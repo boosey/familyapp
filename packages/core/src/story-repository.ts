@@ -20,8 +20,9 @@
  */
 import { eq } from "drizzle-orm";
 import { media, stories } from "@chronicle/db/content";
-import { consentRecords, persons } from "@chronicle/db/schema";
+import { asks, consentRecords, persons } from "@chronicle/db/schema";
 import type {
+  Ask,
   AudienceTier,
   ConsentRecord,
   Database,
@@ -287,6 +288,8 @@ export interface ApproveAndShareResult {
   story: Story;
   approvalAudio: Media;
   consentRecord: ConsentRecord;
+  /** The Ask that was flipped to `answered` in the same tx, if the Story pointed at one. */
+  answeredAsk: Ask | null;
 }
 
 export async function approveAndShareStory(
@@ -296,12 +299,15 @@ export async function approveAndShareStory(
   const now = input.now ?? new Date();
   return db.transaction(async (tx) => {
     // 1. Load + ownership/state checks, all inside the tx so a concurrent state change cannot
-    //    sneak past (the row update at the end serializes against a second approver too).
+    //    sneak past (the row update at the end serializes against a second approver too). Also
+    //    pull `askId` so the asked-question relay's other end (Ask → answered) can close in
+    //    the SAME transaction as the consent ledger entry.
     const [current] = await tx
       .select({
         id: stories.id,
         ownerPersonId: stories.ownerPersonId,
         state: stories.state,
+        askId: stories.askId,
       })
       .from(stories)
       .where(eq(stories.id, input.storyId))
@@ -365,10 +371,58 @@ export async function approveAndShareStory(
       })
       .returning();
 
+    // 5. If this Story was created in response to an Ask, atomically flip the Ask to
+    //    `answered` and point it at this Story — closing the relay's second half (spec Part
+    //    III, "on approval, the Ask flips to `answered` with a pointer to the Story, and the
+    //    answer is delivered back to the asker"). Folding this into the same tx as the consent
+    //    write means the asker never sees an "approved story without an answered ask" or vice
+    //    versa. Legal source states are `queued` (elder answered without pre-routing) and
+    //    `routed` (interviewer marked it). `answered` with same storyId is idempotent; with a
+    //    different storyId raises — an Ask answers exactly one Story.
+    let answeredAsk: Ask | null = null;
+    if (current.askId !== null) {
+      const [askCurrent] = await tx
+        .select({ status: asks.status, storyId: asks.storyId })
+        .from(asks)
+        .where(eq(asks.id, current.askId))
+        .limit(1);
+      if (!askCurrent) {
+        throw new InvariantViolation(
+          `story ${input.storyId} references missing ask ${current.askId}`,
+        );
+      }
+      if (askCurrent.status === "answered" && askCurrent.storyId !== input.storyId) {
+        throw new InvariantViolation(
+          `ask ${current.askId} already answered by a different story`,
+        );
+      }
+      if (askCurrent.status !== "answered") {
+        const [askRow] = await tx
+          .update(asks)
+          .set({
+            status: "answered",
+            storyId: input.storyId,
+            answeredAt: now,
+            updatedAt: now,
+          })
+          .where(eq(asks.id, current.askId))
+          .returning();
+        answeredAsk = askRow!;
+      } else {
+        const [askRow] = await tx
+          .select()
+          .from(asks)
+          .where(eq(asks.id, current.askId))
+          .limit(1);
+        answeredAsk = askRow!;
+      }
+    }
+
     return {
       story: updatedStory!,
       approvalAudio: approvalMedia!,
       consentRecord: consent!,
+      answeredAsk,
     };
   });
 }

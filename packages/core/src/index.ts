@@ -47,6 +47,10 @@ export { AuthorizationError, InvariantViolation } from "./errors";
 export {
   createAsk,
   listPendingAsksForElder,
+  listAsksByAsker,
+  markAskRouted,
+  markAskAnswered,
   type CreateAskInput,
   type PendingAskForElder,
+  type AskerOwnAsk,
 } from "./asks";

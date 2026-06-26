@@ -59,4 +59,5 @@ export {
 export {
   createCoreMemorySource,
   createCoreAnchorSource,
+  createCoreAskSource,
 } from "./core-adapters";

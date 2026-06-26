@@ -69,6 +69,12 @@ export interface PendingAsk {
 export interface AskSource {
   /** Pending Asks targeting this elder, in arrival order (the loop will re-sort by priority). */
   pendingForElder(personId: string): Promise<PendingAsk[]>;
+  /**
+   * Notify the source that an Ask has been consumed into a turn (queued → routed). The DB
+   * adapter flips the Ask's status; the in-memory mock no-ops. Called by the turn loop after a
+   * successful `ask` intent so the asker-side notification view stops showing it as `queued`.
+   */
+  markRouted(askId: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

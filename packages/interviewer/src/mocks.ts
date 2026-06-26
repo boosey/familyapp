@@ -38,6 +38,8 @@ export class ScriptedVoice implements Voice {
 }
 
 export class InMemoryAskSource implements AskSource {
+  readonly routed: string[] = [];
+
   constructor(private readonly byElder: Map<string, PendingAsk[]> = new Map()) {}
 
   setAsks(personId: string, asks: PendingAsk[]): void {
@@ -46,6 +48,10 @@ export class InMemoryAskSource implements AskSource {
 
   async pendingForElder(personId: string): Promise<PendingAsk[]> {
     return this.byElder.get(personId)?.slice() ?? [];
+  }
+
+  async markRouted(askId: string): Promise<void> {
+    this.routed.push(askId);
   }
 }
 

@@ -13,12 +13,16 @@
 import {
   getElderBiographicalContext,
   listElderMemoryForInterviewer,
+  listPendingAsksForElder,
+  markAskRouted,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type {
   AnchorSource,
+  AskSource,
   BiographicalAnchors,
   MemorySource,
+  PendingAsk,
   PriorStoryMemory,
 } from "./contracts";
 
@@ -40,6 +44,28 @@ export function createCoreMemorySource(db: Database): MemorySource {
         promptQuestion: r.promptQuestion,
         createdAt: r.createdAt,
       }));
+    },
+  };
+}
+
+/**
+ * Build an `AskSource` backed by the core Ask repository. `pendingForElder` calls
+ * `listPendingAsksForElder` (returns queued/routed asks with the asker's spoken name);
+ * `markRouted` calls the audited `markAskRouted` write (queued → routed). The interviewer never
+ * touches the `asks` table directly — same "single boundary" pattern as the memory source.
+ */
+export function createCoreAskSource(db: Database): AskSource {
+  return {
+    async pendingForElder(personId: string): Promise<PendingAsk[]> {
+      const rows = await listPendingAsksForElder(db, personId);
+      return rows.map((r) => ({
+        askId: r.ask.id,
+        askerName: r.askerSpokenName,
+        questionText: r.ask.questionText,
+      }));
+    },
+    async markRouted(askId: string): Promise<void> {
+      await markAskRouted(db, askId);
     },
   };
 }

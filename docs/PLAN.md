@@ -67,10 +67,10 @@ The data model + the single front door + the append-only ledger.
 - [x] Ask submission — `/hub/ask` via new `@chronicle/core` `createAsk` (co-membership gated; non-anonymous; non-empty; spoofed-familyId rejected)
 - [x] All reads strictly through the authorization function — hub feed via `listStoriesForViewer`; `/api/media/[id]` via `getMediaForViewer` (404 indistinguishable from "no access")
 
-## Increment 7 — ASKED-QUESTION RELAY (self-feeding loop)
-- [ ] Ask queued → routed into interviewer queue (one of several prompt sources = seam)
-- [ ] Prioritize + frame warmly with asker named; buffered, never interrupts elder
-- [ ] On approval: Ask → answered + Story pointer; deliver answer back to asker (hub notification)
+## Increment 7 — ASKED-QUESTION RELAY (self-feeding loop)  ✅
+- [x] Ask queued → routed into interviewer queue (one of several prompt sources = seam) — `createCoreAskSource` adapter calls `listPendingAsksForElder` + `markAskRouted`; turn loop calls `askSource.markRouted` after `ask` intent
+- [x] Prioritize + frame warmly with asker named; buffered, never interrupts elder — already in `behavior.ts`/`phraser.ts` from I4; `/api/capture` accepts optional `askId` to bind a recording to an Ask
+- [x] On approval: Ask → answered + Story pointer; deliver answer back to asker (hub notification) — `approveAndShareStory` atomically flips a linked Ask to `answered` (status + storyId + answeredAt) in the SAME tx as the consent ledger entry; `/hub/asks` shows the asker their submitted Asks with status + `getStoryForViewer`-gated link to the answered Story
 
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /

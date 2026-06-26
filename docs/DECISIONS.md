@@ -213,6 +213,35 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   check also returns 404 — no body distinguishes the two cases (an attacker timing
   difference is acceptable for Phase 1).
 
+## Increment 7 review responses
+
+- **The relay closes atomically inside the approval transaction.** Spec wording: "on
+  approval, the Ask flips to `answered` with a pointer to the Story." Implementation folds
+  the ask flip INTO the same `db.transaction` as the consent ledger insert in
+  `approveAndShareStory`. An observer never sees "approved + shared story without an
+  answered ask" or vice versa. Rollback proven by the same DROP-table mechanism used for
+  the consent atomicity test.
+- **One Ask → one Story (invariant).** The atomic flip path AND the standalone
+  `markAskAnswered` helper both reject an attempt to answer the same Ask with a different
+  Story (raises `InvariantViolation`). The schema doesn't enforce uniqueness on
+  `asks.storyId`, but the write surface does — and the write surface is the audited
+  boundary.
+- **markRouted is best-effort from the turn loop.** The turn loop calls
+  `askSource.markRouted(askId)` AFTER the synthesized turn is ready, in a try/catch that
+  swallows failures. Rationale: a DB hiccup must NOT erase the warm phrased question the
+  elder is about to hear (spec: "never interrupts the elder; buffered"). The next
+  successful turn / a retry catches the bookkeeping up; the asker-side notification
+  briefly showing `queued` instead of `routed` is an acceptable consistency lag.
+- **Asker notification view (`/hub/asks`) resolves story links through the front door.**
+  `listAsksByAsker` returns the asker's submitted Asks; for `answered` ones the page calls
+  `getStoryForViewer` and only renders a "Listen" link if the asker is authorized to read
+  the story. Otherwise it shows "Answered (not shared with you)" — the asker knows their
+  question was answered without leaking the story content. The same authorization function
+  the hub feed uses.
+- **`createCoreAskSource` uses ONLY core exports — no direct asks-table import.** Same
+  discipline as the memory adapter: the interviewer never reaches around `@chronicle/core`
+  for the seam. Architecture allowlist unchanged.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

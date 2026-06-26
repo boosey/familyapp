@@ -97,6 +97,18 @@ export async function createInterviewSession(
       ...(deps.voiceId !== undefined ? { voiceId: deps.voiceId } : {}),
     });
     recordTurnCompleted(state, intent);
+    // Close the relay's first half: notify the source that this Ask has been routed (queued
+    // → routed). The DB adapter flips the row so the asker's hub view stops showing
+    // `queued`; the in-memory mock no-ops. Best-effort — a failure here must NOT erase the
+    // synthesized turn the elder is about to hear, so we swallow and log to console.
+    if (intent.kind === "ask") {
+      try {
+        await deps.askSource.markRouted(intent.askId);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("askSource.markRouted failed (ask=%s):", intent.askId, e);
+      }
+    }
     return { intent, spokenText: phrased.spokenText, audio, state };
   }
 

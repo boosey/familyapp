@@ -22,6 +22,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const token = form.get("token");
   const audio = form.get("audio");
+  const askIdField = form.get("askId");
   if (typeof token !== "string" || !(audio instanceof Blob)) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
@@ -31,6 +32,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
+  // Optional askId pairs the recording with the relay (the elder is answering a family
+  // member's question). The approval write later flips the Ask to `answered` atomically.
+  const askId = typeof askIdField === "string" && askIdField !== "" ? askIdField : undefined;
+
   try {
     const result = await ingestRecording(db, storage, {
       sessionToken: token,
@@ -39,6 +44,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         bytes,
         contentType: audio.type || "audio/webm",
       },
+      ...(askId !== undefined ? { askId } : {}),
     });
     return NextResponse.json({ ok: true, storyId: result.storyId });
   } catch (err) {

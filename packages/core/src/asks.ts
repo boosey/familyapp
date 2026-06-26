@@ -11,10 +11,10 @@
  * (Increment 7) are wired in I7 — this file deliberately exposes only what I6 needs, so the I7
  * shape is an additive change.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { asks, memberships, persons } from "@chronicle/db/schema";
 import type { Ask, AskStatus, Database } from "@chronicle/db";
-import { AuthorizationError } from "./errors";
+import { AuthorizationError, InvariantViolation } from "./errors";
 import type { AuthContext } from "./authorization";
 import { viewerPersonId } from "./authorization";
 
@@ -111,6 +111,103 @@ export async function createAsk(
 export interface PendingAskForElder {
   ask: Ask;
   askerSpokenName: string;
+}
+
+/**
+ * Mark an Ask as `routed` — called by the interviewer turn loop the moment it consumes the Ask
+ * to phrase a turn. The Ask transitions queued → routed (no other input states are legal). This
+ * is the seam that closes the relay's first half: the family member's question has reached the
+ * elder's queue and is being asked. Idempotent: re-marking an already-`routed` Ask is a no-op.
+ */
+export async function markAskRouted(
+  db: Database,
+  askId: string,
+  opts: { now?: Date } = {},
+): Promise<Ask> {
+  const now = opts.now ?? new Date();
+  const [current] = await db
+    .select({ status: asks.status })
+    .from(asks)
+    .where(eq(asks.id, askId))
+    .limit(1);
+  if (!current) throw new InvariantViolation(`ask not found: ${askId}`);
+  if (current.status === "routed") {
+    const [row] = await db.select().from(asks).where(eq(asks.id, askId)).limit(1);
+    return row!;
+  }
+  if (current.status !== "queued") {
+    throw new InvariantViolation(
+      `markAskRouted: ask must be queued (was ${current.status})`,
+    );
+  }
+  const [row] = await db
+    .update(asks)
+    .set({ status: "routed", routedAt: now, updatedAt: now })
+    .where(eq(asks.id, askId))
+    .returning();
+  return row!;
+}
+
+/**
+ * Mark an Ask as `answered` and point it at the Story. Called atomically from the approval
+ * write when the elder approves a Story that pointed at an Ask (story.askId). Legal sources are
+ * `queued` (the elder answered without the interviewer pre-routing — e.g. a tight session) and
+ * `routed`. Re-marking an already-`answered` Ask with the SAME storyId is idempotent; with a
+ * different storyId it is rejected (an Ask answers exactly one Story).
+ */
+export async function markAskAnswered(
+  db: Database,
+  askId: string,
+  storyId: string,
+  opts: { now?: Date } = {},
+): Promise<Ask> {
+  const now = opts.now ?? new Date();
+  const [current] = await db
+    .select({ status: asks.status, storyId: asks.storyId })
+    .from(asks)
+    .where(eq(asks.id, askId))
+    .limit(1);
+  if (!current) throw new InvariantViolation(`ask not found: ${askId}`);
+  if (current.status === "answered") {
+    if (current.storyId === storyId) {
+      const [row] = await db.select().from(asks).where(eq(asks.id, askId)).limit(1);
+      return row!;
+    }
+    throw new InvariantViolation(
+      `markAskAnswered: ask ${askId} already answered by a different story`,
+    );
+  }
+  const [row] = await db
+    .update(asks)
+    .set({ status: "answered", storyId, answeredAt: now, updatedAt: now })
+    .where(eq(asks.id, askId))
+    .returning();
+  return row!;
+}
+
+/**
+ * The asker's own submitted Asks, most-recent first, with the target elder's spoken name and
+ * (for answered ones) the resulting story id. Powers the hub notification view — the asker sees
+ * their question's status without polling the elder side.
+ */
+export interface AskerOwnAsk {
+  ask: Ask;
+  targetSpokenName: string;
+}
+
+export async function listAsksByAsker(
+  db: Database,
+  ctx: AuthContext,
+): Promise<AskerOwnAsk[]> {
+  const asker = viewerPersonId(ctx);
+  if (asker === null) return [];
+  const rows = await db
+    .select({ ask: asks, targetSpokenName: persons.spokenName })
+    .from(asks)
+    .innerJoin(persons, eq(persons.id, asks.targetPersonId))
+    .where(eq(asks.askerPersonId, asker))
+    .orderBy(desc(asks.createdAt));
+  return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName }));
 }
 
 export async function listPendingAsksForElder(

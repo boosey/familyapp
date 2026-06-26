@@ -37,6 +37,7 @@ export default async function HubPage() {
       <nav style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
         <Link href="/hub/invite">Invite an elder</Link>
         <Link href="/hub/ask">Ask a question</Link>
+        <Link href="/hub/asks">Your asks</Link>
         <Link href="/dev/sign-in">Switch user</Link>
       </nav>
       {feed.length === 0 ? (
@@ -56,7 +57,7 @@ export default async function HubPage() {
             ) : (
               <ul style={{ listStyle: "none", padding: 0 }}>
                 {slot.stories.map((story) => (
-                  <li key={story.id} style={{ marginBottom: "1.5rem" }}>
+                  <li key={story.id} id={`story-${story.id}`} style={{ marginBottom: "1.5rem" }}>
                     <h3>{story.title ?? "Untitled"}</h3>
                     {/* Original voice is PRIMARY — render it before the prose. */}
                     <audio

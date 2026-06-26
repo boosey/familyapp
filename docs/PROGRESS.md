@@ -11,10 +11,31 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 4 — Interviewer | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 5 — Approval gate | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 6 — Family hub | ✅ done | 3 | NO SPEC VIOLATIONS |
-| 7 — Asked-question relay | ⬜ | — | — |
+| 7 — Asked-question relay | ✅ done | 1 | NO SPEC VIOLATIONS |
 
 ## Log
 
+- **2026-06-26** — Increment 7 (asked-question relay) eval-clean (1 round).
+  Closes the self-feeding loop. New `@chronicle/core` lifecycle helpers `markAskRouted`
+  (queued→routed; idempotent; rejects answered→routed) and `markAskAnswered` (rejects
+  same-ask-different-story); `listAsksByAsker` for the asker's hub notification.
+  `approveAndShareStory` extended: in the SAME `db.transaction` as the consent insert, if
+  `story.askId` is non-null, flip the Ask to `answered` with the story pointer + answeredAt.
+  Rejects if the linked Ask is already answered by a DIFFERENT story (one Ask → one Story).
+  Interviewer: `AskSource` contract extended with `markRouted`; `InMemoryAskSource.markRouted`
+  records calls (no-op semantically); turn loop calls `askSource.markRouted` after a
+  successful `ask` intent (failure swallowed — never erases the synthesized turn). New
+  `createCoreAskSource(db)` adapter uses ONLY core exports (`listPendingAsksForElder` +
+  `markAskRouted`) — no direct asks-table access, mirroring the memory adapter's discipline.
+  Web: `/api/capture` accepts optional `askId` form field forwarded to `ingestRecording`
+  (so the elder-side answer to an Ask carries the back-pointer). New `/hub/asks` server
+  component lists the asker's submitted asks; answered ones link to the Story via
+  `getStoryForViewer` (authorized) — shows "Answered (not shared with you)" when the
+  authorization function denies, so no story content leaks. Anchor `id="story-{id}"` added
+  on each hub story `<li>` so the deep link resolves.
+  Round 1: NO SPEC VIOLATIONS. 145 tests green (db 11, storage 11, core 59, capture 17,
+  pipeline 21, interviewer 26); all packages + apps/web typecheck clean. Architecture-test
+  allowlist canary unchanged. Vendor-SDK guard: zero leaks.
 - **2026-06-26** — Increment 6 (basic family hub) eval-clean (3 rounds).
   New `@chronicle/core` Ask repository (`asks.ts`): `createAsk` enforces shared-active-family
   co-membership at the boundary (rejects anonymous, ended/paused, strangers, empty questions,

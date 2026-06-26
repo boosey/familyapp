@@ -345,6 +345,29 @@ describe("turn loop — composes turn from all four inputs", () => {
     expect(deps.voice.calls[1]!.voiceId).toBe("warm-voice-7");
   });
 
+  it("after an `ask` turn, the turn loop calls AskSource.markRouted to close the relay's first half", async () => {
+    const asks: PendingAsk[] = [
+      {
+        askId: "a-routed",
+        askerName: "Sofia",
+        questionText: "Tell me about your wedding.",
+      },
+    ];
+    const deps = makeDeps({ asks });
+    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const t = await session.nextTurn();
+    expect(t.intent.kind).toBe("ask");
+    // The in-memory AskSource records which askIds have been routed.
+    expect(deps.askSource.routed).toEqual(["a-routed"]);
+  });
+
+  it("does NOT call markRouted on non-`ask` turns (base/follow_up/callback/wind_down)", async () => {
+    const deps = makeDeps({});
+    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    await session.nextTurn(); // base
+    expect(deps.askSource.routed).toEqual([]);
+  });
+
   it("the biographical anchors block flags hints as 'do not state as fact'", async () => {
     const deps = makeDeps({});
     const session = await createInterviewSession(deps, { elderPersonId: ELDER });
