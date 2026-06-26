@@ -19,24 +19,31 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
-/** Files permitted to import the raw content tables. Audited surface — keep it small. */
+/**
+ * Files permitted to import the GUARDED content tables (`stories`/`media` via @chronicle/db/content).
+ * This is the entire audited surface — every line that can read OR write Story/Media content.
+ * Keep it small; add a new entry only for a deliberate, reviewed content read/write path.
+ */
 const ALLOWLIST = new Set<string>([
-  "packages/core/src/authorization.ts",
-  "packages/core/src/consent.ts",
+  "packages/core/src/authorization.ts", // the single read front door
+  "packages/core/src/story-repository.ts", // the single write path
 ]);
 
 /**
- * Every known way to reach Story/Media content outside the authorization function. Each closed
- * either by a code change or matched here:
- *   - importing the raw tables via the guarded subpath;
- *   - importing the low-level client subpath (removed from package exports, flagged if re-added);
- *   - the Drizzle relational API on a content table (disabled by not registering schema, but
- *     flagged in case anyone re-registers it).
+ * Every known way to reach Story/Media content outside the authorization function. Each is closed
+ * by a code change and/or matched here:
+ *   - importing the guarded content tables (@chronicle/db/content);
+ *   - importing the low-level client subpath (removed from package exports; flagged if re-added);
+ *   - the Drizzle relational API on a content table (disabled by not registering schema; flagged
+ *     in case anyone re-registers it).
  * Residual, deliberately out of scope: hand-written raw SQL via db.execute(sql`...`). That is an
  * overt bypass that code review catches; no string guard can reliably distinguish it.
  */
 const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
-  { re: /@chronicle\/db\/schema/, label: "imports raw content tables via @chronicle/db/schema" },
+  {
+    re: /@chronicle\/db\/content/,
+    label: "imports the guarded content tables via @chronicle/db/content",
+  },
   { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
   {
     re: /\.query\.(stories|media)\b/,
@@ -88,9 +95,11 @@ describe("single front door (architecture guard)", () => {
     for (const root of scanRoots) {
       for (const file of collectSourceFiles(root)) {
         const rel = toPosix(relative(repoRoot, file));
-        // Only production source counts. Tests legitimately seed via the schema; package-root
-        // config files (vitest/drizzle) are not application code.
-        if (!rel.includes("/src/")) continue;
+        // Scan ALL production code (packages/*/src AND apps/web/app, lib, ...). Skip tests
+        // (they legitimately seed via the schema) and config/env files.
+        if (/\/(test|__tests__)\//.test(rel)) continue;
+        if (/\.(config)\.[cm]?tsx?$/.test(rel)) continue;
+        if (rel.endsWith("-env.d.ts")) continue;
         if (rel.startsWith("packages/db/")) continue; // the table definitions live here
         if (ALLOWLIST.has(rel)) continue;
         const contents = readFileSync(file, "utf8");

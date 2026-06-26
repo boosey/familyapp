@@ -1,10 +1,9 @@
+import { media, stories } from "@chronicle/db/content";
 import {
   consentRecords,
   families,
-  media,
   memberships,
   persons,
-  stories,
 } from "@chronicle/db/schema";
 import type {
   AudienceTier,

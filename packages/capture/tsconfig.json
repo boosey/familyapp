@@ -5,7 +5,9 @@
     "paths": {
       "@chronicle/db": ["../db/src/index.ts"],
       "@chronicle/db/schema": ["../db/src/schema-public.ts"],
-      "@chronicle/db/content": ["../db/src/content.ts"]
+      "@chronicle/db/content": ["../db/src/content.ts"],
+      "@chronicle/core": ["../core/src/index.ts"],
+      "@chronicle/storage": ["../storage/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]

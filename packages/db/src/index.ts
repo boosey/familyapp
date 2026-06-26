@@ -41,3 +41,4 @@ export type {
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
 export { createTestDatabase } from "./testing";
+export { applyMigrations } from "./migrate";

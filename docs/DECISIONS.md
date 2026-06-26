@@ -62,7 +62,7 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   client no longer registers the schema (so `db.query.stories/media` are `undefined`, asserted by
   a runtime test), the `schema` re-export and the `./client` package export are removed, and the
   architecture guard now matches the schema subpath, the client subpath, and `.query.<table>`
-  access. Residual, documented out-of-scope: hand-written raw SQL via `db.execute(sql\`…\`)` —
+  access. Residual, documented out-of-scope: hand-written raw SQL via `db.execute(sql`…`)` —
   an overt bypass that code review covers; no string guard distinguishes it reliably. (Full RLS
   is the only way to make even raw SQL safe; the spec's design is application-layer, Part V.)
 - **Deferred (review finding I4): the story state-machine guard (`assertStoryTransition`) is not

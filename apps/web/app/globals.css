@@ -1,0 +1,102 @@
+/* Elder-first surface: large scalable type, very high contrast, linear layout, no chrome. */
+:root {
+  --bg: #1a1410;
+  --fg: #fbf7f0;
+  --accent: #e8a04b;
+  --accent-press: #c9802f;
+  --muted: #cbb9a3;
+  --danger-soft: #d98a6a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(20px, 2.6vw, 30px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6vh 6vw;
+  gap: 4vh;
+}
+
+.greeting {
+  font-size: clamp(28px, 5vw, 56px);
+  font-weight: normal;
+  max-width: 18ch;
+  margin: 0;
+}
+
+.subtle {
+  color: var(--muted);
+  max-width: 24ch;
+}
+
+/* One big, unmistakable primary control. */
+.big-button {
+  font-family: inherit;
+  font-size: clamp(24px, 4vw, 40px);
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: 9999px;
+  padding: clamp(28px, 6vw, 56px) clamp(40px, 9vw, 90px);
+  min-width: min(80vw, 520px);
+  min-height: 96px;
+  cursor: pointer;
+  box-shadow: 0 8px 0 var(--accent-press);
+  transition: transform 80ms ease;
+}
+
+.big-button:active {
+  transform: translateY(6px);
+  box-shadow: 0 2px 0 var(--accent-press);
+}
+
+.big-button.listening {
+  background: var(--danger-soft);
+  box-shadow: 0 8px 0 #b5694a;
+}
+
+/* "It is listening" indicator. */
+.listening-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listening-dot {
+    animation: none;
+    opacity: 1;
+  }
+}

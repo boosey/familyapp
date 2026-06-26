@@ -18,14 +18,10 @@
  *     content in any state.
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
-// Content tables are imported from the audited subpath. This file is on the architecture-test
-// allowlist precisely because it IS the single front door.
-import {
-  consentRecords,
-  media as mediaTable,
-  memberships,
-  stories,
-} from "@chronicle/db/schema";
+// Content tables come from the GUARDED subpath. This file is on the architecture-test allowlist
+// precisely because it IS the single front door. Non-content tables come from /schema (open).
+import { media as mediaTable, stories } from "@chronicle/db/content";
+import { consentRecords, memberships } from "@chronicle/db/schema";
 import type { Database, Media, Story } from "@chronicle/db";
 
 /**

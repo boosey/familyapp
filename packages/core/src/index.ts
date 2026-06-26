@@ -18,4 +18,10 @@ export {
   canTransitionStory,
   assertStoryTransition,
 } from "./story-state";
+export {
+  type RecordingInput,
+  type DraftStoryInput,
+  type PersistedRecording,
+  persistRecordingAndCreateDraft,
+} from "./story-repository";
 export { AuthorizationError, InvariantViolation } from "./errors";

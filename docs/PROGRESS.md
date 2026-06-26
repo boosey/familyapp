@@ -18,6 +18,16 @@ Tracks which build-sequence increment is active and the eval status of each comp
 - **2026-06-26** — Read spec + kickoff in full. Scaffolded repo (git init, pnpm workspace
   layout), copied spec to `docs/`, wrote PLAN/DECISIONS/OPEN-QUESTIONS/PROGRESS. Resolved all
   stack "OR" choices (see DECISIONS). Starting Increment 0 toolchain, then Increment 1 (spine).
+- **2026-06-26** — Increment 2 (capture path) built; awaiting adversarial review. Added
+  `@chronicle/storage` (MediaStorage iface + in-memory/filesystem + write-once R2 stub),
+  `@chronicle/capture` (hashed session tokens = zero-login identity, source-agnostic
+  `ingestRecording` that persists immutable audio BEFORE any processing then calls the single
+  core write path `persistRecordingAndCreateDraft`), `apps/web` (thin elder surface `/s/[token]`
+  + `/api/capture` route + dev wiring). Front-door guard updated: `story-repository.ts` added to
+  the audited allowlist as the single write path; `@chronicle/db/content` is the guarded subpath
+  for content tables. 56 tests pass (db 11, core 29, storage 8, capture 8); all four packages +
+  apps/web typecheck clean. Web mic + dev-server E2E unverified in headless env (documented in
+  PLAN). Repo moved off Google Drive to local disk; pnpm install clean after move.
 - **2026-06-26** — Increment 1 (the spine) complete and eval-clean. Built: full Drizzle schema
   (8 entities + elder_sessions), DB-trigger-enforced append-only ledger + media immutability,
   the single authorization function (4-tier), consent ledger API, story state machine. 33 tests

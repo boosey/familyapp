@@ -6,6 +6,8 @@
  * the authorization function reads as the latest sharing state. Consent is owned by the Person.
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+// consentRecords is NOT a content table (it is the ledger, protected by its append-only
+// trigger), so it lives in the open /schema surface — consent.ts needs no /content access.
 import { consentRecords } from "@chronicle/db/schema";
 import type { ConsentAction, ConsentRecord, Database } from "@chronicle/db";
 

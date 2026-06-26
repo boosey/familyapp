@@ -23,12 +23,13 @@ The data model + the single front door + the append-only ledger.
 - [ ] Ownership invariant: Person owns all expressive content; Family owns nothing expressive
 - [ ] Tests: authorization matrix, ledger append-only (trigger + repo), no-bypass read path
 
-## Increment 2 — CAPTURE PATH (web link, end to end)
-- [ ] Session token → elder Person + Family context (no login, token IS identity)
-- [ ] Thin elder web page: greeting, one start control, listening state, one stop
-- [ ] In-browser audio capture (wideband); source-agnostic capture adapter (telephony seam)
-- [ ] Immediate immutable persistence of `story_audio` Media (before any processing)
-- [ ] Draft Story created pointing at the canonical Recording
+## Increment 2 — CAPTURE PATH (web link, end to end)  🔨
+- [x] Session token → elder Person + Family context (no login, token IS identity) — `@chronicle/capture` sessions, hashed tokens, expiry/revoke
+- [x] Thin elder web page: greeting, one start control, listening state, one stop — `apps/web` `/s/[token]`
+- [x] In-browser audio capture (wideband); source-agnostic capture adapter (telephony seam) — `CapturedAudio` + `CaptureSource`, `ingestRecording`
+- [x] Immediate immutable persistence of `story_audio` Media (before any processing) — `ingestRecording` uploads bytes, then core write path
+- [x] Draft Story created pointing at the canonical Recording — `persistRecordingAndCreateDraft`
+- Note: browser mic capture + dev-server E2E is unverified in this headless env (no browser/mic). Service layer fully tested; UI typechecks + builds.
 
 ## Increment 3 — PIPELINE (transcribe → speech-to-story)
 - [ ] Durable, staged, idempotent flow behind JobQueue interface (in-proc impl + Inngest seam)

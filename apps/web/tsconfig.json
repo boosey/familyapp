@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "react", "react-dom"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "verbatimModuleSyntax": false,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@chronicle/db": ["../../packages/db/src/index.ts"],
+      "@chronicle/db/schema": ["../../packages/db/src/schema-public.ts"],
+      "@chronicle/db/content": ["../../packages/db/src/content.ts"],
+      "@chronicle/core": ["../../packages/core/src/index.ts"],
+      "@chronicle/capture": ["../../packages/capture/src/index.ts"],
+      "@chronicle/storage": ["../../packages/storage/src/index.ts"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
