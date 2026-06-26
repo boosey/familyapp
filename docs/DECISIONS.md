@@ -94,6 +94,37 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   slipping under a generous upper bound. The allowlist remains the two-file audited surface
   (`authorization.ts` + `story-repository.ts`).
 
+## Increment 3 — review responses
+
+- **The default `WorkingCopyTransformer` reports `speedFactor: 1.0` until real DSP lands
+  (review I3 round 1).** First-round reviewer flagged a sleeper bug: the stub returned
+  passthrough bytes but reported `speedFactor: 1.6`, so the orchestrator would have persisted
+  word timings scaled by 1.6 against audio that wasn't sped up — every persisted word offset
+  in production would have been wrong by ~60% until a real DSP adapter landed. Fix: the stub
+  tells the truth about what it actually did. A real adapter that actually time-stretches will
+  set the factor to 1.6; the orchestrator additionally clamps `speedFactor` to `1.0..2.0` at
+  the mapping step (defense in depth against a buggy adapter — review I3 round 3). The
+  hard-audio backoff and per-request stitching (Groq 10s floor) are encoded as interface seams
+  only and noted as deferred work in OPEN-QUESTIONS.
+- **`getStoryAndRecordingForPipeline` is reachable only via the `@chronicle/core/pipeline`
+  subpath, with its own architecture guard (review I3 round 2).** The helper is a
+  content-surfacing read with no `AuthContext` — system-actor use only. Re-exporting it from
+  `@chronicle/core` root made the "no bypass" property convention-only for this one function.
+  Fixed structurally: subpath export + new `PIPELINE_HELPER_ALLOWLIST` (currently exactly
+  `packages/pipeline/src/orchestrator.ts`) in `architecture.test.ts`. Pattern mirrors the
+  `@chronicle/db/content` subpath/allowlist that already protects the raw content tables.
+- **The state-machine guard (`assertStoryTransition`) is wired now (Increment 1 deferral
+  closed).** Every story state change in the pipeline goes through `transitionStoryState`,
+  which loads the current state and routes through `assertStoryTransition`. Illegal jumps
+  (e.g. archived → pending_approval) throw, and a regression test in `pipeline.test.ts`
+  exercises this by pre-archiving a story and asserting the render stage refuses to advance it.
+- **Empty-transcript is a terminal vendor failure, not a soft retry (review I3 round 2).**
+  The transcribe stage previously persisted `""` and enqueued render; render would re-enqueue
+  transcribe; the in-proc cap eventually broke the loop after 8 wasted paid vendor calls. Fix:
+  the stage throws when the vendor returns empty text — the queue surfaces the error to the
+  caller, the story stays at `transcript=null` so a deliberate human retry is possible, and
+  exactly one vendor call is made per attempt.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

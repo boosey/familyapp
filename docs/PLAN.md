@@ -31,13 +31,17 @@ The data model + the single front door + the append-only ledger.
 - [x] Draft Story created pointing at the canonical Recording — `persistRecordingAndCreateDraft`
 - Note: browser mic capture + dev-server E2E is unverified in this headless env (no browser/mic). Service layer fully tested; UI typechecks + builds.
 
-## Increment 3 — PIPELINE (transcribe → speech-to-story)
-- [ ] Durable, staged, idempotent flow behind JobQueue interface (in-proc impl + Inngest seam)
-- [ ] Working-copy transforms: VAD trim + ~1.6x time-stretch; timestamps × speed factor;
-      stitch segments past per-request minimum; **canonical audio never mutated**
-- [ ] Transcriber interface (Groq Whisper Turbo default) + mock
-- [ ] LanguageModel interface (Claude default) + mock; speech-to-story = faithful light render
-- [ ] Story → pending_approval, still private; prose/transcript derived + regenerable
+## Increment 3 — PIPELINE (transcribe → speech-to-story)  ✅
+- [x] Durable, staged, idempotent flow behind JobQueue interface (in-proc impl; Inngest seam = same interface)
+- [x] Working-copy transforms (DSP stubbed behind `WorkingCopyTransformer`): segment table reports
+      `originalStart/EndMs` ↔ `workingCopyStart/EndMs` so timestamps map back to 1x via
+      `mapWorkingCopyMsToOriginalMs`. Default speedFactor 1.6, low-SNR backoff 1.4, hard cap 2.0.
+      **Canonical audio is a separate Uint8Array — never mutated.**
+- [x] `Transcriber` interface + `ScriptedTranscriber` mock (Groq Whisper Turbo default in DECISIONS)
+- [x] `LanguageModel` interface + `ScriptedLanguageModel` mock (Anthropic Claude default);
+      speech-to-story prompt + parse live in our code (`render-story.ts`)
+- [x] draft → pending_approval via `assertStoryTransition` (the deferred guard is now wired);
+      audienceTier stays `private`; prose/transcript regenerable (clear field → re-run = new render)
 
 ## Increment 4 — INTERVIEWER BEHAVIOR (the IP)
 - [ ] Controlled turn loop wrapping the LLM (NOT an open chat)

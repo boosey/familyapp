@@ -1,0 +1,88 @@
+/**
+ * `InProcessJobQueue` — the dev/test impl of the `JobQueue` seam. It is deliberately small:
+ * enqueue puts a job on a pending list, `drain` runs them in order, handlers must be idempotent.
+ * Production swaps in an Inngest adapter (same interface, durable retries) — the orchestrator
+ * code does not change. Because every stage handler is built idempotent (re-running with the
+ * same payload produces the same outputs without duplicate side effects), retries are safe.
+ *
+ * Pending-dedupe: if the same (name, storyId) is enqueued twice while still pending, the
+ * second enqueue is a no-op. This mirrors what a real durable queue's dedupe key would do and
+ * keeps tests honest — a callsite that retries enqueuing should not pile up duplicate work.
+ */
+import { randomUUID } from "node:crypto";
+import type {
+  EnqueuedJob,
+  JobHandler,
+  JobName,
+  JobPayload,
+  JobQueue,
+} from "./contracts";
+
+/**
+ * Hard cap on attempts per job-id in the in-process queue. A handler that re-enqueues itself
+ * (e.g. render_story re-queueing transcribe when the transcript isn't ready) under a real bug
+ * could otherwise spin forever — production Inngest caps retries, this matches that behavior.
+ * Crossed-cap jobs raise so a test/reviewer sees the loop instead of pegged CPU.
+ */
+const MAX_ATTEMPTS_PER_JOB_ID = 8;
+
+export class InProcessJobQueue implements JobQueue {
+  private readonly queue: EnqueuedJob[] = [];
+  private readonly handlers = new Map<JobName, JobHandler>();
+  private readonly attemptsById = new Map<string, number>();
+  private draining = false;
+
+  async enqueue(name: JobName, payload: JobPayload): Promise<string> {
+    const existing = this.queue.find(
+      (j) => j.name === name && j.payload.storyId === payload.storyId,
+    );
+    if (existing) return existing.id;
+    const job: EnqueuedJob = {
+      id: randomUUID(),
+      name,
+      payload,
+      enqueuedAt: new Date(),
+      attempts: 0,
+    };
+    this.queue.push(job);
+    return job.id;
+  }
+
+  register(name: JobName, handler: JobHandler): void {
+    this.handlers.set(name, handler);
+  }
+
+  async drain(): Promise<void> {
+    // Re-entrant drains are a no-op — the outer drain's while-loop will pick up jobs that
+    // handlers enqueue during their own execution. (Without this guard, nested calls would
+    // race over `this.queue.shift()`.)
+    if (this.draining) return;
+    this.draining = true;
+    this.attemptsById.clear();
+    try {
+      while (this.queue.length > 0) {
+        const job = this.queue.shift()!;
+        const handler = this.handlers.get(job.name);
+        if (!handler) {
+          throw new Error(`no handler registered for job: ${job.name}`);
+        }
+        const key = `${job.name}|${job.payload.storyId}`;
+        const attempts = (this.attemptsById.get(key) ?? 0) + 1;
+        this.attemptsById.set(key, attempts);
+        if (attempts > MAX_ATTEMPTS_PER_JOB_ID) {
+          throw new Error(
+            `job '${job.name}' for story '${job.payload.storyId}' exceeded ${MAX_ATTEMPTS_PER_JOB_ID} attempts in one drain — likely a handler re-queueing itself in a loop`,
+          );
+        }
+        job.attempts = attempts;
+        await handler(job.payload);
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  pending(): EnqueuedJob[] {
+    return this.queue.slice();
+  }
+}

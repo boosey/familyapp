@@ -26,6 +26,19 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   unguessable (256-bit), stored hashed.
 - **Time-stretch default factor 1.6x, backing off to 1.3–1.4x on low-SNR audio**, hard cap 2x,
   per spec guidance. SNR/“hard audio” detection is a stub heuristic in Phase 1 (configurable).
+- **`@chronicle/pipeline` working-copy DSP is stubbed (Increment 3).** The `WorkingCopyTransformer`
+  contract is the right shape (single-segment to multi-segment, `speedFactor`, hard-audio backoff
+  hook), but the default impl does NOT actually run VAD trim or time-stretch on the bytes — it
+  is a typed passthrough that REPORTS `speedFactor: 1.0` so persisted word timings stay honest
+  in the absence of real DSP. A real adapter (ffmpeg-wasm in-process, or a thin Python sidecar)
+  is the obvious follow-up; the interface earns its keep then. Until that lands, transcription
+  cost/latency wins from the spec do not apply; correctness does. (See `working-copy.ts` docstring.)
+- **VAD segment stitching past the per-request floor (e.g. Groq's 10s minimum) is not yet
+  implemented** — the orchestrator currently sends the single working-copy segment the stub
+  reports. The segment-table seam in `WorkingCopyResult.segments[]` is shaped so a real adapter
+  can return many segments and the orchestrator's 1x-mapping math already handles them, but the
+  stitching policy itself (which segments to join into one transcribe call) lives in the future
+  adapter, not in the orchestrator.
 - **Anonymous elder reads:** the authorization function accepts "no Person" (token-scoped
   elder surface). The elder can always access their *own* in-progress story via the session
   token even while it is `private`/`draft`; family members cannot until approved+shared.

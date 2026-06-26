@@ -30,6 +30,18 @@ const ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * The pipeline orchestrator needs a system-actor read of story+canonical-recording metadata to
+ * do its job. That helper (`getStoryAndRecordingForPipeline`) lives in `story-repository.ts`
+ * (already audited above) and is re-exported only via the `@chronicle/core/pipeline` subpath.
+ * This second guard pins that the subpath is used by exactly one file — preventing any future
+ * `apps/web` route from importing the same helper and silently bypassing the authorization
+ * function. Same exact-membership canary discipline as the content-tables allowlist.
+ */
+const PIPELINE_HELPER_ALLOWLIST = new Set<string>([
+  "packages/pipeline/src/orchestrator.ts",
+]);
+
+/**
  * Every known way to reach Story/Media content outside the authorization function. Each is closed
  * by a code change and/or matched here:
  *   - importing the guarded content tables (@chronicle/db/content);
@@ -86,6 +98,42 @@ function toPosix(p: string): string {
 }
 
 describe("single front door (architecture guard)", () => {
+  it("only the pipeline orchestrator imports @chronicle/core/pipeline (system-actor read)", () => {
+    const offenders: string[] = [];
+    const scanRoots = ["packages", "apps"].map((d) => join(repoRoot, d));
+    for (const root of scanRoots) {
+      for (const file of collectSourceFiles(root)) {
+        const rel = toPosix(relative(repoRoot, file));
+        if (/\/(test|__tests__)\//.test(rel)) continue;
+        if (/\.(config)\.[cm]?tsx?$/.test(rel)) continue;
+        if (rel.endsWith("-env.d.ts")) continue;
+        if (rel === "packages/core/src/pipeline.ts") continue; // the subpath itself
+        if (PIPELINE_HELPER_ALLOWLIST.has(rel)) continue;
+        const contents = readFileSync(file, "utf8");
+        // Match only import/from forms — a comment mentioning the path (e.g. the
+        // breadcrumb in core/src/index.ts) is fine and shouldn't trip the guard.
+        if (/from\s+["']@chronicle\/core\/pipeline["']/.test(contents)) {
+          offenders.push(
+            `${rel} — imports the system-actor pipeline helper outside the allowlist`,
+          );
+        }
+      }
+    }
+    expect(
+      offenders,
+      `getStoryAndRecordingForPipeline is a content-surfacing read without an AuthContext check. ` +
+        `Only the pipeline orchestrator may use it; user-facing surfaces must route through ` +
+        `@chronicle/core's authorization function instead.\nOffenders: ` +
+        JSON.stringify(offenders, null, 2),
+    ).toEqual([]);
+  });
+
+  it("the pipeline-helper allowlist is exactly the audited surface (canary)", () => {
+    expect([...PIPELINE_HELPER_ALLOWLIST].sort()).toEqual([
+      "packages/pipeline/src/orchestrator.ts",
+    ]);
+  });
+
   it("only audited files import the raw content tables", () => {
     // Scan every package's src EXCEPT the db package itself (which defines the tables) and
     // except test files (tests legitimately seed via the schema).

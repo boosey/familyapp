@@ -112,6 +112,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
+  packages/pipeline:
+    dependencies:
+      '@chronicle/core':
+        specifier: workspace:*
+        version: link:../core
+      '@chronicle/db':
+        specifier: workspace:*
+        version: link:../db
+      '@chronicle/storage':
+        specifier: workspace:*
+        version: link:../storage
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
   packages/storage:
     devDependencies:
       typescript:

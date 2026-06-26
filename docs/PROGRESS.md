@@ -7,7 +7,7 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 0 — Repo & toolchain scaffold | ✅ done | n/a | — |
 | 1 — The spine | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 2 — Capture path | ✅ done | 2 | NO SPEC VIOLATIONS |
-| 3 — Pipeline | ⬜ | — | — |
+| 3 — Pipeline | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 4 — Interviewer | ⬜ | — | — |
 | 5 — Approval gate | ⬜ | — | — |
 | 6 — Family hub | ⬜ | — | — |
@@ -15,6 +15,30 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-06-26** — Increment 3 (pipeline) eval-clean (3 rounds). Built new `@chronicle/pipeline`
+  package: contracts (`Transcriber`, `LanguageModel`, `JobQueue`, `WorkingCopyTransformer`),
+  `InProcessJobQueue` (dedupe + per-drain attempt cap), default working-copy transformer (honest
+  stub: reports `speedFactor: 1.0` because it does no DSP — see OPEN-QUESTIONS), 1x-time mapping
+  helper, `ScriptedTranscriber/LanguageModel` mocks, in-house speech-to-story prompt + defensive
+  parser (`render-story.ts`), orchestrator wiring transcribe → render_story stages. Wired
+  `assertStoryTransition` at the render write site (Increment 1 deferral closed). Added narrow
+  audited writes to `story-repository.ts`: `updateDerivedFields`, `transitionStoryState`,
+  `getStoryAndRecordingForPipeline`. Round 1: NO HARD VIOLATIONS, 13 advisories. Triage: stub
+  transformer's "speedFactor=1.6 reported but no DSP applied" was a real sleeper bug (timings
+  off by 1.6x in prod) — fixed by reporting `1.0` honestly. Added retry cap on in-proc queue,
+  expanded forbidden-SDK list, wired elder context (`spokenName`/`birthYear`) through to render,
+  hardened canonical-bytes test with mutation, parseRenderResponse rejects arrays/null, added
+  audienceTier-never-written + media-row-count regressions, doc'd DSP/stitching gaps in
+  OPEN-QUESTIONS. Round 2: NO SPEC VIOLATIONS, 12 advisories. The architectural advisory —
+  `getStoryAndRecordingForPipeline` re-exported from `@chronicle/core` root, defended by
+  convention not structure — was closed: helper moved behind `@chronicle/core/pipeline` subpath
+  with a NEW architecture guard (PIPELINE_HELPER_ALLOWLIST, exact-membership = 1 file:
+  `pipeline/src/orchestrator.ts`). Empty-transcript ping-pong (would burn 8 paid vendor calls
+  on a failure) closed: transcribe stage throws on empty result with regression test asserting
+  exactly one vendor call + story untouched. Round 3: NO SPEC VIOLATIONS, 5 minor advisories.
+  Knocked off one more — orchestrator now refuses any `speedFactor > 2.0` from a transformer
+  (defense in depth against a buggy real DSP adapter shipping later). 84 tests green
+  (db 11, core 31, capture 11, storage 11, pipeline 20); all packages + apps/web typecheck.
 - **2026-06-26** — Read spec + kickoff in full. Scaffolded repo (git init, pnpm workspace
   layout), copied spec to `docs/`, wrote PLAN/DECISIONS/OPEN-QUESTIONS/PROGRESS. Resolved all
   stack "OR" choices (see DECISIONS). Starting Increment 0 toolchain, then Increment 1 (spine).
