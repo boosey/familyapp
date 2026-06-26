@@ -7,6 +7,7 @@
  * changes, because everything depends on the @chronicle/* interfaces, not these concretions.
  */
 import "server-only";
+import { mkdirSync } from "node:fs";
 import {
   applyMigrations,
   createPgliteDatabase,
@@ -29,6 +30,10 @@ const globalForRuntime = globalThis as unknown as {
 };
 
 async function build(): Promise<Runtime> {
+  // PGlite (Node) does not create the data directory itself — pre-create it so a fresh clone
+  // can boot without manual `mkdir`. Same idea for the media dir.
+  mkdirSync(DEV_DB_DIR, { recursive: true });
+  mkdirSync(DEV_MEDIA_DIR, { recursive: true });
   const db = createPgliteDatabase(DEV_DB_DIR);
   // Apply migrations idempotently: if the schema is already there, skip.
   try {
@@ -45,6 +50,20 @@ async function build(): Promise<Runtime> {
 }
 
 export function getRuntime(): Promise<Runtime> {
-  globalForRuntime.__chronicleRuntime ??= build();
+  // If a previous build() rejected (e.g. transient mkdir failure during dev), don't cache the
+  // poison — clear the slot on failure so the next request retries from scratch. There is a
+  // benign TOCTOU here: two simultaneous callers seeing `undefined` will both call build() and
+  // the second assignment wins; under PGlite's per-dir file lock the loser would fail at init.
+  // Acceptable under `next dev` (single Node worker) — fix is `globalThis.__chronicleRuntime ??=`
+  // semantics if we ever serve from a multi-worker dev runtime.
+  if (!globalForRuntime.__chronicleRuntime) {
+    const p = build();
+    globalForRuntime.__chronicleRuntime = p;
+    p.catch(() => {
+      if (globalForRuntime.__chronicleRuntime === p) {
+        globalForRuntime.__chronicleRuntime = undefined;
+      }
+    });
+  }
   return globalForRuntime.__chronicleRuntime;
 }

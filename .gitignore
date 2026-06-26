@@ -27,3 +27,6 @@ Thumbs.db
 # local pglite data
 .pglite/
 *.pglite
+
+# local media-storage adapter (FilesystemMediaStorage in dev)
+.media/
