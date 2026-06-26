@@ -29,4 +29,9 @@ export class InMemoryMediaStorage implements MediaStorage {
   async getUrl(key: string): Promise<string> {
     return `memory://${key}`;
   }
+
+  /** Test/inspection helper — number of objects currently stored. */
+  get size(): number {
+    return this.objects.size;
+  }
 }

@@ -111,16 +111,23 @@ describe("single front door (architecture guard)", () => {
 
     expect(
       offenders,
-      `These files import @chronicle/db/schema (the raw content tables) but are not on the ` +
-        `audited allowlist. Either route story/media reads through @chronicle/core, or, if this ` +
-        `is a legitimate write path, add it to ALLOWLIST in this test deliberately.\nOffenders: ` +
+      `These files reach the guarded content tables (via @chronicle/db/content, the /client ` +
+        `subpath, or db.query.{stories,media}) but are not on the audited allowlist. Route ` +
+        `story/media reads through @chronicle/core; for a legitimate new write path, add the ` +
+        `file to ALLOWLIST in this test deliberately.\nOffenders: ` +
         JSON.stringify(offenders, null, 2),
     ).toEqual([]);
   });
 
-  it("the allowlist itself stays small and auditable", () => {
-    // A canary: if this grows unexpectedly, someone widened the trusted surface.
-    expect(ALLOWLIST.size).toBeLessThanOrEqual(8);
+  it("the allowlist itself is exactly the audited surface (canary against quiet widening)", () => {
+    // Exact membership, not a ceiling: every addition is a deliberate review event, surfaced as
+    // a diff that the reviewer must justify (rather than slipping under a generous upper bound).
+    expect([...ALLOWLIST].sort()).toEqual(
+      [
+        "packages/core/src/authorization.ts",
+        "packages/core/src/story-repository.ts",
+      ].sort(),
+    );
   });
 
   it("the runtime client does NOT expose Drizzle's relational API for content tables", async () => {

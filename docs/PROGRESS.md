@@ -6,7 +6,7 @@ Tracks which build-sequence increment is active and the eval status of each comp
 |-----------|--------|-------------|---------------|
 | 0 — Repo & toolchain scaffold | ✅ done | n/a | — |
 | 1 — The spine | ✅ done | 3 | NO SPEC VIOLATIONS |
-| 2 — Capture path | 🔨 in progress | — | — |
+| 2 — Capture path | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 3 — Pipeline | ⬜ | — | — |
 | 4 — Interviewer | ⬜ | — | — |
 | 5 — Approval gate | ⬜ | — | — |
@@ -18,6 +18,20 @@ Tracks which build-sequence increment is active and the eval status of each comp
 - **2026-06-26** — Read spec + kickoff in full. Scaffolded repo (git init, pnpm workspace
   layout), copied spec to `docs/`, wrote PLAN/DECISIONS/OPEN-QUESTIONS/PROGRESS. Resolved all
   stack "OR" choices (see DECISIONS). Starting Increment 0 toolchain, then Increment 1 (spine).
+- **2026-06-26** — Increment 2 (capture path) eval-clean. Review r1 surfaced 1 hard violation
+  (orphan-blob ordering) and 11 advisories. Triage: the storage-first ordering is the *correct*
+  spec-aligned trade-off (authenticity beats polish / audio preserved as recoverable evidence) —
+  defended in DECISIONS rather than reversed. Enhanced: (1) `getElderProfile` core helper (elder
+  page no longer reads `persons` directly); (2) `lastUsedAt` write wrapped in try/catch so a
+  transient write does not 500 the elder page (+ regression test using a Proxy DB); (3) capture
+  test for invalid session now asserts zero storage objects AND zero media/story rows (was
+  hollow); (4) added two partial-failure tests — DB-after-storage-fails preserves audio +
+  rolls back DB; storage-fails leaves no DB rows; (5) architecture allowlist canary tightened
+  from `<=8` to exact membership; (6) fixed misleading `/schema` mention in the architecture
+  guard's failure message; (7) added `size` getter on `InMemoryMediaStorage` (drops a brittle
+  private-field cast in tests); (8) R2 stub now has a test asserting it throws on every
+  credentialed call (catches a future silent-no-op implementer). Review r2: NO HARD VIOLATIONS,
+  9 minor advisories addressed inline. 62 tests green (db 11, core 29, capture 11, storage 11).
 - **2026-06-26** — Increment 2 (capture path) built; awaiting adversarial review. Added
   `@chronicle/storage` (MediaStorage iface + in-memory/filesystem + write-once R2 stub),
   `@chronicle/capture` (hashed session tokens = zero-login identity, source-agnostic

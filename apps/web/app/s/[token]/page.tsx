@@ -5,8 +5,7 @@
  * troubleshooting, nothing for the elder to fix).
  */
 import { resolveElderSession } from "@chronicle/capture";
-import { persons } from "@chronicle/db/schema";
-import { eq } from "drizzle-orm";
+import { getElderProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ElderRecorder } from "./ElderRecorder";
 
@@ -36,13 +35,8 @@ export default async function ElderPage({
     );
   }
 
-  const [elder] = await db
-    .select({ spokenName: persons.spokenName })
-    .from(persons)
-    .where(eq(persons.id, resolved.personId))
-    .limit(1);
-
-  const spokenName = elder?.spokenName ?? "there";
+  const profile = await getElderProfile(db, resolved.personId);
+  const spokenName = profile?.spokenName ?? "there";
 
   return (
     <main className="screen">

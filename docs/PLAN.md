@@ -23,7 +23,7 @@ The data model + the single front door + the append-only ledger.
 - [ ] Ownership invariant: Person owns all expressive content; Family owns nothing expressive
 - [ ] Tests: authorization matrix, ledger append-only (trigger + repo), no-bypass read path
 
-## Increment 2 — CAPTURE PATH (web link, end to end)  🔨
+## Increment 2 — CAPTURE PATH (web link, end to end)  ✅
 - [x] Session token → elder Person + Family context (no login, token IS identity) — `@chronicle/capture` sessions, hashed tokens, expiry/revoke
 - [x] Thin elder web page: greeting, one start control, listening state, one stop — `apps/web` `/s/[token]`
 - [x] In-browser audio capture (wideband); source-agnostic capture adapter (telephony seam) — `CapturedAudio` + `CaptureSource`, `ingestRecording`

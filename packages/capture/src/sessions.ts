@@ -91,10 +91,16 @@ export async function resolveElderSession(
     return null;
   }
 
-  await db
-    .update(elderSessions)
-    .set({ lastUsedAt: now })
-    .where(eq(elderSessions.id, session.id));
+  // Best-effort timestamp update. The elder page is logically a READ; a transient write failure
+  // here must never 500 the elder's greeting. The next successful resolve will catch it up.
+  try {
+    await db
+      .update(elderSessions)
+      .set({ lastUsedAt: now })
+      .where(eq(elderSessions.id, session.id));
+  } catch {
+    // swallow — see comment above.
+  }
 
   return { session, personId: session.personId, familyId: session.familyId };
 }

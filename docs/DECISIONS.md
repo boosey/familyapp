@@ -70,6 +70,30 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   built and unit-tested now and will be enforced at the capture (draft creation) and approval
   (pending→approved→shared) increments. Noted so it is not mistaken for dead code.
 
+## Increment 2 — review responses
+
+- **Capture-path ordering is storage-FIRST, deliberately (review I2/finding).** `ingestRecording`
+  uploads the canonical audio bytes to object storage BEFORE inserting the immutable Media row
+  and draft Story. A reviewer flagged the post-storage-success / pre-DB-commit window as an
+  "orphan blob" risk. The ordering is correct per the LOCKED principle "authenticity beats polish
+  / the original audio is canonical and never overwritten" and the spec's "audio is persisted
+  immediately, before any processing" requirement. The two outcomes on partial failure are:
+  (a) storage-first → if DB fails, audio is preserved in storage with no DB pointer (recoverable
+  evidence); (b) DB-first → if storage fails, a Media row exists pointing at nothing (the elder
+  thinks their voice was preserved; it wasn't). (a) is the lesser evil for an elder voice-capture
+  product. A periodic GC of unreferenced storage objects (older than N hours) is a Phase-2 housekeeping
+  task; pinned by a regression test that asserts the partial-failure invariant explicitly
+  (`packages/capture/test/capture.test.ts`).
+- **Elder profile read goes through a `getElderProfile` core helper, not a direct `persons`
+  query in the page.** `persons` is on the open schema (not behind the front-door guard), so the
+  architecture test does not require this, but routing the read through `@chronicle/core`
+  preserves the "endpoints do not roll their own access logic" pattern by convention for the
+  elder surface too. If a future Phase-1 page is added it should follow suit.
+- **Architecture allowlist canary is EXACT membership, not a `<=8` ceiling (review I2 advisory).**
+  An exact-membership check makes every addition a deliberate, reviewer-visible diff instead of
+  slipping under a generous upper bound. The allowlist remains the two-file audited surface
+  (`authorization.ts` + `story-repository.ts`).
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

@@ -29,5 +29,15 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 - **Anonymous elder reads:** the authorization function accepts "no Person" (token-scoped
   elder surface). The elder can always access their *own* in-progress story via the session
   token even while it is `private`/`draft`; family members cannot until approved+shared.
+- **Capture source channel is type-shaped but not yet data-shaped.** `ingestRecording` accepts a
+  `CaptureSource` ("web_link" | "telephony"), but Phase 1 does not persist that value on the Media
+  or Story row — a future telephony adapter producing the same `CapturedAudio` would be
+  indistinguishable downstream from a web-link capture. The seam is correct at the function
+  signature; persistence will land in Increment 3 when the JobQueue routes pipelines by source
+  (telephony will likely want different VAD / transcriber tuning). Closing this earlier requires
+  a schema migration; left for I3 where it earns its keep.
+- **Orphan storage objects from partial capture failures (storage-first ordering).** A periodic
+  GC pass for `story-audio/**` blobs that have no corresponding `media.storage_key` row is a
+  Phase-2 housekeeping job. Phase 1 favors audio preservation; see DECISIONS for the trade-off.
 - **PGlite for prod-parity testing only.** Production is managed Postgres (Supabase). If you
   prefer Prisma, the schema is small enough to port; noted in DECISIONS why Drizzle was chosen.
