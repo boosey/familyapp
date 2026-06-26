@@ -55,6 +55,16 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   allowlist imports that subpath. This is the spec's "no bypass path" enforced as a build gate —
   the closest a TS monorepo gets to RLS without the weight, and matching the spec's own framing
   (Part V: "impossible to bypass if reads are funneled through one module").
+- **Front door round 2 (review found two real bypasses).** A second cold reviewer found the
+  first guard was incomplete: (a) `client.ts` re-exported `schema` via a `@chronicle/db/client`
+  subpath, and (b) registering `{ schema }` on the Drizzle client exposed the relational API
+  `db.query.stories.findMany()` — a content read needing no table import at all. Fixes: the
+  client no longer registers the schema (so `db.query.stories/media` are `undefined`, asserted by
+  a runtime test), the `schema` re-export and the `./client` package export are removed, and the
+  architecture guard now matches the schema subpath, the client subpath, and `.query.<table>`
+  access. Residual, documented out-of-scope: hand-written raw SQL via `db.execute(sql\`…\`)` —
+  an overt bypass that code review covers; no string guard distinguishes it reliably. (Full RLS
+  is the only way to make even raw SQL safe; the spec's design is application-layer, Part V.)
 - **Deferred (review finding I4): the story state-machine guard (`assertStoryTransition`) is not
   yet wired into a write path** because Increment 1 (the spine) creates no story mutations. It is
   built and unit-tested now and will be enforced at the capture (draft creation) and approval

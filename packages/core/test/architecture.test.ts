@@ -14,6 +14,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createTestDatabase } from "@chronicle/db";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -24,7 +25,24 @@ const ALLOWLIST = new Set<string>([
   "packages/core/src/consent.ts",
 ]);
 
-const SCHEMA_IMPORT = /@chronicle\/db\/schema/;
+/**
+ * Every known way to reach Story/Media content outside the authorization function. Each closed
+ * either by a code change or matched here:
+ *   - importing the raw tables via the guarded subpath;
+ *   - importing the low-level client subpath (removed from package exports, flagged if re-added);
+ *   - the Drizzle relational API on a content table (disabled by not registering schema, but
+ *     flagged in case anyone re-registers it).
+ * Residual, deliberately out of scope: hand-written raw SQL via db.execute(sql`...`). That is an
+ * overt bypass that code review catches; no string guard can reliably distinguish it.
+ */
+const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
+  { re: /@chronicle\/db\/schema/, label: "imports raw content tables via @chronicle/db/schema" },
+  { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
+  {
+    re: /\.query\.(stories|media)\b/,
+    label: "uses the Drizzle relational API on a content table (db.query.*)",
+  },
+];
 
 function collectSourceFiles(dir: string, acc: string[] = []): string[] {
   let entries;
@@ -74,8 +92,11 @@ describe("single front door (architecture guard)", () => {
         // config files (vitest/drizzle) are not application code.
         if (!rel.includes("/src/")) continue;
         if (rel.startsWith("packages/db/")) continue; // the table definitions live here
-        if (!SCHEMA_IMPORT.test(readFileSync(file, "utf8"))) continue;
-        if (!ALLOWLIST.has(rel)) offenders.push(rel);
+        if (ALLOWLIST.has(rel)) continue;
+        const contents = readFileSync(file, "utf8");
+        for (const { re, label } of FORBIDDEN) {
+          if (re.test(contents)) offenders.push(`${rel} — ${label}`);
+        }
       }
     }
 
@@ -91,5 +112,15 @@ describe("single front door (architecture guard)", () => {
   it("the allowlist itself stays small and auditable", () => {
     // A canary: if this grows unexpectedly, someone widened the trusted surface.
     expect(ALLOWLIST.size).toBeLessThanOrEqual(8);
+  });
+
+  it("the runtime client does NOT expose Drizzle's relational API for content tables", async () => {
+    const db = await createTestDatabase();
+    // If schema were registered on the client, `db.query.stories.findMany()` would read content
+    // with no table import and no authorization check. Drizzle leaves `db.query` as an empty
+    // object when no schema is registered, so the content accessors must be absent.
+    const query = (db as unknown as { query: Record<string, unknown> }).query;
+    expect(query.stories).toBeUndefined();
+    expect(query.media).toBeUndefined();
   });
 });

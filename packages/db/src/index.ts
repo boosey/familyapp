@@ -6,8 +6,10 @@
  * is imported only by audited modules (the authorization function, the consent ledger, and
  * write paths). An architecture test (packages/core/test/architecture.test.ts) fails CI if any
  * other source file imports the content tables — so "all reads go through one function" is
- * enforced structurally, not by convention. Consumers get types, the client, and the test
- * harness here; to READ story/media content they must go through @chronicle/core.
+ * enforced structurally, not by convention. The client IS exported here (apps need to open a
+ * connection), but it carries no relational query API (see client.ts: schema is not registered),
+ * so holding the client grants no content read on its own — you still need a guarded table
+ * object. To READ story/media content, go through @chronicle/core.
  */
 export type {
   Person,
