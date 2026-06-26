@@ -12,14 +12,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   accounts,
   consentRecords,
-  createTestDatabase,
   families,
   media,
   memberships,
   persons,
   stories,
-  type Database,
-} from "../src/index";
+} from "../src/schema";
+import { createTestDatabase, type Database } from "../src/index";
 
 let db: Database;
 beforeEach(async () => {
@@ -52,6 +51,30 @@ async function makeStoryWithRecording(ownerPersonId: string) {
     .returning();
   return { recording: rec!, story: story! };
 }
+
+describe("a story is born private + draft (authenticity/consent defaults)", () => {
+  it("defaults audienceTier=private and state=draft when only required fields are given", async () => {
+    const elder = await makePerson();
+    const [rec] = await db
+      .insert(media)
+      .values({
+        ownerPersonId: elder.id,
+        kind: "story_audio",
+        storageKey: "s3://bucket/original.wav",
+        contentType: "audio/wav",
+        checksum: "abc123",
+      })
+      .returning();
+    const [story] = await db
+      .insert(stories)
+      .values({ ownerPersonId: elder.id, recordingMediaId: rec!.id })
+      .returning();
+    expect(story!.state).toBe("draft");
+    expect(story!.audienceTier).toBe("private");
+    expect(story!.approvedAt).toBeNull();
+    expect(story!.prose).toBeNull();
+  });
+});
 
 describe("consent ledger is append-only", () => {
   it("permits INSERT", async () => {

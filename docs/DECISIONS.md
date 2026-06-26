@@ -46,6 +46,20 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   UPDATE/DELETE of `consent_records`, and (2) a repository that exposes only append + read. Both
   are tested (the trigger via PGlite). Revocation is always a new superseding row.
 
+## Increment 1 — review responses
+
+- **Single front door made structural, not conventional (review finding I1).** `@chronicle/db`'s
+  main entry no longer exports the raw content tables; `stories`/`media` are reachable only via
+  the `@chronicle/db/schema` subpath, and an architecture test
+  (`packages/core/test/architecture.test.ts`) fails CI if any `src/` file outside an audited
+  allowlist imports that subpath. This is the spec's "no bypass path" enforced as a build gate —
+  the closest a TS monorepo gets to RLS without the weight, and matching the spec's own framing
+  (Part V: "impossible to bypass if reads are funneled through one module").
+- **Deferred (review finding I4): the story state-machine guard (`assertStoryTransition`) is not
+  yet wired into a write path** because Increment 1 (the spine) creates no story mutations. It is
+  built and unit-tested now and will be enforced at the capture (draft creation) and approval
+  (pending→approved→shared) increments. Noted so it is not mistaken for dead code.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

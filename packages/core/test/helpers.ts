@@ -5,10 +5,12 @@ import {
   memberships,
   persons,
   stories,
-  type AudienceTier,
-  type Database,
-  type MembershipStatus,
-  type StoryState,
+} from "@chronicle/db/schema";
+import type {
+  AudienceTier,
+  Database,
+  MembershipStatus,
+  StoryState,
 } from "@chronicle/db";
 import { eq } from "drizzle-orm";
 

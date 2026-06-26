@@ -6,12 +6,8 @@
  * the authorization function reads as the latest sharing state. Consent is owned by the Person.
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import {
-  consentRecords,
-  type ConsentAction,
-  type ConsentRecord,
-  type Database,
-} from "@chronicle/db";
+import { consentRecords } from "@chronicle/db/schema";
+import type { ConsentAction, ConsentRecord, Database } from "@chronicle/db";
 
 export interface RecordConsentInput {
   /** Whose consent this is (the author/owner of the content). */

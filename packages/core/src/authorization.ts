@@ -18,15 +18,15 @@
  *     content in any state.
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
+// Content tables are imported from the audited subpath. This file is on the architecture-test
+// allowlist precisely because it IS the single front door.
 import {
   consentRecords,
   media as mediaTable,
   memberships,
   stories,
-  type Database,
-  type Media,
-  type Story,
-} from "@chronicle/db";
+} from "@chronicle/db/schema";
+import type { Database, Media, Story } from "@chronicle/db";
 
 /**
  * Who is asking. The anonymous elder surface authenticates with nothing but a session token;

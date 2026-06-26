@@ -6,6 +6,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      // Order matters: the more specific subpath must come first.
+      "@chronicle/db/schema": fileURLToPath(
+        new URL("../db/src/schema.ts", import.meta.url),
+      ),
       "@chronicle/db": fileURLToPath(
         new URL("../db/src/index.ts", import.meta.url),
       ),

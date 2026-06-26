@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
-      "@chronicle/db": ["../db/src/index.ts"]
+      "@chronicle/db": ["../db/src/index.ts"],
+      "@chronicle/db/schema": ["../db/src/schema.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
