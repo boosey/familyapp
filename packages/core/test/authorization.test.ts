@@ -1,0 +1,295 @@
+/**
+ * Increment 1 — the single authorization function: the full permission matrix.
+ *
+ * The reviewer is told to "try to find a query that returns story content without it." These
+ * tests pin every tier × state × relationship combination, plus the elder/owner and anonymous
+ * paths, and assert the public read helpers (the single front door) never leak.
+ */
+import { createTestDatabase, type Database } from "@chronicle/db";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  decideMediaRead,
+  decideStoryRead,
+  getMediaForViewer,
+  getStoryForViewer,
+  listStoriesForViewer,
+  type AuthContext,
+} from "../src/index";
+import {
+  addMembership,
+  endMembership,
+  makeApprovalAudio,
+  makeFamily,
+  makePerson,
+  makeStory,
+  revokeConsent,
+} from "./helpers";
+
+let db: Database;
+beforeEach(async () => {
+  db = await createTestDatabase();
+});
+
+const anon: AuthContext = { kind: "anonymous" };
+const account = (personId: string): AuthContext => ({ kind: "account", personId });
+const elder = (personId: string): AuthContext => ({
+  kind: "elder_session",
+  personId,
+});
+
+describe("owner / elder access", () => {
+  it("owner reads their own private draft story", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "draft",
+      audienceTier: "private",
+    });
+    expect((await decideStoryRead(db, account(e.id), story)).allowed).toBe(true);
+  });
+
+  it("token-scoped elder reads their own private draft (zero login)", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "draft",
+      audienceTier: "private",
+    });
+    const fetched = await getStoryForViewer(db, elder(e.id), story.id);
+    expect(fetched?.id).toBe(story.id);
+  });
+});
+
+describe("anonymous access", () => {
+  it("denies anonymous read of a private story", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      audienceTier: "private",
+    });
+    expect((await decideStoryRead(db, anon, story)).allowed).toBe(false);
+    expect(await getStoryForViewer(db, anon, story.id)).toBeNull();
+  });
+
+  it("allows anonymous read of a public, approved+shared, consented story", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "public",
+      withApprovalConsent: true,
+    });
+    expect((await decideStoryRead(db, anon, story)).allowed).toBe(true);
+  });
+
+  it("denies anonymous read of a public story that is NOT yet approved/shared", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "pending_approval",
+      audienceTier: "public",
+    });
+    expect((await decideStoryRead(db, anon, story)).allowed).toBe(false);
+  });
+});
+
+describe("family-tier access", () => {
+  async function setup(tier: "family" | "branch") {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const stranger = await makePerson(db, "Stranger");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    const sofiaMembership = await addMembership(db, sofia.id, fam.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: tier,
+      withApprovalConsent: true,
+    });
+    return { e, sofia, stranger, fam, sofiaMembership, story };
+  }
+
+  it("allows an active co-member to read a shared family story", async () => {
+    const { sofia, story } = await setup("family");
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      true,
+    );
+  });
+
+  it("treats branch tier as family for enforcement (Phase 0)", async () => {
+    const { sofia, story } = await setup("branch");
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      true,
+    );
+  });
+
+  it("denies a person with no shared family", async () => {
+    const { stranger, story } = await setup("family");
+    expect(
+      (await decideStoryRead(db, account(stranger.id), story)).allowed,
+    ).toBe(false);
+  });
+
+  it("denies a co-member whose membership is ENDED (divorce)", async () => {
+    const { sofia, sofiaMembership, story } = await setup("family");
+    await endMembership(db, sofiaMembership.id);
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("denies a co-member whose membership is PAUSED (estrangement)", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "paused");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("denies a co-member when the family story is still pending_approval", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "pending_approval",
+      audienceTier: "family",
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("denies a co-member after consent is REVOKED (new superseding row hides it)", async () => {
+    const { e, sofia, story } = await setup("family");
+    // visible first
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      true,
+    );
+    await revokeConsent(db, story.id, e.id);
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("denies even a co-member for a PRIVATE story (private = author only)", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "private",
+      withApprovalConsent: true,
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+});
+
+describe("media authorization", () => {
+  it("owner reads their own recording", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const { recording } = await makeStory(db, { ownerPersonId: e.id });
+    expect((await decideMediaRead(db, account(e.id), recording)).allowed).toBe(
+      true,
+    );
+  });
+
+  it("co-member reads the recording of a readable shared story", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const { recording } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+    });
+    expect(
+      (await decideMediaRead(db, account(sofia.id), recording)).allowed,
+    ).toBe(true);
+  });
+
+  it("denies a stranger the recording of a private story", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const stranger = await makePerson(db, "Stranger");
+    const { recording } = await makeStory(db, {
+      ownerPersonId: e.id,
+      audienceTier: "private",
+    });
+    expect(await getMediaForViewer(db, account(stranger.id), recording.id)).toBeNull();
+  });
+
+  it("keeps approval-audio owner-only (co-member denied)", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const approval = await makeApprovalAudio(db, e.id);
+    expect((await decideMediaRead(db, account(sofia.id), approval)).allowed).toBe(
+      false,
+    );
+    expect((await decideMediaRead(db, account(e.id), approval)).allowed).toBe(
+      true,
+    );
+  });
+});
+
+describe("the single front door never leaks via the list helper", () => {
+  it("listStoriesForViewer returns only authorized stories", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+
+    await makeStory(db, { ownerPersonId: e.id, audienceTier: "private" });
+    await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "pending_approval",
+      audienceTier: "family",
+    });
+    const { story: visible } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+    });
+
+    const forSofia = await listStoriesForViewer(db, account(sofia.id), {
+      ownerPersonId: e.id,
+    });
+    expect(forSofia.map((s) => s.id)).toEqual([visible.id]);
+
+    // The owner sees all three.
+    const forOwner = await listStoriesForViewer(db, account(e.id), {
+      ownerPersonId: e.id,
+    });
+    expect(forOwner).toHaveLength(3);
+
+    // Anonymous sees none of these (none are public).
+    const forAnon = await listStoriesForViewer(db, anon, {
+      ownerPersonId: e.id,
+    });
+    expect(forAnon).toHaveLength(0);
+  });
+});
