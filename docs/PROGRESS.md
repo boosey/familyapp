@@ -10,11 +10,34 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 3 — Pipeline | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 4 — Interviewer | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 5 — Approval gate | ✅ done | 2 | NO SPEC VIOLATIONS |
-| 6 — Family hub | ⬜ | — | — |
+| 6 — Family hub | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 7 — Asked-question relay | ⬜ | — | — |
 
 ## Log
 
+- **2026-06-26** — Increment 6 (basic family hub) eval-clean (3 rounds).
+  New `@chronicle/core` Ask repository (`asks.ts`): `createAsk` enforces shared-active-family
+  co-membership at the boundary (rejects anonymous, ended/paused, strangers, empty questions,
+  and form-spoofed familyIds); `listPendingAsksForElder` is the I7 seam returning
+  queued/routed asks in arrival order with the asker's spoken name. Asks live on the open
+  schema surface — no architecture allowlist change.
+  New `apps/web/lib/auth.ts` AuthProvider seam (interface + DevCookie stub; Clerk is the
+  named prod adapter, stubbed per OPEN-QUESTIONS). Wired through `lib/runtime.ts`. All hub
+  pages authenticate via `auth.getCurrentAuthContext()` — no direct cookie reads in pages.
+  New hub pages: `/hub` (`hub-data.ts` `loadHubFeed` lists each co-member elder's stories
+  via `listStoriesForViewer`, sorted by approvedAt; audio rendered FIRST, prose in
+  `<details>` collapsed); `/hub/invite` (server action → audited `createElderSession`,
+  verifies BOTH inviter and elder hold active memberships in the chosen family); invite
+  result page (raw token handed via short-lived httpOnly flash cookie, deleted on first read
+  — NEVER via URL query string); `/hub/ask` (server action → `createAsk`); `/dev/sign-in`
+  (writes the dev cookie). New `/api/media/[id]/route.ts` streams bytes only AFTER
+  `getMediaForViewer` clears the request — 404 indistinguishable from "no access".
+  Round 1: invite did not filter `status='active'` on the inviter's membership query — fixed
+  (defense in depth: paused/ended ex-members must not mint links). Round 2: token leaked via
+  URL query (logs/history/Referer); chosen elder not verified to be in chosen family —
+  fixed (flash cookie + cross-membership check). Round 3: NO SPEC VIOLATIONS. 133 tests
+  green (db 11, storage 11, core 49, capture 17, pipeline 21, interviewer 24); all
+  packages + apps/web typecheck clean. Architecture-test allowlist canary unchanged.
 - **2026-06-26** — Increment 5 (voice-only approval gate) eval-clean (2 rounds).
   New audited write `approveAndShareStory` in `packages/core/src/story-repository.ts`: ONE
   `db.transaction` inserts the `approval_audio` Media row, walks the Story through

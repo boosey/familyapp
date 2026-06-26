@@ -13,11 +13,15 @@ import {
   type Database,
 } from "@chronicle/db";
 import { FilesystemMediaStorage, type MediaStorage } from "@chronicle/storage";
+import {
+  createDevCookieAuthProvider,
+  type AuthProvider,
+} from "./auth";
 
 const DEV_DB_DIR = process.env.CHRONICLE_DB_DIR ?? "./.pglite/dev";
 const DEV_MEDIA_DIR = process.env.CHRONICLE_MEDIA_DIR ?? "./.media";
 
-type Runtime = { db: Database; storage: MediaStorage };
+type Runtime = { db: Database; storage: MediaStorage; auth: AuthProvider };
 
 // Survive HMR in dev: cache on globalThis so we don't reopen PGlite on every reload.
 const globalForRuntime = globalThis as unknown as {
@@ -36,7 +40,8 @@ async function build(): Promise<Runtime> {
     baseDir: DEV_MEDIA_DIR,
     publicBaseUrl: "/media",
   });
-  return { db, storage };
+  const auth = createDevCookieAuthProvider(db);
+  return { db, storage, auth };
 }
 
 export function getRuntime(): Promise<Runtime> {

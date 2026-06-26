@@ -61,11 +61,11 @@ The data model + the single front door + the append-only ledger.
 - [x] Voice correction regenerates prose only; audio untouched — `applyTranscriptCorrection` (core) + `applyVoiceCorrection` (pipeline coordinator); recording pointer structurally unreachable from these seams
 - [x] Authorization function refuses to surface Story without approved/shared + backing ledger row — regression covers full lifecycle (pending→shared@family→revoked)
 
-## Increment 6 — BASIC FAMILY HUB
-- [ ] Logged-in younger-gen surface; approved-stories list (original voice primary, prose secondary)
-- [ ] Invite-link generator (creates session token)
-- [ ] Ask submission
-- [ ] All reads strictly through the authorization function
+## Increment 6 — BASIC FAMILY HUB  ✅
+- [x] Logged-in younger-gen surface; approved-stories list (original voice primary, prose secondary) — `/hub` server component, audio rendered first with prose in `<details>` collapsed by default
+- [x] Invite-link generator (creates session token) — `/hub/invite` via audited `createElderSession`; raw token handed to result page via short-lived httpOnly flash cookie (NEVER via URL query — would leak via logs/history/Referer)
+- [x] Ask submission — `/hub/ask` via new `@chronicle/core` `createAsk` (co-membership gated; non-anonymous; non-empty; spoofed-familyId rejected)
+- [x] All reads strictly through the authorization function — hub feed via `listStoriesForViewer`; `/api/media/[id]` via `getMediaForViewer` (404 indistinguishable from "no access")
 
 ## Increment 7 — ASKED-QUESTION RELAY (self-feeding loop)
 - [ ] Ask queued → routed into interviewer queue (one of several prompt sources = seam)

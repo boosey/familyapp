@@ -180,6 +180,39 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   (recoverable evidence > vanished recording). Tests pin both halves — DB rollback
   preserves storage; storage failure prevents any DB writes.
 
+## Increment 6 review responses
+
+- **Raw session token is handed via a short-lived httpOnly flash cookie, NEVER via URL query
+  (review I6 round 2).** First pass redirected to the result page with
+  `?token=<raw>`. Reviewer flagged: the token would land in server access logs, browser
+  history, and the `Referer` header on any outbound click. Fix: the invite server action
+  writes the raw token into an httpOnly cookie scoped to `/hub/invite/result` with
+  `maxAge=60`; the result page reads it once and deletes it (single-view flash). DB stores
+  only the sha-256 hash, unchanged.
+- **Invite verifies BOTH inviter AND chosen elder are active members of the chosen family
+  (review I6 round 2).** Without the second check, a signed-in account could mint a session
+  token binding an arbitrary Person to a Family the elder is not actually in — exactly the
+  cross-family identity confusion the Person/Membership split exists to prevent (spec Part
+  II). The form's elder dropdown was also tightened to show only co-members; the server
+  action is the authoritative trust boundary.
+- **Membership status is filtered to `active` in every authorization-driving query (review
+  I6 round 1).** Hub feed loader, invite (both the family dropdown AND the inviter check at
+  submit), Ask candidate dropdown, and `createAsk` all filter `status='active'`. Spec Part
+  II is explicit: "The Membership's status and role are inputs to every permission check."
+- **AuthProvider is the seam; DevCookie stub for local, Clerk for prod.** The hub never
+  reads `cookies()` directly except in the cookie-writer adapters (`/dev/sign-in`,
+  `/hub/invite/result` flash read). Everywhere else identity flows through
+  `auth.getCurrentAuthContext()` returning a core `AuthContext`. Clerk slots into this
+  interface without touching pages.
+- **Asks live on the OPEN schema surface (not behind the content guard).** Asks are prompts
+  created by a family member, not expressive content owned by a Person. `createAsk` is in
+  `@chronicle/core` for boundary consistency (single co-membership check) but does not
+  need an architecture-test allowlist entry — it imports only `@chronicle/db/schema`.
+- **Media playback returns 404 indistinguishable from "no access".** `/api/media/[id]` calls
+  `getMediaForViewer` first; on null, returns an empty 404. Storage-miss after the auth
+  check also returns 404 — no body distinguishes the two cases (an attacker timing
+  difference is acceptable for Phase 1).
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

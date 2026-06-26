@@ -44,3 +44,9 @@ export {
   getElderBiographicalContext,
 } from "./elder-profile";
 export { AuthorizationError, InvariantViolation } from "./errors";
+export {
+  createAsk,
+  listPendingAsksForElder,
+  type CreateAskInput,
+  type PendingAskForElder,
+} from "./asks";
