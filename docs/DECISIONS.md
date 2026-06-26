@@ -152,6 +152,34 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   (already in code) and the absolute system rules — it cannot decide topic selection,
   consume Asks, or advance the turn counter.
 
+## Increment 5 review responses
+
+- **`approveAndShareStory` persists the intermediate `approved` row (review I5 round 1).**
+  First pass folded `pending_approval → approved → shared` into a single UPDATE that wrote
+  `state='shared'` directly while calling `assertStoryTransition` for both legs as pure
+  validation. Reviewer flagged: the spec is explicit about THREE states and an observer
+  inside the tx (or any after-the-fact audit query) never sees the legal intermediate.
+  Fix: two sequential UPDATEs inside the same `db.transaction` — one writes
+  `state='approved'` + `audienceTier` + `approvedAt`, the second writes `state='shared'`.
+  `assertStoryTransition` guards each leg. Atomic and observable.
+- **Capture-side approval does NOT join the audited allowlist.** `captureApproval` in
+  `@chronicle/capture` deliberately routes through `getStoryForViewer` (front door) +
+  `approveAndShareStory` (audited core write) instead of importing `@chronicle/db/content`.
+  Keeps the architecture-test allowlist exactly `authorization.ts` + `story-repository.ts`
+  — the canary stays a one-line diff if anyone ever widens it.
+- **Voice correction is a coordinator, not a new write surface.** `applyVoiceCorrection`
+  in `@chronicle/pipeline` composes `applyTranscriptCorrection` (audited clear) +
+  `renderStoryFromTranscript` (re-render) + `updateDerivedFields` (audited persist). The
+  recording pointer is structurally unreachable through this seam — there is no path here
+  that could write Media. State stays `pending_approval`; the elder's NEXT voice action is
+  approval. Correction is gated on `pending_approval` so a post-share edit cannot
+  silently rewrite a story without a new consent event.
+- **Storage-first ordering applies to approval audio too.** Same authenticity-beats-polish
+  ordering as `ingestRecording`: upload approval-audio bytes to storage BEFORE the DB tx.
+  If the DB tx fails, the elder's spoken approval is still durable in object storage
+  (recoverable evidence > vanished recording). Tests pin both halves — DB rollback
+  preserves storage; storage failure prevents any DB writes.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

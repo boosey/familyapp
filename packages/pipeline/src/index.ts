@@ -46,3 +46,8 @@ export {
   type Pipeline,
   type PipelineDeps,
 } from "./orchestrator";
+
+export {
+  applyVoiceCorrection,
+  type ApplyVoiceCorrectionInput,
+} from "./correction";

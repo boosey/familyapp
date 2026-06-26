@@ -24,10 +24,14 @@ export {
   type PersistedRecording,
   type DerivedFields,
   type InterviewerStoryMemory,
+  type ApproveAndShareInput,
+  type ApproveAndShareResult,
   persistRecordingAndCreateDraft,
   updateDerivedFields,
   transitionStoryState,
   listElderMemoryForInterviewer,
+  approveAndShareStory,
+  applyTranscriptCorrection,
 } from "./story-repository";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is

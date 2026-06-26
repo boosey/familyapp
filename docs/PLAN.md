@@ -55,11 +55,11 @@ The data model + the single front door + the append-only ledger.
       is already in the architecture-test allowlist.
 - [x] Voice interface (ElevenLabs default per DECISIONS) + `ScriptedVoice` mock
 
-## Increment 5 — VOICE-ONLY APPROVAL GATE
-- [ ] Voice approval in-session; capture `approval_audio` Media
-- [ ] Atomic: Story pending_approval → approved → shared @ chosen tier + first ConsentRecord
-- [ ] Voice correction regenerates prose only; audio untouched
-- [ ] Authorization function refuses to surface Story without approved/shared + backing ledger row
+## Increment 5 — VOICE-ONLY APPROVAL GATE  ✅
+- [x] Voice approval in-session; capture `approval_audio` Media — `captureApproval` in `@chronicle/capture` (storage-first ordering mirrors `ingestRecording`)
+- [x] Atomic: Story pending_approval → approved → shared @ chosen tier + first ConsentRecord — `approveAndShareStory` (audited core write); one `db.transaction`, both state legs through `assertStoryTransition`, intermediate `approved` row persisted
+- [x] Voice correction regenerates prose only; audio untouched — `applyTranscriptCorrection` (core) + `applyVoiceCorrection` (pipeline coordinator); recording pointer structurally unreachable from these seams
+- [x] Authorization function refuses to surface Story without approved/shared + backing ledger row — regression covers full lifecycle (pending→shared@family→revoked)
 
 ## Increment 6 — BASIC FAMILY HUB
 - [ ] Logged-in younger-gen surface; approved-stories list (original voice primary, prose secondary)

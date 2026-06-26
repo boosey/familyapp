@@ -15,3 +15,9 @@ export {
   type IngestRecordingInput,
   type IngestResult,
 } from "./capture";
+export {
+  captureApproval,
+  StoryNotApprovableError,
+  type CaptureApprovalInput,
+  type CaptureApprovalResult,
+} from "./approval";

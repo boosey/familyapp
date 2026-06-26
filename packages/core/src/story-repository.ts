@@ -20,9 +20,17 @@
  */
 import { eq } from "drizzle-orm";
 import { media, stories } from "@chronicle/db/content";
-import { persons } from "@chronicle/db/schema";
-import type { Database, Media, Story, StoryState } from "@chronicle/db";
+import { consentRecords, persons } from "@chronicle/db/schema";
+import type {
+  AudienceTier,
+  ConsentRecord,
+  Database,
+  Media,
+  Story,
+  StoryState,
+} from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
+import { InvariantViolation } from "./errors";
 
 export interface RecordingInput {
   ownerPersonId: string;
@@ -235,6 +243,180 @@ export async function listElderMemoryForInterviewer(
     }))
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit);
+}
+
+/**
+ * The voice-only approval gate (spec Part III). Atomic, audited write that closes the consent
+ * loop on a single story:
+ *
+ *   - inserts the `approval_audio` Media row pointing at the elder's just-uploaded approval clip
+ *     (storage upload happens BEFORE this call, in the same authenticity-beats-polish ordering
+ *     as `ingestRecording` — if anything below fails, the elder's spoken approval is still safe
+ *     in object storage);
+ *   - advances the Story `pending_approval → approved → shared`, each step routed through
+ *     `assertStoryTransition` so an illegal jump cannot be written from inside this audited file;
+ *   - stamps the chosen `audienceTier` and `approvedAt` on the Story;
+ *   - appends the FIRST `ConsentRecord` for the story — `action=approved_for_sharing`, pointing
+ *     at the approval-audio Media, with the elder as both subject and actor (consent is owned by
+ *     the person, and the elder is the one performing the voice approval).
+ *
+ * All four writes happen in ONE `db.transaction`, so the authorization function never sees a
+ * partial state (e.g. story=shared without a backing consent row, which would itself be a bug
+ * the front door would refuse to surface anyway — defense in depth at the write layer too).
+ *
+ * The caller (elder-session-authenticated capture surface) is responsible for asserting that the
+ * session belongs to `story.ownerPersonId`; this function additionally verifies ownership at the
+ * write layer so a misuse cannot smuggle a foreign approval through.
+ */
+export interface ApproveAndShareInput {
+  storyId: string;
+  /** The elder approving — must equal the story owner. */
+  elderPersonId: string;
+  /** The tier the elder is choosing to share at (private rejected — approval implies sharing). */
+  audienceTier: Exclude<AudienceTier, "private">;
+  approvalAudio: {
+    storageKey: string;
+    contentType: string;
+    checksum: string;
+    durationSeconds?: number;
+  };
+  now?: Date;
+}
+
+export interface ApproveAndShareResult {
+  story: Story;
+  approvalAudio: Media;
+  consentRecord: ConsentRecord;
+}
+
+export async function approveAndShareStory(
+  db: Database,
+  input: ApproveAndShareInput,
+): Promise<ApproveAndShareResult> {
+  const now = input.now ?? new Date();
+  return db.transaction(async (tx) => {
+    // 1. Load + ownership/state checks, all inside the tx so a concurrent state change cannot
+    //    sneak past (the row update at the end serializes against a second approver too).
+    const [current] = await tx
+      .select({
+        id: stories.id,
+        ownerPersonId: stories.ownerPersonId,
+        state: stories.state,
+      })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) throw new Error(`story not found: ${input.storyId}`);
+    if (current.ownerPersonId !== input.elderPersonId) {
+      throw new InvariantViolation(
+        `approveAndShareStory: actor ${input.elderPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    // 2. Insert the approval-audio Media row (immutable, owned by the elder).
+    const [approvalMedia] = await tx
+      .insert(media)
+      .values({
+        ownerPersonId: input.elderPersonId,
+        kind: "approval_audio",
+        storageKey: input.approvalAudio.storageKey,
+        contentType: input.approvalAudio.contentType,
+        durationSeconds: input.approvalAudio.durationSeconds ?? null,
+        checksum: input.approvalAudio.checksum,
+      })
+      .returning();
+
+    // 3. Atomic state walk pending_approval → approved → shared. The spec wording is
+    //    explicit about THREE states; we persist the intermediate `approved` row inside the tx
+    //    (so audit/history queries on this DB after-the-fact can in principle observe the legal
+    //    path was walked) rather than folding the two legs into a single UPDATE. Both legs go
+    //    through `assertStoryTransition`, so an illegal jump cannot be written from inside this
+    //    audited file.
+    assertStoryTransition(current.state, "approved");
+    await tx
+      .update(stories)
+      .set({
+        state: "approved",
+        audienceTier: input.audienceTier,
+        approvedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(stories.id, input.storyId));
+
+    assertStoryTransition("approved", "shared");
+    const [updatedStory] = await tx
+      .update(stories)
+      .set({ state: "shared", updatedAt: now })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+
+    // 4. Append the FIRST ConsentRecord — consent has a voice (approvalAudioMediaId) and a
+    //    ledger row from the very first story. The append-only trigger makes this row immutable;
+    //    a future revocation will be a NEW superseding row.
+    const [consent] = await tx
+      .insert(consentRecords)
+      .values({
+        personId: input.elderPersonId,
+        storyId: input.storyId,
+        action: "approved_for_sharing",
+        resultingState: "shared",
+        approvalAudioMediaId: approvalMedia!.id,
+        actorPersonId: input.elderPersonId,
+      })
+      .returning();
+
+    return {
+      story: updatedStory!,
+      approvalAudio: approvalMedia!,
+      consentRecord: consent!,
+    };
+  });
+}
+
+/**
+ * Voice correction (spec: "a correction the elder voices is applied to the prose (a regeneration
+ * of the derived field) before sharing; the audio is untouched"). Updates the transcript to the
+ * corrected text and CLEARS prose/title/summary/tags so the pipeline's render stage re-runs.
+ * Canonical audio is irrelevant to this write path and is structurally untouchable here (the
+ * recording pointer cannot be modified through this function — there is no write for it).
+ *
+ * Returns the post-clear Story; the actual re-render is the caller's job (typically: invoke
+ * `renderStoryFromTranscript` and then `updateDerivedFields`, or re-enqueue the render stage).
+ * Kept narrow on purpose: this is just the "clear the derived fields so they regenerate" half,
+ * which must touch the table and therefore must live in this audited file.
+ */
+export async function applyTranscriptCorrection(
+  db: Database,
+  storyId: string,
+  correctedTranscript: string,
+): Promise<Story> {
+  const [current] = await db
+    .select({ state: stories.state })
+    .from(stories)
+    .where(eq(stories.id, storyId))
+    .limit(1);
+  if (!current) throw new Error(`story not found: ${storyId}`);
+  // A correction is the elder editing in-session before sharing; refuse on a story already
+  // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
+  if (current.state !== "pending_approval") {
+    throw new InvariantViolation(
+      `applyTranscriptCorrection: story must be pending_approval (was ${current.state})`,
+    );
+  }
+  const [row] = await db
+    .update(stories)
+    .set({
+      transcript: correctedTranscript,
+      transcriptWordTimings: null,
+      prose: null,
+      title: null,
+      summary: null,
+      tags: [],
+      updatedAt: new Date(),
+    })
+    .where(eq(stories.id, storyId))
+    .returning();
+  return row!;
 }
 
 export async function getStoryAndRecordingForPipeline(

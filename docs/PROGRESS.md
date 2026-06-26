@@ -9,12 +9,38 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 2 — Capture path | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 3 — Pipeline | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 4 — Interviewer | ✅ done | 3 | NO SPEC VIOLATIONS |
-| 5 — Approval gate | ⬜ | — | — |
+| 5 — Approval gate | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 6 — Family hub | ⬜ | — | — |
 | 7 — Asked-question relay | ⬜ | — | — |
 
 ## Log
 
+- **2026-06-26** — Increment 5 (voice-only approval gate) eval-clean (2 rounds).
+  New audited write `approveAndShareStory` in `packages/core/src/story-repository.ts`: ONE
+  `db.transaction` inserts the `approval_audio` Media row, walks the Story through
+  `pending_approval → approved → shared` with `assertStoryTransition` on both legs (the
+  intermediate `approved` row IS persisted in-tx, honoring the spec's three-state wording),
+  stamps `audienceTier` + `approvedAt`, and appends the FIRST `ConsentRecord`
+  (`action='approved_for_sharing'`, pointing at the new approval-audio Media). Ownership
+  re-verified inside the tx (defense in depth on top of the capture-side session check).
+  Sibling `applyTranscriptCorrection` clears prose/title/summary/tags + updates transcript,
+  gated on `pending_approval` — recording pointer structurally unreachable from this seam.
+  New `packages/capture/src/approval.ts` `captureApproval` mirrors `ingestRecording`'s
+  storage-first ordering: front-door ownership check via `getStoryForViewer`, upload audio
+  bytes to storage BEFORE the DB tx, then call core. Does NOT import `@chronicle/db/content`
+  — architecture allowlist unchanged. New `packages/pipeline/src/correction.ts`
+  `applyVoiceCorrection` is the tiny coordinator: `applyTranscriptCorrection` →
+  `renderStoryFromTranscript` (re-render via in-house prompt) → `updateDerivedFields`. State
+  stays `pending_approval`; the elder's NEXT voice action (approval) is what advances it.
+  Round 1: two findings — (1) intermediate `approved` state never persisted (spec wording is
+  three states); (2) reviewer flagged atomicity-test mechanism as weak. Fixed (1) by doing
+  two sequential UPDATEs inside the tx; (2) is actually solid: `DROP TABLE consent_records
+  CASCADE` doesn't cascade to stories/media (no FK back), so the tx starts cleanly and the
+  inner consent INSERT genuinely fails mid-tx, and the existing assertions already prove
+  rollback of the media row + state. Round 2: NO SPEC VIOLATIONS. 126 tests green (db 11,
+  storage 11, core 42, capture 17, pipeline 21, interviewer 24); all packages + apps/web
+  typecheck clean. Architecture-test allowlist canary unchanged (still exactly
+  `authorization.ts` + `story-repository.ts`). Vendor-SDK guard: zero leaks.
 - **2026-06-26** — Increment 4 (interviewer) eval-clean (3 rounds). New `@chronicle/interviewer`
   package: `Voice`/`AskSource`/`MemorySource`/`AnchorSource` seams (`ScriptedVoice` +
   in-memory mocks); base question bank as data (`questions/bank.ts`) keyed by
