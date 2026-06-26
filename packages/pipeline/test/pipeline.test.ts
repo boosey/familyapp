@@ -494,7 +494,7 @@ describe("parseRenderResponse — defensive parsing", () => {
 });
 
 describe("pipeline — no vendor SDK imports leak into IP code", () => {
-  it("none of @chronicle/{core,db,storage,capture,pipeline} src files import a vendor SDK", () => {
+  it("none of @chronicle/{core,db,storage,capture,pipeline,interviewer} src files import a vendor SDK", () => {
     // Tight allowlist: only these strings are permitted inside pipeline IP code. Any vendor
     // SDK import (e.g. "groq-sdk", "@anthropic-ai/sdk", "openai", "elevenlabs", "inngest",
     // "@aws-sdk/...") is a violation — vendors live exclusively in adapter files that nothing
@@ -519,7 +519,7 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "@trigger.dev/sdk",
     ];
     const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
-    const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src"];
+    const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src", "packages/interviewer/src"];
     const offenders: string[] = [];
     for (const root of roots) {
       walk(join(repoRoot, root), (full) => {

@@ -43,14 +43,17 @@ The data model + the single front door + the append-only ledger.
 - [x] draft → pending_approval via `assertStoryTransition` (the deferred guard is now wired);
       audienceTier stays `private`; prose/transcript regenerable (clear field → re-run = new render)
 
-## Increment 4 — INTERVIEWER BEHAVIOR (the IP)
-- [ ] Controlled turn loop wrapping the LLM (NOT an open chat)
-- [ ] Behavior policy in our code: open/concrete/non-leading, one-at-a-time, silence-tolerant,
+## Increment 4 — INTERVIEWER BEHAVIOR (the IP)  ✅
+- [x] Controlled turn loop wrapping the LLM (NOT an open chat) — `@chronicle/interviewer`
+- [x] Behavior policy in our code: open/concrete/non-leading, one-at-a-time, silence-tolerant,
       reflect/follow, gentle sequencing, reminiscence-bump weighting, spoken off-ramp
-- [ ] Four turn inputs: base question bank, pending Asks (prioritized, asker named),
+- [x] Four turn inputs: base question bank, pending Asks (prioritized, asker named),
       session memory, biographical anchors
-- [ ] Cross-session memory + warm callback
-- [ ] Voice interface (ElevenLabs default) + mock
+- [x] Cross-session memory + warm callback — via NEW audited core read
+      `listElderMemoryForInterviewer` (SQL-projection-only: title/summary/tags/promptQuestion/
+      createdAt; no transcript/prose/storageKey ever selected). On `story-repository.ts` which
+      is already in the architecture-test allowlist.
+- [x] Voice interface (ElevenLabs default per DECISIONS) + `ScriptedVoice` mock
 
 ## Increment 5 — VOICE-ONLY APPROVAL GATE
 - [ ] Voice approval in-session; capture `approval_audio` Media

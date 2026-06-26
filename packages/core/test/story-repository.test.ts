@@ -2,7 +2,9 @@ import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   getStoryForViewer,
+  listElderMemoryForInterviewer,
   persistRecordingAndCreateDraft,
+  updateDerivedFields,
 } from "../src/index";
 import { makePerson } from "./helpers";
 
@@ -69,5 +71,71 @@ describe("persistRecordingAndCreateDraft (capture write path)", () => {
       { promptQuestion: "What was your mother like?" },
     );
     expect(story.promptQuestion).toBe("What was your mother like?");
+  });
+});
+
+describe("listElderMemoryForInterviewer (audited cross-session memory read)", () => {
+  it("returns only safe metadata for the elder's own stories — never transcript / prose / audio key", async () => {
+    const elder = await makePerson(db, "Eleanor");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: elder.id,
+      storageKey: "r2://chronicle/eleanor/rec.webm",
+      contentType: "audio/webm",
+      checksum: "sha256:1",
+    });
+    await updateDerivedFields(db, story.id, {
+      transcript: "I grew up on a farm.",
+      prose: "I grew up on a farm in Iowa.",
+      title: "The Iowa farm",
+      summary: "A childhood on an Iowa farm.",
+      tags: ["childhood", "farm"],
+    });
+    const rows = await listElderMemoryForInterviewer(db, elder.id, 10);
+    expect(rows.length).toBe(1);
+    const row = rows[0]!;
+    // Permitted: safe metadata.
+    expect(row.title).toBe("The Iowa farm");
+    expect(row.summary).toBe("A childhood on an Iowa farm.");
+    expect(row.tags).toEqual(["childhood", "farm"]);
+    // The contract is the projection: forbidden fields are NOT on the row type — confirm by
+    // structural absence (Object.keys is the runtime check; the TS type already disallows it).
+    const keys = Object.keys(row).sort();
+    expect(keys).toEqual(
+      ["createdAt", "promptQuestion", "storyId", "summary", "tags", "title"].sort(),
+    );
+  });
+
+  it("returns most-recent first, capped at the requested limit", async () => {
+    const elder = await makePerson(db, "Eleanor");
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const { story } = await persistRecordingAndCreateDraft(db, {
+        ownerPersonId: elder.id,
+        storageKey: `r2://chronicle/eleanor/rec-${i}.webm`,
+        contentType: "audio/webm",
+        checksum: `sha256:${i}`,
+      });
+      ids.push(story.id);
+      // Force monotonic createdAt ordering across rows.
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const rows = await listElderMemoryForInterviewer(db, elder.id, 2);
+    expect(rows.length).toBe(2);
+    // Most recent first => the last-inserted story is first.
+    expect(rows[0]!.storyId).toBe(ids[2]);
+    expect(rows[1]!.storyId).toBe(ids[1]);
+  });
+
+  it("does NOT surface stories owned by another person (scoping by ownerPersonId)", async () => {
+    const elder = await makePerson(db, "Eleanor");
+    const other = await makePerson(db, "Other");
+    await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: other.id,
+      storageKey: "r2://chronicle/other/rec.webm",
+      contentType: "audio/webm",
+      checksum: "sha256:other",
+    });
+    const rows = await listElderMemoryForInterviewer(db, elder.id, 10);
+    expect(rows.length).toBe(0);
   });
 });

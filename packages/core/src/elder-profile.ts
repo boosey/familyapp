@@ -33,3 +33,39 @@ export async function getElderProfile(
   if (!row) return null;
   return { personId, spokenName: row.spokenName };
 }
+
+/**
+ * The fuller, lightly-held biographical context the interviewer "arrives prepared" with. This
+ * stays on the OPEN (non-content) read surface because the persons table is not behind the
+ * front-door guard — it's identity, not expressive content. The interviewer is instructed by
+ * its system prompt to treat these as hints, never as ground truth.
+ */
+export interface ElderBiographicalContext {
+  personId: string;
+  spokenName: string;
+  birthYear: number | null;
+  /** `persons.biographical_anchors` jsonb — birthplace, profession, etc. Free-form. */
+  anchors: Record<string, unknown>;
+}
+
+export async function getElderBiographicalContext(
+  db: Database,
+  personId: string,
+): Promise<ElderBiographicalContext | null> {
+  const [row] = await db
+    .select({
+      spokenName: persons.spokenName,
+      birthYear: persons.birthYear,
+      anchors: persons.biographicalAnchors,
+    })
+    .from(persons)
+    .where(eq(persons.id, personId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    personId,
+    spokenName: row.spokenName,
+    birthYear: row.birthYear,
+    anchors: (row.anchors ?? {}) as Record<string, unknown>,
+  };
+}

@@ -15,10 +15,6 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 
 ## Assumptions made (correct me if wrong)
 
-- **Repo lives on Google Drive (`G:\My Drive\...`).** `node_modules` on a synced cloud drive
-  causes sync churn + cross-volume copy slowness (pnpm can't hardlink C:→G:). Recommend either
-  excluding `node_modules`/`.next`/`dist` from Drive sync, or moving the repo to a local path.
-  Proceeding in-place with a thorough `.gitignore`.
 - **"Branch" audience tier == "family" for enforcement** until branch structure is modeled
   (spec permits this explicitly; the stored tier value is kept faithfully and is non-lossy).
 - **Session token expiry default: 30 days, configurable.** Spec says "optionally time-bounded";

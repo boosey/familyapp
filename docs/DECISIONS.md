@@ -125,6 +125,33 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   caller, the story stays at `transcript=null` so a deliberate human retry is possible, and
   exactly one vendor call is made per attempt.
 
+## Increment 4 review responses
+
+- **Cross-session memory: NEW audited core read, projected in SQL (review I4 round 2).**
+  First pass used `listStoriesForViewer` with the elder's own AuthContext and projected
+  metadata in the consumer adapter. Defensible — the elder is owner; the audited call did
+  return only-permitted rows — but the safe-metadata contract lived in the consumer rather
+  than at the boundary. Added `listElderMemoryForInterviewer(db, elderPersonId, limit)` to
+  `story-repository.ts` (already in the architecture allowlist). It SELECTs only
+  `id/title/summary/tags/promptQuestion/createdAt`. Transcript/prose/storageKey are
+  structurally unreachable through this function. The interviewer adapter is now a thin
+  pass-through.
+- **`follow_up` is consumed on use (review I4 round 2).** The picker emits `follow_up` when
+  the elder's last utterance is ≥12 words. Initially `lastElderUtterance` was not cleared on
+  consumption, so the picker could re-emit `follow_up` on every subsequent turn until the
+  elder spoke again. Fix: `recordTurnCompleted` clears `lastElderUtterance` on the
+  `follow_up` case. A new utterance via `recordResponse` still triggers a fresh follow_up;
+  only same-utterance re-firing is suppressed. Regression test pins the fall-back to `base`.
+- **Voice persona is configuration, persona id is forwarded per-turn (locked from spec).**
+  Spec: "the same warm voice every session is a dignity requirement". `turn-loop.ts` forwards
+  the same `deps.voiceId` on every `voice.speak` call; test pins this. The interviewer's
+  synthetic voice is entirely distinct from the elder's preserved original recordings — the
+  Voice seam is for question TTS only and has no path that re-synthesizes a Story's audio.
+- **The LLM never sees policy state.** Sensitivity gating, rapport counter, distress flag,
+  Ask priorities, off-ramp detection are all in `behavior.ts`. The LLM gets a chosen Intent
+  (already in code) and the absolute system rules — it cannot decide topic selection,
+  consume Asks, or advance the turn counter.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

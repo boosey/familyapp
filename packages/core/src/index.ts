@@ -23,13 +23,20 @@ export {
   type DraftStoryInput,
   type PersistedRecording,
   type DerivedFields,
+  type InterviewerStoryMemory,
   persistRecordingAndCreateDraft,
   updateDerivedFields,
   transitionStoryState,
+  listElderMemoryForInterviewer,
 } from "./story-repository";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is
 // the pipeline orchestrator. Import them via `@chronicle/core/pipeline`, which the architecture
 // guard restricts to a single file.
-export { type ElderProfile, getElderProfile } from "./elder-profile";
+export {
+  type ElderProfile,
+  type ElderBiographicalContext,
+  getElderProfile,
+  getElderBiographicalContext,
+} from "./elder-profile";
 export { AuthorizationError, InvariantViolation } from "./errors";

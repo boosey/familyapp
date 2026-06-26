@@ -8,13 +8,33 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 1 — The spine | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 2 — Capture path | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 3 — Pipeline | ✅ done | 3 | NO SPEC VIOLATIONS |
-| 4 — Interviewer | ⬜ | — | — |
+| 4 — Interviewer | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 5 — Approval gate | ⬜ | — | — |
 | 6 — Family hub | ⬜ | — | — |
 | 7 — Asked-question relay | ⬜ | — | — |
 
 ## Log
 
+- **2026-06-26** — Increment 4 (interviewer) eval-clean (3 rounds). New `@chronicle/interviewer`
+  package: `Voice`/`AskSource`/`MemorySource`/`AnchorSource` seams (`ScriptedVoice` +
+  in-memory mocks); base question bank as data (`questions/bank.ts`) keyed by
+  category/sensitivity/lifePhase with absolute drafting rules in the file header; pure
+  `behavior.ts` picker enforcing priority order (distress → off-ramp → callback-on-turn-0 →
+  pending Asks → follow_up → base) with rapport-gated high-sensitivity, reminiscence-bump
+  weighting, and named policy constants; `phraser.ts` wrapping the LLM (NOT an open chat) with
+  in-house system prompt + per-Intent user blocks; `turn-loop.ts` composing the session;
+  `core-adapters.ts` bridging seams to audited core reads. New AUDITED content read
+  `listElderMemoryForInterviewer` on `story-repository.ts` (already in the allowlist) projects
+  ONLY safe metadata at the SQL layer — transcript/prose/storageKey never selected. Round 1:
+  NO SPEC VIOLATIONS, 3 advisories. Triage: pushed the metadata-only contract DOWN into the
+  audited boundary (added `listElderMemoryForInterviewer` so the projection is in SQL not in
+  the consumer). Round 2: NO SPEC VIOLATIONS, 3 advisories. Closed two: stale docstring in
+  `core-adapters.ts`; sticky `follow_up` (cleared `lastElderUtterance` on `follow_up`
+  consumption — with regression test asserting fallback to base on the next pick). Round 3:
+  NO SPEC VIOLATIONS, no advisories. 110 tests green (db 11, storage 11, core 34, capture 11,
+  pipeline 20, interviewer 24); all packages + apps/web typecheck. Architecture-test allowlist
+  canary unchanged (still exactly `authorization.ts` + `story-repository.ts`). Vendor-SDK
+  guard now scans `packages/interviewer/src` too; zero SDK leaks.
 - **2026-06-26** — Increment 3 (pipeline) eval-clean (3 rounds). Built new `@chronicle/pipeline`
   package: contracts (`Transcriber`, `LanguageModel`, `JobQueue`, `WorkingCopyTransformer`),
   `InProcessJobQueue` (dedupe + per-drain attempt cap), default working-copy transformer (honest
