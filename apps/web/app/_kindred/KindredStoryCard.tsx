@@ -1,20 +1,41 @@
 import type { CSSProperties, ReactNode } from "react";
 
 export interface KindredStoryCardProps {
+  /* New hi-fi fields */
+  title?: string;
+  year?: string;
+  place?: string;
+  duration?: string;
+  excerpt?: string;
+  imageSrc?: string;
+  pinned?: boolean;
+  /* Legacy back-compat fields (hub page still passes these) */
   era?: string;
-  title: ReactNode;
   byline?: string;
   meta?: string[];
+  /* Behaviour */
   href?: string;
   onClick?: () => void;
   style?: CSSProperties;
   children?: ReactNode;
 }
 
-/** A single memory in a list — striped photo placeholder, era, title and byline. */
+/**
+ * A single story card — 120 × 120 photo thumbnail (or striped placeholder),
+ * mono metadata row, serif title, excerpt, and optional pin indicator.
+ *
+ * Legacy: if `year`/`place`/`duration` are absent the component falls back to
+ * the old `era` + `meta[]` display so the current hub page keeps working.
+ */
 export function KindredStoryCard({
-  era,
   title,
+  year,
+  place,
+  duration,
+  excerpt,
+  imageSrc,
+  pinned = false,
+  era,
   byline,
   meta = [],
   href,
@@ -24,106 +45,173 @@ export function KindredStoryCard({
 }: KindredStoryCardProps) {
   const Tag: "a" | "div" = href ? "a" : "div";
   const interactive = Boolean(href ?? onClick);
+
+  /* Build the metadata row content. Prefer new scalar fields; fall back to legacy. */
+  const newMetaParts = [year, place, duration].filter(Boolean) as string[];
+  const hasNewMeta = newMetaParts.length > 0;
+
+  /* Legacy row: era + byline + meta[] bullets */
+  const legacyMetaParts: string[] = [];
+  if (era) legacyMetaParts.push(era);
+  if (byline) legacyMetaParts.push(byline);
+  legacyMetaParts.push(...meta);
+
+  const metaLabel = hasNewMeta
+    ? newMetaParts.join(" · ")
+    : legacyMetaParts.join(" · ") || null;
+
   return (
     <Tag
       {...(href ? { href } : {})}
       onClick={onClick}
       style={{
         display: "flex",
-        gap: 20,
+        gap: "var(--space-5)",
         alignItems: "center",
-        background: "var(--kin-paper)",
-        border: "1px solid var(--kin-line)",
-        borderRadius: "var(--kin-radius-md)",
-        padding: 18,
-        fontFamily: "var(--kin-font-sans)",
+        background: "var(--surface-card)",
+        border: "var(--border-width, 1.5px) solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-5)",
+        boxShadow: "var(--shadow-card)",
         cursor: interactive ? "pointer" : "default",
         color: "inherit",
         textDecoration: "none",
+        position: "relative",
         ...style,
       }}
     >
-      <div
-        style={{
-          width: 120,
-          height: 120,
-          flexShrink: 0,
-          borderRadius: "var(--kin-radius-sm)",
-          backgroundColor: "var(--kin-ph-b)",
-          backgroundImage:
-            "repeating-linear-gradient(45deg, var(--kin-ph-a) 0 10px, var(--kin-ph-b) 10px 20px)",
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "center",
-          paddingBottom: 8,
-        }}
-      >
-        <span style={{ fontFamily: "var(--kin-font-mono)", fontSize: 10, color: "var(--kin-ph-text)" }}>
-          photo
-        </span>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {era ? (
-          <div
+      {/* Thumbnail / placeholder */}
+      {imageSrc ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={imageSrc}
+          alt=""
+          style={{
+            width: 120,
+            height: 120,
+            flexShrink: 0,
+            borderRadius: "var(--radius-md)",
+            objectFit: "cover",
+          }}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          style={{
+            width: 120,
+            height: 120,
+            flexShrink: 0,
+            borderRadius: "var(--radius-md)",
+            backgroundColor: "var(--surface-sunken)",
+            backgroundImage:
+              "repeating-linear-gradient(45deg, var(--surface-sunken) 0 10px, var(--surface-page) 10px 20px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            paddingBottom: 8,
+          }}
+        >
+          <span
             style={{
-              fontFamily: "var(--kin-font-mono)",
-              fontSize: 12,
-              color: "var(--kin-accent)",
-              letterSpacing: ".04em",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
+              color: "var(--text-muted)",
             }}
           >
-            {era}
+            photo
+          </span>
+        </div>
+      )}
+
+      {/* Content column */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Mono metadata row */}
+        {metaLabel ? (
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
+              color: "var(--text-meta)",
+              letterSpacing: "var(--tracking-mono)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            {metaLabel}
           </div>
         ) : null}
-        <div
-          style={{
-            fontFamily: "var(--kin-font-serif)",
-            fontSize: "var(--kin-text-h2)",
-            lineHeight: 1.2,
-            margin: era ? "8px 0" : "0 0 8px",
-            color: "var(--kin-ink)",
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            fontSize: "var(--kin-text-sm)",
-            color: "var(--kin-ink-2)",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            flexWrap: "wrap",
-          }}
-        >
-          {byline ? <span>{byline}</span> : null}
-          {meta.map((m, i) => (
-            <span key={i} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {(byline || i > 0) ? (
-                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--kin-field)" }} />
-              ) : null}
-              <span>{m}</span>
-            </span>
-          ))}
-        </div>
+
+        {/* Serif title */}
+        {title ? (
+          <div
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-story-lg)",
+              lineHeight: "var(--leading-snug)",
+              color: "var(--text-body)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            {title}
+          </div>
+        ) : null}
+
+        {/* Excerpt */}
+        {excerpt ? (
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              color: "var(--text-muted)",
+              lineHeight: "var(--leading-body)",
+              margin: 0,
+              marginBottom: children ? "var(--space-2)" : 0,
+              /* Clamp to 3 lines */
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {excerpt}
+          </p>
+        ) : null}
+
         {children}
       </div>
+
+      {/* Arrow — only when interactive */}
       {interactive ? (
         <span
           style={{
             width: 48,
             height: 48,
             borderRadius: "50%",
-            border: "1.5px solid var(--kin-field)",
+            border: "1.5px solid var(--border-strong)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "var(--kin-accent)",
+            color: "var(--accent)",
             fontSize: 22,
             flexShrink: 0,
           }}
         >
           {"›"}
+        </span>
+      ) : null}
+
+      {/* Pin indicator */}
+      {pinned ? (
+        <span
+          aria-label="Pinned"
+          style={{
+            position: "absolute",
+            top: "var(--space-3)",
+            right: interactive ? 68 : "var(--space-4)",
+            fontSize: 14,
+            lineHeight: 1,
+          }}
+        >
+          📌
         </span>
       ) : null}
     </Tag>
