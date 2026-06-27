@@ -15,15 +15,13 @@ import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { HubTabsNav } from "./HubTabsNav";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
+import { AskTab } from "./tabs/AskTab";
+import { AsksTab } from "./tabs/AsksTab";
+import { InviteTab } from "./tabs/InviteTab";
 import type { AccountMenuItem } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const TABS = [
-  { key: "stories", label: "Stories" },
-  // "questions" badge is filled in dynamically at render time
-] as const;
 
 export default async function HubPage({
   searchParams,
@@ -88,7 +86,8 @@ export default async function HubPage({
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
   const { tab: tabParam } = await searchParams;
-  const activeTab = tabParam === "questions" ? "questions" : "stories";
+  const validTabs = new Set(["stories", "questions", "ask", "asks", "invite"]);
+  const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
   const [feed, pendingAsks, viewerRow] = await Promise.all([
     loadHubFeed(db, ctx),
@@ -123,6 +122,9 @@ export default async function HubPage({
       label: "Questions for you",
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
+    { key: "ask", label: "Ask a question" },
+    { key: "asks", label: "Your asks" },
+    { key: "invite", label: "Invite" },
   ];
 
   const accountItems: AccountMenuItem[] = [
@@ -197,6 +199,9 @@ export default async function HubPage({
         <section style={{ padding: "28px 0" }}>
           {activeTab === "stories" && <StoriesTab feed={feed} />}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} />}
+          {activeTab === "ask" && <AskTab />}
+          {activeTab === "asks" && <AsksTab />}
+          {activeTab === "invite" && <InviteTab />}
         </section>
       </div>
     </main>
