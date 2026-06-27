@@ -10,3 +10,5 @@ export { KindredListenBar } from "./KindredListenBar";
 export type { KindredListenBarProps } from "./KindredListenBar";
 export { KindredStoryCard } from "./KindredStoryCard";
 export type { KindredStoryCardProps } from "./KindredStoryCard";
+export { KindredAccountMenu } from "./KindredAccountMenu";
+export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
