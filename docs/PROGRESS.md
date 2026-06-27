@@ -12,9 +12,28 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 5 — Approval gate | ✅ done | 2 | NO SPEC VIOLATIONS |
 | 6 — Family hub | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 7 — Asked-question relay | ✅ done | 1 | NO SPEC VIOLATIONS |
+| Vendor adapters (Phase 1 finish) | ✅ done | 6 adapters × 2 rounds | NO SPEC VIOLATIONS, 6 rounds × 6 adapters = 12 adversarial reviews / 6 fixers |
 
 ## Log
 
+- **2026-06-27** — Six vendor adapters landed (Groq / ElevenLabs / R2 / Clerk / Inngest /
+  Supabase Postgres). Each one: built by sub-agent → adversarial fresh-eyes sub-agent review
+  → fixer sub-agent applied findings. All eval-clean. The front-door invariant got
+  *strengthened* during this wave — Supabase's `Database` type was narrowed to
+  `Record<string, never>` so `db.query.stories` is a COMPILE-TIME error (not just runtime
+  `undefined`), pinned by a `@ts-expect-error` regression in
+  `packages/core/test/architecture.test.ts`. R2 required ONE documented exception in the
+  vendor-SDK guard (`packages/pipeline/test/pipeline.test.ts`) for
+  `packages/storage/src/r2.ts`; all other vendor SDKs remain in their adapter packages
+  outside the IP tree. Test counts per new/changed package: `transcribe-groq` 13,
+  `voice-elevenlabs` 10, `storage` +9 R2 = 17 total, `queue-inngest` 15, `apps/web` +12
+  Clerk = 12, `db` +2 Postgres-narrowing/migration = 13 total. Verified clean: 212 tests
+  passing across 11 packages; `pnpm -r typecheck` clean (after fixing a missing
+  workspace-paths block in `packages/transcribe-groq/tsconfig.json`). Architecture-test
+  allowlists unchanged. Per-adapter design decisions captured in
+  `docs/DECISIONS.md` (new "Vendor adapters (Phase 1 finish)" section). API keys are still
+  required to actually invoke any of these against real services — adapters are wired but
+  the build does not run them in CI.
 - **2026-06-26** — Increment 7 (asked-question relay) eval-clean (1 round).
   Closes the self-feeding loop. New `@chronicle/core` lifecycle helpers `markAskRouted`
   (queued→routed; idempotent; rejects answered→routed) and `markAskAnswered` (rejects

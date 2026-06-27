@@ -242,6 +242,74 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   discipline as the memory adapter: the interviewer never reaches around `@chronicle/core`
   for the seam. Architecture allowlist unchanged.
 
+## Vendor adapters (Phase 1 finish)
+
+Each adapter was built by a sub-agent, reviewed by a cold fresh-eyes sub-agent, and re-fixed.
+The notes here are the load-bearing design decisions that came out of those reviews — NOT a
+recap of every fix.
+
+- **Groq (Whisper Turbo) — zero-byte guard + non-JSON 200 handling.** The adapter rejects
+  zero-byte input BEFORE any network call (matches the orchestrator's "empty transcript is
+  terminal" stance — see I3 round 2) so we never burn a paid call on bytes that cannot
+  possibly transcribe. It also defends against the surprisingly common "HTTP 200 with a
+  text/plain error body" Groq edge case: a 2xx whose body is not JSON is treated as a
+  vendor failure, not silently coerced into an empty transcript. Both shapes have
+  regression tests.
+- **ElevenLabs — `output_format` query-param mechanism only; empty body = error.** The
+  adapter selects the audio format via the documented `?output_format=` query parameter
+  and does NOT send an `Accept` header (ElevenLabs ignores `Accept` and returns mp3 by
+  default — sending it gives the false impression you can negotiate). A 200 with an empty
+  body is treated as a vendor failure (otherwise the interviewer would happily "speak"
+  silence at the elder). Single mechanism = single bug surface.
+- **R2 (`@aws-sdk/client-s3`) — `If-None-Match: *` for atomic write-once; presigned GET
+  (1h default); ONE documented exception in the vendor-SDK guard.** Write-once semantics
+  are enforced AT THE PROVIDER via `If-None-Match: *` on `PutObject` so two racing capture
+  requests cannot silently overwrite the canonical recording (defense in depth on top of
+  the storage-key uniqueness). Reads are served via presigned GET URLs with a 1h default
+  expiry so audio bytes never round-trip through our Next.js process. R2 is the ONLY
+  adapter that lives in the existing `packages/storage` tree (rather than a new
+  `*-r2` package) — chronologically the R2 stub already lived there. That forced one
+  explicit exception in the vendor-SDK guard's ALLOWED_VENDOR_SDK_FILES list for
+  `packages/storage/src/r2.ts`. The threshold for adding another exception is "the
+  adapter package's existence would itself violate a stronger invariant"; otherwise new
+  adapters get their own package.
+- **Clerk — prefix-validated activation; static-import middleware (Edge-safe); one
+  `isClerkConfigured()` shared across runtime/middleware/layout.** Activation is gated
+  not by mere env-var presence but by VALIDATING the key prefixes
+  (`sk_test_`/`sk_live_` for the secret, `pk_test_`/`pk_live_` for the publishable) —
+  catches the "developer pasted the wrong env value" failure mode where Clerk would
+  otherwise initialize and then 500 on first request. Middleware imports Clerk
+  statically (Next.js middleware runs on the Edge runtime where dynamic `await import()`
+  has historically been fragile across versions). The `isClerkConfigured()` predicate
+  is the single source of truth used by runtime wiring, middleware, and the root
+  layout — three call sites cannot disagree about whether Clerk is on.
+- **Inngest — Map-based register (NOT array + find); 24h dedupe window documented;
+  `signingKey` removed from client options.** Initial implementation stored functions
+  in an array and did linear `find()` on dispatch. That breaks against the real
+  `InngestFunction.id()`, which prefix-qualifies the id (`{appId}-{registeredName}`) —
+  a naive equality match misses every function. Fix: register into a `Map` keyed by the
+  function's actual reported id. The 24h dedupe window (Inngest's default for event-id
+  collisions) is documented because our pipeline retry semantics interact with it (a
+  manually triggered re-run within 24h of a failed run with the same job key WILL be
+  deduped server-side; this is intended). `signingKey` was removed from the client
+  constructor options — it is a `serve()` concern (the receiving HTTP handler verifies
+  signatures), not a client concern; leaving it on the client gave false safety.
+- **Supabase Postgres — `Database` type narrowed so `db.query.stories` is a COMPILE
+  error; migration race fixed via INSERT-as-lock; SSL `require` by default; in-process
+  bootstrap gated by `CHRONICLE_RUN_MIGRATIONS=1`.** The single most load-bearing
+  decision: the Drizzle client's `Database` type parameter is narrowed to
+  `Record<string, never>` (an empty schema) so any code that writes
+  `db.query.stories.findMany()` fails AT COMPILE TIME, not just at runtime via
+  `undefined`. A `@ts-expect-error` test in `packages/core/test/architecture.test.ts`
+  pins this — if anyone ever loosens the type, the test breaks. Migration race was a
+  real bug: two app instances starting simultaneously both saw "no migrations applied"
+  and both tried to apply the same set, double-running idempotent-but-not-concurrent
+  migrations. Fixed by inserting a sentinel row into a lock table as the very first
+  step; the second instance gets a unique-key violation and backs off. SSL defaults to
+  `require` (not `prefer`) so a misconfigured prod env fails loud, not silent. The
+  whole bootstrap is gated by `CHRONICLE_RUN_MIGRATIONS=1` — production deploys run
+  migrations as a separate step, never on every cold start.
+
 ## Workflow
 
 - **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per

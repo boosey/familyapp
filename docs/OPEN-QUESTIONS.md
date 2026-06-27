@@ -5,11 +5,17 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 
 ## Stubbed — would require your real-world action (spec "stop and ask" case 2)
 
-- **All paid vendor adapters are stubbed/mocked.** Groq (transcription), Anthropic (LLM),
-  ElevenLabs (TTS), Clerk (auth), Cloudflare R2 (storage), Inngest (queue) require accounts,
-  API keys, and incur cost. Each sits behind an interface with a working mock/local impl; the
-  real adapter is a thin shell that reads creds from env and is **not exercised** until you
-  provision. No real elder audio is ever sent anywhere in this build.
+- ~~**All paid vendor adapters are stubbed/mocked.**~~ **Resolved 2026-06-27.** Real
+  adapters now exist for all six vendors: Groq (`@chronicle/transcribe-groq`), Anthropic
+  (`@chronicle/llm-anthropic`), ElevenLabs (`@chronicle/voice-elevenlabs`), Clerk
+  (`apps/web/lib/auth-clerk.ts`), Cloudflare R2 (`@chronicle/storage`'s `R2MediaStorage`,
+  real `@aws-sdk/client-s3` impl), Inngest (`@chronicle/queue-inngest`), plus Supabase
+  Postgres (`createPostgresDatabase` in `@chronicle/db`). Each adapter is fully tested
+  against fakes/HTTP mocks. **API keys + accounts are still required to actually invoke
+  these against the real services** — the adapters are wired but neither CI nor the dev
+  loop exercises them end-to-end against production vendors. No real elder audio has been
+  sent anywhere. See `docs/DECISIONS.md` "Vendor adapters (Phase 1 finish)" for per-
+  adapter design notes.
 - **Data-processing agreements.** Spec requires confirming a DPA before sending real elder
   audio to any transcription vendor. Not actionable by me; flagged for you.
 
