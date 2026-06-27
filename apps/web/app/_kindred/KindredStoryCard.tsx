@@ -1,6 +1,7 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
-export interface KindredStoryCardProps {
+export interface KindredStoryCardProps
+  extends Omit<HTMLAttributes<HTMLElement>, "title" | "onClick"> {
   /* New hi-fi fields */
   title?: string;
   year?: string;
@@ -16,7 +17,6 @@ export interface KindredStoryCardProps {
   /* Behaviour */
   href?: string;
   onClick?: () => void;
-  style?: CSSProperties;
   children?: ReactNode;
 }
 
@@ -42,9 +42,25 @@ export function KindredStoryCard({
   onClick,
   style,
   children,
+  ...rest
 }: KindredStoryCardProps) {
   const Tag: "a" | "div" = href ? "a" : "div";
   const interactive = Boolean(href ?? onClick);
+
+  /* For onClick-only (non-anchor) cards, make the <div> keyboard accessible. */
+  const buttonProps =
+    !href && onClick
+      ? {
+          role: "button",
+          tabIndex: 0,
+          onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+            if (e.key === "Enter" || e.key === " ") {
+              if (e.key === " ") e.preventDefault();
+              onClick();
+            }
+          },
+        }
+      : {};
 
   /* Build the metadata row content. Prefer new scalar fields; fall back to legacy. */
   const newMetaParts = [year, place, duration].filter(Boolean) as string[];
@@ -62,7 +78,9 @@ export function KindredStoryCard({
 
   return (
     <Tag
+      {...rest}
       {...(href ? { href } : {})}
+      {...buttonProps}
       onClick={onClick}
       style={{
         display: "flex",
