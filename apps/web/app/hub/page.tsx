@@ -1,28 +1,82 @@
 /**
- * The family hub — the younger-generation logged-in surface, dressed in Kindred's Timeline kit.
- * Reads strictly through `@chronicle/core`'s authorization function via `loadHubFeed`.
+ * Family hub shell — server component.
+ *
+ * Reads active tab from ?tab= searchParam (Next 15: searchParams is a Promise).
+ * Loads feed + pending questions in parallel, then delegates to tab sub-components.
+ * Navigation between tabs is handled by HubTabsNav (client wrapper around HubTabs).
  */
 import Link from "next/link";
+import { eq } from "drizzle-orm";
+import { persons } from "@chronicle/db/schema";
+import { listPendingAsksForElder } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { loadHubFeed } from "@/lib/hub-data";
-import { KindredButton, KindredStoryCard } from "@/app/_kindred";
+import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
+import { HubTabsNav } from "./HubTabsNav";
+import { StoriesTab } from "./tabs/StoriesTab";
+import { QuestionsTab } from "./tabs/QuestionsTab";
+import type { AccountMenuItem } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default async function HubPage() {
+const TABS = [
+  { key: "stories", label: "Stories" },
+  // "questions" badge is filled in dynamically at render time
+] as const;
+
+export default async function HubPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
+  /* ── Anonymous gate ─────────────────────────────────────────────────────── */
   if (ctx.kind === "anonymous") {
     return (
-      <main className="kin-page">
-        <div className="kin-frame" style={{ padding: "clamp(32px, 6vw, 64px)" }}>
-          <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Family Chronicle</h1>
-          <p className="kin-ink-2" style={{ fontSize: "var(--kin-text-h3)", marginTop: 16 }}>
-            This is the family hub. Sign in to see your family's stories.
+      <main
+        style={{
+          minHeight: "100dvh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--surface-page)",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 440,
+            width: "100%",
+            padding: "clamp(32px, 6vw, 64px)",
+            background: "var(--surface-card)",
+            border: "var(--border-width) solid var(--border)",
+            borderRadius: "var(--radius-xl)",
+            boxShadow: "var(--shadow-lift)",
+          }}
+        >
+          <h1
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-display)",
+              color: "var(--text-body)",
+              margin: "0 0 12px",
+            }}
+          >
+            Family Chronicle
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui)",
+              color: "var(--text-muted)",
+              margin: "0 0 28px",
+            }}
+          >
+            Sign in to see your family's stories.
           </p>
-          <div style={{ maxWidth: 260, marginTop: 28 }}>
+          <div style={{ maxWidth: 260 }}>
             <Link href="/dev/sign-in" style={{ textDecoration: "none" }}>
               <KindredButton label="Dev sign-in" fullWidth />
             </Link>
@@ -32,106 +86,119 @@ export default async function HubPage() {
     );
   }
 
-  const feed = await loadHubFeed(db, ctx);
-  const totalStories = feed.reduce((n, s) => n + s.stories.length, 0);
+  /* ── Data ───────────────────────────────────────────────────────────────── */
+  const { tab: tabParam } = await searchParams;
+  const activeTab = tabParam === "questions" ? "questions" : "stories";
 
+  const [feed, pendingAsks, viewerRow] = await Promise.all([
+    loadHubFeed(db, ctx),
+    listPendingAsksForElder(db, ctx.personId, { limit: 20 }),
+    db
+      .select({ spokenName: persons.spokenName, displayName: persons.displayName })
+      .from(persons)
+      .where(eq(persons.id, ctx.personId))
+      .then((rows) => rows[0] ?? null),
+  ]);
+
+  /* ── Derived display values ─────────────────────────────────────────────── */
+  const feedTitle =
+    feed.length === 1
+      ? `${feed[0]!.elder.spokenName}'s chronicle`
+      : "Your family's stories";
+
+  const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
+  const initials = viewerName
+    ? viewerName
+        .split(" ")
+        .map((w) => w[0] ?? "")
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "Y";
+
+  const tabs = [
+    { key: "stories", label: "Stories" },
+    {
+      key: "questions",
+      label: "Questions for you",
+      badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
+    },
+  ];
+
+  const accountItems: AccountMenuItem[] = [
+    { key: "profile", label: "Your profile", href: "/hub" /* stub: no backend yet */ },
+    { key: "settings", label: "Settings", href: "/hub" /* stub: no backend yet */ },
+    { key: "manage-family", label: "Manage family", href: "/hub" /* stub: no backend yet */ },
+    { key: "switch-user", label: "Switch user", href: "/dev/sign-in" },
+    { key: "log-out", label: "Log out", href: "/dev/sign-in" },
+  ];
+
+  /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
-    <main className="kin-page">
-      <div className="kin-frame">
+    <main
+      style={{
+        minHeight: "100dvh",
+        background: "var(--surface-page)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 900,
+          margin: "0 auto",
+          padding: "0 clamp(16px, 4vw, 32px)",
+        }}
+      >
+        {/* Header */}
         <header
           style={{
-            padding: "30px clamp(20px, 5vw, 36px) 22px",
-            borderBottom: "1px solid var(--kin-line)",
+            padding: "28px 0 0",
+            borderBottom: "var(--border-width) solid var(--border)",
             display: "flex",
             flexDirection: "column",
-            gap: 12,
+            gap: 16,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <h1 style={{ fontSize: "clamp(28px, 4.5vw, 38px)", margin: 0, letterSpacing: "-.01em" }}>
-              {feed.length === 1 ? `${feed[0]!.elder.spokenName}'s chronicle` : "Your family's stories"}
+          {/* Title row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1
+              style={{
+                fontFamily: "var(--font-story)",
+                fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
+                fontWeight: 400,
+                color: "var(--text-body)",
+                margin: 0,
+                letterSpacing: "var(--tracking-tight)",
+              }}
+            >
+              {feedTitle}
             </h1>
-            <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Link href="/hub/invite" className="hub-nav-link">Invite an elder</Link>
-              <Link href="/hub/ask" className="hub-nav-link">Ask a question</Link>
-              <Link href="/hub/asks" className="hub-nav-link">Your asks</Link>
-              <Link href="/dev/sign-in" className="hub-nav-link kin-muted">Switch user</Link>
-            </nav>
+            <KindredAccountMenu
+              initials={initials}
+              displayName={viewerName ?? undefined}
+              items={accountItems}
+            />
           </div>
-          <div className="kin-muted" style={{ fontSize: 16 }}>
-            {totalStories === 0
-              ? "Stories will land here as soon as they're shared with you."
-              : `${totalStories} ${totalStories === 1 ? "memory" : "memories"} gathered · ${feed.length} ${feed.length === 1 ? "elder" : "elders"}`}
+
+          {/* Tabs row */}
+          <div style={{ marginBottom: -1 /* overlap the border */ }}>
+            <HubTabsNav tabs={tabs} active={activeTab} />
           </div>
         </header>
 
-        <section style={{ padding: "30px clamp(20px, 5vw, 36px)", display: "flex", flexDirection: "column", gap: 36 }}>
-          {feed.length === 0 ? (
-            <p className="kin-muted" style={{ fontSize: "var(--kin-text-h3)", margin: 0 }}>
-              No families yet. When someone shares a chronicle with you, their stories will appear here.
-            </p>
-          ) : (
-            feed.map((slot) => (
-              <div key={`${slot.family.id}:${slot.elder.id}`} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: "var(--kin-text-h2)", margin: 0, fontFamily: "var(--kin-font-serif)", fontWeight: 500 }}>
-                    {slot.elder.spokenName}
-                  </h2>
-                  <span className="kin-muted mono" style={{ fontSize: 13 }}>{slot.family.name}</span>
-                </div>
-                {slot.stories.length === 0 ? (
-                  <p className="kin-muted" style={{ margin: 0 }}>No shared stories yet.</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {slot.stories.map((story) => {
-                      const eraDate = story.approvedAt ?? story.createdAt;
-                      const era = formatEra(eraDate);
-                      const meta: string[] = [];
-                      if (story.summary) meta.push(truncate(story.summary, 80));
-                      return (
-                        <KindredStoryCard
-                          key={story.id}
-                          era={era}
-                          title={story.title ?? "Untitled"}
-                          byline={`Told by ${slot.elder.spokenName}`}
-                          meta={meta}
-                          href={`/hub/stories/${story.id}`}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
+        {/* Tab content */}
+        <section style={{ padding: "28px 0" }}>
+          {activeTab === "stories" && <StoriesTab feed={feed} />}
+          {activeTab === "questions" && <QuestionsTab asks={pendingAsks} />}
         </section>
       </div>
-
-      <style>{`
-        .hub-nav-link {
-          display: inline-flex;
-          align-items: center;
-          padding: 10px 16px;
-          font-size: 15px;
-          font-weight: 600;
-          color: var(--kin-ink-2);
-          border: 1.5px solid var(--kin-field);
-          border-radius: 999px;
-          background: transparent;
-        }
-        .hub-nav-link:hover { background: var(--kin-tint); border-color: var(--kin-accent); color: var(--kin-accent); text-decoration: none; }
-      `}</style>
     </main>
   );
-}
-
-function formatEra(d: Date): string {
-  const year = d.getFullYear();
-  const month = d.toLocaleString(undefined, { month: "long" }).toUpperCase();
-  return `${year} · ${month}`;
-}
-
-function truncate(s: string, n: number): string {
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1).trimEnd() + "…";
 }
