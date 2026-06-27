@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consent &amp; Estate Framework — The Institutional Layer</title>
+<style>
+  :root{
+    --ink:#2b2420; --muted:#7a6f66; --paper:#f7f3ec; --card:#fffdf9; --line:#d9cfc2;
+    --plum:#8c5c7d; --teal:#3f7d8c; --sage:#7d8c5c; --terra:#c2703d; --sand:#a9863f;
+    --stop:#b5482f; --go:#5c7d5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Georgia","Iowan Old Style",serif;line-height:1.5;padding:32px 20px 56px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  h1{font-size:29px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:15px;font-style:italic;max-width:720px;margin:0 auto}
+  .gate-note{background:#fcf0ec;border:1.5px solid var(--stop);border-radius:10px;
+    color:var(--stop);font-size:14px;padding:11px 18px;max-width:680px;margin:18px auto 0;text-align:center}
+  .gate-note b{color:var(--ink)}
+
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);
+    text-align:center;margin:40px 0 18px}
+
+  /* principles */
+  .principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .pr{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--plum);border-radius:10px;padding:13px 15px}
+  .pr .pn{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .pr h4{margin:3px 0 5px;font-size:15px}
+  .pr p{margin:0;font-size:12.6px;color:var(--muted)}
+
+  /* the gate flow */
+  .gate{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:0}
+  .grow{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:13px 18px}
+  .grow .ico{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:bold;font-size:14px}
+  .grow h4{margin:0 0 2px;font-size:15.5px}
+  .grow p{margin:0;font-size:12.8px;color:var(--muted)}
+  .g1 .ico{background:var(--sand)} .g2 .ico{background:var(--teal)} .g3 .ico{background:var(--plum)} .g4 .ico{background:var(--stop)}
+  .down{display:flex;justify-content:center;color:var(--line);font-size:18px;padding:3px 0}
+
+  /* living vs deceased */
+  .lvd{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .col{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .col.living{border-top:5px solid var(--go)}
+  .col.dec{border-top:5px solid var(--stop)}
+  .col h3{margin:0 0 4px;font-size:18px}
+  .col .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:9px}
+  .col ul{margin:0;padding-left:17px}
+  .col li{font-size:13px;margin-bottom:6px;line-height:1.38}
+  .col li b{font-weight:600}
+  .col .rule{margin-top:10px;font-size:12.5px;font-style:italic;padding:8px 11px;border-radius:7px}
+  .living .rule{background:#eef3ea;color:var(--go)}
+  .dec .rule{background:#fcf0ec;color:var(--stop)}
+
+  /* tiers */
+  .tiers{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .tier{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 16px;text-align:center;min-width:120px}
+  .tier .t{font-size:15px;font-weight:bold;margin-bottom:2px}
+  .tier .d{font-size:12px;color:var(--muted)}
+  .tier.private{border-bottom:4px solid var(--stop)}
+  .tier.branch{border-bottom:4px solid var(--sand)}
+  .tier.family{border-bottom:4px solid var(--teal)}
+  .tier.public{border-bottom:4px solid var(--go)}
+
+  /* custody */
+  .custody{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+  .keeper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 18px;text-align:center;min-width:150px}
+  .keeper .who{font-size:16px;font-weight:bold}
+  .keeper .role{font-size:12px;color:var(--muted)}
+  .handoff{color:var(--plum);font-size:22px;font-weight:bold}
+  .custody-note{text-align:center;font-size:13px;color:var(--muted);font-style:italic;margin-top:12px}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:34px}
+  @media(max-width:620px){.lvd{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Consent &amp; Estate Framework</h1>
+    <p class="sub">The institutional layer (Mode 5): who controls the archive, who sees what, what happens to a person's stories after death, and who holds the keys across generations.</p>
+    <div class="gate-note">⛔ The sequencing rule: <b>build this framework before any avatar feature ships.</b> You cannot ethically build the powerful feature until the governance that constrains it exists.</div>
+  </header>
+
+  <h2>Five foundational principles</h2>
+  <div class="principles">
+    <div class="pr"><p class="pn">Principle 1</p><h4>Their words only</h4><p>Avatars retrieve real recordings — never generate new statements in someone's voice. The brightest line.</p></div>
+    <div class="pr"><p class="pn">Principle 2</p><h4>Explicit &amp; revocable consent</h4><p>Never assumed from silence. Captured, logged, scoped, and (for the living) reversible.</p></div>
+    <div class="pr"><p class="pn">Principle 3</p><h4>Living ≠ deceased</h4><p>The living consent in real time. The dead only per pre-death consent. Silence is a "no."</p></div>
+    <div class="pr"><p class="pn">Principle 4</p><h4>Family veto, grief protected</h4><p>The family can decline or retire any feature. Off-ramps and human support; not therapy.</p></div>
+    <div class="pr"><p class="pn">Principle 5</p><h4>AI always disclosed</h4><p>Synthesized prose, restored photos, and avatars are visibly labeled. No one is misled.</p></div>
+  </div>
+
+  <h2>The avatar consent gate · every check must pass</h2>
+  <div class="gate">
+    <div class="grow g1"><div class="ico">1</div><div><h4>Consent in the ledger</h4><p>Pre-death consent (deceased) or active real-time consent (living). No consent = no avatar.</p></div></div>
+    <div class="down">▼</div>
+    <div class="grow g2"><div class="ico">2</div><div><h4>"Their words only" enforced</h4><p>Retrieval over real recordings. If they never recorded an answer, the avatar says so — it doesn't invent one.</p></div></div>
+    <div class="down">▼</div>
+    <div class="grow g3"><div class="ico">3</div><div><h4>Mutual consent + family governance</h4><p>Both the person consented to be represented and the family governs who may interact.</p></div></div>
+    <div class="down">▼</div>
+    <div class="grow g4"><div class="ico">4</div><div><h4>Disclosure + a retirement procedure</h4><p>Visibly labeled as AI; a dignified way to pause or take it down if it interferes with healthy grief.</p></div></div>
+  </div>
+
+  <h2>Living vs. deceased · the ethical heart</h2>
+  <div class="lvd">
+    <div class="col living">
+      <div class="lbl">Present &amp; in control</div>
+      <h3>The Living</h3>
+      <ul>
+        <li><b>Co-author</b> and consent in real time</li>
+        <li>Set &amp; change their own privacy tiers</li>
+        <li>Edit by voice; <b>revoke</b> anytime</li>
+        <li>Consent is a living, renewable conversation</li>
+      </ul>
+      <div class="rule">✓ Continuously reversible</div>
+    </div>
+    <div class="col dec">
+      <div class="lbl">Represented only as they permitted</div>
+      <h3>The Deceased</h3>
+      <ul>
+        <li><b>No pre-death consent = no posthumous avatar</b></li>
+        <li>Mutual consent required for any interaction</li>
+        <li>Family veto + built-in retirement procedure</li>
+        <li>Enforced by the steward via the ledger</li>
+      </ul>
+      <div class="rule">⛔ Silence is not permission</div>
+    </div>
+  </div>
+
+  <h2>Permission model · per-story audience tiers</h2>
+  <div class="tiers">
+    <div class="tier private"><div class="t">Private</div><div class="d">Author only</div></div>
+    <div class="tier branch"><div class="t">Branch</div><div class="d">One family line</div></div>
+    <div class="tier family"><div class="t">Family</div><div class="d">Everyone in the chronicle</div></div>
+    <div class="tier public"><div class="t">Public</div><div class="d">Open</div></div>
+  </div>
+  <p class="custody-note">Set by the author at approval; governed by the steward. Any tier can be <b>time-gated</b> — "release on an 18th birthday," "open after my death," "seal 50 years."</p>
+
+  <h2>Custody &amp; the "story will" · who holds the keys in 80 years</h2>
+  <div class="custody">
+    <div class="keeper"><div class="who">Diane</div><div class="role">Steward today</div></div>
+    <div class="handoff">→</div>
+    <div class="keeper"><div class="who">Sofia</div><div class="role">Named successor</div></div>
+    <div class="handoff">→</div>
+    <div class="keeper"><div class="who">…</div><div class="role">Each names the next</div></div>
+  </div>
+  <p class="custody-note">Succession is the load-bearing feature: no single point of failure, no chronicle orphaned by one death. The <b>story will</b> records each person's posthumous wishes; <b>durability &amp; portability</b> guarantees answer "what if the company disappears?"</p>
+
+  <footer>Companion to the North Star Vision · Personas · Journey Map · Engagement Engine &nbsp;|&nbsp; Family Chronicle</footer>
+</div>
+</body>
+</html>

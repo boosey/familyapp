@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journey Map — The Life of One Story</title>
+<style>
+  :root{
+    --ink:#2b2420; --muted:#7a6f66; --paper:#f7f3ec; --card:#fffdf9;
+    --line:#d9cfc2;
+    --sofia:#c2703d;   /* warm terracotta */
+    --eleanor:#7d8c5c; /* sage */
+    --marcus:#3f7d8c;  /* teal */
+    --diane:#8c5c7d;   /* plum */
+    --system:#a99a86;  /* sand */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Georgia","Iowan Old Style",serif;line-height:1.5;padding:32px 20px 56px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:15px;font-style:italic;max-width:680px;margin:0 auto 4px}
+  .story{font-size:15px;color:var(--ink);background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:10px 16px;display:inline-block;margin-top:14px}
+  .story b{color:var(--sofia)}
+
+  /* legend */
+  .legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:22px 0 30px}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted)}
+  .dot{width:13px;height:13px;border-radius:50%;display:inline-block}
+
+  /* loop ribbon */
+  .loop{display:flex;align-items:center;justify-content:center;gap:8px;
+    color:var(--muted);font-size:13px;font-style:italic;margin:0 0 24px}
+
+  /* phases */
+  .track{display:grid;grid-template-columns:1fr;gap:14px}
+  .phase{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--system);
+    border-radius:10px;padding:14px 18px;position:relative;display:grid;
+    grid-template-columns:54px 1fr;gap:16px;align-items:start}
+  .num{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:18px;font-weight:bold;color:#fff;font-family:Georgia,serif}
+  .who{font-size:12.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 2px}
+  .ttl{font-size:18px;margin:0 0 5px}
+  .desc{font-size:14.5px;margin:0 0 7px}
+  .meta{font-size:13px;color:var(--muted)}
+  .meta b{color:var(--ink);font-weight:600}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:20px;color:#fff;
+    margin-left:8px;vertical-align:middle;letter-spacing:.4px}
+
+  .s-sofia{border-left-color:var(--sofia)} .n-sofia{background:var(--sofia)} .t-sofia{background:var(--sofia)}
+  .s-eleanor{border-left-color:var(--eleanor)} .n-eleanor{background:var(--eleanor)} .t-eleanor{background:var(--eleanor)}
+  .s-marcus{border-left-color:var(--marcus)} .n-marcus{background:var(--marcus)} .t-marcus{background:var(--marcus)}
+  .s-diane{border-left-color:var(--diane)} .n-diane{background:var(--diane)} .t-diane{background:var(--diane)}
+  .s-system{border-left-color:var(--system)} .n-system{background:var(--system)} .t-system{background:var(--system)}
+
+  .connector{display:flex;justify-content:center;align-items:center;height:14px;color:var(--line);font-size:16px}
+  .closeloop{text-align:center;margin-top:18px;font-style:italic;color:var(--muted);font-size:13.5px;
+    border-top:1px dashed var(--line);padding-top:16px}
+  .closeloop b{color:var(--sofia)}
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
+  @media(max-width:560px){.phase{grid-template-columns:1fr}.num{margin-bottom:-4px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Life of One Story</h1>
+    <p class="sub">How a single memory moves through four people and four modes. The chronicle works as a relay — a question from the young pulls a memory from the old, which becomes a shared, governed, durable entry the next generation inherits.</p>
+    <div class="story">Tracking one story: <b>"The first thing Eleanor ever bought with her own money."</b></div>
+  </header>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--sofia)"></i> Sofia · 16 · grandchild (Mode 4)</span>
+    <span><i class="dot" style="background:var(--eleanor)"></i> Eleanor · 81 · narrator (Mode 1)</span>
+    <span><i class="dot" style="background:var(--marcus)"></i> Marcus · 52 · organizer (Mode 3)</span>
+    <span><i class="dot" style="background:var(--diane)"></i> Diane · 58 · steward (Mode 5)</span>
+    <span><i class="dot" style="background:var(--system)"></i> The system (invisible)</span>
+  </div>
+
+  <div class="loop">↻ &nbsp;This is a loop, not a line — phase 8 becomes phase 1 for the next generation</div>
+
+  <div class="track">
+
+    <div class="phase s-sofia">
+      <div class="num n-sofia">1</div>
+      <div>
+        <p class="who">Sofia · the spark <span class="tag t-sofia">Mode 4 → 3</span></p>
+        <h3 class="ttl">A question is born</h3>
+        <p class="desc">A clip of Grandma sparks curiosity. Instead of a blank box, Sofia taps a suggested prompt and personalizes it: <em>"What was the first thing you ever bought with your own money?"</em></p>
+        <p class="meta"><b>Feels:</b> curious → interested &nbsp;·&nbsp; <b>Owes her:</b> no blank box — suggested questions are the ignition</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-system">
+      <div class="num n-system">2</div>
+      <div>
+        <p class="who">The system · the routing <span class="tag t-system">invisible</span></p>
+        <h3 class="ttl">The question waits for the right moment</h3>
+        <p class="desc">No interruption. The question is buffered and woven into Eleanor's next gentle session at her chosen time, sequenced warmly — framed as <em>"Sofia was wondering…"</em></p>
+        <p class="meta"><b>Where the product's emotional intelligence lives.</b> It turns idle curiosity into a gentle, well-timed invitation.</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-eleanor">
+      <div class="num n-eleanor">3</div>
+      <div>
+        <p class="who">Eleanor · the telling <span class="tag t-eleanor">Mode 1</span></p>
+        <h3 class="ttl">The memory is given</h3>
+        <p class="desc">Tuesday, 10am, her chosen time. A warm familiar voice greets her by name and asks Sofia's question. She laughs, remembers a dress and a payday, and just talks. The system waits through every pause.</p>
+        <p class="meta"><b>Feels:</b> warmth → mattering &nbsp;·&nbsp; <b>Owes her:</b> zero friction, voice-first, naming the asker</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-system">
+      <div class="num n-system">4</div>
+      <div>
+        <p class="who">The system · the synthesis <span class="tag t-system">invisible</span></p>
+        <h3 class="ttl">Raw voice becomes an entry</h3>
+        <p class="desc">Transcribed, lightly cleaned, placed on the timeline, tagged — and enriched with the front page from that summer. The <em>original voice is always preserved</em> alongside the prose.</p>
+        <p class="meta"><b>Risk:</b> over-polishing that drifts from her real words. Authenticity beats polish.</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-eleanor">
+      <div class="num n-eleanor">5</div>
+      <div>
+        <p class="who">Eleanor · the approval <span class="tag t-eleanor">Mode 1</span></p>
+        <h3 class="ttl">The author signs off</h3>
+        <p class="desc">By voice, she reviews, corrects one detail (<em>"1958, not 1959"</em>), and approves it for the family. Nothing is shared until she says so. She is author and owner.</p>
+        <p class="meta"><b>A dignity feature, not a bottleneck.</b> Also the first entry into Diane's consent ledger.</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-marcus">
+      <div class="num n-marcus">6</div>
+      <div>
+        <p class="who">Marcus · the sharing <span class="tag t-marcus">Mode 3</span></p>
+        <h3 class="ttl">The story reaches the family</h3>
+        <p class="desc">Sunday evening, he hears the new story in his mother's voice, shares it to the family thread — closing Sofia's loop — and adds a follow-up question, keeping the engine warm.</p>
+        <p class="meta"><b>Feels:</b> relief → momentum &nbsp;·&nbsp; <b>The amplifier:</b> his share delivers the answer back to Sofia</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-diane">
+      <div class="num n-diane">7</div>
+      <div>
+        <p class="who">Diane · the governance <span class="tag t-diane">Mode 5</span></p>
+        <h3 class="ttl">The entry is made safe &amp; durable</h3>
+        <p class="desc">It enters the permanent record. Diane confirms its visibility, sees consent logged, and knows it's backed up — and that a successor steward is named so it outlives her.</p>
+        <p class="meta"><b>What makes this an institution, not a memoir.</b> The step that lets the chronicle outlive everyone in the room.</p>
+      </div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="phase s-sofia">
+      <div class="num n-sofia">8</div>
+      <div>
+        <p class="who">Future kin · the inheritance <span class="tag t-sofia">Mode 4</span></p>
+        <h3 class="ttl">A descendant receives it</h3>
+        <p class="desc">Years on, a descendant hears Eleanor's actual voice telling the paycheck story, sees it beside the front page from that summer — and feels connected to someone she never met. Then she taps a question of her own.</p>
+        <p class="meta"><b>The payoff and the proof:</b> time runs both ways. A small Tuesday memory becomes a treasured past.</p>
+      </div>
+    </div>
+
+    <div class="closeloop">↻ &nbsp;The inheritance is just the next <b>spark</b>. The map is a loop — which is exactly what a <em>perpetual</em> chronicle requires.</div>
+
+  </div>
+
+  <footer>Companion to the North Star Vision &amp; Personas · Family Chronicle</footer>
+</div>
+</body>
+</html>

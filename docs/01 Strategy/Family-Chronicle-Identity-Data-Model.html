@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Family Identity & Data Model</title>
+<style>
+  :root{
+    --ink:#2b2420; --muted:#7a6f66; --paper:#f7f3ec; --card:#fffdf9; --line:#d9cfc2;
+    --person:#c2703d; --famA:#3f7d8c; --famB:#8c5c7d; --story:#7d8c5c; --sand:#a9863f;
+    --stop:#b5482f; --go:#5c7d5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Georgia","Iowan Old Style",serif;line-height:1.5;padding:32px 20px 56px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:10px}
+  h1{font-size:28px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:15px;font-style:italic;max-width:720px;margin:0 auto}
+  .oneline{background:#fcf3ee;border:1.5px solid var(--person);border-radius:10px;color:var(--ink);
+    font-size:14.5px;padding:11px 18px;max-width:740px;margin:16px auto 0;text-align:center}
+  .oneline b{color:var(--person)}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);text-align:center;margin:36px 0 16px}
+
+  /* the false choice */
+  .choice{display:flex;gap:14px;justify-content:center;align-items:stretch;flex-wrap:wrap}
+  .opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 17px;max-width:300px;flex:1 1 240px}
+  .opt.bad{border-top:5px solid var(--stop)}
+  .opt.good{border-top:5px solid var(--go)}
+  .opt h4{margin:0 0 5px;font-size:15px}
+  .opt p{margin:0;font-size:12.8px;color:var(--muted)}
+  .opt .v{font-size:11.5px;font-style:italic;margin-top:7px}
+  .opt.bad .v{color:var(--stop)} .opt.good .v{color:var(--go)}
+  .vs{display:flex;align-items:center;color:var(--muted);font-size:13px;font-style:italic}
+
+  /* three dials */
+  .dials{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .dial{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 16px;text-align:center}
+  .dial .ic{width:46px;height:46px;border-radius:50%;margin:0 auto 9px;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:21px;font-weight:bold}
+  .dial.d1 .ic{background:var(--person)} .dial.d2 .ic{background:var(--famA)} .dial.d3 .ic{background:var(--story)}
+  .dial h3{margin:0 0 5px;font-size:16px}
+  .dial .q{font-size:12.5px;color:var(--muted);font-style:italic;margin:0 0 6px}
+  .dial p{margin:0;font-size:12.8px}
+  .dial.d1{border-top:5px solid var(--person)} .dial.d2{border-top:5px solid var(--famA)} .dial.d3{border-top:5px solid var(--story)}
+
+  /* the diagram: one person, two families, one story */
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px 20px;text-align:center}
+  .person-node{display:inline-block;background:var(--person);color:#fff;border-radius:50px;padding:12px 26px;font-size:16px;font-weight:bold}
+  .person-sub{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .branches{display:flex;justify-content:center;gap:60px;margin-top:6px;position:relative;flex-wrap:wrap}
+  .mem{display:flex;flex-direction:column;align-items:center}
+  .memline{color:var(--muted);font-size:12px;font-style:italic;margin:8px 0 6px}
+  .fam{border-radius:10px;padding:14px 22px;color:#fff;font-weight:bold;font-size:15px;min-width:160px}
+  .fam.a{background:var(--famA)} .fam.b{background:var(--famB)}
+  .fam .sub{font-size:11px;font-weight:normal;opacity:.9;margin-top:3px}
+  .storychip{background:#eef3ea;border:1.5px dashed var(--story);border-radius:8px;padding:7px 13px;font-size:12px;margin-top:10px;color:var(--ink)}
+  .storychip b{color:var(--story)}
+  .diagcap{font-size:12.5px;color:var(--muted);font-style:italic;margin-top:16px;max-width:680px;margin-left:auto;margin-right:auto}
+
+  /* edge cases */
+  .edges{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:11px}
+  .edge{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--sand);border-radius:9px;padding:11px 14px}
+  .edge h4{margin:0 0 3px;font-size:14px}
+  .edge p{margin:0;font-size:12.4px;color:var(--muted)}
+
+  /* phase 0 */
+  .p0{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .p0col{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 17px}
+  .p0col.build{border-top:5px solid var(--go)}
+  .p0col.defer{border-top:5px solid var(--sand)}
+  .p0col h4{margin:0 0 8px;font-size:15px}
+  .p0col ul{margin:0;padding-left:16px}
+  .p0col li{font-size:12.8px;margin-bottom:5px;line-height:1.35}
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:32px}
+  @media(max-width:640px){.dials{grid-template-columns:1fr}.p0{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Multi-Family Identity &amp; Data Model</h1>
+    <p class="sub">Families are overlapping webs, not clean trees. A marriage merges two chronicles; a divorce splits one; a child belongs to several lineages at once. The foundational Phase 0 decision.</p>
+    <div class="oneline">The vision asked: one archive, or many families? The answer is <b>both — by separating them:</b> one person, one archive, many memberships, per-story visibility.</div>
+  </header>
+
+  <h2>The false choice · and the key insight that dissolves it</h2>
+  <div class="choice">
+    <div class="opt bad">
+      <h4>Too rigid — one clean tree</h4>
+      <p>Each person belongs to exactly one family. A grandmother loved by two families must pick one; a child of divorce can't be represented.</p>
+      <p class="v">⛔ Fights reality — breaks at the first marriage</p>
+    </div>
+    <div class="vs">vs</div>
+    <div class="opt bad">
+      <h4>Too loose — everything shared</h4>
+      <p>Stories flow freely across families. An ex-spouse sees what was never meant for them.</p>
+      <p class="v">⛔ Privacy breaks — leakage across boundaries</p>
+    </div>
+    <div class="vs">→</div>
+    <div class="opt good">
+      <h4>Separate identity from membership</h4>
+      <p>A person is one continuous self who participates in many family contexts — and chooses what's shared in each.</p>
+      <p class="v">✓ Holds the messy human truth</p>
+    </div>
+  </div>
+
+  <h2>The model · three separate dials</h2>
+  <div class="dials">
+    <div class="dial d1">
+      <div class="ic">P</div>
+      <h3>Identity</h3>
+      <p class="q">"Who a person is"</p>
+      <p>One permanent, singular Person. Owns their stories, voice &amp; consent — independent of any family. <b>Answers: carry one archive through life.</b></p>
+    </div>
+    <div class="dial d2">
+      <div class="ic">M</div>
+      <h3>Membership</h3>
+      <p class="q">"Which families they're in"</p>
+      <p>A plural, revocable link from Person to Family, carrying a role. Add on marriage/birth; end on divorce/estrangement. <b>Answers: belong to many families at once.</b></p>
+    </div>
+    <div class="dial d3">
+      <div class="ic">S</div>
+      <h3>Visibility</h3>
+      <p class="q">"What's shared where"</p>
+      <p>A Story is authored once, owned by the Person, and <em>surfaced</em> into families by audience tier — never copied. <b>Answers: what's shared where.</b></p>
+    </div>
+  </div>
+
+  <h2>How it works · one person, two families, one story</h2>
+  <div class="diagram">
+    <div class="person-node">Eleanor · the Person</div>
+    <div class="person-sub">one identity · owns her stories, voice &amp; consent</div>
+    <div class="branches">
+      <div class="mem">
+        <div class="memline">— membership →</div>
+        <div class="fam a">Boudreaux Chronicle<div class="sub">her birth family</div></div>
+      </div>
+      <div class="mem">
+        <div class="memline">— membership →</div>
+        <div class="fam b">Reyes Chronicle<div class="sub">via daughter's marriage</div></div>
+      </div>
+    </div>
+    <div class="storychip">📖 <b>One story</b>, authored once → surfaced into <b>both</b> chronicles by its audience tier · no duplication, no leakage</div>
+    <p class="diagcap">Model A literally cannot represent a grandmother beloved by two families. This model does it natively — and consent &amp; "their words only" travel with <b>Eleanor</b>, not with either family.</p>
+  </div>
+
+  <h2>Every messy case becomes ordinary · a change in membership or visibility</h2>
+  <div class="edges">
+    <div class="edge"><h4>Marriage</h4><p>Gain a membership; keep the existing one. One person, now in two families.</p></div>
+    <div class="edge"><h4>Divorce</h4><p>Memberships end. No identity or stories deleted — the person carries their archive out intact.</p></div>
+    <div class="edge"><h4>Blended family</h4><p>Memberships in multiple chronicles &amp; branches. Never "pick a side."</p></div>
+    <div class="edge"><h4>Adoption</h4><p>Adoptive membership, plus birth-family ties only if chosen &amp; consented.</p></div>
+    <div class="edge"><h4>Estrangement</h4><p>Pause or scope a membership. Visibility is a dial, not a demolition.</p></div>
+    <div class="edge"><h4>Death</h4><p>Identity persists; the story will travels with the person across all families.</p></div>
+  </div>
+
+  <h2>Phase 0 · build the atoms, defer the heavy machinery</h2>
+  <div class="p0">
+    <div class="p0col build">
+      <h4>✓ Build now</h4>
+      <ul>
+        <li><b>Person</b> — first-class, permanent, singular; owns stories &amp; consent</li>
+        <li><b>Membership</b> — separate, plural, revocable, role-carrying</li>
+        <li><b>Story</b> owned by Person; audience tier evaluated per membership</li>
+        <li>The three dials cleanly separated — the seam that makes edge cases ordinary</li>
+      </ul>
+    </div>
+    <div class="p0col defer">
+      <h4>⏳ Defer (leave seams)</h4>
+      <ul>
+        <li>Full <b>federation</b> (Model C) — only at scale, if families demand sovereignty</li>
+        <li>Cross-chronicle <b>conflict resolution &amp; sync</b></li>
+        <li>Deep <b>multi-lineage genealogy</b> — the tree deepens in Phase 3 enrichment</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>Companion to the Vision · Personas · Journey Map · Engagement Engine · Consent &amp; Estate Framework · Release Roadmap &nbsp;|&nbsp; Family Chronicle</footer>
+</div>
+</body>
+</html>

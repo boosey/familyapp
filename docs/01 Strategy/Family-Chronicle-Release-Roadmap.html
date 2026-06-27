@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Roadmap — Phased Sequencing</title>
+<style>
+  :root{
+    --ink:#2b2420; --muted:#7a6f66; --paper:#f7f3ec; --card:#fffdf9; --line:#d9cfc2;
+    --p0:#a9863f; --p1:#c2703d; --p2:#7d8c5c; --p3:#3f7d8c; --p4:#8c5c7d; --p5:#b5482f; --p6:#9a8f80;
+    --stop:#b5482f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Georgia","Iowan Old Style",serif;line-height:1.5;padding:32px 20px 56px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:14px}
+  h1{font-size:29px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:15px;font-style:italic;max-width:720px;margin:0 auto 12px}
+  .frame{background:#fbf6ee;border:1px dashed var(--line);border-radius:9px;font-size:13px;color:var(--muted);
+    padding:10px 16px;max-width:740px;margin:0 auto;text-align:center}
+  .frame b{color:var(--ink)}
+
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);text-align:center;margin:34px 0 16px}
+
+  .ladder{display:flex;flex-direction:column;gap:0}
+  .ph{background:var(--card);border:1px solid var(--line);border-left:7px solid var(--ink);border-radius:10px;
+    padding:14px 18px;display:grid;grid-template-columns:92px 1fr;gap:18px;align-items:center}
+  .ph .tag{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border-radius:9px;color:#fff;padding:10px 6px;text-align:center}
+  .ph .tag .pp{font-size:11px;letter-spacing:.5px;opacity:.85}
+  .ph .tag .pnum{font-size:22px;font-weight:bold;line-height:1.1}
+  .ph h3{margin:0 0 4px;font-size:18px}
+  .ph .goal{margin:0 0 7px;font-size:13.6px}
+  .ph .row{font-size:12.4px;color:var(--muted);margin:2px 0}
+  .ph .row b{color:var(--ink);font-weight:600}
+  .ph .risk{display:inline-block;font-size:11.5px;background:#f3ece1;border-radius:20px;padding:2px 10px;color:var(--ink);margin-top:5px}
+
+  .p0{border-left-color:var(--p0)} .p0 .tag{background:var(--p0)}
+  .p1{border-left-color:var(--p1)} .p1 .tag{background:var(--p1)}
+  .p2{border-left-color:var(--p2)} .p2 .tag{background:var(--p2)}
+  .p3{border-left-color:var(--p3)} .p3 .tag{background:var(--p3)}
+  .p4{border-left-color:var(--p4)} .p4 .tag{background:var(--p4)}
+  .p5{border-left-color:var(--p5)} .p5 .tag{background:var(--p5)}
+  .p6{border-left-color:var(--p6)} .p6 .tag{background:var(--p6)}
+
+  .down{display:flex;justify-content:center;align-items:center;color:var(--line);font-size:17px;padding:4px 0}
+  .gate{display:flex;justify-content:center;align-items:center;gap:10px;color:var(--stop);font-size:13px;font-weight:bold;
+    background:#fcf0ec;border:1.5px solid var(--stop);border-radius:8px;padding:8px 16px;margin:6px auto;max-width:560px}
+
+  .legend{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px}
+  .wedge{background:#fcf3ee;border:1px solid var(--p1);border-radius:9px;padding:9px 15px;max-width:740px;margin:14px auto 0;
+    text-align:center;font-size:13px;color:var(--ink)}
+  .wedge b{color:var(--p1)}
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
+  @media(max-width:600px){.ph{grid-template-columns:1fr}.ph .tag{flex-direction:row;gap:8px;justify-content:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Release Roadmap</h1>
+    <p class="sub">Wedge-first, risk-retiring. Ship the sharpest wedge fastest to validate the core loop, then layer enrichment, engagement, and ethics-gated features.</p>
+    <div class="frame">⏱ Ordered by <b>dependency &amp; risk, not calendar.</b> Built with AI coding agents, so the unit isn't weeks — it's <b>"what must be true before the next phase is buildable."</b> A phase ends on exit criteria, not a date.</div>
+  </header>
+
+  <h2>The phase ladder · each phase makes the next buildable or safe</h2>
+  <div class="ladder">
+
+    <div class="ph p0">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">0</span></div>
+      <div>
+        <h3>The Spine</h3>
+        <p class="goal">One data spine everything reads from — entry model, identity graph, minimal consent ledger &amp; permissions.</p>
+        <p class="row"><b>Build:</b> entry model + identity graph (core IP) &nbsp;·&nbsp; <b>Buy:</b> auth, storage, DB</p>
+        <span class="risk">Retires: an un-retrofittable data model</span>
+      </div>
+    </div>
+    <div class="down">▼</div>
+
+    <div class="ph p1">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">1</span></div>
+      <div>
+        <h3>The Wedge — Elder Voice Capture (MVP)</h3>
+        <p class="goal">An elder talks with zero friction; family receives a real story in their actual voice. Plus the asked-question loop.</p>
+        <p class="row"><b>Build:</b> interviewer behavior (oral-history craft), zero-friction elder entry &nbsp;·&nbsp; <b>Buy:</b> transcription, telephony, LLM</p>
+        <span class="risk">Retires: do elders engage? are the stories good enough to care?</span>
+      </div>
+    </div>
+    <div class="down">▼</div>
+
+    <div class="ph p2">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">2</span></div>
+      <div>
+        <h3>Make It Land — Payoff Surface &amp; Light Engagement</h3>
+        <p class="goal">Explore surface (timeline, feed, voice player) + the social loop and weekly digest. Retain, don't just capture.</p>
+        <p class="row"><b>Build:</b> explore surfaces, trigger cadence rules &nbsp;·&nbsp; <b>Buy:</b> nothing major new</p>
+        <span class="risk">Retires: capture decaying into the digital shoebox</span>
+      </div>
+    </div>
+    <div class="down">▼</div>
+
+    <div class="ph p3">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">3</span></div>
+      <div>
+        <h3>The Moat — External-Data Enrichment</h3>
+        <p class="goal">Fuse narration with records. Start free/high-coverage (FamilySearch, Chronicling America, Ellis Island, census). DNA out of scope.</p>
+        <p class="row"><b>Integrate:</b> data providers via API / user-linked accounts &nbsp;·&nbsp; <b>Build:</b> the matching &amp; enrichment layer</p>
+        <span class="risk">Retires: "just another AI memoir tool"</span>
+      </div>
+    </div>
+    <div class="down">▼</div>
+
+    <div class="ph p4">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">4</span></div>
+      <div>
+        <h3>The Institution — Stewardship &amp; Governance</h3>
+        <p class="goal">Steward console, consent ledger, custody hand-off, story will, time-gated release, full AI disclosure.</p>
+        <p class="row"><b>Build:</b> bespoke — trust depends on legibility &nbsp;·&nbsp; <b>Buy:</b> durable backup; answer "what if the company disappears?"</p>
+        <span class="risk">Retires: growth outrunning governance · unlocks the avatar gate</span>
+      </div>
+    </div>
+
+    <div class="gate">⛔ ETHICS GATE — avatars cannot ship until Phase 4 governance exists</div>
+
+    <div class="ph p5">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">5</span></div>
+      <div>
+        <h3>The Dangerous Feature — Avatars (gated)</h3>
+        <p class="goal">Voice avatars first, living-person before posthumous. Every one passes the 4-check consent gate. "Their words only" — never a generative ghost.</p>
+        <p class="row"><b>Build:</b> consent enforcement, retrieval constraint, retirement procedures &nbsp;·&nbsp; <b>Buy:</b> voice synthesis / rendering</p>
+        <span class="risk">⚠ Introduces the product's highest risk — which is why it's last</span>
+      </div>
+    </div>
+    <div class="down">▼</div>
+
+    <div class="ph p6">
+      <div class="tag"><span class="pp">PHASE</span><span class="pnum">6+</span></div>
+      <div>
+        <h3>The Widening — the rest of the north star</h3>
+        <p class="goal">Real-time capture (Mode 2), ambient (Mode 6), live co-piloted calls, mysteries &amp; geolocation, DNA (opt-in, late), legacy &amp; forward-time features, heritage language.</p>
+        <p class="row"><b>None on the critical path</b> — all valuable later, on a stable, trusted base.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="wedge">⏳ <b>Competitive timing:</b> the AI voice-memoir space is filling fast. Land the <b>wedge (Phase 1)</b> in real families early — even thin — before the window narrows. The compounding moat comes in Phases 3–4.</div>
+
+  <p class="legend">Through-line: start with what needs only the family &amp; the calendar → add what needs data → then what needs time. Never let a powerful feature precede its guardrail.</p>
+
+  <footer>Companion to the Vision · Personas · Journey Map · Engagement Engine · Consent &amp; Estate Framework &nbsp;|&nbsp; Family Chronicle</footer>
+</div>
+</body>
+</html>

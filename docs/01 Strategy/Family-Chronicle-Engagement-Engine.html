@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Engagement Engine — The Chronicle's Heartbeat</title>
+<style>
+  :root{
+    --ink:#2b2420; --muted:#7a6f66; --paper:#f7f3ec; --card:#fffdf9; --line:#d9cfc2;
+    --a:#c2703d; --b:#3f7d8c; --c:#8c5c7d; --d:#7d8c5c; --e:#a9863f;
+    --loop:#b5482f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Georgia","Iowan Old Style",serif;line-height:1.5;padding:32px 20px 56px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:26px}
+  h1{font-size:30px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:15px;font-style:italic;max-width:700px;margin:0 auto}
+
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);
+    text-align:center;margin:38px 0 18px;font-family:Georgia,serif}
+
+  /* central loop */
+  .loop{display:grid;grid-template-columns:repeat(4,1fr);gap:0;align-items:stretch;margin:0 auto 8px;max-width:920px}
+  .beat{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--loop);
+    border-radius:10px;padding:14px 14px;text-align:center;position:relative;margin:0 6px}
+  .beat .bn{width:30px;height:30px;border-radius:50%;background:var(--loop);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:bold;margin:0 auto 8px;font-size:15px}
+  .beat h4{margin:0 0 5px;font-size:15.5px}
+  .beat p{margin:0;font-size:12.5px;color:var(--muted)}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--loop);font-size:22px;font-weight:bold}
+  .loopnote{text-align:center;color:var(--loop);font-style:italic;font-size:13px;margin:6px 0 0}
+  .loopnote b{color:var(--ink)}
+
+  .selffeed{text-align:center;font-size:13px;color:var(--muted);font-style:italic;
+    background:#fbf6ee;border:1px dashed var(--line);border-radius:8px;padding:10px 16px;
+    max-width:760px;margin:14px auto 0}
+  .selffeed b{color:var(--a)}
+
+  /* trigger groups */
+  .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:14px;margin-top:6px}
+  .grp{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--ink);border-radius:10px;padding:13px 15px}
+  .grp.a{border-top-color:var(--a)} .grp.b{border-top-color:var(--b)}
+  .grp.c{border-top-color:var(--c)} .grp.d{border-top-color:var(--d)} .grp.e{border-top-color:var(--e)}
+  .grp .gl{font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 2px}
+  .grp h3{margin:0 0 8px;font-size:16px}
+  .grp ul{margin:0;padding-left:16px}
+  .grp li{font-size:12.8px;margin-bottom:5px;line-height:1.35}
+  .grp li b{font-weight:600}
+  .grp .served{margin-top:8px;font-size:11.5px;color:var(--muted);font-style:italic}
+
+  /* rules */
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .rule{background:#fbf6ee;border:1px solid var(--line);border-radius:10px;padding:13px 16px}
+  .rule h4{margin:0 0 5px;font-size:15px}
+  .rule p{margin:0;font-size:13px;color:var(--muted)}
+  .rule.k{border:1.5px solid var(--loop);background:#fcf0ec}
+  .rule.k h4{color:var(--loop)}
+
+  /* sequencing */
+  .seq{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:stretch}
+  .step{flex:1 1 180px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .step .sn{font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .step h4{margin:3px 0 4px;font-size:15px}
+  .step p{margin:0;font-size:12.6px;color:var(--muted)}
+  .seqarrow{display:flex;align-items:center;color:var(--line);font-size:20px}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:34px}
+  @media(max-width:680px){.loop{grid-template-columns:1fr 1fr}.beat{margin:6px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Engagement Engine</h1>
+    <p class="sub">The heartbeat that keeps a perpetual chronicle alive between big moments. A rescue mission has built-in urgency; a perpetual chronicle must manufacture its own reasons to return — or it becomes the digital shoebox: preserved but dead.</p>
+  </header>
+
+  <h2>The core retention loop · every trigger must complete it</h2>
+  <div class="loop">
+    <div class="beat"><div class="bn">1</div><h4>A signal occurs</h4><p>A date, a record, a location, a gap, a relative's contribution becomes relevant.</p></div>
+    <div class="arrow">→</div>
+    <div class="beat"><div class="bn">2</div><h4>Surfaced gently</h4><p>Routed to the right person, framed warmly, at a tolerable cadence — not a blast.</p></div>
+    <div class="arrow">→</div>
+    <div class="beat"><div class="bn">3</div><h4>Low-effort action</h4><p>Answer one question, tap one share, ask one thing, confirm one detail.</p></div>
+    <div class="arrow">→</div>
+    <div class="beat"><div class="bn">4</div><h4>Visible reward</h4><p>The story grows, a loop closes, someone's delighted — and it feeds the next signal.</p></div>
+  </div>
+  <p class="loopnote">↻ &nbsp;Self-feeding: beat 4 generates the next beat 1</p>
+  <div class="selffeed">In a <b>family</b> system, one person's reward is another's signal: Eleanor's new story is Sofia's notification; Sofia's question is Eleanor's next prompt. The engine runs on the family's own warmth — not manufactured gamification.</div>
+
+  <h2>The trigger catalog · five signal sources</h2>
+  <div class="groups">
+    <div class="grp a">
+      <p class="gl">Group A</p><h3>Time-based</h3>
+      <ul>
+        <li><b>Anniversary prompts</b> — weddings, births, losses</li>
+        <li><b>"This week in family history"</b> weekly digest</li>
+        <li><b>Seasonal &amp; holiday</b> recollection + capture</li>
+        <li><b>Reminiscence-bump</b> sensory prompts (ages 10–30)</li>
+      </ul>
+      <p class="served">The calendar is a free, infinite signal source.</p>
+    </div>
+    <div class="grp b">
+      <p class="gl">Group B</p><h3>Discovery-based</h3>
+      <ul>
+        <li><b>Record-match</b> — "here's the ship from 1921"</li>
+        <li><b>Contradiction &amp; gap</b> detection</li>
+        <li><b>"Day in history"</b> context cards</li>
+      </ul>
+      <p class="served">The unfair advantage. No shoebox finds things for you.</p>
+    </div>
+    <div class="grp c">
+      <p class="gl">Group C</p><h3>Mystery &amp; quest</h3>
+      <ul>
+        <li><b>Collaborative family mysteries</b> — "who is this?"</li>
+        <li><b>Gap-as-invitation</b> — holes become quests</li>
+        <li><b>Geolocation</b> memory triggers</li>
+      </ul>
+      <p class="served">An open question pulls people back. Curiosity is renewable.</p>
+    </div>
+    <div class="grp d">
+      <p class="gl">Group D</p><h3>Social</h3>
+      <ul>
+        <li><b>Question→answer loop</b> (the relay's core)</li>
+        <li><b>New-contribution</b> notifications</li>
+        <li><b>Milestone &amp; membership</b> events</li>
+        <li><b>Nudge-the-elder</b> (initiator-driven)</li>
+      </ul>
+      <p class="served">Cheapest &amp; stickiest — a real human made the reason.</p>
+    </div>
+    <div class="grp e">
+      <p class="gl">Group E</p><h3>Legacy &amp; forward-time</h3>
+      <ul>
+        <li><b>Time-capsule</b> releases (an 18th birthday)</li>
+        <li><b>Present-tense capture</b> nudges (Mode 2)</li>
+        <li><b>Auto editions &amp; documentaries</b></li>
+      </ul>
+      <p class="served">Unique to a perpetual chronicle: time runs both ways.</p>
+    </div>
+  </div>
+
+  <h2>Orchestration · the conductor's rules</h2>
+  <div class="rules">
+    <div class="rule"><h4>One voice, one cadence per person</h4><p>Each persona has a tolerated frequency. Respect per-person budgets; silence is always an option.</p></div>
+    <div class="rule"><h4>Bundle, batch, prefer pull over push</h4><p>Most triggers accumulate into a digest the person chooses to open. Push only for time-sensitive warmth.</p></div>
+    <div class="rule"><h4>Close the loop or cut it</h4><p>If it doesn't lead to a low-effort action with a visible reward that feeds the next signal, it's noise.</p></div>
+    <div class="rule k"><h4>★ The elder's experience is sacrosanct</h4><p>No trigger may ever make Eleanor feel nagged, corrected, or surveilled. Everything reaches her as a decline-able invitation.</p></div>
+  </div>
+
+  <h2>Sequencing · build in the order that compounds</h2>
+  <div class="seq">
+    <div class="step"><p class="sn">First</p><h4>Social loop + weekly digest</h4><p>Runs on the family's own warmth and existing content. Cheap, immediately sticky. The answered-question loop is highest leverage.</p></div>
+    <div class="seqarrow">→</div>
+    <div class="step"><p class="sn">Second</p><h4>Discovery triggers</h4><p>Once external data is wired in, record-matches and gap detection become the moat no competitor can match.</p></div>
+    <div class="seqarrow">→</div>
+    <div class="step"><p class="sn">Third</p><h4>Mysteries + geolocation</h4><p>Deepen multi-player engagement once there's enough chronicle to mine.</p></div>
+    <div class="seqarrow">→</div>
+    <div class="step"><p class="sn">Fourth</p><h4>Legacy + forward-time</h4><p>Time-capsules and auto-editions presuppose a mature, trusted, well-governed chronicle.</p></div>
+  </div>
+
+  <footer>Companion to the North Star Vision · Personas · Journey Map &nbsp;|&nbsp; Family Chronicle</footer>
+</div>
+</body>
+</html>
