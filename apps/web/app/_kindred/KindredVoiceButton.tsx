@@ -1,41 +1,91 @@
 "use client";
 import type { CSSProperties } from "react";
 
-export type VoiceButtonState = "idle" | "recording" | "saving";
-
 export interface KindredVoiceButtonProps {
-  state?: VoiceButtonState;
-  label?: string;
-  onClick?: () => void;
-  style?: CSSProperties;
+  listening?: boolean;
+  saving?: boolean;
   disabled?: boolean;
+  label?: string;
+  size?: number; // px diameter; default 96 (--touch-voice)
+  onClick?: () => void;
 }
 
 /**
- * The single loud control in Kindred. Idle: pulsing accent disc. Recording: calm stop square
- * inside a tinted ring. Saving: dimmed, no pulse.
+ * The single loud control in Kindred.
+ * idle    — accent disc with ambient kindred-listening pulse ring + mic glyph.
+ * listening — accent-soft ground + accent border ring + stop square glyph.
+ * saving  — dimmed accent-strong disc, not clickable.
+ * disabled — not clickable, cursor not-allowed.
+ *
+ * Uses semantic tokens only; no --kin-* references.
  */
 export function KindredVoiceButton({
-  state = "idle",
+  listening = false,
+  saving = false,
+  disabled = false,
   label,
+  size = 96,
   onClick,
-  style,
-  disabled,
 }: KindredVoiceButtonProps) {
-  const recording = state === "recording";
-  const saving = state === "saving";
+  const isBlocked = disabled || saving;
 
-  const ring: CSSProperties = recording
-    ? { background: "var(--kin-tint)", border: "2px solid var(--kin-accent)" }
-    : saving
-      ? { background: "var(--kin-accent-press)", opacity: 0.7 }
-      : { background: "var(--kin-accent)", animation: "kin-pulse 2.6s ease-in-out infinite" };
+  const buttonStyle: CSSProperties = {
+    width: size,
+    height: size,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: isBlocked ? "not-allowed" : "pointer",
+    padding: 0,
+    transition: "background var(--dur-settle) var(--ease-quiet), opacity var(--dur-settle) var(--ease-quiet)",
+    // State-specific styles
+    background: listening
+      ? "var(--accent-soft)"
+      : saving
+        ? "var(--accent-strong)"
+        : "var(--accent)",
+    border: listening ? "2px solid var(--accent)" : "none",
+    boxSizing: "border-box",
+    opacity: saving ? 0.7 : 1,
+    animation:
+      !listening && !saving
+        ? "kindred-listening var(--dur-pulse, 2.4s) ease-in-out infinite"
+        : "none",
+  };
 
-  const glyph: CSSProperties = recording
-    ? { width: 26, height: 26, borderRadius: 6, background: "var(--kin-accent)" }
-    : { width: 30, height: 46, borderRadius: 16, background: "var(--kin-on-accent)" };
+  // Mic glyph: rounded-rect body shape (like a mic capsule), white on accent ground.
+  // Stop glyph: 26×26 rounded square for "stop recording".
+  const glyphSize = Math.round(size * 0.27); // ~26px at size=96, scales with size
+  const glyphStyle: CSSProperties = listening
+    ? {
+        width: glyphSize,
+        height: glyphSize,
+        borderRadius: 6,
+        background: "var(--accent)",
+        flexShrink: 0,
+      }
+    : {
+        // mic body
+        width: Math.round(size * 0.3),
+        height: Math.round(size * 0.47),
+        borderRadius: Math.round(size * 0.16),
+        background: saving ? "var(--accent-on)" : "var(--accent-on)",
+        flexShrink: 0,
+        opacity: saving ? 0.55 : 1,
+      };
 
-  const text = label ?? (saving ? "One moment…" : recording ? "I'm finished" : "Tap to speak");
+  const captionColor = listening
+    ? "var(--accent)"
+    : "var(--text-meta)";
+
+  const defaultLabel = saving
+    ? "One moment…"
+    : listening
+      ? "Listening…"
+      : "Tap to speak";
+
+  const caption = label ?? defaultLabel;
 
   return (
     <div
@@ -44,37 +94,29 @@ export function KindredVoiceButton({
         flexDirection: "column",
         alignItems: "center",
         gap: 12,
-        fontFamily: "var(--kin-font-sans)",
-        ...style,
+        fontFamily: "var(--font-ui)",
       }}
     >
       <button
         type="button"
-        onClick={onClick}
-        disabled={disabled || saving}
-        aria-label={text}
-        style={{
-          width: "var(--kin-touch-primary)",
-          height: "var(--kin-touch-primary)",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: disabled || saving ? "not-allowed" : "pointer",
-          padding: 0,
-          ...ring,
-        }}
+        onClick={isBlocked ? undefined : onClick}
+        disabled={isBlocked}
+        aria-label={caption}
+        aria-pressed={listening}
+        style={buttonStyle}
       >
-        <span style={glyph} />
+        <span role="presentation" style={glyphStyle} />
       </button>
       <span
         style={{
-          fontSize: "var(--kin-text-sm)",
+          fontSize: "var(--text-label)",
           fontWeight: 700,
-          color: recording ? "var(--kin-accent)" : "var(--kin-ink-2)",
+          color: captionColor,
+          letterSpacing: "0.02em",
+          fontFamily: "var(--font-ui)",
         }}
       >
-        {text}
+        {caption}
       </span>
     </div>
   );

@@ -62,9 +62,9 @@ export function ElderRecorder({ token, askId = null }: { token: string; askId?: 
       <p
         aria-live="polite"
         style={{
-          fontFamily: "var(--kin-font-serif)",
-          fontSize: "var(--kin-text-headline)",
-          color: "var(--kin-ink)",
+          fontFamily: "var(--font-story)",
+          fontSize: "var(--text-story-lg)",
+          color: "var(--text-body)",
           margin: 0,
           textAlign: "center",
         }}
@@ -79,17 +79,24 @@ export function ElderRecorder({ token, askId = null }: { token: string; askId?: 
       <p
         aria-live="polite"
         className="kin-muted"
-        style={{ fontSize: "var(--kin-text-body)", margin: 0, textAlign: "center", maxWidth: 360 }}
+        style={{ fontSize: "var(--text-ui-sm)", margin: 0, textAlign: "center", maxWidth: 360 }}
       >
         Let's pick this up another time. The person who invited you will check in soon.
       </p>
     );
   }
 
-  const state = phase === "listening" ? "recording" : phase === "saving" ? "saving" : "idle";
   const onClick = phase === "listening" ? finish : phase === "idle" ? start : undefined;
 
-  return <KindredVoiceButton state={state} onClick={onClick} />;
+  return (
+    <KindredVoiceButton
+      listening={phase === "listening"}
+      saving={phase === "saving"}
+      size={220}
+      label={phase === "listening" ? "Listening…" : "Tap to speak"}
+      onClick={onClick}
+    />
+  );
 }
 
 function pickMimeType(): string {

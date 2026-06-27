@@ -77,9 +77,9 @@ export function ApprovalRecorder({
       <p
         aria-live="polite"
         style={{
-          fontFamily: "var(--kin-font-serif)",
-          fontSize: "var(--kin-text-headline)",
-          color: "var(--kin-ink)",
+          fontFamily: "var(--font-story)",
+          fontSize: "var(--text-story-lg)",
+          color: "var(--text-body)",
           margin: 0,
           textAlign: "center",
         }}
@@ -93,20 +93,19 @@ export function ApprovalRecorder({
       <p
         aria-live="polite"
         className="kin-muted"
-        style={{ fontSize: "var(--kin-text-body)", margin: 0, textAlign: "center" }}
+        style={{ fontSize: "var(--text-ui-sm)", margin: 0, textAlign: "center" }}
       >
         Let's pick this up another time. The person who invited you will check in soon.
       </p>
     );
   }
 
-  const recording = phase === "listening";
-  const saving = phase === "saving";
-  const state = recording ? "recording" : saving ? "saving" : "idle";
+  const isListening = phase === "listening";
+  const isSaving = phase === "saving";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, alignItems: "center" }}>
-      {!recording && !saving ? (
+      {!isListening && !isSaving ? (
         <fieldset
           style={{
             border: "none",
@@ -131,15 +130,15 @@ export function ApprovalRecorder({
                   alignItems: "center",
                   gap: 10,
                   padding: "12px 20px",
-                  minHeight: "var(--kin-touch-default)",
-                  borderRadius: "var(--kin-radius-pill)",
-                  border: checked ? "2px solid var(--kin-accent)" : "1.5px solid var(--kin-field)",
-                  background: checked ? "var(--kin-tint)" : "transparent",
-                  color: checked ? "var(--kin-accent)" : "var(--kin-ink-2)",
-                  fontSize: "var(--kin-text-body)",
+                  minHeight: "var(--touch-default)",
+                  borderRadius: "var(--radius-pill)",
+                  border: checked ? "2px solid var(--accent)" : "var(--border-width) solid var(--border-strong)",
+                  background: checked ? "var(--accent-soft)" : "transparent",
+                  color: checked ? "var(--accent)" : "var(--text-meta)",
+                  fontSize: "var(--text-ui-sm)",
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "background .15s, border-color .15s",
+                  transition: "background var(--dur-fade), border-color var(--dur-fade)",
                 }}
               >
                 <input
@@ -158,11 +157,11 @@ export function ApprovalRecorder({
       ) : null}
 
       <KindredVoiceButton
-        state={state}
-        label={
-          recording ? "I'm finished" : saving ? "One moment…" : "Approve aloud"
-        }
-        onClick={recording ? finish : !saving ? start : undefined}
+        listening={isListening}
+        saving={isSaving}
+        size={150}
+        label={isListening ? "Listening…" : "Approve aloud"}
+        onClick={isListening ? finish : !isSaving ? start : undefined}
       />
     </div>
   );
