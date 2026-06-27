@@ -160,7 +160,7 @@ export function ApprovalRecorder({
         listening={isListening}
         saving={isSaving}
         size={150}
-        label={isListening ? "Listening…" : "Approve aloud"}
+        label={isListening ? "Listening…" : isSaving ? "One moment…" : "Approve aloud"}
         onClick={isListening ? finish : !isSaving ? start : undefined}
       />
     </div>

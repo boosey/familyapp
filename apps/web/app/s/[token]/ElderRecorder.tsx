@@ -93,7 +93,7 @@ export function ElderRecorder({ token, askId = null }: { token: string; askId?: 
       listening={phase === "listening"}
       saving={phase === "saving"}
       size={220}
-      label={phase === "listening" ? "Listening…" : "Tap to speak"}
+      label={phase === "listening" ? "Listening…" : phase === "saving" ? "One moment…" : "Tap to speak"}
       onClick={onClick}
     />
   );

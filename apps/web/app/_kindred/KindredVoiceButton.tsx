@@ -70,7 +70,7 @@ export function KindredVoiceButton({
         width: Math.round(size * 0.3),
         height: Math.round(size * 0.47),
         borderRadius: Math.round(size * 0.16),
-        background: saving ? "var(--accent-on)" : "var(--accent-on)",
+        background: "var(--accent-on)",
         flexShrink: 0,
         opacity: saving ? 0.55 : 1,
       };
