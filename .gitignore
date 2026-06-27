@@ -6,8 +6,12 @@ node_modules/
 dist/
 build/
 .next/
+.next-tmp/
 out/
 *.tsbuildinfo
+
+# dev screenshots (chrome-devtools-mcp output)
+screenshots/
 
 # env & secrets
 .env
