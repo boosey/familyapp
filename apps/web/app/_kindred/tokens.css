@@ -1,136 +1,194 @@
-/* Kindred Design System tokens — ported from
- * docs/design-system/intergenerational-story-design-system/project/tokens/*.css.
- * Fonts are self-hosted by `next/font` in app/layout.tsx; the CSS vars
- * `--font-newsreader` and `--font-public-sans` are injected on <body>. */
+/* Kindred Design System tokens — ported from the canonical _ds token set
+ * (docs/design-system/.../_ds/.../tokens/*.css). Semantic layer over a primitive
+ * palette. Fonts are self-hosted by next/font in app/layout.tsx and injected as
+ * --font-newsreader / --font-public-sans / --font-dm-mono on <html>.
+ *
+ * NOTE: the `--kin-*` block at the bottom is a TEMPORARY compatibility shim mapping
+ * the old flat names to the new semantic vars. Removed in the final task once all
+ * consumers are converted. Do not add new --kin-* references. */
 
-:root {
-  /* Colors — Heirloom (elder default) */
-  --kin-bg: #E7DFD0;
-  --kin-paper: #F5F0E6;
-  --kin-surface: #FBF8F1;
-  --kin-ink: #2A2520;
-  --kin-body: #332D26;
-  --kin-ink-2: #6C6357;
-  --kin-muted: #9C8B6C;
-  --kin-line: #E8E0D1;
-  --kin-line-2: #E1D9C9;
-  --kin-accent: #AE5C39;
-  --kin-accent-press: #8C4829;
-  --kin-tint: #F5EDDF;
-  --kin-tint-border: #EADCC4;
-  --kin-sage: #6C7A52;
-  --kin-gold: #C9A06F;
-  --kin-chip-bg: #F1E9DA;
-  --kin-chip-border: #E5DAC4;
-  --kin-field: #D8CCB6;
-  --kin-ph-a: #DCCFB6;
-  --kin-ph-b: #E4D8C2;
-  --kin-ph-text: #9C8B6C;
-  --kin-bezel: #211C17;
-  --kin-on-accent: #FBF3EC;
-  --kin-ring: rgba(174,92,57,.30);
-  --kin-ring-0: rgba(174,92,57,0);
+:root,
+[data-theme="heirloom"] {
+  --paper-100: #FBF6EE;
+  --paper-200: #F4ECE0;
+  --paper-300: #EAE0D0;
+  --ink-900: #2E2620;
+  --ink-700: #4A3F35;
+  --ink-500: #6B5F54;
+  --terracotta-600: #BD5B3D;
+  --terracotta-700: #A24A2F;
+  --terracotta-100: #F3DACE;
+  --sage-600: #7C8B6F;
+  --sage-100: #DEE4D6;
+  --line-200: #E2D6C5;
+  --line-300: #D6C7B2;
 
-  /* Typography */
-  --kin-font-serif: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
-  --kin-font-sans: var(--font-public-sans, 'Public Sans'), system-ui, -apple-system, sans-serif;
-  --kin-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --surface-page: var(--paper-200);
+  --surface-card: var(--paper-100);
+  --surface-sunken: var(--paper-300);
+  --text-body: var(--ink-900);
+  --text-muted: var(--ink-500);
+  --text-meta: var(--ink-700);
+  --accent: var(--terracotta-600);
+  --accent-strong: var(--terracotta-700);
+  --accent-soft: var(--terracotta-100);
+  --accent-on: #FFFFFF;
+  --support: var(--sage-600);
+  --support-soft: var(--sage-100);
+  --border: var(--line-200);
+  --border-strong: var(--line-300);
+  --focus-ring: var(--terracotta-600);
 
-  --kin-text-display: 64px;
-  --kin-text-title: 46px;
-  --kin-text-headline: 30px;
-  --kin-text-story: 22px;
-  --kin-text-h2: 28px;
-  --kin-text-h3: 20px;
-  --kin-text-body: 18px;
-  --kin-text-sm: 15px;
-  --kin-text-label: 13px;
-
-  --kin-tracking-label: .08em;
-  --kin-leading-story: 1.62;
-  --kin-leading-ui: 1.55;
-
-  /* Spacing & radius */
-  --kin-space-1: 4px;
-  --kin-space-2: 8px;
-  --kin-space-3: 16px;
-  --kin-space-4: 24px;
-  --kin-space-5: 32px;
-  --kin-space-6: 48px;
-  --kin-space-7: 64px;
-
-  --kin-radius-sm: 12px;
-  --kin-radius-md: 16px;
-  --kin-radius-lg: 20px;
-  --kin-radius-xl: 24px;
-  --kin-radius-pill: 999px;
-
-  --kin-shadow-sm: 0 1px 2px rgba(60,45,30,.06), 0 2px 6px rgba(60,45,30,.05);
-  --kin-shadow-md: 0 8px 28px rgba(60,45,30,.12);
-  --kin-shadow-lg: 0 18px 50px rgba(60,45,30,.16);
-
-  --kin-touch-min: 44px;
-  --kin-touch-default: 64px;
-  --kin-touch-primary: 96px;
+  --shadow-sm: 0 1px 2px rgba(70, 50, 30, 0.08);
+  --shadow-card: 0 2px 10px rgba(70, 50, 30, 0.10);
+  --shadow-lift: 0 8px 28px rgba(70, 50, 30, 0.16);
 }
 
 [data-theme="archive"] {
-  --kin-bg: #E9E9E6;
-  --kin-paper: #F1F1EE;
-  --kin-surface: #FAFAF8;
-  --kin-ink: #23262B;
-  --kin-body: #2C2F34;
-  --kin-ink-2: #5C636B;
-  --kin-muted: #969BA1;
-  --kin-line: #E2E2DE;
-  --kin-line-2: #DEDEDB;
-  --kin-accent: #4E6478;
-  --kin-accent-press: #3A4D5E;
-  --kin-tint: #E6EBEF;
-  --kin-tint-border: #D5DDE3;
-  --kin-sage: #7E8A8C;
-  --kin-gold: #9BA6AE;
-  --kin-chip-bg: #E9ECEE;
-  --kin-chip-border: #DADFE2;
-  --kin-field: #CDD3D6;
-  --kin-ph-a: #D2D6D9;
-  --kin-ph-b: #DDE0E2;
-  --kin-ph-text: #8A9197;
-  --kin-bezel: #1C2024;
-  --kin-on-accent: #F5F8FA;
-  --kin-ring: rgba(78,100,120,.30);
-  --kin-ring-0: rgba(78,100,120,0);
+  --paper-100: #F7F8F9; --paper-200: #ECEEF0; --paper-300: #DFE3E6;
+  --ink-900: #232A2E; --ink-700: #3C474C; --ink-500: #5C6B72;
+  --line-200: #D4DADD; --line-300: #C2CACE;
+  --surface-page: var(--paper-200); --surface-card: var(--paper-100); --surface-sunken: var(--paper-300);
+  --text-body: var(--ink-900); --text-muted: var(--ink-500); --text-meta: var(--ink-700);
+  --accent: #45707C; --accent-strong: #355864; --accent-soft: #D2E0E4; --accent-on: #FFFFFF;
+  --support: #8A8270; --support-soft: #E0DED2; --border: var(--line-200); --border-strong: var(--line-300);
+  --focus-ring: #45707C;
+  --shadow-sm: 0 1px 2px rgba(30, 45, 55, 0.08);
+  --shadow-card: 0 2px 10px rgba(30, 45, 55, 0.10);
+  --shadow-lift: 0 8px 28px rgba(30, 45, 55, 0.16);
 }
 
 [data-theme="hearth"] {
-  --kin-bg: #EEE5E2;
-  --kin-paper: #F6ECEA;
-  --kin-surface: #FCF7F5;
-  --kin-ink: #2E2724;
-  --kin-body: #3A302C;
-  --kin-ink-2: #6E625C;
-  --kin-muted: #A08E89;
-  --kin-line: #ECDFDB;
-  --kin-line-2: #E6D8D3;
-  --kin-accent: #AF6A64;
-  --kin-accent-press: #8E5049;
-  --kin-tint: #F3E6E3;
-  --kin-tint-border: #EAD6D1;
-  --kin-sage: #7E5E72;
-  --kin-gold: #C99A8C;
-  --kin-chip-bg: #F2E6E2;
-  --kin-chip-border: #E7D6D0;
-  --kin-field: #DCC9C3;
-  --kin-ph-a: #E0CFC9;
-  --kin-ph-b: #E8D9D4;
-  --kin-ph-text: #A08E89;
-  --kin-bezel: #241D1A;
-  --kin-on-accent: #FBF1EF;
-  --kin-ring: rgba(175,106,100,.30);
-  --kin-ring-0: rgba(175,106,100,0);
+  --paper-100: #FBEFEA; --paper-200: #F3E4DD; --paper-300: #E9D3C9;
+  --ink-900: #34241F; --ink-700: #543A32; --ink-500: #7A5F56;
+  --line-200: #E8D2C8; --line-300: #DCC0B3;
+  --surface-page: var(--paper-200); --surface-card: var(--paper-100); --surface-sunken: var(--paper-300);
+  --text-body: var(--ink-900); --text-muted: var(--ink-500); --text-meta: var(--ink-700);
+  --accent: #B5524C; --accent-strong: #97403B; --accent-soft: #F1D2CC; --accent-on: #FFFFFF;
+  --support: #A8745C; --support-soft: #EFD8C9; --border: var(--line-200); --border-strong: var(--line-300);
+  --focus-ring: #B5524C;
+  --shadow-sm: 0 1px 2px rgba(80, 40, 30, 0.09);
+  --shadow-card: 0 2px 10px rgba(80, 40, 30, 0.12);
+  --shadow-lift: 0 8px 28px rgba(80, 40, 30, 0.18);
 }
 
+:root {
+  /* fonts — next/font injects the variables; these add the fallbacks */
+  --font-story: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
+  --font-ui: var(--font-public-sans, 'Public Sans'), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-label: 0.875rem;
+  --text-ui-sm: 1.125rem;
+  --text-ui: 1.25rem;
+  --text-ui-lg: 1.5rem;
+  --text-story: 1.375rem;
+  --text-story-lg: 1.75rem;
+  --text-prompt: 2rem;
+  --text-display: 2.75rem;
+  --text-display-lg: 3.5rem;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-body: 1.55;
+  --leading-loose: 1.7;
+  --tracking-mono: 0.04em;
+  --tracking-tight: -0.01em;
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600; --weight-bold: 700;
+
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.5rem; --space-6: 2rem; --space-7: 2.5rem; --space-8: 3rem; --space-9: 4rem;
+
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 18px; --radius-xl: 24px; --radius-pill: 999px;
+  --touch-min: 44px; --touch-default: 64px; --touch-voice: 96px;
+  --border-width: 1.5px;
+
+  --ease-quiet: cubic-bezier(0.33, 0, 0.2, 1);
+  --dur-fade: 0.15s; --dur-settle: 0.28s; --dur-pulse: 2.4s;
+}
+
+@keyframes kindred-listening {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50%      { box-shadow: 0 0 0 14px transparent; }
+}
+/* Alias kept for any component still referencing the old pulse name; remove with the shim. */
 @keyframes kin-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--kin-ring); }
-  50%      { box-shadow: 0 0 0 16px var(--kin-ring-0); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50%      { box-shadow: 0 0 0 16px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fade: 0s; --dur-settle: 0s; }
+}
+
+/* ---------------------------------------------------------------------------
+ * TEMPORARY compatibility shim: old --kin-* names → new semantic vars.
+ * Delete in the final task after grep confirms zero --kin-* references remain.
+ * ------------------------------------------------------------------------- */
+:root {
+  --kin-bg: var(--surface-page);
+  --kin-paper: var(--surface-card);
+  --kin-surface: var(--surface-card);
+  --kin-ink: var(--text-body);
+  --kin-body: var(--text-body);
+  --kin-ink-2: var(--text-meta);
+  --kin-muted: var(--text-muted);
+  --kin-line: var(--border);
+  --kin-line-2: var(--border-strong);
+  --kin-accent: var(--accent);
+  --kin-accent-press: var(--accent-strong);
+  --kin-tint: var(--accent-soft);
+  --kin-tint-border: var(--border);
+  --kin-sage: var(--support);
+  --kin-gold: var(--support);
+  --kin-chip-bg: var(--surface-sunken);
+  --kin-chip-border: var(--border);
+  --kin-field: var(--border-strong);
+  --kin-ph-a: var(--surface-sunken);
+  --kin-ph-b: var(--paper-200);
+  --kin-ph-text: var(--text-muted);
+  --kin-bezel: var(--ink-900);
+  --kin-on-accent: var(--accent-on);
+  --kin-ring: var(--accent-soft);
+  --kin-ring-0: transparent;
+
+  --kin-font-serif: var(--font-story);
+  --kin-font-sans: var(--font-ui);
+  --kin-font-mono: var(--font-mono);
+
+  --kin-text-display: var(--text-display-lg);
+  --kin-text-title: var(--text-display);
+  --kin-text-headline: var(--text-story-lg);
+  --kin-text-story: var(--text-story);
+  --kin-text-h2: var(--text-story-lg);
+  --kin-text-h3: var(--text-ui);
+  --kin-text-body: var(--text-ui-sm);
+  --kin-text-sm: var(--text-label);
+  --kin-text-label: var(--text-label);
+
+  --kin-tracking-label: .08em;
+  --kin-leading-story: var(--leading-loose);
+  --kin-leading-ui: var(--leading-body);
+
+  --kin-space-1: var(--space-1);
+  --kin-space-2: var(--space-2);
+  --kin-space-3: var(--space-4);
+  --kin-space-4: var(--space-5);
+  --kin-space-5: var(--space-6);
+  --kin-space-6: var(--space-8);
+  --kin-space-7: var(--space-9);
+
+  --kin-radius-sm: var(--radius-md);
+  --kin-radius-md: var(--radius-lg);
+  --kin-radius-lg: var(--radius-lg);
+  --kin-radius-xl: var(--radius-xl);
+  --kin-radius-pill: var(--radius-pill);
+
+  --kin-shadow-sm: var(--shadow-sm);
+  --kin-shadow-md: var(--shadow-card);
+  --kin-shadow-lg: var(--shadow-lift);
+
+  --kin-touch-min: var(--touch-min);
+  --kin-touch-default: var(--touch-default);
+  --kin-touch-primary: var(--touch-voice);
 }

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Public_Sans } from "next/font/google";
+import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 
@@ -20,6 +20,13 @@ const publicSans = Public_Sans({
   weight: ["400", "500", "600", "700"],
   display: "swap",
   variable: "--font-public-sans",
+});
+
+const dmMono = DM_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  variable: "--font-dm-mono",
 });
 
 export const metadata: Metadata = {
@@ -52,7 +59,7 @@ export default async function RootLayout({
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   return (
-    <html lang="en" className={`${newsreader.variable} ${publicSans.variable}`}>
+    <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`}>
       {inner}
     </html>
   );
