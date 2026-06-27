@@ -1,14 +1,12 @@
 /**
  * "Your asks" view — the hub notification surface. Closes the relay loop: the asker sees their
- * submitted questions and their status. For answered ones, the resulting Story is linked (via
- * the authorization function, so the asker only sees what they're permitted to read).
- *
- * Phase 1: a polled view (no push). Spec Part III: "deliver answer back to asker (a
- * notification in the hub closing their loop)" — this is the notification.
+ * submitted questions and the status. For answered ones, the resulting Story is linked (via the
+ * authorization function, so the asker only sees what they're permitted to read).
  */
 import Link from "next/link";
 import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { KindredButton, KindredChip } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,14 +16,17 @@ export default async function AsksPage() {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") {
     return (
-      <main className="screen">
-        <p>You need to <Link href="/dev/sign-in">sign in</Link>.</p>
+      <main className="kin-page">
+        <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
+          <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Sign in to see your asks</h1>
+          <Link href="/dev/sign-in" style={{ textDecoration: "none", display: "inline-block", maxWidth: 240, marginTop: 24 }}>
+            <KindredButton label="Dev sign-in" />
+          </Link>
+        </div>
       </main>
     );
   }
   const mine = await listAsksByAsker(db, ctx);
-  // For answered asks, also resolve the linked Story via the front door so we only link to
-  // stories the asker is authorized to read.
   const enriched = await Promise.all(
     mine.map(async (m) => {
       let storyVisible = false;
@@ -42,40 +43,74 @@ export default async function AsksPage() {
   );
 
   return (
-    <main className="screen">
-      <h1>Your asks</h1>
-      <p>
-        <Link href="/hub">Back to hub</Link>
-        {" · "}
-        <Link href="/hub/ask">Ask another</Link>
-      </p>
-      {enriched.length === 0 ? (
-        <p className="subtle">You haven't asked anything yet.</p>
-      ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {enriched.map((m) => (
-            <li key={m.ask.id} style={{ marginBottom: "1.25rem" }}>
-              <div>
-                <strong>For {m.targetSpokenName}:</strong> {m.ask.questionText}
-              </div>
-              <div className="subtle">
-                Status: {m.ask.status}
-                {m.ask.status === "answered" && m.storyVisible ? (
-                  <>
-                    {" · "}
-                    <Link href={`/hub#story-${m.ask.storyId}`}>
-                      Listen{m.storyTitle ? `: ${m.storyTitle}` : ""}
-                    </Link>
-                  </>
+    <main className="kin-page">
+      <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
+        <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--kin-ink-2)", textDecoration: "none" }}>
+          ‹ Back to hub
+        </Link>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Your asks</h1>
+          <Link href="/hub/ask" style={{ textDecoration: "none" }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "var(--kin-accent)" }}>+ Ask another</span>
+          </Link>
+        </div>
+
+        {enriched.length === 0 ? (
+          <p className="kin-muted" style={{ fontSize: "var(--kin-text-h3)", marginTop: 28 }}>
+            You haven't asked anything yet.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: "28px 0 0", display: "flex", flexDirection: "column", gap: 18 }}>
+            {enriched.map((m) => (
+              <li
+                key={m.ask.id}
+                style={{
+                  background: "var(--kin-surface)",
+                  border: "1px solid var(--kin-line)",
+                  borderRadius: "var(--kin-radius-md)",
+                  padding: "20px 22px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div className="kin-eyebrow">For {m.targetSpokenName}</div>
+                  <KindredChip kind="status" label={prettyStatus(m.ask.status)} />
+                </div>
+                <p
+                  style={{
+                    fontFamily: "var(--kin-font-serif)",
+                    fontSize: "var(--kin-text-h2)",
+                    lineHeight: 1.25,
+                    color: "var(--kin-ink)",
+                    margin: 0,
+                  }}
+                >
+                  {m.ask.questionText}
+                </p>
+                {m.ask.status === "answered" && m.storyVisible && m.ask.storyId ? (
+                  <Link
+                    href={`/hub/stories/${m.ask.storyId}`}
+                    style={{ fontSize: 15, fontWeight: 600, color: "var(--kin-accent)", textDecoration: "none" }}
+                  >
+                    Listen{m.storyTitle ? `: ${m.storyTitle}` : ""} →
+                  </Link>
                 ) : null}
                 {m.ask.status === "answered" && !m.storyVisible ? (
-                  <> · Answered (not shared with you)</>
+                  <span className="kin-muted" style={{ fontSize: 15 }}>
+                    Answered — not shared with you.
+                  </span>
                 ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </main>
   );
+}
+
+function prettyStatus(s: string): string {
+  return s.replace(/_/g, " ");
 }

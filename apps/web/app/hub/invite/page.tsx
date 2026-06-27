@@ -1,10 +1,7 @@
 /**
  * Invite-link generator. Creates a session token (the elder's identity for the session) and shows
- * the link to send via SMS / email. The token is shown ONCE — only its hash is persisted, so the
- * link cannot be regenerated from the DB.
- *
- * Phase 1 simplification: the inviter picks an existing Person + Family by dropdown. A full UX
- * (create-the-elder-by-name flow) is a hub iteration; nothing in the data model would change.
+ * the link via the result page. The token is shown ONCE — only its hash is persisted, so the link
+ * cannot be regenerated from the DB.
  */
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -13,10 +10,8 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { createElderSession } from "@chronicle/capture";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
+import { KindredButton } from "@/app/_kindred";
 
-/** Short-lived httpOnly cookie used to hand off the freshly-minted token to the result page
- *  WITHOUT putting it in the URL (where it would leak via server logs, browser history, and the
- *  Referer header on any outbound click). The result page reads it once and clears it. */
 const FLASH_COOKIE = "chronicle_flash_invite_token";
 
 export const runtime = "nodejs";
@@ -33,27 +28,14 @@ async function createInvite(formData: FormData): Promise<void> {
   const familyId = String(formData.get("familyId") ?? "");
   if (!elderId || !familyId) throw new Error("elder and family required");
 
-  // Defense in depth: the inviter must hold an ACTIVE membership in the chosen family. Without
-  // this, a stranger — or a paused/ended ex-member (spec Part II: divorce ends a membership,
-  // estrangement pauses one; status is an input to EVERY permission check) — could mint links
-  // for elders they no longer have a relationship to.
   const inviterFams = await db
     .select({ familyId: memberships.familyId })
     .from(memberships)
-    .where(
-      and(
-        eq(memberships.personId, ctx.personId),
-        eq(memberships.status, "active"),
-      ),
-    );
+    .where(and(eq(memberships.personId, ctx.personId), eq(memberships.status, "active")));
   if (!inviterFams.some((r) => r.familyId === familyId)) {
     throw new Error("you are not an active member of that family");
   }
 
-  // The chosen elder MUST hold an active membership in the chosen family. Without this check, a
-  // signed-in account could mint a session token binding an arbitrary Person to a Family the
-  // elder is not actually in — exactly the kind of cross-family identity confusion the
-  // Person/Membership split exists to prevent (spec Part II).
   const [elderHere] = await db
     .select({ id: memberships.id })
     .from(memberships)
@@ -74,15 +56,12 @@ async function createInvite(formData: FormData): Promise<void> {
     familyId,
     invitedByPersonId: ctx.personId,
   });
-  // Hand the raw token to the result page via a short-lived httpOnly cookie — NEVER via a URL
-  // query string (which would leak the secret into server logs, browser history, and the
-  // Referer header on outbound clicks). DB stores only the sha-256 hash.
   const jar = await cookies();
   jar.set(FLASH_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     path: "/hub/invite/result",
-    maxAge: 60, // one minute: the inviter views the link and copies it; then it is gone.
+    maxAge: 60,
   });
   redirect("/hub/invite/result");
 }
@@ -92,8 +71,13 @@ export default async function InvitePage() {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") {
     return (
-      <main className="screen">
-        <p>You need to <Link href="/dev/sign-in">sign in</Link>.</p>
+      <main className="kin-page">
+        <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
+          <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Sign in to invite</h1>
+          <Link href="/dev/sign-in" style={{ textDecoration: "none", display: "inline-block", maxWidth: 240, marginTop: 24 }}>
+            <KindredButton label="Dev sign-in" />
+          </Link>
+        </div>
       </main>
     );
   }
@@ -101,14 +85,7 @@ export default async function InvitePage() {
     .select({ id: families.id, name: families.name })
     .from(memberships)
     .innerJoin(families, eq(families.id, memberships.familyId))
-    .where(
-      and(
-        eq(memberships.personId, ctx.personId),
-        eq(memberships.status, "active"),
-      ),
-    );
-  // Candidate elders: only other active members of the inviter's active families. The server
-  // action re-enforces this; the UI just stays honest. (Strangers were never offered.)
+    .where(and(eq(memberships.personId, ctx.personId), eq(memberships.status, "active")));
   const familyIds = inviterFams.map((f) => f.id);
   const candidateRows = familyIds.length
     ? await db
@@ -124,45 +101,40 @@ export default async function InvitePage() {
         )
     : [];
   const seen = new Set<string>();
-  const allPeople = candidateRows.filter((p) => {
-    if (seen.has(p.id)) return false;
-    seen.add(p.id);
-    return true;
-  });
+  const allPeople = candidateRows.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
 
   return (
-    <main className="screen">
-      <h1>Invite an elder</h1>
-      <p className="subtle">
-        Creates a personal link that opens the elder's recording page. No login,
-        no account — the link IS the identity.
-      </p>
-      <form action={createInvite} style={{ display: "grid", gap: "1rem" }}>
-        <label>
-          Elder
-          <select name="elderId" required>
-            {allPeople.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Family
-          <select name="familyId" required>
-            {inviterFams.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit">Create link</button>
-      </form>
-      <p style={{ marginTop: "1rem" }}>
-        <Link href="/hub">Back to hub</Link>
-      </p>
+    <main className="kin-page">
+      <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
+        <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--kin-ink-2)", textDecoration: "none" }}>
+          ‹ Back to hub
+        </Link>
+        <h1 style={{ fontSize: "var(--kin-text-title)", margin: "16px 0 8px" }}>Invite an elder</h1>
+        <p className="kin-ink-2" style={{ fontSize: "var(--kin-text-h3)", margin: 0 }}>
+          Creates a personal link that opens the elder's recording page. No login, no account — the
+          link is the identity.
+        </p>
+
+        <form action={createInvite} style={{ display: "grid", gap: 20, marginTop: 28 }}>
+          <label className="kin-form-label">
+            Elder
+            <select name="elderId" className="kin-field" required>
+              {allPeople.map((p) => (
+                <option key={p.id} value={p.id}>{p.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="kin-form-label">
+            Family
+            <select name="familyId" className="kin-field" required>
+              {inviterFams.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </label>
+          <KindredButton type="submit" label="Create link" />
+        </form>
+      </div>
     </main>
   );
 }

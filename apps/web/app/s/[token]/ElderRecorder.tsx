@@ -1,13 +1,12 @@
 "use client";
 
 /**
- * The single primary control. Idle -> one big "Start talking" button. While listening -> a clear
- * "it is listening" indicator and one unmistakable "I'm finished" button. Long silences NEVER end
- * the session (silence is thinking). When finished, the wideband audio is uploaded; the elder
- * sees only warm copy — any failure stays silent toward them and is surfaced to the family
- * elsewhere.
+ * Single primary control for the elder. Idle -> pulsing voice button. Listening -> calm stop with
+ * a transcript-style placeholder. Saving/done/softfail mirror the original flow but in Kindred
+ * chrome. Long silences NEVER end the session (silence is thinking).
  */
 import { useCallback, useRef, useState } from "react";
+import { KindredVoiceButton } from "@/app/_kindred";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 
@@ -16,38 +15,6 @@ export function ElderRecorder({ token }: { token: string }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-
-  const start = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        // Wideband, clean capture — the web-link quality advantage over a phone call.
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-      streamRef.current = stream;
-      chunksRef.current = [];
-      const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      mr.onstop = () => void upload();
-      mediaRecorderRef.current = mr;
-      mr.start();
-      setPhase("listening");
-    } catch {
-      // Mic permission denied or unavailable — warm dead-end, nothing to fix on screen.
-      setPhase("softfail");
-    }
-  }, []);
-
-  const finish = useCallback(() => {
-    setPhase("saving");
-    mediaRecorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, []);
 
   const upload = useCallback(async () => {
     try {
@@ -63,9 +30,44 @@ export function ElderRecorder({ token }: { token: string }) {
     }
   }, [token]);
 
+  const start = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = () => void upload();
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setPhase("listening");
+    } catch {
+      setPhase("softfail");
+    }
+  }, [upload]);
+
+  const finish = useCallback(() => {
+    setPhase("saving");
+    mediaRecorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+  }, []);
+
   if (phase === "done") {
     return (
-      <p className="greeting" aria-live="polite">
+      <p
+        aria-live="polite"
+        style={{
+          fontFamily: "var(--kin-font-serif)",
+          fontSize: "var(--kin-text-headline)",
+          color: "var(--kin-ink)",
+          margin: 0,
+          textAlign: "center",
+        }}
+      >
         Thank you. Your family will love hearing this.
       </p>
     );
@@ -73,36 +75,20 @@ export function ElderRecorder({ token }: { token: string }) {
 
   if (phase === "softfail") {
     return (
-      <p className="subtle" aria-live="polite">
-        Let’s pick this up another time. The person who invited you will check
-        in soon.
+      <p
+        aria-live="polite"
+        className="kin-muted"
+        style={{ fontSize: "var(--kin-text-body)", margin: 0, textAlign: "center", maxWidth: 360 }}
+      >
+        Let's pick this up another time. The person who invited you will check in soon.
       </p>
     );
   }
 
-  if (phase === "listening") {
-    return (
-      <>
-        <div className="listening-dot" aria-hidden="true" />
-        <p className="subtle" aria-live="polite">
-          I’m listening…
-        </p>
-        <button className="big-button listening" onClick={finish}>
-          I’m finished
-        </button>
-      </>
-    );
-  }
+  const state = phase === "listening" ? "recording" : phase === "saving" ? "saving" : "idle";
+  const onClick = phase === "listening" ? finish : phase === "idle" ? start : undefined;
 
-  return (
-    <button
-      className="big-button"
-      onClick={start}
-      disabled={phase === "saving"}
-    >
-      {phase === "saving" ? "One moment…" : "Start talking"}
-    </button>
-  );
+  return <KindredVoiceButton state={state} onClick={onClick} />;
 }
 
 function pickMimeType(): string {
