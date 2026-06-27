@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style> * { box-sizing: border-box; } </style>
+</helmet>
+<div style="background:{{ tint }}; border:1px solid {{ tintBorder }}; border-radius:18px; padding:24px 26px; font-family:'Public Sans',sans-serif;">
+  <div style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ accent }}; margin-bottom:14px;">
+    <span style="width:6px; height:6px; border-radius:50%; background:{{ accent }};"></span>{{ eyebrow }}
+  </div>
+  <div style="font-family:'Newsreader',serif; font-size:28px; line-height:1.25; color:{{ ink }};">{{ question }}</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 560, &quot;height&quot;: 180 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;eyebrow&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;A question for Sal&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;question&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;What was your mother like when you were small?&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { ink:'#2A2520', accent:'#AE5C39', tint:'#F5EDDF', tintBorder:'#EADCC4' },
+      archive:  { ink:'#23262B', accent:'#4E6478', tint:'#E6EBEF', tintBorder:'#D5DDE3' },
+      hearth:   { ink:'#2E2724', accent:'#AF6A64', tint:'#F3E6E3', tintBorder:'#EAD6D1' },
+    };
+    const key = PAL[String(this.props.palette ?? 'Heirloom').toLowerCase()] ? String(this.props.palette).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    return {
+      ...c,
+      eyebrow: this.props.eyebrow ?? 'A question for Sal',
+      question: this.props.question ?? 'What was your mother like when you were small?',
+    };
+  }
+}
+</script>
+</body>
+</html>

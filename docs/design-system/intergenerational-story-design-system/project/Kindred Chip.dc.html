@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style> * { box-sizing: border-box; } </style>
+</helmet>
+<div style="display:inline-flex; padding:8px;">
+  <sc-if value="{{ isPerson }}" hint-placeholder-val="{{ true }}">
+    <div style="display:inline-flex; align-items:center; gap:9px; background:{{ chipBg }}; border:1px solid {{ chipBorder }}; border-radius:999px; padding:9px 16px 9px 9px; font-size:15px; font-weight:500; color:{{ ink }}; font-family:'Public Sans',sans-serif;">
+      <span style="width:26px; height:26px; border-radius:50%; background:{{ avatarBg }}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">{{ initial }}</span>{{ label }}
+    </div>
+  </sc-if>
+  <sc-if value="{{ isOutline }}" hint-placeholder-val="{{ false }}">
+    <div style="display:inline-flex; align-items:center; gap:8px; background:transparent; border:1.5px solid {{ field }}; border-radius:999px; padding:9px 16px; font-size:15px; font-weight:{{ outlineWeight }}; color:{{ ink2 }}; font-family:{{ outlineFamily }};">{{ outlineLabel }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 200, &quot;height&quot;: 60 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;kind&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Person&quot;, &quot;Place&quot;, &quot;Time&quot;], &quot;default&quot;: &quot;Person&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;label&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Maria&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;initial&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;M&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;avatar&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Sage&quot;, &quot;Accent&quot;], &quot;default&quot;: &quot;Sage&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { ink:'#2A2520', ink2:'#6C6357', accent:'#AE5C39', sage:'#6C7A52', chipBg:'#F1E9DA', chipBorder:'#E5DAC4', field:'#D8CCB6' },
+      archive:  { ink:'#23262B', ink2:'#5C636B', accent:'#4E6478', sage:'#7E8A8C', chipBg:'#E9ECEE', chipBorder:'#DADFE2', field:'#CDD3D6' },
+      hearth:   { ink:'#2E2724', ink2:'#6E625C', accent:'#AF6A64', sage:'#7E5E72', chipBg:'#F2E6E2', chipBorder:'#E7D6D0', field:'#DCC9C3' },
+    };
+    const key = PAL[String(this.props.palette ?? 'Heirloom').toLowerCase()] ? String(this.props.palette).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    const kind = this.props.kind ?? 'Person';
+    const isPerson = kind === 'Person';
+    const isTime = kind === 'Time';
+    const label = this.props.label ?? (isPerson ? 'Maria' : isTime ? '1962' : 'Amalfi');
+    return {
+      ...c,
+      isPerson,
+      isOutline: !isPerson,
+      initial: this.props.initial ?? (label ? label.charAt(0).toUpperCase() : 'M'),
+      avatarBg: (this.props.avatar ?? 'Sage') === 'Accent' ? c.accent : c.sage,
+      label,
+      outlineLabel: isTime ? label : `📍 ${label}`,
+      outlineWeight: isTime ? 600 : 500,
+      outlineFamily: isTime ? "ui-monospace,Menlo,monospace" : "'Public Sans',sans-serif",
+    };
+  }
+}
+</script>
+</body>
+</html>

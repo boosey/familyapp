@@ -1,0 +1,6 @@
+/* Kindred motion — the only ambient animation is the gentle "listening" pulse
+   on the primary voice action. Everything else fades quietly (.15s). */
+@keyframes kin-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--kin-ring); }
+  50%      { box-shadow: 0 0 0 16px var(--kin-ring-0); }
+}

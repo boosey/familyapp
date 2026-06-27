@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style data-omelette-print-defaults>
+@media print {
+  @page { margin: 0.5in; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  figure, table, pre, blockquote, img, svg, tr, [class~="card" i] { break-inside: avoid; }
+  img, svg { max-width: 100%; }
+  p { orphans: 3; widows: 3; }
+}
+</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#E7DFD0">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#E7DFD0"/>
+    <circle cx="600" cy="360" r="150" fill="#AE5C39"/>
+    <rect x="585" y="300" width="30" height="120" rx="15" fill="#FBF3EC"/>
+    <text x="600" y="600" font-family="Georgia, serif" font-size="92" font-weight="500" fill="#2A2520" text-anchor="middle">Kindred</text>
+  </svg>
+</template>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #E7DFD0; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  * { box-sizing: border-box; }
+  @keyframes kin-pulse { 0%,100% { box-shadow: 0 0 0 0 var(--ring, rgba(140,90,60,.30)); } 50% { box-shadow: 0 0 0 16px var(--ring0, rgba(140,90,60,0)); } }
+</style>
+</helmet>
+<div data-kin="root" data-palette="{{ paletteKey }}" style="background:{{ c.bg }}; min-height:100vh; display:flex; justify-content:center; padding:72px 32px 120px; font-family:'Public Sans',sans-serif; color:{{ c.ink }};">
+<div style="width:1180px; max-width:100%;">
+
+  <!-- ============ COVER ============ -->
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:48px; padding-bottom:40px; border-bottom:1px solid {{ c.line2 }};">
+    <div style="max-width:760px;">
+      <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12px; letter-spacing:.18em; color:{{ c.accent }}; text-transform:uppercase; margin-bottom:24px;">Intergenerational Story System · v0.1</div>
+      <div style="font-family:'Newsreader',serif; font-weight:500; font-size:104px; line-height:.92; letter-spacing:-.02em; color:{{ c.ink }};">Kindred</div>
+      <p style="font-family:'Newsreader',serif; font-size:25px; line-height:1.5; color:{{ c.ink2 }}; margin:28px 0 0; max-width:620px;">A design language for capturing a life — one conversation at a time. Built elders-first: large type, a gentle pace, and voice over typing.</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px; flex-shrink:0; padding-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:8px; background:{{ c.surface }}; border:1px solid {{ c.line2 }}; border-radius:999px; padding:9px 16px; font-size:13px; font-weight:600; color:{{ c.ink2 }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ c.accent }};"></span>Tablet-first</div>
+      <div style="display:flex; align-items:center; gap:8px; background:{{ c.surface }}; border:1px solid {{ c.line2 }}; border-radius:999px; padding:9px 16px; font-size:13px; font-weight:600; color:{{ c.ink2 }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ c.sage }};"></span>WCAG AA+ contrast</div>
+      <div style="display:flex; align-items:center; gap:8px; background:{{ c.surface }}; border:1px solid {{ c.line2 }}; border-radius:999px; padding:9px 16px; font-size:13px; font-weight:600; color:{{ c.ink2 }};"><span style="width:7px;height:7px;border-radius:999px;background:{{ c.gold }};"></span>Newsreader × Public Sans</div>
+    </div>
+  </div>
+
+  <!-- ============ PRINCIPLES ============ -->
+  <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-top:36px;">
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:18px; padding:24px;">
+      <div style="font-family:'Newsreader',serif; font-size:30px; color:{{ c.accent }}; line-height:1; margin-bottom:14px;">01</div>
+      <div style="font-size:17px; font-weight:600; margin-bottom:8px;">Elder-first legibility</div>
+      <div style="font-size:14.5px; line-height:1.55; color:{{ c.ink2 }};">An 18px UI floor, 22px for stories, and touch targets no smaller than 64px.</div>
+    </div>
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:18px; padding:24px;">
+      <div style="font-family:'Newsreader',serif; font-size:30px; color:{{ c.accent }}; line-height:1; margin-bottom:14px;">02</div>
+      <div style="font-size:17px; font-weight:600; margin-bottom:8px;">Voice over keyboard</div>
+      <div style="font-size:14.5px; line-height:1.55; color:{{ c.ink2 }};">Speaking is the primary input. Typing is always offered, never required.</div>
+    </div>
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:18px; padding:24px;">
+      <div style="font-family:'Newsreader',serif; font-size:30px; color:{{ c.accent }}; line-height:1; margin-bottom:14px;">03</div>
+      <div style="font-size:17px; font-weight:600; margin-bottom:8px;">Warm, not clinical</div>
+      <div style="font-size:14.5px; line-height:1.55; color:{{ c.ink2 }};">Paper, ink and photographs. The feeling of an heirloom, not a database.</div>
+    </div>
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:18px; padding:24px;">
+      <div style="font-family:'Newsreader',serif; font-size:30px; color:{{ c.accent }}; line-height:1; margin-bottom:14px;">04</div>
+      <div style="font-size:17px; font-weight:600; margin-bottom:8px;">Memory is the hero</div>
+      <div style="font-size:14.5px; line-height:1.55; color:{{ c.ink2 }};">Chrome recedes. Stories and faces carry the screen; controls stay quiet.</div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION: COLOR ============ -->
+  <div style="margin-top:88px; display:flex; align-items:baseline; gap:18px;">
+    <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.1em;">01</div>
+    <div style="font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.01em;">Color</div>
+  </div>
+  <p style="font-size:16px; line-height:1.6; color:{{ c.ink2 }}; max-width:660px; margin:14px 0 0;">Three directions, each built on warm or cool paper with a single emotional accent. <strong style="color:{{ c.ink }};">Heirloom</strong> is recommended for an elder audience — but the whole system re-themes live: pick a palette in <strong style="color:{{ c.ink }};">Tweaks</strong> and every screen below follows.</p>
+
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:32px;">
+    <!-- Heirloom -->
+    <div style="background:#FBF8F1; border:1px solid #E8E0D1; border-radius:20px; overflow:hidden;">
+      <div style="display:flex; height:120px;">
+        <div style="flex:1.4; background:#E7DFD0;"></div>
+        <div style="flex:1; background:#AE5C39;"></div>
+        <div style="flex:.6; background:#6C7A52;"></div>
+        <div style="flex:.6; background:#2A2520;"></div>
+      </div>
+      <div style="padding:20px 22px 22px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+          <div style="font-family:'Newsreader',serif; font-size:24px; color:#2A2520;">Heirloom</div>
+          <div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#AE5C39; background:rgba(174,92,57,.12); border-radius:999px; padding:4px 10px; text-transform:uppercase;">Recommended</div>
+          <sc-if value="{{ isHeir }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#fff; background:#2A2520; border-radius:999px; padding:4px 10px; text-transform:uppercase;">● Active</div></sc-if>
+        </div>
+        <div style="font-size:14px; line-height:1.5; color:#6C6357;">Cream paper, terracotta, sage. Nostalgic and bookish.</div>
+        <div style="display:flex; gap:6px; margin-top:14px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#9C9388; flex-wrap:wrap;">
+          <span>#E7DFD0</span><span>#AE5C39</span><span>#6C7A52</span><span>#2A2520</span>
+        </div>
+      </div>
+    </div>
+    <!-- Archive -->
+    <div style="background:#FAFAF8; border:1px solid #E5E5E0; border-radius:20px; overflow:hidden;">
+      <div style="display:flex; height:120px;">
+        <div style="flex:1.4; background:#E9E9E6;"></div>
+        <div style="flex:1; background:#4E6478;"></div>
+        <div style="flex:.6; background:#7E8A8C;"></div>
+        <div style="flex:.6; background:#23262B;"></div>
+      </div>
+      <div style="padding:20px 22px 22px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+          <div style="font-family:'Newsreader',serif; font-size:24px; color:#23262B;">Archive</div>
+          <sc-if value="{{ isArch }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#fff; background:#23262B; border-radius:999px; padding:4px 10px; text-transform:uppercase;">● Active</div></sc-if>
+        </div>
+        <div style="font-size:14px; line-height:1.5; color:#6C6357;">Bone, slate-blue, ink. Cool, museum-like, institutional.</div>
+        <div style="display:flex; gap:6px; margin-top:14px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#9C9388; flex-wrap:wrap;">
+          <span>#E9E9E6</span><span>#4E6478</span><span>#7E8A8C</span><span>#23262B</span>
+        </div>
+      </div>
+    </div>
+    <!-- Hearth -->
+    <div style="background:#FCF7F5; border:1px solid #EBDFDB; border-radius:20px; overflow:hidden;">
+      <div style="display:flex; height:120px;">
+        <div style="flex:1.4; background:#EEE5E2;"></div>
+        <div style="flex:1; background:#AF6A64;"></div>
+        <div style="flex:.6; background:#7E5E72;"></div>
+        <div style="flex:.6; background:#2E2724;"></div>
+      </div>
+      <div style="padding:20px 22px 22px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+          <div style="font-family:'Newsreader',serif; font-size:24px; color:#2E2724;">Hearth</div>
+          <sc-if value="{{ isHearth }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#fff; background:#2E2724; border-radius:999px; padding:4px 10px; text-transform:uppercase;">● Active</div></sc-if>
+        </div>
+        <div style="font-size:14px; line-height:1.5; color:#6C6357;">Blush paper, clay rose, plum. Soft, intimate, tender.</div>
+        <div style="display:flex; gap:6px; margin-top:14px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#9C9388; flex-wrap:wrap;">
+          <span>#EEE5E2</span><span>#AF6A64</span><span>#7E5E72</span><span>#2E2724</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active token shelf -->
+  <div style="margin-top:24px; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px 28px 30px;">
+    <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">{{ paletteName }} tokens · active</div>
+    <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:18px;">
+      <div><div style="height:64px; border-radius:12px; background:{{ c.bg }}; border:1px solid {{ c.line2 }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">bg</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.bg }}</div></div>
+      <div><div style="height:64px; border-radius:12px; background:{{ c.paper }}; border:1px solid {{ c.line2 }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">paper</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.paper }}</div></div>
+      <div><div style="height:64px; border-radius:12px; background:{{ c.surface }}; border:1px solid {{ c.line2 }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">surface</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.surface }}</div></div>
+      <div><div style="height:64px; border-radius:12px; background:{{ c.accent }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">accent</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.accent }}</div></div>
+      <div><div style="height:64px; border-radius:12px; background:{{ c.sage }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">sage</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.sage }}</div></div>
+      <div><div style="height:64px; border-radius:12px; background:{{ c.ink }};"></div><div style="margin-top:10px; font-size:13px; font-weight:600;">ink</div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">{{ tok.ink }}</div></div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION: TYPE ============ -->
+  <div style="margin-top:88px; display:flex; align-items:baseline; gap:18px;">
+    <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.1em;">02</div>
+    <div style="font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.01em;">Typography</div>
+  </div>
+  <p style="font-size:16px; line-height:1.6; color:{{ c.ink2 }}; max-width:640px; margin:14px 0 0;">An editorial pairing. <strong style="color:{{ c.ink }};">Newsreader</strong> carries the stories — it reads like a memoir. <strong style="color:{{ c.ink }};">Public Sans</strong> handles the interface; it was drawn for legibility and government accessibility.</p>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:32px;">
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:30px 32px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid {{ c.line }}; padding-bottom:16px; margin-bottom:20px;">
+        <div style="font-family:'Newsreader',serif; font-size:26px;">Newsreader</div>
+        <div style="font-size:12.5px; color:{{ c.muted }}; font-family:ui-monospace,Menlo,monospace;">Stories · serif</div>
+      </div>
+      <div style="font-family:'Newsreader',serif; font-size:52px; font-weight:500; line-height:1.05; letter-spacing:-.015em;">A life, retold</div>
+      <div style="font-family:'Newsreader',serif; font-size:30px; font-weight:500; line-height:1.15; margin-top:18px;">She kept every letter in a tin.</div>
+      <p style="font-family:'Newsreader',serif; font-size:22px; line-height:1.62; color:{{ c.body }}; margin:18px 0 0;">We left before the sun was up, the four of us packed into the old Fiat, and your grandmother already singing.</p>
+      <p style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; line-height:1.6; color:{{ c.ink2 }}; margin:14px 0 0;">“I didn't think anyone would want to hear all this.”</p>
+    </div>
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:30px 32px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid {{ c.line }}; padding-bottom:16px; margin-bottom:20px;">
+        <div style="font-family:'Public Sans',sans-serif; font-size:26px; font-weight:600;">Public Sans</div>
+        <div style="font-size:12.5px; color:{{ c.muted }}; font-family:ui-monospace,Menlo,monospace;">Interface · sans</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:28px; font-weight:600;">Heading · 28/600</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">h2</span></div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:20px; font-weight:600;">Subhead · 20/600</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">h3</span></div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:18px; font-weight:400;">Body & buttons · 18/400</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">body</span></div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:15px; font-weight:400; color:{{ c.ink2 }};">Secondary · 15/400</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">sm</span></div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }};">Label · 13/700</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.muted }};">label</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION: SPACING / TARGETS / ELEVATION ============ -->
+  <div style="margin-top:88px; display:flex; align-items:baseline; gap:18px;">
+    <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.1em;">03</div>
+    <div style="font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.01em;">Space, touch &amp; depth</div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:20px; margin-top:32px;">
+    <!-- touch targets -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:18px;">Touch targets</div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; align-items:center; gap:14px;"><div style="width:44px;height:44px;border-radius:10px;background:{{ c.tint }};border:1px solid {{ c.line2 }};"></div><div><div style="font-size:15px;font-weight:600;">44px</div><div style="font-size:13px;color:{{ c.muted }};">absolute minimum</div></div></div>
+        <div style="display:flex; align-items:center; gap:14px;"><div style="width:64px;height:64px;border-radius:14px;background:{{ c.accent }};"></div><div><div style="font-size:15px;font-weight:600;">64px</div><div style="font-size:13px;color:{{ c.muted }};">elder default</div></div></div>
+        <div style="display:flex; align-items:center; gap:14px;"><div style="width:88px;height:88px;border-radius:50%;background:{{ c.accent }}; --ring:{{ c.ring }}; --ring0:{{ c.ring0 }}; animation:kin-pulse 2.6s ease-in-out infinite;"></div><div><div style="font-size:15px;font-weight:600;">88px+</div><div style="font-size:13px;color:{{ c.muted }};">primary voice action</div></div></div>
+      </div>
+    </div>
+    <!-- spacing scale -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:18px;">Spacing · 4px base</div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:8px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">8</span></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:16px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">16</span></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:24px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">24</span></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:32px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">32</span></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:48px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">48</span></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="height:14px; width:64px; background:{{ c.gold }}; border-radius:3px;"></div><span style="font-size:13px; color:{{ c.ink2 }};">64</span></div>
+      </div>
+    </div>
+    <!-- elevation + radius -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:18px;">Elevation &amp; radius</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div style="width:90px; height:64px; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:12px; box-shadow:0 1px 2px rgba(60,45,30,.06),0 2px 6px rgba(60,45,30,.05); display:flex; align-items:flex-end; padding:8px; font-size:12px; color:{{ c.muted }};">sm</div>
+        <div style="width:90px; height:64px; background:{{ c.surface }}; border-radius:16px; box-shadow:0 8px 28px rgba(60,45,30,.12); display:flex; align-items:flex-end; padding:8px; font-size:12px; color:{{ c.muted }};">md</div>
+        <div style="width:90px; height:64px; background:{{ c.surface }}; border-radius:20px; box-shadow:0 18px 50px rgba(60,45,30,.16); display:flex; align-items:flex-end; padding:8px; font-size:12px; color:{{ c.muted }};">lg</div>
+      </div>
+      <div style="margin-top:20px; font-size:14px; line-height:1.55; color:{{ c.ink2 }};">Corners are soft (12–24px). Shadows are warm and low — brown-toned, never gray.</div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION: COMPONENTS ============ -->
+  <div style="margin-top:88px; display:flex; align-items:baseline; gap:18px;">
+    <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.1em;">04</div>
+    <div style="font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.01em;">Components</div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:32px;">
+
+    <!-- Buttons -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Buttons</div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <button style="height:64px; border:none; border-radius:14px; background:{{ c.accent }}; color:{{ c.onAccent }}; font-family:'Public Sans',sans-serif; font-size:19px; font-weight:600; cursor:pointer; transition:background .15s;" style-hover="background:{{ c.accentPress }};">Save this story</button>
+        <button style="height:64px; border:1.5px solid {{ c.field }}; border-radius:14px; background:transparent; color:{{ c.body }}; font-family:'Public Sans',sans-serif; font-size:19px; font-weight:600; cursor:pointer; transition:border-color .15s, background .15s;" style-hover="background:{{ c.tint }}; border-color:{{ c.accent }};">Maybe later</button>
+        <button style="height:56px; border:none; border-radius:14px; background:transparent; color:{{ c.accent }}; font-family:'Public Sans',sans-serif; font-size:18px; font-weight:600; cursor:pointer;" style-hover="background:{{ c.tint }};">Skip this question</button>
+      </div>
+    </div>
+
+    <!-- Voice button -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px; display:flex; flex-direction:column;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Voice action</div>
+      <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:28px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+          <div style="width:96px; height:96px; border-radius:50%; background:{{ c.accent }}; display:flex; align-items:center; justify-content:center; --ring:{{ c.ring }}; --ring0:{{ c.ring0 }}; animation:kin-pulse 2.6s ease-in-out infinite; cursor:pointer;">
+            <div style="width:30px; height:46px; border-radius:16px; background:{{ c.onAccent }};"></div>
+          </div>
+          <div style="font-size:15px; font-weight:600; color:{{ c.ink2 }};">Tap to speak</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+          <div style="width:96px; height:96px; border-radius:50%; background:{{ c.tint }}; border:2px solid {{ c.accent }}; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <div style="width:26px; height:26px; border-radius:6px; background:{{ c.accent }};"></div>
+          </div>
+          <div style="font-size:15px; font-weight:600; color:{{ c.accent }};">Recording…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt card -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Suggested question</div>
+      <div style="background:{{ c.tint }}; border:1px solid {{ c.tintBorder }}; border-radius:18px; padding:24px 26px;">
+        <div style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.accent }}; margin-bottom:14px;"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.accent }};"></span>A question for Sal</div>
+        <div style="font-family:'Newsreader',serif; font-size:28px; line-height:1.25; color:{{ c.ink }};">What was your mother like when you were small?</div>
+      </div>
+    </div>
+
+    <!-- Chips -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Tags · people, place, time</div>
+      <div style="display:flex; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:9px; background:{{ c.chipBg }}; border:1px solid {{ c.chipBorder }}; border-radius:999px; padding:9px 16px 9px 9px; font-size:15px; font-weight:500;"><span style="width:26px;height:26px;border-radius:50%;background:{{ c.sage }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">M</span>Maria</div>
+        <div style="display:flex; align-items:center; gap:9px; background:{{ c.chipBg }}; border:1px solid {{ c.chipBorder }}; border-radius:999px; padding:9px 16px 9px 9px; font-size:15px; font-weight:500;"><span style="width:26px;height:26px;border-radius:50%;background:{{ c.accent }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">T</span>Tony</div>
+        <div style="display:flex; align-items:center; gap:8px; background:transparent; border:1.5px solid {{ c.field }}; border-radius:999px; padding:9px 16px; font-size:15px; font-weight:500; color:{{ c.ink2 }};">📍 Amalfi</div>
+        <div style="display:flex; align-items:center; gap:8px; background:transparent; border:1.5px solid {{ c.field }}; border-radius:999px; padding:9px 16px; font-size:15px; font-weight:600; color:{{ c.ink2 }}; font-family:ui-monospace,Menlo,monospace;">1962</div>
+      </div>
+    </div>
+
+    <!-- Listen bar -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Audio · listen to the original</div>
+      <div style="display:flex; align-items:center; gap:18px; background:{{ c.paper }}; border:1px solid {{ c.line }}; border-radius:16px; padding:16px 20px;">
+        <div style="width:52px; height:52px; flex-shrink:0; border-radius:50%; background:{{ c.accent }}; display:flex; align-items:center; justify-content:center;"><div style="width:0;height:0;border-left:16px solid {{ c.onAccent }};border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:4px;"></div></div>
+        <div style="flex:1; display:flex; align-items:center; gap:3px; height:36px;">
+          <sc-for list="{{ bars }}" as="b" hint-placeholder-count="22"><div style="flex:1; height:{{ b.h }}px; border-radius:2px; background:{{ c.gold }};"></div></sc-for>
+        </div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; color:{{ c.ink2 }}; flex-shrink:0;">3:48</div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px;">
+      <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Type instead</div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="height:64px; border:1.5px solid {{ c.accent }}; border-radius:14px; background:{{ c.surface }}; display:flex; align-items:center; padding:0 20px; font-size:18px; color:{{ c.ink }};">She loved the garden most of all<span style="display:inline-block; width:2px; height:24px; background:{{ c.accent }}; margin-left:2px;"></span></div>
+        <div style="height:64px; border:1.5px solid {{ c.line2 }}; border-radius:14px; background:{{ c.surface }}; display:flex; align-items:center; padding:0 20px; font-size:18px; color:{{ c.muted }};">Add a few words…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Story list card (full width) -->
+  <div style="background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:20px; padding:28px; margin-top:20px;">
+    <div style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.muted }}; margin-bottom:20px;">Story card</div>
+    <div style="display:flex; gap:20px; align-items:center; background:{{ c.paper }}; border:1px solid {{ c.line }}; border-radius:18px; padding:18px;">
+      <div style="width:120px; height:120px; flex-shrink:0; border-radius:14px; background-color:{{ c.phB }}; background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 10px,{{ c.phB }} 10px 20px); display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:{{ c.phText }};">photo</span></div>
+      <div style="flex:1;">
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:{{ c.accent }}; letter-spacing:.04em;">1962 · THE COAST</div>
+        <div style="font-family:'Newsreader',serif; font-size:28px; line-height:1.2; margin:8px 0 8px;">The summer we drove to the coast</div>
+        <div style="font-size:15px; color:{{ c.ink2 }}; display:flex; align-items:center; gap:14px;"><span>Told by Salvatore</span><span style="width:4px;height:4px;border-radius:50%;background:{{ c.field }};"></span><span>4 min listen</span><span style="width:4px;height:4px;border-radius:50%;background:{{ c.field }};"></span><span>2 photos</span></div>
+      </div>
+      <div style="width:48px;height:48px;border-radius:50%;border:1.5px solid {{ c.field }};display:flex;align-items:center;justify-content:center;color:{{ c.accent }};font-size:22px;flex-shrink:0;">›</div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION: IN USE ============ -->
+  <div style="margin-top:96px; display:flex; align-items:baseline; gap:18px;">
+    <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.1em;">05</div>
+    <div style="font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.01em;">The system, in use</div>
+  </div>
+  <p style="font-size:16px; line-height:1.6; color:{{ c.ink2 }}; max-width:660px; margin:14px 0 28px;">Three tablet screens carry the product: the conversation that gathers a memory, the finished story it becomes, and the timeline it joins. All three follow the active palette.</p>
+
+  <!-- ---- SCREEN 1: CONVERSATION ---- -->
+  <div style="display:flex; gap:40px; align-items:flex-start; margin-top:40px;">
+    <!-- tablet -->
+    <div style="width:720px; flex-shrink:0; background:{{ c.bezel }}; border-radius:36px; padding:14px; box-shadow:0 30px 70px rgba(60,45,30,.22);">
+      <div style="background:{{ c.paper }}; border-radius:24px; overflow:hidden; height:960px; display:flex; flex-direction:column;">
+        <!-- header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 28px; border-bottom:1px solid {{ c.line }};">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:52px;height:52px;border-radius:50%;background:{{ c.sage }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">S</div>
+            <div><div style="font-size:19px;font-weight:600;">Salvatore Greco</div><div style="font-size:14px;color:{{ c.muted }};">Conversation · Today, 2:14pm</div></div>
+          </div>
+          <div style="height:48px; display:flex; align-items:center; padding:0 18px; border:1.5px solid {{ c.field }}; border-radius:999px; font-size:15px; font-weight:600; color:{{ c.ink2 }};">Pause</div>
+        </div>
+        <!-- body -->
+        <div style="flex:1; padding:28px; overflow:hidden; display:flex; flex-direction:column; gap:22px;">
+          <!-- prompt -->
+          <div style="background:{{ c.tint }}; border:1px solid {{ c.tintBorder }}; border-radius:18px; padding:24px 26px;">
+            <div style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ c.accent }}; margin-bottom:12px;"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.accent }};"></span>Mara asked</div>
+            <div style="font-family:'Newsreader',serif; font-size:30px; line-height:1.22; color:{{ c.ink }};">What was your mother like when you were small?</div>
+          </div>
+          <!-- elder response -->
+          <div style="display:flex; gap:16px;">
+            <div style="width:44px;height:44px;flex-shrink:0;border-radius:50%;background:{{ c.sage }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;">S</div>
+            <div style="flex:1;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><span style="font-size:15px; font-weight:600; color:{{ c.ink2 }};">Salvatore</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:{{ c.accent }};">● 0:42</span></div>
+              <sc-if value="{{ verbatim }}" hint-placeholder-val="{{ true }}">
+                <p style="font-family:'Newsreader',serif; font-size:22px; line-height:1.6; color:{{ c.body }}; margin:0;">Oh — my mother, she, uh… she was always up before anyone. You'd come down and the bread was already going, you know? And she'd, um, she'd sing. Always singing, even when there wasn't much.</p>
+              </sc-if>
+              <sc-if value="{{ polished }}" hint-placeholder-val="{{ true }}">
+                <p style="font-family:'Newsreader',serif; font-size:22px; line-height:1.6; color:{{ c.body }}; margin:0;">My mother was always up before any of us. You'd come downstairs and the bread was already in the oven — and she'd be singing. Always singing, even when there wasn't much to go around.</p>
+              </sc-if>
+              <!-- attached photo -->
+              <div style="display:flex; gap:14px; margin-top:18px; align-items:flex-end;">
+                <div style="width:150px; height:110px; border-radius:12px; background-color:{{ c.phB }}; background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 9px,{{ c.phB }} 9px 18px); display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:{{ c.phText }};">mother · c.1948</span></div>
+                <div style="font-size:14px; color:{{ c.muted }}; padding-bottom:6px;">Tap to add a caption</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- dock -->
+        <div style="padding:22px 28px 28px; border-top:1px solid {{ c.line }}; display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px; width:120px;">
+            <div style="width:64px;height:64px;border-radius:18px;border:1.5px solid {{ c.field }};display:flex;align-items:center;justify-content:center;font-size:24px;">🖼</div>
+            <span style="font-size:14px; font-weight:600; color:{{ c.ink2 }};">Add photo</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+            <div style="width:96px;height:96px;border-radius:50%;background:{{ c.accent }};display:flex;align-items:center;justify-content:center;--ring:{{ c.ring }}; --ring0:{{ c.ring0 }}; animation:kin-pulse 2.6s ease-in-out infinite;"><div style="width:30px;height:46px;border-radius:16px;background:{{ c.onAccent }};"></div></div>
+            <span style="font-size:16px; font-weight:700; color:{{ c.accent }};">Tap to speak</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px; width:120px;">
+            <div style="width:64px;height:64px;border-radius:18px;border:1.5px solid {{ c.field }};display:flex;align-items:center;justify-content:center;font-size:24px;">⌨</div>
+            <span style="font-size:14px; font-weight:600; color:{{ c.ink2 }};">Type instead</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- notes -->
+    <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; padding-top:24px; display:flex; flex-direction:column; gap:26px;">
+        <div style="font-family:'Newsreader',serif; font-size:30px; line-height:1.2;">The conversation</div>
+        <div style="font-size:16px; line-height:1.6; color:{{ c.ink2 }};">The core loop. A family member's question sits at the top in serif; the elder simply speaks. Everything below is what was said.</div>
+        <div style="border-top:1px solid {{ c.line2 }}; padding-top:20px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">VOICE-FIRST</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">The 96px mic is the only loud element. Photo and keyboard are equal, quieter siblings.</div></div>
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">TRANSCRIPT</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">Speech becomes serif body text in place — already reading like a memoir. Toggle the transcript tweak to compare verbatim vs. polished.</div></div>
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">PHOTOS IN CONTEXT</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">A photo can be attached to the exact moment it's mentioned, not a separate album.</div></div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- ---- SCREEN 2: STORY DETAIL ---- -->
+  <div style="display:flex; gap:40px; align-items:flex-start; margin-top:64px;">
+    <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; padding-top:24px; display:flex; flex-direction:column; gap:26px; text-align:right; align-items:flex-end;">
+        <div style="font-family:'Newsreader',serif; font-size:30px; line-height:1.2;">The finished story</div>
+        <div style="font-size:16px; line-height:1.6; color:{{ c.ink2 }}; max-width:320px;">The conversation, edited gently into a memoir page. Photographs lead; the original audio is always one tap away.</div>
+        <div style="border-top:1px solid {{ c.line2 }}; padding-top:20px; display:flex; flex-direction:column; gap:16px; align-items:flex-end;">
+          <div style="max-width:320px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">EDITORIAL</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">Newsreader at 22px with a drop cap. It should feel printed, keepsake-worthy.</div></div>
+          <div style="max-width:320px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">PROVENANCE</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">People, place and year are tappable tags — the quiet hooks for genealogy data later.</div></div>
+        </div>
+      </div>
+    </sc-if>
+    <!-- tablet -->
+    <div style="width:720px; flex-shrink:0; background:{{ c.bezel }}; border-radius:36px; padding:14px; box-shadow:0 30px 70px rgba(60,45,30,.22);">
+      <div style="background:{{ c.paper }}; border-radius:24px; overflow:hidden; height:1040px; display:flex; flex-direction:column;">
+        <!-- top bar -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 28px;">
+          <div style="display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; color:{{ c.ink2 }};"><span style="font-size:22px;">‹</span> Stories</div>
+          <div style="display:flex; gap:18px; font-size:22px; color:{{ c.ink2 }};"><span>🔖</span><span>⤴</span></div>
+        </div>
+        <div style="flex:1; overflow:hidden; padding:0 44px 36px;">
+          <div style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:{{ c.accent }}; letter-spacing:.06em;">1962 · THE COAST</div>
+          <div style="font-family:'Newsreader',serif; font-size:46px; line-height:1.08; letter-spacing:-.01em; margin:14px 0 18px;">The summer we drove to the coast</div>
+          <div style="display:flex; align-items:center; gap:12px; color:{{ c.ink2 }}; font-size:15px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:{{ c.sage }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">S</div>
+            Told by Salvatore Greco<span style="width:4px;height:4px;border-radius:50%;background:{{ c.field }};"></span>Recorded May 3, 2026
+          </div>
+          <!-- listen bar -->
+          <div style="display:flex; align-items:center; gap:16px; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:16px; padding:14px 18px; margin:22px 0;">
+            <div style="width:48px;height:48px;flex-shrink:0;border-radius:50%;background:{{ c.accent }};display:flex;align-items:center;justify-content:center;"><div style="width:0;height:0;border-left:15px solid {{ c.onAccent }};border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:4px;"></div></div>
+            <div style="flex:1; display:flex; align-items:center; gap:3px; height:32px;"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="22"><div style="flex:1; height:{{ b.h }}px; border-radius:2px; background:{{ c.gold }};"></div></sc-for></div>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:14px; color:{{ c.ink2 }};">3:48</span>
+          </div>
+          <!-- lead photo -->
+          <div style="height:240px; border-radius:16px; background-color:{{ c.phB }}; background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 12px,{{ c.phB }} 12px 24px); display:flex; align-items:flex-end; padding:14px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.phText }}; background:rgba(245,240,230,.6); padding:4px 8px; border-radius:6px;">family photo · the coast road, 1962</span></div>
+          <!-- body -->
+          <p style="font-family:'Newsreader',serif; font-size:23px; line-height:1.62; color:{{ c.body }}; margin:26px 0 0;"><span style="float:left; font-family:'Newsreader',serif; font-size:78px; line-height:.74; font-weight:500; color:{{ c.accent }}; padding:8px 14px 0 0;">W</span>e left before the sun was up, the four of us packed into the old Fiat with sandwiches your grandmother had wrapped in wax paper. She sang the whole way down the mountain, and Tony pretended to be asleep so he wouldn't have to.</p>
+          <p style="font-family:'Newsreader',serif; font-size:23px; line-height:1.62; color:{{ c.body }}; margin:18px 0 0;">When the sea finally came into view, nobody said a word. We just stopped the car on the side of the road and looked.</p>
+          <!-- tags -->
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:28px;">
+            <div style="display:flex; align-items:center; gap:9px; background:{{ c.chipBg }}; border:1px solid {{ c.chipBorder }}; border-radius:999px; padding:8px 16px 8px 8px; font-size:15px; font-weight:500;"><span style="width:24px;height:24px;border-radius:50%;background:{{ c.sage }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">M</span>Maria</div>
+            <div style="display:flex; align-items:center; gap:9px; background:{{ c.chipBg }}; border:1px solid {{ c.chipBorder }}; border-radius:999px; padding:8px 16px 8px 8px; font-size:15px; font-weight:500;"><span style="width:24px;height:24px;border-radius:50%;background:{{ c.accent }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">T</span>Tony</div>
+            <div style="display:flex; align-items:center; gap:7px; border:1.5px solid {{ c.field }}; border-radius:999px; padding:8px 16px; font-size:15px; color:{{ c.ink2 }};">📍 Amalfi</div>
+            <div style="border:1.5px solid {{ c.field }}; border-radius:999px; padding:8px 16px; font-size:15px; font-weight:600; color:{{ c.ink2 }}; font-family:ui-monospace,Menlo,monospace;">1962</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- SCREEN 3: TIMELINE ---- -->
+  <div style="display:flex; gap:40px; align-items:flex-start; margin-top:64px;">
+    <!-- tablet -->
+    <div style="width:720px; flex-shrink:0; background:{{ c.bezel }}; border-radius:36px; padding:14px; box-shadow:0 30px 70px rgba(60,45,30,.22);">
+      <div style="background:{{ c.paper }}; border-radius:24px; overflow:hidden; height:1020px; display:flex; flex-direction:column;">
+        <div style="padding:30px 36px 22px; border-bottom:1px solid {{ c.line }};">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-family:'Newsreader',serif; font-size:38px; letter-spacing:-.01em;">A life in years</div>
+            <div style="height:48px; display:flex; align-items:center; padding:0 18px; border:1.5px solid {{ c.field }}; border-radius:999px; font-size:15px; font-weight:600; color:{{ c.ink2 }};">Salvatore ▾</div>
+          </div>
+          <div style="font-size:16px; color:{{ c.muted }}; margin-top:8px;">1938 – present · 47 memories gathered</div>
+        </div>
+        <div style="flex:1; overflow:hidden; padding:30px 36px 36px; position:relative;">
+          <!-- spine -->
+          <div style="position:absolute; left:96px; top:30px; bottom:36px; width:2px; background:{{ c.line2 }};"></div>
+          <div style="display:flex; flex-direction:column; gap:26px;">
+            <!-- node -->
+            <div style="display:flex; gap:24px; align-items:flex-start;">
+              <div style="width:52px; flex-shrink:0; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600; color:{{ c.ink2 }}; padding-top:18px;">1938</div>
+              <div style="width:16px; flex-shrink:0; display:flex; justify-content:center; padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:{{ c.accent }};border:3px solid {{ c.paper }};box-shadow:0 0 0 1px {{ c.line2 }};"></div></div>
+              <div style="flex:1; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:16px; padding:18px 20px; display:flex; gap:16px; align-items:center;">
+                <div style="flex:1;"><div style="font-family:'Newsreader',serif; font-size:24px; line-height:1.15;">Born in Naples</div><div style="font-size:15px; color:{{ c.muted }}; margin-top:4px;">The second of five · Via dei Tribunali</div></div>
+                <div style="width:64px;height:64px;border-radius:12px;background-color:{{ c.phB }};background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 8px,{{ c.phB }} 8px 16px);"></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:24px; align-items:flex-start;">
+              <div style="width:52px; flex-shrink:0; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600; color:{{ c.ink2 }}; padding-top:18px;">1956</div>
+              <div style="width:16px; flex-shrink:0; display:flex; justify-content:center; padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:{{ c.sage }};border:3px solid {{ c.paper }};box-shadow:0 0 0 1px {{ c.line2 }};"></div></div>
+              <div style="flex:1; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:16px; padding:18px 20px;"><div style="font-family:'Newsreader',serif; font-size:24px; line-height:1.15;">Sailed to New York</div><div style="font-size:15px; color:{{ c.muted }}; margin-top:4px;">Eleven days aboard the SS Cristoforo Colombo</div></div>
+            </div>
+            <div style="display:flex; gap:24px; align-items:flex-start;">
+              <div style="width:52px; flex-shrink:0; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600; color:{{ c.accent }}; padding-top:18px;">1962</div>
+              <div style="width:16px; flex-shrink:0; display:flex; justify-content:center; padding-top:22px;"><div style="width:18px;height:18px;border-radius:50%;background:{{ c.accent }};border:3px solid {{ c.paper }};box-shadow:0 0 0 1px {{ c.line2 }};"></div></div>
+              <div style="flex:1; background:{{ c.tint }}; border:1px solid {{ c.tintBorder }}; border-radius:16px; padding:18px 20px; display:flex; gap:16px; align-items:center;">
+                <div style="flex:1;"><div style="font-family:'Newsreader',serif; font-size:24px; line-height:1.15;">The summer we drove to the coast</div><div style="font-size:14px; color:{{ c.accent }}; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:8px;">▶ 3:48 · 2 photos</div></div>
+                <div style="width:64px;height:64px;border-radius:12px;background-color:{{ c.phB }};background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 8px,{{ c.phB }} 8px 16px);"></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:24px; align-items:flex-start;">
+              <div style="width:52px; flex-shrink:0; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600; color:{{ c.ink2 }}; padding-top:18px;">1968</div>
+              <div style="width:16px; flex-shrink:0; display:flex; justify-content:center; padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:{{ c.sage }};border:3px solid {{ c.paper }};box-shadow:0 0 0 1px {{ c.line2 }};"></div></div>
+              <div style="flex:1; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:16px; padding:18px 20px; display:flex; gap:16px; align-items:center;">
+                <div style="flex:1;"><div style="font-family:'Newsreader',serif; font-size:24px; line-height:1.15;">Married Maria</div><div style="font-size:15px; color:{{ c.muted }}; margin-top:4px;">St. Anthony's, Brooklyn · a borrowed suit</div></div>
+                <div style="width:64px;height:64px;border-radius:12px;background-color:{{ c.phB }};background-image:repeating-linear-gradient(45deg,{{ c.phA }} 0 8px,{{ c.phB }} 8px 16px);"></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:24px; align-items:flex-start;">
+              <div style="width:52px; flex-shrink:0; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600; color:{{ c.ink2 }}; padding-top:18px;">1974</div>
+              <div style="width:16px; flex-shrink:0; display:flex; justify-content:center; padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:{{ c.sage }};border:3px solid {{ c.paper }};box-shadow:0 0 0 1px {{ c.line2 }};"></div></div>
+              <div style="flex:1; background:{{ c.surface }}; border:1px solid {{ c.line }}; border-radius:16px; padding:18px 20px;"><div style="font-family:'Newsreader',serif; font-size:24px; line-height:1.15;">Opened the bakery on Court Street</div><div style="font-size:15px; color:{{ c.muted }}; margin-top:4px;">Up at four every morning for thirty years</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- notes -->
+    <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; padding-top:24px; display:flex; flex-direction:column; gap:26px;">
+        <div style="font-family:'Newsreader',serif; font-size:30px; line-height:1.2;">The timeline</div>
+        <div style="font-size:16px; line-height:1.6; color:{{ c.ink2 }};">Every conversation deposits a memory onto a single spine. It's how a scattering of chats becomes a life you can scroll.</div>
+        <div style="border-top:1px solid {{ c.line2 }}; padding-top:20px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">ONE SPINE</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">Years anchor the left rail in monospace; dots scale up for richer moments.</div></div>
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">LIVE STORIES</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">The accent-tinted node is a finished story — tapping it opens the memory page above.</div></div>
+          <div><div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:{{ c.accent }}; letter-spacing:.08em;">ROOM TO GROW</div><div style="font-size:15px; line-height:1.55; color:{{ c.body }}; margin-top:4px;">Census and genealogy records can later slot in as their own muted node type on this same rail.</div></div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- footer -->
+  <div style="margin-top:96px; padding-top:32px; border-top:1px solid {{ c.line2 }}; display:flex; justify-content:space-between; align-items:center;">
+    <div style="font-family:'Newsreader',serif; font-size:24px;">Kindred</div>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:{{ c.muted }}; letter-spacing:.06em;">DESIGN SYSTEM v0.1 · {{ paletteUpper }}</div>
+  </div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;showNotes&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;transcript&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Polished&quot;, &quot;Verbatim&quot;], &quot;default&quot;: &quot;Polished&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.transcript ?? 'Polished';
+    const verbatim = mode === 'Verbatim';
+    const bars = [6,12,20,28,18,10,24,32,22,14,8,18,26,16,10,20,30,14,22,12].map((h) => ({ h }));
+
+    const names = { heirloom: 'Heirloom', archive: 'Archive', hearth: 'Hearth' };
+    const PAL = {
+      heirloom: { bg:'#E7DFD0', paper:'#F5F0E6', surface:'#FBF8F1', ink:'#2A2520', body:'#332D26', ink2:'#6C6357', muted:'#9C8B6C', line:'#E8E0D1', line2:'#E1D9C9', accent:'#AE5C39', accentPress:'#8C4829', tint:'#F5EDDF', tintBorder:'#EADCC4', sage:'#6C7A52', gold:'#C9A06F', chipBg:'#F1E9DA', chipBorder:'#E5DAC4', field:'#D8CCB6', phA:'#DCCFB6', phB:'#E4D8C2', phText:'#9C8B6C', bezel:'#211C17', onAccent:'#FBF3EC', ring:'rgba(174,92,57,.30)', ring0:'rgba(174,92,57,0)' },
+      archive:  { bg:'#E9E9E6', paper:'#F1F1EE', surface:'#FAFAF8', ink:'#23262B', body:'#2C2F34', ink2:'#5C636B', muted:'#969BA1', line:'#E2E2DE', line2:'#DEDEDB', accent:'#4E6478', accentPress:'#3A4D5E', tint:'#E6EBEF', tintBorder:'#D5DDE3', sage:'#7E8A8C', gold:'#9BA6AE', chipBg:'#E9ECEE', chipBorder:'#DADFE2', field:'#CDD3D6', phA:'#D2D6D9', phB:'#DDE0E2', phText:'#8A9197', bezel:'#1C2024', onAccent:'#F5F8FA', ring:'rgba(78,100,120,.30)', ring0:'rgba(78,100,120,0)' },
+      hearth:   { bg:'#EEE5E2', paper:'#F6ECEA', surface:'#FCF7F5', ink:'#2E2724', body:'#3A302C', ink2:'#6E625C', muted:'#A08E89', line:'#ECDFDB', line2:'#E6D8D3', accent:'#AF6A64', accentPress:'#8E5049', tint:'#F3E6E3', tintBorder:'#EAD6D1', sage:'#7E5E72', gold:'#C99A8C', chipBg:'#F2E6E2', chipBorder:'#E7D6D0', field:'#DCC9C3', phA:'#E0CFC9', phB:'#E8D9D4', phText:'#A08E89', bezel:'#241D1A', onAccent:'#FBF1EF', ring:'rgba(175,106,100,.30)', ring0:'rgba(175,106,100,0)' },
+    };
+    const sel = this.props.palette ?? 'Heirloom';
+    const key = PAL[String(sel).toLowerCase()] ? String(sel).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+
+    return {
+      showNotes: this.props.showNotes ?? true,
+      verbatim,
+      polished: !verbatim,
+      bars,
+      c,
+      tok: c,
+      paletteKey: key,
+      paletteName: names[key],
+      paletteUpper: names[key].toUpperCase(),
+      isHeir: key === 'heirloom',
+      isArch: key === 'archive',
+      isHearth: key === 'hearth',
+    };
+  }
+}
+</script>
+<script>
+(async () => {
+  if (!document.title || !document.title.trim()) document.title = "Kindred Design System";
+  // Prepend so page-supplied @page / break rules (deck-stage's margin:0,
+  // author CSS) keep source-order precedence over the baseline.
+  const baseCss = document.createElement('style');
+  baseCss.textContent = "@media print {\n  figure, table { break-inside: avoid; }\n  *, *::before, *::after {\n    print-color-adjust: exact; -webkit-print-color-adjust: exact;\n    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;\n    animation-delay: -99s !important; animation-duration: .001s !important;\n    animation-iteration-count: 1 !important; animation-fill-mode: both !important;\n    animation-play-state: running !important; transition-duration: 0s !important;\n  }\n}";
+  document.head.prepend(baseCss);
+  if (document.readyState === 'loading') {
+    await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  }
+  let ds = document.querySelector('deck-stage');
+  // whenDefined never resolves when nothing registers the element, so only
+  // await it when a <deck-stage> tag exists (and race a timeout regardless).
+  if (ds && !customElements.get('deck-stage')) {
+    try {
+      await Promise.race([
+        customElements.whenDefined('deck-stage'),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
+    } catch (e) {}
+    ds = document.querySelector('deck-stage');
+  }
+  // dc-runtime assigns window.DCLogic at init and mounts into #dc-root on
+  // DOMContentLoaded; settle on that subtree so React has rendered before
+  // print(). Non-DC pages fall through to weighing body.
+  const isDc = !ds && 'DCLogic' in window;
+  const settleRoot = ds || (isDc ? document.getElementById('dc-root') : null) || document.body;
+  if (settleRoot) {
+    // Weigh only content children — skip script/style/template so inline
+    // Babel/CSS doesn't register as stable "content" before the framework
+    // has mounted anything.
+    const MEDIA = 'img,svg,canvas,video,picture,iframe,embed,object';
+    const weigh = () => {
+      let text = 0, media = 0;
+      for (const c of settleRoot.children) {
+        const t = c.tagName;
+        if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+        text += (c.textContent || '').trim().length;
+        media += c.querySelectorAll(MEDIA).length + (c.matches(MEDIA) ? 1 : 0);
+      }
+      return text + media * 100;
+    };
+    // "Non-zero and stable" alone is not sufficient to mean rendered: generic
+    // body can carry a static shell while async main content is pending, and
+    // #dc-root can carry the root DC's static text while child refs are still
+    // .sc-placeholder boxes. Gate generic on readyState 'complete', and never
+    // accept stability while a dc-runtime placeholder is present.
+    const isGeneric = settleRoot === document.body;
+    const deadline = Date.now() + 15000;
+    let last = -1, stable = 0;
+    while (Date.now() < deadline) {
+      const n = weigh();
+      const ready =
+        (!isGeneric || document.readyState === 'complete') &&
+        !settleRoot.querySelector('.sc-placeholder');
+      if (n > 0 && n === last && ready) { if (++stable >= 2) break; } else { stable = 0; }
+      last = n;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  // Reveal content gated on scroll or visibility before printing. Lazy <img>,
+  // IntersectionObserver fade-ins, and collapsed <details> don't render while
+  // off-screen, so a long page would print with them blank or closed. Open
+  // every <details>, force native-lazy images eager, and scroll the document
+  // through its full height to trip lazy-load + IO; then wait (bounded) for the
+  // newly-triggered images. Inert for deck-stage (slides aren't scroll-gated).
+  try {
+    for (const d of document.querySelectorAll('details')) d.open = true;
+    for (const img of document.querySelectorAll('img[loading="lazy"]'))
+      img.loading = 'eager';
+    const scroller = document.scrollingElement || document.documentElement;
+    const full = Math.max(scroller.scrollHeight, document.body.scrollHeight);
+    const step = window.innerHeight || 800;
+    for (let y = 0; y <= full; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    window.scrollTo(0, 0);
+    await Promise.race([
+      Promise.all(
+        [...document.images].map((img) =>
+          img.complete
+            ? null
+            : new Promise((res) => {
+                img.addEventListener('load', res, { once: true });
+                img.addEventListener('error', res, { once: true });
+              })
+        )
+      ),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch (e) {}
+  try { await document.fonts.ready; } catch (e) {}
+  // Jump every animation to its end state so print() never captures a slide
+  // mid-entrance. Ordering matters: the 0s-transition style must be live
+  // BEFORE data-deck-active is set so attribute-keyed transitions don't
+  // start a (now-0s) run from the pre-active base.
+  const st = document.createElement('style');
+  st.textContent = '*,*::before,*::after{animation-delay:-99s !important;animation-duration:.001s !important;animation-iteration-count:1 !important;animation-fill-mode:both !important;animation-play-state:running !important;transition-duration:0s !important}';
+  document.head.appendChild(st);
+  for (const d of document.querySelectorAll('deck-stage')) {
+    for (const c of d.children) {
+      const t = c.tagName;
+      if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+      c.setAttribute('data-deck-active', '');
+    }
+  }
+  // Re-append deck-stage's @page last so no author @page can add a margin and
+  // spill each full-bleed slide onto two sheets. Backstop for old copies.
+  if (ds) {
+    let pg = document.getElementById('deck-stage-print-page');
+    if (!pg) {
+      pg = document.createElement('style');
+      pg.textContent = '@page{size:' + (+ds.getAttribute('width') || 1920) +
+        'px ' + (+ds.getAttribute('height') || 1080) + 'px;margin:0}';
+    }
+    document.body.appendChild(pg);
+  }
+  try {
+    const sweep = () => {
+      for (const a of document.getAnimations()) {
+        try { a.finish(); } catch (e) {
+          try { a.currentTime = (a.effect && a.effect.getComputedTiming().duration) || 0; a.pause(); } catch (e2) {}
+        }
+      }
+    };
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+  } catch (e) {}
+  // Relax break-inside on oversized elements. An element taller than a
+  // printable page can't honor break-inside: avoid — browsers either overflow
+  // it or push it whole to the next page, leaving a blank gap, then break it
+  // anyway at an arbitrary point. After the final layout (content revealed,
+  // animations jumped), find elements taller than a page that still compute
+  // break-inside: avoid and reset them to auto, so the browser breaks them at
+  // their children's boundaries instead (children keep their own avoid). PAGE_PX
+  // is a conservative portrait estimate at 96 CSS px/in — Letter/A4 usable
+  // height minus our 0.5in margins — so only clearly-oversized elements are
+  // touched and under-page elements still stay whole. Skipped for decks, whose
+  // slides are sized to the page.
+  try {
+    if (!document.querySelector('deck-stage')) {
+      const PAGE_PX = 1024;
+      // Our print defaults add a real @page margin only when the source has
+      // no @page of its own; computed style can't tell us (it reports screen
+      // media), so read the injected rule directly.
+      const defaults = document.querySelector('style[data-omelette-print-defaults]');
+      const pageInset = /@page\s*\{[^}]*margin/.test(defaults ? defaults.textContent || '' : '');
+      const SEL = 'section,article,figure,table,pre,blockquote,[class~="card" i],[class~="page" i],[class~="sheet" i]';
+      for (const el of document.body.querySelectorAll(SEL)) {
+        if (el instanceof HTMLElement && el.offsetHeight > PAGE_PX) {
+          el.setAttribute('data-om-oversized', '');
+          // Fake-paged docs simulate sheets with over-tall break-after:page
+          // boxes; honoring the break spills half-blank pages and ends a
+          // colored box mid-sheet. Flow them, and (only when we own the page
+          // inset) drop the redundant padding/background via the rule below.
+          const cs = getComputedStyle(el);
+          if (cs.breakAfter === 'page' || cs.pageBreakAfter === 'always') {
+            el.setAttribute('data-om-fakepage', '');
+          }
+        }
+      }
+      const ost = document.createElement('style');
+      ost.textContent = '@media print{' +
+        '[data-om-oversized]{break-inside:auto !important;page-break-inside:auto !important}' +
+        '[data-om-fakepage]{break-after:auto !important;page-break-after:auto !important}' +
+        (pageInset ? '[data-om-fakepage]{padding:0 !important;background:none !important}' : '') +
+        '}';
+      document.head.appendChild(ost);
+    }
+  } catch (e) {}
+  // macOS Preview renders Skia-PDF Luminosity soft-masks as opaque grey boxes;
+  // swap the CSS that triggers them for Preview-safe forms.
+  try {
+    for (const el of document.body.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+
+      if (cs.boxShadow !== 'none' && cs.filter === 'none') {
+        const outs = [], kept = [];
+        for (const s of cs.boxShadow.split(/,(?![^(]*[)])/)) {
+          const t = s.trim();
+          const m = t.match(/^(rgba?[(][^)]+[)]) (-?[0-9.]+px) (-?[0-9.]+px) ([0-9.]+px) -?[0-9.]+px$/);
+          if (m && parseFloat(m[4]) > 0) outs.push('drop-shadow(' + m[2] + ' ' + m[3] + ' ' + m[4] + ' ' + m[1] + ')');
+          else kept.push(t);
+        }
+        if (outs.length) {
+          el.style.setProperty('filter', outs.join(' '), 'important');
+          el.style.setProperty('box-shadow', kept.join(', ') || 'none', 'important');
+        }
+      }
+
+      const mask = cs.maskImage && cs.maskImage !== 'none' ? cs.maskImage : cs.webkitMaskImage;
+      if (mask && mask !== 'none' && cs.filter === 'none') el.style.setProperty('filter', 'opacity(1)', 'important');
+    }
+  } catch (e) {}
+  setTimeout(() => { try { window.print(); } catch (e) {} }, 200);
+})();
+</script>
+</body>
+</html>

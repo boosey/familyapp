@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style> * { box-sizing: border-box; } </style>
+</helmet>
+<button style="{{ btnStyle }}" style-hover="{{ hoverStyle }}">{{ label }}</button>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 360, &quot;height&quot;: 88 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;variant&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Primary&quot;, &quot;Secondary&quot;, &quot;Ghost&quot;], &quot;default&quot;: &quot;Primary&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;label&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Save this story&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { surface:'#FBF8F1', body:'#332D26', accent:'#AE5C39', accentPress:'#8C4829', tint:'#F5EDDF', field:'#D8CCB6', onAccent:'#FBF3EC' },
+      archive:  { surface:'#FAFAF8', body:'#2C2F34', accent:'#4E6478', accentPress:'#3A4D5E', tint:'#E6EBEF', field:'#CDD3D6', onAccent:'#F5F8FA' },
+      hearth:   { surface:'#FCF7F5', body:'#3A302C', accent:'#AF6A64', accentPress:'#8E5049', tint:'#F3E6E3', field:'#DCC9C3', onAccent:'#FBF1EF' },
+    };
+    const key = PAL[String(this.props.palette ?? 'Heirloom').toLowerCase()] ? String(this.props.palette).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    const variant = this.props.variant ?? 'Primary';
+    const label = this.props.label ?? 'Save this story';
+    const base = "width:100%; height:64px; border-radius:14px; font-family:'Public Sans',sans-serif; font-size:19px; font-weight:600; cursor:pointer; transition:background .15s, border-color .15s;";
+    let btnStyle, hoverStyle;
+    if (variant === 'Secondary') {
+      btnStyle = base + `border:1.5px solid ${c.field}; background:transparent; color:${c.body};`;
+      hoverStyle = `background:${c.tint}; border-color:${c.accent};`;
+    } else if (variant === 'Ghost') {
+      btnStyle = base + `border:none; background:transparent; color:${c.accent};`;
+      hoverStyle = `background:${c.tint};`;
+    } else {
+      btnStyle = base + `border:none; background:${c.accent}; color:${c.onAccent};`;
+      hoverStyle = `background:${c.accentPress};`;
+    }
+    return { label, btnStyle, hoverStyle };
+  }
+}
+</script>
+</body>
+</html>

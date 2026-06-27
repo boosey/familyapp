@@ -1,0 +1,29 @@
+/* Kindred — spacing, radii, sizing.
+   Generous, calm rhythm. Touch targets sized for elder hands. */
+
+:root {
+  /* 4px base spacing scale */
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.5rem;    /* 24 */
+  --space-6: 2rem;      /* 32 */
+  --space-7: 2.5rem;    /* 40 */
+  --space-8: 3rem;      /* 48 */
+  --space-9: 4rem;      /* 64 */
+
+  /* soft corners */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* touch targets — elders-first */
+  --touch-min: 44px;    /* absolute minimum */
+  --touch-default: 64px;/* standard control */
+  --touch-voice: 96px;  /* the one loud voice action */
+
+  --border-width: 1.5px;
+}

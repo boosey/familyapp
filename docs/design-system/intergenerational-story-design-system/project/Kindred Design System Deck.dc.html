@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #211C17; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  * { box-sizing: border-box; }
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%">
+
+<!-- ============ SLIDE 1 · COVER + PRINCIPLES ============ -->
+<section data-label="Cover" data-speaker-notes="Kindred is a design language for capturing a life one conversation at a time. Built elders-first: large type, gentle pace, voice over typing. Four principles anchor every decision." data-screen-label="01" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:96px 110px;display:flex;flex-direction:column;justify-content:space-between;">
+  <div>
+    <div style="font-family:'Courier New',monospace;font-size:18px;letter-spacing:.18em;color:#AE5C39;text-transform:uppercase;margin-bottom:34px;">Intergenerational Story System · v0.1</div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:64px;">
+      <div style="max-width:1180px;">
+        <div style="font-family:'Newsreader',Georgia,serif;font-weight:500;font-size:168px;line-height:.9;letter-spacing:-.02em;color:#2A2520;">Kindred</div>
+        <p style="font-family:'Newsreader',Georgia,serif;font-size:38px;line-height:1.5;color:#6C6357;margin:36px 0 0;max-width:980px;">A design language for capturing a life — one conversation at a time. Built elders-first: large type, a gentle pace, and voice over typing.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;flex-shrink:0;padding-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:11px;background:#FBF8F1;border:1px solid #E1D9C9;border-radius:999px;padding:13px 22px;font-size:19px;font-weight:600;color:#6C6357;"><span style="width:10px;height:10px;border-radius:999px;background:#AE5C39;"></span>Tablet-first</div>
+        <div style="display:flex;align-items:center;gap:11px;background:#FBF8F1;border:1px solid #E1D9C9;border-radius:999px;padding:13px 22px;font-size:19px;font-weight:600;color:#6C6357;"><span style="width:10px;height:10px;border-radius:999px;background:#6C7A52;"></span>WCAG AA+ contrast</div>
+        <div style="display:flex;align-items:center;gap:11px;background:#FBF8F1;border:1px solid #E1D9C9;border-radius:999px;padding:13px 22px;font-size:19px;font-weight:600;color:#6C6357;"><span style="width:10px;height:10px;border-radius:999px;background:#C9A06F;"></span>Newsreader × Public Sans</div>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;">
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:32px;">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:42px;color:#AE5C39;line-height:1;margin-bottom:18px;">01</div>
+      <div style="font-size:23px;font-weight:600;margin-bottom:10px;">Elder-first legibility</div>
+      <div style="font-size:19px;line-height:1.55;color:#6C6357;">An 18px UI floor, 22px for stories, and touch targets no smaller than 64px.</div>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:32px;">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:42px;color:#AE5C39;line-height:1;margin-bottom:18px;">02</div>
+      <div style="font-size:23px;font-weight:600;margin-bottom:10px;">Voice over keyboard</div>
+      <div style="font-size:19px;line-height:1.55;color:#6C6357;">Speaking is the primary input. Typing is always offered, never required.</div>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:32px;">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:42px;color:#AE5C39;line-height:1;margin-bottom:18px;">03</div>
+      <div style="font-size:23px;font-weight:600;margin-bottom:10px;">Warm, not clinical</div>
+      <div style="font-size:19px;line-height:1.55;color:#6C6357;">Paper, ink and photographs. The feeling of an heirloom, not a database.</div>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:32px;">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:42px;color:#AE5C39;line-height:1;margin-bottom:18px;">04</div>
+      <div style="font-size:23px;font-weight:600;margin-bottom:10px;">Memory is the hero</div>
+      <div style="font-size:19px;line-height:1.55;color:#6C6357;">Chrome recedes. Stories and faces carry the screen; controls stay quiet.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 · COLOR ============ -->
+<section data-label="Color" data-speaker-notes="Three palette directions on warm or cool paper with a single emotional accent. Heirloom is recommended for an elder audience. The active token shelf shows the six core values." data-screen-label="02" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:80px 110px;display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:baseline;gap:22px;">
+    <div style="font-family:'Courier New',monospace;font-size:20px;color:#AE5C39;letter-spacing:.1em;">01</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:62px;font-weight:500;letter-spacing:-.01em;">Color</div>
+  </div>
+  <p style="font-size:21px;line-height:1.6;color:#6C6357;max-width:1080px;margin:16px 0 0;">Three directions, each built on warm or cool paper with a single emotional accent. <strong style="color:#2A2520;">Heirloom</strong> is recommended for an elder audience — nostalgic, bookish, high-contrast.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:34px;">
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;overflow:hidden;">
+      <div style="display:flex;height:150px;"><div style="flex:1.4;background:#E7DFD0;"></div><div style="flex:1;background:#AE5C39;"></div><div style="flex:.6;background:#6C7A52;"></div><div style="flex:.6;background:#2A2520;"></div></div>
+      <div style="padding:24px 26px 26px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:30px;color:#2A2520;">Heirloom</div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#AE5C39;background:rgba(174,92,57,.12);border-radius:999px;padding:5px 12px;text-transform:uppercase;">Recommended</div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#fff;background:#2A2520;border-radius:999px;padding:5px 12px;text-transform:uppercase;">● Active</div>
+        </div>
+        <div style="font-size:18px;line-height:1.5;color:#6C6357;">Cream paper, terracotta, sage. Nostalgic and bookish.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;flex-wrap:wrap;"><span>#E7DFD0</span><span>#AE5C39</span><span>#6C7A52</span><span>#2A2520</span></div>
+      </div>
+    </div>
+    <div style="background:#FAFAF8;border:1px solid #E5E5E0;border-radius:22px;overflow:hidden;">
+      <div style="display:flex;height:150px;"><div style="flex:1.4;background:#E9E9E6;"></div><div style="flex:1;background:#4E6478;"></div><div style="flex:.6;background:#7E8A8C;"></div><div style="flex:.6;background:#23262B;"></div></div>
+      <div style="padding:24px 26px 26px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-family:'Newsreader',Georgia,serif;font-size:30px;color:#23262B;">Archive</div></div>
+        <div style="font-size:18px;line-height:1.5;color:#6C6357;">Bone, slate-blue, ink. Cool, museum-like, institutional.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;flex-wrap:wrap;"><span>#E9E9E6</span><span>#4E6478</span><span>#7E8A8C</span><span>#23262B</span></div>
+      </div>
+    </div>
+    <div style="background:#FCF7F5;border:1px solid #EBDFDB;border-radius:22px;overflow:hidden;">
+      <div style="display:flex;height:150px;"><div style="flex:1.4;background:#EEE5E2;"></div><div style="flex:1;background:#AF6A64;"></div><div style="flex:.6;background:#7E5E72;"></div><div style="flex:.6;background:#2E2724;"></div></div>
+      <div style="padding:24px 26px 26px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-family:'Newsreader',Georgia,serif;font-size:30px;color:#2E2724;">Hearth</div></div>
+        <div style="font-size:18px;line-height:1.5;color:#6C6357;">Blush paper, clay rose, plum. Soft, intimate, tender.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;flex-wrap:wrap;"><span>#EEE5E2</span><span>#AF6A64</span><span>#7E5E72</span><span>#2E2724</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:30px;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:32px 34px 34px;">
+    <div style="font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:24px;">Heirloom tokens · active</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:24px;">
+      <div><div style="height:78px;border-radius:14px;background:#E7DFD0;border:1px solid #E1D9C9;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">bg</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#E7DFD0</div></div>
+      <div><div style="height:78px;border-radius:14px;background:#F5F0E6;border:1px solid #E1D9C9;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">paper</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#F5F0E6</div></div>
+      <div><div style="height:78px;border-radius:14px;background:#FBF8F1;border:1px solid #E1D9C9;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">surface</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#FBF8F1</div></div>
+      <div><div style="height:78px;border-radius:14px;background:#AE5C39;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">accent</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#AE5C39</div></div>
+      <div><div style="height:78px;border-radius:14px;background:#6C7A52;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">sage</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#6C7A52</div></div>
+      <div><div style="height:78px;border-radius:14px;background:#2A2520;"></div><div style="margin-top:12px;font-size:17px;font-weight:600;">ink</div><div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;">#2A2520</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3 · TYPOGRAPHY ============ -->
+<section data-label="Type" data-speaker-notes="An editorial pairing. Newsreader carries the stories — it reads like a memoir. Public Sans handles the interface; it was drawn for legibility and government accessibility." data-screen-label="03" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:80px 110px;display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:baseline;gap:22px;">
+    <div style="font-family:'Courier New',monospace;font-size:20px;color:#AE5C39;letter-spacing:.1em;">02</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:62px;font-weight:500;letter-spacing:-.01em;">Typography</div>
+  </div>
+  <p style="font-size:21px;line-height:1.6;color:#6C6357;max-width:1000px;margin:16px 0 0;">An editorial pairing. <strong style="color:#2A2520;">Newsreader</strong> carries the stories — it reads like a memoir. <strong style="color:#2A2520;">Public Sans</strong> handles the interface; drawn for legibility and accessibility.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:36px;flex:1;">
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:40px 44px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #E8E0D1;padding-bottom:20px;margin-bottom:26px;">
+        <div style="font-family:'Newsreader',Georgia,serif;font-size:34px;">Newsreader</div>
+        <div style="font-size:16px;color:#9C8B6C;font-family:'Courier New',monospace;">Stories · serif</div>
+      </div>
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:72px;font-weight:500;line-height:1.05;letter-spacing:-.015em;">A life, retold</div>
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:40px;font-weight:500;line-height:1.15;margin-top:24px;">She kept every letter in a tin.</div>
+      <p style="font-family:'Newsreader',Georgia,serif;font-size:28px;line-height:1.6;color:#332D26;margin:24px 0 0;">We left before the sun was up, the four of us packed into the old Fiat, and your grandmother already singing.</p>
+      <p style="font-family:'Newsreader',Georgia,serif;font-style:italic;font-size:25px;line-height:1.6;color:#6C6357;margin:18px 0 0;">“I didn't think anyone would want to hear all this.”</p>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:40px 44px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #E8E0D1;padding-bottom:20px;margin-bottom:30px;">
+        <div style="font-family:'Public Sans',Arial,sans-serif;font-size:34px;font-weight:600;">Public Sans</div>
+        <div style="font-size:16px;color:#9C8B6C;font-family:'Courier New',monospace;">Interface · sans</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:28px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:38px;font-weight:600;">Heading · 28/600</span><span style="font-family:'Courier New',monospace;font-size:15px;color:#9C8B6C;">h2</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:28px;font-weight:600;">Subhead · 20/600</span><span style="font-family:'Courier New',monospace;font-size:15px;color:#9C8B6C;">h3</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:24px;font-weight:400;">Body &amp; buttons · 18/400</span><span style="font-family:'Courier New',monospace;font-size:15px;color:#9C8B6C;">body</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:20px;font-weight:400;color:#6C6357;">Secondary · 15/400</span><span style="font-family:'Courier New',monospace;font-size:15px;color:#9C8B6C;">sm</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:17px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;">Label · 13/700</span><span style="font-family:'Courier New',monospace;font-size:15px;color:#9C8B6C;">label</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 4 · SPACE / TOUCH / DEPTH ============ -->
+<section data-label="Space" data-speaker-notes="Touch targets start at 44px minimum, 64px is the elder default, and primary voice actions are 88px or larger. Spacing rides a 4px base. Corners are soft and shadows are warm brown-toned, never gray." data-screen-label="04" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:80px 110px;display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:baseline;gap:22px;">
+    <div style="font-family:'Courier New',monospace;font-size:20px;color:#AE5C39;letter-spacing:.1em;">03</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:62px;font-weight:500;letter-spacing:-.01em;">Space, touch &amp; depth</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:28px;margin-top:44px;flex:1;">
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:38px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:30px;">Touch targets</div>
+      <div style="display:flex;flex-direction:column;gap:26px;">
+        <div style="display:flex;align-items:center;gap:20px;"><div style="width:44px;height:44px;border-radius:10px;background:#F5EDDF;border:1px solid #E1D9C9;"></div><div><div style="font-size:21px;font-weight:600;">44px</div><div style="font-size:17px;color:#9C8B6C;">absolute minimum</div></div></div>
+        <div style="display:flex;align-items:center;gap:20px;"><div style="width:64px;height:64px;border-radius:14px;background:#AE5C39;"></div><div><div style="font-size:21px;font-weight:600;">64px</div><div style="font-size:17px;color:#9C8B6C;">elder default</div></div></div>
+        <div style="display:flex;align-items:center;gap:20px;"><div style="width:88px;height:88px;border-radius:50%;background:#AE5C39;box-shadow:0 0 0 10px rgba(174,92,57,.16);"></div><div><div style="font-size:21px;font-weight:600;">88px+</div><div style="font-size:17px;color:#9C8B6C;">primary voice action</div></div></div>
+      </div>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:38px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:30px;">Spacing · 4px base</div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:8px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">8</span></div>
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:16px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">16</span></div>
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:24px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">24</span></div>
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:32px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">32</span></div>
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:48px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">48</span></div>
+        <div style="display:flex;align-items:center;gap:16px;"><div style="height:18px;width:64px;background:#C9A06F;border-radius:3px;"></div><span style="font-size:17px;color:#6C6357;">64</span></div>
+      </div>
+    </div>
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:38px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:30px;">Elevation &amp; radius</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <div style="width:120px;height:84px;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,.06),0 2px 6px rgba(60,45,30,.05);display:flex;align-items:flex-end;padding:10px;font-size:15px;color:#9C8B6C;">sm</div>
+        <div style="width:120px;height:84px;background:#FBF8F1;border-radius:18px;box-shadow:0 8px 28px rgba(60,45,30,.12);display:flex;align-items:flex-end;padding:10px;font-size:15px;color:#9C8B6C;">md</div>
+        <div style="width:120px;height:84px;background:#FBF8F1;border-radius:22px;box-shadow:0 18px 50px rgba(60,45,30,.16);display:flex;align-items:flex-end;padding:10px;font-size:15px;color:#9C8B6C;">lg</div>
+      </div>
+      <div style="margin-top:28px;font-size:19px;line-height:1.55;color:#6C6357;">Corners are soft (12–24px). Shadows are warm and low — brown-toned, never gray.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 5 · COMPONENTS ============ -->
+<section data-label="Components" data-speaker-notes="The component kit. A primary terracotta button, a quiet voice action with its tap-to-speak mic, suggested-question prompt cards in serif, people-place-time chips, an audio listen bar, and a type-instead fallback input." data-screen-label="05" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:72px 110px;display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:baseline;gap:22px;">
+    <div style="font-family:'Courier New',monospace;font-size:20px;color:#AE5C39;letter-spacing:.1em;">04</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:62px;font-weight:500;letter-spacing:-.01em;">Components</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:32px;flex:1;">
+    <!-- Buttons -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Buttons</div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="height:66px;border-radius:14px;background:#AE5C39;color:#FBF3EC;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;">Save this story</div>
+        <div style="height:66px;border:2px solid #D8CCB6;border-radius:14px;color:#332D26;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;">Maybe later</div>
+        <div style="height:58px;border-radius:14px;color:#AE5C39;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;">Skip this question</div>
+      </div>
+    </div>
+    <!-- Voice -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;display:flex;flex-direction:column;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Voice action</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:34px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <div style="width:104px;height:104px;border-radius:50%;background:#AE5C39;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 12px rgba(174,92,57,.16);"><div style="width:32px;height:50px;border-radius:18px;background:#FBF3EC;"></div></div>
+          <div style="font-size:18px;font-weight:600;color:#6C6357;">Tap to speak</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <div style="width:104px;height:104px;border-radius:50%;background:#F5EDDF;border:2px solid #AE5C39;display:flex;align-items:center;justify-content:center;"><div style="width:28px;height:28px;border-radius:7px;background:#AE5C39;"></div></div>
+          <div style="font-size:18px;font-weight:600;color:#AE5C39;">Recording…</div>
+        </div>
+      </div>
+    </div>
+    <!-- Prompt -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Suggested question</div>
+      <div style="background:#F5EDDF;border:1px solid #EADCC4;border-radius:18px;padding:28px;">
+        <div style="display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#AE5C39;margin-bottom:16px;"><span style="width:7px;height:7px;border-radius:50%;background:#AE5C39;"></span>A question for Sal</div>
+        <div style="font-family:'Newsreader',Georgia,serif;font-size:34px;line-height:1.25;color:#2A2520;">What was your mother like when you were small?</div>
+      </div>
+    </div>
+    <!-- Chips -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Tags · people, place, time</div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:11px;background:#F1E9DA;border:1px solid #E5DAC4;border-radius:999px;padding:11px 20px 11px 11px;font-size:19px;font-weight:500;"><span style="width:32px;height:32px;border-radius:50%;background:#6C7A52;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;">M</span>Maria</div>
+        <div style="display:flex;align-items:center;gap:11px;background:#F1E9DA;border:1px solid #E5DAC4;border-radius:999px;padding:11px 20px 11px 11px;font-size:19px;font-weight:500;"><span style="width:32px;height:32px;border-radius:50%;background:#AE5C39;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;">T</span>Tony</div>
+        <div style="display:flex;align-items:center;gap:9px;border:2px solid #D8CCB6;border-radius:999px;padding:11px 20px;font-size:19px;font-weight:500;color:#6C6357;">📍 Amalfi</div>
+        <div style="display:flex;align-items:center;border:2px solid #D8CCB6;border-radius:999px;padding:11px 20px;font-size:19px;font-weight:600;color:#6C6357;font-family:'Courier New',monospace;">1962</div>
+      </div>
+    </div>
+    <!-- Listen bar -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Audio · listen to the original</div>
+      <div style="display:flex;align-items:center;gap:20px;background:#F5F0E6;border:1px solid #E8E0D1;border-radius:16px;padding:18px 22px;">
+        <div style="width:60px;height:60px;flex-shrink:0;border-radius:50%;background:#AE5C39;display:flex;align-items:center;justify-content:center;"><div style="width:0;height:0;border-left:18px solid #FBF3EC;border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:5px;"></div></div>
+        <div style="flex:1;display:flex;align-items:center;gap:4px;height:42px;">
+          <div style="flex:1;height:8px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:16px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:26px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:36px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:24px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:13px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:30px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:40px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:28px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:18px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:10px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:24px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:33px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:20px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:13px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:26px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:38px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:18px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:28px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:15px;border-radius:2px;background:#C9A06F;"></div>
+        </div>
+        <div style="font-family:'Courier New',monospace;font-size:18px;color:#6C6357;flex-shrink:0;">3:48</div>
+      </div>
+    </div>
+    <!-- Input -->
+    <div style="background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:30px;">
+      <div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:22px;">Type instead</div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="height:66px;border:2px solid #AE5C39;border-radius:14px;display:flex;align-items:center;padding:0 22px;font-size:21px;color:#2A2520;">She loved the garden most of all<span style="display:inline-block;width:2px;height:28px;background:#AE5C39;margin-left:3px;"></span></div>
+        <div style="height:66px;border:2px solid #E1D9C9;border-radius:14px;display:flex;align-items:center;padding:0 22px;font-size:21px;color:#9C8B6C;">Add a few words…</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 6 · STORY CARD + IN USE INTRO ============ -->
+<section data-label="In use" data-speaker-notes="The story card is the recurring object across the product. Next, three tablet screens carry the experience: the conversation that gathers a memory, the finished story it becomes, and the timeline it joins. All follow the active palette." data-screen-label="06" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:80px 110px;display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:baseline;gap:22px;">
+    <div style="font-family:'Courier New',monospace;font-size:20px;color:#AE5C39;letter-spacing:.1em;">05</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:62px;font-weight:500;letter-spacing:-.01em;">The system, in use</div>
+  </div>
+  <p style="font-size:23px;line-height:1.6;color:#6C6357;max-width:1180px;margin:18px 0 0;">Three tablet screens carry the product: the conversation that gathers a memory, the finished story it becomes, and the timeline it joins. All three follow the active palette. The recurring object that ties them together is the <strong style="color:#2A2520;">story card</strong>.</p>
+  <div style="margin-top:auto;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:22px;padding:38px;">
+    <div style="font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9C8B6C;margin-bottom:24px;">Story card</div>
+    <div style="display:flex;gap:28px;align-items:center;background:#F5F0E6;border:1px solid #E8E0D1;border-radius:20px;padding:26px;">
+      <div style="width:160px;height:160px;flex-shrink:0;border-radius:16px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 12px,#E4D8C2 12px 24px);display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;"><span style="font-family:'Courier New',monospace;font-size:13px;color:#9C8B6C;">photo</span></div>
+      <div style="flex:1;">
+        <div style="font-family:'Courier New',monospace;font-size:16px;color:#AE5C39;letter-spacing:.04em;">1962 · THE COAST</div>
+        <div style="font-family:'Newsreader',Georgia,serif;font-size:40px;line-height:1.2;margin:10px 0 12px;">The summer we drove to the coast</div>
+        <div style="font-size:20px;color:#6C6357;display:flex;align-items:center;gap:18px;"><span>Told by Salvatore</span><span style="width:5px;height:5px;border-radius:50%;background:#D8CCB6;"></span><span>4 min listen</span><span style="width:5px;height:5px;border-radius:50%;background:#D8CCB6;"></span><span>2 photos</span></div>
+      </div>
+      <div style="width:60px;height:60px;border-radius:50%;border:2px solid #D8CCB6;display:flex;align-items:center;justify-content:center;color:#AE5C39;font-size:30px;flex-shrink:0;">›</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 7 · SCREEN 1 CONVERSATION ============ -->
+<section data-label="Conversation" data-speaker-notes="The core loop. A family member's question sits at the top in serif; the elder simply speaks. The 96px mic is the only loud element. Speech becomes serif body text in place, already reading like a memoir. Photos attach to the exact moment they're mentioned." data-screen-label="07" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:50px 110px;display:flex;gap:56px;align-items:center;">
+  <!-- tablet -->
+  <div style="width:660px;flex-shrink:0;background:#211C17;border-radius:38px;padding:14px;box-shadow:0 30px 70px rgba(60,45,30,.22);">
+    <div style="background:#F5F0E6;border-radius:26px;overflow:hidden;height:952px;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 28px;border-bottom:1px solid #E8E0D1;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#6C7A52;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">S</div>
+          <div><div style="font-size:20px;font-weight:600;">Salvatore Greco</div><div style="font-size:15px;color:#9C8B6C;">Conversation · Today, 2:14pm</div></div>
+        </div>
+        <div style="height:48px;display:flex;align-items:center;padding:0 20px;border:2px solid #D8CCB6;border-radius:999px;font-size:16px;font-weight:600;color:#6C6357;">Pause</div>
+      </div>
+      <div style="flex:1;padding:28px;display:flex;flex-direction:column;gap:24px;">
+        <div style="background:#F5EDDF;border:1px solid #EADCC4;border-radius:18px;padding:26px;">
+          <div style="display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#AE5C39;margin-bottom:14px;"><span style="width:7px;height:7px;border-radius:50%;background:#AE5C39;"></span>Mara asked</div>
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:33px;line-height:1.22;color:#2A2520;">What was your mother like when you were small?</div>
+        </div>
+        <div style="display:flex;gap:16px;">
+          <div style="width:44px;height:44px;flex-shrink:0;border-radius:50%;background:#6C7A52;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;">S</div>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span style="font-size:16px;font-weight:600;color:#6C6357;">Salvatore</span><span style="font-family:'Courier New',monospace;font-size:14px;color:#AE5C39;">● 0:42</span></div>
+            <p style="font-family:'Newsreader',Georgia,serif;font-size:24px;line-height:1.6;color:#332D26;margin:0;">My mother was always up before any of us. You'd come downstairs and the bread was already in the oven — and she'd be singing. Always singing, even when there wasn't much to go around.</p>
+            <div style="display:flex;gap:16px;margin-top:20px;align-items:flex-end;">
+              <div style="width:160px;height:118px;border-radius:12px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 9px,#E4D8C2 9px 18px);display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;"><span style="font-family:'Courier New',monospace;font-size:11px;color:#9C8B6C;">mother · c.1948</span></div>
+              <div style="font-size:15px;color:#9C8B6C;padding-bottom:8px;">Tap to add a caption</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:22px 28px 26px;border-top:1px solid #E8E0D1;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:120px;">
+          <div style="width:64px;height:64px;border-radius:18px;border:2px solid #D8CCB6;display:flex;align-items:center;justify-content:center;font-size:26px;">🖼</div>
+          <span style="font-size:15px;font-weight:600;color:#6C6357;">Add photo</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <div style="width:100px;height:100px;border-radius:50%;background:#AE5C39;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 12px rgba(174,92,57,.16);"><div style="width:32px;height:48px;border-radius:17px;background:#FBF3EC;"></div></div>
+          <span style="font-size:17px;font-weight:700;color:#AE5C39;">Tap to speak</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:120px;">
+          <div style="width:64px;height:64px;border-radius:18px;border:2px solid #D8CCB6;display:flex;align-items:center;justify-content:center;font-size:26px;">⌨</div>
+          <span style="font-size:15px;font-weight:600;color:#6C6357;">Type instead</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- notes -->
+  <div style="flex:1;display:flex;flex-direction:column;gap:32px;">
+    <div style="font-family:'Courier New',monospace;font-size:18px;color:#AE5C39;letter-spacing:.1em;">SCREEN 01</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:52px;line-height:1.1;">The conversation</div>
+    <div style="font-size:23px;line-height:1.6;color:#6C6357;">The core loop. A family member's question sits at the top in serif; the elder simply speaks. Everything below is what was said.</div>
+    <div style="border-top:1px solid #E1D9C9;padding-top:28px;display:flex;flex-direction:column;gap:24px;">
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">VOICE-FIRST</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">The 96px mic is the only loud element. Photo and keyboard are equal, quieter siblings.</div></div>
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">TRANSCRIPT</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">Speech becomes serif body text in place — already reading like a memoir.</div></div>
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">PHOTOS IN CONTEXT</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">A photo can be attached to the exact moment it's mentioned, not a separate album.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 8 · SCREEN 2 STORY DETAIL ============ -->
+<section data-label="Story detail" data-speaker-notes="The conversation, edited gently into a memoir page. Newsreader at 23px with a drop cap; it should feel printed and keepsake-worthy. People, place and year are tappable tags — the quiet hooks for genealogy data later. The original audio is always one tap away." data-screen-label="08" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:50px 110px;display:flex;gap:56px;align-items:center;">
+  <!-- notes -->
+  <div style="flex:1;display:flex;flex-direction:column;gap:32px;text-align:right;align-items:flex-end;">
+    <div style="font-family:'Courier New',monospace;font-size:18px;color:#AE5C39;letter-spacing:.1em;">SCREEN 02</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:52px;line-height:1.1;">The finished story</div>
+    <div style="font-size:23px;line-height:1.6;color:#6C6357;max-width:460px;">The conversation, edited gently into a memoir page. Photographs lead; the original audio is always one tap away.</div>
+    <div style="border-top:1px solid #E1D9C9;padding-top:28px;display:flex;flex-direction:column;gap:24px;align-items:flex-end;">
+      <div style="max-width:460px;"><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">EDITORIAL</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">Newsreader at 22px with a drop cap. It should feel printed, keepsake-worthy.</div></div>
+      <div style="max-width:460px;"><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">PROVENANCE</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">People, place and year are tappable tags — the quiet hooks for genealogy data later.</div></div>
+    </div>
+  </div>
+  <!-- tablet -->
+  <div style="width:660px;flex-shrink:0;background:#211C17;border-radius:38px;padding:14px;box-shadow:0 30px 70px rgba(60,45,30,.22);">
+    <div style="background:#F5F0E6;border-radius:26px;overflow:hidden;height:952px;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 28px;">
+        <div style="display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;color:#6C6357;"><span style="font-size:24px;">‹</span> Stories</div>
+        <div style="display:flex;gap:18px;font-size:24px;color:#6C6357;"><span>🔖</span><span>⤴</span></div>
+      </div>
+      <div style="flex:1;overflow:hidden;padding:0 44px 30px;">
+        <div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.06em;">1962 · THE COAST</div>
+        <div style="font-family:'Newsreader',Georgia,serif;font-size:50px;line-height:1.08;letter-spacing:-.01em;margin:14px 0 18px;">The summer we drove to the coast</div>
+        <div style="display:flex;align-items:center;gap:12px;color:#6C6357;font-size:16px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#6C7A52;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">S</div>
+          Told by Salvatore Greco<span style="width:4px;height:4px;border-radius:50%;background:#D8CCB6;"></span>Recorded May 3, 2026
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:16px;padding:14px 18px;margin:22px 0;">
+          <div style="width:48px;height:48px;flex-shrink:0;border-radius:50%;background:#AE5C39;display:flex;align-items:center;justify-content:center;"><div style="width:0;height:0;border-left:15px solid #FBF3EC;border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:4px;"></div></div>
+          <div style="flex:1;display:flex;align-items:center;gap:3px;height:34px;">
+            <div style="flex:1;height:7px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:14px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:22px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:30px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:20px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:11px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:26px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:34px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:24px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:15px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:9px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:20px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:28px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:17px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:11px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:22px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:32px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:15px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:24px;border-radius:2px;background:#C9A06F;"></div><div style="flex:1;height:13px;border-radius:2px;background:#C9A06F;"></div>
+          </div>
+          <span style="font-family:'Courier New',monospace;font-size:15px;color:#6C6357;">3:48</span>
+        </div>
+        <div style="height:228px;border-radius:16px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 12px,#E4D8C2 12px 24px);display:flex;align-items:flex-end;padding:14px;"><span style="font-family:'Courier New',monospace;font-size:12px;color:#6C6357;background:rgba(245,240,230,.6);padding:5px 9px;border-radius:6px;">family photo · the coast road, 1962</span></div>
+        <p style="font-family:'Newsreader',Georgia,serif;font-size:24px;line-height:1.6;color:#332D26;margin:24px 0 0;"><span style="float:left;font-family:'Newsreader',Georgia,serif;font-size:82px;line-height:.74;font-weight:500;color:#AE5C39;padding:8px 14px 0 0;">W</span>e left before the sun was up, the four of us packed into the old Fiat with sandwiches your grandmother had wrapped in wax paper. She sang the whole way down the mountain, and Tony pretended to be asleep.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px;">
+          <div style="display:flex;align-items:center;gap:9px;background:#F1E9DA;border:1px solid #E5DAC4;border-radius:999px;padding:8px 16px 8px 8px;font-size:16px;font-weight:500;"><span style="width:24px;height:24px;border-radius:50%;background:#6C7A52;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">M</span>Maria</div>
+          <div style="display:flex;align-items:center;gap:9px;background:#F1E9DA;border:1px solid #E5DAC4;border-radius:999px;padding:8px 16px 8px 8px;font-size:16px;font-weight:500;"><span style="width:24px;height:24px;border-radius:50%;background:#AE5C39;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">T</span>Tony</div>
+          <div style="display:flex;align-items:center;gap:7px;border:2px solid #D8CCB6;border-radius:999px;padding:8px 16px;font-size:16px;color:#6C6357;">📍 Amalfi</div>
+          <div style="border:2px solid #D8CCB6;border-radius:999px;padding:8px 16px;font-size:16px;font-weight:600;color:#6C6357;font-family:'Courier New',monospace;">1962</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 9 · SCREEN 3 TIMELINE ============ -->
+<section data-label="Timeline" data-speaker-notes="Every conversation deposits a memory onto a single spine. Years anchor the left rail in monospace; dots scale up for richer moments. The accent-tinted node is a finished story. Census and genealogy records can later slot in as their own muted node type on the same rail." data-screen-label="09" style="width:1920px;height:1080px;background:#E7DFD0;font-family:'Public Sans',Arial,sans-serif;color:#2A2520;padding:50px 110px;display:flex;gap:56px;align-items:center;">
+  <!-- tablet -->
+  <div style="width:660px;flex-shrink:0;background:#211C17;border-radius:38px;padding:14px;box-shadow:0 30px 70px rgba(60,45,30,.22);">
+    <div style="background:#F5F0E6;border-radius:26px;overflow:hidden;height:952px;display:flex;flex-direction:column;">
+      <div style="padding:30px 36px 22px;border-bottom:1px solid #E8E0D1;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:40px;letter-spacing:-.01em;">A life in years</div>
+          <div style="height:48px;display:flex;align-items:center;padding:0 18px;border:2px solid #D8CCB6;border-radius:999px;font-size:16px;font-weight:600;color:#6C6357;">Salvatore ▾</div>
+        </div>
+        <div style="font-size:17px;color:#9C8B6C;margin-top:8px;">1938 – present · 47 memories gathered</div>
+      </div>
+      <div style="flex:1;padding:30px 36px;position:relative;">
+        <div style="position:absolute;left:96px;top:30px;bottom:30px;width:2px;background:#E1D9C9;"></div>
+        <div style="display:flex;flex-direction:column;gap:24px;">
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+            <div style="width:52px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;font-size:17px;font-weight:600;color:#6C6357;padding-top:18px;">1938</div>
+            <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:#AE5C39;border:3px solid #F5F0E6;box-shadow:0 0 0 1px #E1D9C9;"></div></div>
+            <div style="flex:1;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:16px;padding:18px 20px;display:flex;gap:16px;align-items:center;">
+              <div style="flex:1;"><div style="font-family:'Newsreader',Georgia,serif;font-size:25px;line-height:1.15;">Born in Naples</div><div style="font-size:16px;color:#9C8B6C;margin-top:4px;">The second of five · Via dei Tribunali</div></div>
+              <div style="width:64px;height:64px;border-radius:12px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 8px,#E4D8C2 8px 16px);"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+            <div style="width:52px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;font-size:17px;font-weight:600;color:#6C6357;padding-top:18px;">1956</div>
+            <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:#6C7A52;border:3px solid #F5F0E6;box-shadow:0 0 0 1px #E1D9C9;"></div></div>
+            <div style="flex:1;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:16px;padding:18px 20px;"><div style="font-family:'Newsreader',Georgia,serif;font-size:25px;line-height:1.15;">Sailed to New York</div><div style="font-size:16px;color:#9C8B6C;margin-top:4px;">Eleven days aboard the SS Cristoforo Colombo</div></div>
+          </div>
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+            <div style="width:52px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;font-size:17px;font-weight:600;color:#AE5C39;padding-top:18px;">1962</div>
+            <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:20px;"><div style="width:18px;height:18px;border-radius:50%;background:#AE5C39;border:3px solid #F5F0E6;box-shadow:0 0 0 1px #E1D9C9;"></div></div>
+            <div style="flex:1;background:#F5EDDF;border:1px solid #EADCC4;border-radius:16px;padding:18px 20px;display:flex;gap:16px;align-items:center;">
+              <div style="flex:1;"><div style="font-family:'Newsreader',Georgia,serif;font-size:25px;line-height:1.15;">The summer we drove to the coast</div><div style="font-size:15px;color:#AE5C39;font-weight:600;margin-top:6px;">▶ 3:48 · 2 photos</div></div>
+              <div style="width:64px;height:64px;border-radius:12px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 8px,#E4D8C2 8px 16px);"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+            <div style="width:52px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;font-size:17px;font-weight:600;color:#6C6357;padding-top:18px;">1968</div>
+            <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:#6C7A52;border:3px solid #F5F0E6;box-shadow:0 0 0 1px #E1D9C9;"></div></div>
+            <div style="flex:1;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:16px;padding:18px 20px;display:flex;gap:16px;align-items:center;">
+              <div style="flex:1;"><div style="font-family:'Newsreader',Georgia,serif;font-size:25px;line-height:1.15;">Married Maria</div><div style="font-size:16px;color:#9C8B6C;margin-top:4px;">St. Anthony's, Brooklyn · a borrowed suit</div></div>
+              <div style="width:64px;height:64px;border-radius:12px;background-color:#E4D8C2;background-image:repeating-linear-gradient(45deg,#DCCFB6 0 8px,#E4D8C2 8px 16px);"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:24px;align-items:flex-start;">
+            <div style="width:52px;flex-shrink:0;text-align:right;font-family:'Courier New',monospace;font-size:17px;font-weight:600;color:#6C6357;padding-top:18px;">1974</div>
+            <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:22px;"><div style="width:14px;height:14px;border-radius:50%;background:#6C7A52;border:3px solid #F5F0E6;box-shadow:0 0 0 1px #E1D9C9;"></div></div>
+            <div style="flex:1;background:#FBF8F1;border:1px solid #E8E0D1;border-radius:16px;padding:18px 20px;"><div style="font-family:'Newsreader',Georgia,serif;font-size:25px;line-height:1.15;">Opened the bakery on Court Street</div><div style="font-size:16px;color:#9C8B6C;margin-top:4px;">Up at four every morning for thirty years</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- notes -->
+  <div style="flex:1;display:flex;flex-direction:column;gap:32px;">
+    <div style="font-family:'Courier New',monospace;font-size:18px;color:#AE5C39;letter-spacing:.1em;">SCREEN 03</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:52px;line-height:1.1;">The timeline</div>
+    <div style="font-size:23px;line-height:1.6;color:#6C6357;">Every conversation deposits a memory onto a single spine. It's how a scattering of chats becomes a life you can scroll.</div>
+    <div style="border-top:1px solid #E1D9C9;padding-top:28px;display:flex;flex-direction:column;gap:24px;">
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">ONE SPINE</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">Years anchor the left rail in monospace; dots scale up for richer moments.</div></div>
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">LIVE STORIES</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">The accent-tinted node is a finished story — tapping it opens the memory page.</div></div>
+      <div><div style="font-family:'Courier New',monospace;font-size:15px;color:#AE5C39;letter-spacing:.08em;">ROOM TO GROW</div><div style="font-size:20px;line-height:1.55;color:#332D26;margin-top:6px;">Census and genealogy records can later slot in as their own muted node type.</div></div>
+    </div>
+    <div style="margin-top:auto;padding-top:28px;border-top:1px solid #E1D9C9;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:28px;">Kindred</div>
+      <div style="font-family:'Courier New',monospace;font-size:14px;color:#9C8B6C;letter-spacing:.06em;">DESIGN SYSTEM v0.1 · HEIRLOOM</div>
+    </div>
+  </div>
+</section>
+
+</x-import>
+</x-dc>
+</body>
+</html>

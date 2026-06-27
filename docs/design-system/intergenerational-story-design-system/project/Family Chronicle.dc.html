@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/colors.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/typography.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/motion.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/styles.css">
+<script src="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/_ds_bundle.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  textarea, select, input { font-family: var(--font-ui); }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+</style>
+</helmet>
+
+<!-- ===== Canvas header ===== -->
+<div style="position:absolute; left:40px; top:0; width:1180px;">
+  <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent);">Family Chronicle · recreated in Kindred</div>
+  <div style="font-family:var(--font-story); font-weight:400; font-size:42px; line-height:1.08; letter-spacing:-0.01em; color:#2E2620; margin-top:10px;">An heirloom, not a database</div>
+  <p style="font-family:var(--font-ui); font-size:18px; line-height:1.55; color:#5C5247; margin:14px 0 0; max-width:60ch;">The elder surface and the family hub, styled elders-first in the Heirloom palette. Tap a microphone to move through the recording states; switch the hub tabs to walk the family flows. Two takes on the recorder are shown — a guided one and the minimal single-action version.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- ELDER · RECOMMENDED (guided)                                  -->
+<!-- ============================================================ -->
+<div style="position:absolute; left:40px; top:250px;">
+  <div data-drags-parent="1" style="margin-bottom:14px;">
+    <div style="font-family:var(--font-mono); font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:var(--accent);">The elder surface · recommended</div>
+    <div style="font-family:var(--font-story); font-size:24px; color:#2E2620; margin-top:4px;">Guided recording — one question at a time</div>
+  </div>
+  <div style="background:#241E18; border-radius:40px; padding:18px; box-shadow:0 30px 64px rgba(50,35,20,0.30), inset 0 0 0 2px rgba(255,255,255,0.04);">
+    <div data-screen-label="Elder · recommended" style="width:720px; height:1000px; background:var(--surface-page); border-radius:24px; overflow:hidden; position:relative; display:flex; flex-direction:column; padding:52px 48px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-family:var(--font-story); font-size:22px; color:var(--text-meta);">Family Chronicle</span>
+        <span style="font-family:var(--font-mono); font-size:14px; letter-spacing:0.04em; color:var(--support);">SAT · 9:14</span>
+      </div>
+      <h1 style="font-family:var(--font-story); font-weight:400; font-size:52px; line-height:1.06; letter-spacing:-0.01em; color:var(--text-body); margin:34px 0 0;">Hello, Sal.</h1>
+
+      <sc-if value="{{ elderIdle }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; flex:1;">
+          <p style="font-family:var(--font-ui); font-size:20px; line-height:1.5; color:var(--text-muted); margin:14px 0 0; max-width:26ch;">Here is something your family hoped you would tell them about.</p>
+          <div style="margin-top:28px;">
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredPromptCard" dc-props="{{ elderPromptProps }}" hint-size="100%,210px"></x-import>
+          </div>
+          <div style="margin-top:14px;">
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" size="small" leading-icon="↻" dc-props="{{ elderNextProps }}" hint-size="auto,44px">Ask me a different one</x-import>
+          </div>
+          <div style="flex:1;"></div>
+          <sc-if value="{{ elderHideType }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:22px;">
+              <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ elderVoiceIdle }}" hint-size="180px,200px"></x-import>
+              <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" leading-icon="⌨" dc-props="{{ elderTypeProps }}" hint-size="auto,52px">Type instead</x-import>
+            </div>
+          </sc-if>
+          <sc-if value="{{ elderShowType }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <textarea placeholder="Type your story here. Take all the time you want…" style="width:100%; min-height:160px; resize:none; padding:18px 20px; font-size:20px; line-height:1.5; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:14px; outline:none;"></textarea>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" dc-props="{{ elderFinishProps }}" hint-size="auto,64px">Save this story</x-import>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" leading-icon="🎙" dc-props="{{ elderTypeProps }}" hint-size="auto,64px">Back to talking</x-import>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ elderListening }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; flex:1; align-items:center; justify-content:center; gap:38px;">
+          <p style="font-family:var(--font-story); font-size:30px; line-height:1.3; color:var(--text-muted); text-align:center; max-width:20ch;">I'm listening. Tell me anything you'd like.</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ elderVoiceListening }}" hint-size="200px,220px"></x-import>
+          <div style="width:100%; max-width:440px;">
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" full-width="{{ true }}" dc-props="{{ elderFinishProps }}" hint-size="100%,76px">I'm finished</x-import>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ elderSaving }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex:1; align-items:center; justify-content:center;">
+          <p style="font-family:var(--font-story); font-size:32px; color:var(--text-muted);">One moment…</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ elderDone }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; flex:1; align-items:center; justify-content:center; gap:30px; text-align:center;">
+          <p style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.25; color:var(--text-body); max-width:18ch;">Thank you. Your family will love hearing this.</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="secondary" size="large" dc-props="{{ elderResetProps }}" hint-size="auto,76px">Tell another story</x-import>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ELDER · ALTERNATIVE (minimal single action)                   -->
+<!-- ============================================================ -->
+<div style="position:absolute; left:880px; top:250px;">
+  <div data-drags-parent="1" style="margin-bottom:14px;">
+    <div style="font-family:var(--font-mono); font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:var(--support);">Alternative · one clear action</div>
+    <div style="font-family:var(--font-story); font-size:24px; color:#2E2620; margin-top:4px;">The minimal "single button" take</div>
+  </div>
+  <div style="background:#241E18; border-radius:40px; padding:18px; box-shadow:0 30px 64px rgba(50,35,20,0.30), inset 0 0 0 2px rgba(255,255,255,0.04);">
+    <div data-screen-label="Elder · one clear action" style="width:720px; height:1000px; background:var(--surface-page); border-radius:24px; overflow:hidden; position:relative; display:flex; flex-direction:column; padding:52px 48px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-family:var(--font-story); font-size:22px; color:var(--text-meta);">Family Chronicle</span>
+        <span style="font-family:var(--font-mono); font-size:14px; letter-spacing:0.04em; color:var(--support);">SAT · 9:14</span>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:44px; text-align:center;">
+        <sc-if value="{{ altIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:18px;">
+            <h1 style="font-family:var(--font-story); font-weight:400; font-size:52px; line-height:1.08; color:var(--text-body); margin:0;">Hello, Sal.</h1>
+            <p style="font-family:var(--font-ui); font-size:21px; line-height:1.5; color:var(--text-muted); margin:0; max-width:22ch;">Tap the circle and just start talking.</p>
+          </div>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ altVoiceProps }}" hint-size="240px,260px"></x-import>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" leading-icon="⌨" hint-size="auto,52px">Type instead</x-import>
+        </sc-if>
+        <sc-if value="{{ altListening }}" hint-placeholder-val="{{ false }}">
+          <p style="font-family:var(--font-story); font-size:30px; color:var(--text-muted); margin:0; max-width:20ch;">I'm listening…</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ altVoiceProps }}" hint-size="240px,260px"></x-import>
+          <div style="width:100%; max-width:440px;">
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" full-width="{{ true }}" dc-props="{{ altFinishProps }}" hint-size="100%,76px">I'm finished</x-import>
+          </div>
+        </sc-if>
+        <sc-if value="{{ altSaving }}" hint-placeholder-val="{{ false }}">
+          <p style="font-family:var(--font-story); font-size:32px; color:var(--text-muted); margin:0;">One moment…</p>
+        </sc-if>
+        <sc-if value="{{ altDone }}" hint-placeholder-val="{{ false }}">
+          <p style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.25; color:var(--text-body); margin:0; max-width:18ch;">Thank you. Your family will love hearing this.</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="secondary" size="large" dc-props="{{ altResetProps }}" hint-size="auto,76px">Tell another story</x-import>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ELDER · SPOKEN APPROVAL                                        -->
+<!-- ============================================================ -->
+<div style="position:absolute; left:1720px; top:250px;">
+  <div data-drags-parent="1" style="margin-bottom:14px;">
+    <div style="font-family:var(--font-mono); font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:var(--accent);">The elder surface · approval</div>
+    <div style="font-family:var(--font-story); font-size:24px; color:#2E2620; margin-top:4px;">Say who can hear it, then approve aloud</div>
+  </div>
+  <div style="background:#241E18; border-radius:40px; padding:18px; box-shadow:0 30px 64px rgba(50,35,20,0.30), inset 0 0 0 2px rgba(255,255,255,0.04);">
+    <div data-screen-label="Elder · spoken approval" style="width:720px; height:1000px; background:var(--surface-page); border-radius:24px; overflow:hidden; position:relative; display:flex; flex-direction:column; padding:52px 48px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-family:var(--font-story); font-size:22px; color:var(--text-meta);">Family Chronicle</span>
+        <span style="font-family:var(--font-mono); font-size:14px; letter-spacing:0.04em; color:var(--support);">YOUR STORY</span>
+      </div>
+      <h1 style="font-family:var(--font-story); font-weight:400; font-size:46px; line-height:1.1; color:var(--text-body); margin:30px 0 0;">Ready to share this one?</h1>
+      <p style="font-family:var(--font-ui); font-size:20px; line-height:1.5; color:var(--text-muted); margin:14px 0 0; max-width:28ch;">Have a listen first. Then tell me who should be able to hear it.</p>
+      <div style="margin-top:24px;">
+        <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredListenBar" dc-props="{{ apprListenProps }}" hint-size="100%,86px"></x-import>
+      </div>
+
+      <sc-if value="{{ apprIdle }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; flex:1;">
+          <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); margin:30px 0 14px;">Who should hear this?</div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <sc-for list="{{ apprTiers }}" as="tier" hint-placeholder-count="3">
+              <button onClick="{{ tier.onClick }}" style="{{ tier.rowStyle }}">
+                <span style="{{ tier.dotStyle }}"><span style="{{ tier.innerStyle }}"></span></span>
+                <span style="display:flex; flex-direction:column; gap:2px;">
+                  <span style="font-size:21px; font-weight:600; color:var(--text-body);">{{ tier.label }}</span>
+                  <span style="font-size:16px; color:var(--text-muted);">{{ tier.desc }}</span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:18px;">
+            
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ apprVoiceProps }}" hint-size="200px,200px"></x-import><x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" dc-props="{{ apprConfirmProps }}" hint-size="auto,76px">Share with {{ apprTierName }}</x-import>
+            
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ apprListening }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; flex:1; align-items:center; justify-content:center; gap:36px;">
+          <p style="font-family:var(--font-story); font-size:28px; line-height:1.3; color:var(--text-muted); text-align:center; max-width:22ch;">Say it in your own words — "Yes, my family can hear this."</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ apprVoiceProps }}" hint-size="200px,220px"></x-import>
+          <div style="width:100%; max-width:440px;">
+            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" full-width="{{ true }}" dc-props="{{ apprFinishProps }}" hint-size="100%,76px">I'm finished</x-import>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ apprSaving }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex:1; align-items:center; justify-content:center;">
+          <p style="font-family:var(--font-story); font-size:32px; color:var(--text-muted);">One moment…</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ apprDone }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; flex:1; align-items:center; justify-content:center; gap:30px; text-align:center;">
+          <p style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.25; color:var(--text-body); max-width:18ch;">Thank you. Your family will hear it now.</p>
+          <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="secondary" size="large" dc-props="{{ apprResetProps }}" hint-size="auto,76px">Back to the start</x-import>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FAMILY HUB (landscape, interactive tabs)                      -->
+<!-- ============================================================ -->
+<div style="position:absolute; left:40px; top:1420px;">
+  <div data-drags-parent="1" style="margin-bottom:14px;">
+    <div style="font-family:var(--font-mono); font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:var(--accent);">The family hub · younger generation</div>
+    <div style="font-family:var(--font-story); font-size:24px; color:#2E2620; margin-top:4px;">Where the stories come home — switch the tabs</div>
+  </div>
+  <div style="background:#241E18; border-radius:34px; padding:16px; box-shadow:0 30px 64px rgba(50,35,20,0.30), inset 0 0 0 2px rgba(255,255,255,0.04);">
+    <div data-screen-label="Family hub" style="width:1180px; height:820px; background:var(--surface-page); border-radius:20px; overflow:hidden; position:relative; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 36px; border-bottom:1.5px solid var(--border); background:var(--surface-card);">
+        <div style="display:flex; align-items:baseline; gap:14px;">
+          <span style="font-family:var(--font-story); font-size:28px; color:var(--text-body);">Family Chronicle</span>
+          <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">THE ESPOSITO FAMILY</span>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+            <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">{{ tab.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex:1; overflow-y:auto; padding:34px 40px;">
+
+        <!-- STORIES -->
+        <sc-if value="{{ hubStories }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Sal Esposito<span style="font-size:20px; color:var(--text-muted);"> · shared with you</span></h2>
+              <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">12 STORIES</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;">
+              <sc-for list="{{ filterChips }}" as="fc" hint-placeholder-count="5">
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredChip" dc-props="{{ fc.chipProps }}" hint-size="90px,44px">{{ fc.label }}</x-import>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface-card); border:1.5px solid var(--border); border-radius:18px; box-shadow:var(--shadow-card); padding:26px; margin-top:24px; display:flex; gap:26px;">
+              <div style="flex:0 0 auto; width:200px; height:200px; border-radius:14px; background-image:repeating-linear-gradient(135deg, var(--support-soft) 0 14px, var(--accent-soft) 14px 28px); position:relative;">
+                <span style="position:absolute; top:12px; right:12px; width:34px; height:34px; border-radius:999px; background:var(--surface-card); box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; justify-content:center; font-size:16px;">📍</span>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <p style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.04em; color:var(--text-meta); margin:0;">1958 · NAPLES</p>
+                <h3 style="font-family:var(--font-story); font-weight:500; font-size:30px; line-height:1.2; color:var(--text-body); margin:6px 0 0;">The bakery on Via Roma</h3>
+                <div style="margin-top:16px;">
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredListenBar" dc-props="{{ featuredListen }}" hint-size="100%,80px"></x-import>
+                </div>
+                <p style="font-family:var(--font-ui); font-size:18px; line-height:1.5; color:var(--text-muted); margin:16px 0 0;">Sal's father baked before light; the smell filled the whole street awake.</p>
+                <details style="margin-top:12px;">
+                  <summary style="font-family:var(--font-ui); font-size:18px; font-weight:600; color:var(--accent-strong); cursor:pointer;">Read the prose ›</summary>
+                  <p style="font-family:var(--font-story); font-size:20px; line-height:1.6; color:var(--text-body); margin:12px 0 0;">"Before the sky turned grey my father was already at the ovens. I would carry the warm loaves up front in my arms, and the whole of Via Roma would wake to the smell. We were poor, but no one on that street was ever hungry in the morning."</p>
+                </details>
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); margin:30px 0 16px;">Earlier memories</div>
+            <div style="display:flex; gap:24px;">
+              <sc-for list="{{ timelineStories }}" as="st" hint-placeholder-count="2">
+                <div style="flex:1; min-width:0;">
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredStoryCard" title="{{ st.title }}" year="{{ st.year }}" place="{{ st.place }}" excerpt="{{ st.excerpt }}" duration="{{ st.duration }}" style="width:100%" hint-size="100%,420px"></x-import>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ASK -->
+        <sc-if value="{{ hubAsk }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:620px;">
+            <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Ask Sal a question</h2>
+            <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">Your question waits quietly in the queue. It is asked the next time Sal sits down to talk — never as an interruption.</p>
+            <sc-if value="{{ askNotSent }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:22px; margin-top:28px;">
+                <label style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-ui); font-size:18px; color:var(--text-meta);">For
+                  <select style="padding:14px 16px; font-size:19px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:10px; outline:none;">
+                    <option>Sal Esposito</option>
+                    <option>Nonna Lucia</option>
+                  </select>
+                </label>
+                <label style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-ui); font-size:18px; color:var(--text-meta);">Question
+                  <textarea rows="4" placeholder="What would you love to hear Sal talk about?" style="padding:14px 16px; font-size:19px; line-height:1.5; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:10px; outline:none; resize:none;"></textarea>
+                </label>
+                <div>
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" dc-props="{{ askSendProps }}" hint-size="auto,64px">Send to the queue</x-import>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ askSent }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:28px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:16px; box-shadow:var(--shadow-card); padding:30px;">
+                <p style="font-family:var(--font-story); font-weight:400; font-size:28px; line-height:1.3; color:var(--text-body); margin:0;">Your question is in the queue.</p>
+                <p style="font-family:var(--font-ui); font-size:18px; line-height:1.5; color:var(--text-muted); margin:12px 0 22px;">We will let you know the moment Sal answers it.</p>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" dc-props="{{ askAnotherProps }}" hint-size="auto,56px">Ask another</x-import>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- YOUR ASKS -->
+        <sc-if value="{{ hubAsks }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Your asks</h2>
+            <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">The questions you have sent, and where they are.</p>
+            <div style="display:flex; flex-direction:column; gap:14px; margin-top:24px;">
+              <sc-for list="{{ asksView }}" as="a" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:20px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:14px; padding:20px 24px;">
+                  <div style="flex:1; min-width:0;">
+                    <p style="font-family:var(--font-ui); font-size:19px; line-height:1.45; color:var(--text-body); margin:0;"><span style="color:var(--text-meta);">For {{ a.forName }}:</span> {{ a.q }}</p>
+                  </div>
+                  <sc-if value="{{ a.answered }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:inline-flex; align-items:center; gap:8px; font-family:var(--font-ui); font-size:18px; font-weight:600; color:var(--accent-strong); white-space:nowrap;">▶ {{ a.title }}</span>
+                  </sc-if>
+                  <sc-if value="{{ a.queued }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support); white-space:nowrap;">IN THE QUEUE</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- INVITE -->
+        <sc-if value="{{ hubInvite }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:620px;">
+            <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Invite an elder</h2>
+            <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">Creates a personal link that opens Sal's recording page. No login, no app — the link is the welcome.</p>
+            <sc-if value="{{ inviteNotDone }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:22px; margin-top:28px;">
+                <label style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-ui); font-size:18px; color:var(--text-meta);">Elder
+                  <select style="padding:14px 16px; font-size:19px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:10px; outline:none;">
+                    <option>Sal Esposito</option>
+                    <option>Nonna Lucia</option>
+                  </select>
+                </label>
+                <label style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-ui); font-size:18px; color:var(--text-meta);">Family
+                  <select style="padding:14px 16px; font-size:19px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:10px; outline:none;">
+                    <option>The Esposito family</option>
+                  </select>
+                </label>
+                <div>
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" dc-props="{{ inviteCreateProps }}" hint-size="auto,64px">Create link</x-import>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ inviteDone }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:28px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:16px; box-shadow:var(--shadow-card); padding:30px;">
+                <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support);">Personal link — shown once</div>
+                <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+                  <div style="flex:1; min-width:0; font-family:var(--font-mono); font-size:17px; color:var(--text-body); background:var(--surface-sunken); border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">chronicle.family/s/9f2a-7c1b-e4d0</div>
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="secondary" size="small" hint-size="auto,52px">Copy</x-import>
+                </div>
+                <p style="font-family:var(--font-ui); font-size:17px; line-height:1.5; color:var(--text-muted); margin:18px 0 22px;">Send it by text or email. For safety we keep only a fingerprint — you will not see this link again.</p>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" dc-props="{{ inviteDoneProps }}" hint-size="auto,56px">Done</x-import>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    elderPhase: 'idle', elderShowType: false, elderQ: 0,
+    altPhase: 'idle',
+    apprTier: 'family', apprPhase: 'idle', apprPlaying: false,
+    hubTab: 'stories', hubFilter: 'All', playing: {},
+    askSent: false, inviteDone: false,
+  };
+
+  questions = [
+    { eyebrow: 'ROSA ASKED', text: 'What was your mother like when you were small?' },
+    { eyebrow: 'A GENTLE ONE', text: 'Tell me about the summer you moved to Naples.' },
+    { eyebrow: 'MARCO ASKED', text: 'How did you and Nonna first meet?' },
+  ];
+
+  stories = [
+    { id: 's1', title: 'The bakery on Via Roma', year: '1958', place: 'Naples', duration: '4:12' },
+    { id: 's2', title: 'Nine days on the Saturnia', year: '1961', place: 'At sea', duration: '6:48', excerpt: 'I was seasick the whole way, but your Nonna sang to me each night up on the deck.' },
+    { id: 's3', title: 'Three rooms in Brooklyn', year: '1962', place: 'Brooklyn', duration: '3:30', excerpt: 'A radiator that clanked like a church bell, and the best neighbors we ever had.' },
+  ];
+
+  asks = [
+    { forName: 'Sal', q: 'How did you and Nonna first meet?', status: 'answered', title: 'The dance at St. Rocco\u2019s' },
+    { forName: 'Sal', q: 'What did your father do for work?', status: 'queued' },
+    { forName: 'Nonna Lucia', q: 'What was your wedding day like?', status: 'queued' },
+  ];
+
+  filters = ['All', 'Childhood', 'Family', 'Work', 'Naples'];
+
+  // ---- elder (recommended) ----
+  elderMic = () => { if (this.state.elderPhase === 'idle') this.setState({ elderPhase: 'listening' }); };
+  elderFinish = () => { this.setState({ elderPhase: 'saving' }); setTimeout(() => this.setState({ elderPhase: 'done' }), 1300); };
+  elderReset = () => this.setState({ elderPhase: 'idle', elderShowType: false });
+  elderNext = () => this.setState(s => ({ elderQ: (s.elderQ + 1) % this.questions.length }));
+  elderToggleType = () => this.setState(s => ({ elderShowType: !s.elderShowType }));
+
+  // ---- elder (alternative) ----
+  altMic = () => {
+    const p = this.state.altPhase;
+    if (p === 'idle') this.setState({ altPhase: 'listening' });
+    else if (p === 'listening') { this.setState({ altPhase: 'saving' }); setTimeout(() => this.setState({ altPhase: 'done' }), 1300); }
+  };
+  altReset = () => this.setState({ altPhase: 'idle' });
+
+  // ---- approval ----
+  setTier = (t) => this.setState({ apprTier: t });
+  apprMic = () => {
+    const p = this.state.apprPhase;
+    if (p === 'idle') this.setState({ apprPhase: 'listening' });
+    else if (p === 'listening') { this.setState({ apprPhase: 'saving' }); setTimeout(() => this.setState({ apprPhase: 'done' }), 1300); }
+  };
+  apprReset = () => this.setState({ apprPhase: 'idle', apprPlaying: false });
+  apprConfirm = () => this.setState({ apprPhase: 'done' });
+  apprTogglePlay = () => this.setState(s => ({ apprPlaying: !s.apprPlaying }));
+
+  // ---- hub ----
+  setTab = (t) => this.setState({ hubTab: t, askSent: false, inviteDone: false });
+  setFilter = (f) => this.setState({ hubFilter: f });
+  togglePlay = (id) => this.setState(s => ({ playing: { ...s.playing, [id]: !s.playing[id] } }));
+  sendAsk = () => this.setState({ askSent: true });
+  resetAsk = () => this.setState({ askSent: false });
+  createLink = () => this.setState({ inviteDone: true });
+  resetInvite = () => this.setState({ inviteDone: false });
+
+  renderVals() {
+    const s = this.state;
+    const q = this.questions[s.elderQ];
+
+    // elder phases
+    const ep = s.elderPhase;
+    const ap = s.altPhase;
+    const rp = s.apprPhase;
+
+    // approval tiers
+    const TIER = {
+      family: ['My whole family', 'Everyone in the Esposito family'],
+      branch: ['Just one branch', 'A chosen part of the family'],
+      public: ['Anyone', 'Shared openly'],
+    };
+    const apprTiers = ['family', 'branch', 'public'].map(k => {
+      const sel = s.apprTier === k;
+      return {
+        key: k, label: TIER[k][0], desc: TIER[k][1], onClick: () => this.setTier(k),
+        rowStyle: `display:flex; align-items:center; gap:16px; width:100%; text-align:left; padding:16px 20px; border-radius:14px; cursor:pointer; transition:background .15s; background:${sel ? 'var(--accent-soft)' : 'var(--surface-card)'}; border:1.5px solid ${sel ? 'var(--accent)' : 'var(--border)'};`,
+        dotStyle: `flex:0 0 auto; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:2px solid ${sel ? 'var(--accent)' : 'var(--border-strong)'}; background:${sel ? 'var(--accent)' : 'transparent'};`,
+        innerStyle: `width:10px; height:10px; border-radius:50%; background:var(--accent-on); opacity:${sel ? 1 : 0};`,
+      };
+    });
+
+    // hub tabs
+    const tabs = [['stories', 'Stories'], ['ask', 'Ask'], ['asks', 'Your asks'], ['invite', 'Invite']].map(([k, label]) => {
+      const active = s.hubTab === k;
+      return { key: k, label, onClick: () => this.setTab(k),
+        style: `padding:10px 18px; border-radius:999px; border:none; cursor:pointer; font-family:var(--font-ui); font-size:18px; font-weight:600; background:${active ? 'var(--accent-soft)' : 'transparent'}; color:${active ? 'var(--accent-strong)' : 'var(--text-muted)'};` };
+    });
+
+    const filterChips = this.filters.map(f => ({ label: f, chipProps: { selected: s.hubFilter === f, onClick: () => this.setFilter(f) } }));
+
+    const asksView = this.asks.map(a => ({ ...a, answered: a.status === 'answered', queued: a.status !== 'answered' }));
+
+    return {
+      // elder recommended
+      elderIdle: ep === 'idle', elderListening: ep === 'listening', elderSaving: ep === 'saving', elderDone: ep === 'done',
+      elderShowType: s.elderShowType, elderHideType: !s.elderShowType,
+      elderPromptProps: { eyebrow: q.eyebrow, prompt: q.text },
+      elderVoiceIdle: { listening: false, label: 'Tap to answer', onClick: this.elderMic, size: 140 },
+      elderVoiceListening: { listening: true, label: 'Listening\u2026', onClick: this.elderFinish, size: 160 },
+      elderNextProps: { onClick: this.elderNext },
+      elderTypeProps: { onClick: this.elderToggleType },
+      elderFinishProps: { onClick: this.elderFinish },
+      elderResetProps: { onClick: this.elderReset },
+
+      // elder alternative
+      altIdle: ap === 'idle', altListening: ap === 'listening', altSaving: ap === 'saving', altDone: ap === 'done',
+      altVoiceProps: ap === 'listening'
+        ? { listening: true, label: 'Listening\u2026', onClick: this.altMic, size: 220 }
+        : { listening: false, label: 'Tap to speak', onClick: this.altMic, size: 220 },
+      altFinishProps: { onClick: this.altMic },
+      altResetProps: { onClick: this.altReset },
+
+      // approval
+      apprIdle: rp === 'idle', apprListening: rp === 'listening', apprSaving: rp === 'saving', apprDone: rp === 'done',
+      apprTiers,
+      apprListenProps: { playing: s.apprPlaying, duration: '3:48', title: 'The bakery on Via Roma', onToggle: this.apprTogglePlay },
+      apprVoiceProps: rp === 'listening'
+        ? { listening: true, label: 'Listening\u2026', onClick: this.apprMic, size: 150 }
+        : { listening: false, label: 'Approve aloud', onClick: this.apprMic, size: 150 },
+      apprFinishProps: { onClick: this.apprMic },
+      apprResetProps: { onClick: this.apprReset },
+      apprConfirmProps: { onClick: this.apprConfirm },
+      apprTierName: TIER[s.apprTier][0].toLowerCase(),
+
+      // hub
+      hubStories: s.hubTab === 'stories', hubAsk: s.hubTab === 'ask', hubAsks: s.hubTab === 'asks', hubInvite: s.hubTab === 'invite',
+      tabs, filterChips, asksView,
+      timelineStories: this.stories.slice(1),
+      featuredListen: { playing: !!s.playing['s1'], duration: '4:12', title: 'Sal\u2019s voice \u2014 the original recording', onToggle: () => this.togglePlay('s1') },
+      askNotSent: !s.askSent, askSent: s.askSent,
+      askSendProps: { onClick: this.sendAsk },
+      askAnotherProps: { onClick: this.resetAsk },
+      inviteNotDone: !s.inviteDone, inviteDone: s.inviteDone,
+      inviteCreateProps: { onClick: this.createLink },
+      inviteDoneProps: { onClick: this.resetInvite },
+    };
+  }
+}
+</script>
+</body>
+</html>

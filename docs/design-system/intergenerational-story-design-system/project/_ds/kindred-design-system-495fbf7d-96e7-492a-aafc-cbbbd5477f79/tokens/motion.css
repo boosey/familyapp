@@ -1,0 +1,19 @@
+/* Kindred — motion.
+   Quiet by default. One ambient "listening" pulse on the voice button;
+   everything else fades. Respect prefers-reduced-motion. */
+
+:root {
+  --ease-quiet: cubic-bezier(0.33, 0, 0.2, 1); /* @kind other */
+  --dur-fade: 0.15s;   /* @kind other */
+  --dur-settle: 0.28s; /* @kind other */
+  --dur-pulse: 2.4s;   /* @kind other */
+}
+
+@keyframes kindred-listening {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50%      { box-shadow: 0 0 0 14px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fade: 0s; /* @kind other */ --dur-settle: 0s; /* @kind other */ }
+}

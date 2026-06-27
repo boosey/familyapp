@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style> * { box-sizing: border-box; } </style>
+</helmet>
+<div style="display:flex; align-items:center; gap:18px; background:{{ paper }}; border:1px solid {{ line }}; border-radius:16px; padding:16px 20px;">
+  <div style="width:52px; height:52px; flex-shrink:0; border-radius:50%; background:{{ accent }}; display:flex; align-items:center; justify-content:center;">
+    <div style="width:0; height:0; border-left:16px solid {{ onAccent }}; border-top:11px solid transparent; border-bottom:11px solid transparent; margin-left:4px;"></div>
+  </div>
+  <div style="flex:1; display:flex; align-items:center; gap:3px; height:36px;">
+    <sc-for list="{{ bars }}" as="b" hint-placeholder-count="22"><div style="flex:1; height:{{ b.h }}px; border-radius:2px; background:{{ gold }};"></div></sc-for>
+  </div>
+  <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; color:{{ ink2 }}; flex-shrink:0;">{{ duration }}</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 520, &quot;height&quot;: 96 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;duration&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;3:48&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { paper:'#F5F0E6', line:'#E8E0D1', accent:'#AE5C39', onAccent:'#FBF3EC', gold:'#C9A06F', ink2:'#6C6357' },
+      archive:  { paper:'#F1F1EE', line:'#E2E2DE', accent:'#4E6478', onAccent:'#F5F8FA', gold:'#9BA6AE', ink2:'#5C636B' },
+      hearth:   { paper:'#F6ECEA', line:'#ECDFDB', accent:'#AF6A64', onAccent:'#FBF1EF', gold:'#C99A8C', ink2:'#6E625C' },
+    };
+    const key = PAL[String(this.props.palette ?? 'Heirloom').toLowerCase()] ? String(this.props.palette).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    const bars = [6,12,20,28,18,10,24,32,22,14,8,18,26,16,10,20,30,14,22,12].map((h) => ({ h }));
+    return { ...c, bars, duration: this.props.duration ?? '3:48' };
+  }
+}
+</script>
+</body>
+</html>

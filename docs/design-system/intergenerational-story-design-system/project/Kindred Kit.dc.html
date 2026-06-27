@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#E7DFD0; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+</style>
+</helmet>
+<div style="background:{{ bg }}; min-height:100vh; padding:64px 40px 120px; font-family:'Public Sans',sans-serif; color:{{ ink }};">
+<div style="max-width:1080px; margin:0 auto;">
+
+  <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12px; letter-spacing:.18em; color:{{ accent }}; text-transform:uppercase; margin-bottom:18px;">Kindred · Importable Components</div>
+  <div style="font-family:'Newsreader',serif; font-weight:500; font-size:64px; line-height:1; letter-spacing:-.02em;">Component Kit</div>
+  <p style="font-family:'Newsreader',serif; font-size:22px; line-height:1.5; color:{{ ink2 }}; margin:20px 0 0; max-width:680px;">Each block below is a standalone Design Component — drop it into any design with <span style="font-family:ui-monospace,Menlo,monospace; font-size:18px;">&lt;dc-import&gt;</span>. They all read a <strong style="color:{{ ink }};">palette</strong> prop, so switching the theme in Tweaks re-skins every one.</p>
+
+  <!-- BUTTONS -->
+  <div style="{{ secHead }}"><span style="{{ secNum }}">01</span>Buttons</div>
+  <div style="background:{{ surface }}; border:1px solid {{ line }}; border-radius:20px; padding:28px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start;">
+    <dc-import name="Kindred Button" palette="{{ palette }}" variant="Primary" label="Save this story" hint-size="100%,64px"></dc-import>
+    <dc-import name="Kindred Button" palette="{{ palette }}" variant="Secondary" label="Maybe later" hint-size="100%,64px"></dc-import>
+    <dc-import name="Kindred Button" palette="{{ palette }}" variant="Ghost" label="Skip this question" hint-size="100%,64px"></dc-import>
+  </div>
+
+  <!-- VOICE + CHIPS -->
+  <div style="{{ secHead }}"><span style="{{ secNum }}">02</span>Voice action &amp; tags</div>
+  <div style="display:grid; grid-template-columns:1fr 1.3fr; gap:20px;">
+    <div style="background:{{ surface }}; border:1px solid {{ line }}; border-radius:20px; padding:20px; display:flex; align-items:center; justify-content:center; gap:24px;">
+      <dc-import name="Kindred Voice Button" palette="{{ palette }}" state="Idle" hint-size="120px,160px"></dc-import>
+      <dc-import name="Kindred Voice Button" palette="{{ palette }}" state="Recording" hint-size="120px,160px"></dc-import>
+    </div>
+    <div style="background:{{ surface }}; border:1px solid {{ line }}; border-radius:20px; padding:24px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start; align-items:center;">
+      <dc-import name="Kindred Chip" palette="{{ palette }}" kind="Person" label="Maria" initial="M" avatar="Sage" hint-size="120px,52px"></dc-import>
+      <dc-import name="Kindred Chip" palette="{{ palette }}" kind="Person" label="Tony" initial="T" avatar="Accent" hint-size="110px,52px"></dc-import>
+      <dc-import name="Kindred Chip" palette="{{ palette }}" kind="Place" label="Amalfi" hint-size="130px,52px"></dc-import>
+      <dc-import name="Kindred Chip" palette="{{ palette }}" kind="Time" label="1962" hint-size="100px,52px"></dc-import>
+    </div>
+  </div>
+
+  <!-- PROMPT -->
+  <div style="{{ secHead }}"><span style="{{ secNum }}">03</span>Suggested question</div>
+  <dc-import name="Kindred Prompt Card" palette="{{ palette }}" hint-size="100%,180px"></dc-import>
+
+  <!-- LISTEN -->
+  <div style="{{ secHead }}"><span style="{{ secNum }}">04</span>Audio player</div>
+  <dc-import name="Kindred Listen Bar" palette="{{ palette }}" duration="3:48" hint-size="100%,88px"></dc-import>
+
+  <!-- STORY CARD -->
+  <div style="{{ secHead }}"><span style="{{ secNum }}">05</span>Story card</div>
+  <dc-import name="Kindred Story Card" palette="{{ palette }}" hint-size="100%,160px"></dc-import>
+
+  <div style="margin-top:80px; padding-top:28px; border-top:1px solid {{ line2 }}; display:flex; justify-content:space-between; align-items:center;">
+    <div style="font-family:'Newsreader',serif; font-size:22px;">Kindred</div>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:{{ muted }}; letter-spacing:.06em;">COMPONENT KIT · {{ paletteUpper }}</div>
+  </div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1160, &quot;height&quot;: 1400 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { bg:'#E7DFD0', surface:'#FBF8F1', ink:'#2A2520', ink2:'#6C6357', muted:'#9C8B6C', line:'#E8E0D1', line2:'#E1D9C9', accent:'#AE5C39' },
+      archive:  { bg:'#E9E9E6', surface:'#FAFAF8', ink:'#23262B', ink2:'#5C636B', muted:'#969BA1', line:'#E2E2DE', line2:'#DEDEDB', accent:'#4E6478' },
+      hearth:   { bg:'#EEE5E2', surface:'#FCF7F5', ink:'#2E2724', ink2:'#6E625C', muted:'#A08E89', line:'#ECDFDB', line2:'#E6D8D3', accent:'#AF6A64' },
+    };
+    const names = { heirloom:'Heirloom', archive:'Archive', hearth:'Hearth' };
+    const sel = this.props.palette ?? 'Heirloom';
+    const key = PAL[String(sel).toLowerCase()] ? String(sel).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    const secHead = `margin-top:64px; margin-bottom:20px; display:flex; align-items:center; gap:14px; font-family:'Newsreader',serif; font-size:34px; font-weight:500; letter-spacing:-.01em; color:${c.ink};`;
+    const secNum = `font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; color:${c.accent}; letter-spacing:.1em;`;
+    return { ...c, palette: names[key], paletteUpper: names[key].toUpperCase(), secHead, secNum };
+  }
+}
+</script>
+</body>
+</html>

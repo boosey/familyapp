@@ -1,0 +1,26 @@
+/* Kindred type system — Newsreader carries the stories (memoir voice);
+   Public Sans handles the interface (drawn for accessibility);
+   a mono face is used only for metadata, years and labels. */
+
+:root {
+  --kin-font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --kin-font-sans: 'Public Sans', system-ui, -apple-system, sans-serif;
+  --kin-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Editorial / serif scale (stories) */
+  --kin-text-display: 64px;   /* cover, hero titles */
+  --kin-text-title: 46px;     /* story title */
+  --kin-text-headline: 30px;  /* prompts, section heads */
+  --kin-text-story: 22px;     /* story body — never below this */
+
+  /* Interface / sans scale */
+  --kin-text-h2: 28px;
+  --kin-text-h3: 20px;
+  --kin-text-body: 18px;      /* UI floor — never below this */
+  --kin-text-sm: 15px;
+  --kin-text-label: 13px;     /* uppercase, tracked, weight 700 */
+
+  --kin-tracking-label: .08em;
+  --kin-leading-story: 1.62;
+  --kin-leading-ui: 1.55;
+}

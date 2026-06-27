@@ -1,0 +1,35 @@
+/* Kindred — typography.
+   Newsreader (serif, stories) · Public Sans (sans, UI) · DM Mono (years/meta).
+   Elders-first sizing: UI floor 18px, story floor 22px. */
+
+:root {
+  --font-story: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Public Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* type scale — interface (sans) */
+  --text-label: 0.875rem;   /* 14px — mono labels/years only */
+  --text-ui-sm: 1.125rem;   /* 18px — UI floor */
+  --text-ui: 1.25rem;       /* 20px — default body UI */
+  --text-ui-lg: 1.5rem;     /* 24px — prominent UI / buttons */
+
+  /* type scale — stories (serif) */
+  --text-story: 1.375rem;   /* 22px — story floor */
+  --text-story-lg: 1.75rem; /* 28px — pull lines */
+  --text-prompt: 2rem;      /* 32px — conversation prompt */
+  --text-display: 2.75rem;  /* 44px — titles */
+  --text-display-lg: 3.5rem;/* 56px — hero */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-body: 1.55;
+  --leading-loose: 1.7;     /* long-form story reading */
+
+  --tracking-mono: 0.04em;
+  --tracking-tight: -0.01em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+}

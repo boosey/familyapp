@@ -1,0 +1,87 @@
+/* Kindred color system — three themes built on warm or cool paper with a single emotional accent.
+   :root is Heirloom (canonical / elder default). Wrap any subtree in
+   data-theme="archive" or data-theme="hearth" to re-skin it. */
+
+:root {
+  --kin-bg: #E7DFD0;
+  --kin-paper: #F5F0E6;
+  --kin-surface: #FBF8F1;
+  --kin-ink: #2A2520;
+  --kin-body: #332D26;
+  --kin-ink-2: #6C6357;
+  --kin-muted: #9C8B6C;
+  --kin-line: #E8E0D1;
+  --kin-line-2: #E1D9C9;
+  --kin-accent: #AE5C39;
+  --kin-accent-press: #8C4829;
+  --kin-tint: #F5EDDF;
+  --kin-tint-border: #EADCC4;
+  --kin-sage: #6C7A52;
+  --kin-gold: #C9A06F;
+  --kin-chip-bg: #F1E9DA;
+  --kin-chip-border: #E5DAC4;
+  --kin-field: #D8CCB6;
+  --kin-ph-a: #DCCFB6;
+  --kin-ph-b: #E4D8C2;
+  --kin-ph-text: #9C8B6C;
+  --kin-bezel: #211C17;
+  --kin-on-accent: #FBF3EC;
+  --kin-ring: rgba(174,92,57,.30);
+  --kin-ring-0: rgba(174,92,57,0);
+}
+
+[data-theme="archive"] {
+  --kin-bg: #E9E9E6;
+  --kin-paper: #F1F1EE;
+  --kin-surface: #FAFAF8;
+  --kin-ink: #23262B;
+  --kin-body: #2C2F34;
+  --kin-ink-2: #5C636B;
+  --kin-muted: #969BA1;
+  --kin-line: #E2E2DE;
+  --kin-line-2: #DEDEDB;
+  --kin-accent: #4E6478;
+  --kin-accent-press: #3A4D5E;
+  --kin-tint: #E6EBEF;
+  --kin-tint-border: #D5DDE3;
+  --kin-sage: #7E8A8C;
+  --kin-gold: #9BA6AE;
+  --kin-chip-bg: #E9ECEE;
+  --kin-chip-border: #DADFE2;
+  --kin-field: #CDD3D6;
+  --kin-ph-a: #D2D6D9;
+  --kin-ph-b: #DDE0E2;
+  --kin-ph-text: #8A9197;
+  --kin-bezel: #1C2024;
+  --kin-on-accent: #F5F8FA;
+  --kin-ring: rgba(78,100,120,.30);
+  --kin-ring-0: rgba(78,100,120,0);
+}
+
+[data-theme="hearth"] {
+  --kin-bg: #EEE5E2;
+  --kin-paper: #F6ECEA;
+  --kin-surface: #FCF7F5;
+  --kin-ink: #2E2724;
+  --kin-body: #3A302C;
+  --kin-ink-2: #6E625C;
+  --kin-muted: #A08E89;
+  --kin-line: #ECDFDB;
+  --kin-line-2: #E6D8D3;
+  --kin-accent: #AF6A64;
+  --kin-accent-press: #8E5049;
+  --kin-tint: #F3E6E3;
+  --kin-tint-border: #EAD6D1;
+  --kin-sage: #7E5E72;
+  --kin-gold: #C99A8C;
+  --kin-chip-bg: #F2E6E2;
+  --kin-chip-border: #E7D6D0;
+  --kin-field: #DCC9C3;
+  --kin-ph-a: #E0CFC9;
+  --kin-ph-b: #E8D9D4;
+  --kin-ph-text: #A08E89;
+  --kin-bezel: #241D1A;
+  --kin-on-accent: #FBF1EF;
+  --kin-ring: rgba(175,106,100,.30);
+  --kin-ring-0: rgba(175,106,100,0);
+}

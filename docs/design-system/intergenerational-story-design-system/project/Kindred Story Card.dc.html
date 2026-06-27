@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style> * { box-sizing: border-box; } </style>
+</helmet>
+<div style="display:flex; gap:20px; align-items:center; background:{{ paper }}; border:1px solid {{ line }}; border-radius:18px; padding:18px; font-family:'Public Sans',sans-serif;">
+  <div style="width:120px; height:120px; flex-shrink:0; border-radius:14px; background-color:{{ phB }}; background-image:repeating-linear-gradient(45deg,{{ phA }} 0 10px,{{ phB }} 10px 20px); display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px;">
+    <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:{{ phText }};">photo</span>
+  </div>
+  <div style="flex:1;">
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:{{ accent }}; letter-spacing:.04em;">{{ era }}</div>
+    <div style="font-family:'Newsreader',serif; font-size:28px; line-height:1.2; margin:8px 0 8px; color:{{ ink }};">{{ title }}</div>
+    <div style="font-size:15px; color:{{ ink2 }}; display:flex; align-items:center; gap:14px;">
+      <span>{{ byline }}</span>
+      <span style="width:4px; height:4px; border-radius:50%; background:{{ field }};"></span>
+      <span>{{ meta1 }}</span>
+      <span style="width:4px; height:4px; border-radius:50%; background:{{ field }};"></span>
+      <span>{{ meta2 }}</span>
+    </div>
+  </div>
+  <div style="width:48px; height:48px; border-radius:50%; border:1.5px solid {{ field }}; display:flex; align-items:center; justify-content:center; color:{{ accent }}; font-size:22px; flex-shrink:0;">›</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 620, &quot;height&quot;: 160 },
+  &quot;palette&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Heirloom&quot;, &quot;Archive&quot;, &quot;Hearth&quot;], &quot;default&quot;: &quot;Heirloom&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;era&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;1962 · THE COAST&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;title&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;The summer we drove to the coast&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;byline&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Told by Salvatore&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;meta1&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;4 min listen&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;meta2&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;2 photos&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    const PAL = {
+      heirloom: { ink:'#2A2520', ink2:'#6C6357', accent:'#AE5C39', paper:'#F5F0E6', line:'#E8E0D1', field:'#D8CCB6', phA:'#DCCFB6', phB:'#E4D8C2', phText:'#9C8B6C' },
+      archive:  { ink:'#23262B', ink2:'#5C636B', accent:'#4E6478', paper:'#F1F1EE', line:'#E2E2DE', field:'#CDD3D6', phA:'#D2D6D9', phB:'#DDE0E2', phText:'#8A9197' },
+      hearth:   { ink:'#2E2724', ink2:'#6E625C', accent:'#AF6A64', paper:'#F6ECEA', line:'#ECDFDB', field:'#DCC9C3', phA:'#E0CFC9', phB:'#E8D9D4', phText:'#A08E89' },
+    };
+    const key = PAL[String(this.props.palette ?? 'Heirloom').toLowerCase()] ? String(this.props.palette).toLowerCase() : 'heirloom';
+    const c = PAL[key];
+    return {
+      ...c,
+      era: this.props.era ?? '1962 · THE COAST',
+      title: this.props.title ?? 'The summer we drove to the coast',
+      byline: this.props.byline ?? 'Told by Salvatore',
+      meta1: this.props.meta1 ?? '4 min listen',
+      meta2: this.props.meta2 ?? '2 photos',
+    };
+  }
+}
+</script>
+</body>
+</html>
