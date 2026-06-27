@@ -6,7 +6,6 @@ import {
   FilesystemMediaStorage,
   InMemoryMediaStorage,
   ObjectAlreadyExistsError,
-  R2MediaStorage,
   type MediaStorage,
 } from "../src/index";
 
@@ -65,29 +64,4 @@ runContract(
     }),
 );
 
-describe("R2MediaStorage (stub — unprovisioned in Phase 0/1)", () => {
-  // A future implementer who silently no-ops `put` would lose elder audio — assert the stub
-  // throws loudly on every credentialed call so the mistake is impossible to ship.
-  const r2 = new R2MediaStorage({
-    accountId: "x",
-    accessKeyId: "x",
-    secretAccessKey: "x",
-    bucket: "x",
-    publicBaseUrl: "https://media.example",
-  });
-
-  it("throws on put (no silent no-op)", async () => {
-    await expect(
-      r2.put({ key: "k", bytes: new Uint8Array([1]), contentType: "audio/webm" }),
-    ).rejects.toThrow(/stub/);
-  });
-
-  it("throws on getBytes and exists", async () => {
-    await expect(r2.getBytes("k")).rejects.toThrow(/stub/);
-    await expect(r2.exists("k")).rejects.toThrow(/stub/);
-  });
-
-  it("can still compute a playback URL without credentials", async () => {
-    expect(await r2.getUrl("a/b.webm")).toBe("https://media.example/a/b.webm");
-  });
-});
+// R2MediaStorage is exercised with a mocked S3 client in r2.test.ts.

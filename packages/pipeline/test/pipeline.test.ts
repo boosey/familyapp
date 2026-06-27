@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   getStoryForViewer,
@@ -520,9 +520,16 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
     ];
     const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
     const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src", "packages/interviewer/src"];
+    // Documented exception: `packages/storage/src/r2.ts` is the production R2 adapter and is the
+    // single place in storage/src permitted to import `@aws-sdk/*` (R2 speaks S3). It sits behind
+    // the `MediaStorage` interface, so no vendor types leak into the IP packages downstream.
+    // Any new entry here requires a DECISIONS.md entry explaining why the adapter cannot live in a separate service.
+    const ADAPTER_EXCEPTIONS = new Set<string>(["packages/storage/src/r2.ts"]);
     const offenders: string[] = [];
     for (const root of roots) {
       walk(join(repoRoot, root), (full) => {
+        const relPath = full.slice(repoRoot.length).split(sep).join("/");
+        if (ADAPTER_EXCEPTIONS.has(relPath)) return;
         const contents = readFileSync(full, "utf8");
         for (const f of forbidden) {
           if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
