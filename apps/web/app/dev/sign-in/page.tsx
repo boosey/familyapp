@@ -33,8 +33,8 @@ export default async function DevSignIn() {
     <main className="kin-page">
       <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
         <span className="kin-dev-banner">dev · localhost</span>
-        <h1 style={{ fontSize: "var(--kin-text-title)", margin: "14px 0 8px" }}>Dev sign-in</h1>
-        <p className="kin-ink-2" style={{ fontSize: "var(--kin-text-h3)", margin: 0 }}>
+        <h1 style={{ fontSize: "var(--text-display)", margin: "14px 0 8px" }}>Dev sign-in</h1>
+        <p className="kin-ink-2" style={{ fontSize: "var(--text-ui)", margin: 0 }}>
           Local development only. Picks which Person the hub treats you as.
         </p>
 
@@ -54,7 +54,7 @@ export default async function DevSignIn() {
         </form>
 
         <p style={{ marginTop: 20 }}>
-          <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--kin-ink-2)" }}>
+          <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-meta)" }}>
             ‹ Back to hub
           </Link>
         </p>

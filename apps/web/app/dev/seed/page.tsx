@@ -28,7 +28,7 @@ export default async function DevSeedPage({
     return (
       <main className="kin-page">
         <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
-          <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Not available.</h1>
+          <h1 style={{ fontSize: "var(--text-display)", margin: 0 }}>Not available.</h1>
         </div>
       </main>
     );
@@ -45,8 +45,8 @@ export default async function DevSeedPage({
     <main className="kin-page">
       <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
         <span className="kin-dev-banner">dev · localhost</span>
-        <h1 style={{ fontSize: "var(--kin-text-title)", margin: "14px 0 8px" }}>Dev seed</h1>
-        <p className="kin-ink-2" style={{ fontSize: "var(--kin-text-h3)", margin: 0 }}>
+        <h1 style={{ fontSize: "var(--text-display)", margin: "14px 0 8px" }}>Dev seed</h1>
+        <p className="kin-ink-2" style={{ fontSize: "var(--text-ui)", margin: 0 }}>
           Wipes the local PGlite database and recreates a small dataset: Eleanor (elder), Sofia +
           Marco (members), one Boudreaux family, one approved+shared sample story, and one
           pending-approval story.
@@ -60,14 +60,14 @@ export default async function DevSeedPage({
           <section
             style={{
               marginTop: 36,
-              background: "var(--kin-surface)",
-              border: "1px solid var(--kin-line)",
-              borderRadius: "var(--kin-radius-md)",
+              background: "var(--surface-card)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
               padding: "22px 24px",
             }}
           >
             <div className="kin-eyebrow">Seeded</div>
-            <h2 style={{ fontSize: "var(--kin-text-h2)", margin: "10px 0 16px", fontFamily: "var(--kin-font-serif)" }}>
+            <h2 style={{ fontSize: "var(--text-story-lg)", margin: "10px 0 16px", fontFamily: "var(--font-story)" }}>
               Try the flow
             </h2>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 14 }}>

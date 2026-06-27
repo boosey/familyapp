@@ -55,7 +55,7 @@ export default async function StoryDetailPage({
               gap: 10,
               fontSize: 17,
               fontWeight: 600,
-              color: "var(--kin-ink-2)",
+              color: "var(--text-meta)",
               textDecoration: "none",
             }}
           >
@@ -74,13 +74,13 @@ export default async function StoryDetailPage({
         >
           {story.title ?? "Untitled"}
         </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--kin-ink-2)", fontSize: 15 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--text-meta)", fontSize: 15 }}>
           <span
             style={{
               width: 36,
               height: 36,
               borderRadius: "50%",
-              background: "var(--kin-sage)",
+              background: "var(--support)",
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -101,10 +101,10 @@ export default async function StoryDetailPage({
         {prose ? (
           <p
             style={{
-              fontFamily: "var(--kin-font-serif)",
-              fontSize: "var(--kin-text-story)",
-              lineHeight: "var(--kin-leading-story)",
-              color: "var(--kin-body)",
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-story)",
+              lineHeight: "var(--leading-loose)",
+              color: "var(--text-body)",
               margin: "26px 0 0",
               whiteSpace: "pre-wrap",
             }}
@@ -112,11 +112,11 @@ export default async function StoryDetailPage({
             <span
               style={{
                 float: "left",
-                fontFamily: "var(--kin-font-serif)",
+                fontFamily: "var(--font-story)",
                 fontSize: 78,
                 lineHeight: 0.74,
                 fontWeight: 500,
-                color: "var(--kin-accent)",
+                color: "var(--accent)",
                 padding: "8px 14px 0 0",
               }}
             >

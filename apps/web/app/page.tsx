@@ -12,7 +12,7 @@ export default function Home() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--kin-bg)",
+        background: "var(--surface-page)",
         padding: "6vh 6vw",
         gap: 12,
       }}
@@ -20,16 +20,27 @@ export default function Home() {
       <div className="kin-eyebrow">Est. 2026</div>
       <h1
         style={{
-          fontFamily: "var(--kin-font-serif)",
-          fontSize: "clamp(40px, 8vw, 84px)",
-          letterSpacing: "-.015em",
-          color: "var(--kin-ink)",
+          fontFamily: "var(--font-story)",
+          fontSize: "var(--text-display-lg)",
+          letterSpacing: "var(--tracking-tight)",
+          color: "var(--text-body)",
           margin: 0,
+          lineHeight: "var(--leading-tight)",
         }}
       >
         Family Chronicle
       </h1>
-      <p className="kin-muted" style={{ maxWidth: "32ch", textAlign: "center", margin: 0 }}>
+      <p
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-ui)",
+          color: "var(--text-muted)",
+          maxWidth: "32ch",
+          textAlign: "center",
+          margin: 0,
+          lineHeight: "var(--leading-body)",
+        }}
+      >
         A warm place to tell your stories.
       </p>
     </main>
