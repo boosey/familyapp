@@ -1,0 +1,225 @@
+/**
+ * Adapter tests — no live API calls. We inject a stubbed `fetch` and verify request shape
+ * (URL, auth header, multipart fields) and response translation (text trim, seconds→ms word
+ * timings, modelId echo).
+ */
+import { describe, expect, it, vi } from "vitest";
+import { createGroqTranscriber, GroqTranscriberError } from "../src/index";
+
+function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status: init.status ?? 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function bytes(s: string): Uint8Array {
+  return new TextEncoder().encode(s);
+}
+
+// Tuple-typed fetch stub so `spy.mock.calls[0]` keeps `[url, init]` instead of collapsing to `[]`.
+type FetchArgs = [string | URL, RequestInit?];
+function fetchStub(impl: (...args: FetchArgs) => Promise<Response>) {
+  return vi.fn<(...args: FetchArgs) => Promise<Response>>(impl);
+}
+
+describe("createGroqTranscriber", () => {
+  it("POSTs to the OpenAI-compatible endpoint with bearer auth + verbose_json + word granularity", async () => {
+    const fetchSpy = fetchStub(async () =>
+      jsonResponse({ text: "hello world", words: [] }),
+    );
+    const t = createGroqTranscriber({ apiKey: "sk-test", fetch: fetchSpy as unknown as typeof fetch });
+    await t.transcribe({ bytes: bytes("xxx"), contentType: "audio/webm" });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(String(url)).toBe("https://api.groq.com/openai/v1/audio/transcriptions");
+    expect(init?.method).toBe("POST");
+    const headers = new Headers(init!.headers);
+    expect(headers.get("authorization")).toBe("Bearer sk-test");
+    // FormData is opaque to assertions; round-trip via a Request to read fields.
+    const fields = await readFormFields(init!.body as FormData);
+    expect(fields.get("model")).toBe("whisper-large-v3-turbo");
+    expect(fields.get("response_format")).toBe("verbose_json");
+    expect(fields.getAll("timestamp_granularities[]")).toEqual(["word"]);
+    const file = fields.get("file") as File;
+    expect(file).toBeInstanceOf(Blob);
+    expect(file.type).toBe("audio/webm");
+    // Default filename based on contentType
+    expect((file as File).name).toBe("audio.webm");
+  });
+
+  it("converts seconds to milliseconds (rounded) for word timings", async () => {
+    const fetchImpl = fetchStub(async () =>
+      jsonResponse({
+        text: " hello world ",
+        words: [
+          { word: "hello", start: 0.0, end: 0.4567 },
+          { word: "world", start: 0.5012, end: 1.2 },
+        ],
+      }),
+    );
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    const out = await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+
+    expect(out.text).toBe("hello world"); // trimmed
+    expect(out.modelId).toBe("whisper-large-v3-turbo");
+    expect(out.words).toEqual([
+      { word: "hello", startMs: 0, endMs: 457 },
+      { word: "world", startMs: 501, endMs: 1200 },
+    ]);
+  });
+
+  it("treats a missing `words` array as no timings, not a crash", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok" }));
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    const out = await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    expect(out.words).toEqual([]);
+  });
+
+  it("honors model override", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({
+      apiKey: "k",
+      model: "whisper-large-v3",
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    const out = await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    expect(out.modelId).toBe("whisper-large-v3");
+    const fields = await readFormFields(fetchImpl.mock.calls[0]![1]!.body as FormData);
+    expect(fields.get("model")).toBe("whisper-large-v3");
+  });
+
+  it("forwards optional language and prompt", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({
+      apiKey: "k",
+      language: "en",
+      prompt: "Acme Corp, Sofia",
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    const fields = await readFormFields(fetchImpl.mock.calls[0]![1]!.body as FormData);
+    expect(fields.get("language")).toBe("en");
+    expect(fields.get("prompt")).toBe("Acme Corp, Sofia");
+  });
+
+  it("omits language and prompt when not provided", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    const fields = await readFormFields(fetchImpl.mock.calls[0]![1]!.body as FormData);
+    expect(fields.get("language")).toBeNull();
+    expect(fields.get("prompt")).toBeNull();
+  });
+
+  it("picks a filename extension that matches the contentType", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    for (const [ct, expected] of [
+      ["audio/webm", "audio.webm"],
+      ["audio/ogg; codecs=opus", "audio.ogg"],
+      ["audio/wav", "audio.wav"],
+      ["audio/mpeg", "audio.mp3"],
+      ["audio/mp4", "audio.m4a"],
+      ["audio/x-m4a", "audio.m4a"],
+      ["audio/flac", "audio.flac"],
+      ["application/octet-stream", "audio.webm"], // fallback
+    ] as const) {
+      await t.transcribe({ bytes: bytes("x"), contentType: ct });
+      const fields = await readFormFields(
+        fetchImpl.mock.calls.at(-1)![1]!.body as FormData,
+      );
+      const file = fields.get("file") as File;
+      expect(file.name).toBe(expected);
+    }
+  });
+
+  it("throws GroqTranscriberError with status and body on non-2xx", async () => {
+    const fetchImpl = fetchStub(async () =>
+      new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } }),
+    );
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    await expect(
+      t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" }),
+    ).rejects.toMatchObject({
+      name: "GroqTranscriberError",
+      status: 429,
+      responseBody: "rate limited",
+    });
+    await expect(
+      t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" }),
+    ).rejects.toBeInstanceOf(GroqTranscriberError);
+  });
+
+  it("throws GroqTranscriberError with a helpful preview on non-JSON 200 body", async () => {
+    const html = "<!doctype html><html><body>Bad Gateway proxy page</body></html>";
+    const fetchImpl = fetchStub(async () =>
+      new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
+    );
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    await expect(
+      t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" }),
+    ).rejects.toMatchObject({
+      name: "GroqTranscriberError",
+      status: 200,
+      responseBody: html,
+    });
+    await expect(
+      t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" }),
+    ).rejects.toThrow(/non-JSON/);
+  });
+
+  it("honors endpoint override", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const proxy = "https://proxy.example.com/v1/audio/transcriptions";
+    const t = createGroqTranscriber({
+      apiKey: "k",
+      endpoint: proxy,
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    expect(String(fetchImpl.mock.calls[0]![0])).toBe(proxy);
+  });
+
+  it("rejects zero-byte audio without calling fetch", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({ apiKey: "k", fetch: fetchImpl as unknown as typeof fetch });
+    await expect(
+      t.transcribe({ bytes: new Uint8Array(0), contentType: "audio/webm" }),
+    ).rejects.toThrow(/zero-byte audio/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("honors the filename override option", async () => {
+    const fetchImpl = fetchStub(async () => jsonResponse({ text: "ok", words: [] }));
+    const t = createGroqTranscriber({
+      apiKey: "k",
+      filename: "custom.flac",
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    await t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" });
+    const fields = await readFormFields(fetchImpl.mock.calls[0]![1]!.body as FormData);
+    const file = fields.get("file") as File;
+    expect(file.name).toBe("custom.flac");
+  });
+
+  it("throws a clear error when no API key is configured", async () => {
+    const prev = process.env["GROQ_API_KEY"];
+    delete process.env["GROQ_API_KEY"];
+    try {
+      const t = createGroqTranscriber({ fetch: (async () => new Response()) as unknown as typeof fetch });
+      await expect(
+        t.transcribe({ bytes: bytes("x"), contentType: "audio/webm" }),
+      ).rejects.toThrow(/GROQ_API_KEY/);
+    } finally {
+      if (prev !== undefined) process.env["GROQ_API_KEY"] = prev;
+    }
+  });
+});
+
+// Read FormData fields back via a Request round-trip — vitest/node FormData has no introspection.
+async function readFormFields(form: FormData): Promise<FormData> {
+  const req = new Request("https://x.test", { method: "POST", body: form });
+  return await req.formData();
+}

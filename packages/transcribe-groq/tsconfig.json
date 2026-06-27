@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@chronicle/pipeline": ["../pipeline/src/index.ts"],
+      "@chronicle/core": ["../core/src/index.ts"],
+      "@chronicle/core/pipeline": ["../core/src/pipeline.ts"],
+      "@chronicle/db": ["../db/src/index.ts"],
+      "@chronicle/db/schema": ["../db/src/schema-public.ts"],
+      "@chronicle/db/content": ["../db/src/content.ts"],
+      "@chronicle/storage": ["../storage/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
