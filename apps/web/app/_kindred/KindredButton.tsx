@@ -17,7 +17,7 @@ const VARIANTS: Record<Variant, { base: CSSProperties; hover: CSSProperties }> =
   },
   secondary: {
     base:  { border: "var(--border-width) solid var(--border-strong)", background: "transparent", color: "var(--text-body)" },
-    hover: { background: "var(--accent-soft)" },
+    hover: { background: "var(--accent-soft)", borderColor: "var(--accent)" },
   },
   ghost: {
     base:  { border: "none", background: "transparent", color: "var(--accent)" },

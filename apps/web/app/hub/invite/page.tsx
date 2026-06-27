@@ -75,7 +75,7 @@ export default async function InvitePage() {
         <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
           <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Sign in to invite</h1>
           <Link href="/dev/sign-in" style={{ textDecoration: "none", display: "inline-block", maxWidth: 240, marginTop: 24 }}>
-            <KindredButton label="Dev sign-in" />
+            <KindredButton label="Dev sign-in" fullWidth />
           </Link>
         </div>
       </main>

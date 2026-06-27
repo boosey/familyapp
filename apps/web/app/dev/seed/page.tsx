@@ -53,7 +53,7 @@ export default async function DevSeedPage({
         </p>
 
         <form action={runReseed} style={{ marginTop: 28, maxWidth: 240 }}>
-          <KindredButton type="submit" label="Reseed" />
+          <KindredButton type="submit" label="Reseed" fullWidth />
         </form>
 
         {elderUrl ? (
@@ -88,10 +88,10 @@ export default async function DevSeedPage({
             </p>
             <div style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Link href="/dev/sign-in" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
-                <KindredButton label="Dev sign-in" variant="secondary" />
+                <KindredButton label="Dev sign-in" variant="secondary" fullWidth />
               </Link>
               <Link href="/hub" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
-                <KindredButton label="Hub" variant="secondary" />
+                <KindredButton label="Hub" variant="secondary" fullWidth />
               </Link>
             </div>
           </section>

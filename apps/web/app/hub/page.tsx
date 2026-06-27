@@ -24,7 +24,7 @@ export default async function HubPage() {
           </p>
           <div style={{ maxWidth: 260, marginTop: 28 }}>
             <Link href="/dev/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label="Dev sign-in" />
+              <KindredButton label="Dev sign-in" fullWidth />
             </Link>
           </div>
         </div>

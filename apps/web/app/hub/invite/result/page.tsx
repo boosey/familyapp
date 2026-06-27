@@ -27,7 +27,7 @@ export default async function InviteResult() {
             Mint a new one whenever you're ready.
           </p>
           <Link href="/hub/invite" style={{ textDecoration: "none", display: "inline-block", maxWidth: 260, marginTop: 16 }}>
-            <KindredButton label="New invite link" />
+            <KindredButton label="New invite link" fullWidth />
           </Link>
         </div>
       </main>
@@ -73,7 +73,7 @@ export default async function InviteResult() {
 
         <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href="/hub" style={{ textDecoration: "none", flex: 1, minWidth: 200 }}>
-            <KindredButton label="Back to hub" variant="secondary" />
+            <KindredButton label="Back to hub" variant="secondary" fullWidth />
           </Link>
         </div>
       </div>
