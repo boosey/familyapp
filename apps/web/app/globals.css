@@ -1,102 +1,126 @@
-/* Elder-first surface: large scalable type, very high contrast, linear layout, no chrome. */
-:root {
-  --bg: #1a1410;
-  --fg: #fbf7f0;
-  --accent: #e8a04b;
-  --accent-press: #c9802f;
-  --muted: #cbb9a3;
-  --danger-soft: #d98a6a;
-}
+/* Kindred — global base. Tokens (colors, typography, spacing, motion) live in tokens.css. */
+@import url('./_kindred/tokens.css');
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(20px, 2.6vw, 30px);
-  line-height: 1.5;
+  background: var(--kin-bg);
+  color: var(--kin-body);
+  font-family: var(--kin-font-sans);
+  font-size: var(--kin-text-body);
+  line-height: var(--kin-leading-ui);
   -webkit-font-smoothing: antialiased;
 }
 
-.screen {
+h1, h2, h3 {
+  font-family: var(--kin-font-serif);
+  color: var(--kin-ink);
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+
+a {
+  color: var(--kin-accent);
+  text-decoration: none;
+}
+a:hover { color: var(--kin-accent-press); text-decoration: underline; }
+
+code, .mono { font-family: var(--kin-font-mono); font-size: var(--kin-text-sm); }
+
+/* Layout primitives reused across pages */
+.kin-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: clamp(24px, 4vw, 64px) clamp(16px, 4vw, 32px);
+}
+.kin-frame {
+  width: 100%;
+  max-width: 880px;
+  background: var(--kin-paper);
+  border-radius: var(--kin-radius-xl);
+  box-shadow: var(--kin-shadow-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Elder full-bleed conversation surface — fills the viewport, no card chrome */
+.kin-fullbleed {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--kin-paper);
+}
+
+.kin-stack { display: flex; flex-direction: column; gap: var(--kin-space-3); }
+.kin-stack-lg { display: flex; flex-direction: column; gap: var(--kin-space-5); }
+.kin-row { display: flex; align-items: center; gap: var(--kin-space-3); }
+.kin-divider { height: 1px; background: var(--kin-line); border: none; margin: 0; }
+
+.kin-label {
+  font-size: var(--kin-text-label);
+  font-weight: 700;
+  letter-spacing: var(--kin-tracking-label);
+  text-transform: uppercase;
+  color: var(--kin-accent);
+}
+.kin-eyebrow {
+  font-family: var(--kin-font-mono);
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--kin-accent);
+}
+.kin-muted { color: var(--kin-muted); }
+.kin-ink-2 { color: var(--kin-ink-2); }
+
+.kin-serif { font-family: var(--kin-font-serif); }
+
+.kin-field {
+  width: 100%;
+  font-family: var(--kin-font-sans);
+  font-size: var(--kin-text-body);
+  color: var(--kin-body);
+  background: var(--kin-surface);
+  border: 1.5px solid var(--kin-field);
+  border-radius: var(--kin-radius-sm);
+  padding: 14px 16px;
+  min-height: var(--kin-touch-default);
+  line-height: var(--kin-leading-ui);
+}
+.kin-field:focus {
+  outline: none;
+  border-color: var(--kin-accent);
+  box-shadow: 0 0 0 4px var(--kin-ring);
+}
+textarea.kin-field { resize: vertical; min-height: 160px; }
+select.kin-field { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--kin-ink-2) 50%), linear-gradient(135deg, var(--kin-ink-2) 50%, transparent 50%); background-position: calc(100% - 22px) 50%, calc(100% - 14px) 50%; background-size: 8px 8px; background-repeat: no-repeat; padding-right: 40px; }
+
+.kin-form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kin-space-2);
+  font-size: var(--kin-text-sm);
+  font-weight: 600;
+  color: var(--kin-ink-2);
+}
+
+/* Quiet dev banner */
+.kin-dev-banner {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 6vh 6vw;
-  gap: 4vh;
-}
-
-.greeting {
-  font-size: clamp(28px, 5vw, 56px);
-  font-weight: normal;
-  max-width: 18ch;
-  margin: 0;
-}
-
-.subtle {
-  color: var(--muted);
-  max-width: 24ch;
-}
-
-/* One big, unmistakable primary control. */
-.big-button {
-  font-family: inherit;
-  font-size: clamp(24px, 4vw, 40px);
-  color: var(--bg);
-  background: var(--accent);
-  border: none;
-  border-radius: 9999px;
-  padding: clamp(28px, 6vw, 56px) clamp(40px, 9vw, 90px);
-  min-width: min(80vw, 520px);
-  min-height: 96px;
-  cursor: pointer;
-  box-shadow: 0 8px 0 var(--accent-press);
-  transition: transform 80ms ease;
-}
-
-.big-button:active {
-  transform: translateY(6px);
-  box-shadow: 0 2px 0 var(--accent-press);
-}
-
-.big-button.listening {
-  background: var(--danger-soft);
-  box-shadow: 0 8px 0 #b5694a;
-}
-
-/* "It is listening" indicator. */
-.listening-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
+  gap: 6px;
+  font-family: var(--kin-font-mono);
+  font-size: 12px;
+  color: var(--kin-ink-2);
+  background: var(--kin-chip-bg);
+  border: 1px solid var(--kin-chip-border);
+  border-radius: var(--kin-radius-pill);
+  padding: 4px 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .listening-dot {
-    animation: none;
-    opacity: 1;
-  }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
