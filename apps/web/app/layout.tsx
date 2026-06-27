@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Public_Sans } from "next/font/google";
 import "./globals.css";
+import { isClerkConfigured } from "../lib/clerk-config";
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
@@ -33,16 +34,32 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export default function RootLayout({
+/**
+ * ClerkProvider is mounted ONLY when Clerk is configured. In dev (no Clerk envs) the cookie-stub
+ * auth path is in effect and Clerk's React context would be dead weight (and would error if its
+ * publishable key were missing). The dynamic import is gated by a server-evaluated env check so
+ * the Clerk bundle is not pulled into the dev build at all.
+ */
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const body = <body>{children}</body>;
+  const inner = isClerkConfigured()
+    ? await wrapWithClerk(body)
+    : body;
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   return (
     <html lang="en" className={`${newsreader.variable} ${publicSans.variable}`}>
-      <body>{children}</body>
+      {inner}
     </html>
   );
+}
+
+async function wrapWithClerk(body: React.ReactElement): Promise<React.ReactElement> {
+  // Dynamic import keeps @clerk/nextjs out of the dev bundle entirely when Clerk is not wired.
+  const { ClerkProvider } = await import("@clerk/nextjs");
+  return <ClerkProvider>{body}</ClerkProvider>;
 }

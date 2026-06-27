@@ -12,7 +12,9 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applyMigrations,
+  applyMigrationsToPostgres,
   createPgliteDatabase,
+  createPostgresDatabase,
   type Database,
 } from "@chronicle/db";
 import { FilesystemMediaStorage, type MediaStorage } from "@chronicle/storage";
@@ -20,6 +22,10 @@ import {
   createDevCookieAuthProvider,
   type AuthProvider,
 } from "./auth";
+import { createClerkAuthProvider } from "./auth-clerk";
+import { isClerkConfigured } from "./clerk-config";
+
+export { isClerkConfigured };
 
 // Anchor relative paths to the apps/web package dir, not process.cwd(). On Windows Next dev's
 // recursive `mkdirSync` against a relative path occasionally ENOENTs even when the directory
@@ -56,20 +62,40 @@ function ensureDir(p: string): void {
 }
 
 async function build(): Promise<Runtime> {
-  ensureDir(DEV_DB_DIR);
   ensureDir(DEV_MEDIA_DIR);
-  const db = createPgliteDatabase(DEV_DB_DIR);
-  // Apply migrations idempotently: if the schema is already there, skip.
-  try {
-    await db.$pglite!.query("select 1 from persons limit 1");
-  } catch {
-    await applyMigrations(db.$pglite!);
+  // Runtime switch: in PROD, hosts set DATABASE_URL (Supabase / Neon / any managed Postgres)
+  // and we use the postgres-js Drizzle adapter. Otherwise — local dev, CI, anywhere unset —
+  // stay on PGlite so `pnpm dev` keeps working with no external Postgres to provision.
+  let db: Database;
+  if (process.env.DATABASE_URL) {
+    db = createPostgresDatabase(process.env.DATABASE_URL);
+    // First-boot bootstrap only, and opt-in: every Next.js cold start AND every HMR cycle would
+    // otherwise hammer `applyMigrationsToPostgres`. Ongoing schema changes go through
+    // `drizzle-kit migrate` as a deploy step; this in-process path is for bootstrapping a fresh
+    // Supabase/Neon project. Set `CHRONICLE_RUN_MIGRATIONS=1` on the boot that should run it.
+    if (db.$postgres && process.env.CHRONICLE_RUN_MIGRATIONS === "1") {
+      await applyMigrationsToPostgres(db.$postgres);
+    }
+  } else {
+    ensureDir(DEV_DB_DIR);
+    db = createPgliteDatabase(DEV_DB_DIR);
+    // Apply migrations idempotently: if the schema is already there, skip.
+    try {
+      await db.$pglite!.query("select 1 from persons limit 1");
+    } catch {
+      await applyMigrations(db.$pglite!);
+    }
   }
   const storage = new FilesystemMediaStorage({
     baseDir: DEV_MEDIA_DIR,
     publicBaseUrl: "/media",
   });
-  const auth = createDevCookieAuthProvider(db);
+  // Runtime switch: production hosts set both Clerk keys with valid prefixes and get the Clerk
+  // adapter; local dev and CI leave them unset (or use placeholders) and keep the cookie stub
+  // (so `pnpm dev` works with no Clerk account).
+  const auth: AuthProvider = isClerkConfigured()
+    ? createClerkAuthProvider(db)
+    : createDevCookieAuthProvider(db);
   return { db, storage, auth };
 }
 

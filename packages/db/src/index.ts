@@ -40,5 +40,9 @@ export type {
   AskStatus,
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
+export {
+  createPostgresDatabase,
+  type PostgresClientOptions,
+} from "./postgres-client";
 export { createTestDatabase } from "./testing";
-export { applyMigrations } from "./migrate";
+export { applyMigrations, applyMigrationsToPostgres } from "./migrate";

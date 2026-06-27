@@ -187,4 +187,22 @@ describe("single front door (architecture guard)", () => {
     expect(query.stories).toBeUndefined();
     expect(query.media).toBeUndefined();
   });
+
+  it("db.query.stories / db.query.media are rejected at the TYPE level (compile-time guard)", async () => {
+    // Type-level regression test. The runtime test above proves the property is undefined at
+    // runtime, but a previous version of `Database` had `PgDatabase<any, any, any>`, which made
+    // `db.query` resolve to `any` — so a caller writing `db.query.stories.findMany()` would
+    // compile silently and only blow up at runtime. The `Database` type now pins the schema
+    // generic to `Record<string, never>`, which causes Drizzle to resolve `query` to a
+    // `DrizzleTypeError<...>`. The `@ts-expect-error` lines below MUST produce a real TS error;
+    // if anyone widens the schema generic back to `any` or registers a schema on the client,
+    // the suppressions go unused and tsc fails the typecheck. That is the regression alarm.
+    const db = await createTestDatabase();
+    // @ts-expect-error db.query.stories must be structurally unreachable (front-door type guard)
+    const _stories = db.query.stories;
+    // @ts-expect-error db.query.media must be structurally unreachable (front-door type guard)
+    const _media = db.query.media;
+    void _stories;
+    void _media;
+  });
 });
