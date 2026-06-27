@@ -111,84 +111,8 @@
   0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
   50%      { box-shadow: 0 0 0 14px transparent; }
 }
-/* Alias kept for any component still referencing the old pulse name; remove with the shim. */
-@keyframes kin-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
-  50%      { box-shadow: 0 0 0 16px transparent; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-fade: 0s; --dur-settle: 0s; }
 }
 
-/* ---------------------------------------------------------------------------
- * TEMPORARY compatibility shim: old --kin-* names → new semantic vars.
- * Delete in the final task after grep confirms zero --kin-* references remain.
- * ------------------------------------------------------------------------- */
-:root {
-  --kin-bg: var(--surface-page);
-  --kin-paper: var(--surface-card);
-  --kin-surface: var(--surface-card);
-  --kin-ink: var(--text-body);
-  --kin-body: var(--text-body);
-  --kin-ink-2: var(--text-meta);
-  --kin-muted: var(--text-muted);
-  --kin-line: var(--border);
-  --kin-line-2: var(--border-strong);
-  --kin-accent: var(--accent);
-  --kin-accent-press: var(--accent-strong);
-  --kin-tint: var(--accent-soft);
-  --kin-tint-border: var(--border);
-  --kin-sage: var(--support);
-  --kin-gold: var(--support);
-  --kin-chip-bg: var(--surface-sunken);
-  --kin-chip-border: var(--border);
-  --kin-field: var(--border-strong);
-  --kin-ph-a: var(--surface-sunken);
-  --kin-ph-b: var(--paper-200);
-  --kin-ph-text: var(--text-muted);
-  --kin-bezel: var(--ink-900);
-  --kin-on-accent: var(--accent-on);
-  --kin-ring: var(--accent-soft);
-  --kin-ring-0: transparent;
 
-  --kin-font-serif: var(--font-story);
-  --kin-font-sans: var(--font-ui);
-  --kin-font-mono: var(--font-mono);
-
-  --kin-text-display: var(--text-display-lg);
-  --kin-text-title: var(--text-display);
-  --kin-text-headline: var(--text-story-lg);
-  --kin-text-story: var(--text-story);
-  --kin-text-h2: var(--text-story-lg);
-  --kin-text-h3: var(--text-ui);
-  --kin-text-body: var(--text-ui-sm);
-  --kin-text-sm: var(--text-label);
-  --kin-text-label: var(--text-label);
-
-  --kin-tracking-label: .08em;
-  --kin-leading-story: var(--leading-loose);
-  --kin-leading-ui: var(--leading-body);
-
-  --kin-space-1: var(--space-1);
-  --kin-space-2: var(--space-2);
-  --kin-space-3: var(--space-4);
-  --kin-space-4: var(--space-5);
-  --kin-space-5: var(--space-6);
-  --kin-space-6: var(--space-8);
-  --kin-space-7: var(--space-9);
-
-  --kin-radius-sm: var(--radius-md);
-  --kin-radius-md: var(--radius-lg);
-  --kin-radius-lg: var(--radius-lg);
-  --kin-radius-xl: var(--radius-xl);
-  --kin-radius-pill: var(--radius-pill);
-
-  --kin-shadow-sm: var(--shadow-sm);
-  --kin-shadow-md: var(--shadow-card);
-  --kin-shadow-lg: var(--shadow-lift);
-
-  --kin-touch-min: var(--touch-min);
-  --kin-touch-default: var(--touch-default);
-  --kin-touch-primary: var(--touch-voice);
-}
