@@ -10,7 +10,7 @@ import { KindredVoiceButton } from "@/app/_kindred";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 
-export function ElderRecorder({ token }: { token: string }) {
+export function ElderRecorder({ token, askId = null }: { token: string; askId?: string | null }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -23,12 +23,13 @@ export function ElderRecorder({ token }: { token: string }) {
       const form = new FormData();
       form.append("token", token);
       form.append("audio", blob, "recording.webm");
+      if (askId) form.append("askId", askId);
       const res = await fetch("/api/capture", { method: "POST", body: form });
       setPhase(res.ok ? "done" : "softfail");
     } catch {
       setPhase("softfail");
     }
-  }, [token]);
+  }, [token, askId]);
 
   const start = useCallback(async () => {
     try {

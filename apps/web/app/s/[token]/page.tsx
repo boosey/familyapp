@@ -7,7 +7,7 @@
  * loud voice button.
  */
 import { resolveElderSession } from "@chronicle/capture";
-import { getElderProfile } from "@chronicle/core";
+import { getElderProfile, listPendingAsksForElder } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ElderRecorder } from "./ElderRecorder";
 import { KindredPromptCard } from "@/app/_kindred";
@@ -38,6 +38,12 @@ export default async function ElderPage({
 
   const profile = await getElderProfile(db, resolved.personId);
   const spokenName = profile?.spokenName ?? "there";
+
+  // Pull the next queued/routed Ask for this elder. If one exists, surface it as the prompt
+  // (named asker, their words) and pair the recording to it via askId so the approval write
+  // can flip the Ask to `answered`.
+  const pending = await listPendingAsksForElder(db, resolved.personId, { limit: 1 });
+  const nextAsk = pending[0] ?? null;
   const initial = spokenName.charAt(0).toUpperCase();
   const now = new Date();
   const dateLabel = now.toLocaleString(undefined, {
@@ -98,8 +104,12 @@ export default async function ElderPage({
           Whenever you're ready, tap the button and tell me anything you'd like. Take all the time you want.
         </p>
         <KindredPromptCard
-          eyebrow="A thought to start with"
-          question="What's something from your day, or from long ago, that's been on your mind?"
+          eyebrow={nextAsk ? `${nextAsk.askerSpokenName} asked` : "A thought to start with"}
+          question={
+            nextAsk
+              ? nextAsk.ask.questionText
+              : "What's something from your day, or from long ago, that's been on your mind?"
+          }
         />
       </section>
 
@@ -111,7 +121,7 @@ export default async function ElderPage({
           justifyContent: "center",
         }}
       >
-        <ElderRecorder token={token} />
+        <ElderRecorder token={token} askId={nextAsk?.ask.id ?? null} />
       </footer>
     </main>
   );
