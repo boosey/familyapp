@@ -7,7 +7,9 @@
  * changes, because everything depends on the @chronicle/* interfaces, not these concretions.
  */
 import "server-only";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   applyMigrations,
   createPgliteDatabase,
@@ -19,8 +21,16 @@ import {
   type AuthProvider,
 } from "./auth";
 
-const DEV_DB_DIR = process.env.CHRONICLE_DB_DIR ?? "./.pglite/dev";
-const DEV_MEDIA_DIR = process.env.CHRONICLE_MEDIA_DIR ?? "./.media";
+// Anchor relative paths to the apps/web package dir, not process.cwd(). On Windows Next dev's
+// recursive `mkdirSync` against a relative path occasionally ENOENTs even when the directory
+// already exists, depending on which cwd Next chose. Absolute paths sidestep the class of issue.
+const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function anchor(p: string): string {
+  return isAbsolute(p) ? p : resolve(PKG_DIR, p);
+}
+
+const DEV_DB_DIR = anchor(process.env.CHRONICLE_DB_DIR ?? "./.pglite/dev");
+const DEV_MEDIA_DIR = anchor(process.env.CHRONICLE_MEDIA_DIR ?? "./.media");
 
 type Runtime = { db: Database; storage: MediaStorage; auth: AuthProvider };
 
@@ -29,11 +39,25 @@ const globalForRuntime = globalThis as unknown as {
   __chronicleRuntime?: Promise<Runtime>;
 };
 
+// PGlite (Node) does not create the data directory itself — pre-create it so a fresh clone
+// can boot without manual `mkdir`. Same idea for the media dir.
+// Node 24 on Windows can spuriously throw ENOENT from `mkdirSync(p, {recursive:true})` even
+// when the directory exists — guard with existsSync and swallow non-fatal failures (we
+// re-verify with statSync at the end so a truly missing dir still surfaces).
+function ensureDir(p: string): void {
+  try {
+    if (!existsSync(p)) {
+      mkdirSync(p, { recursive: true });
+    }
+  } catch (err) {
+    const exists = existsSync(p) && statSync(p).isDirectory();
+    if (!exists) throw err;
+  }
+}
+
 async function build(): Promise<Runtime> {
-  // PGlite (Node) does not create the data directory itself — pre-create it so a fresh clone
-  // can boot without manual `mkdir`. Same idea for the media dir.
-  mkdirSync(DEV_DB_DIR, { recursive: true });
-  mkdirSync(DEV_MEDIA_DIR, { recursive: true });
+  ensureDir(DEV_DB_DIR);
+  ensureDir(DEV_MEDIA_DIR);
   const db = createPgliteDatabase(DEV_DB_DIR);
   // Apply migrations idempotently: if the schema is already there, skip.
   try {
