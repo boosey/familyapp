@@ -1,46 +1,59 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, HTMLAttributes } from "react";
 
 export type ChipKind = "person" | "place" | "time" | "status";
 
-export interface KindredChipProps {
+export interface KindredChipProps extends HTMLAttributes<HTMLSpanElement> {
   kind?: ChipKind;
   label: string;
   initial?: string;
   avatar?: "sage" | "accent";
-  style?: CSSProperties;
 }
 
-export function KindredChip({ kind = "person", label, initial, avatar = "sage", style }: KindredChipProps) {
+export function KindredChip({
+  kind = "person",
+  label,
+  initial,
+  avatar = "sage",
+  style,
+  ...rest
+}: KindredChipProps) {
+  const pillBase: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    background: "var(--surface-sunken)",
+    border: "var(--border-width, 1.5px) solid var(--border)",
+    borderRadius: "var(--radius-pill)",
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-label)",
+    fontWeight: 500,
+    color: "var(--text-body)",
+  };
+
   if (kind === "person") {
+    const avatarBg = avatar === "accent" ? "var(--accent)" : "var(--support)";
     return (
       <span
         style={{
-          display: "inline-flex",
-          alignItems: "center",
+          ...pillBase,
           gap: 9,
-          background: "var(--kin-chip-bg)",
-          border: "1px solid var(--kin-chip-border)",
-          borderRadius: "var(--kin-radius-pill)",
           padding: "9px 16px 9px 9px",
-          fontFamily: "var(--kin-font-sans)",
-          fontSize: "var(--kin-text-sm)",
-          fontWeight: 500,
-          color: "var(--kin-ink)",
           ...style,
         }}
+        {...rest}
       >
         <span
           style={{
             width: 26,
             height: 26,
             borderRadius: "50%",
-            background: avatar === "accent" ? "var(--kin-accent)" : "var(--kin-sage)",
-            color: "#fff",
+            background: avatarBg,
+            color: "var(--accent-on)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 12,
             fontWeight: 700,
+            flexShrink: 0,
           }}
         >
           {(initial ?? label.charAt(0)).toUpperCase()}
@@ -50,26 +63,61 @@ export function KindredChip({ kind = "person", label, initial, avatar = "sage", 
     );
   }
 
-  const isTime = kind === "time";
-  const isStatus = kind === "status";
+  if (kind === "place") {
+    return (
+      <span
+        style={{
+          ...pillBase,
+          gap: 6,
+          padding: "9px 16px",
+          color: "var(--text-meta)",
+          ...style,
+        }}
+        {...rest}
+      >
+        <span aria-hidden="true">📍</span>
+        {label}
+      </span>
+    );
+  }
+
+  if (kind === "time") {
+    return (
+      <span
+        style={{
+          ...pillBase,
+          gap: 8,
+          padding: "9px 16px",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-label)",
+          letterSpacing: "var(--tracking-mono)",
+          fontWeight: 600,
+          color: "var(--text-meta)",
+          ...style,
+        }}
+        {...rest}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  // status
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
+        ...pillBase,
         gap: 8,
-        background: isStatus ? "var(--kin-chip-bg)" : "transparent",
-        border: isStatus ? "1px solid var(--kin-chip-border)" : "1.5px solid var(--kin-field)",
-        borderRadius: "var(--kin-radius-pill)",
-        padding: "9px 16px",
-        fontSize: "var(--kin-text-sm)",
-        fontWeight: isTime ? 600 : 500,
-        color: "var(--kin-ink-2)",
-        fontFamily: isTime ? "var(--kin-font-mono)" : "var(--kin-font-sans)",
+        padding: "6px 14px",
+        fontSize: "var(--text-label)",
+        fontWeight: 600,
+        color: "var(--text-muted)",
+        textTransform: "capitalize",
         ...style,
       }}
+      {...rest}
     >
-      {isTime || isStatus ? label : `📍 ${label}`}
+      {label}
     </span>
   );
 }
