@@ -28,8 +28,8 @@ export default async function ElderPage({
   if (!resolved) {
     return (
       <main className="kin-fullbleed" style={{ alignItems: "center", justifyContent: "center", padding: 32 }}>
-        <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0 }}>Welcome.</h1>
-        <p className="kin-muted" style={{ maxWidth: 32 + "ch", textAlign: "center", marginTop: 16 }}>
+        <h1 style={{ fontFamily: "var(--font-story)", fontSize: "var(--text-display)", fontWeight: 400, margin: 0, color: "var(--text-body)" }}>Welcome.</h1>
+        <p style={{ maxWidth: "32ch", textAlign: "center", marginTop: 16, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-ui)" }}>
           This link is resting for now. Whoever invited you will help you get started again.
         </p>
       </main>
@@ -60,7 +60,7 @@ export default async function ElderPage({
           alignItems: "center",
           gap: 14,
           padding: "20px 28px",
-          borderBottom: "1px solid var(--kin-line)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         <span
@@ -68,7 +68,7 @@ export default async function ElderPage({
             width: 52,
             height: 52,
             borderRadius: "50%",
-            background: "var(--kin-sage)",
+            background: "var(--support)",
             color: "#fff",
             display: "flex",
             alignItems: "center",
@@ -80,8 +80,8 @@ export default async function ElderPage({
           {initial}
         </span>
         <div>
-          <div style={{ fontSize: 19, fontWeight: 600, color: "var(--kin-ink)" }}>{spokenName}</div>
-          <div style={{ fontSize: 14, color: "var(--kin-muted)" }}>Conversation · {dateLabel}</div>
+          <div style={{ fontSize: 19, fontWeight: 600, color: "var(--text-body)" }}>{spokenName}</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Conversation · {dateLabel}</div>
         </div>
       </header>
 
@@ -92,15 +92,25 @@ export default async function ElderPage({
           display: "flex",
           flexDirection: "column",
           gap: 28,
-          maxWidth: 760,
+          maxWidth: 720,
           width: "100%",
           alignSelf: "center",
         }}
       >
-        <h1 style={{ fontSize: "var(--kin-text-title)", margin: 0, lineHeight: 1.1 }}>
+        <h1
+          style={{
+            fontFamily: "var(--font-story)",
+            fontSize: "52px",
+            fontWeight: 400,
+            lineHeight: 1.06,
+            letterSpacing: "-0.01em",
+            color: "var(--text-body)",
+            margin: 0,
+          }}
+        >
           Hello, {spokenName}.
         </h1>
-        <p className="kin-ink-2" style={{ fontSize: "var(--kin-text-h3)", margin: 0, lineHeight: 1.5 }}>
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui)", margin: 0, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "26ch" }}>
           Whenever you're ready, tap the button and tell me anything you'd like. Take all the time you want.
         </p>
         <KindredPromptCard
@@ -116,7 +126,7 @@ export default async function ElderPage({
       <footer
         style={{
           padding: "28px clamp(20px, 5vw, 56px) clamp(24px, 5vw, 48px)",
-          borderTop: "1px solid var(--kin-line)",
+          borderTop: "1px solid var(--border)",
           display: "flex",
           justifyContent: "center",
         }}
