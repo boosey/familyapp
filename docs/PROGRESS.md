@@ -13,9 +13,25 @@ Tracks which build-sequence increment is active and the eval status of each comp
 | 6 — Family hub | ✅ done | 3 | NO SPEC VIOLATIONS |
 | 7 — Asked-question relay | ✅ done | 1 | NO SPEC VIOLATIONS |
 | Vendor adapters (Phase 1 finish) | ✅ done | 6 adapters × 2 rounds | NO SPEC VIOLATIONS, 6 rounds × 6 adapters = 12 adversarial reviews / 6 fixers |
+| Hi-fi design pass (web UI) | ✅ done | per-task adversarial review | All gates green; manual visual walk pending |
 
 ## Log
 
+- **2026-06-27** — Hi-fi design pass over `apps/web` (UI/presentation only; data/auth/core
+  untouched). Migrated the app off the stale flat `--kin-*` tokens to the design system's
+  **semantic token layer** (`--accent`/`--surface-*`/`--text-*`, rem type scale, DM Mono, 3
+  themes) via a temporary `--kin-*` shim that was removed once all consumers converted. All six
+  Kindred components reconciled to the updated showcase APIs (`KindredVoiceButton` listening/size,
+  `KindredListenBar` controlled+audio, `KindredStoryCard` year/place/excerpt, etc.). Elder
+  conversation + approval screens rebuilt to the showcase. **Family hub restructured into a single
+  tabbed shell** (Stories / Questions / Ask / Asks / Invite) with an account avatar menu + tab
+  badges; the old `/hub/ask|asks|invite|invite/result` routes now redirect into the tabs, with
+  all server actions and the once-shown invite token preserved. Built subagent-driven: each task
+  implemented by a coding sub-agent → fresh adversarial reviewer sub-agent → coding agent
+  iterated until clean (per the corrected workflow in DECISIONS § Workflow). Gates: `pnpm -r
+  typecheck` clean; web 12/12, core 60/60 (front-door/consent guards), pipeline 21/21; web build
+  green (16 routes). Manual visual fidelity walk against `Family Chronicle.dc.html` still
+  outstanding (browser unavailable in this session). Onboarding flow explicitly out of scope.
 - **2026-06-27** — Six vendor adapters landed (Groq / ElevenLabs / R2 / Clerk / Inngest /
   Supabase Postgres). Each one: built by sub-agent → adversarial fresh-eyes sub-agent review
   → fixer sub-agent applied findings. All eval-clean. The front-door invariant got

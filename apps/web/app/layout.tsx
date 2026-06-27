@@ -5,7 +5,8 @@ import { isClerkConfigured } from "../lib/clerk-config";
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
- * Exposes CSS variables that `_kindred/tokens.css` reads through `--kin-font-*`.
+ * Exposes CSS variables that `_kindred/tokens.css` reads through `--font-newsreader`,
+ * `--font-public-sans`, and `--font-dm-mono` (mapped to `--font-story`/`--font-ui`/`--font-mono`).
  */
 const newsreader = Newsreader({
   subsets: ["latin"],
