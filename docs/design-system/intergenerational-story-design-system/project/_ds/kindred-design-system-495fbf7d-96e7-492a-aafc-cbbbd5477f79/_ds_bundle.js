@@ -498,44 +498,22 @@ function KindredVoiceButton({
     }
   }))) :
   /*#__PURE__*/
-  /* simple CSS mic glyph: rounded capsule + stand */
-  React.createElement("span", {
-    "aria-hidden": "true",
-    style: {
-      position: 'relative',
-      width: size * 0.22,
-      height: size * 0.42
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      inset: 0,
-      bottom: '32%',
-      background: 'currentColor',
-      borderRadius: 'var(--radius-pill)'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      left: '50%',
-      bottom: 0,
-      transform: 'translateX(-50%)',
-      width: 2.5,
-      height: '24%',
-      background: 'currentColor'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      left: '50%',
-      bottom: 0,
-      transform: 'translateX(-50%)',
-      width: size * 0.16,
-      height: 2.5,
-      background: 'currentColor',
-      borderRadius: 2
-    }
-  }))), label ? /*#__PURE__*/React.createElement("span", {
+  /* CSS microphone glyph: capsule head + U cradle + stem + base */
+  (function () {
+    var H = size * 0.5;
+    return React.createElement("span", {
+      "aria-hidden": "true",
+      style: { position: 'relative', display: 'inline-block', width: H * 0.72, height: H }
+    }, React.createElement("span", {
+      style: { position: 'absolute', left: '50%', top: 0, transform: 'translateX(-50%)', width: H * 0.46, height: H * 0.62, borderRadius: H * 0.23, background: 'currentColor' }
+    }), React.createElement("span", {
+      style: { position: 'absolute', left: '50%', top: H * 0.28, transform: 'translateX(-50%)', width: H * 0.72, height: H * 0.44, border: (H * 0.075) + 'px solid currentColor', borderTop: 'none', borderRadius: '0 0 ' + (H * 0.36) + 'px ' + (H * 0.36) + 'px', boxSizing: 'border-box' }
+    }), React.createElement("span", {
+      style: { position: 'absolute', left: '50%', top: H * 0.72, transform: 'translateX(-50%)', width: H * 0.075, height: H * 0.18, background: 'currentColor' }
+    }), React.createElement("span", {
+      style: { position: 'absolute', left: '50%', bottom: 0, transform: 'translateX(-50%)', width: H * 0.42, height: H * 0.075, borderRadius: 2, background: 'currentColor' }
+    }));
+  })()), label ? /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: 'var(--font-ui)',
       fontSize: 'var(--text-ui-sm)',

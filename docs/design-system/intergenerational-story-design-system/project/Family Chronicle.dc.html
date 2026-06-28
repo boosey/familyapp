@@ -228,10 +228,30 @@
           <span style="font-family:var(--font-story); font-size:28px; color:var(--text-body);">Family Chronicle</span>
           <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">THE ESPOSITO FAMILY</span>
         </div>
-        <div style="display:flex; gap:6px;">
-          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
-            <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">{{ tab.label }}</button>
-          </sc-for>
+        <div style="display:flex; align-items:center; gap:18px;">
+          <div style="display:flex; gap:6px;">
+            <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+              <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">{{ tab.label }}<sc-if value="{{ tab.badge }}" hint-placeholder-val="{{ false }}"><span style="{{ tab.badgeStyle }}">{{ tab.badge }}</span></sc-if></button>
+            </sc-for>
+          </div>
+          <div style="position:relative;">
+            <button onClick="{{ toggleAvatar }}" aria-label="Your account" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--border-strong); padding:0; cursor:pointer; background:var(--accent); color:var(--accent-on); font-family:var(--font-story); font-size:20px; font-weight:500; display:inline-flex; align-items:center; justify-content:center;">RE</button>
+            <sc-if value="{{ avatarOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; top:58px; right:0; width:248px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:14px; box-shadow:var(--shadow-lift); padding:8px; z-index:20;">
+                <div style="display:flex; align-items:center; gap:12px; padding:12px 12px 14px;">
+                  <span style="width:42px; height:42px; border-radius:50%; background:var(--accent); color:var(--accent-on); font-family:var(--font-story); font-size:18px; font-weight:500; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;">RE</span>
+                  <span style="display:flex; flex-direction:column; min-width:0;">
+                    <span style="font-family:var(--font-ui); font-size:17px; font-weight:600; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Rosa Esposito</span>
+                    <span style="font-family:var(--font-ui); font-size:14px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">rosa@esposito.family</span>
+                  </span>
+                </div>
+                <div style="height:1px; background:var(--border); margin:0 4px 8px;"></div>
+                <sc-for list="{{ avatarMenu }}" as="mi" hint-placeholder-count="3">
+                  <button onClick="{{ mi.onClick }}" style="{{ mi.style }}"><span style="width:22px; text-align:center;">{{ mi.icon }}</span>{{ mi.label }}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
         </div>
       </div>
 
@@ -240,15 +260,107 @@
         <!-- STORIES -->
         <sc-if value="{{ hubStories }}" hint-placeholder-val="{{ true }}">
           <div>
+            <sc-if value="{{ hasToAnswer }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ goAnswer }}" style="display:flex; align-items:center; gap:18px; width:100%; text-align:left; cursor:pointer; background:var(--accent-soft); border:1.5px solid var(--accent); border-radius:16px; padding:20px 24px; margin-bottom:26px;">
+                <span style="flex:0 0 auto; width:46px; height:46px; border-radius:50%; background:var(--accent); color:var(--accent-on); font-family:var(--font-story); font-size:22px; font-weight:500; display:inline-flex; align-items:center; justify-content:center;">{{ toAnswerCount }}</span>
+                <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                  <span style="font-family:var(--font-story); font-size:24px; color:var(--text-body);">{{ toAnswerHeadline }}</span>
+                  <span style="font-family:var(--font-ui); font-size:17px; color:var(--text-muted);">Your family is waiting to hear you tell it.</span>
+                </span>
+                <span style="flex:0 0 auto; font-family:var(--font-ui); font-size:18px; font-weight:600; color:var(--accent-strong); white-space:nowrap;">Answer now ›</span>
+              </button>
+            </sc-if>
             <div style="display:flex; align-items:baseline; justify-content:space-between;">
               <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Sal Esposito<span style="font-size:20px; color:var(--text-muted);"> · shared with you</span></h2>
-              <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">12 STORIES</span>
+              <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">{{ resultLabel }}</span>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;">
-              <sc-for list="{{ filterChips }}" as="fc" hint-placeholder-count="5">
-                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredChip" dc-props="{{ fc.chipProps }}" hint-size="90px,44px">{{ fc.label }}</x-import>
-              </sc-for>
+            <div style="margin-top:18px;">
+              <button onClick="{{ toggleFinder }}" aria-expanded="{{ finderOpen }}" style="display:flex; align-items:center; gap:14px; width:100%; cursor:pointer; background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:999px; padding:16px 24px; box-shadow:var(--shadow-sm);">
+                <span style="font-size:22px;" aria-hidden="true">🔎</span>
+                <span style="flex:1; text-align:left; font-family:var(--font-ui); font-size:21px; font-weight:600; color:var(--text-body);">Find Stories</span>
+                <span style="font-family:var(--font-ui); font-size:20px; color:var(--text-muted);">{{ finderChevron }}</span>
+              </button>
+              <sc-if value="{{ showSummary }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:14px; margin-top:12px; padding-left:10px;">
+                  <span style="font-family:var(--font-ui); font-size:18px; color:var(--text-muted);">{{ summaryText }}</span>
+                  <button onClick="{{ clearFilters }}" style="border:none; background:transparent; cursor:pointer; font-family:var(--font-ui); font-size:18px; font-weight:600; color:var(--accent-strong);">Clear</button>
+                </div>
+              </sc-if>
             </div>
+
+            <sc-if value="{{ finderOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:18px; box-shadow:var(--shadow-lift); padding:26px 30px;">
+                <div style="display:inline-flex; gap:4px; background:var(--surface-sunken); border:1.5px solid var(--border); border-radius:999px; padding:4px;">
+                  <sc-for list="{{ finderModes }}" as="fm" hint-placeholder-count="3">
+                    <button onClick="{{ fm.onClick }}" style="{{ fm.style }}">{{ fm.label }}</button>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ modeSearch }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:22px;">
+                    <div style="display:flex; gap:12px; align-items:center;">
+                      <input type="text" value="{{ query }}" onChange="{{ onQuery }}" placeholder="Try ‘Sal’s wedding’ or ‘Naples in the 50s’" style="flex:1; min-width:0; padding:16px 20px; font-size:21px; color:var(--text-body); background:var(--surface-page); border:1.5px solid var(--border-strong); border-radius:12px; outline:none;">
+                      <button onClick="{{ micSearch }}" aria-label="Speak your search" style="{{ micStyle }}">{{ micGlyph }}</button>
+                    </div>
+                    <sc-if value="{{ listening }}" hint-placeholder-val="{{ false }}">
+                      <p style="font-family:var(--font-ui); font-size:18px; font-weight:600; color:var(--accent-strong); margin:14px 0 0;">Listening… just say what you're looking for.</p>
+                    </sc-if>
+                    <sc-if value="{{ showUnderstood }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:16px;">
+                        <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; text-transform:uppercase; color:var(--support);">Understood as</span>
+                        <sc-for list="{{ understoodChips }}" as="uc" hint-placeholder-count="2">
+                          <span style="display:inline-flex; align-items:center; padding:6px 14px; border-radius:999px; background:var(--accent-soft); color:var(--accent-strong); font-family:var(--font-ui); font-size:17px; font-weight:600;">{{ uc }}</span>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ showNoMatch }}" hint-placeholder-val="{{ false }}">
+                      <p style="font-family:var(--font-ui); font-size:18px; color:var(--text-muted); margin:14px 0 0;">Hmm — try a name, a year, or a moment like “wedding” or “Naples”.</p>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ modeSentence }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:22px;">
+                    <p style="font-family:var(--font-story); font-weight:400; font-size:30px; line-height:1.7; color:var(--text-muted); margin:0;">Show me <button onClick="{{ openPerson }}" style="{{ personSlotStyle }}">{{ personWord }}</button> stories about <button onClick="{{ openTopic }}" style="{{ topicSlotStyle }}">{{ topicWord }}</button>, around <button onClick="{{ openEvent }}" style="{{ eventSlotStyle }}">{{ eventWord }}</button>, from <button onClick="{{ openEra }}" style="{{ eraSlotStyle }}">{{ eraWord }}</button>.</p>
+                    <sc-if value="{{ slotOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:22px; border-top:1px solid var(--border); padding-top:20px;">
+                        <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); margin-bottom:14px;">{{ slotHeading }}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                          <sc-for list="{{ slotOptions }}" as="opt" hint-placeholder-count="3">
+                            <button onClick="{{ opt.onClick }}" style="{{ opt.style }}">{{ opt.label }}</button>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ modeLists }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:22px; display:flex; flex-direction:column; gap:14px;">
+                    <sc-for list="{{ facetGroups }}" as="fg" hint-placeholder-count="4">
+                      <div style="display:flex; align-items:flex-start; gap:18px;">
+                        <span style="flex:0 0 92px; font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); padding-top:11px;">{{ fg.label }}</span>
+                        <div style="flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:8px;">
+                          <sc-for list="{{ fg.chips }}" as="fc" hint-placeholder-count="4">
+                            <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredChip" dc-props="{{ fc.chipProps }}" hint-size="80px,44px">{{ fc.label }}</x-import>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:26px; border-top:1px solid var(--border); padding-top:20px;">
+                  <span style="font-family:var(--font-ui); font-size:18px; color:var(--text-muted);">{{ resultSentence }}</span>
+                  <div style="display:flex; gap:10px;">
+                    <sc-if value="{{ anyFilter }}" hint-placeholder-val="{{ false }}">
+                      <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" dc-props="{{ clearFiltersProps }}" hint-size="auto,56px">Start over</x-import>
+                    </sc-if>
+                    <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" dc-props="{{ doneFinderProps }}" hint-size="auto,56px">Done</x-import>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
             <div style="background:var(--surface-card); border:1.5px solid var(--border); border-radius:18px; box-shadow:var(--shadow-card); padding:26px; margin-top:24px; display:flex; gap:26px;">
               <div style="flex:0 0 auto; width:200px; height:200px; border-radius:14px; background-image:repeating-linear-gradient(135deg, var(--support-soft) 0 14px, var(--accent-soft) 14px 28px); position:relative;">
                 <span style="position:absolute; top:12px; right:12px; width:34px; height:34px; border-radius:999px; background:var(--surface-card); box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; justify-content:center; font-size:16px;">📍</span>
@@ -274,6 +386,32 @@
                 </div>
               </sc-for>
             </div>
+          </div>
+        </sc-if>
+
+        <!-- TO ANSWER -->
+        <sc-if value="{{ hubAnswer }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2 style="font-family:var(--font-story); font-weight:400; font-size:34px; color:var(--text-body); margin:0;">Questions for you</h2>
+            <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">Your family asked these. Tap one to record your answer whenever you're ready — there's no rush.</p>
+            <sc-if value="{{ hasToAnswer }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:14px; margin-top:24px;">
+                <sc-for list="{{ toAnswerView }}" as="qa" hint-placeholder-count="2">
+                  <div style="display:flex; align-items:center; gap:20px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:14px; box-shadow:var(--shadow-card); padding:22px 24px;">
+                    <div style="flex:1; min-width:0;">
+                      <p style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.04em; color:var(--text-meta); margin:0;">{{ qa.from }}</p>
+                      <p style="font-family:var(--font-story); font-size:24px; line-height:1.3; color:var(--text-body); margin:6px 0 0;">{{ qa.q }}</p>
+                    </div>
+                    <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" leading-icon="🎙" hint-size="auto,60px">Answer</x-import>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noToAnswer }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:24px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:16px; padding:30px; text-align:center;">
+                <p style="font-family:var(--font-story); font-size:26px; color:var(--text-muted); margin:0;">You're all caught up. Nothing waiting.</p>
+              </div>
+            </sc-if>
           </div>
         </sc-if>
 
@@ -379,8 +517,9 @@ class Component extends DCLogic {
     elderPhase: 'idle', elderShowType: false, elderQ: 0,
     altPhase: 'idle',
     apprTier: 'family', apprPhase: 'idle', apprPlaying: false,
-    hubTab: 'stories', hubFilter: 'All', playing: {},
-    askSent: false, inviteDone: false,
+    hubTab: 'stories', facets: { person: 'all', era: 'all', event: 'all', topic: 'All' }, playing: {},
+    finderOpen: false, openSlot: null, finderMode: 'search', query: '', listening: false,
+    askSent: false, inviteDone: false, avatarOpen: false,
   };
 
   questions = [
@@ -401,7 +540,35 @@ class Component extends DCLogic {
     { forName: 'Nonna Lucia', q: 'What was your wedding day like?', status: 'queued' },
   ];
 
-  filters = ['All', 'Childhood', 'Family', 'Work', 'Naples'];
+  // Facet definitions: [value, label]. First entry of each is the "reset".
+  facetDefs = {
+    person: [['all', 'Everyone'], ['sal', 'Sal'], ['lucia', 'Nonna Lucia']],
+    era:    [['all', 'Any era'], ['1950s', "'50s"], ['1960s', "'60s"], ['1970s', "'70s"]],
+    event:  [['all', 'All events'], ['marriage', 'Marriage'], ['birth', 'Birth'], ['emigration', 'Emigration'], ['work', 'Work']],
+    topic:  [['All', 'All'], ['Childhood', 'Childhood'], ['Family', 'Family'], ['Naples', 'Naples']],
+  };
+  facetLabels = { person: 'Person', era: 'Era', event: 'Event', topic: 'Topic' };
+
+  // 12 stories with tags, so result counts are real.
+  catalog = [
+    { person: 'sal', era: '1950s', event: 'childhood', topic: 'Childhood' },
+    { person: 'sal', era: '1950s', event: 'childhood', topic: 'Naples' },
+    { person: 'sal', era: '1960s', event: 'emigration', topic: 'Family' },
+    { person: 'sal', era: '1960s', event: 'emigration', topic: 'Naples' },
+    { person: 'sal', era: '1960s', event: 'marriage', topic: 'Family' },
+    { person: 'sal', era: '1960s', event: 'birth', topic: 'Family' },
+    { person: 'sal', era: '1970s', event: 'work', topic: 'Family' },
+    { person: 'sal', era: '1970s', event: 'work', topic: 'Family' },
+    { person: 'lucia', era: '1950s', event: 'childhood', topic: 'Childhood' },
+    { person: 'lucia', era: '1960s', event: 'marriage', topic: 'Family' },
+    { person: 'lucia', era: '1960s', event: 'birth', topic: 'Family' },
+    { person: 'lucia', era: '1970s', event: 'work', topic: 'Family' },
+  ];
+
+  toAnswer = [
+    { from: 'Marco asked', q: 'What was Grandpa like as a young father?' },
+    { from: 'Lucia asked', q: 'What do you remember about your wedding day?' },
+  ];
 
   // ---- elder (recommended) ----
   elderMic = () => { if (this.state.elderPhase === 'idle') this.setState({ elderPhase: 'listening' }); };
@@ -430,8 +597,44 @@ class Component extends DCLogic {
   apprTogglePlay = () => this.setState(s => ({ apprPlaying: !s.apprPlaying }));
 
   // ---- hub ----
-  setTab = (t) => this.setState({ hubTab: t, askSent: false, inviteDone: false });
-  setFilter = (f) => this.setState({ hubFilter: f });
+  setTab = (t) => this.setState({ hubTab: t, askSent: false, inviteDone: false, avatarOpen: false });
+  toggleAvatar = () => this.setState(s => ({ avatarOpen: !s.avatarOpen }));
+  setFacet = (group, val) => this.setState(s => ({ facets: { ...s.facets, [group]: val }, openSlot: null }));
+  clearFilters = () => this.setState({ facets: { person: 'all', era: 'all', event: 'all', topic: 'All' }, openSlot: null, query: '' });
+  toggleFinder = () => this.setState(s => ({ finderOpen: !s.finderOpen, openSlot: null }));
+  closeFinder = () => this.setState({ finderOpen: false, openSlot: null });
+  setOpenSlot = (slot) => this.setState(s => ({ openSlot: s.openSlot === slot ? null : slot }));
+  setMode = (m) => this.setState({ finderMode: m, openSlot: null });
+
+  exIdx = 0;
+  examples = ["Sal's wedding", 'Naples in the 1950s', "Lucia's stories about family", 'when they emigrated', 'the bakery'];
+
+  parseQuery(q) {
+    const t = (q || '').toLowerCase();
+    const f = { person: 'all', era: 'all', event: 'all', topic: 'All' };
+    if (/\bsal\b/.test(t)) f.person = 'sal';
+    if (/lucia|nonna|grandma|grandmother/.test(t)) f.person = 'lucia';
+    if (/195|'?50s|fiftie/.test(t)) f.era = '1950s';
+    if (/196|'?60s|sixtie/.test(t)) f.era = '1960s';
+    if (/197|'?70s|seventie/.test(t)) f.era = '1970s';
+    if (/wedding|marri/.test(t)) f.event = 'marriage';
+    if (/birth|born|baby|babies/.test(t)) f.event = 'birth';
+    if (/emigrat|immigrat|moved|voyage|ship|sail|crossing/.test(t)) f.event = 'emigration';
+    if (/\bwork|job|bakery|baker/.test(t)) f.event = 'work';
+    if (/child/.test(t)) f.topic = 'Childhood';
+    if (/famil/.test(t)) f.topic = 'Family';
+    if (/naples|napoli/.test(t)) f.topic = 'Naples';
+    return f;
+  }
+  onQuery = (e) => { const v = e.target.value; this.setState({ query: v, facets: this.parseQuery(v) }); };
+  micSearch = () => {
+    this.setState({ listening: true });
+    setTimeout(() => {
+      const ex = this.examples[this.exIdx % this.examples.length];
+      this.exIdx++;
+      this.setState({ listening: false, query: ex, facets: this.parseQuery(ex) });
+    }, 1300);
+  };
   togglePlay = (id) => this.setState(s => ({ playing: { ...s.playing, [id]: !s.playing[id] } }));
   sendAsk = () => this.setState({ askSent: true });
   resetAsk = () => this.setState({ askSent: false });
@@ -464,15 +667,83 @@ class Component extends DCLogic {
     });
 
     // hub tabs
-    const tabs = [['stories', 'Stories'], ['ask', 'Ask'], ['asks', 'Your asks'], ['invite', 'Invite']].map(([k, label]) => {
+    const toAnswerCount = this.toAnswer.length;
+    const tabDefs = [['stories', 'Stories'], ['answer', 'To answer'], ['ask', 'Ask'], ['asks', 'Your asks'], ['invite', 'Invite']];
+    const tabs = tabDefs.map(([k, label]) => {
       const active = s.hubTab === k;
-      return { key: k, label, onClick: () => this.setTab(k),
-        style: `padding:10px 18px; border-radius:999px; border:none; cursor:pointer; font-family:var(--font-ui); font-size:18px; font-weight:600; background:${active ? 'var(--accent-soft)' : 'transparent'}; color:${active ? 'var(--accent-strong)' : 'var(--text-muted)'};` };
+      const badge = k === 'answer' && toAnswerCount > 0 ? toAnswerCount : null;
+      return { key: k, label, onClick: () => this.setTab(k), badge,
+        style: `display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius:999px; border:none; cursor:pointer; font-family:var(--font-ui); font-size:18px; font-weight:600; background:${active ? 'var(--accent-soft)' : 'transparent'}; color:${active ? 'var(--accent-strong)' : 'var(--text-muted)'};`,
+        badgeStyle: `display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; padding:0 6px; border-radius:999px; background:var(--accent); color:var(--accent-on); font-family:var(--font-mono); font-size:13px; font-weight:500;` };
     });
 
-    const filterChips = this.filters.map(f => ({ label: f, chipProps: { selected: s.hubFilter === f, onClick: () => this.setFilter(f) } }));
+    const F = s.facets;
+    const defaults = { person: 'all', era: 'all', event: 'all', topic: 'All' };
+    const anyFilter = Object.keys(defaults).some(k => F[k] !== defaults[k]);
+    const matchCount = this.catalog.filter(st =>
+      (F.person === 'all' || st.person === F.person) &&
+      (F.era === 'all' || st.era === F.era) &&
+      (F.event === 'all' || st.event === F.event) &&
+      (F.topic === 'All' || st.topic === F.topic)
+    ).length;
+    const total = this.catalog.length;
+    const resultLabel = anyFilter ? `${matchCount} OF ${total}` : `${total} STORIES`;
+    const resultSentence = matchCount === 1 ? '1 story matches' : `${matchCount} stories match`;
+
+    // ---- plain-language sentence builder ----
+    // Each slot: options as [value, sentenceWord, optionLabel]
+    const SLOTS = {
+      person: { heading: 'Whose stories?', opts: [['all', 'everyone\u2019s', 'Everyone'], ['sal', 'Sal\u2019s', 'Sal'], ['lucia', 'Nonna Lucia\u2019s', 'Nonna Lucia']] },
+      topic:  { heading: 'About what?', opts: [['All', 'anything', 'Anything'], ['Childhood', 'childhood', 'Childhood'], ['Family', 'family', 'Family'], ['Naples', 'Naples', 'Naples']] },
+      event:  { heading: 'Around which moment?', opts: [['all', 'any moment', 'Any moment'], ['marriage', 'a marriage', 'Marriage'], ['birth', 'a birth', 'Birth'], ['emigration', 'emigration', 'Emigration'], ['work', 'work', 'Work']] },
+      era:    { heading: 'From when?', opts: [['all', 'any time', 'Any time'], ['1950s', 'the 1950s', 'The 1950s'], ['1960s', 'the 1960s', 'The 1960s'], ['1970s', 'the 1970s', 'The 1970s']] },
+    };
+    const wordFor = (slot) => (SLOTS[slot].opts.find(o => o[0] === F[slot]) || SLOTS[slot].opts[0])[1];
+    const slotStyle = (slot) => {
+      const on = s.openSlot === slot;
+      const active = F[slot] !== defaults[slot];
+      return `font:inherit; padding:2px 12px; margin:0 2px; border:none; cursor:pointer; border-radius:999px; text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; color:${active ? 'var(--accent-strong)' : 'var(--accent)'}; background:${on ? 'var(--accent-soft)' : 'transparent'};`;
+    };
+    const open = s.openSlot;
+    const slotOptions = open ? SLOTS[open].opts.map(([val, , label]) => {
+      const sel = F[open] === val;
+      return { label, onClick: () => this.setFacet(open, val),
+        style: `min-height:56px; padding:12px 22px; cursor:pointer; border-radius:999px; font-family:var(--font-ui); font-size:20px; font-weight:600; background:${sel ? 'var(--accent)' : 'var(--surface-card)'}; color:${sel ? 'var(--accent-on)' : 'var(--text-body)'}; border:1.5px solid ${sel ? 'var(--accent)' : 'var(--border-strong)'};` };
+    }) : [];
+
+    // closed-state summary (friendly, only non-default facets)
+    const sumParts = [];
+    if (F.person !== 'all') sumParts.push(SLOTS.person.opts.find(o => o[0] === F.person)[2]);
+    if (F.topic !== 'All') sumParts.push(SLOTS.topic.opts.find(o => o[0] === F.topic)[2]);
+    if (F.event !== 'all') sumParts.push(SLOTS.event.opts.find(o => o[0] === F.event)[2]);
+    if (F.era !== 'all') sumParts.push(SLOTS.era.opts.find(o => o[0] === F.era)[2]);
+    const summaryText = `${matchCount} ${matchCount === 1 ? 'story' : 'stories'} · ${sumParts.join(' · ')}`;
+
+    // ---- mode switcher + lists mode + search mode ----
+    const mode = s.finderMode;
+    const finderModes = [['search', 'Search'], ['sentence', 'Sentence'], ['lists', 'Lists']].map(([k, label]) => {
+      const on = mode === k;
+      return { key: k, label, onClick: () => this.setMode(k),
+        style: `padding:10px 22px; border:none; cursor:pointer; border-radius:999px; font-family:var(--font-ui); font-size:18px; font-weight:600; background:${on ? 'var(--surface-card)' : 'transparent'}; color:${on ? 'var(--accent-strong)' : 'var(--text-muted)'}; box-shadow:${on ? 'var(--shadow-sm)' : 'none'};` };
+    });
+    const facetGroups = Object.keys(this.facetDefs).map(group => ({
+      key: group, label: this.facetLabels[group],
+      chips: this.facetDefs[group].map(([val, label]) => ({
+        label, chipProps: { selected: F[group] === val, onClick: () => this.setFacet(group, val) },
+      })),
+    }));
+    const understoodChips = sumParts;
 
     const asksView = this.asks.map(a => ({ ...a, answered: a.status === 'answered', queued: a.status !== 'answered' }));
+
+    const miBase = 'display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:11px 12px; border:none; border-radius:9px; cursor:pointer; background:transparent; font-family:var(--font-ui); font-size:17px; color:var(--text-body);';
+    const avatarMenu = [
+      { key: 'profile', icon: '◔', label: 'Your profile' },
+      { key: 'settings', icon: '⚙', label: 'Settings' },
+      { key: 'family', icon: '⌂', label: 'Manage family' },
+      { key: 'logout', icon: '→', label: 'Log out' },
+    ].map(m => ({ ...m, onClick: () => this.setState({ avatarOpen: false }),
+      style: miBase + (m.key === 'logout' ? ' color:var(--danger, #B4442E); border-top:1px solid var(--border); border-radius:0 0 9px 9px; margin-top:4px;' : '') }));
 
     return {
       // elder recommended
@@ -507,8 +778,32 @@ class Component extends DCLogic {
       apprTierName: TIER[s.apprTier][0].toLowerCase(),
 
       // hub
-      hubStories: s.hubTab === 'stories', hubAsk: s.hubTab === 'ask', hubAsks: s.hubTab === 'asks', hubInvite: s.hubTab === 'invite',
-      tabs, filterChips, asksView,
+      hubStories: s.hubTab === 'stories', hubAnswer: s.hubTab === 'answer', hubAsk: s.hubTab === 'ask', hubAsks: s.hubTab === 'asks', hubInvite: s.hubTab === 'invite',
+      tabs, anyFilter, resultLabel, resultSentence,
+      clearFilters: this.clearFilters,
+      clearFiltersProps: { onClick: this.clearFilters },
+      finderOpen: s.finderOpen, toggleFinder: this.toggleFinder,
+      finderChevron: s.finderOpen ? '\u25B4' : '\u25BE',
+      doneFinderProps: { onClick: this.closeFinder },
+      showSummary: anyFilter && !s.finderOpen, summaryText,
+      personWord: wordFor('person'), topicWord: wordFor('topic'), eventWord: wordFor('event'), eraWord: wordFor('era'),
+      personSlotStyle: slotStyle('person'), topicSlotStyle: slotStyle('topic'), eventSlotStyle: slotStyle('event'), eraSlotStyle: slotStyle('era'),
+      openPerson: () => this.setOpenSlot('person'), openTopic: () => this.setOpenSlot('topic'), openEvent: () => this.setOpenSlot('event'), openEra: () => this.setOpenSlot('era'),
+      slotOpen: !!open, slotHeading: open ? SLOTS[open].heading : '', slotOptions,
+      finderModes, facetGroups,
+      modeSearch: mode === 'search', modeSentence: mode === 'sentence', modeLists: mode === 'lists',
+      query: s.query, onQuery: this.onQuery, micSearch: this.micSearch, listening: s.listening,
+      micGlyph: s.listening ? '\u25CF' : '\uD83C\uDF99',
+      micStyle: `flex:0 0 auto; width:58px; height:58px; border-radius:50%; cursor:pointer; font-size:24px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid ${s.listening ? 'var(--accent)' : 'var(--border-strong)'}; background:${s.listening ? 'var(--accent)' : 'var(--surface-card)'}; color:${s.listening ? 'var(--accent-on)' : 'var(--accent-strong)'};`,
+      understoodChips,
+      showUnderstood: anyFilter,
+      showNoMatch: !!s.query.trim() && !anyFilter,
+      asksView,
+      toAnswerView: this.toAnswer, toAnswerCount,
+      hasToAnswer: toAnswerCount > 0, noToAnswer: toAnswerCount === 0,
+      toAnswerHeadline: toAnswerCount === 1 ? 'You have 1 question to answer' : `You have ${toAnswerCount} questions to answer`,
+      goAnswer: () => this.setTab('answer'),
+      avatarOpen: s.avatarOpen, toggleAvatar: this.toggleAvatar, avatarMenu,
       timelineStories: this.stories.slice(1),
       featuredListen: { playing: !!s.playing['s1'], duration: '4:12', title: 'Sal\u2019s voice \u2014 the original recording', onToggle: () => this.togglePlay('s1') },
       askNotSent: !s.askSent, askSent: s.askSent,

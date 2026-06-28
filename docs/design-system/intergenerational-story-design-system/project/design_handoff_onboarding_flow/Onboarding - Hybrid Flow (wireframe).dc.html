@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/colors.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+</style>
+</helmet>
+
+<!-- ===================== HEADER ===================== -->
+<div style="position:absolute; left:60px; top:30px; width:1180px;">
+  <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.18em; text-transform:uppercase; color:#cf8a63;">Kindred · new user onboarding · chosen direction</div>
+  <div style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.08; letter-spacing:-0.01em; color:#2E2620; margin-top:8px;">The hybrid — confirm, give a birthday, choose a door</div>
+  <p style="font-family:var(--font-ui); font-size:16px; line-height:1.55; color:#5C5247; margin:12px 0 0; max-width:80ch;">Fast spine from <b>Two doors</b> with the warmth of <b>The first conversation</b>. Name and relationship arrive pre-filled from the inviter, so the only required ask is date of birth. From the fork you either step straight into the hub or "just talk" your way through the deep interview — and a persistent hub banner keeps that invitation open forever.</p>
+</div>
+
+<!-- ===================== MAIN SPINE (top lane) ===================== -->
+
+<!-- S1 Welcome -->
+<div style="position:absolute; left:60px; top:262px; width:340px;">
+  <div data-drags-parent="1" style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-bottom:8px;">1 · Welcome — confirm who you are</div>
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:16px; display:flex; flex-direction:column; gap:10px; overflow:hidden;">
+    <div style="font-family:var(--font-story); font-size:11px; color:#b3a690;">Family Chronicle</div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:9px;">
+      <div style="font-family:var(--font-story); font-size:20px; line-height:1.22; color:#4a4036;">Rosa invited you to the Esposito family.</div>
+      <div style="display:flex; align-items:center; gap:9px; background:#faf6ef; border:1.5px solid #e3d8c8; border-radius:10px; padding:9px 11px;">
+        <span style="width:34px; height:34px; border-radius:50%; background:#e7ded2; flex:0 0 auto;"></span>
+        <div><div style="font-family:var(--font-ui); font-size:13px; font-weight:600; color:#5c5247;">Salvatore Esposito</div><div style="font-family:var(--font-ui); font-size:11px; color:#9a8d7c;">Rosa's father · from the invite</div></div>
+      </div>
+      <div style="font-family:var(--font-ui); font-size:10.5px; color:#b3a690;">Not you, or not quite right? <span style="color:#cf8a63; font-weight:600;">Fix this</span></div>
+    </div>
+    <div style="align-self:flex-start; padding:9px 18px; border-radius:999px; background:#cf8a63; color:#fff; font-family:var(--font-ui); font-size:12px; font-weight:600;">Come in →</div>
+  </div>
+</div>
+
+<!-- arrow S1->S2 -->
+<div style="position:absolute; left:400px; top:392px; width:50px; text-align:center;"><div style="font-family:'Caveat',cursive; font-size:13px; color:#b3a690;">confirm</div><div style="font-size:24px; color:#c2b6a4; line-height:1;">→</div></div>
+
+<!-- S2 DOB -->
+<div style="position:absolute; left:450px; top:262px; width:340px;">
+  <div data-drags-parent="1" style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-bottom:8px;">2 · The one required ask</div>
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:16px; display:flex; flex-direction:column; gap:10px; overflow:hidden;">
+    <div style="font-family:var(--font-story); font-size:19px; line-height:1.22; color:#4a4036;">Before we go in — when were you born?</div>
+    <div style="display:flex; align-items:center; gap:11px; margin-top:2px;">
+      <div style="width:56px; height:56px; border-radius:50%; border:2px dashed #cf8a63; display:flex; align-items:center; justify-content:center; font-size:20px; flex:0 0 auto;">🎙</div>
+      <div style="font-family:'Caveat',cursive; font-size:15px; color:#b3a690; line-height:1.2;">say it out loud…<br>or type it below</div>
+    </div>
+    <div style="border:1.5px solid #cf8a63; border-radius:7px; padding:8px 10px; font-family:var(--font-mono); font-size:12px; color:#5c5247; background:#fbf0e8; display:flex; justify-content:space-between;"><span>14 March 1949</span><span style="color:#7a9a6c;">✓</span></div>
+    <div style="font-family:'Caveat',cursive; font-size:14px; color:#b3a690;">shapes the prompts &amp; pacing you'll get later</div>
+    <div style="flex:1;"></div>
+    <div style="align-self:flex-start; padding:9px 18px; border-radius:999px; background:#cf8a63; color:#fff; font-family:var(--font-ui); font-size:12px; font-weight:600;">Continue</div>
+  </div>
+</div>
+
+<!-- arrow S2->S3 -->
+<div style="position:absolute; left:790px; top:392px; width:50px; text-align:center;"><div style="font-family:'Caveat',cursive; font-size:13px; color:#b3a690;">next</div><div style="font-size:24px; color:#c2b6a4; line-height:1;">→</div></div>
+
+<!-- S3 Two doors -->
+<div style="position:absolute; left:840px; top:262px; width:340px;">
+  <div data-drags-parent="1" style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-bottom:8px;">3 · Two doors — the fork</div>
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:16px; display:flex; flex-direction:column; gap:10px; overflow:hidden;">
+    <div style="font-family:var(--font-story); font-size:19px; color:#4a4036;">You're in, Sal. Where to first?</div>
+    <div style="display:flex; gap:10px; flex:1; margin-top:2px;">
+      <div style="flex:1; border:1.5px solid #cf8a63; background:#fbf0e8; border-radius:10px; padding:11px; display:flex; flex-direction:column;">
+        <div style="font-size:22px;">🏛</div>
+        <div style="font-family:var(--font-story); font-size:14px; color:#4a4036; margin-top:6px; line-height:1.15;">Go to our Family's Story</div>
+        <div style="font-family:var(--font-ui); font-size:10.5px; color:#9a8d7c; margin-top:4px;">See everyone's stories now</div>
+        <div style="flex:1;"></div>
+        <div style="font-family:var(--font-ui); font-size:10px; font-weight:700; color:#cf8a63;">PRIMARY</div>
+      </div>
+      <div style="flex:1; border:1.5px solid #d8cdbd; border-radius:10px; padding:11px; display:flex; flex-direction:column;">
+        <div style="font-size:22px;">🎙</div>
+        <div style="font-family:var(--font-story); font-size:14px; color:#4a4036; margin-top:6px; line-height:1.15;">Tell your story</div>
+        <div style="font-family:var(--font-ui); font-size:10.5px; color:#9a8d7c; margin-top:4px;">Just talk · ~12 min</div>
+        <div style="flex:1;"></div>
+        <div style="font-family:var(--font-ui); font-size:10px; font-weight:700; color:#b3a690;">OPTIONAL</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow S3->HUB (Door 1) -->
+<div style="position:absolute; left:1180px; top:350px; width:120px; text-align:center;"><div style="font-family:'Caveat',cursive; font-size:14px; color:#cf8a63; line-height:1.05;">Door 1 ·<br>straight in</div><div style="font-size:26px; color:#cf8a63; line-height:1;">→</div></div>
+
+<!-- HUB (convergence, top-right) -->
+<div style="position:absolute; left:1300px; top:262px; width:340px;">
+  <div data-drags-parent="1" style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-bottom:8px;">The hub — both paths land here</div>
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:0; display:flex; flex-direction:column; overflow:hidden;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1.5px solid #ece4d8;">
+      <span style="font-family:var(--font-story); font-size:12px; color:#7a6f60;">Family Chronicle</span>
+      <div style="display:flex; gap:5px; align-items:center;"><span style="width:42px; height:14px; border-radius:999px; background:#fbf0e8;"></span><span style="width:30px; height:14px; border-radius:999px; background:#efe7db;"></span><span style="width:24px; height:24px; border-radius:50%; background:#cf8a63;"></span></div>
+    </div>
+    <div style="padding:13px; display:flex; flex-direction:column; gap:9px;">
+      <div style="border:1.5px solid #cf8a63; background:#fbf0e8; border-radius:10px; padding:10px 12px; display:flex; align-items:center; gap:9px;">
+        <span style="font-size:18px;">🎙</span>
+        <span style="flex:1; font-family:var(--font-story); font-size:12px; color:#5c5247; line-height:1.2;">Your story is just beginning. Sit for a short interview whenever you like.</span>
+        <span style="font-family:var(--font-ui); font-size:10px; font-weight:700; color:#cf8a63; white-space:nowrap;">Start ›</span>
+      </div>
+      <div style="display:flex; gap:9px;">
+        <span style="width:58px; height:58px; border-radius:8px; background:repeating-linear-gradient(135deg,#e7ded2 0 9px,#fbf0e8 9px 18px); flex:0 0 auto;"></span>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px; padding-top:4px;"><span style="height:8px; width:80%; background:#e7ded2; border-radius:4px;"></span><span style="height:8px; width:55%; background:#efe7db; border-radius:4px;"></span><span style="height:8px; width:68%; background:#efe7db; border-radius:4px;"></span></div>
+      </div>
+    </div>
+  </div>
+  <div style="font-family:'Caveat',cursive; font-size:15px; color:#cf8a63; text-align:center; margin-top:6px;">↑ the persistent banner — the deep-interview nudge, forever</div>
+</div>
+
+<!-- arrow S3 down to interview (Door 2) -->
+<div style="position:absolute; left:840px; top:530px; width:340px; text-align:center;"><div style="font-family:'Caveat',cursive; font-size:15px; color:#cf8a63;">Door 2 · the interview — "just talk"</div><div style="font-size:26px; color:#cf8a63; line-height:1;">↓</div></div>
+
+<!-- ===================== INTERVIEW BRANCH (lower lane) ===================== -->
+
+<!-- S4 interview start -->
+<div style="position:absolute; left:840px; top:642px; width:340px;">
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:16px; display:flex; flex-direction:column; gap:9px; overflow:hidden; position:relative;">
+    <div style="position:absolute; top:12px; right:14px; font-family:var(--font-ui); font-size:10px; font-weight:600; color:#9a8d7c; border:1.5px solid #d8cdbd; border-radius:999px; padding:4px 9px;">Take me in →</div>
+    <div style="font-family:var(--font-ui); font-size:9.5px; color:#9a8d7c; display:flex; gap:6px; flex-wrap:wrap; max-width:60%;"><span style="color:#7a9a6c;">name ✓</span><span style="color:#7a9a6c;">born ✓</span><span style="background:#fbf0e8; border-radius:999px; padding:1px 7px; color:#cf8a63;">birthplace…</span></div>
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center;">
+      <div style="font-family:var(--font-story); font-size:20px; line-height:1.25; color:#4a4036; max-width:22ch;">Where did you grow up?</div>
+      <div style="width:62px; height:62px; border-radius:50%; border:2px solid #cf8a63; background:#fbf0e8; display:flex; align-items:center; justify-content:center; gap:3px;"><span style="width:4px; height:14px; background:#cf8a63; border-radius:2px;"></span><span style="width:4px; height:24px; background:#cf8a63; border-radius:2px;"></span><span style="width:4px; height:18px; background:#cf8a63; border-radius:2px;"></span></div>
+    </div>
+  </div>
+  <div style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-top:7px;">4 · Just talk — flowing questions (voice)</div>
+</div>
+
+<!-- arrow S4->S5 -->
+<div style="position:absolute; left:1180px; top:762px; width:120px; text-align:center;"><div style="font-family:'Caveat',cursive; font-size:13px; color:#b3a690;">keeps going</div><div style="font-size:24px; color:#c2b6a4; line-height:1;">→</div></div>
+
+<!-- S5 interview continues -->
+<div style="position:absolute; left:1300px; top:642px; width:340px;">
+  <div style="width:340px; height:258px; background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:16px; display:flex; flex-direction:column; gap:9px; overflow:hidden;">
+    <div style="font-family:var(--font-ui); font-size:9.5px; color:#9a8d7c; display:flex; gap:5px; flex-wrap:wrap;"><span style="color:#7a9a6c;">name ✓</span><span style="color:#7a9a6c;">born ✓</span><span style="color:#7a9a6c;">birthplace ✓</span><span style="background:#fbf0e8; border-radius:999px; padding:1px 7px; color:#cf8a63;">places lived…</span><span>big moments</span></div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:7px;">
+      <div style="font-family:var(--font-story); font-size:19px; line-height:1.25; color:#4a4036;">The streets you've called home?</div>
+      <div style="font-family:var(--font-story); font-size:13px; color:#c2b6a4;">…then: the moments that mattered…</div>
+    </div>
+    <div style="border:1.5px solid #cf8a63; background:#fbf0e8; border-radius:999px; padding:9px 14px; text-align:center; font-family:var(--font-ui); font-size:12px; font-weight:600; color:#cf8a63;">I'm ready — take me to the hub</div>
+  </div>
+  <div style="font-family:'Caveat',cursive; font-size:18px; color:#8a7d6c; text-align:center; margin-top:7px;">5 · Seeds lifetime data · exit anytime</div>
+</div>
+
+<!-- arrow S5 up to HUB -->
+<div style="position:absolute; left:1300px; top:540px; width:340px; text-align:center;"><div style="font-size:26px; color:#cf8a63; line-height:1;">↑</div><div style="font-family:'Caveat',cursive; font-size:15px; color:#cf8a63;">back to the hub when you're done (or when you bail)</div></div>
+
+<!-- ===================== STICKIES ===================== -->
+<div style="position:absolute; left:60px; top:572px; width:330px; background:#fdf2a8; border-radius:3px; box-shadow:0 8px 18px rgba(70,50,30,0.13); padding:14px 16px; transform:rotate(-1.1deg); font-family:'Caveat',cursive; font-size:16px; line-height:1.32; color:#5c5240;">
+  <b>Pre-filled from the invite:</b> name + relationship to the inviter ("Rosa's father"). New user just confirms — or taps <i>Fix this</i> to correct. No typing required to get in.
+</div>
+<div style="position:absolute; left:60px; top:722px; width:330px; background:#fdf2a8; border-radius:3px; box-shadow:0 8px 18px rgba(70,50,30,0.13); padding:14px 16px; transform:rotate(0.8deg); font-family:'Caveat',cursive; font-size:16px; line-height:1.32; color:#5c5240;">
+  <b>Date of birth is the only hard gate.</b> Captured conversationally — speak it or type it — because it shapes the prompts and pacing Kindred uses for this person later.
+</div>
+<div style="position:absolute; left:1700px; top:262px; width:230px; background:#fdf2a8; border-radius:3px; box-shadow:0 8px 18px rgba(70,50,30,0.13); padding:14px 16px; transform:rotate(1.2deg); font-family:'Caveat',cursive; font-size:16px; line-height:1.32; color:#5c5240;">
+  <b>Persistent banner</b> rides the top of the hub for anyone whose story is still thin — the nudge that never nags but never disappears.
+</div>
+<div style="position:absolute; left:1700px; top:662px; width:230px; background:#fdf2a8; border-radius:3px; box-shadow:0 8px 18px rgba(70,50,30,0.13); padding:14px 16px; transform:rotate(-0.9deg); font-family:'Caveat',cursive; font-size:16px; line-height:1.32; color:#5c5240;">
+  <b>The interview is B-style</b> — one flowing conversation, exit ramp always visible. Each answer becomes a seeded story on the timeline.
+</div>
+
+<!-- ===================== NEXT NOTE ===================== -->
+<div style="position:absolute; left:60px; top:892px; width:700px;">
+  <div data-drags-parent="1" style="font-family:'Caveat',cursive; font-size:20px; color:#8a7d6c; margin-bottom:8px;">Open questions before hi-fi prototype →</div>
+  <div style="background:#fff; border:1.5px solid #cabfb0; border-radius:12px; box-shadow:0 8px 20px rgba(70,50,30,0.07); padding:18px 20px; font-family:var(--font-ui); font-size:14px; line-height:1.6; color:#5c5247;">
+    <div style="margin-bottom:8px;"><b style="color:#cf8a63;">1 ·</b> If the relationship is wrong, what can they change — just the label, or re-pick the person?</div>
+    <div style="margin-bottom:8px;"><b style="color:#cf8a63;">2 ·</b> Should DOB allow "I'd rather not say a day" (month + year only)?</div>
+    <div><b style="color:#cf8a63;">3 ·</b> Does the banner ever retire (e.g. after N stories), or stay until dismissed?</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

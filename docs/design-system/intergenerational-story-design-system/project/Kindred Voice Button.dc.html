@@ -28,6 +28,19 @@
   &quot;label&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Tap to speak&quot;, &quot;tsType&quot;: &quot;string&quot; }
 }">
 class Component extends DCLogic {
+  mic(col, H) {
+    const px = n => `${n}px`;
+    const span = (key, s) => React.createElement('span', { key, style: s });
+    return React.createElement('span', {
+      'aria-hidden': 'true',
+      style: { position:'relative', display:'inline-block', width:px(H*0.72), height:px(H) }
+    }, [
+      span('head', { position:'absolute', left:'50%', top:0, transform:'translateX(-50%)', width:px(H*0.46), height:px(H*0.62), borderRadius:px(H*0.23), background:col }),
+      span('cradle', { position:'absolute', left:'50%', top:px(H*0.28), transform:'translateX(-50%)', width:px(H*0.72), height:px(H*0.44), border:`${px(H*0.075)} solid ${col}`, borderTop:'none', borderRadius:`0 0 ${px(H*0.36)} ${px(H*0.36)}`, boxSizing:'border-box' }),
+      span('stem', { position:'absolute', left:'50%', top:px(H*0.72), transform:'translateX(-50%)', width:px(H*0.075), height:px(H*0.18), background:col }),
+      span('base', { position:'absolute', left:'50%', bottom:0, transform:'translateX(-50%)', width:px(H*0.42), height:px(H*0.075), borderRadius:'2px', background:col }),
+    ]);
+  }
   renderVals() {
     const PAL = {
       heirloom: { accent:'#AE5C39', tint:'#F5EDDF', ink2:'#6C6357', onAccent:'#FBF3EC', ring:'rgba(174,92,57,.30)', ring0:'rgba(174,92,57,0)' },
@@ -45,7 +58,7 @@ class Component extends DCLogic {
       labelColor = c.accent;
     } else {
       ringStyle = `width:96px; height:96px; border-radius:50%; background:${c.accent}; display:flex; align-items:center; justify-content:center; cursor:pointer; --ring:${c.ring}; --ring0:${c.ring0}; animation:kin-pulse 2.6s ease-in-out infinite;`;
-      glyph = React.createElement('div', { style: { width:'30px', height:'46px', borderRadius:'16px', background:c.onAccent } });
+      glyph = this.mic(c.onAccent, 48);
       label = this.props.label ?? 'Tap to speak';
       labelColor = c.ink2;
     }

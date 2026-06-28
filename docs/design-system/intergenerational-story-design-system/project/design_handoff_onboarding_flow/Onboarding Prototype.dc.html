@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/colors.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/typography.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/motion.css">
+<link rel="stylesheet" href="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/styles.css">
+<script src="_ds/kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/_ds_bundle.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  textarea, select, input { font-family: var(--font-ui); }
+  @keyframes kfade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  body { background: #d9ccb6; }
+</style>
+</helmet>
+
+<div style="background:#241E18; border-radius:36px; padding:16px; margin:40px auto; width:max-content; box-shadow:0 40px 80px rgba(50,35,20,0.34), inset 0 0 0 2px rgba(255,255,255,0.04);">
+    <div data-screen-label="Onboarding" style="width:1180px; height:820px; background:var(--surface-page); border-radius:22px; overflow:hidden; position:relative;">
+
+      <!-- ============ ONBOARDING (welcome / dob / doors / interview) ============ -->
+      <sc-if value="{{ showOnboard }}" hint-placeholder-val="{{ true }}">
+        <div style="height:100%; display:flex; flex-direction:column;">
+          <!-- top chrome -->
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:26px 40px 0;">
+            <span style="font-family:var(--font-story); font-size:22px; color:var(--text-meta);">Family Chronicle</span>
+            <sc-if value="{{ showDots }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; gap:9px; align-items:center;">
+                <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+                  <span style="{{ d.style }}"></span>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isInterview }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ goHub }}" style="border:1.5px solid var(--border-strong); background:var(--surface-card); border-radius:999px; padding:9px 18px; cursor:pointer; font-family:var(--font-ui); font-size:16px; font-weight:600; color:var(--text-muted);">Go to our Family's Story →</button>
+            </sc-if>
+          </div>
+
+          <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:24px 40px 48px;">
+
+            <!-- WELCOME -->
+            <sc-if value="{{ isWelcome }}" hint-placeholder-val="{{ true }}">
+              <div style="width:640px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; text-align:center; gap:28px;">
+                <h1 style="font-family:var(--font-story); font-weight:400; font-size:48px; line-height:1.1; letter-spacing:-0.01em; color:var(--text-body); margin:0;">Rosa invited you to the Esposito family.</h1>
+                <div style="width:100%; display:flex; align-items:center; gap:18px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:18px; box-shadow:var(--shadow-card); padding:22px 24px; text-align:left;">
+                  <span style="flex:0 0 auto; width:64px; height:64px; border-radius:50%; background:var(--accent); color:var(--accent-on); display:inline-flex; align-items:center; justify-content:center; font-family:var(--font-story); font-size:26px; font-weight:500;">SE</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-family:var(--font-story); font-size:26px; color:var(--text-body);">Salvatore Esposito</div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+                      <sc-if value="{{ relIdle }}" hint-placeholder-val="{{ true }}">
+                        <span style="font-family:var(--font-ui); font-size:18px; color:var(--text-muted);">{{ relLabel }}</span>
+                        <button onClick="{{ editRel }}" style="border:none; background:transparent; cursor:pointer; font-family:var(--font-ui); font-size:16px; font-weight:600; color:var(--accent-strong); display:inline-flex; align-items:center; gap:5px;">✎ Change</button>
+                      </sc-if>
+                      <sc-if value="{{ relEditing }}" hint-placeholder-val="{{ false }}">
+                        <input type="text" value="{{ relLabel }}" onChange="{{ onRelChange }}" style="flex:1; min-width:0; padding:8px 12px; font-size:17px; color:var(--text-body); background:var(--surface-page); border:1.5px solid var(--accent); border-radius:9px; outline:none;">
+                        <button onClick="{{ saveRel }}" style="border:none; background:var(--accent); color:var(--accent-on); cursor:pointer; border-radius:9px; padding:8px 14px; font-family:var(--font-ui); font-size:15px; font-weight:600;">Save</button>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <span style="flex:0 0 auto; font-family:var(--font-mono); font-size:12px; letter-spacing:0.06em; color:var(--support);">FROM THE INVITE</span>
+                </div>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" dc-props="{{ comeInProps }}" hint-size="auto,76px">Come in</x-import>
+              </div>
+            </sc-if>
+
+            <!-- DOB -->
+            <sc-if value="{{ isDob }}" hint-placeholder-val="{{ false }}">
+              <div style="width:660px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; text-align:center; gap:24px;">
+                <h1 style="font-family:var(--font-story); font-weight:400; font-size:44px; line-height:1.12; color:var(--text-body); margin:0;">Before we go in — when were you born?</h1>
+                <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:0; max-width:34ch;">It quietly shapes the questions and pace Kindred uses with you. Say it out loud, or choose below.</p>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ dobVoiceProps }}" hint-size="150px,160px"></x-import>
+                <div style="display:flex; align-items:center; gap:14px; width:100%; max-width:420px;">
+                  <span style="flex:1; height:1.5px; background:var(--border);"></span>
+                  <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.1em; color:var(--support);">OR CHOOSE</span>
+                  <span style="flex:1; height:1.5px; background:var(--border);"></span>
+                </div>
+                <div style="display:flex; gap:12px; width:100%; max-width:480px;">
+                  <select value="{{ dobMonth }}" onChange="{{ onMonth }}" style="flex:1.4; min-width:0; padding:14px 14px; font-size:18px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:11px; outline:none;">
+                    <option value="">Month</option>
+                    <sc-for list="{{ months }}" as="m" hint-placeholder-count="12"><option value="{{ m.v }}">{{ m.label }}</option></sc-for>
+                  </select>
+                  <select value="{{ dobDay }}" onChange="{{ onDay }}" style="flex:1; min-width:0; padding:14px 14px; font-size:18px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:11px; outline:none;">
+                    <option value="">Day</option>
+                    <sc-for list="{{ days }}" as="d" hint-placeholder-count="31"><option value="{{ d }}">{{ d }}</option></sc-for>
+                  </select>
+                  <select value="{{ dobYear }}" onChange="{{ onYear }}" style="flex:1.2; min-width:0; padding:14px 14px; font-size:18px; color:var(--text-body); background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:11px; outline:none;">
+                    <option value="">Year</option>
+                    <sc-for list="{{ years }}" as="y" hint-placeholder-count="20"><option value="{{ y }}">{{ y }}</option></sc-for>
+                  </select>
+                </div>
+                <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" disabled="{{ dobIncomplete }}" dc-props="{{ dobContinueProps }}" hint-size="auto,76px">Continue</x-import>
+              </div>
+            </sc-if>
+
+            <!-- DOORS -->
+            <sc-if value="{{ isDoors }}" hint-placeholder-val="{{ false }}">
+              <div style="width:820px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; gap:30px;">
+                <div style="text-align:center;">
+                  <h1 style="font-family:var(--font-story); font-weight:400; font-size:46px; line-height:1.1; color:var(--text-body); margin:0;">You're in, Sal. Where to first?</h1>
+                  <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">Either way, you can do the other one whenever you like.</p>
+                </div>
+                <div style="display:flex; gap:24px; width:100%;">
+                  <button onClick="{{ goHub }}" style="flex:1; text-align:left; cursor:pointer; background:var(--accent-soft); border:1.5px solid var(--accent); border-radius:20px; padding:30px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow-card);">
+                    <span style="font-size:40px;">🏛</span>
+                    <span style="font-family:var(--font-story); font-size:30px; color:var(--text-body);">Go to our Family's Story</span>
+                    <span style="font-family:var(--font-ui); font-size:18px; line-height:1.45; color:var(--text-muted);">See the stories your family has already gathered.</span>
+                    <span style="margin-top:8px; font-family:var(--font-ui); font-size:17px; font-weight:700; color:var(--accent-strong);">Take me in ›</span>
+                  </button>
+                  <button onClick="{{ goInterview }}" style="flex:1; text-align:left; cursor:pointer; background:var(--surface-card); border:1.5px solid var(--border-strong); border-radius:20px; padding:30px; display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow-sm);">
+                    <span style="font-size:40px;">🎙</span>
+                    <span style="font-family:var(--font-story); font-size:30px; color:var(--text-body);">Tell your story</span>
+                    <span style="font-family:var(--font-ui); font-size:18px; line-height:1.45; color:var(--text-muted);">Just talk for a few minutes — no rush, stop anytime.</span>
+                    <span style="margin-top:8px; font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">ABOUT 12 MINUTES</span>
+                  </button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- INTERVIEW -->
+            <sc-if value="{{ isInterview }}" hint-placeholder-val="{{ false }}">
+              <div style="width:760px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; gap:30px;">
+                <!-- facts ribbon -->
+                <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
+                  <sc-for list="{{ ribbon }}" as="f" hint-placeholder-count="5">
+                    <span style="{{ f.style }}">{{ f.mark }} {{ f.label }}</span>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ interviewAsking }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:30px;">
+                    <p style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.2; color:var(--text-body); text-align:center; margin:0; max-width:20ch;">{{ currentQ }}</p>
+                    <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ interviewVoiceProps }}" hint-size="200px,210px"></x-import>
+                    <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="ghost" leading-icon="⌨" hint-size="auto,52px">Type instead</x-import>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ interviewDone }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:26px; text-align:center;">
+                    <p style="font-family:var(--font-story); font-weight:400; font-size:40px; line-height:1.2; color:var(--text-body); margin:0; max-width:18ch;">That's a beautiful start, Sal.</p>
+                    <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:0; max-width:32ch;">Your family already has a few of your moments to ask you about. You can add more anytime.</p>
+                    <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredButton" variant="primary" size="large" dc-props="{{ doneToHubProps }}" hint-size="auto,76px">Go to our Family's Story</x-import>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ HUB ============ -->
+      <sc-if value="{{ isHub }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%; display:flex; flex-direction:column; animation:kfade .2s ease;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 36px; border-bottom:1.5px solid var(--border); background:var(--surface-card);">
+            <div style="display:flex; align-items:baseline; gap:14px;">
+              <span style="font-family:var(--font-story); font-size:28px; color:var(--text-body);">Family Chronicle</span>
+              <span style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.06em; color:var(--support);">THE ESPOSITO FAMILY</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <div style="display:flex; gap:6px;">
+                <sc-for list="{{ hubTabs }}" as="t" hint-placeholder-count="3">
+                  <span style="{{ t.style }}">{{ t.label }}</span>
+                </sc-for>
+              </div>
+              <span style="width:48px; height:48px; border-radius:50%; background:var(--accent); color:var(--accent-on); display:inline-flex; align-items:center; justify-content:center; font-family:var(--font-story); font-size:20px; font-weight:500; border:2px solid var(--border-strong);">SE</span>
+            </div>
+          </div>
+
+          <div style="flex:1; overflow-y:auto; padding:30px 40px 44px;">
+            <!-- persistent banner -->
+            <button onClick="{{ startInterview }}" style="display:flex; align-items:center; gap:18px; width:100%; text-align:left; cursor:pointer; background:var(--accent-soft); border:1.5px solid var(--accent); border-radius:18px; padding:22px 26px; box-shadow:var(--shadow-card);">
+              <span style="flex:0 0 auto; width:54px; height:54px; border-radius:50%; background:var(--accent); color:var(--accent-on); display:inline-flex; align-items:center; justify-content:center; font-size:26px;">🎙</span>
+              <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                <span style="font-family:var(--font-story); font-size:26px; color:var(--text-body);">{{ bannerHeadline }}</span>
+                <span style="font-family:var(--font-ui); font-size:18px; color:var(--text-muted);">{{ bannerSub }}</span>
+              </span>
+              <span style="flex:0 0 auto; font-family:var(--font-ui); font-size:18px; font-weight:700; color:var(--accent-strong); white-space:nowrap;">{{ bannerCta }} ›</span>
+            </button>
+
+            <h1 style="font-family:var(--font-story); font-weight:400; font-size:38px; line-height:1.1; color:var(--text-body); margin:34px 0 0;">Welcome to the family, Sal.</h1>
+
+            <!-- your story so far -->
+            <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); margin:26px 0 14px;">Your story so far</div>
+            <div style="background:var(--surface-card); border:1.5px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:24px 26px;">
+              <div style="position:relative; height:6px; background:var(--surface-sunken); border-radius:3px; margin:6px 8px 0;">
+                <sc-for list="{{ timelinePins }}" as="p" hint-placeholder-count="2">
+                  <span style="{{ p.style }}"></span>
+                </sc-for>
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:10px 18px; margin-top:18px;">
+                <sc-for list="{{ seedChips }}" as="c" hint-placeholder-count="2">
+                  <span style="display:inline-flex; align-items:center; gap:8px; font-family:var(--font-ui); font-size:17px; color:var(--text-body);"><span style="width:9px; height:9px; border-radius:50%; background:var(--accent);"></span>{{ c }}</span>
+                </sc-for>
+              </div>
+              <sc-if value="{{ thinStory }}" hint-placeholder-val="{{ true }}">
+                <p style="font-family:var(--font-ui); font-size:18px; line-height:1.5; color:var(--text-muted); margin:14px 0 0;">Just your birth year so far. The short interview above is the quickest way to give your family more to ask you about.</p>
+              </sc-if>
+            </div>
+
+            <!-- from the family -->
+            <div style="font-family:var(--font-mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--support); margin:30px 0 16px;">Stories you can listen to now</div>
+            <div style="display:flex; gap:22px;">
+              <sc-for list="{{ familyStories }}" as="st" hint-placeholder-count="3">
+                <div style="flex:1; min-width:0;">
+                  <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredStoryCard" title="{{ st.title }}" year="{{ st.year }}" place="{{ st.place }}" excerpt="{{ st.excerpt }}" duration="{{ st.duration }}" style="width:100%" hint-size="100%,420px"></x-import>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- restart strip -->
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 36px; border-top:1.5px solid var(--border); background:var(--surface-card);">
+            <span style="font-family:var(--font-mono); font-size:12px; letter-spacing:0.06em; color:var(--support);">PROTOTYPE</span>
+            <button onClick="{{ restart }}" style="border:1.5px solid var(--border-strong); background:transparent; border-radius:999px; padding:7px 16px; cursor:pointer; font-family:var(--font-ui); font-size:15px; font-weight:600; color:var(--text-muted);">↺ Replay onboarding</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    step: 'welcome',
+    relLabel: "Rosa's father", relEditing: false,
+    dobMonth: '', dobDay: '', dobYear: '', dobListening: false,
+    interviewIdx: 0, captured: [], intListening: false,
+    didInterview: false,
+  };
+
+  interviewQs = [
+    { key: 'birthplace', label: 'Birthplace', q: 'Where were you born?' },
+    { key: 'places', label: 'Places lived', q: 'And the places you’ve called home since?' },
+    { key: 'moments', label: 'Big moments', q: 'A moment you’d never want forgotten?' },
+  ];
+  seedText = { birthplace: 'Naples, 1949', places: 'Naples → Brooklyn', moments: 'A wedding at St. Rocco’s' };
+
+  familyStories = [
+    { title: 'The bakery on Via Roma', year: '1958', place: 'Naples', duration: '4:12', excerpt: 'My father baked before light; the whole street woke to the smell.' },
+    { title: 'Nine days on the Saturnia', year: '1961', place: 'At sea', duration: '6:48', excerpt: 'Seasick the whole way, but your Nonna sang to me each night on deck.' },
+    { title: 'Three rooms in Brooklyn', year: '1962', place: 'Brooklyn', duration: '3:30', excerpt: 'A radiator that clanked like a church bell, and the best neighbors we ever had.' },
+  ];
+
+  // ---- welcome ----
+  editRel = () => this.setState({ relEditing: true });
+  onRelChange = (e) => this.setState({ relLabel: e.target.value });
+  saveRel = () => this.setState({ relEditing: false });
+  comeIn = () => this.setState({ step: 'dob', relEditing: false });
+
+  // ---- dob ----
+  onMonth = (e) => this.setState({ dobMonth: e.target.value });
+  onDay = (e) => this.setState({ dobDay: e.target.value });
+  onYear = (e) => this.setState({ dobYear: e.target.value });
+  dobVoice = () => {
+    if (this.state.dobListening) return;
+    this.setState({ dobListening: true });
+    setTimeout(() => this.setState({ dobListening: false, dobMonth: '3', dobDay: '14', dobYear: '1949' }), 1300);
+  };
+  dobContinue = () => this.setState({ step: 'doors' });
+
+  // ---- doors ----
+  goHub = () => this.setState({ step: 'hub' });
+  goInterview = () => this.setState({ step: 'interview' });
+
+  // ---- interview ----
+  intVoice = () => {
+    if (this.state.intListening) return;
+    this.setState({ intListening: true });
+    setTimeout(() => {
+      this.setState(s => {
+        const cur = this.interviewQs[s.interviewIdx];
+        const captured = cur && !s.captured.includes(cur.key) ? [...s.captured, cur.key] : s.captured;
+        return { intListening: false, captured, interviewIdx: s.interviewIdx + 1, didInterview: true };
+      });
+    }, 1400);
+  };
+  doneToHub = () => this.setState({ step: 'hub' });
+  startInterview = () => this.setState({ step: 'interview' });
+
+  restart = () => this.setState({
+    step: 'welcome', relLabel: "Rosa's father", relEditing: false,
+    dobMonth: '', dobDay: '', dobYear: '', dobListening: false,
+    interviewIdx: 0, captured: [], intListening: false, didInterview: false,
+  });
+
+  renderVals() {
+    const s = this.state;
+    const step = s.step;
+    const onboard = step !== 'hub';
+
+    // step dots (welcome=0, dob=1, doors=2)
+    const idxMap = { welcome: 0, dob: 1, doors: 2 };
+    const active = idxMap[step];
+    const dots = [0, 1, 2].map(i => ({
+      style: `width:${i === active ? '26px' : '10px'}; height:10px; border-radius:999px; background:${i === active ? 'var(--accent)' : (i < active ? 'var(--accent-soft)' : 'var(--border-strong)')}; transition:all .2s;`,
+    }));
+
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const months = MONTHS.map((label, i) => ({ v: String(i + 1), label }));
+    const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
+    const years = Array.from({ length: 91 }, (_, i) => String(2014 - i));
+
+    const dobComplete = s.dobMonth && s.dobDay && s.dobYear;
+
+    // interview
+    const idx = s.interviewIdx;
+    const asking = idx < this.interviewQs.length;
+    const cur = this.interviewQs[idx];
+    const ribbonBase = [
+      { key: '_name', label: 'Name', label2: 'Name' },
+      { key: '_born', label: 'Born' },
+      ...this.interviewQs,
+    ];
+    const ribbon = ribbonBase.map((f, i) => {
+      const done = f.key === '_name' || f.key === '_born' || s.captured.includes(f.key);
+      const isActive = asking && cur && f.key === cur.key;
+      const mark = done ? '✓' : (isActive ? '●' : '·');
+      const bg = done ? 'var(--accent-soft)' : (isActive ? 'var(--surface-card)' : 'transparent');
+      const col = done ? 'var(--accent-strong)' : (isActive ? 'var(--text-body)' : 'var(--text-muted)');
+      const bd = done ? 'var(--accent)' : (isActive ? 'var(--accent)' : 'var(--border)');
+      return { label: f.label, mark, style: `display:inline-flex; align-items:center; gap:6px; padding:7px 15px; border-radius:999px; font-family:var(--font-ui); font-size:16px; font-weight:600; background:${bg}; color:${col}; border:1.5px solid ${bd};` };
+    });
+
+    // hub seeds
+    const seedChips = ['Born · March 1949', ...s.captured.map(k => this.seedText[k])];
+    const pinPositions = [6, ...s.captured.map((_, i) => 30 + i * 26)];
+    const timelinePins = pinPositions.map(left => ({
+      style: `position:absolute; left:${left}%; top:-4px; width:14px; height:14px; border-radius:50%; background:var(--accent); border:2px solid var(--surface-card);`,
+    }));
+    const thinStory = s.captured.length === 0;
+
+    const hubTabs = [['Stories', true], ['To answer', false], ['Family', false]].map(([label, on]) => ({
+      label, style: `display:inline-flex; align-items:center; padding:10px 18px; border-radius:999px; font-family:var(--font-ui); font-size:18px; font-weight:600; background:${on ? 'var(--accent-soft)' : 'transparent'}; color:${on ? 'var(--accent-strong)' : 'var(--text-muted)'};`,
+    }));
+
+    return {
+      showOnboard: onboard, isHub: step === 'hub',
+      isWelcome: step === 'welcome', isDob: step === 'dob', isDoors: step === 'doors', isInterview: step === 'interview',
+      showDots: step === 'welcome' || step === 'dob' || step === 'doors',
+      dots,
+      goHub: this.goHub,
+
+      // welcome
+      relLabel: s.relLabel, relIdle: !s.relEditing, relEditing: s.relEditing,
+      editRel: this.editRel, onRelChange: this.onRelChange, saveRel: this.saveRel,
+      comeInProps: { onClick: this.comeIn },
+
+      // dob
+      months, days, years,
+      dobMonth: s.dobMonth, dobDay: s.dobDay, dobYear: s.dobYear,
+      onMonth: this.onMonth, onDay: this.onDay, onYear: this.onYear,
+      dobIncomplete: !dobComplete,
+      dobContinueProps: { onClick: dobComplete ? this.dobContinue : () => {} },
+      dobVoiceProps: { listening: s.dobListening, label: s.dobListening ? 'Listening…' : 'Say it out loud', onClick: this.dobVoice, size: 110 },
+
+      // doors
+      goInterview: this.goInterview,
+
+      // interview
+      ribbon,
+      interviewAsking: asking, interviewDone: !asking,
+      currentQ: cur ? cur.q : '',
+      interviewVoiceProps: { listening: s.intListening, label: s.intListening ? 'Listening…' : 'Tap to answer', onClick: this.intVoice, size: 150 },
+      doneToHubProps: { onClick: this.doneToHub },
+
+      // hub
+      hubTabs, seedChips, timelinePins, thinStory,
+      familyStories: this.familyStories,
+      startInterview: this.startInterview,
+      restart: this.restart,
+      bannerHeadline: s.didInterview ? 'There’s always more to tell.' : 'Your story is just beginning.',
+      bannerSub: s.didInterview ? 'Sit down for another short interview whenever you like.' : 'Sit for a short interview whenever you like — there’s no rush.',
+      bannerCta: s.didInterview ? 'Continue' : 'Start',
+    };
+  }
+}
+</script>
+</body>
+</html>
