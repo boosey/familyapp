@@ -17,7 +17,7 @@ async function submitAsk(formData: FormData): Promise<void> {
   const targetPersonId = String(formData.get("targetPersonId") ?? "");
   const questionText = String(formData.get("questionText") ?? "");
   await createAsk(db, ctx, { targetPersonId, questionText });
-  redirect("/hub?asked=1");
+  redirect("/hub?tab=asks");
 }
 
 export async function AskTab() {
