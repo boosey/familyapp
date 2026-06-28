@@ -1,0 +1,134 @@
+/**
+ * Memberships — the plural, revocable link between a Person and a Family (spec Part II).
+ *
+ * A membership carries role + status and is the input to every permission check. The load-bearing
+ * invariant here is the partial unique index "at most one ACTIVE membership per (person, family)"
+ * (added in the triggers migration). This module is the single place that respects it on the write
+ * side, so the same guard is reused by invitation-accept and join-request-approve rather than each
+ * rolling its own check.
+ */
+import { and, eq } from "drizzle-orm";
+import { families, memberships, persons } from "@chronicle/db/schema";
+import type { Database, Membership, MembershipRole } from "@chronicle/db";
+import { InvariantViolation } from "./errors";
+
+/**
+ * A handle that is either the pooled client or an open transaction. The membership insert is reused
+ * inside the invitation-accept / join-request-approve transactions, so the helper must accept a tx.
+ */
+type DbOrTx = Pick<Database, "select" | "insert">;
+
+/**
+ * Insert an ACTIVE membership, honoring the at-most-one-active-(person, family) index. Shared by
+ * `addMembership` and the accept/approve write paths so the guard lives in one place. If an active
+ * membership already exists -> `InvariantViolation`. An ENDED/PAUSED row does not block a rejoin —
+ * a new active row is inserted (the DB permits it; the partial index only constrains active rows).
+ */
+export async function insertActiveMembership(
+  db: DbOrTx,
+  input: { personId: string; familyId: string; role?: MembershipRole },
+): Promise<{ membershipId: string }> {
+  const [existing] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, input.personId),
+        eq(memberships.familyId, input.familyId),
+        eq(memberships.status, "active"),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    throw new InvariantViolation(
+      `person ${input.personId} already has an active membership in family ${input.familyId}`,
+    );
+  }
+  const [row] = await db
+    .insert(memberships)
+    .values({
+      personId: input.personId,
+      familyId: input.familyId,
+      role: input.role ?? "member",
+      status: "active",
+    })
+    .returning({ id: memberships.id });
+  return { membershipId: row!.id };
+}
+
+/** Public entry: add an ACTIVE membership (defaults to `member`). */
+export async function addMembership(
+  db: Database,
+  input: { personId: string; familyId: string; role?: MembershipRole },
+): Promise<{ membershipId: string }> {
+  return insertActiveMembership(db, input);
+}
+
+export async function listActiveMembershipsForPerson(
+  db: Database,
+  personId: string,
+): Promise<Membership[]> {
+  return db
+    .select()
+    .from(memberships)
+    .where(
+      and(eq(memberships.personId, personId), eq(memberships.status, "active")),
+    );
+}
+
+export async function isActiveMember(
+  db: Pick<Database, "select">,
+  personId: string,
+  familyId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.familyId, familyId),
+        eq(memberships.status, "active"),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/** The family's steward Person id, or null if the family does not exist. */
+export async function getStewardPersonId(
+  db: Pick<Database, "select">,
+  familyId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(families)
+    .where(eq(families.id, familyId))
+    .limit(1);
+  return row?.stewardPersonId ?? null;
+}
+
+export interface FamilyMemberView {
+  personId: string;
+  displayName: string;
+  role: MembershipRole;
+}
+
+/** Active members of a family, with display name + role. */
+export async function listMembersOfFamily(
+  db: Database,
+  familyId: string,
+): Promise<FamilyMemberView[]> {
+  const rows = await db
+    .select({
+      personId: persons.id,
+      displayName: persons.displayName,
+      role: memberships.role,
+    })
+    .from(memberships)
+    .innerJoin(persons, eq(persons.id, memberships.personId))
+    .where(
+      and(eq(memberships.familyId, familyId), eq(memberships.status, "active")),
+    );
+  return rows;
+}

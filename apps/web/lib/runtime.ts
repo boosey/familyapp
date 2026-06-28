@@ -18,11 +18,9 @@ import {
   type Database,
 } from "@chronicle/db";
 import { FilesystemMediaStorage, type MediaStorage } from "@chronicle/storage";
-import {
-  createDevCookieAuthProvider,
-  type AuthProvider,
-} from "./auth";
+import { type AuthProvider } from "./auth";
 import { createClerkAuthProvider } from "./auth-clerk";
+import { createMockAuthProvider } from "./auth-mock";
 import { isClerkConfigured } from "./clerk-config";
 
 export { isClerkConfigured };
@@ -91,11 +89,13 @@ async function build(): Promise<Runtime> {
     publicBaseUrl: "/media",
   });
   // Runtime switch: production hosts set both Clerk keys with valid prefixes and get the Clerk
-  // adapter; local dev and CI leave them unset (or use placeholders) and keep the cookie stub
-  // (so `pnpm dev` works with no Clerk account).
+  // adapter; local dev and CI leave them unset (or use placeholders) and get the mock provider —
+  // a real email+password store (`mock_auth_users`) so `pnpm dev` exercises the actual signup /
+  // signin flow with no Clerk account. (The dev-cookie provider in auth.ts is kept for the
+  // /dev/sign-in "act as seeded user" path.)
   const auth: AuthProvider = isClerkConfigured()
     ? createClerkAuthProvider(db)
-    : createDevCookieAuthProvider(db);
+    : createMockAuthProvider(db);
   return { db, storage, auth };
 }
 

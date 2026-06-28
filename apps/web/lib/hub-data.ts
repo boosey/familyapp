@@ -26,6 +26,8 @@ async function viewerFamilyIds(
     .select({
       id: families.id,
       name: families.name,
+      description: families.description,
+      discoverable: families.discoverable,
       creatorPersonId: families.creatorPersonId,
       stewardPersonId: families.stewardPersonId,
       createdAt: families.createdAt,
@@ -49,6 +51,8 @@ async function familyCoMembers(
       displayName: persons.displayName,
       spokenName: persons.spokenName,
       birthYear: persons.birthYear,
+      birthDate: persons.birthDate,
+      onboardedAt: persons.onboardedAt,
       biographicalAnchors: persons.biographicalAnchors,
       lifeStatus: persons.lifeStatus,
       accountId: persons.accountId,

@@ -14,6 +14,10 @@ const MIGRATIONS = [
   // Onboarding + family flows: families.description/discoverable, persons.birth_date/onboarded_at,
   // invitations, join_requests, mock_auth_users (+ their enums). See ADR-0001.
   "../drizzle/0002_huge_pixie.sql",
+  // Partial unique index: at most one PENDING join_request per (family, requester). Closes the
+  // concurrent-duplicate phantom a tx alone cannot under READ COMMITTED. Must run after 0002
+  // (the join_requests table). See ADR-0001.
+  "../drizzle/custom/0003_join_request_pending_uq.sql",
 ];
 
 function readMigrationSql(rel: string): string {

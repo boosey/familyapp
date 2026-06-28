@@ -13,6 +13,7 @@ import {
   accounts,
   consentRecords,
   families,
+  joinRequests,
   media,
   memberships,
   persons,
@@ -220,6 +221,59 @@ describe("membership active-uniqueness", () => {
       .values({ personId: elder.id, familyId: fam!.id, status: "active" })
       .returning();
     expect(rejoin!.status).toBe("active");
+  });
+});
+
+describe("join-request pending-uniqueness", () => {
+  async function makeDiscoverableFamily(stewardId: string) {
+    const [fam] = await db
+      .insert(families)
+      .values({
+        name: "Esposito",
+        discoverable: true,
+        creatorPersonId: stewardId,
+        stewardPersonId: stewardId,
+      })
+      .returning();
+    return fam!;
+  }
+
+  it("rejects two PENDING join requests for the same family+requester (partial unique index)", async () => {
+    const steward = await makePerson("Rosa");
+    const requester = await makePerson("Cousin");
+    const fam = await makeDiscoverableFamily(steward.id);
+    await db.insert(joinRequests).values({
+      familyId: fam.id,
+      requesterPersonId: requester.id,
+      status: "pending",
+    });
+    await expect(
+      db.insert(joinRequests).values({
+        familyId: fam.id,
+        requesterPersonId: requester.id,
+        status: "pending",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("allows a new pending request after an earlier one was declined", async () => {
+    const steward = await makePerson("Rosa");
+    const requester = await makePerson("Cousin");
+    const fam = await makeDiscoverableFamily(steward.id);
+    await db.insert(joinRequests).values({
+      familyId: fam.id,
+      requesterPersonId: requester.id,
+      status: "declined",
+    });
+    const [again] = await db
+      .insert(joinRequests)
+      .values({
+        familyId: fam.id,
+        requesterPersonId: requester.id,
+        status: "pending",
+      })
+      .returning();
+    expect(again!.status).toBe("pending");
   });
 });
 
