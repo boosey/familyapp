@@ -13,9 +13,12 @@ export const dynamic = "force-dynamic";
 async function runReseed(): Promise<void> {
   "use server";
   if (process.env.NODE_ENV === "production") return;
-  const { elderToken, pendingStoryId } = await runSeed();
+  const { elderToken, pendingStoryId, memberInviteToken } = await runSeed();
+  const inv = memberInviteToken
+    ? `&invite=${encodeURIComponent(memberInviteToken)}`
+    : "";
   redirect(
-    `/dev/seed?token=${encodeURIComponent(elderToken)}&pending=${encodeURIComponent(pendingStoryId)}`,
+    `/dev/seed?token=${encodeURIComponent(elderToken)}&pending=${encodeURIComponent(pendingStoryId)}${inv}`,
   );
 }
 
@@ -38,8 +41,11 @@ export default async function DevSeedPage({
   const token = Array.isArray(tokenRaw) ? tokenRaw[0] : tokenRaw;
   const pendingRaw = sp.pending;
   const pendingStoryId = Array.isArray(pendingRaw) ? pendingRaw[0] : pendingRaw;
+  const inviteRaw = sp.invite;
+  const inviteToken = Array.isArray(inviteRaw) ? inviteRaw[0] : inviteRaw;
   const elderUrl = token ? `/s/${token}` : null;
   const approvalUrl = token && pendingStoryId ? `/s/${token}/approve/${pendingStoryId}` : null;
+  const joinUrl = inviteToken ? `/join/${inviteToken}` : null;
 
   return (
     <main className="kin-page">
@@ -81,6 +87,22 @@ export default async function DevSeedPage({
                   <Link href={approvalUrl} className="mono" style={{ wordBreak: "break-all" }}>{approvalUrl}</Link>
                 </li>
               ) : null}
+              {joinUrl ? (
+                <li>
+                  <div className="kin-muted" style={{ fontSize: 13 }}>Member invite link (Maya — unknown to system)</div>
+                  <Link href={joinUrl} className="mono" style={{ wordBreak: "break-all" }}>{joinUrl}</Link>
+                </li>
+              ) : null}
+              <li>
+                <div className="kin-muted" style={{ fontSize: 13 }}>Steward sign-in (Sofia)</div>
+                <span className="mono">sofia@example.test · password</span>{" "}
+                <Link href="/sign-in" style={{ fontWeight: 600 }}>→ /sign-in</Link>
+              </li>
+              <li>
+                <div className="kin-muted" style={{ fontSize: 13 }}>Find a family (search "Lafayette", "Eleanor", "teachers")</div>
+                <Link href="/families/find" className="mono">/families/find</Link>{" "}
+                <span className="kin-muted" style={{ fontSize: 12 }}>· Theo has a pending request for Sofia to approve</span>
+              </li>
             </ul>
             <p className="kin-muted" style={{ fontSize: 13, marginTop: 16 }}>
               One-time token; it's in the URL only because this is a localhost dev tool. The real
