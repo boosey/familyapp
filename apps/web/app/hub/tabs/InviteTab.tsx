@@ -33,15 +33,6 @@ async function origin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/** Family ids the signed-in inviter is an active member of (gate for both invite modes). */
-async function inviterFamilyIds(db: Awaited<ReturnType<typeof getRuntime>>["db"], personId: string) {
-  return db
-    .select({ familyId: memberships.familyId })
-    .from(memberships)
-    .where(and(eq(memberships.personId, personId), eq(memberships.status, "active")))
-    .then((rows) => rows.map((r) => r.familyId));
-}
-
 async function createInvite(formData: FormData): Promise<void> {
   "use server";
   const { db, auth } = await getRuntime();
@@ -51,24 +42,8 @@ async function createInvite(formData: FormData): Promise<void> {
   const familyId = String(formData.get("familyId") ?? "");
   if (!elderId || !familyId) throw new Error("elder and family required");
 
-  const fams = await inviterFamilyIds(db, ctx.personId);
-  if (!fams.includes(familyId)) {
-    throw new Error("you are not an active member of that family");
-  }
-
-  const [elderHere] = await db
-    .select({ id: memberships.id })
-    .from(memberships)
-    .where(
-      and(
-        eq(memberships.personId, elderId),
-        eq(memberships.familyId, familyId),
-        eq(memberships.status, "active"),
-      ),
-    )
-    .limit(1);
-  if (!elderHere) throw new Error("that person is not an active member of that family");
-
+  // The membership gate (inviter AND elder must be active members of this family) is enforced
+  // inside createElderSession — the domain owns it, transactionally. We don't re-check here.
   const { token } = await createElderSession(db, {
     personId: elderId,
     familyId,
@@ -95,11 +70,8 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   const familyId = String(formData.get("familyId") ?? "");
   if (!inviteeName || !familyId) throw new Error("name and family required");
 
-  const fams = await inviterFamilyIds(db, ctx.personId);
-  if (!fams.includes(familyId)) {
-    throw new Error("you are not an active member of that family");
-  }
-
+  // createInvitation enforces the "inviter must be an active member" gate transactionally; no
+  // redundant pre-check here.
   const { token } = await createInvitation(db, {
     familyId,
     inviterPersonId: ctx.personId,

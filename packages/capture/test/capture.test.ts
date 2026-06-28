@@ -1,6 +1,6 @@
-import { getStoryForViewer } from "@chronicle/core";
+import { AuthorizationError, getStoryForViewer } from "@chronicle/core";
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { families, persons } from "@chronicle/db/schema";
+import { families, memberships, persons } from "@chronicle/db/schema";
 import {
   InMemoryMediaStorage,
   type MediaStorage,
@@ -36,6 +36,12 @@ async function rowCount(d: Database, table: "media" | "stories"): Promise<number
   return rows[0]?.n ?? 0;
 }
 
+async function rowCountAny(table: string): Promise<number> {
+  const result = await db.execute(sql.raw(`select count(*)::int as n from ${table}`));
+  const rows = (result as unknown as { rows: Array<{ n: number }> }).rows;
+  return rows[0]?.n ?? 0;
+}
+
 async function makeElderAndFamily() {
   const [elder] = await db
     .insert(persons)
@@ -53,6 +59,11 @@ async function makeElderAndFamily() {
       stewardPersonId: inviter!.id,
     })
     .returning();
+  // Both must be active members — createElderSession gates the invite on family membership.
+  await db.insert(memberships).values([
+    { personId: elder!.id, familyId: fam!.id, role: "narrator", status: "active" },
+    { personId: inviter!.id, familyId: fam!.id, role: "member", status: "active" },
+  ]);
   return { elder: elder!, inviter: inviter!, family: fam! };
 }
 
@@ -138,6 +149,57 @@ describe("elder sessions (token = identity, zero login)", () => {
     });
     await revokeElderSession(db, session.id);
     expect(await resolveElderSession(db, token)).toBeNull();
+  });
+
+  it("refuses to create a session when the inviter is NOT an active member of the family", async () => {
+    const { elder, family } = await makeElderAndFamily();
+    // A bystander with no membership in `family` must not be able to mint an elder link.
+    const [stranger] = await db
+      .insert(persons)
+      .values({ displayName: "Stranger", spokenName: "Stranger" })
+      .returning();
+    await expect(
+      createElderSession(db, {
+        personId: elder.id,
+        familyId: family.id,
+        invitedByPersonId: stranger!.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    // Nothing was written.
+    expect(await rowCountAny("elder_sessions")).toBe(0);
+  });
+
+  it("refuses to create a session when the elder is NOT an active member of the family", async () => {
+    const { inviter, family } = await makeElderAndFamily();
+    // A person who isn't a member of `family` cannot be made the narrator of a link in it.
+    const [outsiderElder] = await db
+      .insert(persons)
+      .values({ displayName: "Outsider", spokenName: "Outsider" })
+      .returning();
+    await expect(
+      createElderSession(db, {
+        personId: outsiderElder!.id,
+        familyId: family.id,
+        invitedByPersonId: inviter.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await rowCountAny("elder_sessions")).toBe(0);
+  });
+
+  it("refuses when a once-active inviter membership has ended (gate reads current status)", async () => {
+    const { elder, inviter, family } = await makeElderAndFamily();
+    // Flip the inviter's membership to ended; the gate must now reject.
+    await db.execute(
+      sql`update memberships set status = 'ended' where person_id = ${inviter.id} and family_id = ${family.id}`,
+    );
+    await expect(
+      createElderSession(db, {
+        personId: elder.id,
+        familyId: family.id,
+        invitedByPersonId: inviter.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await rowCountAny("elder_sessions")).toBe(0);
   });
 });
 

@@ -31,6 +31,38 @@ export class StoryNotApprovableError extends Error {
   }
 }
 
+export class InvalidAudienceTierError extends Error {
+  readonly code = "INVALID_AUDIENCE_TIER";
+  constructor(reason: string) {
+    super(reason);
+    this.name = "InvalidAudienceTierError";
+  }
+}
+
+/**
+ * The tiers an elder may publish a story to. `private` is excluded by design — approval is the act
+ * of *sharing*, so "approve as private" is meaningless. This is the domain's authoritative list;
+ * the transport layer must NOT re-encode it (a string from an untrusted client lands here and is
+ * checked once, fail-fast, before any storage or DB write).
+ */
+const SHAREABLE_TIERS: ReadonlySet<Exclude<AudienceTier, "private">> = new Set([
+  "branch",
+  "family",
+  "public",
+]);
+
+function assertShareableTier(
+  tier: string,
+): asserts tier is Exclude<AudienceTier, "private"> {
+  if (!SHAREABLE_TIERS.has(tier as Exclude<AudienceTier, "private">)) {
+    throw new InvalidAudienceTierError(
+      `audience tier ${JSON.stringify(tier)} is not a shareable tier (expected one of: ${[
+        ...SHAREABLE_TIERS,
+      ].join(", ")})`,
+    );
+  }
+}
+
 export interface CaptureApprovalInput {
   /** Elder's session token — the only credential on this path. */
   sessionToken: string;
@@ -72,6 +104,10 @@ export async function captureApproval(
   storage: MediaStorage,
   input: CaptureApprovalInput,
 ): Promise<CaptureApprovalResult> {
+  // Fail-fast on a bad tier BEFORE touching the session, storage, or DB — a malformed tier from
+  // the transport layer must never reach a side effect.
+  assertShareableTier(input.audienceTier);
+
   const resolved = await resolveElderSession(db, input.sessionToken, {
     now: input.now,
   });

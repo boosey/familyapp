@@ -3,6 +3,12 @@
  * the source-agnostic ingest: persist the immutable audio FIRST, then create the draft Story.
  * Errors return a non-OK status but carry NO troubleshooting detail to the elder — the client
  * shows warm copy and the failure is surfaced to the family elsewhere.
+ *
+ * Auth model (intentional — NOT an oversight): there is deliberately no `getCurrentAuthContext()`
+ * here. On the elder surface the session token IS the identity; it is the only credential, and it
+ * is validated INSIDE the domain (`ingestRecording` → `resolveElderSession`), which fails with
+ * `InvalidSessionError` (→ 401) on a bad/expired/revoked token. The account-cookie auth used by the
+ * hub routes does not apply to this login-free surface.
  */
 import { ingestRecording, InvalidSessionError } from "@chronicle/capture";
 import { NextResponse } from "next/server";

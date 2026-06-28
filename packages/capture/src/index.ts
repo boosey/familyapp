@@ -18,6 +18,7 @@ export {
 export {
   captureApproval,
   StoryNotApprovableError,
+  InvalidAudienceTierError,
   type CaptureApprovalInput,
   type CaptureApprovalResult,
 } from "./approval";

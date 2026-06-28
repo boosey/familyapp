@@ -9,7 +9,7 @@ import {
   updateDerivedFields,
 } from "@chronicle/core";
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { families, persons } from "@chronicle/db/schema";
+import { families, memberships, persons } from "@chronicle/db/schema";
 import {
   InMemoryMediaStorage,
   type MediaStorage,
@@ -20,6 +20,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   captureApproval,
   createElderSession,
+  InvalidAudienceTierError,
   InvalidSessionError,
   StoryNotApprovableError,
 } from "../src/index";
@@ -55,6 +56,11 @@ async function setup() {
       stewardPersonId: inviter!.id,
     })
     .returning();
+  // Both the elder (narrator) and the inviter must be active members — createElderSession gates on it.
+  await db.insert(memberships).values([
+    { personId: elder!.id, familyId: fam!.id, role: "narrator", status: "active" },
+    { personId: inviter!.id, familyId: fam!.id, role: "member", status: "active" },
+  ]);
   const { token } = await createElderSession(db, {
     personId: elder!.id,
     familyId: fam!.id,
@@ -148,6 +154,10 @@ describe("captureApproval (voice-only approval gate)", () => {
         stewardPersonId: other!.id,
       })
       .returning();
+    await db.insert(memberships).values([
+      { personId: otherElder!.id, familyId: otherFam!.id, role: "narrator", status: "active" },
+      { personId: other!.id, familyId: otherFam!.id, role: "member", status: "active" },
+    ]);
     const { token: otherToken } = await createElderSession(db, {
       personId: otherElder!.id,
       familyId: otherFam!.id,
@@ -213,6 +223,38 @@ describe("captureApproval (voice-only approval gate)", () => {
     const r = await db.execute(sql`select state from stories where id = ${storyId}`);
     const row = (r as unknown as { rows: Array<{ state: string }> }).rows[0]!;
     expect(row.state).toBe("pending_approval");
+  });
+
+  it("rejects an invalid audience tier (e.g. private) before any storage or DB write — the rule lives in the domain, not the route", async () => {
+    const { storyId, token } = await setup();
+    await expect(
+      captureApproval(db, storage, {
+        sessionToken: token,
+        storyId,
+        // @ts-expect-error — deliberately exercising the runtime guard against a tier the
+        // transport layer must never let through (the type already forbids "private").
+        audienceTier: "private",
+        audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidAudienceTierError);
+    // Fail-fast: nothing was uploaded and no consent row was written.
+    expect(storage.size).toBe(0);
+    expect(await rowCount(db, "consent_records")).toBe(0);
+  });
+
+  it("rejects a garbage audience tier string the same way (no storage/DB write)", async () => {
+    const { storyId, token } = await setup();
+    await expect(
+      captureApproval(db, storage, {
+        sessionToken: token,
+        storyId,
+        // @ts-expect-error — a malformed tier value arriving from an untrusted client.
+        audienceTier: "everyone",
+        audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidAudienceTierError);
+    expect(storage.size).toBe(0);
+    expect(await rowCount(db, "consent_records")).toBe(0);
   });
 
   it("refuses when the story is not in pending_approval (e.g. already shared, or still draft)", async () => {

@@ -6,6 +6,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { AuthorizationError, isActiveMember } from "@chronicle/core";
 import { elderSessions } from "@chronicle/db/schema";
 import type { Database, ElderSession } from "@chronicle/db";
 
@@ -45,18 +46,42 @@ export async function createElderSession(
   const ttl = input.ttlDays === undefined ? DEFAULT_TTL_DAYS : input.ttlDays;
   const expiresAt = ttl === null ? null : new Date(now.getTime() + ttl * MS_PER_DAY);
 
-  const [session] = await db
-    .insert(elderSessions)
-    .values({
-      tokenHash,
-      personId: input.personId,
-      familyId: input.familyId,
-      invitedByPersonId: input.invitedByPersonId,
-      expiresAt,
-    })
-    .returning();
+  // The family-membership gate lives here, in the domain — not in the UI that calls it. Both the
+  // inviter (who is minting the link) and the elder (the narrator the link speaks for) must hold an
+  // ACTIVE membership in this family. One transaction so the two checks and the insert see a
+  // consistent snapshot — a membership revoked between check and write cannot slip a session
+  // through (mirrors createInvitation's gate in @chronicle/core).
+  return db.transaction(async (tx) => {
+    const inviterIsMember = await isActiveMember(
+      tx,
+      input.invitedByPersonId,
+      input.familyId,
+    );
+    if (!inviterIsMember) {
+      throw new AuthorizationError(
+        "only an active member of the family may create an elder session",
+      );
+    }
+    const elderIsMember = await isActiveMember(tx, input.personId, input.familyId);
+    if (!elderIsMember) {
+      throw new AuthorizationError(
+        "the elder must be an active member of the family the session is created in",
+      );
+    }
 
-  return { token, session: session! };
+    const [session] = await tx
+      .insert(elderSessions)
+      .values({
+        tokenHash,
+        personId: input.personId,
+        familyId: input.familyId,
+        invitedByPersonId: input.invitedByPersonId,
+        expiresAt,
+      })
+      .returning();
+
+    return { token, session: session! };
+  });
 }
 
 export interface ResolvedElderSession {
