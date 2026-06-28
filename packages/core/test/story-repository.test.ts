@@ -74,6 +74,58 @@ describe("persistRecordingAndCreateDraft (capture write path)", () => {
   });
 });
 
+describe("updateDerivedFields — historical era (eraYear / eraLabel)", () => {
+  it("persists eraYear/eraLabel and a subsequent read returns them", async () => {
+    const elder = await makePerson(db, "Eleanor");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: elder.id,
+      storageKey: "r2://chronicle/eleanor/era.webm",
+      contentType: "audio/webm",
+      checksum: "sha256:era",
+    });
+    // Born without an era.
+    expect(story.eraYear).toBeNull();
+    expect(story.eraLabel).toBeNull();
+
+    const updated = await updateDerivedFields(db, story.id, {
+      eraYear: 1958,
+      eraLabel: "Cherry Street",
+    });
+    expect(updated.eraYear).toBe(1958);
+    expect(updated.eraLabel).toBe("Cherry Street");
+
+    // Read back through the authorized front door as the owner.
+    const readBack = await getStoryForViewer(
+      db,
+      { kind: "elder_session", personId: elder.id },
+      story.id,
+    );
+    expect(readBack?.eraYear).toBe(1958);
+    expect(readBack?.eraLabel).toBe("Cherry Street");
+  });
+
+  it("leaves era fields untouched when omitted, and allows clearing eraLabel via null", async () => {
+    const elder = await makePerson(db, "Eleanor");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: elder.id,
+      storageKey: "r2://chronicle/eleanor/era2.webm",
+      contentType: "audio/webm",
+      checksum: "sha256:era2",
+    });
+    await updateDerivedFields(db, story.id, { eraYear: 1961, eraLabel: "the Blue Room" });
+
+    // A later derived-field write that omits era fields must not wipe them (undefined = skip).
+    const afterTitle = await updateDerivedFields(db, story.id, { title: "The dance" });
+    expect(afterTitle.eraYear).toBe(1961);
+    expect(afterTitle.eraLabel).toBe("the Blue Room");
+
+    // Explicit null clears the label (distinct from undefined).
+    const cleared = await updateDerivedFields(db, story.id, { eraLabel: null });
+    expect(cleared.eraYear).toBe(1961);
+    expect(cleared.eraLabel).toBeNull();
+  });
+});
+
 describe("listElderMemoryForInterviewer (audited cross-session memory read)", () => {
   it("returns only safe metadata for the elder's own stories — never transcript / prose / audio key", async () => {
     const elder = await makePerson(db, "Eleanor");

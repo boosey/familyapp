@@ -106,6 +106,10 @@ export interface DerivedFields {
   title?: string;
   summary?: string;
   tags?: string[];
+  /** The representative year the story is ABOUT (historical era), not when it was recorded. */
+  eraYear?: number | null;
+  /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
+  eraLabel?: string | null;
 }
 
 /** Update derived fields on a Story. Only the audited write surface touches the table. */
@@ -122,6 +126,8 @@ export async function updateDerivedFields(
   if (fields.title !== undefined) patch.title = fields.title;
   if (fields.summary !== undefined) patch.summary = fields.summary;
   if (fields.tags !== undefined) patch.tags = fields.tags;
+  if (fields.eraYear !== undefined) patch.eraYear = fields.eraYear;
+  if (fields.eraLabel !== undefined) patch.eraLabel = fields.eraLabel;
 
   const [row] = await db
     .update(stories)

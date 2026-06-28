@@ -25,9 +25,36 @@ function readMigrationSql(rel: string): string {
   return readFileSync(path, "utf8").replaceAll("--> statement-breakpoint", "");
 }
 
+/**
+ * Apply all pending migrations to a PGlite instance, idempotently and incrementally. A
+ * `_chronicle_meta` table records which migration files have run (mirroring the Postgres path),
+ * so:
+ *   - a fresh DB (the test harness) runs every migration once;
+ *   - an existing dev DB (`apps/web/.pglite/dev`) runs only the migrations added since it was
+ *     last booted, instead of being skipped wholesale.
+ *
+ * The non-idempotent DDL in our migrations (`CREATE TYPE`, `CREATE TRIGGER`) is what forces
+ * per-file tracking rather than blind re-apply. Each file's claim + DDL run in one transaction,
+ * so a failed migration does not leave its meta row claimed against a half-applied schema.
+ */
 export async function applyMigrations(pg: PGlite): Promise<void> {
+  await pg.exec(`
+    CREATE TABLE IF NOT EXISTS _chronicle_meta (
+      migration text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
   for (const rel of MIGRATIONS) {
-    await pg.exec(readMigrationSql(rel));
+    const name = rel.replace(/^\.\.\//, "");
+    await pg.transaction(async (tx) => {
+      const claimed = await tx.query<{ migration: string }>(
+        `INSERT INTO _chronicle_meta (migration) VALUES ($1)
+         ON CONFLICT DO NOTHING RETURNING migration`,
+        [name],
+      );
+      if (claimed.rows.length === 0) return; // already applied
+      await tx.exec(readMigrationSql(rel));
+    });
   }
 }
 

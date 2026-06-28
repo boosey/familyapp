@@ -77,12 +77,11 @@ async function build(): Promise<Runtime> {
   } else {
     ensureDir(DEV_DB_DIR);
     db = createPgliteDatabase(DEV_DB_DIR);
-    // Apply migrations idempotently: if the schema is already there, skip.
-    try {
-      await db.$pglite!.query("select 1 from persons limit 1");
-    } catch {
-      await applyMigrations(db.$pglite!);
-    }
+    // applyMigrations is idempotent and incremental (tracks applied files in _chronicle_meta),
+    // so it both bootstraps a fresh DB and lands newly-added migrations on an existing dev DB.
+    // The previous "skip everything if `persons` exists" gate silently dropped every migration
+    // added after first boot — that is what made `invitations` go missing here.
+    await applyMigrations(db.$pglite!);
   }
   const storage = new FilesystemMediaStorage({
     baseDir: DEV_MEDIA_DIR,
