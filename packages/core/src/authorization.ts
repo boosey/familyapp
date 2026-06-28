@@ -14,7 +14,7 @@
  *   - A non-owner may NEVER see a story until it is in `approved`/`shared` state AND the consent
  *     ledger's latest sharing event is `approved_for_sharing` (a later `revoked` row hides it
  *     again — revocation is a new row, never an edit).
- *   - The owner (incl. the token-scoped elder reading their own archive) always sees their own
+ *   - The owner (incl. the token-scoped narrator reading their own archive) always sees their own
  *     content in any state.
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -25,14 +25,14 @@ import { consentRecords, memberships } from "@chronicle/db/schema";
 import type { Database, Media, Story } from "@chronicle/db";
 
 /**
- * Who is asking. The anonymous elder surface authenticates with nothing but a session token;
- * that token resolves to the elder's own Person id, so they arrive here as `elder_session` and
+ * Who is asking. The anonymous narrator surface authenticates with nothing but a session token;
+ * that token resolves to the narrator's own Person id, so they arrive here as `link_session` and
  * are treated as the owner of their own stories. There is no account/login on that path.
  */
 export type AuthContext =
   | { readonly kind: "anonymous" }
   | { readonly kind: "account"; readonly personId: string }
-  | { readonly kind: "elder_session"; readonly personId: string };
+  | { readonly kind: "link_session"; readonly personId: string };
 
 export type AuthDecision =
   | { readonly allowed: true }
@@ -94,7 +94,7 @@ export async function decideStoryRead(
 ): Promise<AuthDecision> {
   const viewer = viewerPersonId(ctx);
 
-  // The owner (and the token-scoped elder) always sees their own content, any state, any tier.
+  // The owner (and the token-scoped narrator) always sees their own content, any state, any tier.
   if (viewer !== null && viewer === story.ownerPersonId) return ALLOW;
 
   // Public is the only tier visible without sharing consent + an approved/shared state...
@@ -138,7 +138,7 @@ export async function decideStoryRead(
 
 /**
  * Authorization for reading a Media asset. Media is reachable only:
- *   - by its owner (the elder owns their recordings and approval clips), or
+ *   - by its owner (the narrator owns their recordings and approval clips), or
  *   - as the canonical recording of a Story the viewer is allowed to read.
  * Approval-audio clips are therefore owner-only (they are not a story's recording), which is
  * the intended Phase-1 behavior.
@@ -193,7 +193,7 @@ export async function getStoryForViewer(
 
 /**
  * Lists stories visible to the viewer, optionally narrowed to one owner (e.g. the hub showing a
- * single elder's approved stories). Every candidate is filtered through the same decision — the
+ * single narrator's approved stories). Every candidate is filtered through the same decision — the
  * single front door — so the list can never surface something a point read would deny.
  */
 export async function listStoriesForViewer(

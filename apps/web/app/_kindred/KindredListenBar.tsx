@@ -172,14 +172,17 @@ export function KindredListenBar({
   const containerStyle: CSSProperties = {
     background: "var(--surface-card)",
     border: "var(--border-width) solid var(--border)",
+    // Canonical bundle uses --radius-card, which is undefined in the token set
+    // (tokens/spacing.css only ships sm/md/lg/xl/pill); --radius-lg is the card radius.
     borderRadius: "var(--radius-lg)",
-    padding: "18px 22px",
+    boxShadow: "var(--shadow-sm)",
+    padding: "var(--space-4) var(--space-5)",
     ...style,
   };
 
   const timecodeStyle: CSSProperties = {
     fontFamily: "var(--font-mono)",
-    fontSize: 14,
+    fontSize: "var(--text-label)",
     color: "var(--text-meta)",
     letterSpacing: "var(--tracking-mono)",
     flex: "0 0 auto",
@@ -191,10 +194,10 @@ export function KindredListenBar({
       {title && (
         <p
           style={{
-            margin: "0 0 14px",
+            margin: "0 0 var(--space-3)",
             fontFamily: "var(--font-ui)",
-            fontSize: 18,
-            fontWeight: 600,
+            fontSize: "var(--text-ui-sm)",
+            fontWeight: 500,
             color: "var(--text-body)",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -206,7 +209,7 @@ export function KindredListenBar({
       )}
 
       {/* Scrubber */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
         <span style={timecodeStyle}>{curLabel}</span>
         <div
           ref={trackRef}
@@ -272,8 +275,8 @@ export function KindredListenBar({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 18,
-          marginTop: 14,
+          gap: "var(--space-4)",
+          marginTop: "var(--space-3)",
         }}
       >
         <TransportButton onClick={() => seekTo(0)} title="Start over" disabled={!isAudioMode}>
@@ -312,7 +315,7 @@ export function KindredListenBar({
             transition: "background var(--dur-fade) var(--ease-quiet)",
           }}
         >
-          {playing ? "❚❚" : "▶"}
+          <span style={{ marginLeft: playing ? 0 : 2 }}>{playing ? "❚❚" : "▶"}</span>
         </button>
 
         <TransportButton
@@ -371,10 +374,10 @@ function TransportButton({
         width: 46,
         height: 46,
         flexShrink: 0,
-        borderRadius: "50%",
+        borderRadius: "var(--radius-pill)",
         border: "1.5px solid var(--border-strong)",
         background: "var(--surface-card)",
-        color: "var(--accent)",
+        color: "var(--accent-strong)",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.5 : 1,
         fontSize: 20,

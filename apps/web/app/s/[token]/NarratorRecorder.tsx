@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Single primary control for the elder. Idle -> pulsing voice button. Listening -> calm stop with
+ * Single primary control for the narrator. Idle -> pulsing voice button. Listening -> calm stop with
  * a transcript-style placeholder. Saving/done/softfail mirror the original flow but in Kindred
  * chrome. Long silences NEVER end the session (silence is thinking).
  */
@@ -10,7 +10,7 @@ import { KindredVoiceButton } from "@/app/_kindred";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 
-export function ElderRecorder({ token, askId = null }: { token: string; askId?: string | null }) {
+export function NarratorRecorder({ token, askId = null }: { token: string; askId?: string | null }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);

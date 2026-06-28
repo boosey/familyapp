@@ -5,7 +5,7 @@
  */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStoryForViewer, getElderProfile } from "@chronicle/core";
+import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { KindredListenBar, KindredChip } from "@/app/_kindred";
 
@@ -24,8 +24,8 @@ export default async function StoryDetailPage({
   const story = await getStoryForViewer(db, ctx, id);
   if (!story) notFound();
 
-  const elder = await getElderProfile(db, story.ownerPersonId);
-  const elderName = elder?.spokenName ?? "the family";
+  const narrator = await getNarratorProfile(db, story.ownerPersonId);
+  const narratorName = narrator?.spokenName ?? "the family";
   const recordedAt = (story.approvedAt ?? story.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
@@ -89,9 +89,9 @@ export default async function StoryDetailPage({
               fontWeight: 700,
             }}
           >
-            {elderName.charAt(0).toUpperCase()}
+            {narratorName.charAt(0).toUpperCase()}
           </span>
-          Told by {elderName} · Recorded {recordedAt}
+          Told by {narratorName} · Recorded {recordedAt}
         </div>
 
         <div style={{ margin: "22px 0" }}>
@@ -131,7 +131,7 @@ export default async function StoryDetailPage({
         )}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 32 }}>
-          <KindredChip kind="person" label={elderName} />
+          <KindredChip kind="person" label={narratorName} />
           <KindredChip kind="time" label={String((story.approvedAt ?? story.createdAt).getFullYear())} />
           <KindredChip kind="status" label={story.state.replace(/_/g, " ")} />
         </div>

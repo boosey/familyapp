@@ -8,7 +8,7 @@
  *   - three finder modes that all drive the SAME filter state: Search / Sentence / Lists,
  *   - a large featured story card (top result), then a responsive grid of "Earlier memories".
  *
- * Facets are derived from real data only: Person (the elders in the feed), Era (the decade of
+ * Facets are derived from real data only: Person (the narrators in the feed), Era (the decade of
  * each story's date), and Topic (the free-form `tags` on each story). The design's separate
  * "Event" facet has no backing field yet, so it is intentionally absent.
  */

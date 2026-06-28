@@ -1,13 +1,13 @@
 /**
- * Voice-only approval surface. The elder lands here after the pipeline has prepared a draft. The
+ * Voice-only approval surface. The narrator lands here after the pipeline has prepared a draft. The
  * page renders in Kindred's intimate `hearth` theme; the original wide-band recording is one tap
  * away in a listen bar, and the actual approval is spoken via `ApprovalRecorder`.
  *
- * Server-side: resolves the session token, confirms the story exists for this elder via the
+ * Server-side: resolves the session token, confirms the story exists for this narrator via the
  * single front door, and refuses anything that isn't `pending_approval`.
  */
-import { resolveElderSession } from "@chronicle/capture";
-import { getStoryForViewer, getElderProfile } from "@chronicle/core";
+import { resolveLinkSession } from "@chronicle/capture";
+import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ApprovalRecorder } from "./ApprovalRecorder";
 import { KindredListenBar } from "@/app/_kindred";
@@ -23,7 +23,7 @@ export default async function ApprovePage({
   const { token, storyId } = await params;
   const { db } = await getRuntime();
 
-  const resolved = await resolveElderSession(db, token);
+  const resolved = await resolveLinkSession(db, token);
   if (!resolved) {
     return (
       <main
@@ -58,7 +58,7 @@ export default async function ApprovePage({
 
   const story = await getStoryForViewer(
     db,
-    { kind: "elder_session", personId: resolved.personId },
+    { kind: "link_session", personId: resolved.personId },
     storyId,
   );
 
@@ -94,7 +94,7 @@ export default async function ApprovePage({
     );
   }
 
-  const profile = await getElderProfile(db, resolved.personId);
+  const profile = await getNarratorProfile(db, resolved.personId);
 
   return (
     <main className="kin-fullbleed">

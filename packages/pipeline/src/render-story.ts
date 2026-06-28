@@ -2,7 +2,7 @@
  * Speech-to-story render — the in-house prompt + parse logic that wraps the bought LLM.
  *
  * Behavior policy lives HERE, not in the vendor: "lightly clean false starts and filler while
- * preserving the elder's actual words, idiom, and meaning. This is NOT a literary rewrite —
+ * preserving the narrator's actual words, idiom, and meaning. This is NOT a literary rewrite —
  * authenticity beats polish; an LLM left unconstrained will drift from how the person actually
  * speaks." The vendor only sees the assembled messages.
  *
@@ -18,11 +18,11 @@ import type {
 
 export interface RenderInput {
   transcript: string;
-  /** The question that prompted the telling, if any — gives the model the framing the elder heard. */
+  /** The question that prompted the telling, if any — gives the model the framing the narrator heard. */
   promptQuestion?: string | null;
-  /** Lightly-held elder context the model may use to set names/tone (never to invent facts). */
-  elderSpokenName?: string;
-  elderBirthYear?: number;
+  /** Lightly-held narrator context the model may use to set names/tone (never to invent facts). */
+  narratorSpokenName?: string;
+  narratorBirthYear?: number;
 }
 
 export interface RenderOutput {
@@ -58,8 +58,8 @@ Return ONLY the JSON object. No prose around it.`;
 
 function buildMessages(input: RenderInput): LanguageModelMessage[] {
   const ctxLines: string[] = [];
-  if (input.elderSpokenName) ctxLines.push(`Speaker's spoken name: ${input.elderSpokenName}`);
-  if (input.elderBirthYear) ctxLines.push(`Speaker's birth year: ${input.elderBirthYear}`);
+  if (input.narratorSpokenName) ctxLines.push(`Speaker's spoken name: ${input.narratorSpokenName}`);
+  if (input.narratorBirthYear) ctxLines.push(`Speaker's birth year: ${input.narratorBirthYear}`);
   if (input.promptQuestion) ctxLines.push(`Question that prompted the telling: ${input.promptQuestion}`);
   const ctxBlock = ctxLines.length ? `${ctxLines.join("\n")}\n\n` : "";
   const userContent = `${ctxBlock}Transcript (verbatim, from speech-to-text):\n"""\n${input.transcript}\n"""`;

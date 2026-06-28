@@ -1,8 +1,8 @@
 /**
- * Member invitations — the account-creating join link (distinct from the elder session token).
+ * Member invitations — the account-creating join link (distinct from the link session token).
  *
- * An invitation leads a NEW younger-generation person to create an Account and join a family. Like
- * the elder session, the raw token is sent in the link and NEVER stored: only its SHA-256 hash
+ * An invitation leads a NEW person to create an Account and join a family. Like
+ * the link session, the raw token is sent in the link and NEVER stored: only its SHA-256 hash
  * lives in the DB, so a database leak does not expose working invites (mirrors
  * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
  */

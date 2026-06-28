@@ -172,8 +172,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const render = await renderStoryFromTranscript(deps.languageModel, {
       transcript: view.transcript,
       promptQuestion: view.promptQuestion,
-      elderSpokenName: view.ownerSpokenName,
-      ...(view.ownerBirthYear !== null ? { elderBirthYear: view.ownerBirthYear } : {}),
+      narratorSpokenName: view.ownerSpokenName,
+      ...(view.ownerBirthYear !== null ? { narratorBirthYear: view.ownerBirthYear } : {}),
     });
 
     await updateDerivedFields(deps.db, view.storyId, {

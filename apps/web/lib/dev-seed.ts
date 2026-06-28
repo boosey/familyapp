@@ -3,13 +3,17 @@
  * /api/dev/seed POST. Wipes (TRUNCATE) and recreates a small click-through-ready dataset.
  *
  * Identity:
- *   - Persons: Eleanor (elder, no Account), Sofia + Marco (members, with Accounts)
+ *   - Persons: Eleanor (narrator role), Sofia + Marco (member/steward roles). Every Person has an
+ *     Account — "narrator" vs "asker" is a role, not an account distinction. All can sign into the hub.
  *   - Family: Boudreaux, with all three active members
  *
  * Sample content (every write goes through the audited core path; storage-first ordering):
- *   - One Story already approved+shared at family tier (visible in /hub when signed in as Sofia/Marco)
- *   - One Story left at pending_approval (drives the /s/<token>/approve/<storyId> UI)
- *   - One elder session for Eleanor (returned token; the raw token IS the elder's identity)
+ *   - Five Stories approved+shared at family tier (visible in /hub when signed in as Sofia/Marco/Eleanor)
+ *   - Four pending Asks for Eleanor (Sofia × 2, Marco × 2) so her "Questions for you" tab has a queue
+ *   - One DRAFT Story linked to the first Ask — hub shows "Review & approve" immediately for that ask
+ *   - One link session for Eleanor (convenience deep-link / magic-link test; NOT the primary UI entry)
+ *
+ * Sign-in is the headline entry point: /dev/sign-in (one-click) or /sign-in with credentials.
  *
  * TRUNCATE bypasses the BEFORE UPDATE/DELETE triggers on consent_records/media, so re-running
  * this seed cleanly resets the dataset without fighting the immutability invariants.
@@ -17,6 +21,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
+import { resetSchema } from "@chronicle/db";
 import {
   accounts,
   families,
@@ -25,17 +30,18 @@ import {
 } from "@chronicle/db/schema";
 import {
   approveAndShareStory,
+  createAsk,
   createInvitation,
   createJoinRequest,
   persistRecordingAndCreateDraft,
   transitionStoryState,
   updateDerivedFields,
 } from "@chronicle/core";
-import { createElderSession } from "@chronicle/capture";
+import { createLinkSession } from "@chronicle/capture";
 import { getRuntime } from "./runtime";
 import { seedMockCredential } from "./auth-mock";
 
-/** Shared dev password handed to every seeded younger-gen credential. */
+/** Shared dev password handed to every seeded account credential. */
 const SEED_PASSWORD = "password";
 
 const SAMPLE_AUDIO_CONTENT_TYPE = "audio/wav";
@@ -71,12 +77,16 @@ function checksumOf(bytes: Uint8Array): string {
 }
 
 export interface SeedResult {
-  elderToken: string;
-  elderPersonId: string;
-  pendingStoryId: string;
-  /** A seeded younger-gen account you can sign in as through the real mock flow (the steward). */
+  /** Eleanor's link-session token. Usable via /s/<token> for magic-link tests;
+   *  NOT presented as the primary entry on the seed page — sign-in is the headline path. */
+  narratorToken: string;
+  narratorPersonId: string;
+  /** Eleanor's one seeded DRAFT story (linked to an Ask). The hub's Questions tab shows
+   *  "Review & approve" immediately for the linked Ask when signed in as Eleanor. */
+  draftStoryId: string;
+  /** A seeded account you can sign in as through the real mock flow (the steward). */
   stewardSignInEmail: string;
-  /** The shared password for every seeded credential (Sofia, Marco, Theo). */
+  /** The shared password for every seeded credential (Eleanor, Sofia, Marco, Theo). */
   seedPassword: string;
   /** The discoverable Boudreaux family — drives family-search + the steward requests surface. */
   boudreauxFamilyId: string;
@@ -102,23 +112,23 @@ interface ExtraStorySpec {
 }
 
 /**
- * Create → derive → approve+share a story for an elder, then back-date its timeline so the hub's
+ * Create → derive → approve+share a story for a narrator, then back-date its timeline so the hub's
  * Era facet spans real decades. Dates are stamped via a raw SQL UPDATE — the documented dev-only
  * bypass; production never backdates a story.
  */
 async function seedApprovedStory(
   db: Awaited<ReturnType<typeof getRuntime>>["db"],
   storage: Awaited<ReturnType<typeof getRuntime>>["storage"],
-  elderPersonId: string,
+  narratorPersonId: string,
   spec: ExtraStorySpec,
 ): Promise<void> {
   const audio = tinyWav();
-  const key = `story-audio/${elderPersonId}/${randomUUID()}.wav`;
+  const key = `story-audio/${narratorPersonId}/${randomUUID()}.wav`;
   await storage.put({ key, bytes: audio, contentType: SAMPLE_AUDIO_CONTENT_TYPE });
   const { story } = await persistRecordingAndCreateDraft(
     db,
     {
-      ownerPersonId: elderPersonId,
+      ownerPersonId: narratorPersonId,
       storageKey: key,
       contentType: SAMPLE_AUDIO_CONTENT_TYPE,
       durationSeconds: 1,
@@ -137,7 +147,7 @@ async function seedApprovedStory(
   });
   await transitionStoryState(db, story.id, "pending_approval");
   const approvalAudio = tinyWav();
-  const approvalKey = `approval-audio/${elderPersonId}/${randomUUID()}.wav`;
+  const approvalKey = `approval-audio/${narratorPersonId}/${randomUUID()}.wav`;
   await storage.put({
     key: approvalKey,
     bytes: approvalAudio,
@@ -145,7 +155,7 @@ async function seedApprovedStory(
   });
   await approveAndShareStory(db, {
     storyId: story.id,
-    elderPersonId,
+    narratorPersonId,
     audienceTier: "family",
     approvalAudio: {
       storageKey: approvalKey,
@@ -164,26 +174,22 @@ async function seedApprovedStory(
 
 export async function runSeed(): Promise<SeedResult> {
   const { db, storage } = await getRuntime();
+  return seedInto(db, storage);
+}
 
-  // mock_auth_users has no FK back to persons/accounts, so a CASCADE off those tables does NOT
-  // clear it — list it explicitly or a re-seed trips the unique-email index. invitations and
-  // join_requests would cascade via their family/person FKs, but we name them too for clarity.
-  await db.execute(sql`
-    TRUNCATE TABLE
-      asks,
-      consent_records,
-      stories,
-      media,
-      elder_sessions,
-      invitations,
-      join_requests,
-      memberships,
-      families,
-      persons,
-      accounts,
-      mock_auth_users
-    RESTART IDENTITY CASCADE
-  `);
+/**
+ * The seed itself, against an injected db + storage. Split out from {@link runSeed} so it can run
+ * against a test database (see dev-seed.test.ts) without going through getRuntime's persistent
+ * PGlite + filesystem store.
+ */
+export async function seedInto(
+  db: Awaited<ReturnType<typeof getRuntime>>["db"],
+  storage: Awaited<ReturnType<typeof getRuntime>>["storage"],
+): Promise<SeedResult> {
+  // Single-schema dev model: blow the whole DB away and re-apply the CURRENT schema, rather than
+  // TRUNCATE-ing a fixed table list. This means a schema change (edit src/schema.ts → regenerate)
+  // lands on the very next reseed with no migration bookkeeping and no stale-state archaeology.
+  await resetSchema(db);
 
   const [eleanor] = await db
     .insert(persons)
@@ -211,6 +217,14 @@ export async function runSeed(): Promise<SeedResult> {
     })
     .returning();
 
+  const [eleanorAcct] = await db
+    .insert(accounts)
+    .values({
+      authProviderUserId: "dev:eleanor",
+      email: "eleanor@example.test",
+      displayName: "Eleanor Boudreaux",
+    })
+    .returning();
   const [sofiaAcct] = await db
     .insert(accounts)
     .values({
@@ -227,6 +241,10 @@ export async function runSeed(): Promise<SeedResult> {
       displayName: "Marco Boudreaux",
     })
     .returning();
+  await db
+    .update(persons)
+    .set({ accountId: eleanorAcct!.id })
+    .where(eq(persons.id, eleanor!.id));
   await db
     .update(persons)
     .set({ accountId: sofiaAcct!.id })
@@ -265,10 +283,80 @@ export async function runSeed(): Promise<SeedResult> {
     },
   ]);
 
+  // Four pending Asks for Eleanor so her "Questions for you" tab has a real queue.
+  // The FIRST ask is the one the seeded DRAFT story answers (state=draft, askId=ask1.id).
+  const ask1 = await createAsk(
+    db,
+    { kind: "account", personId: sofia!.id },
+    {
+      targetPersonId: eleanor!.id,
+      familyId: family!.id,
+      questionText: "Grandma, what's your earliest memory of your own grandmother?",
+    },
+  );
+  await createAsk(
+    db,
+    { kind: "account", personId: sofia!.id },
+    {
+      targetPersonId: eleanor!.id,
+      familyId: family!.id,
+      questionText:
+        "What's the best meal you remember from your childhood? Can you describe it?",
+    },
+  );
+  await createAsk(
+    db,
+    { kind: "account", personId: marco!.id },
+    {
+      targetPersonId: eleanor!.id,
+      familyId: family!.id,
+      questionText:
+        "Tell me about a time you felt really proud of one of your children.",
+    },
+  );
+  await createAsk(
+    db,
+    { kind: "account", personId: marco!.id },
+    {
+      targetPersonId: eleanor!.id,
+      familyId: family!.id,
+      questionText:
+        "What do you wish you'd known when you were twenty years old?",
+    },
+  );
+
+  // One DRAFT story linked to ask1 — when signed in as Eleanor, the Questions tab shows
+  // "Review & approve" for that ask immediately. No transcript/prose: the pipeline runs at approval.
+  const draftAudio = tinyWav();
+  const draftKey = `story-audio/${eleanor!.id}/${randomUUID()}.wav`;
+  await storage.put({
+    key: draftKey,
+    bytes: draftAudio,
+    contentType: SAMPLE_AUDIO_CONTENT_TYPE,
+  });
+  const { story: draftStory } = await persistRecordingAndCreateDraft(
+    db,
+    {
+      ownerPersonId: eleanor!.id,
+      storageKey: draftKey,
+      contentType: SAMPLE_AUDIO_CONTENT_TYPE,
+      durationSeconds: 1,
+      checksum: checksumOf(draftAudio),
+    },
+    { promptQuestion: ask1.questionText, askId: ask1.id },
+  );
+
   // --- Onboarding + family-flow demo data --------------------------------------------------
-  // Give Sofia + Marco real login credentials (the mock provider plays Clerk locally) so the
-  // /sign-in flow works, and mark them already-onboarded (onboarded_at + birth_date set) so they
-  // land straight on the hub instead of the /welcome onboarding gate.
+  // Give Eleanor + Sofia + Marco real login credentials (the mock provider plays Clerk locally) so
+  // the /sign-in flow works, and mark them already-onboarded (onboarded_at + birth_date set) so they
+  // land straight on the hub instead of the /welcome onboarding gate. Every Person has an Account —
+  // "narrator" is a role, not an account distinction; Eleanor's link token is a convenience login,
+  // not her identity.
+  await seedMockCredential(db, {
+    email: "eleanor@example.test",
+    password: SEED_PASSWORD,
+    authProviderUserId: "dev:eleanor",
+  });
   await seedMockCredential(db, {
     email: "sofia@example.test",
     password: SEED_PASSWORD,
@@ -279,6 +367,10 @@ export async function runSeed(): Promise<SeedResult> {
     password: SEED_PASSWORD,
     authProviderUserId: "dev:marco",
   });
+  await db
+    .update(persons)
+    .set({ onboardedAt: sql`now()`, birthDate: "1942-05-10" })
+    .where(eq(persons.id, eleanor!.id));
   await db
     .update(persons)
     .set({ onboardedAt: sql`now()`, birthDate: "1988-03-12" })
@@ -338,7 +430,7 @@ export async function runSeed(): Promise<SeedResult> {
     relationshipLabel: "Sofia's cousin",
   });
 
-  const { token } = await createElderSession(db, {
+  const { token } = await createLinkSession(db, {
     personId: eleanor!.id,
     familyId: family!.id,
     invitedByPersonId: sofia!.id,
@@ -386,7 +478,7 @@ export async function runSeed(): Promise<SeedResult> {
   });
   await approveAndShareStory(db, {
     storyId: story.id,
-    elderPersonId: eleanor!.id,
+    narratorPersonId: eleanor!.id,
     audienceTier: "family",
     approvalAudio: {
       storageKey: approvalKey,
@@ -459,44 +551,10 @@ export async function runSeed(): Promise<SeedResult> {
     await seedApprovedStory(db, storage, eleanor!.id, spec);
   }
 
-  // Story 2 — left at pending_approval so the approval UI has something to act on.
-  const pendingAudio = tinyWav();
-  const pendingKey = `story-audio/${eleanor!.id}/${randomUUID()}.wav`;
-  await storage.put({
-    key: pendingKey,
-    bytes: pendingAudio,
-    contentType: SAMPLE_AUDIO_CONTENT_TYPE,
-  });
-  const { story: pendingStory } = await persistRecordingAndCreateDraft(
-    db,
-    {
-      ownerPersonId: eleanor!.id,
-      storageKey: pendingKey,
-      contentType: SAMPLE_AUDIO_CONTENT_TYPE,
-      durationSeconds: 1,
-      checksum: checksumOf(pendingAudio),
-    },
-    { promptQuestion: "What did your father do for a living?" },
-  );
-  await updateDerivedFields(db, pendingStory.id, {
-    transcript:
-      "My father worked on the railroad — the Southern Pacific. He was gone for days at a time " +
-      "and when he came home he smelled like creosote and metal.",
-    prose:
-      "My father worked on the Southern Pacific railroad. He was gone for days at a time; " +
-      "when he came home, the smell of creosote and metal came with him.",
-    title: "My father on the railroad",
-    summary: "Eleanor remembers her father's railroad work.",
-    tags: ["father", "work"],
-    eraYear: 1948,
-    eraLabel: "the railroad",
-  });
-  await transitionStoryState(db, pendingStory.id, "pending_approval");
-
   return {
-    elderToken: token,
-    elderPersonId: eleanor!.id,
-    pendingStoryId: pendingStory.id,
+    narratorToken: token,
+    narratorPersonId: eleanor!.id,
+    draftStoryId: draftStory.id,
     stewardSignInEmail: "sofia@example.test",
     seedPassword: SEED_PASSWORD,
     boudreauxFamilyId: family!.id,

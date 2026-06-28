@@ -2,22 +2,29 @@
 
 Paste the prompt block below into a fresh Claude Code session. It is self-contained.
 
+> **Maintenance note:** keep the "State of the build" section honest. This file was
+> badly stale once (it claimed Increment 5 was next long after the whole build had
+> shipped) and nearly sent a fresh session re-building finished work. If you finish
+> something, update the HEAD hash + the done/next lines here in the same pass.
+
 ---
 
 ## Prompt to paste
 
 You are the lead engineer continuing the Phase 0 + Phase 1 build of "Family
-Chronicle", an AI-first family-storytelling product. Resume an in-progress
-build — do NOT restart.
+Chronicle", an AI-first family-storytelling product. The core build is COMPLETE
+and committed — you are now in the polish / verification / next-phase stage, NOT
+the increment build-out. Do not rebuild finished work.
 
 ### Read these first (in order)
 1. `CLAUDE.md` (repo root) — short orientation written for fresh sessions
 2. `docs/Phase-0-1-Engineering-Spec.md` — source of truth (read in full)
-3. `docs/PLAN.md` — 7-increment checklist with progress
-4. `docs/PROGRESS.md` — eval status/log per increment
+3. `docs/PLAN.md` — increment checklist (all increments ✅ done)
+4. `docs/PROGRESS.md` — eval log per increment + the hi-fi design pass + vendor adapters
 5. `docs/DECISIONS.md` — every non-obvious choice already made + why
-   (READ the I1 / I2 / I3 / I4 review-response sections; do NOT re-litigate them)
 6. `docs/OPEN-QUESTIONS.md` — stubs + acknowledged Phase-1 gaps (not violations)
+7. `docs/superpowers/specs/2026-06-27-hi-fi-design-pass-design.md` +
+   `docs/superpowers/plans/2026-06-27-hi-fi-design-pass.md` — the UI pass (done)
 
 ### Operating mandate (unchanged)
 Own the implementation; make engineering decisions yourself without asking,
@@ -25,26 +32,9 @@ except (1) a spec ambiguity with materially different hard-to-reverse
 architectures, or (2) anything requiring real-world action (paid accounts,
 vendor signup, real personal data, cost) — stub those and note in
 OPEN-QUESTIONS. Honor the LOCKED decisions + 3 principles as inviolable
-(elder never feels they use software; authenticity beats polish / original
+(the narrator never feels they use software; authenticity beats polish / original
 audio canonical and never overwritten; consent owned by the person, enforced
 at the data layer).
-
-For EACH increment run the loop: BUILD (code + real asserting tests) →
-spawn a FRESH adversarial sub-agent reviewer (give it ONLY the spec + the
-files you wrote + a review checklist; it reports spec violations with
-file:line, fixes nothing) → ENHANCE → re-eval with a NEW fresh sub-agent
-until it returns no spec violations → next increment. Keep
-PLAN/PROGRESS/DECISIONS/OPEN-QUESTIONS updated. Commit locally per
-increment (no push). Use the general-purpose agent for reviewers.
-
-**Build the remaining increments SEQUENTIALLY (I5 → I6 → I7). No
-parallelism.** The interviewer (I4) is now in place and the approval gate
-(I5) is the next thing the rest of the build leans on; doing it solo with
-full attention is the right call. Same for I6 (depends on I5 output) and
-I7 (depends on I4 + I6).
-
-Commit messages end with:
-`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 
 ### Environment
 - Repo IS on local disk (`C:\Users\boose\projects\familyapp`) — not Google Drive.
@@ -54,116 +44,71 @@ Commit messages end with:
 - `cd` does NOT persist between Bash tool calls — use `pnpm -F <pkg> exec ...`
   from the repo root, or pass absolute paths.
 
-### State of the build (HEAD = `e5e758b`)
-- Increment 0 (scaffold): ✅ done
-- Increment 1 (THE SPINE): ✅ done, eval-clean (3 rounds)
-- Increment 2 (CAPTURE PATH): ✅ done, eval-clean (2 rounds)
-- Increment 3 (PIPELINE): ✅ done, eval-clean (3 rounds)
-- **Increment 4 (INTERVIEWER): ✅ done, eval-clean (3 rounds)**
-  - New `@chronicle/interviewer` package: controlled turn loop wrapping
-    `LanguageModel` (NOT an open chat). Seams: `Voice` (TTS for question
-    audio — ElevenLabs default), `AskSource` (I7 plugs DB-backed asks),
-    `MemorySource`, `AnchorSource`. Mocks: `ScriptedVoice`,
-    `InMemoryAskSource`, `InMemoryMemorySource`, `InMemoryAnchorSource`.
-  - Behavior policy (`behavior.ts`) priority: distress → off-ramp →
-    callback-on-turn-0 → pending Asks (by priority) → follow_up → base
-    bank. High-sensitivity rapport-gated (`RAPPORT_THRESHOLD_TURNS = 4`);
-    distress flag suppresses high even past rapport. Reminiscence-bump
-    (childhood / young_adult) phases preferred. Off-ramp ≠ distress —
-    only distress flags `surfaceHumanSupport`. `follow_up` clears
-    `lastElderUtterance` on consumption (no sticky re-fire).
-  - Phraser (`phraser.ts`) is the ONLY LLM call; in-house system prompt
-    embeds the spec's absolute rules (one thing at a time, open-ended,
-    never invent facts, never push, anchors-as-hints).
-  - Cross-session memory uses NEW audited content read
-    `listElderMemoryForInterviewer` in `story-repository.ts`. SQL projects
-    only `title/summary/tags/promptQuestion/createdAt` — transcript /
-    prose / storageKey never selected. Architecture allowlist UNCHANGED
-    (exact-membership canary still pins `authorization.ts` +
-    `story-repository.ts`).
-  - Vendor-SDK guard now scans `packages/interviewer/src` too.
-  - 111 tests green (db 11, storage 11, core 34, capture 11, pipeline 20,
-    interviewer 24). All packages + apps/web typecheck clean.
+### State of the build (HEAD = `ccbc299` — "new audio controls")
+Everything in the spec's build sequence is DONE and eval-clean:
+- Increments 0–7: ✅ all done (spine, capture, pipeline, interviewer, approval
+  gate, family hub, asked-question relay). See PROGRESS.md per-increment log.
+- Six vendor adapters (Groq / ElevenLabs / R2 / Clerk / Inngest / Supabase
+  Postgres): ✅ wired behind seams, eval-clean. API keys still required to
+  invoke against real services; CI does not run them.
+- Hi-fi design pass over `apps/web`: ✅ done. App migrated off the stale
+  `--kin-*` tokens to the semantic token layer (`--accent`/`--surface-*`/
+  `--text-*`, rem scale, DM Mono, 3 themes); all six Kindred components
+  reconciled to the showcase; narrator conversation + approval screens rebuilt;
+  family hub rebuilt as one tabbed shell (Stories / Questions / Ask / Asks /
+  Invite) with account menu + tab badges; old `/hub/*` routes redirect in.
+- Onboarding + family flows (landing, auth, invite, join, steward approvals):
+  ✅ landed (commits `2d128de`→`da59f1e`).
+- **New audio control (`KindredListenBar`): ✅ done (`ccbc299`).** It is the
+  sophisticated functional scrubber — seekable track + thumb, current/total
+  timecode, transport row (⏮ restart · ↺10 back · ▶/❚❚ play · ↻10 fwd · ⏭ next),
+  real `<audio>` playback in audio (`src`) mode, controlled `playing`/`onToggle`
+  mode otherwise. It matches `…/project/Kindred Listen Bar.dc.html` (the live
+  design prototype). NOTE: the embedded copy of `KindredListenBar` inside
+  `…/_ds/…/_ds_bundle.js` is STALE — it still shows the old single-button pill
+  with a static waveform. The bundle is a generated reference artifact we
+  consume, not edit; ignore that copy. The `.dc.html` prototype is authoritative.
+
+### What's actually open
+- **Manual visual fidelity walk** (the one carried-over TODO): with a browser,
+  run `pnpm -F @chronicle/web dev`, seed via `/dev/seed`, and walk each screen
+  against `…/project/Family Chronicle.dc.html` — narrator conversation, narrator
+  approval, hub (each tab + account menu + badges), story detail, and the
+  listen-bar scrubber. Repeat with `data-theme="archive"` and `"hearth"`. Note
+  + fix any fidelity gaps. (Only do this when the user asks to start the dev
+  server.)
+- Anything in `docs/OPEN-QUESTIONS.md` still marked open.
+- Next-phase work is the user's call — ask before starting a new initiative.
 
 ### Two architecture allowlists are in force (both exact-membership)
 - Content tables (`@chronicle/db/content`): exactly `authorization.ts` +
   `story-repository.ts`.
 - Pipeline system-actor read (`@chronicle/core/pipeline`): exactly
   `packages/pipeline/src/orchestrator.ts`.
-
-Any new audited file must be added to the appropriate ALLOWLIST in
-`packages/core/test/architecture.test.ts` in the SAME commit. The two
-existing allowlists are exact-membership canaries — extending them is a
-deliberate, reviewer-visible event.
-
-### DO THIS NEXT — Increment 5 (then I6, then I7) — sequentially
-
-Per `PLAN.md` / spec Part III.
-
-**Increment 5 — VOICE-ONLY APPROVAL GATE**
-- Voice approval IN-SESSION; capture `approval_audio` Media (different
-  `kind` from `story_audio`, already in the schema enum) via the same
-  storage-first ordering pattern as `ingestRecording` (audio bytes in
-  storage BEFORE the DB row, so authenticity beats polish if anything
-  fails).
-- ATOMIC transition: `pending_approval → approved → shared` at the
-  elder's chosen `audienceTier`, AND the first `ConsentRecord`
-  (`action=approved_for_sharing`, points at the approval-audio Media) —
-  in **one `db.transaction`**. Build a new audited write function in
-  `packages/core/src/story-repository.ts` (file is already on the
-  allowlist; no new entry needed). It should call `transitionStoryState`
-  twice (pending_approval → approved, then approved → shared) and
-  `recordConsent` once, all within the same transaction.
-- Voice correction regenerates **prose only** (call into
-  `renderStoryFromTranscript` again with the corrected transcript);
-  audio untouched, canonical bytes still primary.
-- Authorization function already refuses to surface a Story without
-  approved/shared state + backing `approved_for_sharing` ledger row.
-  Add regression tests that exercise the full approval flow end-to-end:
-  before approval → invisible to family; after approval → visible at the
-  chosen tier; after a `revoked` superseding row → invisible again.
-- Touches `@chronicle/capture` (approval capture path uses the same
-  `CapturedAudio` / `ingestRecording`-style helper) +
-  `@chronicle/core` (the new audited write + tests).
-
-**Increment 6 — BASIC FAMILY HUB** (after I5)
-- Logged-in younger-gen `apps/web` surface; approved-stories list
-  (original voice primary, prose secondary); invite-link generator
-  (creates `elder_session`); Ask submission form.
-- AuthProvider seam stubbed (Clerk in prod per DECISIONS).
-- All reads strictly through `@chronicle/core`'s authorization function.
-
-**Increment 7 — ASKED-QUESTION RELAY** (after I6)
-- Ask queued → routed into the interviewer queue (one of several prompt
-  sources = seam already shaped by `@chronicle/interviewer`'s
-  `AskSource`).
-- Prioritize + frame warmly with asker named; buffered, never interrupts
-  elder.
-- On approval flip Ask to `answered` with Story pointer + notify asker
-  (hub notification).
-
-### Front-door discipline reminder
-Any new content read/write path goes through `@chronicle/core` and is
-added to the appropriate ALLOWLIST in
-`packages/core/test/architecture.test.ts` in the same commit. Both
-existing allowlists are exact-membership canaries — quiet widening is
-not possible.
+Any new audited content read/write path goes through `@chronicle/core` and is
+added to the appropriate ALLOWLIST in `packages/core/test/architecture.test.ts`
+in the SAME commit. Both are exact-membership canaries — quiet widening is not
+possible. Raw SQL via `db.execute(sql\`…\`)` is the documented, out-of-scope
+bypass (code review catches it).
 
 ### Conventions reminder
 - TS strict + `noUncheckedIndexedAccess`; ESM only; `verbatimModuleSyntax`.
 - Pure source packages (`main = ./src/index.ts`), `workspace:*` deps.
 - Vendor SDKs only in adapter files; the architecture test in
-  `packages/pipeline/test/pipeline.test.ts` enforces zero vendor SDK
-  imports in `@chronicle/{core,db,storage,capture,pipeline,interviewer}`.
-  When you add another IP package (none planned for I5–I7), add it to
-  that scan.
-- Global preferences (`~/.claude/CLAUDE.md`): regression test after bug
-  fix; act adversarial; remember corrections (per-project here).
+  `packages/pipeline/test/pipeline.test.ts` enforces zero vendor SDK imports in
+  `@chronicle/{core,db,storage,capture,pipeline,interviewer}` (R2 is the one
+  documented exception for `packages/storage/src/r2.ts`).
+- Workflow: subagent-driven — a coding sub-agent writes; a FRESH adversarial
+  reviewer sub-agent reviews; iterate until clean (DECISIONS § Workflow).
+- Global prefs (`~/.claude/CLAUDE.md`): regression test after bug fix; act
+  adversarial; remember corrections (per-project here).
 - Memory at
   `C:\Users\boose\.claude\projects\C--Users-boose-projects-familyapp\memory\`.
-  Read `MEMORY.md` early. One feedback memory: always provide a
-  continuation prompt when suggesting clean context.
+  Read `MEMORY.md` early.
 
-Begin with reading the spec + PLAN/PROGRESS/DECISIONS/OPEN-QUESTIONS,
-then state the I5 plan in 3-5 lines and start building. Sequential —
-I5 → I6 → I7 — no parallelism.
+Commit messages end with:
+`Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
+
+Begin by reading the spec + PLAN/PROGRESS/DECISIONS/OPEN-QUESTIONS, then ask the
+user what they want to tackle (visual fidelity walk, an open question, or
+next-phase work) rather than assuming there is more of the build sequence to do.

@@ -1,16 +1,19 @@
-import type { PendingAskForElder } from "@chronicle/core";
-import { AnswerButton } from "./AnswerButton";
+import Link from "next/link";
+import type { PendingAskForNarrator } from "@chronicle/core";
+import type { OutstandingAnswerDraft } from "@chronicle/core";
 
 interface QuestionsTabProps {
-  asks: PendingAskForElder[];
+  asks: PendingAskForNarrator[];
+  /** Keyed by Ask id. Presence signals a recorded-but-unapproved draft exists for that ask. */
+  draftsByAskId: Record<string, Pick<OutstandingAnswerDraft, "storyId" | "recordedAt">>;
 }
 
 /**
- * Questions tab — the asks routed to the viewer as the target elder. Hi-fi per the "To answer"
- * panel in the Family Chronicle design: a serif heading + gentle subtitle, then one card per
- * question with the asker, the question, and an Answer affordance. Server component.
+ * Questions tab — the asks routed to the viewer as the target narrator. Two-state per ask:
+ * "Answer" (no draft recorded yet) and "Review & approve" (draft exists). Both states link to
+ * /hub/answer/[askId] — the full-screen in-hub record→review page. Server component.
  */
-export function QuestionsTab({ asks }: QuestionsTabProps) {
+export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
   return (
     <div>
       <h2
@@ -33,7 +36,7 @@ export function QuestionsTab({ asks }: QuestionsTabProps) {
           margin: "12px 0 0",
         }}
       >
-        Your family asked these. Answer whenever you’re ready — there’s no rush.
+        Your family asked these. Answer whenever you're ready — there's no rush.
       </p>
 
       {asks.length === 0 ? (
@@ -55,7 +58,7 @@ export function QuestionsTab({ asks }: QuestionsTabProps) {
               margin: 0,
             }}
           >
-            You’re all caught up. Nothing waiting.
+            You're all caught up. Nothing waiting.
           </p>
         </div>
       ) : (
@@ -69,46 +72,99 @@ export function QuestionsTab({ asks }: QuestionsTabProps) {
             gap: 14,
           }}
         >
-          {asks.map((item) => (
-            <li
-              key={item.ask.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 20,
-                background: "var(--surface-card)",
-                border: "var(--border-width) solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-card)",
-                padding: "20px 24px",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span
+          {asks.map((item) => {
+            const draft = draftsByAskId[item.ask.id];
+            const hasDraft = Boolean(draft);
+
+            // Short relative date for the "Recorded X ago" sub-label
+            let recordedLabel: string | null = null;
+            if (draft) {
+              const dt = new Date(draft.recordedAt);
+              const diffMs = Date.now() - dt.getTime();
+              const diffMins = Math.floor(diffMs / 60000);
+              if (diffMins < 2) recordedLabel = "just now";
+              else if (diffMins < 60) recordedLabel = `${diffMins} min ago`;
+              else {
+                const diffHrs = Math.floor(diffMins / 60);
+                if (diffHrs < 24) recordedLabel = `${diffHrs}h ago`;
+                else recordedLabel = dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+              }
+            }
+
+            return (
+              <li
+                key={item.ask.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 20,
+                  background: "var(--surface-card)",
+                  border: `var(--border-width) solid ${hasDraft ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: "var(--radius-lg)",
+                  boxShadow: "var(--shadow-card)",
+                  padding: "20px 24px",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-label)",
+                      color: "var(--text-meta)",
+                      letterSpacing: "var(--tracking-mono)",
+                    }}
+                  >
+                    {item.askerSpokenName.toUpperCase()} ASKED
+                  </span>
+                  <p
+                    style={{
+                      fontFamily: "var(--font-story)",
+                      fontSize: "var(--text-story)",
+                      lineHeight: "var(--leading-snug)",
+                      color: "var(--text-body)",
+                      margin: "6px 0 0",
+                    }}
+                  >
+                    {item.ask.questionText}
+                  </p>
+                  {recordedLabel ? (
+                    <p
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-label)",
+                        color: "var(--support)",
+                        letterSpacing: "var(--tracking-mono)",
+                        margin: "6px 0 0",
+                      }}
+                    >
+                      RECORDED {recordedLabel.toUpperCase()}
+                    </p>
+                  ) : null}
+                </div>
+
+                <Link
+                  href={`/hub/answer/${item.ask.id}`}
                   style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    color: "var(--text-meta)",
-                    letterSpacing: "var(--tracking-mono)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "12px 22px",
+                    borderRadius: "var(--radius-md)",
+                    border: hasDraft ? `1.5px solid var(--accent)` : "none",
+                    background: hasDraft ? "var(--accent-soft)" : "var(--accent)",
+                    color: hasDraft ? "var(--accent)" : "var(--accent-on)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "var(--text-ui-sm)",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    textDecoration: "none",
                   }}
                 >
-                  {item.askerSpokenName.toUpperCase()} ASKED
-                </span>
-                <p
-                  style={{
-                    fontFamily: "var(--font-story)",
-                    fontSize: "var(--text-story)",
-                    lineHeight: "var(--leading-snug)",
-                    color: "var(--text-body)",
-                    margin: "6px 0 0",
-                  }}
-                >
-                  {item.ask.questionText}
-                </p>
-              </div>
-              <AnswerButton />
-            </li>
-          ))}
+                  {hasDraft ? "Review & approve" : "Answer"}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

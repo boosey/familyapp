@@ -6,7 +6,7 @@
  * breaking the entire invite result view. The fix moves the show-once deletion into THIS route
  * handler, invoked from a client effect after the link renders. This test pins that the handler
  * deletes the correct cookies (name + path) and returns 204, so the deletion never drifts back
- * into render. The handler clears BOTH show-once flash cookies (the elder-invite link and the
+ * into render. The handler clears BOTH show-once flash cookies (the narrator-invite link and the
  * member-invite link), since either result view may have set one.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";

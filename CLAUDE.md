@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Family Chronicle — Phase 0 (the spine) + Phase 1 (the elder voice-capture wedge). TypeScript end-to-end, pnpm workspaces monorepo, Node >=20.
+Family Chronicle — Phase 0 (the spine) + Phase 1 (the voice-capture wedge). TypeScript end-to-end, pnpm workspaces monorepo, Node >=20.
 
 Authoritative docs (read these before non-trivial work):
 - `docs/Phase-0-1-Engineering-Spec.md` — the spec the code implements.
@@ -30,10 +30,10 @@ Tests use Vitest. The DB layer uses **PGlite** (real Postgres in-process) — th
 - `@chronicle/db` — Drizzle schema (the spec made executable), client, migrations, PGlite test helper.
 - `@chronicle/core` — the IP: single authorization function, append-only consent ledger, story state machine, story write repository.
 - `@chronicle/storage` — `MediaStorage` interface + in-memory/filesystem/R2 adapters. Media bytes only; no DB.
-- `@chronicle/capture` — session tokens (token IS identity for the elder surface), `ingestRecording` orchestrator (storage upload → core write path).
+- `@chronicle/capture` — session tokens (token IS identity for the link-session capture surface), `ingestRecording` orchestrator (storage upload → core write path).
 - `@chronicle/pipeline` — `Transcriber`/`LanguageModel`/`JobQueue`/`WorkingCopyTransformer` seams + mocks, in-process queue, speech-to-story prompt + orchestrator (`transcribe → render_story`).
-- `@chronicle/interviewer` — controlled turn loop wrapping `LanguageModel` (NOT an open chat). `Voice`/`AskSource`/`MemorySource`/`AnchorSource` seams + mocks; base question bank as data; behavior policy (sensitivity gating, off-ramp, distress, reminiscence bump) in `behavior.ts`; in-house system prompt + phraser in `phraser.ts`. Cross-session memory goes through the audited `listElderMemoryForInterviewer` on `story-repository.ts` (SQL projects safe metadata only).
-- `@chronicle/web` — Next.js elder surface (`/s/[token]`).
+- `@chronicle/interviewer` — controlled turn loop wrapping `LanguageModel` (NOT an open chat). `Voice`/`AskSource`/`MemorySource`/`AnchorSource` seams + mocks; base question bank as data; behavior policy (sensitivity gating, off-ramp, distress, reminiscence bump) in `behavior.ts`; in-house system prompt + phraser in `phraser.ts`. Cross-session memory goes through the audited `listNarratorMemoryForInterviewer` on `story-repository.ts` (SQL projects safe metadata only).
+- `@chronicle/web` — Next.js link-session capture surface (`/s/[token]`).
 
 Packages publish source directly (`"main": "./src/index.ts"`) and depend on each other via `workspace:*`. There is no build step between packages in dev.
 

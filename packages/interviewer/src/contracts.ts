@@ -5,7 +5,7 @@
  * `@chronicle/pipeline`) only PHRASES a chosen-topic question; the choice of topic, the
  * sequencing, sensitivity gating, off-ramp recognition, and cross-session memory are all in
  * our code. The `Voice` seam below is the interviewer's synthetic TTS for SPEAKING the
- * question — entirely distinct from the elder's preserved original recordings, which the
+ * question — entirely distinct from the narrator's preserved original recordings, which the
  * capture path persists immutably and which are never synthesized.
  *
  * Vendor SDKs live ONLY in adapter files (none ship in Phase 1; ElevenLabs is the prod default
@@ -17,7 +17,7 @@
 // Voice — TTS for the interviewer's questions ONLY.
 // The chosen voice identity (persona) is configuration; the same warm voice every session is
 // a dignity requirement (spec Part III). The Voice seam returns audio bytes; the higher-level
-// turn loop hands those to the elder surface for playback.
+// turn loop hands those to the narrator surface for playback.
 // ---------------------------------------------------------------------------
 
 export interface VoiceSpeakInput {
@@ -67,8 +67,8 @@ export interface PendingAsk {
 }
 
 export interface AskSource {
-  /** Pending Asks targeting this elder, in arrival order (the loop will re-sort by priority). */
-  pendingForElder(personId: string): Promise<PendingAsk[]>;
+  /** Pending Asks targeting this narrator, in arrival order (the loop will re-sort by priority). */
+  pendingForNarrator(personId: string): Promise<PendingAsk[]>;
   /**
    * Notify the source that an Ask has been consumed into a turn (queued → routed). The DB
    * adapter flips the Ask's status; the in-memory mock no-ops. Called by the turn loop after a
@@ -78,12 +78,12 @@ export interface AskSource {
 }
 
 // ---------------------------------------------------------------------------
-// MemorySource — cross-session memory: what THIS elder has already talked about. The loop
+// MemorySource — cross-session memory: what THIS narrator has already talked about. The loop
 // uses this for (a) the warm callback that opens a returning session ("Last week you started
 // telling me about the farm…") and (b) de-duplication so the base bank doesn't ask the same
 // thing twice.
 //
-// Phase 1's prod impl is the audited core read `listElderMemoryForInterviewer`. Returning ONLY
+// Phase 1's prod impl is the audited core read `listNarratorMemoryForInterviewer`. Returning ONLY
 // title/summary/tags (no transcript, no audio bytes) keeps the interviewer surface from
 // becoming a backdoor on story content — those fields are derived, regenerable, and already
 // the lowest-sensitivity story metadata. The tests use an in-memory mock.
@@ -101,7 +101,7 @@ export interface PriorStoryMemory {
 }
 
 export interface MemorySource {
-  recentStoriesForElder(personId: string, limit: number): Promise<PriorStoryMemory[]>;
+  recentStoriesForNarrator(personId: string, limit: number): Promise<PriorStoryMemory[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,5 +121,5 @@ export interface BiographicalAnchors {
 }
 
 export interface AnchorSource {
-  loadForElder(personId: string): Promise<BiographicalAnchors | null>;
+  loadForNarrator(personId: string): Promise<BiographicalAnchors | null>;
 }

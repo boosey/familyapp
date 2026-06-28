@@ -5,14 +5,14 @@
  * narrow on purpose: identity-graph reads only.
  */
 import "server-only";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import { listStoriesForViewer } from "@chronicle/core";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, Family, Person, Story } from "@chronicle/db";
 
-export interface ElderWithStories {
-  elder: Person;
+export interface MemberWithStories {
+  person: Person;
   family: Family;
   stories: Story[];
 }
@@ -39,12 +39,9 @@ async function viewerFamilyIds(
     );
 }
 
-/** Other active members of a family (excluding the viewer themselves). */
-async function familyCoMembers(
-  db: Database,
-  familyId: string,
-  viewerPersonId: string,
-): Promise<Person[]> {
+/** All active members of a family, INCLUDING the viewer themselves (the viewer sees their own
+ *  stories on their hub, not just other people's). Deduping across families is the caller's job. */
+async function familyMembers(db: Database, familyId: string): Promise<Person[]> {
   return db
     .select({
       id: persons.id,
@@ -62,41 +59,46 @@ async function familyCoMembers(
     .from(memberships)
     .innerJoin(persons, eq(persons.id, memberships.personId))
     .where(
-      and(
-        eq(memberships.familyId, familyId),
-        eq(memberships.status, "active"),
-        ne(persons.id, viewerPersonId),
-      ),
+      and(eq(memberships.familyId, familyId), eq(memberships.status, "active")),
     );
 }
 
 /**
- * For an account-authenticated viewer, list every co-member elder in every family they belong
- * to, along with the elder's stories the viewer is authorized to read. Authorization is enforced
- * at the story layer by `listStoriesForViewer` — anything that should be invisible (private,
- * pending_approval, revoked) simply does not appear.
+ * For an account-authenticated viewer, list every active member in every family they belong to —
+ * INCLUDING the viewer themselves, so a narrator who is logged in sees their own stories — along
+ * with that member's stories the viewer is authorized to read (regardless of role). Authorization
+ * is enforced at the story layer by `listStoriesForViewer`: anything that should be invisible to a
+ * non-owner (private, pending_approval, revoked) simply does not appear, while the owner always
+ * sees their own content in any state.
+ *
+ * Each person is emitted once even if shared across several of the viewer's families (deduped by
+ * person id, attributed to the first such family) — otherwise their stories would render twice.
  */
 export async function loadHubFeed(
   db: Database,
   ctx: AuthContext,
-): Promise<ElderWithStories[]> {
+): Promise<MemberWithStories[]> {
   if (ctx.kind !== "account") return [];
   const fams = await viewerFamilyIds(db, ctx.personId);
-  const out: ElderWithStories[] = [];
+
+  // person id -> the (person, representative family) to show them under. First family wins.
+  const byPerson = new Map<string, { person: Person; family: Family }>();
   for (const fam of fams) {
-    const coMembers = await familyCoMembers(db, fam.id, ctx.personId);
-    for (const elder of coMembers) {
-      const stories = await listStoriesForViewer(db, ctx, {
-        ownerPersonId: elder.id,
-      });
-      // Most-recent approval first; falls back to createdAt where approvedAt is null.
-      stories.sort((a, b) => {
-        const at = a.approvedAt?.getTime() ?? a.createdAt.getTime();
-        const bt = b.approvedAt?.getTime() ?? b.createdAt.getTime();
-        return bt - at;
-      });
-      out.push({ elder, family: fam, stories });
+    for (const member of await familyMembers(db, fam.id)) {
+      if (!byPerson.has(member.id)) byPerson.set(member.id, { person: member, family: fam });
     }
+  }
+
+  const out: MemberWithStories[] = [];
+  for (const { person, family } of byPerson.values()) {
+    const stories = await listStoriesForViewer(db, ctx, { ownerPersonId: person.id });
+    // Most-recent approval first; falls back to createdAt where approvedAt is null.
+    stories.sort((a, b) => {
+      const at = a.approvedAt?.getTime() ?? a.createdAt.getTime();
+      const bt = b.approvedAt?.getTime() ?? b.createdAt.getTime();
+      return bt - at;
+    });
+    out.push({ person, family, stories });
   }
   return out;
 }

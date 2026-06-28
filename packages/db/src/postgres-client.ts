@@ -20,14 +20,13 @@
  * are reachable solely via the guarded `@chronicle/db/content` subpath (enforced by
  * `packages/core/test/architecture.test.ts`).
  *
- * MIGRATIONS
- * ----------
- * Migration SQL lives in `packages/db/drizzle/` and is the same source of truth for PGlite (dev/
- * test) and prod. Apply it to a fresh prod database with `applyMigrationsToPostgres(sql)` (see
- * migrate.ts). The bootstrap is guarded by a `_chronicle_meta` table so re-running is a no-op —
- * required because the `CREATE TRIGGER` statements in `0001_invariants.sql` are not idempotent.
- * For ongoing schema changes prefer `drizzle-kit migrate` against `DATABASE_URL`; this bootstrap
- * is for the first-boot case (fresh Supabase/Neon project).
+ * SCHEMA
+ * ------
+ * Single-schema model (no incremental migrations while the schema is molten): the full DDL lives
+ * in `packages/db/drizzle/schema.sql` (+ `invariants.sql`), generated from `src/schema.ts`, and is
+ * the same source of truth for PGlite (dev/test) and prod. Bootstrap a fresh prod database with
+ * `applySchemaToPostgres(sql)` (see migrate.ts) — it applies the schema only if absent and NEVER
+ * drops. When the schema stabilizes, introduce a real migration tool for prod evolution.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";

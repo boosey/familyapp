@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Let elders pinch-zoom; never trap them.
+  // Let narrators pinch-zoom; never trap them.
   maximumScale: 5,
 };
 

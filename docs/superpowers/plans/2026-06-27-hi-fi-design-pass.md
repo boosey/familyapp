@@ -33,7 +33,7 @@
 - `apps/web/app/globals.css` — convert base + utilities to semantic tokens
 - `apps/web/app/_kindred/{KindredButton,KindredVoiceButton,KindredListenBar,KindredStoryCard,KindredPromptCard,KindredChip}.tsx`
 - `apps/web/app/_kindred/index.ts` — export new components
-- `apps/web/app/s/[token]/page.tsx` + `ElderRecorder.tsx`
+- `apps/web/app/s/[token]/page.tsx` + `NarratorRecorder.tsx`
 - `apps/web/app/s/[token]/approve/[storyId]/page.tsx` + `ApprovalRecorder.tsx`
 - `apps/web/app/hub/page.tsx` — becomes the tabbed shell
 - `apps/web/app/hub/ask/page.tsx`, `hub/asks/page.tsx`, `hub/invite/page.tsx`, `hub/invite/result/page.tsx` — thin redirects or re-exports into the shell
@@ -325,7 +325,7 @@ git commit -m "refactor(web): point globals.css at semantic tokens"
 **Files:**
 - Modify: `apps/web/app/_kindred/KindredButton.tsx`
 
-Reference: showcase buttons (e.g. primary CTA on Elder screens; tab buttons line ~233; "Save" / form buttons in hub tabs). Contract:
+Reference: showcase buttons (e.g. primary CTA on Narrator screens; tab buttons line ~233; "Save" / form buttons in hub tabs). Contract:
 
 ```ts
 interface KindredButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -348,9 +348,9 @@ interface KindredButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 **Files:**
 - Modify: `apps/web/app/_kindred/KindredVoiceButton.tsx`
-- Modify call sites: `apps/web/app/s/[token]/ElderRecorder.tsx`, `apps/web/app/s/[token]/approve/[storyId]/ApprovalRecorder.tsx`
+- Modify call sites: `apps/web/app/s/[token]/NarratorRecorder.tsx`, `apps/web/app/s/[token]/approve/[storyId]/ApprovalRecorder.tsx`
 
-Showcase contract (from `renderVals()` ~753–774): `{ listening: boolean, label: string, onClick, size: number }`. Sizes used: elder idle 220, elder answer 140/160, approval 150. Idle shows mic glyph + pulse ring (`kindred-listening` animation on a ring using `--accent-soft`); listening shows stop square. Keep the app's additive `saving`/`disabled` (dim ring with `--accent-strong`, block clicks).
+Showcase contract (from `renderVals()` ~753–774): `{ listening: boolean, label: string, onClick, size: number }`. Sizes used: narrator idle 220, narrator answer 140/160, approval 150. Idle shows mic glyph + pulse ring (`kindred-listening` animation on a ring using `--accent-soft`); listening shows stop square. Keep the app's additive `saving`/`disabled` (dim ring with `--accent-strong`, block clicks).
 
 ```ts
 interface KindredVoiceButtonProps {
@@ -364,7 +364,7 @@ interface KindredVoiceButtonProps {
 ```
 
 - [ ] **Step 1:** Rewrite component to this API + semantic tokens + `kindred-listening` keyframe. Map the app's old `state` prop usage out.
-- [ ] **Step 2:** Update `ElderRecorder.tsx` and `ApprovalRecorder.tsx` to pass `listening`/`size` instead of `state`. Keep their existing recording/upload state machine; translate internal state → `listening`/`saving` booleans. Preserve all capture logic (token, askId, POST to `/api/capture`).
+- [ ] **Step 2:** Update `NarratorRecorder.tsx` and `ApprovalRecorder.tsx` to pass `listening`/`size` instead of `state`. Keep their existing recording/upload state machine; translate internal state → `listening`/`saving` booleans. Preserve all capture logic (token, askId, POST to `/api/capture`).
 - [ ] **Step 3:** Verify `pnpm --filter @chronicle/web typecheck` clean; load `/s/<seeded-token>` in dev (seed via `/dev/seed`) → voice button renders large with pulse; clicking toggles to listening. Stop server.
 - [ ] **Step 4 (suggested commit):** `git commit -am "feat(web): KindredVoiceButton listening/size API"`
 
@@ -440,21 +440,21 @@ interface KindredStoryCardProps {
 
 ---
 
-## Task 8: Elder conversation screen
+## Task 8: Narrator conversation screen
 
 **Files:**
-- Modify: `apps/web/app/s/[token]/page.tsx`, `apps/web/app/s/[token]/ElderRecorder.tsx`
+- Modify: `apps/web/app/s/[token]/page.tsx`, `apps/web/app/s/[token]/NarratorRecorder.tsx`
 
-Reference: showcase Elder screens, lines ~44–155. Target layout: `--surface-page` full-bleed; top a small identity row (avatar initial on `--support`, name + "Conversation · <day, time>"); centered column (max ~720px) with serif greeting "Hello, {spokenName}." at ~52px `--font-story`, a soft sub-line in `--text-ui` `--text-muted`, then the `KindredPromptCard` (asker's question or default); footer with the single loud `KindredVoiceButton` (size 220, label "Tap to speak"/"Listening…"). Keep the warm null-token fallback (restyled to semantic tokens). Preserve all data flow (`resolveElderSession`, `getElderProfile`, `listPendingAsksForElder`, `askId` wiring).
+Reference: showcase Narrator screens, lines ~44–155. Target layout: `--surface-page` full-bleed; top a small identity row (avatar initial on `--support`, name + "Conversation · <day, time>"); centered column (max ~720px) with serif greeting "Hello, {spokenName}." at ~52px `--font-story`, a soft sub-line in `--text-ui` `--text-muted`, then the `KindredPromptCard` (asker's question or default); footer with the single loud `KindredVoiceButton` (size 220, label "Tap to speak"/"Listening…"). Keep the warm null-token fallback (restyled to semantic tokens). Preserve all data flow (`resolveLinkSession`, `getNarratorProfile`, `listPendingAsksForNarrator`, `askId` wiring).
 
 - [ ] **Step 1:** Update `page.tsx` markup/styles to the above using semantic tokens (no `--kin-*`).
-- [ ] **Step 2:** Update `ElderRecorder.tsx` voice-button props (size 220) if not already from Task 4; keep capture logic.
-- [ ] **Step 3:** Verify typecheck clean; seed via `/dev/seed`, open the elder link → matches showcase greeting/prompt/voice layout. Stop server.
-- [ ] **Step 4 (suggested commit):** `git commit -am "feat(web): hi-fi elder conversation screen"`
+- [ ] **Step 2:** Update `NarratorRecorder.tsx` voice-button props (size 220) if not already from Task 4; keep capture logic.
+- [ ] **Step 3:** Verify typecheck clean; seed via `/dev/seed`, open the narrator link → matches showcase greeting/prompt/voice layout. Stop server.
+- [ ] **Step 4 (suggested commit):** `git commit -am "feat(web): hi-fi narrator conversation screen"`
 
 ---
 
-## Task 9: Elder approval screen
+## Task 9: Narrator approval screen
 
 **Files:**
 - Modify: `apps/web/app/s/[token]/approve/[storyId]/page.tsx`, `ApprovalRecorder.tsx`
@@ -463,7 +463,7 @@ Reference: showcase "Ready to share this one?" line ~156; approval props ~771–
 
 - [ ] **Step 1:** Restyle `page.tsx` + `ApprovalRecorder.tsx` to semantic tokens + the above components/props; keep all approval/audience logic.
 - [ ] **Step 2:** Verify typecheck clean; exercise approval on a seeded pending story. Stop server.
-- [ ] **Step 3 (suggested commit):** `git commit -am "feat(web): hi-fi elder approval screen"`
+- [ ] **Step 3 (suggested commit):** `git commit -am "feat(web): hi-fi narrator approval screen"`
 
 ---
 
@@ -493,8 +493,8 @@ Reference: showcase account avatar + dropdown (Family Chronicle.dc.html ~236–2
 Reference: Family hub ~225–420. The shell reads `?tab=` (default `stories`), renders header (family title + `HubTabs` + `KindredAccountMenu`), and the active tab. Account menu items: Log out → `/dev/sign-in` (or Clerk sign-out when configured) and "Switch user" → `/dev/sign-in`; profile/settings/manage-family are placeholder links (route to `/hub` for now) clearly commented as stubs. Keep `loadHubFeed` + `getCurrentAuthContext` + anonymous gate.
 
 - [ ] **Step 1:** Rewrite `hub/page.tsx`: `searchParams` → active tab; render shell + `KindredAccountMenu` (initials from `ctx`/profile) + `HubTabs` with badges (Questions badge = pending-asks count). Switch on tab to render `StoriesTab` / `QuestionsTab` / `AskTab` / `AsksTab` / `InviteTab` (latter three added in Task 12).
-- [ ] **Step 2:** `StoriesTab.tsx` — move the current per-elder feed rendering here using the updated `KindredStoryCard` (+ a featured `KindredListenBar` per the showcase). Server component; receives `feed` as props.
-- [ ] **Step 3:** `QuestionsTab.tsx` — list asks routed to the viewer ("Questions for you", ~395). Reuse the existing asks-for-elder data path; server component.
+- [ ] **Step 2:** `StoriesTab.tsx` — move the current per-narrator feed rendering here using the updated `KindredStoryCard` (+ a featured `KindredListenBar` per the showcase). Server component; receives `feed` as props.
+- [ ] **Step 3:** `QuestionsTab.tsx` — list asks routed to the viewer ("Questions for you", ~395). Reuse the existing asks-for-narrator data path; server component.
 - [ ] **Step 4:** Verify typecheck clean; `/hub?tab=stories` and `?tab=questions` render with seeded data; account menu opens; tabs switch. Stop server.
 - [ ] **Step 5 (suggested commit):** `git commit -am "feat(web): tabbed hub shell with stories + questions tabs"`
 
@@ -546,7 +546,7 @@ Reference: Family hub ~225–420. The shell reads `?tab=` (default `stories`), r
 - [ ] **Step 1:** Run `pnpm -r typecheck` → clean.
 - [ ] **Step 2:** Run `pnpm -r build` → succeeds.
 - [ ] **Step 3:** Run `pnpm --filter @chronicle/web test` → green. Run `pnpm --filter @chronicle/core test` and `pnpm --filter @chronicle/pipeline test` → architecture tests green (confirms the UI pass introduced no `@chronicle/db/content` / `.query.stories` access).
-- [ ] **Step 4:** `pnpm --filter @chronicle/web dev`; seed via `/dev/seed`; walk each screen against `Family Chronicle.dc.html`: elder conversation, elder approval, hub (each tab + account menu + badges), story detail. Repeat with `data-theme="archive"` and `"hearth"` (temporarily set on `<html>`) to confirm theming. Note any fidelity gaps and fix.
+- [ ] **Step 4:** `pnpm --filter @chronicle/web dev`; seed via `/dev/seed`; walk each screen against `Family Chronicle.dc.html`: narrator conversation, narrator approval, hub (each tab + account menu + badges), story detail. Repeat with `data-theme="archive"` and `"hearth"` (temporarily set on `<html>`) to confirm theming. Note any fidelity gaps and fix.
 - [ ] **Step 5:** Update `docs/PROGRESS.md` with a short entry for the hi-fi design pass.
 - [ ] **Step 6 (suggested commit):** `git commit -am "docs: log hi-fi design pass in PROGRESS"`
 

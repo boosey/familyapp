@@ -34,7 +34,7 @@ The ledger is the spine of the whole framework: a durable, auditable record of w
 
 **What a consent record contains.** The person it concerns; the scope of use it permits (e.g., "family may hear my stories," "voice archive permitted," "no interactive avatar"); the audience tier it allows; whether it applies during life, after death, or both; the date and method of capture; and its current status (active, paused, revoked, or — for the deceased — locked).
 
-**How consent is captured.** For the living, in their own voice during a session ("Is it alright if your grandchildren hear this one?") and through explicit settings, with help from the steward or initiator where needed. Crucially, low-friction for the elder: a spoken yes is a valid, logged consent, so Eleanor never fills out a form. For sensitive or posthumous permissions, capture is deliberate and unambiguous, not buried in a default.
+**How consent is captured.** For the living, in their own voice during a session ("Is it alright if your grandchildren hear this one?") and through explicit settings, with help from the steward or initiator where needed. Crucially, low-friction for the narrator: a spoken yes is a valid, logged consent, so Eleanor never fills out a form. For sensitive or posthumous permissions, capture is deliberate and unambiguous, not buried in a default.
 
 **Why it's auditable.** Diane must be able to *see* who can access what and why — the framework's legibility requirement. The ledger is the evidence that Eleanor's wishes are being honored, the record a court or a future steward could rely on, and the proof that any avatar was permitted. Legibility is itself a trust feature.
 
@@ -54,7 +54,7 @@ Granular, per-story privacy is how the chronicle holds a family's full range of 
 
 ## Component 3 — Living vs. deceased rules
 
-This is the ethical heart of the framework, and the distinction the broader elder/younger framing tended to gloss.
+This is the ethical heart of the framework, and a distinction that matters more than any role or generation — and one the everyday capture framing tends to gloss.
 
 **For the living.** The person is present and in control. They co-author, consent in real time, set and change their own privacy tiers, edit by voice, and revoke. Consent here is a living conversation, continuously renewable and reversible.
 

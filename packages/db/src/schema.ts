@@ -94,9 +94,9 @@ export const askStatusEnum = pgEnum("ask_status", [
 ]);
 
 /**
- * Member invitation lifecycle (account-creating join link). DISTINCT from the elder session
- * token: an invitation leads a NEW younger-generation person to create an Account and join a
- * family, whereas an elder session is anonymous capture identity. See ADR-0001.
+ * Member invitation lifecycle (account-creating join link). DISTINCT from a link session
+ * token: an invitation leads a NEW person to create an Account and join a family, whereas a
+ * link session is a login-free capture identity (no Account required). See ADR-0001.
  */
 export const invitationStatusEnum = pgEnum("invitation_status", [
   "pending",
@@ -118,7 +118,8 @@ export const joinRequestStatusEnum = pgEnum("join_request_status", [
 
 // ---------------------------------------------------------------------------
 // Person — the spine. Permanent, singular, owner of everything expressive.
-// A Person does NOT require a login. Elders are Persons with no Account.
+// A Person does NOT require a login: many Persons capture their stories through a login-free
+// link session and never create an Account.
 // ---------------------------------------------------------------------------
 
 export const persons = pgTable(
@@ -130,15 +131,16 @@ export const persons = pgTable(
     spokenName: text("spoken_name").notNull(),
     birthYear: integer("birth_year"),
     /**
-     * Full date of birth, captured in younger-gen onboarding (the one required step). Stored as
+     * Full date of birth, captured during account onboarding (the one required step). Stored as
      * a calendar date (no time/zone). `birthYear` is kept alongside as the coarse anchor the
      * interviewer already reads; both are written together when onboarding captures a full date.
      */
     birthDate: date("birth_date"),
     /**
-     * When this Person completed younger-gen onboarding. NULL = has not onboarded yet, which is
-     * the gate the hub uses to route a fresh account into the welcome → DOB → doors flow. Elders
-     * (no Account) never onboard and stay NULL forever — they are never routed through the hub.
+     * When this Person completed account onboarding. NULL = has not onboarded yet, which is
+     * the gate the hub uses to route a fresh account into the welcome → DOB → doors flow. Persons
+     * with no Account (e.g. those who only ever capture via a link session) never onboard and stay
+     * NULL forever — they are never routed through the hub.
      */
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     /** Lightly-held biographical anchors used to warm up the interviewer (place, etc.). */
@@ -147,10 +149,10 @@ export const persons = pgTable(
       .default(sql`'{}'::jsonb`),
     lifeStatus: lifeStatusEnum("life_status").notNull().default("living"),
     /**
-     * Pointer to the Account that may control this Person, if any (most elders: null).
-     * UNIQUE so one Account maps to exactly one Person. This is the SINGLE source of truth
-     * for the Person<->Account link (Account carries no back-pointer, avoiding divergence).
-     * Postgres unique indexes permit many NULLs, so the many login-less elders coexist freely.
+     * Pointer to the Account that may control this Person, if any (null for the many login-free
+     * Persons). UNIQUE so one Account maps to exactly one Person. This is the SINGLE source of
+     * truth for the Person<->Account link (Account carries no back-pointer, avoiding divergence).
+     * Postgres unique indexes permit many NULLs, so the many login-less Persons coexist freely.
      */
     accountId: uuid("account_id").references(() => accounts.id),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -370,7 +372,7 @@ export const consentRecords = pgTable(
     approvalAudioMediaId: uuid("approval_audio_media_id").references(
       () => media.id,
     ),
-    /** The actor who recorded the event (the elder, for a voice approval). */
+    /** The actor who recorded the event (the narrator, for a voice approval). */
     actorPersonId: uuid("actor_person_id")
       .notNull()
       .references(() => persons.id),
@@ -385,8 +387,8 @@ export const consentRecords = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Ask — the self-feeding relay. A family member's question for an elder, which becomes
-// the elder's next prompt and, once answered+approved, the family's notification.
+// Ask — the self-feeding relay. A family member's question for a narrator, which becomes
+// the narrator's next prompt and, once answered+approved, the family's notification.
 // An Ask is a prompt, not expressive content — it is not owned by a Family.
 // ---------------------------------------------------------------------------
 
@@ -397,7 +399,7 @@ export const asks = pgTable(
     askerPersonId: uuid("asker_person_id")
       .notNull()
       .references(() => persons.id),
-    /** The target elder. */
+    /** The target narrator. */
     targetPersonId: uuid("target_person_id")
       .notNull()
       .references(() => persons.id),
@@ -423,18 +425,19 @@ export const asks = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Sessions — the elder's token-based, login-free entry (Phase 1 capture path).
-// The token IS the identity for the duration of the session. Stored hashed.
-// (Defined here so the schema is the one source of truth; used from increment 2 on.)
+// Link sessions — a login-free, token-based capture entry (Phase 1 capture path). The long,
+// unguessable token IS the identity for the duration of the session; it is bound to one Person
+// (the narrator the link captures for) but assumes nothing about who they are or how they record.
+// Stored hashed. (Defined here so the schema is the one source of truth; used from increment 2 on.)
 // ---------------------------------------------------------------------------
 
-export const elderSessions = pgTable(
-  "elder_sessions",
+export const linkSessions = pgTable(
+  "link_sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     /** SHA-256 of the long unguessable token. The raw token is never stored. */
     tokenHash: text("token_hash").notNull(),
-    /** The elder this token speaks for. */
+    /** The Person (narrator) this link speaks for. */
     personId: uuid("person_id")
       .notNull()
       .references(() => persons.id),
@@ -454,16 +457,16 @@ export const elderSessions = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   },
   (t) => [
-    uniqueIndex("elder_sessions_token_hash_uq").on(t.tokenHash),
-    index("elder_sessions_person_idx").on(t.personId),
+    uniqueIndex("link_sessions_token_hash_uq").on(t.tokenHash),
+    index("link_sessions_person_idx").on(t.personId),
   ],
 );
 
 // ---------------------------------------------------------------------------
-// Invitation — the account-creating member invite (distinct from elder_sessions).
-// A younger-generation person follows the link, signs up, and joins `familyId`. The invite
-// carries the payload the onboarding "welcome" screen renders (inviter, family, name, relation).
-// Stored hashed like elder sessions: the raw token is never persisted. ADR-0001.
+// Invitation — the account-creating member invite (distinct from link_sessions).
+// A person follows the link, signs up, and joins `familyId`. The invite carries the payload the
+// onboarding "welcome" screen renders (inviter, family, name, relation).
+// Stored hashed like link sessions: the raw token is never persisted. ADR-0001.
 // ---------------------------------------------------------------------------
 
 export const invitations = pgTable(
@@ -591,8 +594,8 @@ export type ConsentRecord = typeof consentRecords.$inferSelect;
 export type NewConsentRecord = typeof consentRecords.$inferInsert;
 export type Ask = typeof asks.$inferSelect;
 export type NewAsk = typeof asks.$inferInsert;
-export type ElderSession = typeof elderSessions.$inferSelect;
-export type NewElderSession = typeof elderSessions.$inferInsert;
+export type LinkSession = typeof linkSessions.$inferSelect;
+export type NewLinkSession = typeof linkSessions.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
 export type JoinRequest = typeof joinRequests.$inferSelect;

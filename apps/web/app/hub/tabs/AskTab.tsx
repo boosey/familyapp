@@ -1,5 +1,5 @@
 /**
- * Ask tab — compose a question for an elder.
+ * Ask tab — compose a question for a narrator.
  * Server component; fetches family members and renders the ask form + its server action.
  */
 import { redirect } from "next/navigation";

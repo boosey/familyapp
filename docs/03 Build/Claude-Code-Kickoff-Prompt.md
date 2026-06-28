@@ -20,7 +20,7 @@ Where the spec names candidate services or offers an option ("Inngest OR Trigger
 rationale in docs/DECISIONS.md, and proceed. Bias toward shipping a coherent, working
 vertical slice over exhaustively building every branch.
 
-The spec contains a set of LOCKED decisions and three non-negotiable principles (the elder
+The spec contains a set of LOCKED decisions and three non-negotiable principles (the narrator
 never feels they're using software; authenticity beats polish — original audio is canonical
 and never overwritten; consent is owned by the person and enforced at the data layer from
 line one). Treat these as inviolable constraints. Your freedom is in HOW you implement them,
@@ -47,7 +47,7 @@ increment in that sequence, run this loop:
      - Is the consent ledger append-only (no update/delete; revocation = new row)?
      - Is the original audio persisted before any processing and never mutated by a later
        stage? Can a synthesis step structurally overwrite it? (It must not.)
-     - Does the elder surface require zero login/account, using only the session token?
+     - Does the link-session capture surface require zero login/account, using only the session token?
      - Are bought services (Transcriber/LanguageModel/Voice) behind swappable interfaces
        with no vendor SDK imported into the built IP (interviewer, consent, auth logic)?
      - Are tests actually asserting the above, or are they hollow?

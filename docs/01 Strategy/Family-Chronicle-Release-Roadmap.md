@@ -15,9 +15,9 @@
 - **Risk retired** — the assumption this phase de-risks  
 - **Exit criteria** — how you know it's done and the next phase can start
 
-**The wedge-first logic.** The vision says elder storytelling is "Mode One — the first mode built and the primary entry point." It's the sharpest wedge: irreplaceable stories with a real deadline, the clearest emotional hook, and the richest single source of narrative to seed the chronicle. So the roadmap drives a thin but complete version of that to working software first, then widens.
+**The wedge-first logic.** The vision says narrator voice capture is "Mode One — the first mode built and the primary entry point." It's the sharpest wedge: irreplaceable stories with a real deadline, the clearest emotional hook, and the richest single source of narrative to seed the chronicle. So the roadmap drives a thin but complete version of that to working software first, then widens.
 
-**A note on competitive timing.** The vision warns the AI voice-first memoir space is "filling rapidly" and the window to claim the chronicle/multi-mode framing "is not indefinite." This argues for getting a real, voice-first elder-capture product into real families *early* — even thin — rather than perfecting the full institution in private. The compounding moat (enrichment, perpetual chronicle, multi-generation) is built in later phases, but the wedge has to land before the window narrows.
+**A note on competitive timing.** The vision warns the AI voice-first memoir space is "filling rapidly" and the window to claim the chronicle/multi-mode framing "is not indefinite." This argues for getting a real, voice-first capture product into real families *early* — even thin — rather than perfecting the full institution in private. The compounding moat (enrichment, perpetual chronicle, multi-generation) is built in later phases, but the wedge has to land before the window narrows.
 
 ---
 
@@ -25,7 +25,7 @@
 
 **Goal.** Establish the single data spine the whole system depends on, so no later phase has to retrofit it. The vision is explicit that all modes share "*one* data spine, identity model, and synthesis engine."
 
-**Scope.** The core entry model (a "story" with original media, transcript, synthesized text, timeline placement, entities, audience tier, and consent status); a basic family/identity model; user accounts for the *younger* generation only (the elder never logs in); and the consent ledger and per-story permission model in their minimal form — because the Consent & Estate Framework establishes these as the foundation nothing sensitive ships without.
+**Scope.** The core entry model (a "story" with original media, transcript, synthesized text, timeline placement, entities, audience tier, and consent status); a basic family/identity model (roles: narrator / member / steward); the two access mechanisms — accounts (login via the auth provider, used at the `/hub` surface) and login-free link sessions (a long, unguessable token *is* the identity for the `/s/[token]` capture surface, so a person can be captured without ever creating an account); and the consent ledger and per-story permission model in their minimal form — because the Consent & Estate Framework establishes these as the foundation nothing sensitive ships without.
 
 **Build vs. buy.** *Build* the entry model and identity graph — this is the core IP. *Buy* auth, storage, and database infrastructure (standard cloud primitives). Defer the hard multi-family identity question (see Open Questions) — build a clean single-family model now with the seams to extend later.
 
@@ -35,25 +35,25 @@
 
 ---
 
-## Phase 1 — The Wedge: Elder Voice Capture (MVP)
+## Phase 1 — The Wedge: Narrator Voice Capture (MVP)
 
-**Goal.** Prove the core loop: an elder talks, with zero friction, and a younger family member receives a real story in the elder's actual voice. This is the minimum lovable product and the sharpest competitive wedge.
+**Goal.** Prove the core loop: a narrator talks, with zero friction, and a family member receives a real story in the narrator's actual voice. This is the minimum lovable product and the sharpest competitive wedge.
 
-**Scope.** Mode 1 in its thinnest complete form: the AI interviewer running a gentle session; voice-first, zero-app entry for the elder (start with one channel — phone call or a single-tap link — not all of them); the oral-history question engine (open-ended, non-leading, one at a time, reminiscence-bump weighted, from the vision's base question sets); recording, transcription, and speech-to-story synthesis *with original voice preserved*; voice-only approval by the elder; and a basic family hub where the younger generation hears the result. Plus the answered-question loop (younger asks → routed into the elder's next session → answer returned), because the Journey Map shows that loop is the relay's core and the Engagement Engine names it the highest-leverage trigger.
+**Scope.** Mode 1 in its thinnest complete form: the AI interviewer running a gentle session; voice-first, zero-app entry for the narrator (start with one channel — phone call or a single-tap link — not all of them); the oral-history question engine (open-ended, non-leading, one at a time, reminiscence-bump weighted, from the vision's base question sets); recording, transcription, and speech-to-story synthesis *with original voice preserved*; voice-only approval by the narrator; and a basic family hub where members hear the result. Plus the answered-question loop (a member asks → routed into the narrator's next session → answer returned), because the Journey Map shows that loop is the relay's core and the Engagement Engine names it the highest-leverage trigger.
 
 **Out of scope (deliberately).** External-data enrichment, avatars, mysteries, ambient capture, multiple entry channels, the steward console. All later.
 
-**Build vs. buy.** *Buy* transcription/speech-to-text (mature, commoditized) and telephony (a voice/phone API) — building these is wasted effort. *Buy* the LLM for synthesis and the interviewer. *Build* the interviewer's *behavior* — the oral-history technique, pacing, silence tolerance, session memory, and reminiscence weighting — because generic chatbot patterns are exactly what the vision says to avoid, and this craft is differentiating. *Build* the elder's zero-friction entry experience; it's the wedge's whole point.
+**Build vs. buy.** *Buy* transcription/speech-to-text (mature, commoditized) and telephony (a voice/phone API) — building these is wasted effort. *Buy* the LLM for synthesis and the interviewer. *Build* the interviewer's *behavior* — the oral-history technique, pacing, silence tolerance, session memory, and reminiscence weighting — because generic chatbot patterns are exactly what the vision says to avoid, and this craft is differentiating. *Build* the narrator's zero-friction entry experience; it's the wedge's whole point.
 
-**Risk retired.** The two riskiest assumptions in the entire product: (a) that elders will actually engage with an AI interviewer with dignity and without friction, and (b) that the resulting stories are good enough that younger family members care. If either fails, everything downstream is moot — so this phase exists to find out fast, with real families.
+**Risk retired.** The two riskiest assumptions in the entire product: (a) that narrators will actually engage with an AI interviewer with dignity and without friction, and (b) that the resulting stories are good enough that the rest of the family cares. If either fails, everything downstream is moot — so this phase exists to find out fast, with real families.
 
-**Exit criteria.** A real elder (not the founder) completes multiple gentle sessions unassisted after setup; their family receives and is moved by the stories in the elder's voice; the asked-question loop closes end to end. You'd put your own grandmother on it.
+**Exit criteria.** A real narrator (not the founder) completes multiple gentle sessions unassisted after setup; their family receives and is moved by the stories in the narrator's voice; the asked-question loop closes end to end. You'd put your own grandmother on it.
 
 ---
 
 ## Phase 2 — Make It Land: The Payoff Surface & Light Engagement
 
-**Goal.** Turn captured stories into something the younger generation returns to, and start the heartbeat so the chronicle doesn't go quiet after the first burst. Retain, don't just capture.
+**Goal.** Turn captured stories into something the family returns to, and start the heartbeat so the chronicle doesn't go quiet after the first burst. Retain, don't just capture.
 
 **Scope.** Mode 4 as a real explore surface (timeline, story feed, photo gallery, audio player with original voice — mobile-first); richer Mode 3 question-asking with suggested prompts so no one faces a blank box; and the cheapest, stickiest engagement triggers from the Engagement Engine's recommended first wave — the social loop (Group D) and the weekly "this week in family history" digest (A2), which run on the family's own warmth and existing content with no new data sources. Add photo upload so the family can enrich stories with images.
 
@@ -61,7 +61,7 @@
 
 **Risk retired.** That capture without a payoff surface and an engagement loop decays into the digital shoebox — the vision's central failure mode. This phase proves people come *back*.
 
-**Exit criteria.** Families return between capture sessions (measurable re-engagement); the weekly digest is opened, not muted; younger members ask questions unprompted. The loop is self-feeding without the founder nudging.
+**Exit criteria.** Families return between capture sessions (measurable re-engagement); the weekly digest is opened, not muted; members ask questions unprompted. The loop is self-feeding without the founder nudging.
 
 ---
 
@@ -126,7 +126,7 @@ Once the institution stands, the remaining vision modes and innovations layer on
 Each phase makes the next *buildable* or *safe*:
 
 - **Phase 0** gives everything a spine to read from.  
-- **Phase 1** proves elders engage and stories matter — without which nothing else is worth building.  
+- **Phase 1** proves narrators engage and stories matter — without which nothing else is worth building.  
 - **Phase 2** proves people return — converting capture into retention.  
 - **Phase 3** builds the moat — enrichment that needs Phase 0's data model and Phase 1's stories to enrich.  
 - **Phase 4** makes it an institution — and is the ethical gate for what follows.  
@@ -143,4 +143,4 @@ These are flagged in the vision and surface again here because they shape early 
 
 1. **The multi-family identity/data model.** Does a person carry one archive through life, or belong to many family chronicles at once? Phase 0 builds a clean single-family model with extensible seams, but the real decision should be made consciously before the identity graph hardens. This is the recommended next working session.
 
-2. **Where the wedge meets the business.** The wedge (Phase 1) earns the stories; the chronicle (Phases 3–4) earns the subscription. The Personas doc notes the buyer (Marcus) and the source (Elder) are different humans — pricing and packaging should be designed around that split, and it's worth deciding which phase introduces paid conversion.  
+2. **Where the wedge meets the business.** The wedge (Phase 1) earns the stories; the chronicle (Phases 3–4) earns the subscription. The Personas doc notes the buyer (Marcus) and the source (the narrator) are different humans — pricing and packaging should be designed around that split, and it's worth deciding which phase introduces paid conversion.  

@@ -30,6 +30,11 @@ export class InMemoryMediaStorage implements MediaStorage {
     return `memory://${key}`;
   }
 
+  /** Idempotent hard-delete (write-once store still permits deleting an unreferenced draft). */
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
   /** Test/inspection helper — number of objects currently stored. */
   get size(): number {
     return this.objects.size;

@@ -1,5 +1,5 @@
 /**
- * Voice-only approval endpoint. Receives the elder's session token, the storyId being approved,
+ * Voice-only approval endpoint. Receives the narrator's session token, the storyId being approved,
  * the chosen audienceTier, and a wideband audio blob of the spoken approval. Delegates the entire
  * storage-first → atomic-DB-write flow to `captureApproval`, which in turn calls the audited
  * `approveAndShareStory`. Errors return non-OK with no troubleshooting detail (warm-dead-end
@@ -56,7 +56,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // The tier is validated inside `captureApproval` (the domain owns the shareable-tier rule);
     // the cast just satisfies the input type at this untrusted boundary.
     const result = await captureApproval(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       storyId,
       audienceTier: tierField as Exclude<AudienceTier, "private">,
       audio: { bytes, contentType: audio.type || "audio/webm" },

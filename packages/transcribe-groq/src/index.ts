@@ -42,7 +42,7 @@ export interface GroqTranscriberOptions {
   language?: string;
   /**
    * Optional prompt to bias the model (vendor's `prompt` parameter). Keep terse; the spec says
-   * the elder's voice is canonical, so do NOT use this to put words in their mouth — reserve
+   * the narrator's voice is canonical, so do NOT use this to put words in their mouth — reserve
    * it for known proper nouns or domain terms that the model otherwise transliterates poorly.
    */
   prompt?: string;
@@ -97,7 +97,7 @@ export function createGroqTranscriber(opts: GroqTranscriberOptions = {}): Transc
       const form = new FormData();
       // Wrap bytes in a Blob — File extends Blob and the OpenAI multipart contract uses
       // filename via the third arg to FormData.append.
-      const blob = new Blob([input.bytes], { type: input.contentType });
+      const blob = new Blob([input.bytes as Uint8Array<ArrayBuffer>], { type: input.contentType });
       form.append("file", blob, filename);
       form.append("model", model);
       form.append("response_format", "verbose_json");

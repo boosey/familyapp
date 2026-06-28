@@ -3,7 +3,7 @@
  * Clerk is configured. When Clerk env keys are unset / placeholder (local dev / CI) this is a
  * no-op pass-through, so the DevCookie auth path keeps working without Clerk envs.
  *
- * We deliberately scope Clerk's middleware to the hub: the elder token surface at `/s/[token]`
+ * We deliberately scope Clerk's middleware to the hub: the narrator token surface at `/s/[token]`
  * authenticates via session token in the URL (per @chronicle/capture) and must NOT be touched
  * by Clerk's redirect/auth flow.
  *
@@ -26,7 +26,7 @@ const handler: (req: NextRequest) => Response | Promise<Response> =
 export default handler;
 
 export const config = {
-  // Match the hub surface only. The elder token surface (/s/[token]) and Next internals are
+  // Match the hub surface only. The narrator token surface (/s/[token]) and Next internals are
   // intentionally excluded.
   matcher: ["/hub/:path*"],
 };

@@ -56,18 +56,18 @@ async function makeApprovableStory(opts: {
 
 describe("approveAndShareStory — atomic voice approval", () => {
   it("transitions pending_approval → shared, stamps tier+approvedAt, and writes the first consent row", async () => {
-    const elder = await makePerson(db, "Eleanor");
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const narrator = await makePerson(db, "Eleanor");
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
 
     const now = new Date("2026-06-26T12:00:00Z");
     const { story, approvalAudio, consentRecord } = await approveAndShareStory(
       db,
       {
         storyId,
-        elderPersonId: elder.id,
+        narratorPersonId: narrator.id,
         audienceTier: "family",
         approvalAudio: {
-          storageKey: `approval-audio/${elder.id}/abc.webm`,
+          storageKey: `approval-audio/${narrator.id}/abc.webm`,
           contentType: "audio/webm",
           checksum: "sha256:approval",
           durationSeconds: 3,
@@ -79,23 +79,25 @@ describe("approveAndShareStory — atomic voice approval", () => {
     expect(story.state).toBe("shared");
     expect(story.audienceTier).toBe("family");
     expect(story.approvedAt?.getTime()).toBe(now.getTime());
-    expect(approvalAudio.kind).toBe("approval_audio");
-    expect(approvalAudio.ownerPersonId).toBe(elder.id);
+    // This is the VOICE-approval path (audio supplied), so the clip Media row must exist.
+    expect(approvalAudio).not.toBeNull();
+    expect(approvalAudio!.kind).toBe("approval_audio");
+    expect(approvalAudio!.ownerPersonId).toBe(narrator.id);
     expect(consentRecord.action).toBe("approved_for_sharing");
     expect(consentRecord.storyId).toBe(storyId);
-    expect(consentRecord.approvalAudioMediaId).toBe(approvalAudio.id);
-    expect(consentRecord.personId).toBe(elder.id);
-    expect(consentRecord.actorPersonId).toBe(elder.id);
+    expect(consentRecord.approvalAudioMediaId).toBe(approvalAudio!.id);
+    expect(consentRecord.personId).toBe(narrator.id);
+    expect(consentRecord.actorPersonId).toBe(narrator.id);
   });
 
   it("refuses approval if the actor is not the story owner (defense in depth at the write layer)", async () => {
-    const elder = await makePerson(db, "Eleanor");
+    const narrator = await makePerson(db, "Eleanor");
     const impostor = await makePerson(db, "Impostor");
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
     await expect(
       approveAndShareStory(db, {
         storyId,
-        elderPersonId: impostor.id,
+        narratorPersonId: impostor.id,
         audienceTier: "family",
         approvalAudio: {
           storageKey: "k",
@@ -107,9 +109,9 @@ describe("approveAndShareStory — atomic voice approval", () => {
   });
 
   it("refuses approval if the story is not in pending_approval (state machine guard)", async () => {
-    const elder = await makePerson(db, "Eleanor");
+    const narrator = await makePerson(db, "Eleanor");
     const { story } = await persistRecordingAndCreateDraft(db, {
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       storageKey: "r2://x",
       contentType: "audio/webm",
       checksum: "sha256:y",
@@ -118,7 +120,7 @@ describe("approveAndShareStory — atomic voice approval", () => {
     await expect(
       approveAndShareStory(db, {
         storyId: story.id,
-        elderPersonId: elder.id,
+        narratorPersonId: narrator.id,
         audienceTier: "family",
         approvalAudio: {
           storageKey: "k",
@@ -130,8 +132,8 @@ describe("approveAndShareStory — atomic voice approval", () => {
   });
 
   it("is atomic: if the consent insert fails, the media row + state transition both roll back", async () => {
-    const elder = await makePerson(db, "Eleanor");
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const narrator = await makePerson(db, "Eleanor");
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
 
     // Force the consent insert to fail by dropping the consent_records table inside the tx
     // window. We do this BEFORE the call so the insert raises mid-tx; the media insert and
@@ -142,7 +144,7 @@ describe("approveAndShareStory — atomic voice approval", () => {
     await expect(
       approveAndShareStory(db, {
         storyId,
-        elderPersonId: elder.id,
+        narratorPersonId: narrator.id,
         audienceTier: "family",
         approvalAudio: {
           storageKey: "k",
@@ -161,24 +163,24 @@ describe("approveAndShareStory — atomic voice approval", () => {
     expect(row.state).toBe("pending_approval");
     expect(row.audience_tier).toBe("private");
 
-    // No approval-audio media row exists for the elder.
+    // No approval-audio media row exists for the narrator.
     const approvalRows = await db
       .select()
       .from(media)
-      .where(sql`kind = 'approval_audio' and owner_person_id = ${elder.id}`);
+      .where(sql`kind = 'approval_audio' and owner_person_id = ${narrator.id}`);
     expect(approvalRows.length).toBe(0);
   });
 });
 
 describe("authorization regression: full visibility lifecycle", () => {
   it("before approval: invisible to family. After approval: visible at the chosen tier. After revoke: invisible again.", async () => {
-    const elder = await makePerson(db, "Eleanor");
+    const narrator = await makePerson(db, "Eleanor");
     const cousin = await makePerson(db, "Sofia");
-    const family = await makeFamily(db, "Boudreaux", elder.id);
-    await addMembership(db, elder.id, family.id);
+    const family = await makeFamily(db, "Boudreaux", narrator.id);
+    await addMembership(db, narrator.id, family.id);
     await addMembership(db, cousin.id, family.id);
 
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
     const cousinCtx = { kind: "account" as const, personId: cousin.id };
 
     // Stage A: pending_approval — family CANNOT see it.
@@ -187,10 +189,10 @@ describe("authorization regression: full visibility lifecycle", () => {
       (await listStoriesForViewer(db, cousinCtx)).map((s) => s.id),
     ).not.toContain(storyId);
 
-    // Stage B: elder approves at `family` — cousin CAN now see it.
+    // Stage B: narrator approves at `family` — cousin CAN now see it.
     await approveAndShareStory(db, {
       storyId,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "approval-audio/eleanor/x.webm",
@@ -203,32 +205,32 @@ describe("authorization regression: full visibility lifecycle", () => {
     expect(seen?.state).toBe("shared");
     expect(seen?.audienceTier).toBe("family");
 
-    // Stage C: elder revokes (a NEW superseding consent row) — cousin can no longer see it.
-    await revokeConsent(db, storyId, elder.id);
+    // Stage C: narrator revokes (a NEW superseding consent row) — cousin can no longer see it.
+    await revokeConsent(db, storyId, narrator.id);
     expect(await getStoryForViewer(db, cousinCtx, storyId)).toBeNull();
     expect(
       (await listStoriesForViewer(db, cousinCtx)).map((s) => s.id),
     ).not.toContain(storyId);
 
-    // The elder herself (the owner) sees the story in every stage.
-    const elderCtx = { kind: "elder_session" as const, personId: elder.id };
-    expect((await getStoryForViewer(db, elderCtx, storyId))?.id).toBe(storyId);
+    // The narrator herself (the owner) sees the story in every stage.
+    const narratorCtx = { kind: "link_session" as const, personId: narrator.id };
+    expect((await getStoryForViewer(db, narratorCtx, storyId))?.id).toBe(storyId);
   });
 
   it("private tier does not become visible to family even with an approval consent row", async () => {
     // The capture-side helper refuses `private` at the type level; this exercises the lower-level
     // authorization invariant: private means author-only, regardless of consent.
-    const elder = await makePerson(db, "Eleanor");
+    const narrator = await makePerson(db, "Eleanor");
     const cousin = await makePerson(db, "Sofia");
-    const family = await makeFamily(db, "Boudreaux", elder.id);
-    await addMembership(db, elder.id, family.id);
+    const family = await makeFamily(db, "Boudreaux", narrator.id);
+    await addMembership(db, narrator.id, family.id);
     await addMembership(db, cousin.id, family.id);
 
     // Build the story manually so we can hold tier=private despite state=shared.
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
     await approveAndShareStory(db, {
       storyId,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k",
@@ -247,13 +249,13 @@ describe("authorization regression: full visibility lifecycle", () => {
 
 describe("applyTranscriptCorrection — voice correction regenerates derived fields only", () => {
   it("rewrites the transcript and clears prose/title/summary/tags; audio pointer is untouched", async () => {
-    const elder = await makePerson(db, "Eleanor");
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const narrator = await makePerson(db, "Eleanor");
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
 
     // Snapshot the canonical recording pointer + checksum before the correction.
     const before = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elder.id },
+      { kind: "link_session", personId: narrator.id },
       storyId,
     );
     const recordingIdBefore = before!.recordingMediaId;
@@ -271,16 +273,16 @@ describe("applyTranscriptCorrection — voice correction regenerates derived fie
     expect(updated.tags).toEqual([]);
     // The canonical audio pointer is unchanged — the correction touches derived fields only.
     expect(updated.recordingMediaId).toBe(recordingIdBefore);
-    // State stays pending_approval; the elder's next voice action (approval) advances it.
+    // State stays pending_approval; the narrator's next voice action (approval) advances it.
     expect(updated.state).toBe("pending_approval");
   });
 
   it("refuses to apply a correction once the story has been shared (post-share edits need a new consent)", async () => {
-    const elder = await makePerson(db, "Eleanor");
-    const storyId = await makeApprovableStory({ ownerPersonId: elder.id });
+    const narrator = await makePerson(db, "Eleanor");
+    const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
     await approveAndShareStory(db, {
       storyId,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k",

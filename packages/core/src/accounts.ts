@@ -1,5 +1,5 @@
 /**
- * Account creation — the younger-generation login surface (spec Part IV).
+ * Account creation — the account login surface (spec Part IV).
  *
  * An Account is the OPTIONAL, severable login attached to a Person. It stores only the auth
  * provider's opaque user id (never a password — the provider owns credentials). The Person is the

@@ -1,7 +1,8 @@
 /**
- * Root landing — the younger-generation front door. Elders NEVER land here; they only ever follow
- * their personal /s/[token] link. This is the warm marketing-light entry for relatives: name the
- * product, then offer the two real doors (create a family, or sign in to an existing one).
+ * Root landing — the account-holder front door. A login-free link-session visitor NEVER lands here;
+ * they only ever follow their personal /s/[token] capture link. This is the warm marketing-light
+ * entry for relatives: name the product, then offer the two real doors (create a family, or sign
+ * in to an existing one).
  */
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
@@ -77,7 +78,7 @@ export default function Home() {
           margin: "8px 0 0",
         }}
       >
-        Invited an elder to record? They open their own personal link — they never sign in here.
+        Invited a narrator to record? They open their own personal link — they never sign in here.
       </p>
     </main>
   );

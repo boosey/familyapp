@@ -23,7 +23,7 @@ export interface RecordConsentInput {
   resultingState: string;
   /** Pointer to the approval-audio Media — so consent has a voice, not just a row. */
   approvalAudioMediaId?: string;
-  /** The actor who recorded the event (the elder, for a voice approval). */
+  /** The actor who recorded the event (the narrator, for a voice approval). */
   actorPersonId: string;
 }
 

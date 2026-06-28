@@ -1,13 +1,28 @@
 import * as React from 'react';
 
 export interface KindredListenBarProps {
-  /** Total duration label, e.g. "3:48". */
+  /**
+   * Playback state. Omit to let the bar manage its own play/pause; pass a
+   * boolean to drive it from a parent (controlled — `onToggle` fires on tap).
+   */
+  playing?: boolean;
+  /** Mono timecode for the full length, also parsed as total seconds. @default "3:24" */
   duration?: string;
-  /** Waveform bar heights in px. */
-  bars?: number[];
-  onPlay?: () => void;
+  /** Optional story title above the scrubber. */
+  title?: string;
+  /** Play/pause toggle handler. */
+  onToggle?: () => void;
+  /** Show the "next story" button at the end of the transport row. @default true */
+  showNext?: boolean;
+  /** Handler for the "next story" button. */
+  onNext?: () => void;
   style?: React.CSSProperties;
 }
 
-/** Audio player for listening to the original recording. */
-export declare function KindredListenBar(props: KindredListenBarProps): React.JSX.Element;
+/**
+ * An audio playback row for a recorded story — a draggable scrubber line with a
+ * position thumb between mono timecodes, over a transport row: start over,
+ * back 10s, play/pause, forward 10s, and next story. Voice is the medium; this
+ * is how a recorded answer is heard back.
+ */
+export declare function KindredListenBar(props: KindredListenBarProps): React.ReactElement;

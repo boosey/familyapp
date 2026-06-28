@@ -6,7 +6,7 @@
  * `persistRecordingAndCreateDraft` encodes the spec's capture invariant: the original audio
  * Media is written FIRST (and is immutable thereafter — the DB trigger forbids UPDATE/DELETE),
  * then a `draft` Story is created pointing at it. A draft story is born `private` (it stays
- * there until the elder approves by voice). The two writes are wrapped in a transaction so a
+ * there until the narrator approves by voice). The two writes are wrapped in a transaction so a
  * story can never exist without its canonical recording.
  *
  * `updateDerivedFields` and `transitionStoryState` are the pipeline's two narrow write seams:
@@ -18,7 +18,7 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { media, stories } from "@chronicle/db/content";
 import { asks, consentRecords, persons } from "@chronicle/db/schema";
 import type {
@@ -181,7 +181,7 @@ export async function transitionStoryState(
 export interface PipelineStoryView {
   storyId: string;
   ownerPersonId: string;
-  /** The elder's spoken name + birthYear — the lightly-held context the renderer may use to
+  /** The narrator's spoken name + birthYear — the lightly-held context the renderer may use to
    * set tone (never to invent facts). Joined here so the pipeline does not have to call core
    * twice per stage. */
   ownerSpokenName: string;
@@ -201,13 +201,13 @@ export interface PipelineStoryView {
 
 /**
  * Cross-session memory for the interviewer — the narrow audited read that returns ONLY safe
- * metadata for the elder's own prior stories. The projection at the SQL layer (not in the
+ * metadata for the narrator's own prior stories. The projection at the SQL layer (not in the
  * consumer) is the point: this function structurally cannot leak transcript/prose/audio key,
  * because it never selects them. The interviewer is restricted to titles/summaries/tags by
  * the TYPE of what it can ask core for, not by a convention in a downstream adapter.
  *
  * AuthZ: this is a system-actor read, BUT the implementation enforces that the requesting
- * caller is reading the elder's OWN stories (the elder is the owner — `ownerPersonId ===
+ * caller is reading the narrator's OWN stories (the narrator is the owner — `ownerPersonId ===
  * personId`). That is exactly the owner-branch of the authorization function. We avoid the
  * full `listStoriesForViewer` round-trip because (a) the projection is the contract and (b)
  * fetching only metadata is cheaper. The architecture allowlist already includes this file.
@@ -221,9 +221,9 @@ export interface InterviewerStoryMemory {
   createdAt: Date;
 }
 
-export async function listElderMemoryForInterviewer(
+export async function listNarratorMemoryForInterviewer(
   db: Database,
-  elderPersonId: string,
+  narratorPersonId: string,
   limit: number,
 ): Promise<InterviewerStoryMemory[]> {
   const rows = await db
@@ -236,7 +236,7 @@ export async function listElderMemoryForInterviewer(
       createdAt: stories.createdAt,
     })
     .from(stories)
-    .where(eq(stories.ownerPersonId, elderPersonId));
+    .where(eq(stories.ownerPersonId, narratorPersonId));
   // Most recent first; cap at `limit`. Sorting in app code (not SQL) keeps the test DB happy
   // and the projection identical regardless of index choice.
   return rows
@@ -256,32 +256,40 @@ export async function listElderMemoryForInterviewer(
  * The voice-only approval gate (spec Part III). Atomic, audited write that closes the consent
  * loop on a single story:
  *
- *   - inserts the `approval_audio` Media row pointing at the elder's just-uploaded approval clip
+ *   - inserts the `approval_audio` Media row pointing at the narrator's just-uploaded approval clip
  *     (storage upload happens BEFORE this call, in the same authenticity-beats-polish ordering
- *     as `ingestRecording` — if anything below fails, the elder's spoken approval is still safe
+ *     as `ingestRecording` — if anything below fails, the narrator's spoken approval is still safe
  *     in object storage);
  *   - advances the Story `pending_approval → approved → shared`, each step routed through
  *     `assertStoryTransition` so an illegal jump cannot be written from inside this audited file;
  *   - stamps the chosen `audienceTier` and `approvedAt` on the Story;
  *   - appends the FIRST `ConsentRecord` for the story — `action=approved_for_sharing`, pointing
- *     at the approval-audio Media, with the elder as both subject and actor (consent is owned by
- *     the person, and the elder is the one performing the voice approval).
+ *     at the approval-audio Media, with the narrator as both subject and actor (consent is owned by
+ *     the person, and the narrator is the one performing the voice approval).
  *
  * All four writes happen in ONE `db.transaction`, so the authorization function never sees a
  * partial state (e.g. story=shared without a backing consent row, which would itself be a bug
  * the front door would refuse to surface anyway — defense in depth at the write layer too).
  *
- * The caller (elder-session-authenticated capture surface) is responsible for asserting that the
+ * The caller (narrator-session-authenticated capture surface) is responsible for asserting that the
  * session belongs to `story.ownerPersonId`; this function additionally verifies ownership at the
  * write layer so a misuse cannot smuggle a foreign approval through.
  */
 export interface ApproveAndShareInput {
   storyId: string;
-  /** The elder approving — must equal the story owner. */
-  elderPersonId: string;
-  /** The tier the elder is choosing to share at (private rejected — approval implies sharing). */
+  /** The narrator approving — must equal the story owner. */
+  narratorPersonId: string;
+  /** The tier the narrator is choosing to share at (private rejected — approval implies sharing). */
   audienceTier: Exclude<AudienceTier, "private">;
-  approvalAudio: {
+  /**
+   * The spoken-approval audio clip. OPTIONAL (ADR-0004): the in-hub flow approves with a TAP — the
+   * just-recorded answer is the content, the tap is the consent act, and no second recording is
+   * required. When omitted, the consent ledger row is written with `approvalAudioMediaId = NULL`
+   * (the column is nullable); the row still records action/state/tier/actor/timestamp, so consent
+   * is still audited — just without a voice artifact. The `/s/[token]` voice-approval surface still
+   * passes it.
+   */
+  approvalAudio?: {
     storageKey: string;
     contentType: string;
     checksum: string;
@@ -292,7 +300,8 @@ export interface ApproveAndShareInput {
 
 export interface ApproveAndShareResult {
   story: Story;
-  approvalAudio: Media;
+  /** The approval-audio Media row, or `null` for a tap approval (ADR-0004) with no voice clip. */
+  approvalAudio: Media | null;
   consentRecord: ConsentRecord;
   /** The Ask that was flipped to `answered` in the same tx, if the Story pointed at one. */
   answeredAsk: Ask | null;
@@ -319,24 +328,30 @@ export async function approveAndShareStory(
       .where(eq(stories.id, input.storyId))
       .limit(1);
     if (!current) throw new Error(`story not found: ${input.storyId}`);
-    if (current.ownerPersonId !== input.elderPersonId) {
+    if (current.ownerPersonId !== input.narratorPersonId) {
       throw new InvariantViolation(
-        `approveAndShareStory: actor ${input.elderPersonId} is not the owner of story ${input.storyId}`,
+        `approveAndShareStory: actor ${input.narratorPersonId} is not the owner of story ${input.storyId}`,
       );
     }
 
-    // 2. Insert the approval-audio Media row (immutable, owned by the elder).
-    const [approvalMedia] = await tx
-      .insert(media)
-      .values({
-        ownerPersonId: input.elderPersonId,
-        kind: "approval_audio",
-        storageKey: input.approvalAudio.storageKey,
-        contentType: input.approvalAudio.contentType,
-        durationSeconds: input.approvalAudio.durationSeconds ?? null,
-        checksum: input.approvalAudio.checksum,
-      })
-      .returning();
+    // 2. Insert the approval-audio Media row (immutable, owned by the narrator) — ONLY when the
+    //    narrator approved by voice. A tap approval (ADR-0004) has no clip, so no Media row is
+    //    written and the consent record below points at NULL.
+    let approvalMedia: Media | null = null;
+    if (input.approvalAudio) {
+      const [row] = await tx
+        .insert(media)
+        .values({
+          ownerPersonId: input.narratorPersonId,
+          kind: "approval_audio",
+          storageKey: input.approvalAudio.storageKey,
+          contentType: input.approvalAudio.contentType,
+          durationSeconds: input.approvalAudio.durationSeconds ?? null,
+          checksum: input.approvalAudio.checksum,
+        })
+        .returning();
+      approvalMedia = row!;
+    }
 
     // 3. Atomic state walk pending_approval → approved → shared. The spec wording is
     //    explicit about THREE states; we persist the intermediate `approved` row inside the tx
@@ -368,12 +383,12 @@ export async function approveAndShareStory(
     const [consent] = await tx
       .insert(consentRecords)
       .values({
-        personId: input.elderPersonId,
+        personId: input.narratorPersonId,
         storyId: input.storyId,
         action: "approved_for_sharing",
         resultingState: "shared",
-        approvalAudioMediaId: approvalMedia!.id,
-        actorPersonId: input.elderPersonId,
+        approvalAudioMediaId: approvalMedia?.id ?? null,
+        actorPersonId: input.narratorPersonId,
       })
       .returning();
 
@@ -382,7 +397,7 @@ export async function approveAndShareStory(
     //    III, "on approval, the Ask flips to `answered` with a pointer to the Story, and the
     //    answer is delivered back to the asker"). Folding this into the same tx as the consent
     //    write means the asker never sees an "approved story without an answered ask" or vice
-    //    versa. Legal source states are `queued` (elder answered without pre-routing) and
+    //    versa. Legal source states are `queued` (narrator answered without pre-routing) and
     //    `routed` (interviewer marked it). `answered` with same storyId is idempotent; with a
     //    different storyId raises — an Ask answers exactly one Story.
     let answeredAsk: Ask | null = null;
@@ -426,7 +441,7 @@ export async function approveAndShareStory(
 
     return {
       story: updatedStory!,
-      approvalAudio: approvalMedia!,
+      approvalAudio: approvalMedia,
       consentRecord: consent!,
       answeredAsk,
     };
@@ -434,7 +449,7 @@ export async function approveAndShareStory(
 }
 
 /**
- * Voice correction (spec: "a correction the elder voices is applied to the prose (a regeneration
+ * Voice correction (spec: "a correction the narrator voices is applied to the prose (a regeneration
  * of the derived field) before sharing; the audio is untouched"). Updates the transcript to the
  * corrected text and CLEARS prose/title/summary/tags so the pipeline's render stage re-runs.
  * Canonical audio is irrelevant to this write path and is structurally untouchable here (the
@@ -456,7 +471,7 @@ export async function applyTranscriptCorrection(
     .where(eq(stories.id, storyId))
     .limit(1);
   if (!current) throw new Error(`story not found: ${storyId}`);
-  // A correction is the elder editing in-session before sharing; refuse on a story already
+  // A correction is the narrator editing in-session before sharing; refuse on a story already
   // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
   if (current.state !== "pending_approval") {
     throw new InvariantViolation(
@@ -477,6 +492,172 @@ export async function applyTranscriptCorrection(
     .where(eq(stories.id, storyId))
     .returning();
   return row!;
+}
+
+/**
+ * Outstanding answer-drafts for a narrator — the record-now-approve-later state the Questions tab
+ * needs to show "Review & approve" (with the recorded time) instead of "Answer". A draft is a
+ * Story the narrator recorded against an Ask but has NOT yet approved: `state = 'draft'` AND
+ * `askId IS NOT NULL`, owned by the narrator.
+ *
+ * This MUST live here (the audited write/read surface) because it reads the guarded `stories`
+ * table — `asks.ts` cannot. The web layer merges this with `listPendingAsksForNarrator` (which
+ * returns the still-pending Asks) to render the per-ask two-state affordance. Returned keyed by
+ * Ask id; if more than one draft somehow points at the same Ask, the most recently recorded wins
+ * (re-record + discard should keep this 1:1, but we never surface a stale earlier take).
+ *
+ * AuthZ: a system-actor read scoped to the narrator's OWN drafts (`ownerPersonId === narrator`) —
+ * the owner branch of the authorization function. No content (transcript/prose/audio key) is
+ * selected; only the lifecycle pointer + timestamp.
+ */
+export interface OutstandingAnswerDraft {
+  /** The Ask this draft answers. */
+  askId: string;
+  /** The durable draft Story (reachable via `/hub/answer/[askId]` to resume/approve). */
+  storyId: string;
+  /** When the draft was recorded (its Story's createdAt). */
+  recordedAt: Date;
+}
+
+export async function listOutstandingAnswerDrafts(
+  db: Database,
+  narratorPersonId: string,
+): Promise<OutstandingAnswerDraft[]> {
+  const rows = await db
+    .select({
+      askId: stories.askId,
+      storyId: stories.id,
+      recordedAt: stories.createdAt,
+    })
+    .from(stories)
+    .where(
+      and(
+        eq(stories.ownerPersonId, narratorPersonId),
+        eq(stories.state, "draft"),
+        isNotNull(stories.askId),
+      ),
+    );
+  // Most recent first, then keep one draft per ask (the latest take).
+  const byAsk = new Map<string, OutstandingAnswerDraft>();
+  for (const r of rows.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())) {
+    const askId = r.askId!;
+    if (!byAsk.has(askId)) {
+      byAsk.set(askId, { askId, storyId: r.storyId, recordedAt: r.recordedAt });
+    }
+  }
+  return [...byAsk.values()];
+}
+
+/**
+ * Audited core DELETE path for a never-consented draft (ADR-0002).
+ *
+ * The two "discard" events (explicit narrator discard and re-record supersession) are the ONLY
+ * paths that remove rows from the DB — everything else is append-only. This function is the sole
+ * entry point for both: callers decide WHEN to invoke it; this function decides WHAT may be
+ * deleted and in what ORDER, guaranteeing the invariant "consented audio is immutable forever".
+ *
+ * Deletion order — story row FIRST, then media row — is required by two constraints acting in
+ * concert that the DB enforces independently of this application code:
+ *
+ *   (a) FK constraint: `stories.recording_media_id → media`. The story row holds the FK
+ *       reference; Postgres refuses to delete the media row while any story points at it.
+ *       Deleting the story first removes the reference, unlocking the media delete.
+ *
+ *   (b) The `chronicle_media_delete_guard` trigger (invariants.sql, ADR-0002) checks whether
+ *       any story with `recording_media_id = OLD.id` has consent records (via an INNER JOIN
+ *       on `consent_records`). With the story row gone, the INNER JOIN returns nothing, and
+ *       the trigger permits the delete. If we tried media-first, the FK would RAISE before
+ *       the trigger even ran.
+ *
+ * Why the CALLER deletes the blob (not us): a leaked object-storage blob is harmless — no user
+ * can enumerate R2 keys and cost is negligible. A dangling DB row is not harmless: it would
+ * confuse authorization, pipeline, and listing queries. The row goes transactionally first;
+ * blob cleanup is best-effort after the commit. We return the keys so the caller can do it.
+ */
+export interface DiscardDraftResult {
+  /** Storage keys the caller should best-effort delete from MediaStorage after the tx commits. */
+  storageKeys: string[];
+}
+
+export async function discardDraftStory(
+  db: Database,
+  input: { storyId: string; narratorPersonId: string },
+): Promise<DiscardDraftResult> {
+  return db.transaction(async (tx) => {
+    // 1. Load the story. Missing → InvariantViolation (the caller is performing a domain
+    //    action on a specific story by ID; "not found" is a precondition failure).
+    const [story] = await tx
+      .select({
+        id: stories.id,
+        ownerPersonId: stories.ownerPersonId,
+        state: stories.state,
+        recordingMediaId: stories.recordingMediaId,
+      })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!story) {
+      throw new InvariantViolation(
+        `discardDraftStory: story ${input.storyId} not found`,
+      );
+    }
+
+    // 2. Ownership: only the narrator who owns the draft may discard it. A session-layer
+    //    check in the caller is expected, but the domain write layer enforces it too.
+    if (story.ownerPersonId !== input.narratorPersonId) {
+      throw new InvariantViolation(
+        `discardDraftStory: actor ${input.narratorPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    // 3. State: only `draft` stories are deletable. Once a story has left `draft` it may
+    //    carry consent (pending_approval is the gate before approval; approved/shared carry
+    //    consent records). ADR-0002: immutability protects CONSENTED audio; the draft is
+    //    the ONLY consent-free, deletable state.
+    if (story.state !== "draft") {
+      throw new InvariantViolation(
+        `discardDraftStory: story ${input.storyId} is not a draft (state=${story.state}); only never-consented drafts may be discarded`,
+      );
+    }
+
+    // 4. Defense-in-depth: assert ZERO consent_records rows exist for this story. For a
+    //    true draft this is normally impossible (the approval gate is the only path that
+    //    writes consent rows, and it requires `pending_approval`), but the domain must NEVER
+    //    delete consented audio regardless of state, so we check at the layer closest to the
+    //    delete. The DB trigger is the structural backstop; this gives a clean domain error
+    //    instead of a raw trigger RAISE propagating to the caller.
+    const consentCheck = await tx
+      .select({ id: consentRecords.id })
+      .from(consentRecords)
+      .where(eq(consentRecords.storyId, input.storyId))
+      .limit(1);
+    if (consentCheck.length > 0) {
+      throw new InvariantViolation(
+        `discardDraftStory: story ${input.storyId} has consent records; consented audio is immutable forever`,
+      );
+    }
+
+    // 5. Capture the recording's storageKey BEFORE deleting anything, so we can return it
+    //    to the caller for best-effort blob cleanup. A draft has exactly one recording media
+    //    (created atomically in persistRecordingAndCreateDraft); if it's missing the DB is
+    //    already corrupt — surface it as an invariant failure.
+    const [rec] = await tx
+      .select({ storageKey: media.storageKey })
+      .from(media)
+      .where(eq(media.id, story.recordingMediaId))
+      .limit(1);
+    if (!rec) {
+      throw new InvariantViolation(
+        `discardDraftStory: recording media ${story.recordingMediaId} for story ${input.storyId} not found`,
+      );
+    }
+
+    // 6. Delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale).
+    await tx.delete(stories).where(eq(stories.id, input.storyId));
+    await tx.delete(media).where(eq(media.id, story.recordingMediaId));
+
+    return { storageKeys: [rec.storageKey] };
+  });
 }
 
 export async function getStoryAndRecordingForPipeline(

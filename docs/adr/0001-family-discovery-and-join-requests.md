@@ -1,7 +1,7 @@
 # ADR-0001 — Family discovery is opt-in and joining is always steward-approved
 
 Status: Accepted (2026-06-28)
-Context: Phase 1 younger-generation onboarding & family flows.
+Context: Phase 1 account-holder onboarding & family flows.
 
 ## Context
 
@@ -34,10 +34,10 @@ is the kind of structural decision that is expensive to walk back once data and 
 - **Natural-language search is a seam** (`FamilySearch` interface) with a deterministic keyword
   implementation now; a real LLM slots in behind the same interface later, so no vendor call is on
   the offline-test path.
-- **Member invitations** (`invitations`) are modeled **distinctly from elder session tokens**
-  (`elder_sessions`). An invitation creates a younger-generation Account and a Membership on accept;
-  an elder session is anonymous capture identity with no Account. Fusing them would conflate "a login
-  the family member owns" with "a token that IS the elder's identity" — the exact Person/Account
+- **Member invitations** (`invitations`) are modeled **distinctly from link session tokens**
+  (`link_sessions`). An invitation creates an Account and a Membership on accept;
+  a link session is anonymous capture identity with no Account. Fusing them would conflate "a login
+  the family member owns" with "a token that IS the narrator's identity for that session" — the exact Person/Account
   split the spec calls load-bearing.
 
 ## Consequences

@@ -31,7 +31,7 @@ export {
   SILENCE_TOLERANCE_MS,
   MEMORY_LOOKBACK_COUNT,
   createSessionState,
-  ingestElderUtterance,
+  ingestNarratorUtterance,
   detectDistress,
   detectOffRamp,
   pickNextIntent,

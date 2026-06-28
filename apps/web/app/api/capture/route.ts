@@ -1,12 +1,12 @@
 /**
- * Capture intake endpoint. Receives the elder's session token + the wideband audio blob and runs
+ * Capture intake endpoint. Receives the narrator's session token + the wideband audio blob and runs
  * the source-agnostic ingest: persist the immutable audio FIRST, then create the draft Story.
- * Errors return a non-OK status but carry NO troubleshooting detail to the elder — the client
+ * Errors return a non-OK status but carry NO troubleshooting detail to the narrator — the client
  * shows warm copy and the failure is surfaced to the family elsewhere.
  *
  * Auth model (intentional — NOT an oversight): there is deliberately no `getCurrentAuthContext()`
- * here. On the elder surface the session token IS the identity; it is the only credential, and it
- * is validated INSIDE the domain (`ingestRecording` → `resolveElderSession`), which fails with
+ * here. On the narrator surface the session token IS the identity; it is the only credential, and it
+ * is validated INSIDE the domain (`ingestRecording` → `resolveLinkSession`), which fails with
  * `InvalidSessionError` (→ 401) on a bad/expired/revoked token. The account-cookie auth used by the
  * hub routes does not apply to this login-free surface.
  */
@@ -38,13 +38,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  // Optional askId pairs the recording with the relay (the elder is answering a family
+  // Optional askId pairs the recording with the relay (the narrator is answering a family
   // member's question). The approval write later flips the Ask to `answered` atomically.
   const askId = typeof askIdField === "string" && askIdField !== "" ? askIdField : undefined;
 
   try {
     const result = await ingestRecording(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       source: "web_link",
       audio: {
         bytes,

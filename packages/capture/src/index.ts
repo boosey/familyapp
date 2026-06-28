@@ -1,15 +1,16 @@
 export {
   hashToken,
-  createElderSession,
-  resolveElderSession,
-  revokeElderSession,
-  type CreateElderSessionInput,
-  type CreatedElderSession,
-  type ResolvedElderSession,
+  createLinkSession,
+  resolveLinkSession,
+  revokeLinkSession,
+  type CreateLinkSessionInput,
+  type CreatedLinkSession,
+  type ResolvedLinkSession,
 } from "./sessions";
 export {
   ingestRecording,
   InvalidSessionError,
+  type CaptureActor,
   type CaptureSource,
   type CapturedAudio,
   type IngestRecordingInput,

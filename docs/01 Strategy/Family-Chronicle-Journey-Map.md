@@ -8,7 +8,7 @@
 
 ## The spine: one story, eight phases
 
-The story doesn't start with the elder. It starts with a question — which is the whole design insight. Curiosity from the young is what pulls the memory out of the old.
+The story doesn't start with the narrator. It starts with a question — which is the whole design insight. Curiosity from one person is what pulls the memory out of another.
 
 | # | Phase | Whose hands | Mode |  
 |---|---|---|---|  
@@ -35,7 +35,7 @@ The loop closes and reopens: the inheritance in phase 8 is just a spark (phase 1
 
 **System behavior.** Lowers the barrier to participation (no blank box); captures the question and tags it to Eleanor's queue; notes who asked, so the answer can be returned to Sofia personally.
 
-**Risk if done wrong.** A blank box, a clunky form, or a "homework" feel and Sofia never asks — the spark dies and the elder is never prompted.
+**Risk if done wrong.** A blank box, a clunky form, or a "homework" feel and Sofia never asks — the spark dies and the narrator is never prompted.
 
 **Design opportunity.** Treat the grandchild's question as the primary ignition source for the whole system, not a nice-to-have. Suggested prompts are load-bearing.
 
@@ -155,7 +155,7 @@ The loop closes and reopens: the inheritance in phase 8 is just a spark (phase 1
 
 ## What the map reveals (design takeaways)
 
-**Curiosity is the ignition, not the conclusion.** The story begins with Sofia's question, not Eleanor's prompt. The grandchild's wonder pulls the memory out of the elder. Build the question-asking surface as a primary input, not a passive feature.
+**Curiosity is the ignition, not the conclusion.** The story begins with Sofia's question, not Eleanor's prompt. The grandchild's wonder pulls the memory out of the narrator. Build the question-asking surface as a primary input, not a passive feature.
 
 **The system carries the coordination so humans only feel the warmth.** Phases 2 and 4 are invisible by design. The routing and synthesis layers absorb all the friction so neither the 81-year-old nor the 16-year-old ever touches machinery.
 

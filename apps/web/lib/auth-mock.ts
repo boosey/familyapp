@@ -158,6 +158,24 @@ export function createMockAuthProvider(db: Database): AuthProvider {
         return { kind: "anonymous" };
       }
     },
+    async establishAccountSession(personId: string): Promise<void> {
+      // Magic-link sign-in (ADR-0003): resolve the Person to their Account's opaque
+      // `auth_provider_user_id` (the mock session value, exactly what a Clerk session would carry)
+      // and set the session cookie. Throws if the Person has no Account — the caller must only
+      // magic-link a Person who has one.
+      const [row] = await db
+        .select({ authProviderUserId: accounts.authProviderUserId })
+        .from(persons)
+        .innerJoin(accounts, eq(accounts.id, persons.accountId))
+        .where(eq(persons.id, personId))
+        .limit(1);
+      if (!row) {
+        throw new Error(
+          `establishAccountSession: Person ${personId} has no Account to sign in as`,
+        );
+      }
+      await setSessionCookie(row.authProviderUserId);
+    },
   };
 }
 

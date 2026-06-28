@@ -13,10 +13,10 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   Postgres (`createPostgresDatabase` in `@chronicle/db`). Each adapter is fully tested
   against fakes/HTTP mocks. **API keys + accounts are still required to actually invoke
   these against the real services** — the adapters are wired but neither CI nor the dev
-  loop exercises them end-to-end against production vendors. No real elder audio has been
+  loop exercises them end-to-end against production vendors. No real narrator audio has been
   sent anywhere. See `docs/DECISIONS.md` "Vendor adapters (Phase 1 finish)" for per-
   adapter design notes.
-- **Data-processing agreements.** Spec requires confirming a DPA before sending real elder
+- **Data-processing agreements.** Spec requires confirming a DPA before sending real narrator
   audio to any transcription vendor. Not actionable by me; flagged for you.
 
 ## Assumptions made (correct me if wrong)
@@ -24,7 +24,7 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 - **"Branch" audience tier == "family" for enforcement** until branch structure is modeled
   (spec permits this explicitly; the stored tier value is kept faithfully and is non-lossy).
 - **Session token expiry default: 30 days, configurable.** Spec says "optionally time-bounded";
-  picked a generous default so an elder's link doesn't die mid-relationship. Tokens are long,
+  picked a generous default so a narrator's link doesn't die mid-relationship. Tokens are long,
   unguessable (256-bit), stored hashed.
 - **Time-stretch default factor 1.6x, backing off to 1.3–1.4x on low-SNR audio**, hard cap 2x,
   per spec guidance. SNR/“hard audio” detection is a stub heuristic in Phase 1 (configurable).
@@ -41,8 +41,8 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   can return many segments and the orchestrator's 1x-mapping math already handles them, but the
   stitching policy itself (which segments to join into one transcribe call) lives in the future
   adapter, not in the orchestrator.
-- **Anonymous elder reads:** the authorization function accepts "no Person" (token-scoped
-  elder surface). The elder can always access their *own* in-progress story via the session
+- **Anonymous link-session reads:** the authorization function accepts "no Person" (token-scoped
+  capture surface). The narrator can always access their *own* in-progress story via the session
   token even while it is `private`/`draft`; family members cannot until approved+shared.
 - **Capture source channel is type-shaped but not yet data-shaped.** `ingestRecording` accepts a
   `CaptureSource` ("web_link" | "telephony"), but Phase 1 does not persist that value on the Media

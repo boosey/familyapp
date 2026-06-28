@@ -28,8 +28,8 @@ export type {
   NewConsentRecord,
   Ask,
   NewAsk,
-  ElderSession,
-  NewElderSession,
+  LinkSession,
+  NewLinkSession,
   Invitation,
   NewInvitation,
   JoinRequest,
@@ -53,4 +53,4 @@ export {
   type PostgresClientOptions,
 } from "./postgres-client";
 export { createTestDatabase } from "./testing";
-export { applyMigrations, applyMigrationsToPostgres } from "./migrate";
+export { applySchema, resetSchema, applySchemaToPostgres } from "./migrate";

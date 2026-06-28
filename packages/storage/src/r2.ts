@@ -12,6 +12,7 @@
  * this single filename — see the comment there.
  */
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -126,6 +127,17 @@ export class R2MediaStorage implements MediaStorage {
       this.client,
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn: this.presignExpirySeconds },
+    );
+  }
+
+  /**
+   * Idempotent hard-delete. S3/R2 `DeleteObject` returns success (204) for a missing key, so this
+   * is naturally a no-op when the object is already gone. Only ever called for unreferenced draft
+   * audio (the audited core path removes the DB row first).
+   */
+  async delete(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
   }
 }

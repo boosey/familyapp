@@ -1,101 +1,84 @@
 /**
- * Apply the schema (generated table DDL + custom invariants) to a PGlite instance. Shared by the
- * test harness (fresh in-memory DB per test) and any dev bootstrap (persistent dataDir).
+ * Schema application — single-schema, no incremental migrations.
+ *
+ * While the schema is still molten (heavy development) we do NOT keep a chain of incremental
+ * migration files. `src/schema.ts` is the single source of truth; `drizzle/schema.sql` is its
+ * generated full DDL (regenerate with `pnpm --filter @chronicle/db db:generate`), and
+ * `drizzle/invariants.sql` holds the structural guarantees drizzle can't model (the append-only /
+ * media-immutability triggers and the partial unique indexes).
+ *
+ * Two primitives:
+ *   - `applySchema(pg)`  — apply schema + invariants if the DB is empty (idempotent create). Used
+ *     by the test harness and dev boot; never destroys data.
+ *   - `resetSchema(db)`  — BLOW AWAY everything and re-apply (drop schema → recreate). This is how
+ *     the dev seed picks up schema changes: edit schema.ts → regenerate → reseed. DESTRUCTIVE and
+ *     dev-only.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { PGlite } from "@electric-sql/pglite";
 import type postgres from "postgres";
+import type { Database } from "./client";
 
-const MIGRATIONS = [
-  "../drizzle/0000_init.sql",
-  "../drizzle/custom/0001_invariants.sql",
-  "../drizzle/0001_next_lady_vermin.sql",
-  // Onboarding + family flows: families.description/discoverable, persons.birth_date/onboarded_at,
-  // invitations, join_requests, mock_auth_users (+ their enums). See ADR-0001.
-  "../drizzle/0002_huge_pixie.sql",
-  // Partial unique index: at most one PENDING join_request per (family, requester). Closes the
-  // concurrent-duplicate phantom a tx alone cannot under READ COMMITTED. Must run after 0002
-  // (the join_requests table). See ADR-0001.
-  "../drizzle/custom/0003_join_request_pending_uq.sql",
-];
+const SCHEMA_FILES = ["../drizzle/schema.sql", "../drizzle/invariants.sql"];
 
-function readMigrationSql(rel: string): string {
+function readSql(rel: string): string {
   const path = fileURLToPath(new URL(rel, import.meta.url));
+  // `--> statement-breakpoint` is a drizzle-kit marker some tools emit; harmless to strip.
   return readFileSync(path, "utf8").replaceAll("--> statement-breakpoint", "");
 }
 
-/**
- * Apply all pending migrations to a PGlite instance, idempotently and incrementally. A
- * `_chronicle_meta` table records which migration files have run (mirroring the Postgres path),
- * so:
- *   - a fresh DB (the test harness) runs every migration once;
- *   - an existing dev DB (`apps/web/.pglite/dev`) runs only the migrations added since it was
- *     last booted, instead of being skipped wholesale.
- *
- * The non-idempotent DDL in our migrations (`CREATE TYPE`, `CREATE TRIGGER`) is what forces
- * per-file tracking rather than blind re-apply. Each file's claim + DDL run in one transaction,
- * so a failed migration does not leave its meta row claimed against a half-applied schema.
- */
-export async function applyMigrations(pg: PGlite): Promise<void> {
-  await pg.exec(`
-    CREATE TABLE IF NOT EXISTS _chronicle_meta (
-      migration text PRIMARY KEY,
-      applied_at timestamptz NOT NULL DEFAULT now()
-    );
-  `);
-  for (const rel of MIGRATIONS) {
-    const name = rel.replace(/^\.\.\//, "");
-    await pg.transaction(async (tx) => {
-      const claimed = await tx.query<{ migration: string }>(
-        `INSERT INTO _chronicle_meta (migration) VALUES ($1)
-         ON CONFLICT DO NOTHING RETURNING migration`,
-        [name],
-      );
-      if (claimed.rows.length === 0) return; // already applied
-      await tx.exec(readMigrationSql(rel));
-    });
-  }
+/** The full schema SQL (table DDL then invariants), concatenated. */
+function schemaSql(): string {
+  return SCHEMA_FILES.map(readSql).join("\n");
 }
 
 /**
- * Apply the same migration SQL to a real Postgres server (Supabase, Neon, ...) via the
- * `postgres` (postgres.js) driver. Idempotent: a `_chronicle_meta` row records which migration
- * files have run, so a re-invocation on an already-bootstrapped database is a no-op.
- *
- * Why a meta table and not blind re-apply: `0001_invariants.sql` uses `CREATE TRIGGER` (NOT
- * `CREATE OR REPLACE`), which would error on the second run. A bootstrap guard is the simplest
- * correct shape for a fresh-database first boot. For ONGOING schema changes prefer the
- * `drizzle-kit migrate` flow against `DATABASE_URL`; this function is for the bootstrap path.
+ * Apply the schema to a PGlite instance if it isn't already there. Idempotent via a cheap
+ * existence probe (the generated DDL itself is not idempotent — CREATE TYPE / CREATE TRIGGER —
+ * so we guard rather than blindly re-run). A fresh in-memory test DB gets the full schema; an
+ * already-populated dev DB is left untouched (use `resetSchema` to rebuild it).
  */
-export async function applyMigrationsToPostgres(
-  sql: postgres.Sql,
-): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS _chronicle_meta (
-      migration text PRIMARY KEY,
-      applied_at timestamptz NOT NULL DEFAULT now()
-    );
-  `);
+export async function applySchema(pg: PGlite): Promise<void> {
+  const probe = await pg.query<{ reg: string | null }>(
+    "SELECT to_regclass('public.persons') AS reg",
+  );
+  if (probe.rows[0]?.reg) return; // schema already present
+  await pg.exec(schemaSql());
+}
 
-  for (const rel of MIGRATIONS) {
-    const name = rel.replace(/^\.\.\//, "");
-    const body = readMigrationSql(rel);
-    // Race-safe bootstrap: the INSERT itself is the lock. Two concurrent first-boots both pass a
-    // pre-check `SELECT`, then both run the non-idempotent `CREATE TRIGGER` DDL and the loser
-    // errors. Instead, attempt to claim the migration row with `INSERT ... ON CONFLICT DO NOTHING
-    // RETURNING`: whoever wins the PK insert owns the DDL; the other tx sees 0 rows back and
-    // no-ops cleanly. The whole thing stays in one transaction so a partial DDL run cannot leave
-    // the meta row claimed against a half-applied schema.
-    await sql.begin(async (tx) => {
-      const rows = await tx<{ migration: string }[]>`
-        INSERT INTO _chronicle_meta (migration)
-        VALUES (${name})
-        ON CONFLICT DO NOTHING
-        RETURNING migration
-      `;
-      if (rows.length === 0) return; // another instance owns this migration
-      await tx.unsafe(body);
-    });
+/**
+ * BLOW AWAY the entire schema and re-apply it from scratch. This is the dev seed's reset: it drops
+ * `public` (every table, type, trigger, index) and rebuilds from the current schema, so a schema
+ * change shows up on the next reseed with no stale-state archaeology. DESTRUCTIVE — dev only.
+ *
+ * Works against both the PGlite dev/test DB and a (disposable, dev) Postgres pointed at by
+ * DATABASE_URL. It will refuse nothing — never wire this to a production database.
+ */
+export async function resetSchema(db: Database): Promise<void> {
+  const drop = "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;";
+  if (db.$pglite) {
+    await db.$pglite.exec(drop);
+    await db.$pglite.exec(schemaSql());
+    return;
   }
+  if (db.$postgres) {
+    await db.$postgres.unsafe(drop);
+    await db.$postgres.unsafe(schemaSql());
+    return;
+  }
+  throw new Error("resetSchema: database has neither a PGlite nor a Postgres handle");
+}
+
+/**
+ * First-boot bootstrap for a real Postgres server (Supabase, Neon, ...). Applies the schema only
+ * if absent — NEVER drops. For ongoing prod schema changes use a proper migration tool; this is
+ * the fresh-database bootstrap path only.
+ */
+export async function applySchemaToPostgres(sql: postgres.Sql): Promise<void> {
+  const rows = await sql<{ reg: string | null }[]>`
+    SELECT to_regclass('public.persons') AS reg
+  `;
+  if (rows[0]?.reg) return; // already bootstrapped
+  await sql.unsafe(schemaSql());
 }

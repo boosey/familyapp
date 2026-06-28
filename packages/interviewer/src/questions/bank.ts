@@ -8,16 +8,16 @@
  * hardships, hobbies and friendships, places lived, advice and legacy).
  *
  * Each question carries:
- *   - `category` — used by de-dup vs. the elder's prior tags.
+ *   - `category` — used by de-dup vs. the narrator's prior tags.
  *   - `sensitivity` — `low` (safe opener, e.g. childhood food), `medium` (work, marriage),
  *     `high` (loss, hardship, faith doubts). Sensitive items are GATED behind a rapport
  *     threshold in the picker; the picker NEVER asks `high` until enough rapport turns have
- *     completed AND the elder hasn't signalled an off-ramp.
- *   - `lifePhase` — coarse age bin the question PROBES, not the elder's current age. The
+ *     completed AND the narrator hasn't signalled an off-ramp.
+ *   - `lifePhase` — coarse age bin the question PROBES, not the narrator's current age. The
  *     picker weights toward the reminiscence bump (roughly ages 10–30) by preferring
  *     `childhood` and `young_adult` items when picking from the base bank.
  *   - `text` — the topic seed, written open-ended, concrete, non-leading per spec. The LLM
- *     phraser re-renders this in the warm persona; the seed itself is not what the elder hears.
+ *     phraser re-renders this in the warm persona; the seed itself is not what the narrator hears.
  *
  * ABSOLUTE DRAFTING RULES (so a future contributor doesn't drift):
  *   - Open-ended ("Tell me about…", "What was it like…"). NEVER yes/no, NEVER leading.

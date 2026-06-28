@@ -1,5 +1,5 @@
 /**
- * Tests for account creation — the younger-generation login surface. The load-bearing properties:
+ * Tests for account creation — the account login surface. The load-bearing properties:
  * the Account+Person pair is created atomically with the single `persons.account_id` FK wired, and
  * a duplicate provider id is rejected (one Account per provider identity).
  */

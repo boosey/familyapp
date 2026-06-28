@@ -14,10 +14,27 @@ import { createHash, randomUUID } from "node:crypto";
 import { persistRecordingAndCreateDraft } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
-import { resolveElderSession } from "./sessions";
+import { resolveCaptureActor } from "./identity";
 
 /** The audio entry channel. The pipeline behind this is identical for every value. */
 export type CaptureSource = "web_link" | "telephony";
+
+/**
+ * WHO is capturing — the identity-agnostic credential for the capture orchestrator (ADR-0003).
+ *
+ *   - `account`      — a signed-in Person (the in-hub answer flow). Identity is the resolved
+ *                      `personId`; trust is established by the web auth layer BEFORE calling capture,
+ *                      so capture trusts the personId directly (it never re-authenticates a cookie).
+ *   - `link_session` — the login-free `/s/[token]` surface. The raw token IS the identity; capture
+ *                      resolves it via `resolveLinkSession` and rejects unknown/expired/revoked.
+ *
+ * Both kinds funnel into the SAME storage-first orchestrator (`ingestRecording` / `captureApproval`)
+ * — the only difference is how the owning `personId` is obtained. Core is untouched (already
+ * `personId`-based).
+ */
+export type CaptureActor =
+  | { kind: "account"; personId: string }
+  | { kind: "link_session"; token: string };
 
 export interface CapturedAudio {
   bytes: Uint8Array;
@@ -27,8 +44,8 @@ export interface CapturedAudio {
 }
 
 export interface IngestRecordingInput {
-  /** The raw session token from the elder's link — the only credential on this path. */
-  sessionToken: string;
+  /** WHO is capturing — a link-session token or a signed-in account (ADR-0003). */
+  actor: CaptureActor;
   audio: CapturedAudio;
   /** Defaults to "web_link". Present so a telephony adapter is a config, not a rebuild. */
   source?: CaptureSource;
@@ -76,10 +93,7 @@ export async function ingestRecording(
   storage: MediaStorage,
   input: IngestRecordingInput,
 ): Promise<IngestResult> {
-  const resolved = await resolveElderSession(db, input.sessionToken, {
-    now: input.now,
-  });
-  if (!resolved) throw new InvalidSessionError();
+  const resolved = await resolveCaptureActor(db, input.actor, { now: input.now });
 
   const key = `story-audio/${resolved.personId}/${randomUUID()}.${extensionFor(
     input.audio.contentType,

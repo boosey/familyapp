@@ -9,11 +9,11 @@ import {
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  createElderSession,
+  createLinkSession,
   ingestRecording,
   InvalidSessionError,
-  resolveElderSession,
-  revokeElderSession,
+  resolveLinkSession,
+  revokeLinkSession,
 } from "../src/index";
 
 let db: Database;
@@ -42,8 +42,8 @@ async function rowCountAny(table: string): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
-async function makeElderAndFamily() {
-  const [elder] = await db
+async function makeNarratorAndFamily() {
+  const [narrator] = await db
     .insert(persons)
     .values({ displayName: "Eleanor", spokenName: "Eleanor" })
     .returning();
@@ -59,31 +59,31 @@ async function makeElderAndFamily() {
       stewardPersonId: inviter!.id,
     })
     .returning();
-  // Both must be active members — createElderSession gates the invite on family membership.
+  // Both must be active members — createLinkSession gates the invite on family membership.
   await db.insert(memberships).values([
-    { personId: elder!.id, familyId: fam!.id, role: "narrator", status: "active" },
+    { personId: narrator!.id, familyId: fam!.id, role: "narrator", status: "active" },
     { personId: inviter!.id, familyId: fam!.id, role: "member", status: "active" },
   ]);
-  return { elder: elder!, inviter: inviter!, family: fam! };
+  return { narrator: narrator!, inviter: inviter!, family: fam! };
 }
 
-describe("elder sessions (token = identity, zero login)", () => {
-  it("resolves a valid token to the elder + family", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token } = await createElderSession(db, {
-      personId: elder.id,
+describe("link sessions (token = identity, zero login)", () => {
+  it("resolves a valid token to the narrator + family", async () => {
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
-    const resolved = await resolveElderSession(db, token);
-    expect(resolved?.personId).toBe(elder.id);
+    const resolved = await resolveLinkSession(db, token);
+    expect(resolved?.personId).toBe(narrator.id);
     expect(resolved?.familyId).toBe(family.id);
   });
 
   it("never stores the raw token (only its hash)", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token, session } = await createElderSession(db, {
-      personId: elder.id,
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token, session } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
@@ -92,36 +92,36 @@ describe("elder sessions (token = identity, zero login)", () => {
   });
 
   it("rejects an unknown token", async () => {
-    expect(await resolveElderSession(db, "not-a-real-token")).toBeNull();
+    expect(await resolveLinkSession(db, "not-a-real-token")).toBeNull();
   });
 
   it("rejects an expired token", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
     const issued = new Date("2026-01-01T00:00:00Z");
-    const { token } = await createElderSession(db, {
-      personId: elder.id,
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
       ttlDays: 1,
       now: issued,
     });
     const later = new Date("2026-01-03T00:00:00Z");
-    expect(await resolveElderSession(db, token, { now: later })).toBeNull();
+    expect(await resolveLinkSession(db, token, { now: later })).toBeNull();
   });
 
   it(
-    "still resolves the elder if the best-effort lastUsedAt write fails " +
-      "(elder page is logically a read; transient write errors must not 500)",
+    "still resolves the narrator if the best-effort lastUsedAt write fails " +
+      "(narrator page is logically a read; transient write errors must not 500)",
     async () => {
-      const { elder, inviter, family } = await makeElderAndFamily();
-      const { token } = await createElderSession(db, {
-        personId: elder.id,
+      const { narrator, inviter, family } = await makeNarratorAndFamily();
+      const { token } = await createLinkSession(db, {
+        personId: narrator.id,
         familyId: family.id,
         invitedByPersonId: inviter.id,
       });
 
       // Wrap db so .update() throws (simulates transient write failure on the lastUsedAt
-      // bookkeeping). .select() still works, so the SELECT in resolveElderSession succeeds.
+      // bookkeeping). .select() still works, so the SELECT in resolveLinkSession succeeds.
       // sessions.ts must swallow the UPDATE failure and still return the resolved session.
       const flakyOnWrite = new Proxy(db, {
         get(target, prop, recv) {
@@ -134,87 +134,87 @@ describe("elder sessions (token = identity, zero login)", () => {
         },
       }) as unknown as typeof db;
 
-      const resolved = await resolveElderSession(flakyOnWrite, token);
-      expect(resolved?.personId).toBe(elder.id);
+      const resolved = await resolveLinkSession(flakyOnWrite, token);
+      expect(resolved?.personId).toBe(narrator.id);
       expect(resolved?.familyId).toBe(family.id);
     },
   );
 
   it("rejects a revoked token", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token, session } = await createElderSession(db, {
-      personId: elder.id,
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token, session } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
-    await revokeElderSession(db, session.id);
-    expect(await resolveElderSession(db, token)).toBeNull();
+    await revokeLinkSession(db, session.id);
+    expect(await resolveLinkSession(db, token)).toBeNull();
   });
 
   it("refuses to create a session when the inviter is NOT an active member of the family", async () => {
-    const { elder, family } = await makeElderAndFamily();
-    // A bystander with no membership in `family` must not be able to mint an elder link.
+    const { narrator, family } = await makeNarratorAndFamily();
+    // A bystander with no membership in `family` must not be able to mint a narrator link.
     const [stranger] = await db
       .insert(persons)
       .values({ displayName: "Stranger", spokenName: "Stranger" })
       .returning();
     await expect(
-      createElderSession(db, {
-        personId: elder.id,
+      createLinkSession(db, {
+        personId: narrator.id,
         familyId: family.id,
         invitedByPersonId: stranger!.id,
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
     // Nothing was written.
-    expect(await rowCountAny("elder_sessions")).toBe(0);
+    expect(await rowCountAny("link_sessions")).toBe(0);
   });
 
-  it("refuses to create a session when the elder is NOT an active member of the family", async () => {
-    const { inviter, family } = await makeElderAndFamily();
+  it("refuses to create a session when the narrator is NOT an active member of the family", async () => {
+    const { inviter, family } = await makeNarratorAndFamily();
     // A person who isn't a member of `family` cannot be made the narrator of a link in it.
-    const [outsiderElder] = await db
+    const [outsiderNarrator] = await db
       .insert(persons)
       .values({ displayName: "Outsider", spokenName: "Outsider" })
       .returning();
     await expect(
-      createElderSession(db, {
-        personId: outsiderElder!.id,
+      createLinkSession(db, {
+        personId: outsiderNarrator!.id,
         familyId: family.id,
         invitedByPersonId: inviter.id,
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
-    expect(await rowCountAny("elder_sessions")).toBe(0);
+    expect(await rowCountAny("link_sessions")).toBe(0);
   });
 
   it("refuses when a once-active inviter membership has ended (gate reads current status)", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
     // Flip the inviter's membership to ended; the gate must now reject.
     await db.execute(
       sql`update memberships set status = 'ended' where person_id = ${inviter.id} and family_id = ${family.id}`,
     );
     await expect(
-      createElderSession(db, {
-        personId: elder.id,
+      createLinkSession(db, {
+        personId: narrator.id,
         familyId: family.id,
         invitedByPersonId: inviter.id,
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
-    expect(await rowCountAny("elder_sessions")).toBe(0);
+    expect(await rowCountAny("link_sessions")).toBe(0);
   });
 });
 
 describe("ingestRecording (capture path)", () => {
   it("persists the audio to storage AND creates a private draft story pointing at it", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token } = await createElderSession(db, {
-      personId: elder.id,
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
 
     const bytes = new Uint8Array([10, 20, 30, 40, 50]);
     const result = await ingestRecording(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       audio: { bytes, contentType: "audio/webm", durationSeconds: 88 },
     });
 
@@ -224,13 +224,13 @@ describe("ingestRecording (capture path)", () => {
       10, 20, 30, 40, 50,
     ]);
 
-    // a draft story exists, owned by the elder, private, pointing at the recording
+    // a draft story exists, owned by the narrator, private, pointing at the recording
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elder.id },
+      { kind: "link_session", personId: narrator.id },
       result.storyId,
     );
-    expect(story?.ownerPersonId).toBe(elder.id);
+    expect(story?.ownerPersonId).toBe(narrator.id);
     expect(story?.state).toBe("draft");
     expect(story?.audienceTier).toBe("private");
     expect(story?.recordingMediaId).toBe(result.recordingMediaId);
@@ -239,7 +239,7 @@ describe("ingestRecording (capture path)", () => {
   it("rejects an invalid session and writes NOTHING (no orphan audio row, no story, no blob)", async () => {
     await expect(
       ingestRecording(db, storage, {
-        sessionToken: "bogus",
+        actor: { kind: "link_session", token: "bogus" },
         audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
       }),
     ).rejects.toBeInstanceOf(InvalidSessionError);
@@ -257,11 +257,11 @@ describe("ingestRecording (capture path)", () => {
       "(authenticity-beats-polish trade-off) and NO Story is created",
     async () => {
       // The capture-path ordering is deliberate (DECISIONS.md): audio first, then DB. If the DB
-      // write fails, the elder's voice is still durable in object storage — recoverable evidence
+      // write fails, the narrator's voice is still durable in object storage — recoverable evidence
       // is the lesser evil than a vanished recording. This test pins that contract.
-      const { elder, inviter, family } = await makeElderAndFamily();
-      const { token } = await createElderSession(db, {
-        personId: elder.id,
+      const { narrator, inviter, family } = await makeNarratorAndFamily();
+      const { token } = await createLinkSession(db, {
+        personId: narrator.id,
         familyId: family.id,
         invitedByPersonId: inviter.id,
       });
@@ -274,7 +274,7 @@ describe("ingestRecording (capture path)", () => {
 
       await expect(
         ingestRecording(db, storage, {
-          sessionToken: token,
+          actor: { kind: "link_session", token },
           audio: {
             bytes: new Uint8Array([99, 99, 99]),
             contentType: "audio/webm",
@@ -291,9 +291,9 @@ describe("ingestRecording (capture path)", () => {
   );
 
   it("if storage.put fails, NEITHER an orphan blob NOR a DB row is created", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token } = await createElderSession(db, {
-      personId: elder.id,
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
@@ -305,11 +305,12 @@ describe("ingestRecording (capture path)", () => {
       getBytes: async () => null,
       exists: async () => false,
       getUrl: async (k: string) => `nowhere://${k}`,
+      delete: async () => {},
     };
 
     await expect(
       ingestRecording(db, failingStorage, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         audio: { bytes: new Uint8Array([7, 7]), contentType: "audio/webm" },
       }),
     ).rejects.toThrow(/simulated R2 outage/);
@@ -321,14 +322,14 @@ describe("ingestRecording (capture path)", () => {
   });
 
   it("a fresh draft is invisible to family members (private until approval)", async () => {
-    const { elder, inviter, family } = await makeElderAndFamily();
-    const { token } = await createElderSession(db, {
-      personId: elder.id,
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
       familyId: family.id,
       invitedByPersonId: inviter.id,
     });
     const { storyId } = await ingestRecording(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       audio: { bytes: new Uint8Array([1, 2]), contentType: "audio/webm" },
     });
     // inviter is a family member; they must NOT see the private draft
@@ -338,5 +339,49 @@ describe("ingestRecording (capture path)", () => {
       storyId,
     );
     expect(seen).toBeNull();
+  });
+
+  // ── account-actor branch (ADR-0003) ────────────────────────────────────────
+
+  it("account actor: persists a draft owned by the signed-in person (no token needed)", async () => {
+    // Simulates the in-hub answer flow: the web auth layer has already resolved the cookie to a
+    // personId before calling capture.  capture trusts it directly and just checks the person row exists.
+    const { narrator } = await makeNarratorAndFamily();
+    const bytes = new Uint8Array([11, 22, 33]);
+    const result = await ingestRecording(db, storage, {
+      actor: { kind: "account", personId: narrator.id },
+      audio: { bytes, contentType: "audio/webm", durationSeconds: 5 },
+    });
+
+    // Audio is durable in storage.
+    expect(await storage.exists(result.storageKey)).toBe(true);
+    expect(Array.from((await storage.getBytes(result.storageKey))!)).toEqual([11, 22, 33]);
+
+    // Draft story is owned by the narrator and is private.
+    const story = await getStoryForViewer(
+      db,
+      { kind: "account", personId: narrator.id },
+      result.storyId,
+    );
+    expect(story?.ownerPersonId).toBe(narrator.id);
+    expect(story?.state).toBe("draft");
+    expect(story?.audienceTier).toBe("private");
+    expect(story?.recordingMediaId).toBe(result.recordingMediaId);
+  });
+
+  it("account actor: rejects a phantom personId that has no row in persons (InvalidSessionError)", async () => {
+    // A manually-crafted request that bypasses auth might supply a non-existent personId.
+    // capture must reject it before touching storage or DB content tables.
+    const phantomId = "00000000-0000-0000-0000-000000000000";
+    await expect(
+      ingestRecording(db, storage, {
+        actor: { kind: "account", personId: phantomId },
+        audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidSessionError);
+    // Nothing written.
+    expect(storageObjectCount(storage)).toBe(0);
+    expect(await rowCount(db, "media")).toBe(0);
+    expect(await rowCount(db, "stories")).toBe(0);
   });
 });

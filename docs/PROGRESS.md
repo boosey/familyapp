@@ -22,7 +22,7 @@ Tracks which build-sequence increment is active and the eval status of each comp
   **semantic token layer** (`--accent`/`--surface-*`/`--text-*`, rem type scale, DM Mono, 3
   themes) via a temporary `--kin-*` shim that was removed once all consumers converted. All six
   Kindred components reconciled to the updated showcase APIs (`KindredVoiceButton` listening/size,
-  `KindredListenBar` controlled+audio, `KindredStoryCard` year/place/excerpt, etc.). Elder
+  `KindredListenBar` controlled+audio, `KindredStoryCard` year/place/excerpt, etc.). Narrator
   conversation + approval screens rebuilt to the showcase. **Family hub restructured into a single
   tabbed shell** (Stories / Questions / Ask / Asks / Invite) with an account avatar menu + tab
   badges; the old `/hub/ask|asks|invite|invite/result` routes now redirect into the tabs, with
@@ -60,10 +60,10 @@ Tracks which build-sequence increment is active and the eval status of each comp
   Interviewer: `AskSource` contract extended with `markRouted`; `InMemoryAskSource.markRouted`
   records calls (no-op semantically); turn loop calls `askSource.markRouted` after a
   successful `ask` intent (failure swallowed — never erases the synthesized turn). New
-  `createCoreAskSource(db)` adapter uses ONLY core exports (`listPendingAsksForElder` +
+  `createCoreAskSource(db)` adapter uses ONLY core exports (`listPendingAsksForNarrator` +
   `markAskRouted`) — no direct asks-table access, mirroring the memory adapter's discipline.
   Web: `/api/capture` accepts optional `askId` form field forwarded to `ingestRecording`
-  (so the elder-side answer to an Ask carries the back-pointer). New `/hub/asks` server
+  (so the narrator-side answer to an Ask carries the back-pointer). New `/hub/asks` server
   component lists the asker's submitted asks; answered ones link to the Story via
   `getStoryForViewer` (authorized) — shows "Answered (not shared with you)" when the
   authorization function denies, so no story content leaks. Anchor `id="story-{id}"` added
@@ -74,23 +74,23 @@ Tracks which build-sequence increment is active and the eval status of each comp
 - **2026-06-26** — Increment 6 (basic family hub) eval-clean (3 rounds).
   New `@chronicle/core` Ask repository (`asks.ts`): `createAsk` enforces shared-active-family
   co-membership at the boundary (rejects anonymous, ended/paused, strangers, empty questions,
-  and form-spoofed familyIds); `listPendingAsksForElder` is the I7 seam returning
+  and form-spoofed familyIds); `listPendingAsksForNarrator` is the I7 seam returning
   queued/routed asks in arrival order with the asker's spoken name. Asks live on the open
   schema surface — no architecture allowlist change.
   New `apps/web/lib/auth.ts` AuthProvider seam (interface + DevCookie stub; Clerk is the
   named prod adapter, stubbed per OPEN-QUESTIONS). Wired through `lib/runtime.ts`. All hub
   pages authenticate via `auth.getCurrentAuthContext()` — no direct cookie reads in pages.
-  New hub pages: `/hub` (`hub-data.ts` `loadHubFeed` lists each co-member elder's stories
+  New hub pages: `/hub` (`hub-data.ts` `loadHubFeed` lists each co-member's stories
   via `listStoriesForViewer`, sorted by approvedAt; audio rendered FIRST, prose in
-  `<details>` collapsed); `/hub/invite` (server action → audited `createElderSession`,
-  verifies BOTH inviter and elder hold active memberships in the chosen family); invite
+  `<details>` collapsed); `/hub/invite` (server action → audited `createLinkSession`,
+  verifies BOTH inviter and narrator hold active memberships in the chosen family); invite
   result page (raw token handed via short-lived httpOnly flash cookie, deleted on first read
   — NEVER via URL query string); `/hub/ask` (server action → `createAsk`); `/dev/sign-in`
   (writes the dev cookie). New `/api/media/[id]/route.ts` streams bytes only AFTER
   `getMediaForViewer` clears the request — 404 indistinguishable from "no access".
   Round 1: invite did not filter `status='active'` on the inviter's membership query — fixed
   (defense in depth: paused/ended ex-members must not mint links). Round 2: token leaked via
-  URL query (logs/history/Referer); chosen elder not verified to be in chosen family —
+  URL query (logs/history/Referer); chosen narrator not verified to be in chosen family —
   fixed (flash cookie + cross-membership check). Round 3: NO SPEC VIOLATIONS. 133 tests
   green (db 11, storage 11, core 49, capture 17, pipeline 21, interviewer 24); all
   packages + apps/web typecheck clean. Architecture-test allowlist canary unchanged.
@@ -110,7 +110,7 @@ Tracks which build-sequence increment is active and the eval status of each comp
   — architecture allowlist unchanged. New `packages/pipeline/src/correction.ts`
   `applyVoiceCorrection` is the tiny coordinator: `applyTranscriptCorrection` →
   `renderStoryFromTranscript` (re-render via in-house prompt) → `updateDerivedFields`. State
-  stays `pending_approval`; the elder's NEXT voice action (approval) is what advances it.
+  stays `pending_approval`; the narrator's NEXT voice action (approval) is what advances it.
   Round 1: two findings — (1) intermediate `approved` state never persisted (spec wording is
   three states); (2) reviewer flagged atomicity-test mechanism as weak. Fixed (1) by doing
   two sequential UPDATEs inside the tx; (2) is actually solid: `DROP TABLE consent_records
@@ -129,12 +129,12 @@ Tracks which build-sequence increment is active and the eval status of each comp
   weighting, and named policy constants; `phraser.ts` wrapping the LLM (NOT an open chat) with
   in-house system prompt + per-Intent user blocks; `turn-loop.ts` composing the session;
   `core-adapters.ts` bridging seams to audited core reads. New AUDITED content read
-  `listElderMemoryForInterviewer` on `story-repository.ts` (already in the allowlist) projects
+  `listNarratorMemoryForInterviewer` on `story-repository.ts` (already in the allowlist) projects
   ONLY safe metadata at the SQL layer — transcript/prose/storageKey never selected. Round 1:
   NO SPEC VIOLATIONS, 3 advisories. Triage: pushed the metadata-only contract DOWN into the
-  audited boundary (added `listElderMemoryForInterviewer` so the projection is in SQL not in
+  audited boundary (added `listNarratorMemoryForInterviewer` so the projection is in SQL not in
   the consumer). Round 2: NO SPEC VIOLATIONS, 3 advisories. Closed two: stale docstring in
-  `core-adapters.ts`; sticky `follow_up` (cleared `lastElderUtterance` on `follow_up`
+  `core-adapters.ts`; sticky `follow_up` (cleared `lastNarratorUtterance` on `follow_up`
   consumption — with regression test asserting fallback to base on the next pick). Round 3:
   NO SPEC VIOLATIONS, no advisories. 110 tests green (db 11, storage 11, core 34, capture 11,
   pipeline 20, interviewer 24); all packages + apps/web typecheck. Architecture-test allowlist
@@ -151,7 +151,7 @@ Tracks which build-sequence increment is active and the eval status of each comp
   `getStoryAndRecordingForPipeline`. Round 1: NO HARD VIOLATIONS, 13 advisories. Triage: stub
   transformer's "speedFactor=1.6 reported but no DSP applied" was a real sleeper bug (timings
   off by 1.6x in prod) — fixed by reporting `1.0` honestly. Added retry cap on in-proc queue,
-  expanded forbidden-SDK list, wired elder context (`spokenName`/`birthYear`) through to render,
+  expanded forbidden-SDK list, wired narrator context (`spokenName`/`birthYear`) through to render,
   hardened canonical-bytes test with mutation, parseRenderResponse rejects arrays/null, added
   audienceTier-never-written + media-row-count regressions, doc'd DSP/stitching gaps in
   OPEN-QUESTIONS. Round 2: NO SPEC VIOLATIONS, 12 advisories. The architectural advisory —
@@ -170,9 +170,9 @@ Tracks which build-sequence increment is active and the eval status of each comp
 - **2026-06-26** — Increment 2 (capture path) eval-clean. Review r1 surfaced 1 hard violation
   (orphan-blob ordering) and 11 advisories. Triage: the storage-first ordering is the *correct*
   spec-aligned trade-off (authenticity beats polish / audio preserved as recoverable evidence) —
-  defended in DECISIONS rather than reversed. Enhanced: (1) `getElderProfile` core helper (elder
+  defended in DECISIONS rather than reversed. Enhanced: (1) `getNarratorProfile` core helper (narrator
   page no longer reads `persons` directly); (2) `lastUsedAt` write wrapped in try/catch so a
-  transient write does not 500 the elder page (+ regression test using a Proxy DB); (3) capture
+  transient write does not 500 the narrator page (+ regression test using a Proxy DB); (3) capture
   test for invalid session now asserts zero storage objects AND zero media/story rows (was
   hollow); (4) added two partial-failure tests — DB-after-storage-fails preserves audio +
   rolls back DB; storage-fails leaves no DB rows; (5) architecture allowlist canary tightened
@@ -185,14 +185,14 @@ Tracks which build-sequence increment is active and the eval status of each comp
   `@chronicle/storage` (MediaStorage iface + in-memory/filesystem + write-once R2 stub),
   `@chronicle/capture` (hashed session tokens = zero-login identity, source-agnostic
   `ingestRecording` that persists immutable audio BEFORE any processing then calls the single
-  core write path `persistRecordingAndCreateDraft`), `apps/web` (thin elder surface `/s/[token]`
+  core write path `persistRecordingAndCreateDraft`), `apps/web` (thin capture surface `/s/[token]`
   + `/api/capture` route + dev wiring). Front-door guard updated: `story-repository.ts` added to
   the audited allowlist as the single write path; `@chronicle/db/content` is the guarded subpath
   for content tables. 56 tests pass (db 11, core 29, storage 8, capture 8); all four packages +
   apps/web typecheck clean. Web mic + dev-server E2E unverified in headless env (documented in
   PLAN). Repo moved off Google Drive to local disk; pnpm install clean after move.
 - **2026-06-26** — Increment 1 (the spine) complete and eval-clean. Built: full Drizzle schema
-  (8 entities + elder_sessions), DB-trigger-enforced append-only ledger + media immutability,
+  (8 entities + link_sessions), DB-trigger-enforced append-only ledger + media immutability,
   the single authorization function (4-tier), consent ledger API, story state machine. 33 tests
   (11 db + 22 core) + 4 architecture-guard tests, all green; both packages typecheck clean.
   Eval round 1: 0 hard violations, 4 advisories (front door convention-only, 2 test gaps, unwired

@@ -5,7 +5,7 @@
  *   - Ask created (queued)
  *   - story persisted with askId
  *   - story progressed to pending_approval (mirrors post-pipeline state)
- *   - elder approves -> in ONE tx the consent ledger row lands AND the Ask flips to `answered`
+ *   - narrator approves -> in ONE tx the consent ledger row lands AND the Ask flips to `answered`
  *     pointing at the story.
  *
  * Plus the small lifecycle helpers (`markAskRouted`, `markAskAnswered`) and the asker's view.
@@ -33,12 +33,12 @@ beforeEach(async () => {
 });
 
 async function relaySetup() {
-  const elder = await makePerson(db, "Eleanor");
+  const narrator = await makePerson(db, "Eleanor");
   const cousin = await makePerson(db, "Sofia");
-  const fam = await makeFamily(db, "B", elder.id);
-  await addMembership(db, elder.id, fam.id);
+  const fam = await makeFamily(db, "B", narrator.id);
+  await addMembership(db, narrator.id, fam.id);
   await addMembership(db, cousin.id, fam.id);
-  return { elder, cousin, fam };
+  return { narrator, cousin, fam };
 }
 
 async function pendingApprovableStoryForAsk(opts: {
@@ -69,21 +69,21 @@ async function pendingApprovableStoryForAsk(opts: {
 
 describe("approval atomically closes the relay (story.askId → ask answered)", () => {
   it("approval flips a queued Ask to `answered` with storyId + answeredAt, in the SAME transaction", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Tell me about your wedding." },
+      { targetPersonId: narrator.id, questionText: "Tell me about your wedding." },
     );
     const storyId = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
 
     const now = new Date("2026-06-26T12:00:00Z");
     const result = await approveAndShareStory(db, {
       storyId,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k",
@@ -104,21 +104,21 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
   });
 
   it("approval also closes the relay when the interviewer ALREADY marked the Ask `routed`", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Q" },
+      { targetPersonId: narrator.id, questionText: "Q" },
     );
     await markAskRouted(db, ask.id);
     const storyId = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
 
     const result = await approveAndShareStory(db, {
       storyId,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k",
@@ -131,9 +131,9 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
   });
 
   it("approval of a story with NO linked Ask leaves answeredAsk null (does not break the non-relay path)", async () => {
-    const { elder } = await relaySetup();
+    const { narrator } = await relaySetup();
     const { story } = await persistRecordingAndCreateDraft(db, {
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       storageKey: "r2://r1.webm",
       contentType: "audio/webm",
       checksum: "sha256:r",
@@ -148,7 +148,7 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
     await transitionStoryState(db, story.id, "pending_approval");
     const result = await approveAndShareStory(db, {
       storyId: story.id,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k",
@@ -160,14 +160,14 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
   });
 
   it("rolls back the ASK flip when the surrounding tx fails (atomic with the consent write)", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Q" },
+      { targetPersonId: narrator.id, questionText: "Q" },
     );
     const storyId = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
     // Force the consent insert (later in the tx than the ask flip) to fail.
@@ -175,7 +175,7 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
     await expect(
       approveAndShareStory(db, {
         storyId,
-        elderPersonId: elder.id,
+        narratorPersonId: narrator.id,
         audienceTier: "family",
         approvalAudio: {
           storageKey: "k",
@@ -191,20 +191,20 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
   });
 
   it("rejects approval if the linked Ask was already answered by a DIFFERENT story (one ask → one story)", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Q" },
+      { targetPersonId: narrator.id, questionText: "Q" },
     );
     // First story answers the ask.
     const firstStory = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
     await approveAndShareStory(db, {
       storyId: firstStory,
-      elderPersonId: elder.id,
+      narratorPersonId: narrator.id,
       audienceTier: "family",
       approvalAudio: {
         storageKey: "k1",
@@ -214,13 +214,13 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
     });
     // Second story ALSO points at the same ask (impossible in normal flow, but defense in depth).
     const secondStory = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
     await expect(
       approveAndShareStory(db, {
         storyId: secondStory,
-        elderPersonId: elder.id,
+        narratorPersonId: narrator.id,
         audienceTier: "family",
         approvalAudio: {
           storageKey: "k2",
@@ -234,11 +234,11 @@ describe("approval atomically closes the relay (story.askId → ask answered)", 
 
 describe("markAskRouted / markAskAnswered (lifecycle helpers)", () => {
   it("markAskRouted: queued → routed; idempotent on re-mark; rejects from answered", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Q" },
+      { targetPersonId: narrator.id, questionText: "Q" },
     );
     const routed = await markAskRouted(db, ask.id);
     expect(routed.status).toBe("routed");
@@ -249,14 +249,14 @@ describe("markAskRouted / markAskAnswered (lifecycle helpers)", () => {
   });
 
   it("markAskAnswered: rejects when same ask is answered by a different story", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const ask = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "Q" },
+      { targetPersonId: narrator.id, questionText: "Q" },
     );
     const storyA = await pendingApprovableStoryForAsk({
-      ownerPersonId: elder.id,
+      ownerPersonId: narrator.id,
       askId: ask.id,
     });
     await markAskAnswered(db, ask.id, storyA);
@@ -268,17 +268,17 @@ describe("markAskRouted / markAskAnswered (lifecycle helpers)", () => {
 
 describe("listAsksByAsker (hub notification view)", () => {
   it("returns the asker's own asks with target name, most-recent first", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const a1 = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "first" },
+      { targetPersonId: narrator.id, questionText: "first" },
     );
     await new Promise((r) => setTimeout(r, 5));
     const a2 = await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "second" },
+      { targetPersonId: narrator.id, questionText: "second" },
     );
     const seen = await listAsksByAsker(db, { kind: "account", personId: cousin.id });
     expect(seen.map((s) => s.ask.id)).toEqual([a2.id, a1.id]);
@@ -286,12 +286,12 @@ describe("listAsksByAsker (hub notification view)", () => {
   });
 
   it("does NOT leak other people's asks", async () => {
-    const { elder, cousin } = await relaySetup();
+    const { narrator, cousin } = await relaySetup();
     const stranger = await makePerson(db, "Stranger");
     await createAsk(
       db,
       { kind: "account", personId: cousin.id },
-      { targetPersonId: elder.id, questionText: "private to cousin" },
+      { targetPersonId: narrator.id, questionText: "private to cousin" },
     );
     const seen = await listAsksByAsker(db, { kind: "account", personId: stranger.id });
     expect(seen).toEqual([]);

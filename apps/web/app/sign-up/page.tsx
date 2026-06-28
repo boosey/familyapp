@@ -1,5 +1,5 @@
 /**
- * /sign-up — create a younger-generation Account+Person via the mock auth provider. A fresh account
+ * /sign-up — create a Account+Person via the mock auth provider. A fresh account
  * is never onboarded, so resolvePostAuthRoute always lands a new signup on /welcome. Inline errors
  * (email already taken / invalid input) come back through the ?error= searchParam — the server
  * action redirects to itself on failure so there is no client boundary here.
@@ -45,7 +45,7 @@ export default async function SignUpPage({
   return (
     <AuthScreen
       title="Create your family"
-      subtitle="Start a space for your family's stories. You can invite relatives and elders once you're in."
+      subtitle="Start a space for your family's stories. You can invite relatives and narrators once you're in."
       error={error ? ERRORS[error] ?? null : null}
       footer={
         <p

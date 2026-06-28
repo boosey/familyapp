@@ -2,11 +2,11 @@
  * Turn loop — the runnable wrapper that pulls all the seams together. Each call to `nextTurn`
  * composes ONE turn from the four inputs the spec names (base bank, pending Asks, session
  * memory, biographical anchors), asks the picker for the Intent, asks the LLM to phrase it,
- * and asks the Voice seam to synthesize speech. The caller (the elder surface, or a test)
- * then plays the audio, captures the elder's response, and feeds it back via `recordResponse`
+ * and asks the Voice seam to synthesize speech. The caller (the narrator surface, or a test)
+ * then plays the audio, captures the narrator's response, and feeds it back via `recordResponse`
  * before the next `nextTurn` call.
  *
- * The loop is INTENTIONALLY a function-per-turn, not a long-running goroutine. The elder
+ * The loop is INTENTIONALLY a function-per-turn, not a long-running goroutine. The narrator
  * surface (Phase 1: a thin web page) drives pacing; this module is the brain it consults.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
@@ -22,7 +22,7 @@ import type {
 import {
   MEMORY_LOOKBACK_COUNT,
   createSessionState,
-  ingestElderUtterance,
+  ingestNarratorUtterance,
   pickNextIntent,
   primeCoveredCategoriesFromPrior,
   recordTurnCompleted,
@@ -42,7 +42,7 @@ export interface InterviewerDeps {
 }
 
 export interface InterviewSessionOptions {
-  elderPersonId: string;
+  narratorPersonId: string;
 }
 
 export interface Turn {
@@ -57,7 +57,7 @@ export interface InterviewSession {
   /** Compose, phrase, and synthesize the next turn. Returns null if the session is winding down
    * and there is nothing more to say (the loop ends cleanly). */
   nextTurn(): Promise<Turn>;
-  /** Feed the elder's response into the session state so the next turn can react. */
+  /** Feed the narrator's response into the session state so the next turn can react. */
   recordResponse(utterance: string): void;
   /** Direct read of the running state (tests & observability). */
   getState(): SessionState;
@@ -68,7 +68,7 @@ export interface InterviewSession {
 }
 
 /**
- * Create an interview session bound to one elder. Loads memory + anchors ONCE up front; the
+ * Create an interview session bound to one narrator. Loads memory + anchors ONCE up front; the
  * loop then picks/phrases/speaks per turn. The single up-front load keeps the session a stable
  * snapshot — a story approved mid-session does not perturb the picker until the next session.
  * That's a deliberate choice: behavior policy is auditable as "what the loop saw at start".
@@ -77,11 +77,11 @@ export async function createInterviewSession(
   deps: InterviewerDeps,
   opts: InterviewSessionOptions,
 ): Promise<InterviewSession> {
-  const state = createSessionState(opts.elderPersonId);
+  const state = createSessionState(opts.narratorPersonId);
   const [priorStories, anchors, pendingAsks] = await Promise.all([
-    deps.memorySource.recentStoriesForElder(opts.elderPersonId, MEMORY_LOOKBACK_COUNT),
-    deps.anchorSource.loadForElder(opts.elderPersonId),
-    deps.askSource.pendingForElder(opts.elderPersonId),
+    deps.memorySource.recentStoriesForNarrator(opts.narratorPersonId, MEMORY_LOOKBACK_COUNT),
+    deps.anchorSource.loadForNarrator(opts.narratorPersonId),
+    deps.askSource.pendingForNarrator(opts.narratorPersonId),
   ]);
   primeCoveredCategoriesFromPrior(state, priorStories);
 
@@ -100,7 +100,7 @@ export async function createInterviewSession(
     // Close the relay's first half: notify the source that this Ask has been routed (queued
     // → routed). The DB adapter flips the row so the asker's hub view stops showing
     // `queued`; the in-memory mock no-ops. Best-effort — a failure here must NOT erase the
-    // synthesized turn the elder is about to hear, so we swallow and log to console.
+    // synthesized turn the narrator is about to hear, so we swallow and log to console.
     if (intent.kind === "ask") {
       try {
         await deps.askSource.markRouted(intent.askId);
@@ -113,7 +113,7 @@ export async function createInterviewSession(
   }
 
   function recordResponse(utterance: string): void {
-    ingestElderUtterance(state, utterance);
+    ingestNarratorUtterance(state, utterance);
   }
 
   return {

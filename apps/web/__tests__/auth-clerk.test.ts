@@ -148,8 +148,8 @@ describe("isClerkConfigured", () => {
 });
 
 describe("middleware matcher", () => {
-  it("excludes the elder token surface (/s/...) and includes /hub/", () => {
-    // Clerk must NEVER intercept the elder token surface — it authenticates by URL token, not
+  it("excludes the narrator token surface (/s/...) and includes /hub/", () => {
+    // Clerk must NEVER intercept the narrator token surface — it authenticates by URL token, not
     // by Clerk session, and any redirect/auth flow would break the wedge.
     const serialized = JSON.stringify(middlewareConfig.matcher);
     expect(serialized).not.toContain("/s/");

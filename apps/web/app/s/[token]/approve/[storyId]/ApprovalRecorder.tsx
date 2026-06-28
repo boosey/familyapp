@@ -2,7 +2,7 @@
 
 /**
  * Approval recorder, in Kindred chrome. Vertical radio-row tier picker (default: family) so the
- * elder's spoken approval applies to the audience they actually want — then the single loud voice
+ * narrator's spoken approval applies to the audience they actually want — then the single loud voice
  * button. Preserves the approval POST to `/api/capture/approve` with audienceTier.
  */
 import { useCallback, useRef, useState } from "react";

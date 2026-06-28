@@ -11,13 +11,21 @@ import { existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  applyMigrations,
-  applyMigrationsToPostgres,
+  applySchema,
+  applySchemaToPostgres,
   createPgliteDatabase,
   createPostgresDatabase,
   type Database,
 } from "@chronicle/db";
 import { FilesystemMediaStorage, type MediaStorage } from "@chronicle/storage";
+import {
+  createPipeline,
+  ScriptedTranscriber,
+  ScriptedLanguageModel,
+  type Pipeline,
+} from "@chronicle/pipeline";
+import { createGroqTranscriber } from "@chronicle/transcribe-groq";
+import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
 import { type AuthProvider } from "./auth";
 import { createClerkAuthProvider } from "./auth-clerk";
 import { createMockAuthProvider } from "./auth-mock";
@@ -36,7 +44,21 @@ function anchor(p: string): string {
 const DEV_DB_DIR = anchor(process.env.CHRONICLE_DB_DIR ?? "./.pglite/dev");
 const DEV_MEDIA_DIR = anchor(process.env.CHRONICLE_MEDIA_DIR ?? "./.media");
 
-type Runtime = { db: Database; storage: MediaStorage; auth: AuthProvider };
+type Runtime = {
+  db: Database;
+  storage: MediaStorage;
+  auth: AuthProvider;
+  /**
+   * Build a FRESH pipeline (its own in-process JobQueue) for one transcribe→render run. This is a
+   * FACTORY, not a singleton, on purpose: the in-process queue's `drain()` has a single-flight
+   * re-entrancy guard sized for one async call tree. If two concurrent `shareAnswerAction` requests
+   * shared one queue, the second's `drain()` would no-op while the first is draining and could then
+   * approve a story still in `draft` (illegal transition → stuck `pending_approval`). A per-call
+   * pipeline isolates each approval. (Production's durable Inngest queue is exempt; this is the
+   * dev/CI in-process path.) The vendor adapters are stateless, so they are built once and reused.
+   */
+  newPipeline: () => Pipeline;
+};
 
 // Survive HMR in dev: cache on globalThis so we don't reopen PGlite on every reload.
 const globalForRuntime = globalThis as unknown as {
@@ -68,20 +90,18 @@ async function build(): Promise<Runtime> {
   if (process.env.DATABASE_URL) {
     db = createPostgresDatabase(process.env.DATABASE_URL);
     // First-boot bootstrap only, and opt-in: every Next.js cold start AND every HMR cycle would
-    // otherwise hammer `applyMigrationsToPostgres`. Ongoing schema changes go through
-    // `drizzle-kit migrate` as a deploy step; this in-process path is for bootstrapping a fresh
-    // Supabase/Neon project. Set `CHRONICLE_RUN_MIGRATIONS=1` on the boot that should run it.
+    // otherwise hammer `applySchemaToPostgres`. It applies the schema only if absent (never drops);
+    // for bootstrapping a fresh Supabase/Neon project. Set `CHRONICLE_RUN_MIGRATIONS=1` to run it.
     if (db.$postgres && process.env.CHRONICLE_RUN_MIGRATIONS === "1") {
-      await applyMigrationsToPostgres(db.$postgres);
+      await applySchemaToPostgres(db.$postgres);
     }
   } else {
     ensureDir(DEV_DB_DIR);
     db = createPgliteDatabase(DEV_DB_DIR);
-    // applyMigrations is idempotent and incremental (tracks applied files in _chronicle_meta),
-    // so it both bootstraps a fresh DB and lands newly-added migrations on an existing dev DB.
-    // The previous "skip everything if `persons` exists" gate silently dropped every migration
-    // added after first boot — that is what made `invitations` go missing here.
-    await applyMigrations(db.$pglite!);
+    // Single-schema model (no incremental migrations while the schema is molten): create the
+    // schema if this dev DB is empty, otherwise leave it alone. Schema changes are picked up by
+    // RESEEDING — the dev seed blows the DB away and re-applies the current schema (resetSchema).
+    await applySchema(db.$pglite!);
   }
   const storage = new FilesystemMediaStorage({
     baseDir: DEV_MEDIA_DIR,
@@ -95,7 +115,23 @@ async function build(): Promise<Runtime> {
   const auth: AuthProvider = isClerkConfigured()
     ? createClerkAuthProvider(db)
     : createMockAuthProvider(db);
-  return { db, storage, auth };
+  // Runtime switch: when vendor API keys are present in env, use real adapters (Groq Whisper
+  // for transcription, Anthropic Claude for story rendering). When keys are absent — local dev,
+  // CI, or any environment without secrets — fall back to deterministic in-process mocks so
+  // the pipeline can run end-to-end without any paid vendor call. Mirrors the Clerk-vs-mock
+  // pattern above.
+  const transcriber = process.env.GROQ_API_KEY
+    ? createGroqTranscriber({})
+    : new ScriptedTranscriber({
+        text: "(Dev mode: no GROQ_API_KEY set — this is placeholder transcript text so the pipeline can run end to end.)",
+      });
+  const languageModel = process.env.ANTHROPIC_API_KEY
+    ? createAnthropicLanguageModel({})
+    : new ScriptedLanguageModel();
+  // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
+  const newPipeline = (): Pipeline =>
+    createPipeline({ db, storage, transcriber, languageModel });
+  return { db, storage, auth, newPipeline };
 }
 
 export function getRuntime(): Promise<Runtime> {

@@ -5,7 +5,7 @@ import {
   createSessionState,
   detectDistress,
   detectOffRamp,
-  ingestElderUtterance,
+  ingestNarratorUtterance,
   InMemoryAnchorSource,
   InMemoryAskSource,
   InMemoryMemorySource,
@@ -22,11 +22,11 @@ import {
   type PromptIntent,
 } from "../src/index";
 
-const ELDER = "elder-1";
+const NARRATOR = "narrator-1";
 
 function makeAnchors(): BiographicalAnchors {
   return {
-    personId: ELDER,
+    personId: NARRATOR,
     spokenName: "Eleanor",
     birthYear: 1942,
     anchors: { birthplace: "Iowa" },
@@ -40,9 +40,9 @@ function makeDeps(opts: {
   llmRespond?: string;
 }) {
   const askSource = new InMemoryAskSource();
-  if (opts.asks) askSource.setAsks(ELDER, opts.asks);
+  if (opts.asks) askSource.setAsks(NARRATOR, opts.asks);
   const memorySource = new InMemoryMemorySource();
-  if (opts.stories) memorySource.setStories(ELDER, opts.stories);
+  if (opts.stories) memorySource.setStories(NARRATOR, opts.stories);
   const anchorSource = new InMemoryAnchorSource();
   if (opts.anchors !== null) anchorSource.set(opts.anchors ?? makeAnchors());
   const languageModel = new ScriptedLanguageModel({
@@ -67,18 +67,18 @@ describe("behavior — distress / off-ramp detection", () => {
   });
 
   it("ingesting an utterance flips state flags", () => {
-    const s = createSessionState(ELDER);
-    ingestElderUtterance(s, "let's skip that");
+    const s = createSessionState(NARRATOR);
+    ingestNarratorUtterance(s, "let's skip that");
     expect(s.offRampRequested).toBe(true);
     expect(s.distressed).toBe(false);
-    ingestElderUtterance(s, "I can't talk about it");
+    ingestNarratorUtterance(s, "I can't talk about it");
     expect(s.distressed).toBe(true);
   });
 });
 
 describe("behavior — picker priority order (spec)", () => {
-  it("returns wind_down(distress, surfaceHumanSupport=true) when the elder signals distress", () => {
-    const state = createSessionState(ELDER);
+  it("returns wind_down(distress, surfaceHumanSupport=true) when the narrator signals distress", () => {
+    const state = createSessionState(NARRATOR);
     state.distressed = true;
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("wind_down");
@@ -89,7 +89,7 @@ describe("behavior — picker priority order (spec)", () => {
   });
 
   it("wind_down (off-ramp) does NOT surface human support — that is reserved for distress", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.offRampRequested = true;
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("wind_down");
@@ -99,7 +99,7 @@ describe("behavior — picker priority order (spec)", () => {
   });
 
   it("opens with a warm callback on turn 0 IF prior stories exist", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     const priorStories: PriorStoryMemory[] = [
       {
         storyId: "s1",
@@ -116,13 +116,13 @@ describe("behavior — picker priority order (spec)", () => {
   });
 
   it("does NOT open with a callback if there are no prior stories", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("base");
   });
 
   it("prioritizes pending Asks over the base bank (after turn 0)", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 1; // not a callback turn
     const asks: PendingAsk[] = [
       { askId: "a1", askerName: "Sofia", questionText: "What was your wedding day like?" },
@@ -133,7 +133,7 @@ describe("behavior — picker priority order (spec)", () => {
   });
 
   it("Asks are sorted by priority, descending — high-priority asker first", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 1;
     const asks: PendingAsk[] = [
       { askId: "low", askerName: "X", questionText: "q-low", priority: 1 },
@@ -144,19 +144,19 @@ describe("behavior — picker priority order (spec)", () => {
     expect((intent as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("high");
   });
 
-  it("emits a follow_up when the elder's last utterance is substantial", () => {
-    const state = createSessionState(ELDER);
+  it("emits a follow_up when the narrator's last utterance is substantial", () => {
+    const state = createSessionState(NARRATOR);
     state.turnCount = 2;
-    state.lastElderUtterance =
+    state.lastNarratorUtterance =
       "Well, my father worked at the railway for forty years, and every evening he'd come home and tell us a story about the men he'd met.";
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("follow_up");
   });
 
   it("a follow_up is consumed — does not re-fire on the SAME utterance the next turn", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 2;
-    state.lastElderUtterance =
+    state.lastNarratorUtterance =
       "Well, my father worked at the railway for forty years, and every evening he'd come home and tell us stories.";
     const i1 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(i1.kind).toBe("follow_up");
@@ -167,9 +167,9 @@ describe("behavior — picker priority order (spec)", () => {
   });
 
   it("does NOT follow_up on a tiny utterance ('yes', 'maybe')", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 2;
-    state.lastElderUtterance = "Yes, that's right.";
+    state.lastNarratorUtterance = "Yes, that's right.";
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("base");
   });
@@ -177,7 +177,7 @@ describe("behavior — picker priority order (spec)", () => {
 
 describe("behavior — gentle sequencing: high-sensitivity is rapport-gated", () => {
   it(`refuses to pick high-sensitivity questions before ${RAPPORT_THRESHOLD_TURNS} turns`, () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = RAPPORT_THRESHOLD_TURNS - 1;
     // Pre-exhaust every non-high question by category, forcing the picker to consider only high.
     for (const q of QUESTION_BANK) {
@@ -192,7 +192,7 @@ describe("behavior — gentle sequencing: high-sensitivity is rapport-gated", ()
   });
 
   it("allows high-sensitivity after rapport, but never if distress was detected", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = RAPPORT_THRESHOLD_TURNS + 2;
     state.distressed = true;
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
@@ -203,7 +203,7 @@ describe("behavior — gentle sequencing: high-sensitivity is rapport-gated", ()
 
 describe("behavior — reminiscence-bump weighting", () => {
   it("prefers childhood / young_adult phases when picking from the base bank", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 1;
     const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent.kind).toBe("base");
@@ -214,7 +214,7 @@ describe("behavior — reminiscence-bump weighting", () => {
 
 describe("behavior — de-duplication", () => {
   it("does not re-ask a question once asked", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 1;
     const intent1 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
     expect(intent1.kind).toBe("base");
@@ -227,7 +227,7 @@ describe("behavior — de-duplication", () => {
   });
 
   it("seeds covered categories from prior stories' tags (cross-session dedup)", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     const priorStories: PriorStoryMemory[] = [
       {
         storyId: "s1",
@@ -244,7 +244,7 @@ describe("behavior — de-duplication", () => {
   });
 
   it("does not re-issue the same Ask twice in one session", () => {
-    const state = createSessionState(ELDER);
+    const state = createSessionState(NARRATOR);
     state.turnCount = 1;
     const asks: PendingAsk[] = [
       { askId: "a1", askerName: "Sofia", questionText: "...", priority: 10 },
@@ -274,14 +274,14 @@ describe("turn loop — composes turn from all four inputs", () => {
       stories: priorStories,
       llmRespond: "Last time you started telling me about the farm — shall we pick up there?",
     });
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     const turn = await session.nextTurn();
     expect(turn.intent.kind).toBe("callback");
     // LLM was asked once; Voice TTS was asked once with the LLM's spoken text.
     expect(deps.languageModel.calls.length).toBe(1);
     expect(deps.voice.calls.length).toBe(1);
     expect(deps.voice.calls[0]!.text).toBe(turn.spokenText);
-    // Phraser context block included the elder's name and the prior summary in the LLM prompt.
+    // Phraser context block included the narrator's name and the prior summary in the LLM prompt.
     const llmUserMsg = deps.languageModel.calls[0]!.messages.find((m) => m.role === "user")!
       .content;
     expect(llmUserMsg).toContain("Eleanor");
@@ -299,7 +299,7 @@ describe("turn loop — composes turn from all four inputs", () => {
       },
     ];
     const deps = makeDeps({ asks, llmRespond: "Sofia was wondering what Grandpa was like…" });
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     // Burn turn 0 by forcing it past callback (no prior stories ⇒ goes straight to ask).
     const turn = await session.nextTurn();
     expect(turn.intent.kind).toBe("ask");
@@ -311,7 +311,7 @@ describe("turn loop — composes turn from all four inputs", () => {
 
   it("recording an off-ramp response makes the NEXT turn a wind_down", async () => {
     const deps = makeDeps({});
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     await session.nextTurn(); // base question
     session.recordResponse("let's skip that, please");
     const next = await session.nextTurn();
@@ -320,7 +320,7 @@ describe("turn loop — composes turn from all four inputs", () => {
 
   it("the LLM system prompt encodes the spec's absolute behavior rules", async () => {
     const deps = makeDeps({});
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     await session.nextTurn();
     const systemMsg = deps.languageModel.calls[0]!.messages.find(
       (m) => m.role === "system",
@@ -336,7 +336,7 @@ describe("turn loop — composes turn from all four inputs", () => {
     const deps = makeDeps({});
     const session = await createInterviewSession(
       { ...deps, voiceId: "warm-voice-7" },
-      { elderPersonId: ELDER },
+      { narratorPersonId: NARRATOR },
     );
     await session.nextTurn();
     await session.nextTurn();
@@ -354,7 +354,7 @@ describe("turn loop — composes turn from all four inputs", () => {
       },
     ];
     const deps = makeDeps({ asks });
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     const t = await session.nextTurn();
     expect(t.intent.kind).toBe("ask");
     // The in-memory AskSource records which askIds have been routed.
@@ -363,14 +363,14 @@ describe("turn loop — composes turn from all four inputs", () => {
 
   it("does NOT call markRouted on non-`ask` turns (base/follow_up/callback/wind_down)", async () => {
     const deps = makeDeps({});
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     await session.nextTurn(); // base
     expect(deps.askSource.routed).toEqual([]);
   });
 
   it("the biographical anchors block flags hints as 'do not state as fact'", async () => {
     const deps = makeDeps({});
-    const session = await createInterviewSession(deps, { elderPersonId: ELDER });
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     await session.nextTurn();
     const llmUserMsg = deps.languageModel.calls[0]!.messages.find((m) => m.role === "user")!
       .content;

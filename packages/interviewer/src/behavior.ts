@@ -10,11 +10,11 @@
  *   - Silence-tolerant                      — `SILENCE_TOLERANCE_MS` is generous; pacing lives
  *                                             with the surface, but the policy is named here.
  *   - Reflect/follow tangents               — `pickNextIntent` returns a "follow_up" Intent when
- *                                             the last elder utterance carried a recognized
+ *                                             the last narrator utterance carried a recognized
  *                                             thread (a noun or name we'd like to dig into).
  *   - Gentle sequencing                     — `pickNextIntent` will not pick a `high`-sensitivity
  *                                             question until `RAPPORT_THRESHOLD_TURNS` warm
- *                                             exchanges have completed and the elder has not
+ *                                             exchanges have completed and the narrator has not
  *                                             signalled distress.
  *   - Never push into pain                  — if `detectDistress` or `detectOffRamp` flips,
  *                                             `pickNextIntent` returns a redirect/wind-down,
@@ -46,7 +46,7 @@ import {
 export const RAPPORT_THRESHOLD_TURNS = 4;
 
 /**
- * How long to wait through silence before nudging the elder. Silence IS thinking — this is well
+ * How long to wait through silence before nudging the narrator. Silence IS thinking — this is well
  * past what a generic voice assistant uses. The surface honors this; the policy names it.
  */
 export const SILENCE_TOLERANCE_MS = 12_000;
@@ -63,32 +63,32 @@ export const MEMORY_LOOKBACK_COUNT = 8;
 // ---------------------------------------------------------------------------
 
 export interface SessionState {
-  /** Person id of the elder this session belongs to. */
-  elderPersonId: string;
+  /** Person id of the narrator this session belongs to. */
+  narratorPersonId: string;
   /** Number of completed turns in the CURRENT session (resets across sessions). */
   turnCount: number;
   /** Set of base-question ids the interviewer has used this session — never re-picked. */
   askedQuestionIds: Set<string>;
   /** Set of Ask ids the interviewer has consumed this session. */
   consumedAskIds: Set<string>;
-  /** Categories the elder has already covered (from prior stories' tags + this session). */
+  /** Categories the narrator has already covered (from prior stories' tags + this session). */
   coveredCategories: Set<string>;
-  /** The most recent elder utterance, if any — used to surface a "follow_up" Intent. */
-  lastElderUtterance: string | null;
+  /** The most recent narrator utterance, if any — used to surface a "follow_up" Intent. */
+  lastNarratorUtterance: string | null;
   /** True if distress was detected — the policy avoids any further sensitive topics. */
   distressed: boolean;
-  /** True if the elder has explicitly asked to skip / change topic / wind down. */
+  /** True if the narrator has explicitly asked to skip / change topic / wind down. */
   offRampRequested: boolean;
 }
 
-export function createSessionState(elderPersonId: string): SessionState {
+export function createSessionState(narratorPersonId: string): SessionState {
   return {
-    elderPersonId,
+    narratorPersonId,
     turnCount: 0,
     askedQuestionIds: new Set(),
     consumedAskIds: new Set(),
     coveredCategories: new Set(),
-    lastElderUtterance: null,
+    lastNarratorUtterance: null,
     distressed: false,
     offRampRequested: false,
   };
@@ -130,7 +130,7 @@ export type PromptIntent =
     };
 
 // ---------------------------------------------------------------------------
-// Listener-side: detect distress and off-ramp from the elder's utterance. Conservative
+// Listener-side: detect distress and off-ramp from the narrator's utterance. Conservative
 // heuristics — the cost of a missed detection is over-asking on a sensitive topic, so the
 // heuristics deliberately err on the side of pulling back.
 // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ const DISTRESS_PHRASES = [
 ];
 
 /**
- * Off-ramp lexicon — the elder asking, in plain speech, to change direction. Spec calls these
+ * Off-ramp lexicon — the narrator asking, in plain speech, to change direction. Spec calls these
  * out as spoken off-ramps the interviewer must honor immediately.
  */
 const OFF_RAMP_PHRASES = [
@@ -179,9 +179,9 @@ export function detectOffRamp(utterance: string): boolean {
   return containsAny(utterance, OFF_RAMP_PHRASES);
 }
 
-/** Apply the elder's latest utterance to the session state. Returns the same state for chaining. */
-export function ingestElderUtterance(state: SessionState, utterance: string): SessionState {
-  state.lastElderUtterance = utterance;
+/** Apply the narrator's latest utterance to the session state. Returns the same state for chaining. */
+export function ingestNarratorUtterance(state: SessionState, utterance: string): SessionState {
+  state.lastNarratorUtterance = utterance;
   if (detectDistress(utterance)) state.distressed = true;
   if (detectOffRamp(utterance)) state.offRampRequested = true;
   return state;
@@ -242,15 +242,15 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     };
   }
 
-  // 3. Follow_up — if the last elder utterance was substantial, prefer reflecting on it. The
+  // 3. Follow_up — if the last narrator utterance was substantial, prefer reflecting on it. The
   // policy here is conservative: only if the utterance is long enough to imply a real thread.
   // The LLM does the actual semantic work of identifying the thread in the system prompt.
-  const last = state.lastElderUtterance;
+  const last = state.lastNarratorUtterance;
   if (last && last.trim().split(/\s+/).length >= 12) {
     return { kind: "follow_up", threadSeed: last };
   }
 
-  // 4. Base bank. De-dup against already-asked AND categories the elder has covered. Then
+  // 4. Base bank. De-dup against already-asked AND categories the narrator has covered. Then
   // gate by sensitivity (no `high` until rapport threshold). Among survivors prefer
   // reminiscence-bump phases.
   const eligible = QUESTION_BANK.filter((q) => {
@@ -293,9 +293,9 @@ export function recordTurnCompleted(state: SessionState, intent: PromptIntent): 
       break;
     case "follow_up":
       // The thread has been consumed. Clearing prevents the picker from re-emitting follow_up
-      // on the same utterance every subsequent turn until the elder speaks again — without
+      // on the same utterance every subsequent turn until the narrator speaks again — without
       // this, one substantial answer would steer the loop indefinitely.
-      state.lastElderUtterance = null;
+      state.lastNarratorUtterance = null;
       break;
     case "callback":
     case "wind_down":
@@ -305,8 +305,8 @@ export function recordTurnCompleted(state: SessionState, intent: PromptIntent): 
 }
 
 /**
- * Prime `coveredCategories` from the elder's prior stories' tags, so the picker doesn't ask
- * something the elder has already covered in a different session. The match is by category
+ * Prime `coveredCategories` from the narrator's prior stories' tags, so the picker doesn't ask
+ * something the narrator has already covered in a different session. The match is by category
  * name appearing in the tag list — Phase 1's prose tagger emits free-form tags, so this is a
  * best-effort overlap; over time the tagger and the category enum can converge.
  */

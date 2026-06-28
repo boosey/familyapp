@@ -2,7 +2,7 @@
  * Increment 1 — the single authorization function: the full permission matrix.
  *
  * The reviewer is told to "try to find a query that returns story content without it." These
- * tests pin every tier × state × relationship combination, plus the elder/owner and anonymous
+ * tests pin every tier × state × relationship combination, plus the narrator/owner and anonymous
  * paths, and assert the public read helpers (the single front door) never leak.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
@@ -32,12 +32,12 @@ beforeEach(async () => {
 
 const anon: AuthContext = { kind: "anonymous" };
 const account = (personId: string): AuthContext => ({ kind: "account", personId });
-const elder = (personId: string): AuthContext => ({
-  kind: "elder_session",
+const narrator = (personId: string): AuthContext => ({
+  kind: "link_session",
   personId,
 });
 
-describe("owner / elder access", () => {
+describe("owner / narrator access", () => {
   it("owner reads their own private draft story", async () => {
     const e = await makePerson(db, "Eleanor");
     const { story } = await makeStory(db, {
@@ -48,14 +48,14 @@ describe("owner / elder access", () => {
     expect((await decideStoryRead(db, account(e.id), story)).allowed).toBe(true);
   });
 
-  it("token-scoped elder reads their own private draft (zero login)", async () => {
+  it("token-scoped narrator reads their own private draft (zero login)", async () => {
     const e = await makePerson(db, "Eleanor");
     const { story } = await makeStory(db, {
       ownerPersonId: e.id,
       state: "draft",
       audienceTier: "private",
     });
-    const fetched = await getStoryForViewer(db, elder(e.id), story.id);
+    const fetched = await getStoryForViewer(db, narrator(e.id), story.id);
     expect(fetched?.id).toBe(story.id);
   });
 });

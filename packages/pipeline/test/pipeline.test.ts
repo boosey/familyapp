@@ -33,26 +33,26 @@ beforeEach(async () => {
   storage = new InMemoryMediaStorage();
 });
 
-async function makeElder(): Promise<string> {
-  const [elder] = await db
+async function makeNarrator(): Promise<string> {
+  const [narrator] = await db
     .insert(persons)
     .values({ displayName: "Eleanor", spokenName: "Eleanor", birthYear: 1942 })
     .returning();
-  return elder!.id;
+  return narrator!.id;
 }
 
 async function seedDraftStory(
-  elderId: string,
+  narratorId: string,
   bytes: Uint8Array,
   promptQuestion?: string,
 ): Promise<{ storyId: string; storageKey: string; checksum: string }> {
-  const storageKey = `story-audio/${elderId}/test.webm`;
+  const storageKey = `story-audio/${narratorId}/test.webm`;
   await storage.put({ key: storageKey, bytes, contentType: "audio/webm" });
   const checksum = sha(bytes);
   const persisted = await persistRecordingAndCreateDraft(
     db,
     {
-      ownerPersonId: elderId,
+      ownerPersonId: narratorId,
       storageKey,
       contentType: "audio/webm",
       durationSeconds: 60,
@@ -65,9 +65,9 @@ async function seedDraftStory(
 
 describe("pipeline — canonical audio invariant (LOCKED)", () => {
   it("after a full pipeline run, the canonical bytes in storage are byte-identical", async () => {
-    const elderId = await makeElder();
+    const narratorId = await makeNarrator();
     const canonical = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    const { storyId, storageKey, checksum } = await seedDraftStory(elderId, canonical);
+    const { storyId, storageKey, checksum } = await seedDraftStory(narratorId, canonical);
 
     const transcriber = new ScriptedTranscriber({ text: "I was born on a farm." });
     const languageModel = new ScriptedLanguageModel();
@@ -83,10 +83,10 @@ describe("pipeline — canonical audio invariant (LOCKED)", () => {
   });
 
   it("the canonical bytes are NEVER handed to the transcriber (working copy is a separate Uint8Array)", async () => {
-    const elderId = await makeElder();
+    const narratorId = await makeNarrator();
     const canonical = new Uint8Array([99, 98, 97]);
     const canonicalChecksum = sha(canonical);
-    const { storyId, storageKey } = await seedDraftStory(elderId, canonical);
+    const { storyId, storageKey } = await seedDraftStory(narratorId, canonical);
 
     let capturedWorkingCopy: Uint8Array | null = null;
     const transcriber = new ScriptedTranscriber({ text: "x" });
@@ -126,8 +126,8 @@ describe("pipeline — canonical audio invariant (LOCKED)", () => {
   });
 
   it("storage holds exactly ONE object after the pipeline runs (no working-copy Media row or blob)", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([5, 5, 5]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([5, 5, 5]));
     const transcriber = new ScriptedTranscriber({ text: "hello" });
     const languageModel = new ScriptedLanguageModel();
     const pipeline = createPipeline({ db, storage, transcriber, languageModel });
@@ -148,9 +148,9 @@ describe("pipeline — canonical audio invariant (LOCKED)", () => {
 
 describe("pipeline — end-to-end stages produce a pending_approval story (still private)", () => {
   it("populates transcript + prose, moves draft -> pending_approval, audienceTier stays private", async () => {
-    const elderId = await makeElder();
+    const narratorId = await makeNarrator();
     const { storyId } = await seedDraftStory(
-      elderId,
+      narratorId,
       new Uint8Array([1]),
       "Tell me about your childhood",
     );
@@ -172,7 +172,7 @@ describe("pipeline — end-to-end stages produce a pending_approval story (still
 
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(story).not.toBeNull();
@@ -185,13 +185,13 @@ describe("pipeline — end-to-end stages produce a pending_approval story (still
     expect(story!.audienceTier).toBe("private");
   });
 
-  it("the LLM receives elder context (spoken name + birth year) so the renderer can set tone", async () => {
-    const [elder] = await db
+  it("the LLM receives narrator context (spoken name + birth year) so the renderer can set tone", async () => {
+    const [narrator] = await db
       .insert(persons)
       .values({ displayName: "Eleanor", spokenName: "Eleanor", birthYear: 1942 })
       .returning();
     const { storyId } = await seedDraftStory(
-      elder!.id,
+      narrator!.id,
       new Uint8Array([1]),
       "Tell me about your wedding",
     );
@@ -205,10 +205,10 @@ describe("pipeline — end-to-end stages produce a pending_approval story (still
     expect(userContent).toContain("1942");
   });
 
-  it("the LLM is given the prompt question so the model can match the framing the elder heard", async () => {
-    const elderId = await makeElder();
+  it("the LLM is given the prompt question so the model can match the framing the narrator heard", async () => {
+    const narratorId = await makeNarrator();
     const { storyId } = await seedDraftStory(
-      elderId,
+      narratorId,
       new Uint8Array([1]),
       "What was your wedding day like?",
     );
@@ -226,15 +226,15 @@ describe("pipeline — end-to-end stages produce a pending_approval story (still
 
 describe("pipeline — word timings are mapped back to 1x time before persisting", () => {
   it("scales sped-up timings by speedFactor against the segment table", async () => {
-    const elderId = await makeElder();
+    const narratorId = await makeNarrator();
     // 10s of canonical audio; default transformer reports speedFactor=1.6, so a working-copy
     // segment runs 0..(10000/1.6) = 0..6250ms. A word at workingCopyMs=3125 (the midpoint of
     // the working copy) should map back to 5000ms in the original.
     const canonical = new Uint8Array([0]);
-    const storageKey = `story-audio/${elderId}/timing.webm`;
+    const storageKey = `story-audio/${narratorId}/timing.webm`;
     await storage.put({ key: storageKey, bytes: canonical, contentType: "audio/webm" });
     const persisted = await persistRecordingAndCreateDraft(db, {
-      ownerPersonId: elderId,
+      ownerPersonId: narratorId,
       storageKey,
       contentType: "audio/webm",
       durationSeconds: 10,
@@ -262,7 +262,7 @@ describe("pipeline — word timings are mapped back to 1x time before persisting
 
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       persisted.story.id,
     );
     const persistedTimings = story!.transcriptWordTimings!;
@@ -274,8 +274,8 @@ describe("pipeline — word timings are mapped back to 1x time before persisting
 
 describe("pipeline — idempotency (durable retry safety)", () => {
   it("re-running the pipeline does not re-call vendors and does not re-transition state", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1, 2, 3]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1, 2, 3]));
     const transcriber = new ScriptedTranscriber({ text: "the transcript" });
     const languageModel = new ScriptedLanguageModel();
     const pipeline = createPipeline({ db, storage, transcriber, languageModel });
@@ -293,7 +293,7 @@ describe("pipeline — idempotency (durable retry safety)", () => {
 
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(story!.state).toBe("pending_approval");
@@ -308,8 +308,8 @@ describe("pipeline — idempotency (durable retry safety)", () => {
   });
 
   it("empty vendor transcript surfaces as an error (no ping-pong, no wasted paid retries)", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1, 1, 1]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1, 1, 1]));
     const transcriber = new ScriptedTranscriber({ text: "" });
     const languageModel = new ScriptedLanguageModel();
     const pipeline = createPipeline({ db, storage, transcriber, languageModel });
@@ -323,7 +323,7 @@ describe("pipeline — idempotency (durable retry safety)", () => {
     // Story is untouched (transcript still null) so a deliberate retry by a human is possible.
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(story!.transcript).toBeNull();
@@ -348,8 +348,8 @@ describe("pipeline — idempotency (durable retry safety)", () => {
 
 describe("pipeline — derived fields are regenerable", () => {
   it("clearing the transcript and re-running produces a fresh transcript + prose", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([7, 7]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([7, 7]));
     const transcriber = new ScriptedTranscriber({ text: "first transcript" });
     const languageModel = new ScriptedLanguageModel({
       respond: () =>
@@ -372,7 +372,7 @@ describe("pipeline — derived fields are regenerable", () => {
 
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(story!.transcript).toBe("second transcript (better model)");
@@ -385,8 +385,8 @@ describe("pipeline — derived fields are regenerable", () => {
 
 describe("pipeline — defends spec hard cap on speedFactor (defense in depth)", () => {
   it("refuses a transformer that reports speedFactor > 2.0 (spec hard cap)", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1]));
     const transcriber = new ScriptedTranscriber({ text: "x" });
     const languageModel = new ScriptedLanguageModel();
     const evilTransformer = {
@@ -416,16 +416,16 @@ describe("pipeline — defends spec hard cap on speedFactor (defense in depth)",
 
 describe("pipeline — state machine guard", () => {
   it("transitionStoryState rejects illegal jumps (draft -> shared) — gate is wired", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1]));
     await expect(transitionStoryState(db, storyId, "shared")).rejects.toThrow(
       /illegal story state transition/,
     );
   });
 
   it("audienceTier is never changed by the pipeline (stays `private` through pending_approval)", async () => {
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1]));
     const transcriber = new ScriptedTranscriber({ text: "x" });
     const languageModel = new ScriptedLanguageModel();
     const pipeline = createPipeline({ db, storage, transcriber, languageModel });
@@ -433,7 +433,7 @@ describe("pipeline — state machine guard", () => {
     await pipeline.runToCompletion();
     const story = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(story!.audienceTier).toBe("private");
@@ -447,7 +447,7 @@ describe("pipeline — state machine guard", () => {
     } as unknown as Parameters<typeof updateDerivedFields>[2]);
     const after = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elderId },
+      { kind: "link_session", personId: narratorId },
       storyId,
     );
     expect(after!.audienceTier).toBe("private");
@@ -456,8 +456,8 @@ describe("pipeline — state machine guard", () => {
   it("the render stage moves draft -> pending_approval ONLY via assertStoryTransition", async () => {
     // Wedge: pre-set the story to `archived` (legal from draft). The render stage must NOT be
     // able to force it into pending_approval — assertStoryTransition forbids that jump.
-    const elderId = await makeElder();
-    const { storyId } = await seedDraftStory(elderId, new Uint8Array([1]));
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1]));
     await transitionStoryState(db, storyId, "archived");
     // Manually populate a transcript so the render stage proceeds past its precondition.
     await updateDerivedFields(db, storyId, { transcript: "anything" });

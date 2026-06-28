@@ -6,11 +6,11 @@
  * exactly as they ship.
  */
 import { createPgliteDatabase, type Database } from "./client";
-import { applyMigrations } from "./migrate";
+import { applySchema } from "./migrate";
 
 /** Create a fresh in-memory database with the complete schema + invariants applied. */
 export async function createTestDatabase(): Promise<Database> {
   const db = createPgliteDatabase();
-  await applyMigrations(db.$pglite!);
+  await applySchema(db.$pglite!);
   return db;
 }

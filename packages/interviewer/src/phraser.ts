@@ -1,5 +1,5 @@
 /**
- * Phraser — turns a chosen `PromptIntent` into the warm spoken sentence the elder hears.
+ * Phraser — turns a chosen `PromptIntent` into the warm spoken sentence the narrator hears.
  *
  * This is the ONLY place the bought LLM enters the interviewer. Behavior policy stays in
  * `behavior.ts`; the LLM's job here is narrow: render the chosen-topic seed in the warm
@@ -13,8 +13,8 @@ import type { LanguageModel, LanguageModelMessage } from "@chronicle/pipeline";
 import type { BiographicalAnchors, PriorStoryMemory } from "./contracts";
 import type { PromptIntent } from "./behavior";
 
-const SYSTEM_PROMPT = `You are the warm voice of the family chronicler. You are speaking to an
-elder family member. You are not a chatbot and not a therapist.
+const SYSTEM_PROMPT = `You are the warm voice of the family chronicler. You are speaking to a
+family member who is sharing their life stories. You are not a chatbot and not a therapist.
 
 ABSOLUTE RULES — non-negotiable:
 - Speak ONE thing at a time. Never combine two questions in one turn.
@@ -22,7 +22,7 @@ ABSOLUTE RULES — non-negotiable:
   like when…". NEVER use yes/no framing. NEVER use "Don't you think…".
 - Be conversational and warm, but brief. 1-3 sentences MAX. No preamble, no apologies, no
   "I'd love to hear…" filler. Get to the question.
-- Never invent facts about the elder or their family. Use any provided biographical anchors
+- Never invent facts about the narrator or their family. Use any provided biographical anchors
   ONLY to set names or tone — never to state something as known fact.
 - When a family member's question is being relayed, name the asker warmly ("Sofia was
   wondering…") and frame the question kindly.
@@ -30,11 +30,11 @@ ABSOLUTE RULES — non-negotiable:
   using ONLY the words in the provided prior-story summary. Do not embellish.
 - If asked to wind down, redirect, or surface human support, do so gently and stop asking
   questions for this turn.
-- Never moralize. Never soften difficult content the elder brought up themselves. Never
-  push the elder into a sensitive topic.
+- Never moralize. Never soften difficult content the narrator brought up themselves. Never
+  push the narrator into a sensitive topic.
 
-You will be told the elder's name to use and the topic seed for THIS turn. Render the
-spoken line — no JSON, no labels, just the words you want the elder to hear.`;
+You will be told the narrator's name to use and the topic seed for THIS turn. Render the
+spoken line — no JSON, no labels, just the words you want the narrator to hear.`;
 
 export interface PhraseInput {
   intent: PromptIntent;
@@ -45,7 +45,7 @@ export interface PhraseInput {
 }
 
 export interface PhraseResult {
-  /** The line the elder hears (also handed to the Voice seam for TTS). */
+  /** The line the narrator hears (also handed to the Voice seam for TTS). */
   spokenText: string;
   modelId: string;
 }
@@ -76,7 +76,7 @@ function buildMessages(input: PhraseInput): LanguageModelMessage[] {
 function renderContextBlock(anchors: BiographicalAnchors | null): string {
   if (!anchors) return "";
   const lines: string[] = [];
-  lines.push(`Elder's spoken name: ${anchors.spokenName}`);
+  lines.push(`Narrator's spoken name: ${anchors.spokenName}`);
   if (anchors.birthYear !== null) lines.push(`Approximate birth year: ${anchors.birthYear}`);
   for (const [k, v] of Object.entries(anchors.anchors ?? {})) {
     if (v === null || v === undefined) continue;
@@ -84,7 +84,7 @@ function renderContextBlock(anchors: BiographicalAnchors | null): string {
       lines.push(`${k}: ${v}`);
     }
   }
-  return `CONTEXT (hints only — do not state any of these as fact unless the elder confirms):\n${lines.join("\n")}\n\n`;
+  return `CONTEXT (hints only — do not state any of these as fact unless the narrator confirms):\n${lines.join("\n")}\n\n`;
 }
 
 function renderIntentBlock(
@@ -108,8 +108,8 @@ Prior story summary: ${summary || "(no summary available — refer only to the t
 Asker's name: ${intent.askerName}
 The asker's actual question (paraphrase warmly; name the asker explicitly): ${intent.questionText}`;
     case "follow_up":
-      return `Type: FOLLOW-UP on what the elder just said.
-The elder's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):
+      return `Type: FOLLOW-UP on what the narrator just said.
+The narrator's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):
 """${intent.threadSeed}"""`;
     case "base":
       return `Type: BASE QUESTION.
@@ -121,6 +121,6 @@ Topic seed (re-render in your warm voice — do NOT read this verbatim):
 Reason: ${intent.reason}
 ${intent.surfaceHumanSupport
   ? "Surface (briefly, warmly) that this is not therapy and that the family — and human support — is here. Do NOT ask another question this turn."
-  : "Acknowledge the elder's wish to pause or change subject. Offer to come back another time. Do NOT ask another question this turn."}`;
+  : "Acknowledge the narrator's wish to pause or change subject. Offer to come back another time. Do NOT ask another question this turn."}`;
   }
 }

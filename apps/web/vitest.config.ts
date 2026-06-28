@@ -25,6 +25,11 @@ export default defineConfig({
       "@chronicle/db": fileURLToPath(
         new URL("../../packages/db/src/index.ts", import.meta.url),
       ),
+      // More specific subpath BEFORE the package root so plugin-alias matches it first
+      // (mirrors the @chronicle/db/content vs @chronicle/db ordering above).
+      "@chronicle/core/pipeline": fileURLToPath(
+        new URL("../../packages/core/src/pipeline.ts", import.meta.url),
+      ),
       "@chronicle/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),
@@ -33,6 +38,15 @@ export default defineConfig({
       ),
       "@chronicle/storage": fileURLToPath(
         new URL("../../packages/storage/src/index.ts", import.meta.url),
+      ),
+      "@chronicle/pipeline": fileURLToPath(
+        new URL("../../packages/pipeline/src/index.ts", import.meta.url),
+      ),
+      "@chronicle/transcribe-groq": fileURLToPath(
+        new URL("../../packages/transcribe-groq/src/index.ts", import.meta.url),
+      ),
+      "@chronicle/llm-anthropic": fileURLToPath(
+        new URL("../../packages/llm-anthropic/src/index.ts", import.meta.url),
       ),
     },
   },

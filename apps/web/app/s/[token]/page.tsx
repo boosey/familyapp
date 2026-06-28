@@ -1,21 +1,21 @@
 /**
- * The elder entry surface. Tapping the personal link opens this one full-screen page. No login,
+ * The narrator entry surface. Tapping the personal link opens this one full-screen page. No login,
  * no account, no install: the session token in the URL IS the identity. If the token does not
  * resolve, we fail WARMLY toward the human.
  *
  * Rendered in the Kindred Conversation kit screen: a paper card with the inviter's prompt and one
  * loud voice button.
  */
-import { resolveElderSession } from "@chronicle/capture";
-import { getElderProfile, listPendingAsksForElder } from "@chronicle/core";
+import { resolveLinkSession } from "@chronicle/capture";
+import { getNarratorProfile, listPendingAsksForNarrator } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
-import { ElderRecorder } from "./ElderRecorder";
+import { NarratorRecorder } from "./NarratorRecorder";
 import { KindredPromptCard } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default async function ElderPage({
+export default async function NarratorPage({
   params,
 }: {
   params: Promise<{ token: string }>;
@@ -23,7 +23,7 @@ export default async function ElderPage({
   const { token } = await params;
   const { db } = await getRuntime();
 
-  const resolved = await resolveElderSession(db, token);
+  const resolved = await resolveLinkSession(db, token);
 
   if (!resolved) {
     return (
@@ -36,13 +36,13 @@ export default async function ElderPage({
     );
   }
 
-  const profile = await getElderProfile(db, resolved.personId);
+  const profile = await getNarratorProfile(db, resolved.personId);
   const spokenName = profile?.spokenName ?? "there";
 
-  // Pull the next queued/routed Ask for this elder. If one exists, surface it as the prompt
+  // Pull the next queued/routed Ask for this narrator. If one exists, surface it as the prompt
   // (named asker, their words) and pair the recording to it via askId so the approval write
   // can flip the Ask to `answered`.
-  const pending = await listPendingAsksForElder(db, resolved.personId, { limit: 1 });
+  const pending = await listPendingAsksForNarrator(db, resolved.personId, { limit: 1 });
   const nextAsk = pending[0] ?? null;
   const initial = spokenName.charAt(0).toUpperCase();
   const now = new Date();
@@ -131,7 +131,7 @@ export default async function ElderPage({
           justifyContent: "center",
         }}
       >
-        <ElderRecorder token={token} askId={nextAsk?.ask.id ?? null} />
+        <NarratorRecorder token={token} askId={nextAsk?.ask.id ?? null} />
       </footer>
     </main>
   );

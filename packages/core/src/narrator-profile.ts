@@ -1,30 +1,30 @@
 /**
- * Elder-profile read helper for the token-scoped capture surface.
+ * Narrator-profile read helper for the token-scoped capture surface.
  *
- * Why this exists: the elder web page needs the spoken name to greet the elder warmly. That is a
+ * Why this exists: the narrator web page needs the spoken name to greet the narrator warmly. That is a
  * *non-content* read (persons table is on the open schema, not behind the front-door guard), but
  * routing it through a core helper keeps with the spirit of "endpoints do not roll their own
  * access logic" (spec Part II / V) — the same pattern we enforce structurally for Story/Media is
- * followed here by convention, so the elder surface has a single read path too.
+ * followed here by convention, so the narrator surface has a single read path too.
  */
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 
-export interface ElderProfile {
+export interface NarratorProfile {
   personId: string;
   /** The name the interviewer/greeting should speak aloud. */
   spokenName: string;
 }
 
 /**
- * Look up the elder's greeting profile by Person id (the id the session token resolved to).
+ * Look up the narrator's greeting profile by Person id (the id the session token resolved to).
  * Returns null only if the row is missing (which would indicate a broken session pointer).
  */
-export async function getElderProfile(
+export async function getNarratorProfile(
   db: Database,
   personId: string,
-): Promise<ElderProfile | null> {
+): Promise<NarratorProfile | null> {
   const [row] = await db
     .select({ spokenName: persons.spokenName })
     .from(persons)
@@ -40,7 +40,7 @@ export async function getElderProfile(
  * front-door guard — it's identity, not expressive content. The interviewer is instructed by
  * its system prompt to treat these as hints, never as ground truth.
  */
-export interface ElderBiographicalContext {
+export interface NarratorBiographicalContext {
   personId: string;
   spokenName: string;
   birthYear: number | null;
@@ -48,10 +48,10 @@ export interface ElderBiographicalContext {
   anchors: Record<string, unknown>;
 }
 
-export async function getElderBiographicalContext(
+export async function getNarratorBiographicalContext(
   db: Database,
   personId: string,
-): Promise<ElderBiographicalContext | null> {
+): Promise<NarratorBiographicalContext | null> {
   const [row] = await db
     .select({
       spokenName: persons.spokenName,

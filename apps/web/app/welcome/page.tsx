@@ -1,5 +1,5 @@
 /**
- * /welcome — younger-generation onboarding host (handoff screens 1–4: welcome → dob → doors →
+ * /welcome — account onboarding host (handoff screens 1–4: welcome → dob → doors →
  * interview). The server component resolves identity + the post-onboarding destination once and
  * hands them to the client state machine; all persistence happens via the server actions in
  * ./actions.ts. The destination is precomputed here because memberships don't change mid-onboarding:

@@ -9,7 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import { listPendingAsksForElder, listPendingJoinRequestsForSteward } from "@chronicle/core";
+import { listPendingAsksForNarrator, listPendingJoinRequestsForSteward, listOutstandingAnswerDrafts } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
 import { loadHubFeed } from "@/lib/hub-data";
@@ -101,16 +101,22 @@ export default async function HubPage({
   const validTabs = new Set(["stories", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
-  const [feed, pendingAsks, pendingRequests, viewerRow] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, viewerRow, answerDrafts] = await Promise.all([
     loadHubFeed(db, ctx),
-    listPendingAsksForElder(db, ctx.personId, { limit: 20 }),
+    listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
     db
       .select({ spokenName: persons.spokenName, displayName: persons.displayName })
       .from(persons)
       .where(eq(persons.id, ctx.personId))
       .then((rows) => rows[0] ?? null),
+    listOutstandingAnswerDrafts(db, ctx.personId),
   ]);
+
+  // Build a lookup map so QuestionsTab can render two-state affordances per ask.
+  const draftsByAskId = Object.fromEntries(
+    answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
+  );
 
   /* ── Derived display values ─────────────────────────────────────────────── */
   const familyNames = [...new Set(feed.map((s) => s.family.name))];
@@ -228,7 +234,7 @@ export default async function HubPage({
         {/* Tab content */}
         <section style={{ padding: "28px 0" }}>
           {activeTab === "stories" && <StoriesTab feed={feed} />}
-          {activeTab === "questions" && <QuestionsTab asks={pendingAsks} />}
+          {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab />}
           {activeTab === "asks" && <AsksTab />}
           {activeTab === "invite" && <InviteTab />}

@@ -22,6 +22,17 @@ export interface MediaStorage {
   exists(key: string): Promise<boolean>;
   /** A URL the browser can fetch for playback (a signed, expiring URL in production). */
   getUrl(key: string): Promise<string>;
+  /**
+   * Hard-delete the object at `key`. Used ONLY for never-consented draft-audio cleanup
+   * (re-record supersession + explicit discard — ADR-0002). The audited core path removes the
+   * Media DB row FIRST, inside the transaction, so a delete here can only ever target an object
+   * with no live reference. MUST be idempotent: deleting a missing key is a no-op (a leaked or
+   * already-gone blob is harmless; a dangling row would not be — but the row is gone first).
+   *
+   * This does NOT weaken immutability: consented audio (any Media tied to a consent_records row,
+   * or whose Story has one) is never routed here — the DB trigger raises on its DELETE regardless.
+   */
+  delete(key: string): Promise<void>;
 }
 
 export class ObjectAlreadyExistsError extends Error {

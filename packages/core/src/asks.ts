@@ -1,7 +1,7 @@
 /**
  * The Ask repository — the self-feeding relay seam (spec Part III, "asked-question loop").
  *
- * Asks are NOT expressive content — they are prompts created by a family member for an elder, and
+ * Asks are NOT expressive content — they are prompts created by a family member for a narrator, and
  * the table is on the OPEN schema surface (not behind the guarded content subpath). That said,
  * to keep with the spec's "endpoints do not roll their own access logic" discipline (Part II / V),
  * Ask creation and listing route through this module — so the co-membership check that gates who
@@ -19,7 +19,7 @@ import type { AuthContext } from "./authorization";
 import { viewerPersonId } from "./authorization";
 
 export interface CreateAskInput {
-  /** The target elder the question is for. */
+  /** The target narrator the question is for. */
   targetPersonId: string;
   /** The family context the ask is raised in (optional — informs routing/notification). */
   familyId?: string;
@@ -41,11 +41,11 @@ async function activeFamilyIds(
 }
 
 /**
- * Submit an Ask from the viewer to the target elder. Authorization rule: the asker and the target
+ * Submit an Ask from the viewer to the target narrator. Authorization rule: the asker and the target
  * must share an ACTIVE membership in some family — the same co-membership relation the
  * authorization function uses for family-tier reads. Anonymous viewers cannot create asks.
  *
- * On success the Ask is born `queued`; the interviewer (Increment 7) pulls it on the elder's next
+ * On success the Ask is born `queued`; the interviewer (Increment 7) pulls it on the narrator's next
  * gentle session, frames it warmly with the asker named, and flips it to `routed` then
  * `answered` on approval.
  */
@@ -104,11 +104,11 @@ export async function createAsk(
 }
 
 /**
- * Pending asks for an elder, in arrival order. Used by Increment 7's interviewer to pull the next
+ * Pending asks for a narrator, in arrival order. Used by Increment 7's interviewer to pull the next
  * batch (with the asker named) into the turn loop. System-actor read — no AuthContext, because it
  * is invoked by the interviewer behavior policy, not a viewer-facing surface.
  */
-export interface PendingAskForElder {
+export interface PendingAskForNarrator {
   ask: Ask;
   askerSpokenName: string;
 }
@@ -117,7 +117,7 @@ export interface PendingAskForElder {
  * Mark an Ask as `routed` — called by the interviewer turn loop the moment it consumes the Ask
  * to phrase a turn. The Ask transitions queued → routed (no other input states are legal). This
  * is the seam that closes the relay's first half: the family member's question has reached the
- * elder's queue and is being asked. Idempotent: re-marking an already-`routed` Ask is a no-op.
+ * narrator's queue and is being asked. Idempotent: re-marking an already-`routed` Ask is a no-op.
  */
 export async function markAskRouted(
   db: Database,
@@ -150,8 +150,8 @@ export async function markAskRouted(
 
 /**
  * Mark an Ask as `answered` and point it at the Story. Called atomically from the approval
- * write when the elder approves a Story that pointed at an Ask (story.askId). Legal sources are
- * `queued` (the elder answered without the interviewer pre-routing — e.g. a tight session) and
+ * write when the narrator approves a Story that pointed at an Ask (story.askId). Legal sources are
+ * `queued` (the narrator answered without the interviewer pre-routing — e.g. a tight session) and
  * `routed`. Re-marking an already-`answered` Ask with the SAME storyId is idempotent; with a
  * different storyId it is rejected (an Ask answers exactly one Story).
  */
@@ -186,9 +186,9 @@ export async function markAskAnswered(
 }
 
 /**
- * The asker's own submitted Asks, most-recent first, with the target elder's spoken name and
+ * The asker's own submitted Asks, most-recent first, with the target narrator's spoken name and
  * (for answered ones) the resulting story id. Powers the hub notification view — the asker sees
- * their question's status without polling the elder side.
+ * their question's status without polling the narrator side.
  */
 export interface AskerOwnAsk {
   ask: Ask;
@@ -210,11 +210,11 @@ export async function listAsksByAsker(
   return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName }));
 }
 
-export async function listPendingAsksForElder(
+export async function listPendingAsksForNarrator(
   db: Database,
-  elderPersonId: string,
+  narratorPersonId: string,
   opts: { limit?: number } = {},
-): Promise<PendingAskForElder[]> {
+): Promise<PendingAskForNarrator[]> {
   const limit = opts.limit ?? 20;
   const rows = await db
     .select({
@@ -225,7 +225,7 @@ export async function listPendingAsksForElder(
     .innerJoin(persons, eq(persons.id, asks.askerPersonId))
     .where(
       and(
-        eq(asks.targetPersonId, elderPersonId),
+        eq(asks.targetPersonId, narratorPersonId),
         inArray(asks.status, ["queued", "routed"] as AskStatus[]),
       ),
     )

@@ -2,12 +2,14 @@
 
 Every non-obvious choice and its one-line rationale. Newest at top within each section.
 
-## Onboarding & family flows (younger-generation account side)
+## Onboarding & family flows (account side)
 
 - **Family discovery is opt-in; joining is always steward-approved; discovery exposes only family
   name + steward name.** Full rationale + rejected alternatives in `docs/adr/0001-family-discovery-and-join-requests.md`.
-- **Member invitations are modeled distinctly from elder session tokens.** An invitation creates an
-  Account + Membership; an elder session is anonymous, account-less capture identity. See ADR-0001.
+- **Member invitations are modeled distinctly from link session tokens.** An invitation creates an
+  Account + Membership; a link session is an anonymous, account-less capture identity (the token IS
+  the identity — a mechanism for capturing without an account, assuming nothing about who the person
+  is). See ADR-0001.
 - **Natural-language family search is a `FamilySearch` seam** with a deterministic keyword impl now;
   an LLM slots behind the same interface later, keeping vendor calls off the offline-test path.
 - **Mock auth provider for dev/test** (the `mock_auth_users` table plays Clerk's user store). Account
@@ -42,7 +44,7 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
 - **LLM default: Anthropic Claude**, behind a `LanguageModel` interface. Mock/deterministic
   stub in tests. Prompts + behavior policy live in our code, never the vendor's.
 - **TTS default: ElevenLabs**, behind a `Voice` interface. Mock in tests. (Interviewer's
-  synthetic question-voice only — never the elder's preserved recordings.)
+  synthetic question-voice only — never the narrator's preserved recordings.)
 
 ## Architecture & layout
 
@@ -54,7 +56,7 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
 - **Package split:** `packages/db` (schema = the spec made executable, client, migrations),
   `packages/core` (the IP: authorization function, consent ledger, story state machine,
   permission tiers), `packages/pipeline` (capture→transcribe→synthesize + vendor interfaces +
-  mocks), `packages/interviewer` (behavior policy), `apps/web` (Next.js elder surface + hub,
+  mocks), `packages/interviewer` (behavior policy), `apps/web` (Next.js capture surface + hub,
   added at increment 2). Vendor SDKs may only appear in adapter files, never in core/interviewer.
 - **Append-only ledger enforced at TWO layers:** (1) a Postgres trigger that raises on
   UPDATE/DELETE of `consent_records`, and (2) a repository that exposes only append + read. Both
@@ -93,16 +95,16 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   / the original audio is canonical and never overwritten" and the spec's "audio is persisted
   immediately, before any processing" requirement. The two outcomes on partial failure are:
   (a) storage-first → if DB fails, audio is preserved in storage with no DB pointer (recoverable
-  evidence); (b) DB-first → if storage fails, a Media row exists pointing at nothing (the elder
-  thinks their voice was preserved; it wasn't). (a) is the lesser evil for an elder voice-capture
+  evidence); (b) DB-first → if storage fails, a Media row exists pointing at nothing (the narrator
+  thinks their voice was preserved; it wasn't). (a) is the lesser evil for a voice-capture
   product. A periodic GC of unreferenced storage objects (older than N hours) is a Phase-2 housekeeping
   task; pinned by a regression test that asserts the partial-failure invariant explicitly
   (`packages/capture/test/capture.test.ts`).
-- **Elder profile read goes through a `getElderProfile` core helper, not a direct `persons`
+- **Narrator profile read goes through a `getNarratorProfile` core helper, not a direct `persons`
   query in the page.** `persons` is on the open schema (not behind the front-door guard), so the
   architecture test does not require this, but routing the read through `@chronicle/core`
   preserves the "endpoints do not roll their own access logic" pattern by convention for the
-  elder surface too. If a future Phase-1 page is added it should follow suit.
+  capture surface too. If a future Phase-1 page is added it should follow suit.
 - **Architecture allowlist canary is EXACT membership, not a `<=8` ceiling (review I2 advisory).**
   An exact-membership check makes every addition a deliberate, reviewer-visible diff instead of
   slipping under a generous upper bound. The allowlist remains the two-file audited surface
@@ -142,24 +144,24 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
 ## Increment 4 review responses
 
 - **Cross-session memory: NEW audited core read, projected in SQL (review I4 round 2).**
-  First pass used `listStoriesForViewer` with the elder's own AuthContext and projected
-  metadata in the consumer adapter. Defensible — the elder is owner; the audited call did
+  First pass used `listStoriesForViewer` with the narrator's own AuthContext and projected
+  metadata in the consumer adapter. Defensible — the narrator is owner; the audited call did
   return only-permitted rows — but the safe-metadata contract lived in the consumer rather
-  than at the boundary. Added `listElderMemoryForInterviewer(db, elderPersonId, limit)` to
+  than at the boundary. Added `listNarratorMemoryForInterviewer(db, narratorPersonId, limit)` to
   `story-repository.ts` (already in the architecture allowlist). It SELECTs only
   `id/title/summary/tags/promptQuestion/createdAt`. Transcript/prose/storageKey are
   structurally unreachable through this function. The interviewer adapter is now a thin
   pass-through.
 - **`follow_up` is consumed on use (review I4 round 2).** The picker emits `follow_up` when
-  the elder's last utterance is ≥12 words. Initially `lastElderUtterance` was not cleared on
+  the narrator's last utterance is ≥12 words. Initially `lastNarratorUtterance` was not cleared on
   consumption, so the picker could re-emit `follow_up` on every subsequent turn until the
-  elder spoke again. Fix: `recordTurnCompleted` clears `lastElderUtterance` on the
+  narrator spoke again. Fix: `recordTurnCompleted` clears `lastNarratorUtterance` on the
   `follow_up` case. A new utterance via `recordResponse` still triggers a fresh follow_up;
   only same-utterance re-firing is suppressed. Regression test pins the fall-back to `base`.
 - **Voice persona is configuration, persona id is forwarded per-turn (locked from spec).**
   Spec: "the same warm voice every session is a dignity requirement". `turn-loop.ts` forwards
   the same `deps.voiceId` on every `voice.speak` call; test pins this. The interviewer's
-  synthetic voice is entirely distinct from the elder's preserved original recordings — the
+  synthetic voice is entirely distinct from the narrator's preserved original recordings — the
   Voice seam is for question TTS only and has no path that re-synthesizes a Story's audio.
 - **The LLM never sees policy state.** Sensitivity gating, rapport counter, distress flag,
   Ask priorities, off-ramp detection are all in `behavior.ts`. The LLM gets a chosen Intent
@@ -185,12 +187,12 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   in `@chronicle/pipeline` composes `applyTranscriptCorrection` (audited clear) +
   `renderStoryFromTranscript` (re-render) + `updateDerivedFields` (audited persist). The
   recording pointer is structurally unreachable through this seam — there is no path here
-  that could write Media. State stays `pending_approval`; the elder's NEXT voice action is
+  that could write Media. State stays `pending_approval`; the narrator's NEXT voice action is
   approval. Correction is gated on `pending_approval` so a post-share edit cannot
   silently rewrite a story without a new consent event.
 - **Storage-first ordering applies to approval audio too.** Same authenticity-beats-polish
   ordering as `ingestRecording`: upload approval-audio bytes to storage BEFORE the DB tx.
-  If the DB tx fails, the elder's spoken approval is still durable in object storage
+  If the DB tx fails, the narrator's spoken approval is still durable in object storage
   (recoverable evidence > vanished recording). Tests pin both halves — DB rollback
   preserves storage; storage failure prevents any DB writes.
 
@@ -203,11 +205,11 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   writes the raw token into an httpOnly cookie scoped to `/hub/invite/result` with
   `maxAge=60`; the result page reads it once and deletes it (single-view flash). DB stores
   only the sha-256 hash, unchanged.
-- **Invite verifies BOTH inviter AND chosen elder are active members of the chosen family
+- **Invite verifies BOTH inviter AND chosen narrator are active members of the chosen family
   (review I6 round 2).** Without the second check, a signed-in account could mint a session
-  token binding an arbitrary Person to a Family the elder is not actually in — exactly the
+  token binding an arbitrary Person to a Family the narrator is not actually in — exactly the
   cross-family identity confusion the Person/Membership split exists to prevent (spec Part
-  II). The form's elder dropdown was also tightened to show only co-members; the server
+  II). The form's narrator dropdown was also tightened to show only co-members; the server
   action is the authoritative trust boundary.
 - **Membership status is filtered to `active` in every authorization-driving query (review
   I6 round 1).** Hub feed loader, invite (both the family dropdown AND the inviter check at
@@ -243,7 +245,7 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
 - **markRouted is best-effort from the turn loop.** The turn loop calls
   `askSource.markRouted(askId)` AFTER the synthesized turn is ready, in a try/catch that
   swallows failures. Rationale: a DB hiccup must NOT erase the warm phrased question the
-  elder is about to hear (spec: "never interrupts the elder; buffered"). The next
+  narrator is about to hear (spec: "never interrupts the narrator; buffered"). The next
   successful turn / a retry catches the bookkeeping up; the asker-side notification
   briefly showing `queued` instead of `routed` is an acceptable consistency lag.
 - **Asker notification view (`/hub/asks`) resolves story links through the front door.**
@@ -274,7 +276,7 @@ recap of every fix.
   and does NOT send an `Accept` header (ElevenLabs ignores `Accept` and returns mp3 by
   default — sending it gives the false impression you can negotiate). A 200 with an empty
   body is treated as a vendor failure (otherwise the interviewer would happily "speak"
-  silence at the elder). Single mechanism = single bug surface.
+  silence at the narrator). Single mechanism = single bug surface.
 - **R2 (`@aws-sdk/client-s3`) — `If-None-Match: *` for atomic write-once; presigned GET
   (1h default); ONE documented exception in the vendor-SDK guard.** Write-once semantics
   are enforced AT THE PROVIDER via `If-None-Match: *` on `PutObject` so two racing capture
@@ -323,6 +325,20 @@ recap of every fix.
   `require` (not `prefer`) so a misconfigured prod env fails loud, not silent. The
   whole bootstrap is gated by `CHRONICLE_RUN_MIGRATIONS=1` — production deploys run
   migrations as a separate step, never on every cold start.
+- **Single-schema, no incremental migrations while the schema is molten (2026-06-28).**
+  During heavy development we do NOT maintain a chain of incremental migration files.
+  `src/schema.ts` is the single source of truth; `pnpm --filter @chronicle/db db:generate`
+  (`scripts/gen-schema.mjs` → `drizzle-kit export`) regenerates `drizzle/schema.sql`, the full
+  DDL, and `drizzle/invariants.sql` holds the structural guarantees drizzle can't model (the
+  append-only / media-immutability triggers and the partial unique indexes). Two primitives in
+  `migrate.ts`: `applySchema(pg)` creates the schema if the DB is empty (boot + tests, never
+  destructive), and `resetSchema(db)` BLOWS the DB away (`DROP SCHEMA public CASCADE`) and
+  re-applies it. The dev seed calls `resetSchema`, so the loop to pick up a schema change is:
+  edit `schema.ts` → `db:generate` → reseed. This deletes the previous `_chronicle_meta`
+  incremental runner and the `elder_sessions`→`link_sessions` rename migration: it also kills the
+  stale-dev-DB footgun (an old DB whose schema predated a new migration could no longer break a
+  reseed, because reseed rebuilds from scratch). Prod stays safe — `applySchemaToPostgres` applies
+  only if absent and NEVER drops; a real migration tool comes back when the schema stabilizes.
 
 ## Workflow
 

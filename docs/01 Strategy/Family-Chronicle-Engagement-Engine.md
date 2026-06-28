@@ -32,7 +32,7 @@ The genius of a *family* system is that the reward for one person becomes the si
 
 ## The trigger catalog
 
-Triggers are grouped by what fires them. For each: **what fires it**, **who it targets**, **the persona served**, **cadence**, and **the anti-annoyance rule** that keeps it from becoming spam. (Personas referenced: Eleanor — elder narrator; Marcus — initiator; Sofia — grandchild; Diane — steward.)
+Triggers are grouped by what fires them. For each: **what fires it**, **who it targets**, **the persona served**, **cadence**, and **the anti-annoyance rule** that keeps it from becoming spam. (Personas referenced: Eleanor — narrator; Marcus — initiator; Sofia — grandchild; Diane — steward.)
 
 ### Group A — Time-based triggers (the calendar is always running)
 
@@ -42,17 +42,17 @@ These exist because dates arrive whether or not anyone's thinking about the chro
 
 **A2 · "This week in family history" digest.** *Fires on:* a weekly cron that scans the chronicle for entries, photos, and records tied to this calendar week across all years. *Targets:* the whole family, opt-in. *Serves:* Sofia and the broader audience (Mode 4) — a calm, browsable feed, not a demand. *Cadence:* weekly, one digest, bundled. *Anti-annoyance rule:* one digest, never per-item pings; if a week is empty, stay silent rather than manufacture filler.
 
-**A3 · Seasonal & holiday prompts.** *Fires on:* recurring holidays and seasons the family observes. *Targets:* elders for recollection ("What did Christmas look like when you were Sofia's age?"), middle generation for present capture ("What does our Thanksgiving look like this year?"). *Serves:* Eleanor and Marcus (Mode 2). *Cadence:* a handful per year. *Anti-annoyance rule:* learn which holidays the family actually marks; don't prompt holidays they don't observe.
+**A3 · Seasonal & holiday prompts.** *Fires on:* recurring holidays and seasons the family observes. *Targets:* narrators for recollection ("What did Christmas look like when you were Sofia's age?"), the middle generation for present capture ("What does our Thanksgiving look like this year?"). *Serves:* Eleanor and Marcus (Mode 2). *Cadence:* a handful per year. *Anti-annoyance rule:* learn which holidays the family actually marks; don't prompt holidays they don't observe.
 
-**A4 · Reminiscence-bump sensory prompts.** *Fires on:* scheduled delivery of music, imagery, or references from an elder's ages ~10–30 (the memory-rich window). *Targets:* the elder. *Serves:* Eleanor (Mode 1). *Cadence:* woven into sessions, not a separate notification stream. *Anti-annoyance rule:* these belong inside gentle sessions, not as push notifications; they're a question technique, not an alert.
+**A4 · Reminiscence-bump sensory prompts.** *Fires on:* scheduled delivery of music, imagery, or references from a narrator's ages ~10–30 (the memory-rich window). *Targets:* the narrator. *Serves:* Eleanor (Mode 1). *Cadence:* woven into sessions, not a separate notification stream. *Anti-annoyance rule:* these belong inside gentle sessions, not as push notifications; they're a question technique, not an alert.
 
 ### Group B — Discovery-based triggers (the archive finds things)
 
 These are the product's unfair advantage. No shoebox can do this. The system is actively *working* between sessions.
 
-**B1 · Record-match prompts.** *Fires on:* an external-data match — a ship manifest, a census line, a newspaper mention, a yearbook photo. *Targets:* the relevant elder, or the relative who'd know. *Serves:* Eleanor (Mode 1, record-triggered prompt — "Here's the ship that brought your grandfather over in 1921; did he ever talk about the crossing?"). *Cadence:* as discoveries surface; can be queued so they don't bunch. *Anti-annoyance rule:* verify match confidence before surfacing; a wrong "we found your ancestor" erodes trust fast.
+**B1 · Record-match prompts.** *Fires on:* an external-data match — a ship manifest, a census line, a newspaper mention, a yearbook photo. *Targets:* the relevant narrator, or the relative who'd know. *Serves:* Eleanor (Mode 1, record-triggered prompt — "Here's the ship that brought your grandfather over in 1921; did he ever talk about the crossing?"). *Cadence:* as discoveries surface; can be queued so they don't bunch. *Anti-annoyance rule:* verify match confidence before surfacing; a wrong "we found your ancestor" erodes trust fast.
 
-**B2 · Contradiction & gap detection.** *Fires on:* the system noticing a conflict (record says 1923, Grandma said 1925) or a hole (no one has explained why the family left Sicily). *Targets:* the person who can resolve it, plus the steward for awareness. *Serves:* Diane (Mode 5 review) and whoever holds the answer. *Cadence:* surfaced gently, batched into a review, never alarmist. *Anti-annoyance rule:* frame as curiosity and invitation, never as "you have errors"; the elder must never feel corrected or caught out.
+**B2 · Contradiction & gap detection.** *Fires on:* the system noticing a conflict (record says 1923, Grandma said 1925) or a hole (no one has explained why the family left Sicily). *Targets:* the person who can resolve it, plus the steward for awareness. *Serves:* Diane (Mode 5 review) and whoever holds the answer. *Cadence:* surfaced gently, batched into a review, never alarmist. *Anti-annoyance rule:* frame as curiosity and invitation, never as "you have errors"; the narrator must never feel corrected or caught out.
 
 **B3 · "Day in history" context cards.** *Fires on:* placing a story on the timeline and matching it to world/local events of that day. *Targets:* viewers of that story. *Serves:* Sofia and audience (Mode 4) — enrichment that makes a memory feel historically real. *Cadence:* passive; attached to stories, pulled not pushed. *Anti-annoyance rule:* keep it relevant and local; generic "this is what was happening in the world" is filler.
 
@@ -64,7 +64,7 @@ The vision calls these out specifically: open family mysteries are "the heartbea
 
 **C2 · Gap-as-invitation.** *Fires on:* B2's gaps, reframed as open quests rather than review items. *Targets:* the family member most likely to know. *Serves:* turns Diane's quality review into Sofia's and Marcus's curiosity. *Cadence:* steady trickle. *Anti-annoyance rule:* one open invitation at a time per person; don't present a wall of holes.
 
-**C3 · Geolocation memory triggers.** *Fires on:* a family member visiting (or street-viewing) an old home, school, or hometown. *Targets:* the elder who lived there, or the relative standing there now. *Serves:* Eleanor (Mode 1) and Marcus/Sofia in the moment ("You're near the house Grandma grew up in — want to ask her about it?"). *Cadence:* rare and location-driven, therefore high-signal. *Anti-annoyance rule:* opt-in location use only; never feel surveillant.
+**C3 · Geolocation memory triggers.** *Fires on:* a family member visiting (or street-viewing) an old home, school, or hometown. *Targets:* the narrator who lived there, or the relative standing there now. *Serves:* Eleanor (Mode 1) and Marcus/Sofia in the moment ("You're near the house Grandma grew up in — want to ask her about it?"). *Cadence:* rare and location-driven, therefore high-signal. *Anti-annoyance rule:* opt-in location use only; never feel surveillant.
 
 ### Group D — Social triggers (the family is the engine)
 
@@ -76,7 +76,7 @@ These run on the family's own warmth. They're the cheapest and stickiest because
 
 **D3 · Milestone & membership events.** *Fires on:* a birth, a marriage-in, a reconnection, a new member joining. *Targets:* steward to admit/permission; family to welcome. *Serves:* Diane (Mode 5) and the whole family. *Cadence:* life-event rare. *Anti-annoyance rule:* route admin to Diane, celebration to everyone; don't make the whole family do paperwork.
 
-**D4 · Nudge-the-elder (initiator-driven).** *Fires on:* Marcus choosing to gently encourage a session, or the system suggesting he might. *Targets:* Eleanor, softly, via the warm persona — never as pressure. *Serves:* Marcus (Mode 3) as the engagement engine. *Cadence:* initiator-controlled. *Anti-annoyance rule:* the elder must never feel nagged; nudges arrive as the system's warm invitation, not "Marcus is waiting on you."
+**D4 · Nudge-the-narrator (initiator-driven).** *Fires on:* Marcus choosing to gently encourage a session, or the system suggesting he might. *Targets:* Eleanor, softly, via the warm persona — never as pressure. *Serves:* Marcus (Mode 3) as the engagement engine. *Cadence:* initiator-controlled. *Anti-annoyance rule:* the narrator must never feel nagged; nudges arrive as the system's warm invitation, not "Marcus is waiting on you."
 
 ### Group E — Legacy & forward-time triggers (time runs both directions)
 
@@ -100,13 +100,13 @@ A catalog of triggers is dangerous without a conductor. Twelve well-meaning noti
 
 **Every trigger must complete the loop or be cut.** If a notification doesn't lead to a low-effort action that produces a visible reward and feeds the next signal, it's noise — and noise is how the whole engine gets muted. The test for any new trigger: *does it close a loop, and would the family thank us for it?*
 
-A fourth, overriding rule: **the elder's experience is sacrosanct.** No trigger may ever make Eleanor feel nagged, corrected, surveilled, or like she's "behind." Anything aimed at her passes through the warm persona as an invitation she's free to decline.
+A fourth, overriding rule: **the narrator's experience is sacrosanct.** No trigger may ever make Eleanor feel nagged, corrected, surveilled, or like she's "behind." Anything aimed at her passes through the warm persona as an invitation she's free to decline.
 
 ---
 
 ## How the engine maps to the personas
 
-**Eleanor (elder):** receives only gentle, warm, decline-able invitations — anniversary, record-match, sensory, and geolocation prompts, all routed through her session persona. Never a raw notification.
+**Eleanor (narrator):** receives only gentle, warm, decline-able invitations — anniversary, record-match, sensory, and geolocation prompts, all routed through her session persona. Never a raw notification.
 
 **Marcus (initiator):** the human half of the engine. Gets progress and contribution digests; controls nudges; is rewarded with visible momentum that keeps him — and through him, Eleanor — engaged.
 

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   ObjectAlreadyExistsError,
@@ -49,5 +49,10 @@ export class FilesystemMediaStorage implements MediaStorage {
 
   async getUrl(key: string): Promise<string> {
     return `${this.publicBaseUrl}/${key}`;
+  }
+
+  /** Idempotent hard-delete. `force: true` makes a missing path a no-op (not an error). */
+  async delete(key: string): Promise<void> {
+    await rm(this.pathFor(key), { force: true });
   }
 }

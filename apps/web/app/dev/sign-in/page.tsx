@@ -1,9 +1,10 @@
 /**
  * DEV sign-in. The default local AuthProvider is now the MOCK provider (auth-mock.ts), whose session
  * is the `chronicle_mock_session` cookie holding an Account's `auth_provider_user_id`. This page is
- * the fast "act as a seeded user" path: pick a Person, and we set that cookie to their Account's
- * provider id (looked up via persons.account_id → accounts). Persons without an Account (elders) are
- * not listed — they never sign in to the hub. In production this whole route is replaced by Clerk.
+ * the fast "act as a seeded user" path: one button per Person sets that cookie to their Account's
+ * provider id (looked up via persons.account_id → accounts) and redirects to /hub. Every Person has
+ * an Account, so all seeded people appear — the inner join is just a safety filter against malformed
+ * seed data, not a narrator exclusion. In production this whole route is replaced by Clerk.
  */
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -54,23 +55,33 @@ export default async function DevSignIn() {
         <span className="kin-dev-banner">dev · localhost</span>
         <h1 style={{ fontSize: "var(--text-display)", margin: "14px 0 8px" }}>Dev sign-in</h1>
         <p className="kin-ink-2" style={{ fontSize: "var(--text-ui)", margin: 0 }}>
-          Local development only. Picks which Person the hub treats you as (sets the mock session).
+          Local development only. One click to act as any seeded user — sets the mock session and
+          takes you straight to the hub.
         </p>
 
-        <form action={signInAs} style={{ display: "grid", gap: 20, marginTop: 28 }}>
-          <label className="kin-form-label">
-            Sign in as
-            <select name="authProviderUserId" className="kin-field">
-              <option value="">(sign out)</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.authProviderUserId}>
-                  {p.displayName} ({p.id.slice(0, 8)}…)
-                </option>
-              ))}
-            </select>
-          </label>
-          <KindredButton type="submit" label="Apply" />
-        </form>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            marginTop: 28,
+            maxWidth: 320,
+          }}
+        >
+          {people.map((p) => (
+            <form key={p.id} action={signInAs}>
+              <input type="hidden" name="authProviderUserId" value={p.authProviderUserId} />
+              <KindredButton type="submit" label={`Become ${p.displayName}`} fullWidth />
+            </form>
+          ))}
+
+          <div style={{ marginTop: 8 }}>
+            <form action={signInAs}>
+              <input type="hidden" name="authProviderUserId" value="" />
+              <KindredButton type="submit" label="Sign out" variant="secondary" fullWidth />
+            </form>
+          </div>
+        </div>
 
         <p style={{ marginTop: 20 }}>
           <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-meta)" }}>

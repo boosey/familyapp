@@ -7,8 +7,8 @@
 ## 📁 01 Strategy  
 The seven-document arc, each a Google Doc with a matching HTML visual where noted. Read in this order — each builds on the last:
 
-1. **Family-Chronicle-Vision** — the north star. One perpetual chronicle, many modes; elder storytelling is Mode One.  
-2. **Family-Chronicle-Personas** — the four people in the elder-storytelling use case: Eleanor (elder narrator), Marcus (initiator/buyer), Sofia (grandchild/audience), Diane (steward). *+ visual*  
+1. **Family-Chronicle-Vision** — the north star. One perpetual chronicle, many modes; narrator storytelling (voice-capture) is Mode One.  
+2. **Family-Chronicle-Personas** — the four people in the storytelling use case: Eleanor (narrator), Marcus (initiator/buyer), Sofia (grandchild/audience), Diane (steward). *+ visual*  
 3. **Family-Chronicle-Journey-Map** — how one story moves through all four people in eight phases. *+ visual*  
 4. **Family-Chronicle-Engagement-Engine** — the heartbeat: the trigger catalog that keeps the chronicle alive between big moments. *+ visual*  
 5. **Family-Chronicle-Consent-Estate-Framework** — the governance backbone (Mode 5). Build before any avatar ships. *+ visual*  

@@ -1,7 +1,7 @@
 /**
  * /join/[token] — accept a family-member invitation (asks #3 + #6, handoff Screen 1).
  *
- * The token in the path IS the invite (mirrors the elder /s/[token] surface); it's shown once via
+ * The token in the path IS the invite (mirrors the narrator /s/[token] surface); it's shown once via
  * the inviter's flash-cookie and never echoed into a query/redirect. We look the invite up by token
  * for a safe view (no email leak), then either let an anonymous visitor create a login and accept,
  * or — if already signed in — accept directly. Both paths edit only the free-text relationship label

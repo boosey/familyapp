@@ -19,8 +19,8 @@ All under `docs/design-system/intergenerational-story-design-system/project/`:
 
 1. **`_ds/kindred-design-system-495fbf7d-.../tokens/*.css`** — the canonical, current tokens (colors, typography, spacing, motion, fonts). **This is the token source of truth.**
 2. **`Family Chronicle.dc.html`** — the canonical, current **screen** designs and the authoritative way components are *used* (props, sizes, copy). Screen line anchors:
-   - Elder conversation ("Hello, Sal.") — line ~44 (and alt at ~114)
-   - Elder approval ("Ready to share this one?") — line ~156
+   - Narrator conversation ("Hello, Sal.") — line ~44 (and alt at ~114)
+   - Narrator approval ("Ready to share this one?") — line ~156
    - Family hub (tabbed shell, 1180×820) — line ~225; tabs: Stories ~274, Questions for you ~395, Ask a question ~421, Your asks ~452, Invite ~475
    - Sample data ~532; component-prop logic (`renderVals()`) ~660–810
 3. **`_ds/.../_ds_bundle.js`** — compiled component internals. Reference only if the showcase's rendered styling is ambiguous.
@@ -49,7 +49,7 @@ Replace `apps/web/app/_kindred/tokens.css` with a port of the `_ds` tokens:
 Reconcile each to the showcase contract. Keep the app's genuinely-needed functional enhancements (real audio playback, `disabled`, `saving`, `href`, form `type`) but align prop **names** and **visuals** to the design.
 
 - **KindredButton** — `variant` primary/secondary/ghost, `size` small(44)/default(64)/large(76). Keep `disabled`, `type`, `fullWidth`, children. Verify height, radius, accent fills against showcase.
-- **KindredVoiceButton** — adopt the showcase API: `listening: boolean`, `label`, `onClick`, `size` (px; showcase uses 140/160/220 for elder, 150 approval). Keep the app's `saving`/`disabled` as additive states. Pulse ring + waveform per `motion.css`.
+- **KindredVoiceButton** — adopt the showcase API: `listening: boolean`, `label`, `onClick`, `size` (px; showcase uses 140/160/220 for the narrator screen, 150 approval). Keep the app's `saving`/`disabled` as additive states. Pulse ring + waveform per `motion.css`.
 - **KindredListenBar** — adopt `playing` + `onToggle` (showcase) while keeping the app's real `<audio>` playback + `src`. Title/duration/waveform; waveform recolors to accent while playing.
 - **KindredStoryCard** — support showcase fields: `title`, `year`, `place`, `duration`, `excerpt`, optional `imageSrc` (striped placeholder fallback), `pinned`, plus app's `href`/`onClick`. Mono for year·place·duration.
 - **KindredPromptCard** — `eyebrow`, `question`, children; restore `{...rest}` passthrough.
@@ -61,14 +61,14 @@ General: restore `{...rest}` spreading on all components (a11y/composition); mak
 
 Each screen re-implemented to match the showcase, using the components + semantic tokens (minimal ad-hoc inline styling).
 
-- **Elder conversation** — `app/s/[token]/page.tsx` + `ElderRecorder.tsx`. Match "Hello, Sal." layout: large serif greeting, prompt card, single loud voice button (size ~220). Preserve token-as-identity data flow and the warm null-token fallback.
-- **Elder approval** — `app/s/[token]/approve/[storyId]/page.tsx` + `ApprovalRecorder.tsx`. Match "Ready to share this one?": listen bar of the recording, audience-tier picker, "Approve aloud" voice button (~150).
+- **Narrator conversation** — `app/s/[token]/page.tsx` + `NarratorRecorder.tsx`. Match "Hello, Sal." layout: large serif greeting, prompt card, single loud voice button (size ~220). Preserve token-as-identity data flow and the warm null-token fallback.
+- **Narrator approval** — `app/s/[token]/approve/[storyId]/page.tsx` + `ApprovalRecorder.tsx`. Match "Ready to share this one?": listen bar of the recording, audience-tier picker, "Approve aloud" voice button (~150).
 - **Family hub (tabbed shell)** — `app/hub/page.tsx` becomes the shell with tabs + account menu + badges. Tab contents:
-  - **Stories** — elder section(s) with updated `KindredStoryCard`s + featured listen bar (from `loadHubFeed`).
+  - **Stories** — narrator section(s) with updated `KindredStoryCard`s + featured listen bar (from `loadHubFeed`).
   - **Questions for you** — pending asks routed to the viewer.
   - **Ask a question** — the compose form (from `/hub/ask`).
   - **Your asks** — the asker's outbox (from `/hub/asks`).
-  - **Invite** — the invite-an-elder form + result (from `/hub/invite`).
+  - **Invite** — the invite-a-narrator form + result (from `/hub/invite`).
   - **Account menu** — profile / settings / manage family / log out (wire log out + switch-user; profile/settings/manage-family may be stubs/links if no backend, clearly marked).
   - Routing: keep deep-linkable URLs (e.g. `/hub?tab=asks` or nested routes rendered within the shell) so existing links/redirects (server actions that `redirect("/hub/invite/result")`) still resolve. Preserve all existing server actions and data loaders; this is a **presentation** restructure, not a data-layer change.
 - **Story detail** — `app/hub/stories/[id]/page.tsx`. Align to showcase story-detail treatment (serif prose, listen bar, chips).
@@ -88,7 +88,7 @@ Each screen re-implemented to match the showcase, using the components + semanti
 
 - `pnpm -r typecheck` + `pnpm -r build` clean.
 - `pnpm --filter @chronicle/web test` and the architecture tests still pass (no new `@chronicle/db/content` / `.query.stories` access — UI pass must not touch the audited surface).
-- Manual: run `pnpm --filter @chronicle/web dev`, walk each screen (elder, approval, hub tabs, story detail) against the showcase; check all three themes.
+- Manual: run `pnpm --filter @chronicle/web dev`, walk each screen (narrator, approval, hub tabs, story detail) against the showcase; check all three themes.
 - Side-by-side fidelity check of each rebuilt screen vs its `Family Chronicle.dc.html` counterpart.
 
 ## 10. Risks

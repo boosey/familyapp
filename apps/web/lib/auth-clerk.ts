@@ -1,5 +1,5 @@
 /**
- * Clerk-backed AuthProvider — the production identity adapter for the younger-generation hub.
+ * Clerk-backed AuthProvider — the production identity adapter for the account-holder hub.
  *
  * Per DECISIONS.md, Clerk is the named auth vendor. Account stores only the provider's opaque
  * user id (`accounts.authProviderUserId`), nothing expressive — so the adapter's job is purely:
@@ -10,7 +10,7 @@
  * to anonymous. A stale Clerk session, a missing Account, an orphaned Account with no Person, or
  * a transient DB error all degrade to `{ kind: "anonymous" }` rather than leak content.
  *
- * The hub NEVER constructs an `elder_session` AuthContext (that path is the token surface in
+ * The hub NEVER constructs an `link_session` AuthContext (that path is the token surface in
  * @chronicle/capture). This adapter therefore only emits `anonymous` or `account`.
  *
  * Env vars (set in production only — when unset, runtime.ts falls back to the DevCookie path):
@@ -79,6 +79,18 @@ export function createClerkAuthProvider(
         );
         return { kind: "anonymous" };
       }
+    },
+    async establishAccountSession(_personId: string): Promise<void> {
+      // ADR-0003 magic-link account login. Clerk does NOT permit forging a server-side session
+      // from a Person id: a passwordless login goes through a Clerk *sign-in token* (createSignInToken)
+      // that the browser redeems. Wiring that (Clerk Backend SDK + a redeem redirect) is out of
+      // Phase-1 scope — Clerk itself is unconfigured in dev/CI, where the mock adapter is used. This
+      // throws loudly rather than silently no-op so a production magic-link wire-up is a deliberate,
+      // visible follow-up, not a quietly-broken path.
+      throw new Error(
+        "establishAccountSession is not supported by the Clerk adapter in Phase 1 " +
+          "(magic-link login requires Clerk sign-in tokens redeemed client-side; see ADR-0003).",
+      );
     },
   };
 }

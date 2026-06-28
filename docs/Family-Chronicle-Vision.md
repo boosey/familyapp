@@ -7,9 +7,9 @@
 ## TL;DR
 
 - **Build a perpetual family chronicle — a living institution that outlives any single contributor — not a one-time memoir gift.** The product is the family's continuous, structured, queryable record of itself across generations. Its true competitor is not StoryWorth; it is *the attic* — the unlabeled shoebox of photos, the one relative who "knew all the family history" and took it with them. The defensible wedge against StoryWorth, Remento, and HereAfter AI is *ongoing synthesis + external-data enrichment + collaborative, multi-generational participation that never finishes*.  
-- **One chronicle underneath; many interaction modes on top.** Every member is, over a lifetime, a narrator, an interviewer, a subject, an archivist, and an audience — and those roles rotate. The system is the continuous spine holding it all together. Different scenarios get different UX modes (see §0). **Elder storytelling is Mode One — the first mode built and the primary entry point — but it is one mode within the larger chronicle, not the whole product.**  
+- **One chronicle underneath; many interaction modes on top.** Every member is, over a lifetime, a narrator, an interviewer, a subject, an archivist, and an audience — and those roles rotate. The system is the continuous spine holding it all together. Different scenarios get different UX modes (see §0). **Guided narration is Mode One — the first mode built and the primary entry point — but it is one mode within the larger chronicle, not the whole product.** Elders are its launch audience, but "narrator" is a role anyone can occupy, not an age.  
 - **Time runs in two directions.** The chronicle recovers the past *and* captures a present that will become someone's treasured past. The most valuable entry fifty years from now may be a mundane Tuesday-dinner recording made today — which argues for low-ceremony, ongoing, ambient capture as a core behavior, not a special occasion.  
-- **Design every elder touchpoint around dignity, low cognitive load, and emotional safety.** The evidence base is strong: a meta-analysis of 128 controlled studies (Pinquart & Forstmeier, 2012) found reminiscence/life-review interventions produce moderate improvements in ego-integrity (g=0.64) and depression (g=0.57). The AI interviewer should be built on oral-history and reminiscence-therapy technique, not generic chatbot patterns.  
+- **Design every narration touchpoint around dignity, low cognitive load, and emotional safety.** The evidence base is strong: a meta-analysis of 128 controlled studies (Pinquart & Forstmeier, 2012) found reminiscence/life-review interventions produce moderate improvements in ego-integrity (g=0.64) and depression (g=0.57). The AI interviewer should be built on oral-history and reminiscence-therapy technique, not generic chatbot patterns.  
 - **Treat avatars and "digital afterlife" features as the most powerful AND most ethically dangerous capability.** Adopt a consent-first, "their words only" design with explicit living-vs-deceased rules. Public acceptance of posthumous avatars collapses without prior consent.
 
 ---
@@ -23,14 +23,14 @@ The thing being built is a **permanent institution for the family** — a contin
 This reframes nearly every design decision:
 
 - **The unit of value** shifts from "capture a person's story before it's lost" (a rescue mission, urgent and finite) to "the family never stops adding to the record" (an institution, perpetual). Rescue is still real and still the on-ramp — but it's the first chapter, not the book.  
-- **Roles rotate.** Today's pure subject (a newborn) becomes tomorrow's narrator and, decades on, an elder. The middle generation is not merely the "organizer" who buys the gift and nudges Grandma; they are a primary subject mid-story, recording their own present as it happens.  
+- **Roles rotate.** Today's pure subject (a newborn) becomes tomorrow's narrator and, decades on, a steward. The middle generation is not merely the "organizer" who buys the gift and nudges Grandma; they are a primary subject mid-story, recording their own present as it happens.  
 - **Time is bidirectional.** The chronicle accumulates the past and simultaneously records a present destined to become treasured. This makes low-ceremony ambient capture a core behavior.  
 - **Artifacts are snapshots, not finish lines.** The system emits *periodic editions* (the family's annual), *event editions* (a wedding, a birth, a death), and *on-demand cuts* (everything about Grandpa's military years) — all from one growing corpus.  
 - **Stewardship is load-bearing.** A perpetual institution must answer "who holds the keys in eighty years?" — custody, permissions, admitting new members, and handing off when a steward dies. The "digital estate / story will" is infrastructure, not an edge feature.
 
-### Why elder storytelling is still Mode One
+### Why guided narration is still Mode One
 
-It is the sharpest wedge (irreplaceable stories with a real deadline), the clearest emotional hook, and the richest single source of narrative the chronicle can be seeded with. Build it first and build it best. Just don't let it define the ceiling.
+It is the sharpest wedge — irreplaceable stories with a real deadline, which is why elders are the launch audience — the clearest emotional hook, and the richest single source of narrative the chronicle can be seeded with. Build it first and build it best. Just don't let it define the ceiling.
 
 ### The interaction modes (different UX per scenario)
 
@@ -38,40 +38,40 @@ The same underlying chronicle is reached through distinct modes, each with a dif
 
 | Mode | Who / when | UX posture | Defining characteristics |
 | :---- | :---- | :---- | :---- |
-| **1. Elder Narration** *(first built)* | An elder telling their life and the family's history | **AI leads, person answers.** Voice-first, zero-friction, generous pacing, large/high-contrast, phone-callable, no login. Maximum warmth and patience. | The system carries all cognitive load. Sessions, not tasks. Dignity and emotional safety paramount. (Full detail in §1.) |
+| **1. Guided Narration** *(first built)* | A narrator telling their life and the family's history — elders are the launch audience, but the role assumes nothing about age | **AI leads, person answers.** Voice-first, low-friction, generous pacing, phone-callable, login-free link sessions; an optional simplified large/high-contrast view offered as a preference. Maximum warmth and patience. | The system carries the cognitive load. Sessions, not tasks. Dignity and emotional safety paramount. (Full detail in §1.) |
 | **2. Real-Time Capture** | The middle generation recording the present as it happens — a voice note the week a child is born | **Person leads, AI assists.** Fast, low-ceremony, mobile-first, "drop it in 20 seconds." Minimal prompting. | Captures the *raising*, not only the *recollection*. Mundane-by-design. Becomes priceless later precisely because it felt unremarkable now. |
-| **3. Interviewer / Curious Relative** | A younger member asking an elder a question, or steering what gets captured | **Person directs, AI routes & co-pilots.** Submit a question for an elder's next gentle session; or co-pilot a live call with suggested questions and quiet record-retrieval. | Turns passive audience into active contributor. The engine that keeps elders engaged between sessions. |
+| **3. Interviewer / Curious Relative** | A family member asking a narrator a question, or steering what gets captured | **Person directs, AI routes & co-pilots.** Submit a question for a narrator's next gentle session; or co-pilot a live call with suggested questions and quiet record-retrieval. | Turns passive audience into active contributor. The engine that keeps narrators engaged between sessions. |
 | **4. Explorer / Audience** | Anyone browsing, reading, listening, watching | **Person explores, system reveals.** Timeline, map, tree, story feed, "ask the archive," search. Rich, immersive, calm. | The payoff surface. Where the Duke/Fivush intergenerational benefit (§8) actually lands for kids and grandkids. |
 | **5. Archivist / Steward** | Whoever holds custody of the chronicle | **Person governs, system enforces.** Permissions, membership, custody hand-off, release rules, consent records, gap/quality review. | The institutional layer. Quietly powerful, rarely touched, absolutely essential. (See §0 stewardship + §10 digital estate.) |
 | **6. Ambient / Passive** | The whole family, opt-in | **System listens, person reviews.** A home device or always-on "story corner" captures spontaneous dinner-table stories; everything is reviewable and consent-gated before it enters the record. | Catches the stories no one would ever sit down to formally record. The antidote to the unlabeled shoebox. |
 
-**Design principle across modes:** the modes share *one* data spine, identity model, and synthesis engine. A story captured ambiently (Mode 6), refined by an elder (Mode 1), questioned by a grandchild (Mode 3), and read by a descendant in 2120 (Mode 4) is the *same entry*, enriched over time. Modes are lenses on the chronicle, never silos.
+**Design principle across modes:** the modes share *one* data spine, identity model, and synthesis engine. A story captured ambiently (Mode 6), refined by its narrator (Mode 1), questioned by a grandchild (Mode 3), and read by a descendant in 2120 (Mode 4) is the *same entry*, enriched over time. Modes are lenses on the chronicle, never silos.
 
 ### Two foundational questions this frame forces (open — need your call)
 
-1. **The multi-family problem.** Families are overlapping webs, not clean trees. A marriage merges two chronicles; a divorce splits one; a child belongs to several lineages at once. Does a person carry *one* archive through life, or belong to *many* family chronicles simultaneously? This is a foundational identity/data-model decision the chronicle frame surfaces (and the elder/younger frame let us ignore).  
+1. **The multi-family problem.** Families are overlapping webs, not clean trees. A marriage merges two chronicles; a divorce splits one; a child belongs to several lineages at once. Does a person carry *one* archive through life, or belong to *many* family chronicles simultaneously? This is a foundational identity/data-model decision the chronicle frame surfaces (and the earlier elder/younger frame let us ignore).  
 2. **The engagement engine.** Rescue has built-in urgency; a perpetual chronicle must manufacture its own reasons to return across decades or it becomes the digital shoebox — preserved but dead. Anniversary triggers, open family mysteries, and "this week in family history" digests are not garnish here; they are the heartbeat. (See §10.)
 
 ---
 
 ## 1. User Experiences
 
-### The Elder Experience (Mode 1) — comfort, dignity, low friction
+### The Narrator Experience (Mode 1) — comfort, dignity, low friction
 
-The single most important design principle: **the elder should never feel they are "using software."** They should feel they are being listened to by someone who cares.
+This is the launch experience, tuned for narrators who would rather be listened to than operate software — elders especially, though it assumes nothing about age. The stripped-down, simplified controls described here are a *preference* the product offers, not a fact about who the narrator is; an account-holder who wants a fuller experience can have one. The single most important design principle: **the narrator should never feel they are "using software."** They should feel they are being listened to by someone who cares.
 
 - **Voice-first, zero-app entry.** Reachable by a single tap on a text/email link, a phone call (landline included), or an always-on home device — no login, password, or download. The system calls *them* at a chosen, consistent time. ("Homework" kills participation — the failure mode that sinks writing-first tools.)  
-- **The AI initiates and carries the load.** The elder answers; never types, navigates menus, or remembers commands.  
-- **Generous pacing and silence tolerance.** Don't interrupt; tolerate long pauses; let the elder set the tempo.  
+- **The AI initiates and carries the load.** The narrator answers; never types, navigates menus, or remembers commands.  
+- **Generous pacing and silence tolerance.** Don't interrupt; tolerate long pauses; let the narrator set the tempo.  
 - **Sensory accessibility:** large high-contrast type, scalable fonts, simple linear navigation, clear slow adjustable-rate speech, captions on any video, error tolerance.  
 - **Emotional safety:** start non-threatening; save sensitive topics for after rapport; always allow "let's skip that," "pause," or "talk about something happier."  
-- **Dignity:** the elder is author and owner. They approve everything before family sees it. They can edit by voice.  
+- **Dignity:** the narrator is author and owner. They approve everything before family sees it. They can edit by voice.  
 - **Trust and continuity:** the same warm persona/voice each session; transparent control over who sees what; reassurance about data security.
 
-### The Younger / Curious Relative Experience (Modes 3 & 4)
+### The Account-Holder / Curious Relative Experience (Modes 3 & 4)
 
 - A living **family hub**: browse a relative's life as a timeline, map, family tree, photo gallery, and story feed.  
-- **Ask questions asynchronously** that route into an elder's next gentle session ("Your granddaughter would love to know how you met Grandpa").  
+- **Ask questions asynchronously** that route into a narrator's next gentle session ("Your granddaughter would love to know how you met Grandpa").  
 - **Contribute and enrich:** upload photos, scanned documents, corrections, their own version of a shared event.  
 - **Live/synchronous mode:** schedule a guided video/voice call where the AI co-pilots, suggesting questions and quietly retrieving relevant records in real time.  
 - **Gentle nudges** tied to anniversaries, holidays, and newly discovered records.
@@ -126,9 +126,9 @@ For each category: what it provides, how it enriches the story, notable provider
 
 ## 4. Interaction Models
 
-**Input forms:** voice (primary), phone calls (incl. landline), text/chat, photo upload, video, scanned documents/letters, and opt-in ambient capture. Multi-modal: an elder can be shown a restored photo and asked to narrate it.
+**Input forms:** voice (primary), phone calls (incl. landline), text/chat, photo upload, video, scanned documents/letters, and opt-in ambient capture. Multi-modal: a narrator can be shown a restored photo and asked to narrate it.
 
-**Asynchronous (default):** scheduled gentle sessions; family questions queued for the elder; everyone contributes on their own time.
+**Asynchronous (default):** scheduled gentle sessions; family questions queued for the narrator; everyone contributes on their own time.
 
 **Live/synchronous:** AI-co-piloted family video calls; the AI suggests questions, retrieves records, and transcribes — turning a casual call into archived oral history.
 
@@ -148,7 +148,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 
 - **Open-ended, concrete, non-leading questions:** "Tell me about…", "What was it like when…", never "Don't you think…". One question at a time.  
 - **Research-informed rapport:** the AI arrives "prepared" (knows names, dates, places from records) to jog memory and build trust.  
-- **Restraint & active listening:** don't interrupt; follow tangents; reflect back; use the elder's own words; embrace silence.  
+- **Restraint & active listening:** don't interrupt; follow tangents; reflect back; use the narrator's own words; embrace silence.  
 - **Adaptive pacing & follow-ups:** detect rich threads and gently dig; recognize fatigue and wind down; remember prior sessions and call back ("Last week you mentioned your sister Rosa…").  
 - **Sequencing:** simple biographical questions first; sensitive/painful topics only after rapport, with explicit consent and an easy exit.  
 - **Handling painful memories:** validate emotion, never push, offer to pause or redirect, and surface human support resources where appropriate. The system is not therapy and should say so.  
@@ -217,7 +217,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
   - **Bohlmeijer et al. (2007),** *Aging & Mental Health* — 15 studies, d=0.54 on psychological well-being; again, life review \> simple reminiscence.  
 - **Reminiscence bump:** memories cluster at ages ~10–30 (identity-formation and cultural-life-script accounts; Conway, Rubin, Berntsen, McAdams) — directs prompt weighting toward self-defining and first-time experiences.  
 - **Narrative identity (Dan McAdams):** people construct selfhood as an internalized, evolving life story; the product literally helps build the family's narrative identity.  
-- **Intergenerational benefits — Duke, Lazarus & Fivush (2008), Emory "Do You Know?" 20-question scale:** children who knew more about family history showed higher self-esteem, resilience, internal locus of control, and lower anxiety/depression — and were more resilient after stressful events. The strongest argument for the *younger-generation* side of the product, and for the chronicle's payoff surface (Mode 4).  
+- **Intergenerational benefits — Duke, Lazarus & Fivush (2008), Emory "Do You Know?" 20-question scale:** children who knew more about family history showed higher self-esteem, resilience, internal locus of control, and lower anxiety/depression — and were more resilient after stressful events. The strongest argument for the *audience* side of the product — the members and descendants who explore the chronicle — and for the chronicle's payoff surface (Mode 4).  
 - **Grief & legacy work:** legacy projects help both the dying (meaning and closure) and the bereaved — but griefbot research cautions against interfering with healthy grieving.
 
 ---
@@ -227,7 +227,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 - **StoryWorth:** weekly emailed prompts → typed answers → hardcover book. Writing-first; one storyteller; doesn't preserve the actual voice; one-year framing. Gap: no voice, no ongoing archive, no external enrichment.  
 - **Remento:** voice/video answers → "Speech-to-Story" prose → coffee-table book with QR codes to original recordings. Strong on voice + low friction; still book-centric and one-year.  
 - **HereAfter AI:** virtual interviewer + interactive audio "Legacy Avatar." Closest to the avatar vision; audio-only, app-friction complaints.  
-- **Tell Mel:** live AI phone interviews that adapt in real time; the elder just answers the phone. Strong live-interview model; private, less collaborative.  
+- **Tell Mel:** live AI phone interviews that adapt in real time; the person just answers the phone. Strong live-interview model; private, less collaborative.  
 - **Storii:** phone-based audio prompts; accessible for elders uncomfortable with video.  
 - **StoryCorps:** the gold-standard human oral-history model — two people who care + a facilitator, archived at the Library of Congress. Teaches the interview ritual and question craft; not AI, not record-enriched, not a private family product.  
 - **MyHeritage (Deep Nostalgia, In Color, DeepStory, Storied):** best-in-class photo animation/restoration + records; not a storytelling interviewer. Watermarks AI-edited images — a model for honest disclosure.  
@@ -237,7 +237,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 - **ChatMemoir / "Memoir" (App Store/Play) / memoraapp.io:** a fast-filling field of AI voice-first memoir apps — evidence the category is consolidating quickly.  
 - **Replika / Eternime / "griefbots":** companion/afterlife bots; cautionary tales on emotional dependency and consent.
 
-**The gap a new product fills:** a *perpetual, multi-generational chronicle* — not a one-storyteller, one-year book — that fuses the family's own narration with external historical records, supports many interaction modes (elder narration, real-time capture, interviewing, exploring, stewardship, ambient), generates many artifacts, and treats avatars with a consent-first ethical framework. No current player is built as a permanent family institution.
+**The gap a new product fills:** a *perpetual, multi-generational chronicle* — not a one-storyteller, one-year book — that fuses the family's own narration with external historical records, supports many interaction modes (guided narration, real-time capture, interviewing, exploring, stewardship, ambient), generates many artifacts, and treats avatars with a consent-first ethical framework. No current player is built as a permanent family institution.
 
 ---
 
@@ -250,7 +250,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 - **Event/anniversary-triggered prompts:** a news event, a song from their youth, a birthday, or a holiday auto-launches a relevant gentle question — part of the **engagement engine** that keeps the chronicle alive between big moments.  
 - **Sensory / "Proustian" prompts:** music from the reminiscence-bump years, recipes, and scents used to unlock stories.  
 - **Ambient / passive collection (Mode 6, opt-in):** capture spontaneous dinner-table stories via a home device, consent-gated and reviewable.  
-- **Smart-home "story corner":** a simple voice-activated device — no screen, no login — that just listens when the elder wants to talk.  
+- **Smart-home "story corner":** a simple voice-activated device — no screen, no login — that just listens when the narrator wants to talk.  
 - **"Interview your future descendants" / time-capsule messages:** record answers and letters to be released on a grandchild's 18th birthday or wedding.  
 - **The future-descendant interview:** descendants not yet born can someday "ask" the avatar — built with consent and "their words only" guardrails.  
 - **Digital estate & "story will" (Mode 5 infrastructure):** who controls the archive, what may be released when, whether a posthumous avatar is permitted, and a documented mutual-consent standard. Load-bearing, not optional.  
@@ -264,13 +264,13 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 
 ## Recommendations
 
-1. **Anchor the product spine on the perpetual chronicle + multi-mode model**, with elder storytelling as Mode One — the on-ramp, not the ceiling. This is the defensible differentiation versus the crowded one-year-book layer.  
-2. **Lead with elder comfort in Mode 1.** Zero-friction voice/phone entry and AI-led sessions are non-negotiable; any required login on the elder side is a bug.  
+1. **Anchor the product spine on the perpetual chronicle + multi-mode model**, with guided narration as Mode One — the on-ramp, not the ceiling. This is the defensible differentiation versus the crowded one-year-book layer.  
+2. **Lead with narrator comfort in Mode 1** (elders are the launch audience). Zero-friction voice/phone entry and AI-led sessions are non-negotiable; any required login on the narrator's side is a bug.  
 3. **Build the consent/estate framework (Mode 5) before any avatar feature ships.** "Their words only," explicit pre-death consent for posthumous avatars, mutual-consent for interaction, family veto power, visible AI-disclosure.  
 4. **Resolve the two foundational questions early** (multi-family identity model; the engagement engine) — both are surfaced by the chronicle frame and both shape the data model.  
 5. **Sequence data-source integrations by enrichment-per-effort:** start with free/high-coverage sources (FamilySearch, Chronicling America, Ellis Island, census) and user-linked Ancestry/MyHeritage accounts; treat DNA as a later, strictly opt-in module.  
 6. **Ground the question engine in life-review/oral-history method**, weighted toward the reminiscence bump.  
-7. **Position the younger-generation and chronicle value on the Duke/Fivush evidence** (resilience, identity) to justify whole-family subscriptions — and to make younger members the engine that keeps elders engaged.
+7. **Position the member and chronicle value on the Duke/Fivush evidence** (resilience, identity) to justify whole-family subscriptions — and to make active members the engine that keeps narrators engaged.
 
 ---
 

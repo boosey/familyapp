@@ -1,8 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
-// Table DDL is generated from schema.ts (the single source of truth). Triggers, the
-// append-only enforcement, the media-immutability guard, and the partial unique index live in
-// drizzle/custom/0001_invariants.sql (things drizzle-kit does not model) and are applied after.
+// Single-schema dev model (no incremental migrations). `pnpm db:generate` (scripts/gen-schema.mjs)
+// runs `drizzle-kit export` against schema.ts — the single source of truth — to regenerate
+// drizzle/schema.sql, the full DDL. Triggers, the append-only / media-immutability guards, and the
+// partial unique indexes (things drizzle-kit does not model) live in drizzle/invariants.sql and are
+// applied right after schema.sql. See src/migrate.ts.
 export default defineConfig({
   dialect: "postgresql",
   schema: "./src/schema.ts",

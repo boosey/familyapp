@@ -128,7 +128,7 @@ export default async function FamiliesStartPage() {
             href="/families/new"
             eyebrow="Start fresh"
             title="Start a new family"
-            body="Name your family and become its steward. You'll invite relatives and elders next."
+            body="Name your family and become its steward. You'll invite relatives and narrators next."
             primary
           />
           <Door

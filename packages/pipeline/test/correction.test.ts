@@ -27,16 +27,16 @@ beforeEach(async () => {
 
 describe("applyVoiceCorrection", () => {
   it("regenerates prose from the corrected transcript without touching the canonical audio", async () => {
-    const [elder] = await db
+    const [narrator] = await db
       .insert(persons)
       .values({ displayName: "Eleanor", spokenName: "Eleanor", birthYear: 1947 })
       .returning();
 
     const canonical = new Uint8Array([10, 20, 30, 40, 50, 60]);
-    const storageKey = `story-audio/${elder!.id}/test.webm`;
+    const storageKey = `story-audio/${narrator!.id}/test.webm`;
     await storage.put({ key: storageKey, bytes: canonical, contentType: "audio/webm" });
     const { story } = await persistRecordingAndCreateDraft(db, {
-      ownerPersonId: elder!.id,
+      ownerPersonId: narrator!.id,
       storageKey,
       contentType: "audio/webm",
       durationSeconds: 60,
@@ -72,7 +72,7 @@ describe("applyVoiceCorrection", () => {
     expect(updated.prose).toMatch(/1947/);
     expect(updated.title).toBe("Birth in 1947");
     expect(updated.tags).toEqual(["birth", "1947"]);
-    // State stays pending_approval — approval is a separate elder voice action.
+    // State stays pending_approval — approval is a separate narrator voice action.
     expect(updated.state).toBe("pending_approval");
     // Audio pointer unchanged AND the canonical bytes in storage are byte-identical.
     expect(updated.recordingMediaId).toBe(story.recordingMediaId);
@@ -82,7 +82,7 @@ describe("applyVoiceCorrection", () => {
     expect(llm.calls.length).toBe(1);
     const userMsg = llm.calls[0]!.messages.find((m) => m.role === "user")!.content;
     expect(userMsg).toMatch(/1947, not 1948/);
-    // Elder context (spokenName, birthYear) flows through.
+    // Narrator context (spokenName, birthYear) flows through.
     expect(userMsg).toMatch(/Eleanor/);
     expect(userMsg).toMatch(/1947/);
   });

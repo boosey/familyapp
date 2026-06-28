@@ -1,6 +1,6 @@
 /**
  * Invite tab — two modes that share the show-once flash-cookie pattern:
- *   1. "Invite an elder to record" — a personal /s/[token] link that opens the elder recording page
+ *   1. "Invite a narrator to record" — a personal /s/[token] link that opens the narrator recording page
  *      (the link IS the identity; no login).
  *   2. "Invite a family member" — a /join/[token] link that creates an Account-backed membership via
  *      core.createInvitation. The raw token is shown ONCE via a separate flash cookie and never put
@@ -12,7 +12,7 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { createElderSession } from "@chronicle/capture";
+import { createLinkSession } from "@chronicle/capture";
 import { createInvitation } from "@chronicle/core";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
@@ -38,14 +38,14 @@ async function createInvite(formData: FormData): Promise<void> {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
-  const elderId = String(formData.get("elderId") ?? "");
+  const narratorId = String(formData.get("narratorId") ?? "");
   const familyId = String(formData.get("familyId") ?? "");
-  if (!elderId || !familyId) throw new Error("elder and family required");
+  if (!narratorId || !familyId) throw new Error("narrator and family required");
 
-  // The membership gate (inviter AND elder must be active members of this family) is enforced
-  // inside createElderSession — the domain owns it, transactionally. We don't re-check here.
-  const { token } = await createElderSession(db, {
-    personId: elderId,
+  // The membership gate (inviter AND narrator must be active members of this family) is enforced
+  // inside createLinkSession — the domain owns it, transactionally. We don't re-check here.
+  const { token } = await createLinkSession(db, {
+    personId: narratorId,
     familyId,
     invitedByPersonId: ctx.personId,
   });
@@ -185,16 +185,16 @@ function LinkResult({
 
 export async function InviteTab() {
   const jar = await cookies();
-  const elderToken = jar.get(INVITE_FLASH_COOKIE)?.value;
+  const narratorToken = jar.get(INVITE_FLASH_COOKIE)?.value;
   const memberToken = jar.get(MEMBER_INVITE_FLASH_COOKIE)?.value;
 
-  /* ── Elder result (show-once) ────────────────────────────────────────────── */
-  if (elderToken) {
-    const link = `${await origin()}/s/${elderToken}`;
+  /* ── Narrator result (show-once) ────────────────────────────────────────────── */
+  if (narratorToken) {
+    const link = `${await origin()}/s/${narratorToken}`;
     return (
       <LinkResult
         title="Link is ready"
-        blurb="Send this to your elder however you usually talk — text or email. Tapping it opens their recording page directly. There is no password."
+        blurb="Send this to your narrator however you usually talk — text or email. Tapping it opens their recording page directly. There is no password."
         link={link}
         note="For safety we keep only a fingerprint — you won't see this link again. Save it now if you need to send it later; switching tabs or refreshing will clear it."
       />
@@ -327,17 +327,17 @@ export async function InviteTab() {
 
       <hr className="kin-divider" />
 
-      {/* Elder invite */}
+      {/* Narrator invite */}
       <section>
-        <h2 style={sectionTitle}>Invite an elder to record</h2>
+        <h2 style={sectionTitle}>Invite a narrator to record</h2>
         <p style={sectionBlurb}>
-          Creates a personal link that opens the elder&apos;s recording page. No login, no account —
+          Creates a personal link that opens the narrator&apos;s recording page. No login, no account —
           the link is the identity.
         </p>
         <form action={createInvite} style={{ display: "grid", gap: 20 }}>
           <label className="kin-form-label">
-            Elder
-            <select name="elderId" className="kin-field" required>
+            Narrator
+            <select name="narratorId" className="kin-field" required>
               {allPeople.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.displayName}

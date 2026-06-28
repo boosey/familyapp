@@ -1,8 +1,8 @@
 import { StoriesBrowser, type StoryItem, type StoryFacets } from "./StoriesBrowser";
-import type { ElderWithStories } from "@/lib/hub-data";
+import type { MemberWithStories } from "@/lib/hub-data";
 
 interface StoriesTabProps {
-  feed: ElderWithStories[];
+  feed: MemberWithStories[];
 }
 
 function formatDateLabel(d: Date): string {
@@ -25,7 +25,7 @@ function eraDecade(eraYear: number): string {
 }
 
 /**
- * Stories tab — flattens the per-elder authorized feed into a single browsable pool, derives the
+ * Stories tab — flattens the per-member authorized feed into a single browsable pool, derives the
  * finder facets (Person / Era / Topic) from real data, and hands them to the client-side
  * StoriesBrowser (the "Find Stories" finder + featured card + grid).
  */
@@ -42,8 +42,8 @@ export function StoriesTab({ feed }: StoriesTabProps) {
         summary: story.summary ?? null,
         prose: story.prose ?? null,
         tags: story.tags ?? [],
-        personId: slot.elder.id,
-        personName: slot.elder.spokenName,
+        personId: slot.person.id,
+        personName: slot.person.spokenName,
         dateLabel: hasEra
           ? eraDateLabel(story.eraYear!, story.eraLabel ?? null)
           : formatDateLabel(date),
@@ -88,7 +88,7 @@ export function StoriesTab({ feed }: StoriesTabProps) {
     topics: [...topicSet].sort(),
   };
 
-  /* One elder → name it; several → generic. */
+  /* One narrator → name it; several → generic. */
   const contextLabel =
     facets.persons.length === 1
       ? `${facets.persons[0]!.name}’s stories · shared with you`

@@ -40,14 +40,14 @@ export class ScriptedVoice implements Voice {
 export class InMemoryAskSource implements AskSource {
   readonly routed: string[] = [];
 
-  constructor(private readonly byElder: Map<string, PendingAsk[]> = new Map()) {}
+  constructor(private readonly byNarrator: Map<string, PendingAsk[]> = new Map()) {}
 
   setAsks(personId: string, asks: PendingAsk[]): void {
-    this.byElder.set(personId, asks);
+    this.byNarrator.set(personId, asks);
   }
 
-  async pendingForElder(personId: string): Promise<PendingAsk[]> {
-    return this.byElder.get(personId)?.slice() ?? [];
+  async pendingForNarrator(personId: string): Promise<PendingAsk[]> {
+    return this.byNarrator.get(personId)?.slice() ?? [];
   }
 
   async markRouted(askId: string): Promise<void> {
@@ -56,26 +56,26 @@ export class InMemoryAskSource implements AskSource {
 }
 
 export class InMemoryMemorySource implements MemorySource {
-  constructor(private readonly byElder: Map<string, PriorStoryMemory[]> = new Map()) {}
+  constructor(private readonly byNarrator: Map<string, PriorStoryMemory[]> = new Map()) {}
 
   setStories(personId: string, stories: PriorStoryMemory[]): void {
-    this.byElder.set(personId, stories);
+    this.byNarrator.set(personId, stories);
   }
 
-  async recentStoriesForElder(personId: string, limit: number): Promise<PriorStoryMemory[]> {
-    const all = this.byElder.get(personId) ?? [];
+  async recentStoriesForNarrator(personId: string, limit: number): Promise<PriorStoryMemory[]> {
+    const all = this.byNarrator.get(personId) ?? [];
     return all.slice(0, limit);
   }
 }
 
 export class InMemoryAnchorSource implements AnchorSource {
-  constructor(private readonly byElder: Map<string, BiographicalAnchors> = new Map()) {}
+  constructor(private readonly byNarrator: Map<string, BiographicalAnchors> = new Map()) {}
 
   set(anchors: BiographicalAnchors): void {
-    this.byElder.set(anchors.personId, anchors);
+    this.byNarrator.set(anchors.personId, anchors);
   }
 
-  async loadForElder(personId: string): Promise<BiographicalAnchors | null> {
-    return this.byElder.get(personId) ?? null;
+  async loadForNarrator(personId: string): Promise<BiographicalAnchors | null> {
+    return this.byNarrator.get(personId) ?? null;
   }
 }

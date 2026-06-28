@@ -1,6 +1,6 @@
-# User Personas — Elder Storytelling Use Case (Mode One)
+# User Personas — Guided Narration Use Case (Mode One)
 
-*Companion to the North Star Vision. Covers the first use case: capturing an elder's life history in collaboration with younger family members. Four personas map to the four human roles in this flow — the elder narrator (Mode 1), the younger initiator/organizer (Mode 3), the curious grandchild/audience (Mode 4), and the family steward (Mode 5). Roles rotate over a lifetime; these are snapshots of who each person is at the moment they meet the product.*
+*Companion to the North Star Vision. Covers the first use case: capturing one person's life history in collaboration with the rest of their family. Four personas map to the four human roles in this flow — the narrator (Mode 1), the initiator/organizer (Mode 3), the curious audience-member (Mode 4), and the family steward (Mode 5). These personas happen to be an elder and her younger relatives — a common starting constellation — but the roles are age-neutral: a narrator can be any age, and asking, organizing, and stewarding are not the province of the young. Roles rotate over a lifetime; these are snapshots of who each person is at the moment they meet the product.*
 
 ---
 
@@ -19,19 +19,19 @@ Each persona is written for design and product decisions, not marketing. The fie
 - **What motivates them (research grounding)** — the deeper psychological driver, tied to the evidence base  
 - **Design implications** — what this persona demands of the product
 
-A note on the set: the elder is the subject, but the younger initiator is usually the *buyer* and the *engine*. The product fails if either one is neglected — the elder's comfort earns the stories, the initiator's momentum keeps them coming.
+A note on the set: the narrator is the subject, but the initiator (here, a younger relative) is usually the *buyer* and the *engine*. The product fails if either one is neglected — the narrator's comfort earns the stories, the initiator's momentum keeps them coming.
 
 ---
 
-## Persona 1 — Eleanor, the Elder Narrator (Mode 1)
+## Persona 1 — Eleanor, the Narrator (Mode 1)
 
 **"I'm happy to talk. I just don't want to fuss with a computer."**
 
 ### Snapshot  
-Eleanor is 81, widowed four years ago, living independently in the house she and her husband bought in 1971. She has a rich life to tell — a childhood on a farm, a first job she's proud of, a marriage, four children, a move across the country — but she has never written any of it down. She's not in a hurry, and she's mildly suspicious that anything involving "an app" will be more trouble than it's worth. She loves talking to her family on the phone and lights up when a grandchild asks about the old days.
+Eleanor is 81, widowed four years ago, living independently in the house she and her husband bought in 1971. She has a rich life to tell — a childhood on a farm, a first job she's proud of, a marriage, four children, a move across the country — but she has never written any of it down. She's not in a hurry, and she's mildly suspicious that anything involving "an app" will be more trouble than it's worth. She loves talking to her family on the phone and lights up when a grandchild asks about the old days. Eleanor is elderly and prefers a stripped-down, login-free way in — but that is a fact about *her*, not an assumption the product makes about narrators. A narrator can be any age, and the simplified, account-free path she relies on is one preference the product offers, not the definition of the role.
 
 ### Modes she lives in  
-Almost entirely **Mode 1 (Elder Narration)**. The system leads; she answers. She occasionally lands in Mode 4 when a grandchild shows her something the family added, but she is never asked to navigate, manage, or administer anything.
+Almost entirely **Mode 1 (Guided Narration)**. The system leads; she answers. She occasionally lands in Mode 4 when a grandchild shows her something the family added, but she is never asked to navigate, manage, or administer anything.
 
 ### Goals  
 She wants to feel listened to, not processed. She wants her stories to reach her grandchildren and great-grandchildren in her own voice. She wants to be the author of her own story — to approve what's shared and correct what's wrong. Underneath it all, she wants to know her life added up to something and will be remembered.
@@ -55,11 +55,11 @@ Zero-friction entry — one tap on a link, an inbound phone call she just answer
 Eleanor is at Erikson's ego-integrity-versus-despair stage. Building a coherent, accepted life narrative is a genuine developmental task of her age — and the evidence (Pinquart & Forstmeier's meta-analysis of 128 studies) shows structured life review produces moderate improvements in ego-integrity and depression. Her drive to pass wisdom to her grandchildren is generativity. The product isn't extracting content from her; it's supporting meaning-making she's already wired to want.
 
 ### Design implications  
-Every required login on the elder side is a bug, not a feature. The interview engine must be built on oral-history and reminiscence technique — open-ended, concrete, non-leading, one question at a time — not generic chatbot patterns. Preserve and foreground her actual voice; synthesized prose is secondary to the recording. Build the consent and emotional-safety rails first. She is the source of everything; protect her experience above all.
+Every required login on a narrator's link-session side is a bug, not a feature. The interview engine must be built on oral-history and reminiscence technique — open-ended, concrete, non-leading, one question at a time — not generic chatbot patterns. Preserve and foreground her actual voice; synthesized prose is secondary to the recording. Build the consent and emotional-safety rails first. The narrator is the source of everything; protect that experience above all.
 
 ---
 
-## Persona 2 — Marcus, the Younger Initiator / Organizer (Mode 3)
+## Persona 2 — Marcus, the Initiator / Organizer (Mode 3)
 
 **"Mom won't be around forever, and nobody's writing any of this down. I want to fix that before it's too late."**
 
@@ -91,7 +91,7 @@ Frictionless setup-on-behalf-of — he configures everything so Eleanor's side r
 Marcus is driven by generativity — Erikson's midlife pull to establish and guide the next generation — and by a rescue instinct sharpened by loss. The vision's "true competitor is the attic" framing is *his* lived fear: the unlabeled shoebox, the relative who took the history with them. He's also unknowingly acting on the Duke/Fivush finding — children who know their family history are more resilient — which is the strongest argument for why involving his own kids matters.
 
 ### Design implications  
-The initiator is the buyer; the elder is the source. Design the purchase and setup flow around Marcus while designing the *use* flow around Eleanor — they are different humans with different needs in the same transaction. Make his ongoing effort near-zero: automate nudges, surface progress, and make sharing one tap. Give him the satisfaction of seeing stories accumulate, because his momentum is what keeps Eleanor engaged between sessions. He is the engagement engine the vision says a perpetual chronicle must manufacture.
+The initiator is the buyer; the narrator is the source. Design the purchase and setup flow around Marcus while designing the *use* flow around Eleanor — they are different humans with different needs in the same transaction. Make his ongoing effort near-zero: automate nudges, surface progress, and make sharing one tap. Give him the satisfaction of seeing stories accumulate, because his momentum is what keeps Eleanor engaged between sessions. He is the engagement engine the vision says a perpetual chronicle must manufacture.
 
 ---
 
@@ -124,7 +124,7 @@ Sofia's dad shares a two-minute clip in the family thread: Grandma, in her own v
 A rich, immersive, mobile-first explore surface — timeline, map, tree, story feed, "ask the archive." Frictionless async questions with suggested prompts so she never faces a blank box. Easy, shareable moments — clips and stories she'd actually want to send. A sense of two-way connection: she asks, Grandma answers, the loop closes.
 
 ### What motivates them (research grounding)  
-Sofia is the living proof of the Duke/Fivush "Do You Know?" finding: children and teens who know more about their family history show higher self-esteem, resilience, internal locus of control, and lower anxiety. She is *why* the younger-generation side of the product exists and the evidence that justifies a whole-family subscription rather than a one-elder gift. She's also the engine behind the engine — her questions are what keep Eleanor engaged between sessions, and her wonder is what keeps Marcus motivated.
+Sofia is the living proof of the Duke/Fivush "Do You Know?" finding: children and teens who know more about their family history show higher self-esteem, resilience, internal locus of control, and lower anxiety. She is *why* the audience side of the product exists and the evidence that justifies a whole-family subscription rather than a one-narrator gift. She's also the engine behind the engine — her questions are what keep Eleanor engaged between sessions, and her wonder is what keeps Marcus motivated.
 
 ### Design implications  
 This persona justifies building Mode 4 as a first-class payoff surface, not an afterthought to capture. Make exploration lively and mobile-native or lose her. Lower the barrier to her participation with suggested questions and one-tap sharing — her engagement is load-bearing for the whole system. Remember she is the future custodian: the chronicle she explores at 16 is the one she may steward at 50, so the experience should quietly build attachment, not just deliver content.
@@ -171,9 +171,9 @@ Build the consent and estate framework (Mode 5) before any avatar feature ships 
 
 | Persona | Role | Primary mode | Buys? | Tech comfort | The one thing the product owes them |  
 |---|---|---|---|---|---|  
-| **Eleanor**, 81 | Elder narrator | Mode 1 | No | Low/uneven | Zero-friction, dignified, voice-first listening |  
+| **Eleanor**, 81 | Narrator | Mode 1 | No | Low/uneven | Zero-friction, dignified, voice-first listening |  
 | **Marcus**, 52 | Initiator / organizer | Mode 3 | **Yes** | High | Near-zero ongoing effort; visible progress |  
-| **Sofia**, 16 | Curious grandchild | Mode 4 | No | Very high | A lively, mobile-native payoff surface |  
+| **Sofia**, 16 | Audience / member | Mode 4 | No | Very high | A lively, mobile-native payoff surface |  
 | **Diane**, 58 | Family steward | Mode 5 | Sometimes | Moderate/careful | Legible governance and a real succession plan |
 
-**The load-bearing relationship:** Marcus's momentum keeps Eleanor engaged; Sofia's questions give Eleanor a reason to return; Diane keeps the whole thing safe enough that the family trusts it with their stories. Neglect any one persona and the system quietly stalls — the elder's comfort earns the stories, the younger generation's curiosity sustains them, and the steward's governance lets it outlive everyone in the room.  
+**The load-bearing relationship:** Marcus's momentum keeps Eleanor engaged; Sofia's questions give Eleanor a reason to return; Diane keeps the whole thing safe enough that the family trusts it with their stories. Neglect any one persona and the system quietly stalls — the narrator's comfort earns the stories, the members' curiosity sustains them, and the steward's governance lets it outlive everyone in the room.  

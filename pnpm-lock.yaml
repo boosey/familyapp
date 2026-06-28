@@ -32,9 +32,18 @@ importers:
       '@chronicle/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@chronicle/llm-anthropic':
+        specifier: workspace:*
+        version: link:../../packages/llm-anthropic
+      '@chronicle/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@chronicle/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@chronicle/transcribe-groq':
+        specifier: workspace:*
+        version: link:../../packages/transcribe-groq
       '@clerk/nextjs':
         specifier: ^6.9.6
         version: 6.39.5(next@15.5.19(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

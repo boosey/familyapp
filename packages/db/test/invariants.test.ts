@@ -5,7 +5,7 @@
  *   - the consent ledger is append-only (UPDATE and DELETE both rejected)
  *   - Media is immutable (the canonical recording can never be overwritten or deleted)
  *   - at most one ACTIVE membership per (person, family), while ended rows may coexist
- *   - one Account maps to exactly one Person; many login-less elders coexist
+ *   - one Account maps to exactly one Person; many login-less narrators coexist
  */
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -55,11 +55,11 @@ async function makeStoryWithRecording(ownerPersonId: string) {
 
 describe("a story is born private + draft (authenticity/consent defaults)", () => {
   it("defaults audienceTier=private and state=draft when only required fields are given", async () => {
-    const elder = await makePerson();
+    const narrator = await makePerson();
     const [rec] = await db
       .insert(media)
       .values({
-        ownerPersonId: elder.id,
+        ownerPersonId: narrator.id,
         kind: "story_audio",
         storageKey: "s3://bucket/original.wav",
         contentType: "audio/wav",
@@ -68,7 +68,7 @@ describe("a story is born private + draft (authenticity/consent defaults)", () =
       .returning();
     const [story] = await db
       .insert(stories)
-      .values({ ownerPersonId: elder.id, recordingMediaId: rec!.id })
+      .values({ ownerPersonId: narrator.id, recordingMediaId: rec!.id })
       .returning();
     expect(story!.state).toBe("draft");
     expect(story!.audienceTier).toBe("private");
@@ -79,13 +79,13 @@ describe("a story is born private + draft (authenticity/consent defaults)", () =
 
 describe("consent ledger is append-only", () => {
   it("permits INSERT", async () => {
-    const elder = await makePerson();
-    const { story } = await makeStoryWithRecording(elder.id);
+    const narrator = await makePerson();
+    const { story } = await makeStoryWithRecording(narrator.id);
     const [row] = await db
       .insert(consentRecords)
       .values({
-        personId: elder.id,
-        actorPersonId: elder.id,
+        personId: narrator.id,
+        actorPersonId: narrator.id,
         storyId: story.id,
         action: "approved_for_sharing",
         resultingState: "shared",
@@ -95,13 +95,13 @@ describe("consent ledger is append-only", () => {
   });
 
   it("rejects UPDATE of a consent record", async () => {
-    const elder = await makePerson();
-    const { story } = await makeStoryWithRecording(elder.id);
+    const narrator = await makePerson();
+    const { story } = await makeStoryWithRecording(narrator.id);
     const [row] = await db
       .insert(consentRecords)
       .values({
-        personId: elder.id,
-        actorPersonId: elder.id,
+        personId: narrator.id,
+        actorPersonId: narrator.id,
         storyId: story.id,
         action: "approved_for_sharing",
         resultingState: "shared",
@@ -116,13 +116,13 @@ describe("consent ledger is append-only", () => {
   });
 
   it("rejects DELETE of a consent record", async () => {
-    const elder = await makePerson();
-    const { story } = await makeStoryWithRecording(elder.id);
+    const narrator = await makePerson();
+    const { story } = await makeStoryWithRecording(narrator.id);
     const [row] = await db
       .insert(consentRecords)
       .values({
-        personId: elder.id,
-        actorPersonId: elder.id,
+        personId: narrator.id,
+        actorPersonId: narrator.id,
         storyId: story.id,
         action: "approved_for_sharing",
         resultingState: "shared",
@@ -134,18 +134,18 @@ describe("consent ledger is append-only", () => {
   });
 
   it("models revocation as a NEW superseding row, not an edit", async () => {
-    const elder = await makePerson();
-    const { story } = await makeStoryWithRecording(elder.id);
+    const narrator = await makePerson();
+    const { story } = await makeStoryWithRecording(narrator.id);
     await db.insert(consentRecords).values({
-      personId: elder.id,
-      actorPersonId: elder.id,
+      personId: narrator.id,
+      actorPersonId: narrator.id,
       storyId: story.id,
       action: "approved_for_sharing",
       resultingState: "shared",
     });
     await db.insert(consentRecords).values({
-      personId: elder.id,
-      actorPersonId: elder.id,
+      personId: narrator.id,
+      actorPersonId: narrator.id,
       storyId: story.id,
       action: "revoked",
       resultingState: "private",
@@ -160,8 +160,8 @@ describe("consent ledger is append-only", () => {
 
 describe("media is immutable (canonical recording protected)", () => {
   it("rejects UPDATE of a media row", async () => {
-    const elder = await makePerson();
-    const { recording } = await makeStoryWithRecording(elder.id);
+    const narrator = await makePerson();
+    const { recording } = await makeStoryWithRecording(narrator.id);
     await expect(
       db
         .update(media)
@@ -170,55 +170,66 @@ describe("media is immutable (canonical recording protected)", () => {
     ).rejects.toThrow(/immutable|append-only/i);
   });
 
-  it("rejects DELETE of a media row", async () => {
-    const elder = await makePerson();
-    const { recording } = await makeStoryWithRecording(elder.id);
+  it("rejects DELETE of a consented story's recording media (ADR-0002)", async () => {
+    // Per ADR-0002 the trigger is consent-scoped: a recording tied to a story that has at
+    // least one consent_records row must never be deleted.  We add a consent record here to
+    // exercise the trigger; without it the trigger permits deletion and the FK constraint
+    // (stories.recording_media_id NOT NULL) is a separate protection.
+    const narrator = await makePerson();
+    const { recording, story } = await makeStoryWithRecording(narrator.id);
+    await db.insert(consentRecords).values({
+      personId: narrator.id,
+      actorPersonId: narrator.id,
+      storyId: story.id,
+      action: "approved_for_sharing",
+      resultingState: "shared",
+    });
     await expect(
       db.delete(media).where(eq(media.id, recording.id)),
-    ).rejects.toThrow(/immutable|append-only/i);
+    ).rejects.toThrow(/immutable|restrict/i);
   });
 });
 
 describe("membership active-uniqueness", () => {
   it("rejects two ACTIVE memberships for the same person+family", async () => {
-    const elder = await makePerson();
+    const narrator = await makePerson();
     const [fam] = await db
       .insert(families)
       .values({
         name: "Boudreaux",
-        creatorPersonId: elder.id,
-        stewardPersonId: elder.id,
+        creatorPersonId: narrator.id,
+        stewardPersonId: narrator.id,
       })
       .returning();
     await db
       .insert(memberships)
-      .values({ personId: elder.id, familyId: fam!.id, role: "narrator" });
+      .values({ personId: narrator.id, familyId: fam!.id, role: "narrator" });
     await expect(
       db
         .insert(memberships)
-        .values({ personId: elder.id, familyId: fam!.id, role: "member" }),
+        .values({ personId: narrator.id, familyId: fam!.id, role: "member" }),
     ).rejects.toThrow();
   });
 
   it("allows an ended membership to coexist with a new active one (rejoin)", async () => {
-    const elder = await makePerson();
+    const narrator = await makePerson();
     const [fam] = await db
       .insert(families)
       .values({
         name: "Boudreaux",
-        creatorPersonId: elder.id,
-        stewardPersonId: elder.id,
+        creatorPersonId: narrator.id,
+        stewardPersonId: narrator.id,
       })
       .returning();
     await db.insert(memberships).values({
-      personId: elder.id,
+      personId: narrator.id,
       familyId: fam!.id,
       status: "ended",
       endedAt: sql`now()`,
     });
     const [rejoin] = await db
       .insert(memberships)
-      .values({ personId: elder.id, familyId: fam!.id, status: "active" })
+      .values({ personId: narrator.id, familyId: fam!.id, status: "active" })
       .returning();
     expect(rejoin!.status).toBe("active");
   });
@@ -278,9 +289,9 @@ describe("join-request pending-uniqueness", () => {
 });
 
 describe("person/account separation", () => {
-  it("permits many login-less elders (null account_id)", async () => {
-    await makePerson("Elder A");
-    await makePerson("Elder B");
+  it("permits many login-less narrators (null account_id)", async () => {
+    await makePerson("Narrator A");
+    await makePerson("Narrator B");
     const all = await db.select().from(persons);
     expect(all.every((p) => p.accountId === null)).toBe(true);
     expect(all).toHaveLength(2);
@@ -291,11 +302,11 @@ describe("person/account separation", () => {
       .insert(accounts)
       .values({ authProviderUserId: "clerk_user_1" })
       .returning();
-    const younger = await makePerson("Sofia");
+    const member = await makePerson("Sofia");
     await db
       .update(persons)
       .set({ accountId: acct!.id })
-      .where(eq(persons.id, younger.id));
+      .where(eq(persons.id, member.id));
     const other = await makePerson("Other");
     await expect(
       db

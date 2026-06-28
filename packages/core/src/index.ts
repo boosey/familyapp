@@ -26,32 +26,36 @@ export {
   type InterviewerStoryMemory,
   type ApproveAndShareInput,
   type ApproveAndShareResult,
+  type OutstandingAnswerDraft,
+  type DiscardDraftResult,
   persistRecordingAndCreateDraft,
   updateDerivedFields,
   transitionStoryState,
-  listElderMemoryForInterviewer,
+  listNarratorMemoryForInterviewer,
   approveAndShareStory,
   applyTranscriptCorrection,
+  listOutstandingAnswerDrafts,
+  discardDraftStory,
 } from "./story-repository";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is
 // the pipeline orchestrator. Import them via `@chronicle/core/pipeline`, which the architecture
 // guard restricts to a single file.
 export {
-  type ElderProfile,
-  type ElderBiographicalContext,
-  getElderProfile,
-  getElderBiographicalContext,
-} from "./elder-profile";
+  type NarratorProfile,
+  type NarratorBiographicalContext,
+  getNarratorProfile,
+  getNarratorBiographicalContext,
+} from "./narrator-profile";
 export { AuthorizationError, InvariantViolation } from "./errors";
 export {
   createAsk,
-  listPendingAsksForElder,
+  listPendingAsksForNarrator,
   listAsksByAsker,
   markAskRouted,
   markAskAnswered,
   type CreateAskInput,
-  type PendingAskForElder,
+  type PendingAskForNarrator,
   type AskerOwnAsk,
 } from "./asks";
 export {

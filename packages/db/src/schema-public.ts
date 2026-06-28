@@ -7,7 +7,7 @@ export {
   accounts,
   asks,
   consentRecords,
-  elderSessions,
+  linkSessions,
   families,
   invitations,
   joinRequests,

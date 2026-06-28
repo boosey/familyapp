@@ -1,6 +1,6 @@
 /**
  * Tests for `captureApproval` — the capture-side approval helper that mirrors `ingestRecording`'s
- * storage-first ordering for the elder's spoken approval clip.
+ * storage-first ordering for the narrator's spoken approval clip.
  */
 import {
   getStoryForViewer,
@@ -19,7 +19,7 @@ import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   captureApproval,
-  createElderSession,
+  createLinkSession,
   InvalidAudienceTierError,
   InvalidSessionError,
   StoryNotApprovableError,
@@ -40,7 +40,7 @@ async function rowCount(d: Database, table: string): Promise<number> {
 }
 
 async function setup() {
-  const [elder] = await db
+  const [narrator] = await db
     .insert(persons)
     .values({ displayName: "Eleanor", spokenName: "Eleanor" })
     .returning();
@@ -56,19 +56,19 @@ async function setup() {
       stewardPersonId: inviter!.id,
     })
     .returning();
-  // Both the elder (narrator) and the inviter must be active members — createElderSession gates on it.
+  // Both the narrator (narrator) and the inviter must be active members — createLinkSession gates on it.
   await db.insert(memberships).values([
-    { personId: elder!.id, familyId: fam!.id, role: "narrator", status: "active" },
+    { personId: narrator!.id, familyId: fam!.id, role: "narrator", status: "active" },
     { personId: inviter!.id, familyId: fam!.id, role: "member", status: "active" },
   ]);
-  const { token } = await createElderSession(db, {
-    personId: elder!.id,
+  const { token } = await createLinkSession(db, {
+    personId: narrator!.id,
     familyId: fam!.id,
     invitedByPersonId: inviter!.id,
   });
   // Get a story to pending_approval (mirrors post-pipeline state).
   const { story } = await persistRecordingAndCreateDraft(db, {
-    ownerPersonId: elder!.id,
+    ownerPersonId: narrator!.id,
     storageKey: "r2://story/x.webm",
     contentType: "audio/webm",
     durationSeconds: 90,
@@ -82,15 +82,15 @@ async function setup() {
     tags: [],
   });
   await transitionStoryState(db, story.id, "pending_approval");
-  return { elder: elder!, inviter: inviter!, family: fam!, token, storyId: story.id };
+  return { narrator: narrator!, inviter: inviter!, family: fam!, token, storyId: story.id };
 }
 
 describe("captureApproval (voice-only approval gate)", () => {
   it("uploads the approval audio, then atomically shares the story and writes the first consent row", async () => {
-    const { elder, storyId, token } = await setup();
+    const { narrator, storyId, token } = await setup();
 
     const result = await captureApproval(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       storyId,
       audienceTier: "family",
       audio: {
@@ -100,7 +100,7 @@ describe("captureApproval (voice-only approval gate)", () => {
       },
     });
 
-    // Approval audio is durable in storage at the returned key, with the elder's bytes.
+    // Approval audio is durable in storage at the returned key, with the narrator's bytes.
     expect(await storage.exists(result.approvalAudioStorageKey)).toBe(true);
     expect(Array.from((await storage.getBytes(result.approvalAudioStorageKey))!)).toEqual([
       1, 2, 3, 4,
@@ -111,11 +111,12 @@ describe("captureApproval (voice-only approval gate)", () => {
     expect(result.story.audienceTier).toBe("family");
     // The consent row points at the approval-audio media.
     expect(result.consentRecord.action).toBe("approved_for_sharing");
-    expect(result.consentRecord.approvalAudioMediaId).toBe(result.approvalAudio.id);
+    expect(result.approvalAudio).not.toBeNull();
+    expect(result.consentRecord.approvalAudioMediaId).toBe(result.approvalAudio!.id);
     // Owner sees the shared story via the front door.
     const seen = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elder.id },
+      { kind: "link_session", personId: narrator.id },
       storyId,
     );
     expect(seen?.state).toBe("shared");
@@ -125,7 +126,7 @@ describe("captureApproval (voice-only approval gate)", () => {
     const { storyId } = await setup();
     await expect(
       captureApproval(db, storage, {
-        sessionToken: "bogus",
+        actor: { kind: "link_session", token: "bogus" },
         storyId,
         audienceTier: "family",
         audio: { bytes: new Uint8Array([9]), contentType: "audio/webm" },
@@ -137,8 +138,8 @@ describe("captureApproval (voice-only approval gate)", () => {
 
   it("rejects an approval against a story this session does not own", async () => {
     const { storyId } = await setup();
-    // A second elder + session
-    const [otherElder] = await db
+    // A second narrator + session
+    const [otherNarrator] = await db
       .insert(persons)
       .values({ displayName: "Maria", spokenName: "Maria" })
       .returning();
@@ -155,18 +156,18 @@ describe("captureApproval (voice-only approval gate)", () => {
       })
       .returning();
     await db.insert(memberships).values([
-      { personId: otherElder!.id, familyId: otherFam!.id, role: "narrator", status: "active" },
+      { personId: otherNarrator!.id, familyId: otherFam!.id, role: "narrator", status: "active" },
       { personId: other!.id, familyId: otherFam!.id, role: "member", status: "active" },
     ]);
-    const { token: otherToken } = await createElderSession(db, {
-      personId: otherElder!.id,
+    const { token: otherToken } = await createLinkSession(db, {
+      personId: otherNarrator!.id,
       familyId: otherFam!.id,
       invitedByPersonId: other!.id,
     });
 
     await expect(
       captureApproval(db, storage, {
-        sessionToken: otherToken,
+        actor: { kind: "link_session", token: otherToken },
         storyId,
         audienceTier: "family",
         audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
@@ -183,7 +184,7 @@ describe("captureApproval (voice-only approval gate)", () => {
 
     await expect(
       captureApproval(db, storage, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         storyId,
         audienceTier: "family",
         audio: { bytes: new Uint8Array([7, 7, 7]), contentType: "audio/webm" },
@@ -209,10 +210,11 @@ describe("captureApproval (voice-only approval gate)", () => {
       getBytes: async () => null,
       exists: async () => false,
       getUrl: async (k: string) => `nowhere://${k}`,
+      delete: async () => {},
     };
     await expect(
       captureApproval(db, failing, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         storyId,
         audienceTier: "family",
         audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
@@ -229,7 +231,7 @@ describe("captureApproval (voice-only approval gate)", () => {
     const { storyId, token } = await setup();
     await expect(
       captureApproval(db, storage, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         storyId,
         // @ts-expect-error — deliberately exercising the runtime guard against a tier the
         // transport layer must never let through (the type already forbids "private").
@@ -246,7 +248,7 @@ describe("captureApproval (voice-only approval gate)", () => {
     const { storyId, token } = await setup();
     await expect(
       captureApproval(db, storage, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         storyId,
         // @ts-expect-error — a malformed tier value arriving from an untrusted client.
         audienceTier: "everyone",
@@ -258,10 +260,10 @@ describe("captureApproval (voice-only approval gate)", () => {
   });
 
   it("refuses when the story is not in pending_approval (e.g. already shared, or still draft)", async () => {
-    const { storyId, token, elder } = await setup();
+    const { storyId, token, narrator } = await setup();
     // Approve once to reach `shared`...
     await captureApproval(db, storage, {
-      sessionToken: token,
+      actor: { kind: "link_session", token },
       storyId,
       audienceTier: "family",
       audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
@@ -269,7 +271,7 @@ describe("captureApproval (voice-only approval gate)", () => {
     // ...a second attempt must fail (state has moved past pending_approval).
     await expect(
       captureApproval(db, storage, {
-        sessionToken: token,
+        actor: { kind: "link_session", token },
         storyId,
         audienceTier: "family",
         audio: { bytes: new Uint8Array([2]), contentType: "audio/webm" },
@@ -278,9 +280,66 @@ describe("captureApproval (voice-only approval gate)", () => {
     // The owner still sees the shared story exactly once.
     const seen = await getStoryForViewer(
       db,
-      { kind: "elder_session", personId: elder.id },
+      { kind: "link_session", personId: narrator.id },
       storyId,
     );
     expect(seen?.state).toBe("shared");
+  });
+
+  // ── account-actor branch (ADR-0003) ────────────────────────────────────────
+
+  it("account actor: rejects a phantom personId before any storage or DB write (InvalidSessionError)", async () => {
+    // captureApproval with an account actor whose personId does not exist in persons must fail
+    // fast — before the tier check reaches storage — with the same warm-dead-end error.
+    const { storyId } = await setup();
+    const phantomId = "00000000-0000-0000-0000-000000000000";
+    await expect(
+      captureApproval(db, storage, {
+        actor: { kind: "account", personId: phantomId },
+        storyId,
+        audienceTier: "family",
+        audio: { bytes: new Uint8Array([1]), contentType: "audio/webm" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidSessionError);
+    // Nothing was written.
+    expect(storage.size).toBe(0);
+    expect(await rowCount(db, "consent_records")).toBe(0);
+  });
+
+  it("account actor: approves the narrator's OWN pending story → shared (happy path)", async () => {
+    const { narrator, storyId } = await setup();
+    const result = await captureApproval(db, storage, {
+      actor: { kind: "account", personId: narrator.id },
+      storyId,
+      audienceTier: "family",
+      audio: { bytes: new Uint8Array([5, 6, 7]), contentType: "audio/webm" },
+    });
+    expect(result.story.state).toBe("shared");
+    expect(result.story.audienceTier).toBe("family");
+    expect(result.consentRecord.action).toBe("approved_for_sharing");
+    // The narrator (now as an account viewer) sees their shared story through the front door.
+    const seen = await getStoryForViewer(
+      db,
+      { kind: "account", personId: narrator.id },
+      storyId,
+    );
+    expect(seen?.state).toBe("shared");
+  });
+
+  it("account actor: cannot approve a story it does NOT own (IDOR — front door denies)", async () => {
+    // `inviter` is a real, co-family Person (passes the phantom check) but is NOT the story owner.
+    // The pending_approval story is invisible to a non-owner, so the front door denies the read and
+    // captureApproval refuses BEFORE any storage/DB write — no cross-user approval is possible.
+    const { storyId, inviter } = await setup();
+    await expect(
+      captureApproval(db, storage, {
+        actor: { kind: "account", personId: inviter.id },
+        storyId,
+        audienceTier: "family",
+        audio: { bytes: new Uint8Array([8]), contentType: "audio/webm" },
+      }),
+    ).rejects.toBeInstanceOf(StoryNotApprovableError);
+    expect(storage.size).toBe(0);
+    expect(await rowCount(db, "consent_records")).toBe(0);
   });
 });
