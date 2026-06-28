@@ -57,6 +57,19 @@ const MONTHS = [
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
 
+/**
+ * Days in a given month (1-12), leap-year aware. Pure date-picker affordance — it keeps the day
+ * dropdown from offering impossible days (e.g. Feb 31). The authoritative validation still lives in
+ * core's completeOnboarding; this just prevents the user from selecting a date it would reject.
+ * When the year isn't chosen yet we assume a leap year so Feb shows 29 (never hides a valid day).
+ */
+function daysInMonth(monthStr: string, yearStr: string): number {
+  if (monthStr === "") return 31;
+  const month = Number(monthStr);
+  const year = yearStr === "" ? 2000 : Number(yearStr);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 export function WelcomeFlow({
   fullName,
   firstName,
@@ -260,7 +273,12 @@ export function WelcomeFlow({
               <select
                 className="kin-field"
                 value={month}
-                onChange={(e) => setMonth(e.target.value)}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  setMonth(m);
+                  // Drop an out-of-range day if the new month is shorter (e.g. 31 → Feb).
+                  if (day !== "" && Number(day) > daysInMonth(m, year)) setDay("");
+                }}
               >
                 <option value="">Month</option>
                 {MONTHS.map((m, i) => (
@@ -274,7 +292,7 @@ export function WelcomeFlow({
               Day
               <select className="kin-field" value={day} onChange={(e) => setDay(e.target.value)}>
                 <option value="">Day</option>
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                {Array.from({ length: daysInMonth(month, year) }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -283,7 +301,16 @@ export function WelcomeFlow({
             </label>
             <label className="kin-form-label">
               Year
-              <select className="kin-field" value={year} onChange={(e) => setYear(e.target.value)}>
+              <select
+                className="kin-field"
+                value={year}
+                onChange={(e) => {
+                  const y = e.target.value;
+                  setYear(y);
+                  // Re-clamp for the Feb-29 leap-year case once a concrete year is known.
+                  if (day !== "" && Number(day) > daysInMonth(month, y)) setDay("");
+                }}
+              >
                 <option value="">Year</option>
                 {YEARS.map((y) => (
                   <option key={y} value={y}>
