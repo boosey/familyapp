@@ -27,9 +27,7 @@ export default async function ApprovePage({
   if (!resolved) {
     return (
       <main
-        className="kin-fullbleed"
-        data-theme="hearth"
-        style={{ alignItems: "center", justifyContent: "center", padding: 32 }}
+        className="kin-fullbleed"        style={{ alignItems: "center", justifyContent: "center", padding: 32 }}
       >
         <h1
           style={{
@@ -67,9 +65,7 @@ export default async function ApprovePage({
   if (!story || story.ownerPersonId !== resolved.personId || story.state !== "pending_approval") {
     return (
       <main
-        className="kin-fullbleed"
-        data-theme="hearth"
-        style={{ alignItems: "center", justifyContent: "center", padding: 32 }}
+        className="kin-fullbleed"        style={{ alignItems: "center", justifyContent: "center", padding: 32 }}
       >
         <h1
           style={{
@@ -101,7 +97,7 @@ export default async function ApprovePage({
   const profile = await getElderProfile(db, resolved.personId);
 
   return (
-    <main className="kin-fullbleed" data-theme="hearth">
+    <main className="kin-fullbleed">
       <section
         style={{
           flex: 1,
