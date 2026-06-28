@@ -6,10 +6,12 @@
  * Navigation between tabs is handled by HubTabsNav (client wrapper around HubTabs).
  */
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import { listPendingAsksForElder } from "@chronicle/core";
+import { listPendingAsksForElder, listPendingJoinRequestsForSteward } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { mockSignOut } from "@/lib/auth-mock";
 import { loadHubFeed } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { HubTabsNav } from "./HubTabsNav";
@@ -18,10 +20,17 @@ import { QuestionsTab } from "./tabs/QuestionsTab";
 import { AskTab } from "./tabs/AskTab";
 import { AsksTab } from "./tabs/AsksTab";
 import { InviteTab } from "./tabs/InviteTab";
+import { RequestsTab } from "./tabs/RequestsTab";
 import type { AccountMenuItem } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+async function logOut(): Promise<void> {
+  "use server";
+  await mockSignOut();
+  redirect("/");
+}
 
 export default async function HubPage({
   searchParams,
@@ -74,9 +83,12 @@ export default async function HubPage({
           >
             Sign in to see your family's stories.
           </p>
-          <div style={{ maxWidth: 260 }}>
-            <Link href="/dev/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label="Dev sign-in" fullWidth />
+          <div style={{ display: "grid", gap: 12, maxWidth: 260 }}>
+            <Link href="/sign-in" style={{ textDecoration: "none" }}>
+              <KindredButton label="Sign in" fullWidth />
+            </Link>
+            <Link href="/sign-up" style={{ textDecoration: "none" }}>
+              <KindredButton label="Create your family" variant="secondary" fullWidth />
             </Link>
           </div>
         </div>
@@ -86,12 +98,13 @@ export default async function HubPage({
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
   const { tab: tabParam } = await searchParams;
-  const validTabs = new Set(["stories", "questions", "ask", "asks", "invite"]);
+  const validTabs = new Set(["stories", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
-  const [feed, pendingAsks, viewerRow] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, viewerRow] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForElder(db, ctx.personId, { limit: 20 }),
+    listPendingJoinRequestsForSteward(db, ctx.personId),
     db
       .select({ spokenName: persons.spokenName, displayName: persons.displayName })
       .from(persons)
@@ -100,10 +113,10 @@ export default async function HubPage({
   ]);
 
   /* ── Derived display values ─────────────────────────────────────────────── */
-  const feedTitle =
-    feed.length === 1
-      ? `${feed[0]!.elder.spokenName}'s chronicle`
-      : "Your family's stories";
+  const familyNames = [...new Set(feed.map((s) => s.family.name))];
+  const familyLabel = familyNames.length
+    ? `THE ${familyNames.join(" · ").toUpperCase()} FAMILY`
+    : null;
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
   const initials = viewerName
@@ -125,6 +138,9 @@ export default async function HubPage({
     { key: "ask", label: "Ask a question" },
     { key: "asks", label: "Your asks" },
     { key: "invite", label: "Invite" },
+    ...(pendingRequests.length > 0
+      ? [{ key: "requests", label: "Requests", badge: pendingRequests.length }]
+      : []),
   ];
 
   const accountItems: AccountMenuItem[] = [
@@ -132,7 +148,7 @@ export default async function HubPage({
     { key: "settings", label: "Settings", href: "/hub" /* stub: no backend yet */ },
     { key: "manage-family", label: "Manage family", href: "/hub" /* stub: no backend yet */ },
     { key: "switch-user", label: "Switch user", href: "/dev/sign-in" },
-    { key: "log-out", label: "Log out", href: "/dev/sign-in" },
+    { key: "log-out", label: "Log out", onSelect: logOut },
   ];
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
@@ -170,18 +186,32 @@ export default async function HubPage({
               flexWrap: "wrap",
             }}
           >
-            <h1
-              style={{
-                fontFamily: "var(--font-story)",
-                fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
-                fontWeight: 400,
-                color: "var(--text-body)",
-                margin: 0,
-                letterSpacing: "var(--tracking-tight)",
-              }}
-            >
-              {feedTitle}
-            </h1>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+              <h1
+                style={{
+                  fontFamily: "var(--font-story)",
+                  fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
+                  fontWeight: 400,
+                  color: "var(--text-body)",
+                  margin: 0,
+                  letterSpacing: "var(--tracking-tight)",
+                }}
+              >
+                Family Chronicle
+              </h1>
+              {familyLabel ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-label)",
+                    letterSpacing: "var(--tracking-mono)",
+                    color: "var(--support)",
+                  }}
+                >
+                  {familyLabel}
+                </span>
+              ) : null}
+            </div>
             <KindredAccountMenu
               initials={initials}
               displayName={viewerName ?? undefined}
@@ -202,6 +232,7 @@ export default async function HubPage({
           {activeTab === "ask" && <AskTab />}
           {activeTab === "asks" && <AsksTab />}
           {activeTab === "invite" && <InviteTab />}
+          {activeTab === "requests" && <RequestsTab />}
         </section>
       </div>
     </main>

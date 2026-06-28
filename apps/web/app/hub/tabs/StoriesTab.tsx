@@ -1,27 +1,63 @@
-import { KindredStoryCard } from "@/app/_kindred";
+import { StoriesBrowser, type StoryItem, type StoryFacets } from "./StoriesBrowser";
 import type { ElderWithStories } from "@/lib/hub-data";
 
 interface StoriesTabProps {
   feed: ElderWithStories[];
 }
 
-function formatEra(d: Date): string {
+function formatDateLabel(d: Date): string {
   const year = d.getFullYear();
   const month = d.toLocaleString(undefined, { month: "long" }).toUpperCase();
   return `${year} · ${month}`;
 }
 
-function truncate(s: string, n: number): string {
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1).trimEnd() + "…";
+function decadeOf(d: Date): string {
+  return `${Math.floor(d.getFullYear() / 10) * 10}s`;
+}
+
+/** The era a story is ABOUT, when known, beats the recording date. */
+function eraDateLabel(eraYear: number, eraLabel: string | null): string {
+  return eraLabel ? `${eraYear} · ${eraLabel.toUpperCase()}` : `${eraYear}`;
+}
+
+function eraDecade(eraYear: number): string {
+  return `${Math.floor(eraYear / 10) * 10}s`;
 }
 
 /**
- * Stories tab — renders the per-elder feed sections with KindredStoryCards.
- * Server component; receives already-authorized feed from the hub shell.
+ * Stories tab — flattens the per-elder authorized feed into a single browsable pool, derives the
+ * finder facets (Person / Era / Topic) from real data, and hands them to the client-side
+ * StoriesBrowser (the "Find Stories" finder + featured card + grid).
  */
 export function StoriesTab({ feed }: StoriesTabProps) {
-  if (feed.length === 0) {
+  /* Flatten every authorized story into one serializable list, newest first. */
+  const dated = feed.flatMap((slot) =>
+    slot.stories.map((story) => {
+      const date = story.approvedAt ?? story.createdAt;
+      // Prefer the historical era the story is ABOUT; fall back to the recording date.
+      const hasEra = story.eraYear != null;
+      const item: StoryItem = {
+        id: story.id,
+        title: story.title ?? "Untitled",
+        summary: story.summary ?? null,
+        prose: story.prose ?? null,
+        tags: story.tags ?? [],
+        personId: slot.elder.id,
+        personName: slot.elder.spokenName,
+        dateLabel: hasEra
+          ? eraDateLabel(story.eraYear!, story.eraLabel ?? null)
+          : formatDateLabel(date),
+        decade: hasEra ? eraDecade(story.eraYear!) : decadeOf(date),
+        href: `/hub/stories/${story.id}`,
+        mediaSrc: `/api/media/${story.recordingMediaId}`,
+      };
+      return { item, sort: date.getTime() };
+    }),
+  );
+  dated.sort((a, b) => b.sort - a.sort);
+  const items: StoryItem[] = dated.map((d) => d.item);
+
+  if (items.length === 0) {
     return (
       <p
         style={{
@@ -31,82 +67,32 @@ export function StoriesTab({ feed }: StoriesTabProps) {
           margin: 0,
         }}
       >
-        No families yet. When someone shares a chronicle with you, their stories will appear here.
+        No stories yet. When someone shares a chronicle with you, their stories will appear here.
       </p>
     );
   }
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
-      {feed.map((slot) => (
-        <section key={`${slot.family.id}:${slot.elder.id}`}>
-          {/* Elder / section heading */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              marginBottom: 18,
-            }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-story)",
-                fontSize: "var(--text-story-lg)",
-                fontWeight: 500,
-                color: "var(--text-body)",
-                margin: 0,
-              }}
-            >
-              {slot.elder.spokenName}
-            </h2>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-label)",
-                color: "var(--text-muted)",
-                letterSpacing: "var(--tracking-mono)",
-              }}
-            >
-              {slot.family.name}
-            </span>
-          </div>
+  /* Derive facets from the real data only. */
+  const personMap = new Map<string, string>();
+  const decadeSet = new Set<string>();
+  const topicSet = new Set<string>();
+  for (const it of items) {
+    personMap.set(it.personId, it.personName);
+    decadeSet.add(it.decade);
+    for (const t of it.tags) topicSet.add(t);
+  }
 
-          {slot.stories.length === 0 ? (
-            <p
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                color: "var(--text-muted)",
-                margin: 0,
-              }}
-            >
-              No shared stories yet.
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {slot.stories.map((story) => {
-                const eraDate = story.approvedAt ?? story.createdAt;
-                const era = formatEra(eraDate);
-                const meta: string[] = [];
-                if (story.summary) meta.push(truncate(story.summary, 80));
-                return (
-                  <KindredStoryCard
-                    key={story.id}
-                    era={era}
-                    title={story.title ?? "Untitled"}
-                    byline={`Told by ${slot.elder.spokenName}`}
-                    meta={meta}
-                    href={`/hub/stories/${story.id}`}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </section>
-      ))}
-    </div>
-  );
+  const facets: StoryFacets = {
+    persons: [...personMap].map(([id, name]) => ({ id, name })),
+    decades: [...decadeSet].sort(),
+    topics: [...topicSet].sort(),
+  };
+
+  /* One elder → name it; several → generic. */
+  const contextLabel =
+    facets.persons.length === 1
+      ? `${facets.persons[0]!.name}’s stories · shared with you`
+      : "Shared with you";
+
+  return <StoriesBrowser items={items} facets={facets} contextLabel={contextLabel} />;
 }

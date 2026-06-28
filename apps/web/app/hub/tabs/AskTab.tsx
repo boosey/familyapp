@@ -77,9 +77,10 @@ export async function AskTab() {
       <p
         style={{
           fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-meta)",
-          margin: "0 0 28px",
+          fontSize: "var(--text-ui-sm)",
+          lineHeight: "var(--leading-body)",
+          color: "var(--text-muted)",
+          margin: "12px 0 28px",
         }}
       >
         Your question goes into the queue. It will be asked next time they sit down to talk —

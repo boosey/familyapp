@@ -1,11 +1,18 @@
-/* Kindred Design System tokens — ported from the canonical _ds token set
- * (docs/design-system/.../_ds/.../tokens/*.css). Semantic layer over a primitive
- * palette. Fonts are self-hosted by next/font in app/layout.tsx and injected as
- * --font-newsreader / --font-public-sans / --font-dm-mono on <html>.
+/* Kindred Design System tokens — SINGLE SOURCE OF TRUTH for the app's design
+ * tokens, ported verbatim (names + values, all three themes) from the canonical
+ * design-system export:
+ *   docs/design-system/intergenerational-story-design-system/project/_ds/
+ *     kindred-design-system-495fbf7d-96e7-492a-aafc-cbbbd5477f79/tokens/*.css
  *
- * NOTE: the `--kin-*` block at the bottom is a TEMPORARY compatibility shim mapping
- * the old flat names to the new semantic vars. Removed in the final task once all
- * consumers are converted. Do not add new --kin-* references. */
+ * Variable NAMES here are identical to that export by design — keep them in sync.
+ * When the design system changes, re-port from _ds (do not rename on import).
+ * The only intentional divergence: fonts are self-hosted via next/font in
+ * app/layout.tsx (--font-newsreader / --font-public-sans / --font-dm-mono),
+ * rather than the export's Google Fonts @import.
+ *
+ * There are NO --kin-* tokens. That was an older, divergent naming that only ever
+ * lived in loose design-system .jsx reference files; the app uses the canonical
+ * semantic names. Do not introduce --kin-* references. */
 
 :root,
 [data-theme="heirloom"] {

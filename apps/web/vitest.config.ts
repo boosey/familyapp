@@ -13,6 +13,9 @@ export default defineConfig({
       "server-only": fileURLToPath(
         new URL("./__tests__/server-only-shim.ts", import.meta.url),
       ),
+      // App-root alias (mirrors tsconfig "@/*") so tests can import route handlers / lib by "@/…".
+      // Key has no trailing slash so the alias plugin treats it as a path-boundary prefix.
+      "@": fileURLToPath(new URL(".", import.meta.url)).replace(/[\\/]$/, ""),
       "@chronicle/db/content": fileURLToPath(
         new URL("../../packages/db/src/content.ts", import.meta.url),
       ),

@@ -6,7 +6,6 @@
 import Link from "next/link";
 import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
-import { KindredChip } from "@/app/_kindred";
 
 export async function AsksTab() {
   const { db, auth } = await getRuntime();
@@ -42,120 +41,158 @@ export async function AsksTab() {
     }),
   );
 
-  if (enriched.length === 0) {
-    return (
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-muted)",
-          margin: 0,
-        }}
-      >
-        You haven&apos;t asked anything yet.
-      </p>
-    );
-  }
-
-  return (
-    <div>
+  const heading = (
+    <>
       <h2
         style={{
           fontFamily: "var(--font-story)",
           fontSize: "var(--text-story-lg)",
           fontWeight: 500,
           color: "var(--text-body)",
-          margin: "0 0 24px",
+          margin: 0,
         }}
       >
         Your asks
       </h2>
+      <p
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-ui-sm)",
+          lineHeight: "var(--leading-body)",
+          color: "var(--text-muted)",
+          margin: "12px 0 0",
+        }}
+      >
+        The questions you’ve sent, and where they are.
+      </p>
+    </>
+  );
+
+  if (enriched.length === 0) {
+    return (
+      <div>
+        {heading}
+        <div
+          style={{
+            marginTop: 24,
+            background: "var(--surface-card)",
+            border: "var(--border-width) solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            padding: 30,
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-story)",
+              color: "var(--text-muted)",
+              margin: 0,
+            }}
+          >
+            You haven’t asked anything yet.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {heading}
       <ul
         style={{
           listStyle: "none",
           padding: 0,
-          margin: 0,
+          margin: "24px 0 0",
           display: "flex",
           flexDirection: "column",
-          gap: 18,
+          gap: 14,
         }}
       >
-        {enriched.map((m) => (
-          <li
-            key={m.ask.id}
-            style={{
-              background: "var(--surface-card)",
-              border: "var(--border-width) solid var(--border)",
-              borderRadius: "var(--radius-lg)",
-              padding: "20px 22px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
+        {enriched.map((m) => {
+          const answeredVisible =
+            m.ask.status === "answered" && m.storyVisible && m.ask.storyId;
+          return (
+            <li
+              key={m.ask.id}
               style={{
+                background: "var(--surface-card)",
+                border: "var(--border-width) solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                boxShadow: "var(--shadow-card)",
+                padding: "20px 24px",
                 display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "flex-start",
-                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 20,
               }}
             >
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-label)",
-                  color: "var(--text-meta)",
-                  letterSpacing: "var(--tracking-mono)",
-                }}
-              >
-                FOR {m.targetSpokenName.toUpperCase()}
-              </span>
-              <KindredChip kind="status" label={prettyStatus(m.ask.status)} />
-            </div>
-            <p
-              style={{
-                fontFamily: "var(--font-story)",
-                fontSize: "var(--text-story-lg)",
-                lineHeight: "var(--leading-snug)",
-                color: "var(--text-body)",
-                margin: 0,
-              }}
-            >
-              {m.ask.questionText}
-            </p>
-            {m.ask.status === "answered" && m.storyVisible && m.ask.storyId ? (
-              <Link
-                href={`/hub/stories/${m.ask.storyId}`}
-                style={{
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "var(--accent)",
-                  textDecoration: "none",
-                }}
-              >
-                Listen{m.storyTitle ? `: ${m.storyTitle}` : ""} →
-              </Link>
-            ) : null}
-            {m.ask.status === "answered" && !m.storyVisible ? (
-              <span
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-label)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Answered — not shared with you.
-              </span>
-            ) : null}
-          </li>
-        ))}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "var(--text-ui-sm)",
+                    lineHeight: "var(--leading-snug)",
+                    color: "var(--text-body)",
+                    margin: 0,
+                  }}
+                >
+                  <span style={{ color: "var(--text-meta)" }}>
+                    For {m.targetSpokenName}:
+                  </span>{" "}
+                  {m.ask.questionText}
+                </p>
+              </div>
+
+              {answeredVisible ? (
+                <Link
+                  href={`/hub/stories/${m.ask.storyId}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "var(--text-ui-sm)",
+                    fontWeight: 600,
+                    color: "var(--accent-strong)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  ▶ {m.storyTitle ?? "Listen"}
+                </Link>
+              ) : m.ask.status === "answered" ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-label)",
+                    letterSpacing: "var(--tracking-mono)",
+                    color: "var(--support)",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  ANSWERED · PRIVATE
+                </span>
+              ) : (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-label)",
+                    letterSpacing: "var(--tracking-mono)",
+                    color: "var(--support)",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  IN THE QUEUE
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
-}
-
-function prettyStatus(s: string): string {
-  return s.replace(/_/g, " ");
 }

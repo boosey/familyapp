@@ -1,20 +1,27 @@
 /**
- * Root landing. The product has no public marketing surface in Phase 1, and crucially the elder
- * NEVER lands here — they only ever follow their personal link to /s/[token]. This page exists so
- * the deployment has a root; it intentionally reveals nothing and asks for nothing.
+ * Root landing — the younger-generation front door. Elders NEVER land here; they only ever follow
+ * their personal /s/[token] link. This is the warm marketing-light entry for relatives: name the
+ * product, then offer the two real doors (create a family, or sign in to an existing one).
  */
+import Link from "next/link";
+import { KindredButton } from "@/app/_kindred";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <main
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         background: "var(--surface-page)",
         padding: "6vh 6vw",
-        gap: 12,
+        gap: 18,
+        textAlign: "center",
       }}
     >
       <div className="kin-eyebrow">Est. 2026</div>
@@ -35,13 +42,42 @@ export default function Home() {
           fontFamily: "var(--font-ui)",
           fontSize: "var(--text-ui)",
           color: "var(--text-muted)",
-          maxWidth: "32ch",
-          textAlign: "center",
+          maxWidth: "34ch",
           margin: 0,
           lineHeight: "var(--leading-body)",
         }}
       >
-        A warm place to tell your stories.
+        A warm place to gather your family&apos;s stories — and to help the people you love tell
+        theirs before they&apos;re lost.
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 14,
+          justifyContent: "center",
+          marginTop: 12,
+        }}
+      >
+        <Link href="/sign-up" style={{ textDecoration: "none" }}>
+          <KindredButton label="Create your family" size="large" />
+        </Link>
+        <Link href="/sign-in" style={{ textDecoration: "none" }}>
+          <KindredButton label="Sign in" variant="secondary" size="large" />
+        </Link>
+      </div>
+
+      <p
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-label)",
+          letterSpacing: "var(--tracking-mono)",
+          color: "var(--support)",
+          margin: "8px 0 0",
+        }}
+      >
+        Invited an elder to record? They open their own personal link — they never sign in here.
       </p>
     </main>
   );
