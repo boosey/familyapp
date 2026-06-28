@@ -2,6 +2,20 @@
 
 Every non-obvious choice and its one-line rationale. Newest at top within each section.
 
+## Onboarding & family flows (younger-generation account side)
+
+- **Family discovery is opt-in; joining is always steward-approved; discovery exposes only family
+  name + steward name.** Full rationale + rejected alternatives in `docs/adr/0001-family-discovery-and-join-requests.md`.
+- **Member invitations are modeled distinctly from elder session tokens.** An invitation creates an
+  Account + Membership; an elder session is anonymous, account-less capture identity. See ADR-0001.
+- **Natural-language family search is a `FamilySearch` seam** with a deterministic keyword impl now;
+  an LLM slots behind the same interface later, keeping vendor calls off the offline-test path.
+- **Mock auth provider for dev/test** (the `mock_auth_users` table plays Clerk's user store). Account
+  still stores only `authProviderUserId`, never a password — credentials live in the mock store and
+  production swaps in the Clerk adapter unchanged.
+- **`Person.onboardedAt` gates the first-sign-on onboarding flow; `Person.birthDate` stores the full
+  DOB** captured there (alongside the coarse `birthYear` the interviewer already reads).
+
 ## Stack & vendor selections (resolving the spec's "OR" options)
 
 - **Language: TypeScript end-to-end; no Python pipeline service.** Spec Part V explicitly
@@ -312,7 +326,10 @@ recap of every fix.
 
 ## Workflow
 
-- **Not using Agent Teams for implementation; using fresh adversarial reviewer sub-agents** per
-  the kickoff mandate. The mandate's build→review→enhance loop with a *cold* reviewer per round
-  is the more specific instruction and overrides the general "use Agent Teams" preference here.
-  I (lead engineer) write all code; sub-agents are review-only and never fix.
+- **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
+  main agent orchestrates. When a coding sub-agent finishes a task, it (or the main agent) spawns
+  a *separate, cold, fresh-eyes* adversarial code-reviewer sub-agent. The coding sub-agent then
+  consumes that review output and iterates on its own code until the review comes back clean,
+  with a *new* reviewer each round. This supersedes the earlier "sub-agents are review-only; lead
+  engineer writes all code" rule (corrected 2026-06-27) and the general "use Agent Teams"
+  preference. Net: coding agents both write and fix; reviewers are independent and per-round.

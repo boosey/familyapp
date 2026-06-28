@@ -10,6 +10,10 @@ import type postgres from "postgres";
 const MIGRATIONS = [
   "../drizzle/0000_init.sql",
   "../drizzle/custom/0001_invariants.sql",
+  "../drizzle/0001_next_lady_vermin.sql",
+  // Onboarding + family flows: families.description/discoverable, persons.birth_date/onboarded_at,
+  // invitations, join_requests, mock_auth_users (+ their enums). See ADR-0001.
+  "../drizzle/0002_huge_pixie.sql",
 ];
 
 function readMigrationSql(rel: string): string {

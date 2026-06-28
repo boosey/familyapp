@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -92,6 +93,29 @@ export const askStatusEnum = pgEnum("ask_status", [
   "answered",
 ]);
 
+/**
+ * Member invitation lifecycle (account-creating join link). DISTINCT from the elder session
+ * token: an invitation leads a NEW younger-generation person to create an Account and join a
+ * family, whereas an elder session is anonymous capture identity. See ADR-0001.
+ */
+export const invitationStatusEnum = pgEnum("invitation_status", [
+  "pending",
+  "accepted",
+  "revoked",
+  "expired",
+]);
+
+/**
+ * Join-request lifecycle. A stranger who discovered a (discoverable) family asks its steward to
+ * let them in; the steward approves (→ membership) or declines. Discovery never bypasses
+ * steward consent — joining is always approval-gated. See ADR-0001.
+ */
+export const joinRequestStatusEnum = pgEnum("join_request_status", [
+  "pending",
+  "approved",
+  "declined",
+]);
+
 // ---------------------------------------------------------------------------
 // Person — the spine. Permanent, singular, owner of everything expressive.
 // A Person does NOT require a login. Elders are Persons with no Account.
@@ -105,6 +129,18 @@ export const persons = pgTable(
     /** The name the interviewer should speak aloud. */
     spokenName: text("spoken_name").notNull(),
     birthYear: integer("birth_year"),
+    /**
+     * Full date of birth, captured in younger-gen onboarding (the one required step). Stored as
+     * a calendar date (no time/zone). `birthYear` is kept alongside as the coarse anchor the
+     * interviewer already reads; both are written together when onboarding captures a full date.
+     */
+    birthDate: date("birth_date"),
+    /**
+     * When this Person completed younger-gen onboarding. NULL = has not onboarded yet, which is
+     * the gate the hub uses to route a fresh account into the welcome → DOB → doors flow. Elders
+     * (no Account) never onboard and stay NULL forever — they are never routed through the hub.
+     */
+    onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     /** Lightly-held biographical anchors used to warm up the interviewer (place, etc.). */
     biographicalAnchors: jsonb("biographical_anchors")
       .$type<Record<string, unknown>>()
@@ -162,6 +198,19 @@ export const accounts = pgTable(
 export const families = pgTable("families", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  /**
+   * Optional free-text description of the family ("the Espositos from Naples, bakers for three
+   * generations"). Feeds the natural-language/keyword family search. Only consulted for families
+   * that have opted into discovery.
+   */
+  description: text("description"),
+  /**
+   * Opt-in discovery flag. A stranger's search NEVER returns a family with `discoverable = false`,
+   * and even when true the search exposes only family name + steward display name — never members
+   * or stories. Joining a discovered family is always steward-approved (a join_request). Default
+   * false keeps the privacy-first posture: families are private until the steward opts in. ADR-0001.
+   */
+  discoverable: boolean("discoverable").notNull().default(false),
   creatorPersonId: uuid("creator_person_id")
     .notNull()
     .references(() => persons.id),
@@ -270,6 +319,10 @@ export const stories = pgTable(
     title: text("title"),
     summary: text("summary"),
     tags: jsonb("tags").$type<string[]>().default(sql`'[]'::jsonb`),
+    /** The representative year the story is ABOUT (historical era), not when it was recorded. */
+    eraYear: integer("era_year"),
+    /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
+    eraLabel: text("era_label"),
     // --- provenance ---
     /** The question that prompted this story. */
     promptQuestion: text("prompt_question"),
@@ -407,6 +460,118 @@ export const elderSessions = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Invitation — the account-creating member invite (distinct from elder_sessions).
+// A younger-generation person follows the link, signs up, and joins `familyId`. The invite
+// carries the payload the onboarding "welcome" screen renders (inviter, family, name, relation).
+// Stored hashed like elder sessions: the raw token is never persisted. ADR-0001.
+// ---------------------------------------------------------------------------
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** SHA-256 of the long unguessable token. The raw token lives only in the emailed link. */
+    tokenHash: text("token_hash").notNull(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    /** Who sent the invite. */
+    inviterPersonId: uuid("inviter_person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** Pre-filled invitee display name from the inviter ("Salvatore Esposito"). */
+    inviteeName: text("invitee_name"),
+    /** Optional email the invite was addressed to (the person may be unknown to the system). */
+    inviteeEmail: text("invitee_email"),
+    /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
+    relationshipLabel: text("relationship_label"),
+    /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */
+    role: membershipRoleEnum("role").notNull().default("member"),
+    status: invitationStatusEnum("status").notNull().default("pending"),
+    /** The Person created/linked when the invite was accepted. */
+    acceptedPersonId: uuid("accepted_person_id").references(() => persons.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("invitations_token_hash_uq").on(t.tokenHash),
+    index("invitations_family_idx").on(t.familyId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// JoinRequest — a stranger's approval-gated request to join a discoverable family.
+// Discovery surfaces the family; this row is the steward's consent gate. Approval creates a
+// Membership (never bypassed). Decline closes it. ADR-0001.
+// ---------------------------------------------------------------------------
+
+export const joinRequests = pgTable(
+  "join_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    /** The person asking to join (already has an Account — they signed up first). */
+    requesterPersonId: uuid("requester_person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** Optional note to the steward ("I'm Rosa's cousin from Naples"). */
+    message: text("message"),
+    status: joinRequestStatusEnum("status").notNull().default("pending"),
+    /** The steward (or other member) who approved/declined. */
+    decidedByPersonId: uuid("decided_by_person_id").references(
+      () => persons.id,
+    ),
+    /** The Membership created on approval (null while pending or if declined). */
+    resultingMembershipId: uuid("resulting_membership_id").references(
+      () => memberships.id,
+    ),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("join_requests_family_idx").on(t.familyId),
+    index("join_requests_requester_idx").on(t.requesterPersonId),
+    index("join_requests_status_idx").on(t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// MockAuthUser — DEV/TEST ONLY. Simulates the bought auth provider's (Clerk's) own user store.
+//
+// The architecture rule (spec Part IV) is that an Account stores ONLY the provider's opaque user
+// id and NEVER a password. The real provider (Clerk) owns credentials. To exercise real signup /
+// signin locally without standing up Clerk, this table plays Clerk's role: it holds the
+// email+password the provider would hold, keyed to the `authProviderUserId` that lands on the
+// Account. PRODUCTION never reads or writes this table — `isClerkConfigured()` swaps it out.
+// ---------------------------------------------------------------------------
+
+export const mockAuthUsers = pgTable(
+  "mock_auth_users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    /** Salted hash — even the mock provider never stores a plaintext password. */
+    passwordHash: text("password_hash").notNull(),
+    /** The opaque id handed to the Account as `auth_provider_user_id` (this provider's user id). */
+    authProviderUserId: text("auth_provider_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("mock_auth_users_email_uq").on(t.email),
+    uniqueIndex("mock_auth_users_provider_id_uq").on(t.authProviderUserId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -428,6 +593,12 @@ export type Ask = typeof asks.$inferSelect;
 export type NewAsk = typeof asks.$inferInsert;
 export type ElderSession = typeof elderSessions.$inferSelect;
 export type NewElderSession = typeof elderSessions.$inferInsert;
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;
+export type JoinRequest = typeof joinRequests.$inferSelect;
+export type NewJoinRequest = typeof joinRequests.$inferInsert;
+export type MockAuthUser = typeof mockAuthUsers.$inferSelect;
+export type NewMockAuthUser = typeof mockAuthUsers.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
@@ -437,3 +608,6 @@ export type AudienceTier = (typeof audienceTierEnum.enumValues)[number];
 export type MediaKind = (typeof mediaKindEnum.enumValues)[number];
 export type ConsentAction = (typeof consentActionEnum.enumValues)[number];
 export type AskStatus = (typeof askStatusEnum.enumValues)[number];
+export type InvitationStatus = (typeof invitationStatusEnum.enumValues)[number];
+export type JoinRequestStatus =
+  (typeof joinRequestStatusEnum.enumValues)[number];

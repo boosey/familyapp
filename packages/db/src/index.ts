@@ -30,6 +30,12 @@ export type {
   NewAsk,
   ElderSession,
   NewElderSession,
+  Invitation,
+  NewInvitation,
+  JoinRequest,
+  NewJoinRequest,
+  MockAuthUser,
+  NewMockAuthUser,
   LifeStatus,
   MembershipRole,
   MembershipStatus,
@@ -38,6 +44,8 @@ export type {
   MediaKind,
   ConsentAction,
   AskStatus,
+  InvitationStatus,
+  JoinRequestStatus,
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
 export {
