@@ -9,7 +9,12 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { asks } from "@chronicle/db/schema";
-import { getStoryForViewer, approveAndShareStory, discardDraftStory } from "@chronicle/core";
+import {
+  getStoryForViewer,
+  approveAndShareStory,
+  discardDraftStory,
+  updateDerivedFields,
+} from "@chronicle/core";
 import { ingestRecording } from "@chronicle/capture";
 import { getRuntime } from "@/lib/runtime";
 
@@ -100,6 +105,21 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
     const pipeline = newPipeline();
     await pipeline.start(storyId);
     await pipeline.runToCompletion();
+
+    // TEMPORARY (no-AI phase): until real transcription/rendering lands, the mock language model
+    // derives every title from the same placeholder transcript, so all new cards look alike. Use
+    // the question itself as the title instead — it's the most meaningful label we have without AI.
+    // Remove this block once the real Groq/Anthropic adapters are producing genuine titles.
+    if (story.askId) {
+      const [askRow] = await db
+        .select({ questionText: asks.questionText })
+        .from(asks)
+        .where(eq(asks.id, story.askId))
+        .limit(1);
+      if (askRow?.questionText) {
+        await updateDerivedFields(db, storyId, { title: askRow.questionText });
+      }
+    }
 
     // Tap approval (ADR-0004): no approvalAudio clip. Consent record is written with
     // approvalAudioMediaId = NULL (the column is nullable since ADR-0004 landed).
