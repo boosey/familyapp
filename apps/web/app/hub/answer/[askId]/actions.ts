@@ -29,7 +29,7 @@ export type ActionResult = { error: string } | undefined;
  * personId is taken from the server session, never from the client.
  */
 export async function recordAnswerAction(formData: FormData): Promise<ActionResult> {
-  const { db, storage, auth } = await getRuntime();
+  const { db, storage, auth, newPipeline } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -58,12 +58,25 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
 
+  let storyId: string;
   try {
-    await ingestRecording(db, storage, {
+    const result = await ingestRecording(db, storage, {
       actor: { kind: "account", personId: ctx.personId },
       audio: { bytes, contentType: audio.type || "audio/webm" },
       askId: askIdField,
     });
+    storyId = result.storyId;
+  } catch {
+    return { error: hub.actions.saveFailed };
+  }
+
+  // Render BEFORE review (prose-provenance design): transcribe → polish so the review phase can
+  // show the polished prose for the narrator to read and edit. A fresh pipeline per call isolates
+  // its in-process queue. Idempotent if re-run.
+  try {
+    const pipeline = newPipeline();
+    await pipeline.start(storyId);
+    await pipeline.runToCompletion();
   } catch {
     return { error: hub.actions.saveFailed };
   }
@@ -100,14 +113,6 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
     if (!story || story.ownerPersonId !== ctx.personId) {
       return { error: hub.actions.storyNotFound };
     }
-
-    // Pipeline runs inline: transcribe → render_story → story moves to pending_approval.
-    // Idempotent: if already pending_approval, both stages are no-ops. A FRESH pipeline (its own
-    // in-process JobQueue) per share isolates concurrent approvals — a shared singleton queue
-    // would interleave jobs across stories and corrupt state (SF-3).
-    const pipeline = newPipeline();
-    await pipeline.start(storyId);
-    await pipeline.runToCompletion();
 
     // TEMPORARY (no-AI phase): until real transcription/rendering lands, the mock language model
     // derives every title from the same placeholder transcript, so all new cards look alike. Use
