@@ -10,9 +10,11 @@ import { eq } from "drizzle-orm";
 import { AuthorizationError, isActiveMember } from "@chronicle/core";
 import { linkSessions } from "@chronicle/db/schema";
 import type { Database, LinkSession } from "@chronicle/db";
-
-const DEFAULT_TTL_DAYS = 30;
-const MS_PER_DAY = 86_400_000;
+import {
+  LINK_SESSION_DEFAULT_TTL_DAYS,
+  LINK_SESSION_TOKEN_ENTROPY_BYTES,
+  MILLISECONDS_PER_DAY,
+} from "./constants";
 
 /** SHA-256 of the raw token. Lookups hash the incoming token and match on this. */
 export function hashToken(rawToken: string): string {
@@ -41,11 +43,12 @@ export async function createLinkSession(
   db: Database,
   input: CreateLinkSessionInput,
 ): Promise<CreatedLinkSession> {
-  const token = randomBytes(32).toString("base64url"); // 256 bits of entropy
+  const token = randomBytes(LINK_SESSION_TOKEN_ENTROPY_BYTES).toString("base64url"); // 256 bits of entropy
   const tokenHash = hashToken(token);
   const now = input.now ?? new Date();
-  const ttl = input.ttlDays === undefined ? DEFAULT_TTL_DAYS : input.ttlDays;
-  const expiresAt = ttl === null ? null : new Date(now.getTime() + ttl * MS_PER_DAY);
+  const ttl = input.ttlDays === undefined ? LINK_SESSION_DEFAULT_TTL_DAYS : input.ttlDays;
+  const expiresAt =
+    ttl === null ? null : new Date(now.getTime() + ttl * MILLISECONDS_PER_DAY);
 
   // The family-membership gate lives here, in the domain — not in the UI that calls it. Both the
   // inviter (who is minting the link) and the narrator (the person the link speaks for) must hold an
