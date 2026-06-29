@@ -46,6 +46,8 @@ export interface PhraseInput {
   /** Recent prior stories — used only when the intent is a `callback` (the model gets the
    * specific summary to refer to). */
   priorStories: ReadonlyArray<PriorStoryMemory>;
+  /** True on the narrator's very first session — gates the one-time welcome opener. */
+  isFirstSession: boolean;
 }
 
 export interface PhraseResult {
@@ -70,7 +72,11 @@ export async function phraseIntent(
 
 function buildMessages(input: PhraseInput): LanguageModelMessage[] {
   const ctxBlock = renderContextBlock(input.anchors);
-  const userContent = `${ctxBlock}TURN:\n${renderIntentBlock(input.intent, input.priorStories)}`;
+  const welcomeBlock =
+    input.isFirstSession && input.intent.kind === "intake"
+      ? `FIRST SESSION: Before the question, add a warm 1–2 sentence welcome that conveys: you'll ask about their life one question at a time; their own words and voice are what's preserved; there are no wrong answers and they can skip anything or stop whenever they like. Then flow straight into the question — no "here we go" filler.\n\n`
+      : "";
+  const userContent = `${ctxBlock}${welcomeBlock}TURN:\n${renderIntentBlock(input.intent, input.priorStories)}`;
   return [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: userContent },
@@ -79,15 +85,15 @@ function buildMessages(input: PhraseInput): LanguageModelMessage[] {
 
 function renderContextBlock(anchors: BiographicalAnchors | null): string {
   if (!anchors) return "";
-  const lines: string[] = [];
-  lines.push(`Narrator's spoken name: ${anchors.spokenName}`);
+  const lines: string[] = [`Narrator's spoken name: ${anchors.spokenName}`];
   if (anchors.birthYear !== null) lines.push(`Approximate birth year: ${anchors.birthYear}`);
-  for (const [k, v] of Object.entries(anchors.anchors ?? {})) {
-    if (v === null || v === undefined) continue;
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-      lines.push(`${k}: ${v}`);
-    }
-  }
+  const p = anchors.profile;
+  if (p.hometown) lines.push(`Hometown: ${p.hometown}`);
+  if (p.currentLocation) lines.push(`Current location: ${p.currentLocation}`);
+  if (p.occupationSummary) lines.push(`Occupation: ${p.occupationSummary}`);
+  if (p.siblingContext) lines.push(`Sibling context: ${p.siblingContext}`);
+  if (p.hasChildren != null) lines.push(`Has children: ${p.hasChildren ? "yes" : "no"}`);
+  if (p.hasGrandchildren != null) lines.push(`Has grandchildren: ${p.hasGrandchildren ? "yes" : "no"}`);
   return `CONTEXT (hints only — do not state any of these as fact unless the narrator confirms):\n${lines.join("\n")}\n\n`;
 }
 
@@ -111,6 +117,12 @@ Prior story summary: ${summary || "(no summary available — refer only to the t
       return `Type: FAMILY MEMBER QUESTION (relay).
 Asker's name: ${intent.askerName}
 The asker's actual question (paraphrase warmly; name the asker explicitly): ${intent.questionText}`;
+    case "intake":
+      return `Type: INTAKE QUESTION — you are warmly building a biographical portrait of this narrator.
+Field being collected: ${intent.questionKey}
+Ask this in your warm voice (re-render naturally — do NOT read verbatim, keep it open-ended, 1–2 sentences):
+"""${intent.questionText}"""
+Curious and warm, never clinical or form-like. Never yes/no.`;
     case "follow_up":
       return `Type: FOLLOW-UP on what the narrator just said.
 The narrator's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):

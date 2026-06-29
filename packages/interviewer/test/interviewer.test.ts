@@ -11,6 +11,7 @@ import {
   InMemoryAnchorSource,
   InMemoryAskSource,
   InMemoryMemorySource,
+  phraseIntent,
   pickNextIntent,
   primeCoveredCategoriesFromPrior,
   QUESTION_BANK,
@@ -524,6 +525,41 @@ describe("Picker — deeplink ask", () => {
     const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: [],
       anchors: anchorsWith(), targetAskId: "missing" });
     expect(i.kind).toBe("intake");
+  });
+});
+
+describe("Phraser — intake + opener", () => {
+  const intakeIntent = { kind: "intake" as const, questionKey: "hometown" as const, questionText: "Tell me about where you grew up.", extractionHint: "h" };
+  function userMsg(llm: ScriptedLanguageModel): string {
+    return llm.calls[0]?.messages.find((m) => m.role === "user")?.content ?? "";
+  }
+  it("intake intent puts INTAKE QUESTION + field in the LLM prompt", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "Where did you grow up?" });
+    await phraseIntent(llm, { intent: intakeIntent, anchors: anchorsWith(), priorStories: [], isFirstSession: false });
+    expect(userMsg(llm)).toContain("INTAKE QUESTION");
+    expect(userMsg(llm)).toContain("hometown");
+  });
+  it("first session prepends the welcome opener for an intake turn", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "Hi." });
+    await phraseIntent(llm, { intent: intakeIntent, anchors: anchorsWith(), priorStories: [], isFirstSession: true });
+    expect(userMsg(llm)).toContain("FIRST SESSION");
+  });
+  it("returning session (isFirstSession false) does NOT prepend the opener", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "Welcome back." });
+    await phraseIntent(llm, { intent: intakeIntent, anchors: anchorsWith(), priorStories: [], isFirstSession: false });
+    expect(userMsg(llm)).not.toContain("FIRST SESSION");
+  });
+  it("does NOT prepend the opener on a non-intake first turn", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "..." });
+    const base = { kind: "base" as const, question: QUESTION_BANK[0]! };
+    await phraseIntent(llm, { intent: base, anchors: anchorsWith(), priorStories: [], isFirstSession: true });
+    expect(userMsg(llm)).not.toContain("FIRST SESSION");
+  });
+  it("renders named profile fields in the context block", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "ok" });
+    await phraseIntent(llm, { intent: intakeIntent, anchors: anchorsWith({ hometown: "New Orleans", occupationSummary: "Teacher for 30 years" }), priorStories: [], isFirstSession: false });
+    expect(userMsg(llm)).toContain("New Orleans");
+    expect(userMsg(llm)).toContain("Teacher for 30 years");
   });
 });
 
