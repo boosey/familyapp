@@ -44,6 +44,18 @@ function makeAnchors(): BiographicalAnchors {
   };
 }
 
+function anchorsWith(profile: Partial<BiographicalProfile> = {}): BiographicalAnchors {
+  return {
+    personId: "p1",
+    spokenName: "Eleanor",
+    birthYear: 1943,
+    profile: { ...EMPTY_PROFILE, ...profile },
+  };
+}
+const PRIOR: PriorStoryMemory[] = [
+  { storyId: "s1", title: "The farm", summary: "A farm", tags: [], promptQuestion: null, createdAt: new Date() },
+];
+
 function makeDeps(opts: {
   asks?: PendingAsk[];
   stories?: PriorStoryMemory[];
@@ -91,7 +103,7 @@ describe("behavior — picker priority order (spec)", () => {
   it("returns wind_down(distress, surfaceHumanSupport=true) when the narrator signals distress", () => {
     const state = createSessionState(NARRATOR);
     state.distressed = true;
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("wind_down");
     expect((intent as Extract<PromptIntent, { kind: "wind_down" }>).reason).toBe("distress");
     expect((intent as Extract<PromptIntent, { kind: "wind_down" }>).surfaceHumanSupport).toBe(
@@ -102,7 +114,7 @@ describe("behavior — picker priority order (spec)", () => {
   it("wind_down (off-ramp) does NOT surface human support — that is reserved for distress", () => {
     const state = createSessionState(NARRATOR);
     state.offRampRequested = true;
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("wind_down");
     expect((intent as Extract<PromptIntent, { kind: "wind_down" }>).surfaceHumanSupport).toBe(
       false,
@@ -121,14 +133,14 @@ describe("behavior — picker priority order (spec)", () => {
         createdAt: new Date("2024-01-01"),
       },
     ];
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories, anchors: null });
     expect(intent.kind).toBe("callback");
     expect((intent as Extract<PromptIntent, { kind: "callback" }>).priorStoryId).toBe("s1");
   });
 
   it("does NOT open with a callback if there are no prior stories", () => {
     const state = createSessionState(NARRATOR);
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("base");
   });
 
@@ -138,7 +150,7 @@ describe("behavior — picker priority order (spec)", () => {
     const asks: PendingAsk[] = [
       { askId: "a1", askerName: "Sofia", questionText: "What was your wedding day like?" },
     ];
-    const intent = pickNextIntent({ state, pendingAsks: asks, priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: asks, priorStories: [], anchors: null });
     expect(intent.kind).toBe("ask");
     expect((intent as Extract<PromptIntent, { kind: "ask" }>).askerName).toBe("Sofia");
   });
@@ -151,7 +163,7 @@ describe("behavior — picker priority order (spec)", () => {
       { askId: "high", askerName: "Y", questionText: "q-high", priority: 100 },
       { askId: "mid", askerName: "Z", questionText: "q-mid", priority: 50 },
     ];
-    const intent = pickNextIntent({ state, pendingAsks: asks, priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: asks, priorStories: [], anchors: null });
     expect((intent as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("high");
   });
 
@@ -160,7 +172,7 @@ describe("behavior — picker priority order (spec)", () => {
     state.turnCount = 2;
     state.lastNarratorUtterance =
       "Well, my father worked at the railway for forty years, and every evening he'd come home and tell us a story about the men he'd met.";
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("follow_up");
   });
 
@@ -169,11 +181,11 @@ describe("behavior — picker priority order (spec)", () => {
     state.turnCount = 2;
     state.lastNarratorUtterance =
       "Well, my father worked at the railway for forty years, and every evening he'd come home and tell us stories.";
-    const i1 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const i1 = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(i1.kind).toBe("follow_up");
     recordTurnCompleted(state, i1);
     // No new utterance — the picker must NOT re-emit follow_up. It falls back to the base bank.
-    const i2 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const i2 = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(i2.kind).toBe("base");
   });
 
@@ -181,7 +193,7 @@ describe("behavior — picker priority order (spec)", () => {
     const state = createSessionState(NARRATOR);
     state.turnCount = 2;
     state.lastNarratorUtterance = "Yes, that's right.";
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("base");
   });
 });
@@ -196,7 +208,7 @@ describe("behavior — gentle sequencing: high-sensitivity is rapport-gated", ()
         state.coveredCategories.add(q.category);
       }
     }
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     // No eligible question survives → wind_down(fatigue), NOT a high-sensitivity pick.
     expect(intent.kind).toBe("wind_down");
     expect((intent as Extract<PromptIntent, { kind: "wind_down" }>).reason).toBe("fatigue");
@@ -206,7 +218,7 @@ describe("behavior — gentle sequencing: high-sensitivity is rapport-gated", ()
     const state = createSessionState(NARRATOR);
     state.turnCount = RAPPORT_THRESHOLD_TURNS + 2;
     state.distressed = true;
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     // Distress is checked FIRST → wind_down, never high-sensitivity.
     expect(intent.kind).toBe("wind_down");
   });
@@ -216,7 +228,7 @@ describe("behavior — reminiscence-bump weighting", () => {
   it("prefers childhood / young_adult phases when picking from the base bank", () => {
     const state = createSessionState(NARRATOR);
     state.turnCount = 1;
-    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent.kind).toBe("base");
     const q = (intent as Extract<PromptIntent, { kind: "base" }>).question;
     expect(REMINISCENCE_BUMP_PHASES.has(q.lifePhase)).toBe(true);
@@ -227,11 +239,11 @@ describe("behavior — de-duplication", () => {
   it("does not re-ask a question once asked", () => {
     const state = createSessionState(NARRATOR);
     state.turnCount = 1;
-    const intent1 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent1 = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     expect(intent1.kind).toBe("base");
     const q1 = (intent1 as Extract<PromptIntent, { kind: "base" }>).question;
     recordTurnCompleted(state, intent1);
-    const intent2 = pickNextIntent({ state, pendingAsks: [], priorStories: [] });
+    const intent2 = pickNextIntent({ state, pendingAsks: [], priorStories: [], anchors: null });
     const q2 = (intent2 as Extract<PromptIntent, { kind: "base" }>).question;
     expect(q2.id).not.toBe(q1.id);
     expect(q2.category).not.toBe(q1.category);
@@ -261,10 +273,10 @@ describe("behavior — de-duplication", () => {
       { askId: "a1", askerName: "Sofia", questionText: "...", priority: 10 },
       { askId: "a2", askerName: "Tom", questionText: "...", priority: 5 },
     ];
-    const i1 = pickNextIntent({ state, pendingAsks: asks, priorStories: [] });
+    const i1 = pickNextIntent({ state, pendingAsks: asks, priorStories: [], anchors: null });
     expect((i1 as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("a1");
     recordTurnCompleted(state, i1);
-    const i2 = pickNextIntent({ state, pendingAsks: asks, priorStories: [] });
+    const i2 = pickNextIntent({ state, pendingAsks: asks, priorStories: [], anchors: null });
     expect((i2 as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("a2");
   });
 });
@@ -457,5 +469,69 @@ describe("Intake question bank", () => {
     for (const q of INTAKE_QUESTIONS) {
       expect(q.text.toLowerCase()).not.toMatch(/^(do|did|are|is|have|has|were|was) you/);
     }
+  });
+});
+
+describe("Picker — intake priority", () => {
+  it("returns intake when profile has nulls and no deeplink/callback", () => {
+    const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: [], anchors: anchorsWith() });
+    expect(i.kind).toBe("intake");
+    expect((i as Extract<PromptIntent, { kind: "intake" }>).questionKey).toBe("hometown");
+  });
+  it("callback beats intake on turn 0 with prior stories", () => {
+    const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: PRIOR, anchors: anchorsWith() });
+    expect(i.kind).toBe("callback");
+  });
+  it("intake resumes from next null field", () => {
+    const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: [],
+      anchors: anchorsWith({ hometown: "NOLA", siblingContext: "Only child" }) });
+    expect((i as Extract<PromptIntent, { kind: "intake" }>).questionKey).toBe("currentLocation");
+  });
+  it("askedIntakeKeys skips a key already asked this session", () => {
+    const s = createSessionState("p1"); s.askedIntakeKeys.add("hometown");
+    const i = pickNextIntent({ state: s, pendingAsks: [], priorStories: [], anchors: anchorsWith() });
+    expect((i as Extract<PromptIntent, { kind: "intake" }>).questionKey).toBe("siblingContext");
+  });
+  it("falls to pending asks once intake complete", () => {
+    const full = { hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: false, hasGrandchildren: null };
+    const i = pickNextIntent({ state: createSessionState("p1"),
+      pendingAsks: [{ askId: "a1", askerName: "Sofia", questionText: "Music?" }], priorStories: [], anchors: anchorsWith(full) });
+    expect(i.kind).toBe("ask");
+  });
+  it("with null anchors, intake is skipped (falls to base bank)", () => {
+    const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: [], anchors: null });
+    expect(i.kind).toBe("base");
+  });
+});
+
+describe("Picker — deeplink ask", () => {
+  it("serves deeplink ask first, before callback and intake", () => {
+    const s = createSessionState("p1");
+    const i = pickNextIntent({ state: s,
+      pendingAsks: [{ askId: "dl", askerName: "Marcus", questionText: "How'd you meet Dad?" }],
+      priorStories: PRIOR, anchors: anchorsWith(), targetAskId: "dl" });
+    expect(i.kind).toBe("ask");
+    expect((i as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("dl");
+  });
+  it("does not re-serve a consumed deeplink ask", () => {
+    const s = createSessionState("p1"); s.consumedAskIds.add("dl");
+    const i = pickNextIntent({ state: s,
+      pendingAsks: [{ askId: "dl", askerName: "Marcus", questionText: "?" }],
+      priorStories: [], anchors: anchorsWith(), targetAskId: "dl" });
+    expect(i.kind).toBe("intake");
+  });
+  it("unknown deeplink id falls through to normal priority", () => {
+    const i = pickNextIntent({ state: createSessionState("p1"), pendingAsks: [], priorStories: [],
+      anchors: anchorsWith(), targetAskId: "missing" });
+    expect(i.kind).toBe("intake");
+  });
+});
+
+describe("recordTurnCompleted — intake", () => {
+  it("adds questionKey to askedIntakeKeys and increments turnCount", () => {
+    const s = createSessionState("p1");
+    recordTurnCompleted(s, { kind: "intake", questionKey: "hometown", questionText: "?", extractionHint: "h" });
+    expect(s.askedIntakeKeys.has("hometown")).toBe(true);
+    expect(s.turnCount).toBe(1);
   });
 });

@@ -23,15 +23,22 @@
  *   - Reminiscence-bump weighting           — base-bank picking prefers `REMINISCENCE_BUMP_PHASES`.
  *   - Cross-session warm callback           — on the first turn of a session AND with prior
  *                                             stories present, the picker returns a `callback`
- *                                             Intent before anything else.
+ *                                             Intent (overridden only by a deeplink Ask or a
+ *                                             wind-down signal).
+ *   - Ephemeral intake pass                 — after callback, the picker asks the next null
+ *                                             `BiographicalProfile` field (when anchors are
+ *                                             present), so the interviewer "arrives prepared"
+ *                                             before open-ended reminiscence.
  */
-import type { PendingAsk, PriorStoryMemory } from "./contracts";
+import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalAnchors, PendingAsk, PriorStoryMemory } from "./contracts";
 import {
   QUESTION_BANK,
   REMINISCENCE_BUMP_PHASES,
   type BaseQuestion,
   type Sensitivity,
 } from "./questions/bank";
+import { nextIntakeQuestion } from "./questions/intake";
 // Policy constants (RAPPORT_THRESHOLD_TURNS, SILENCE_TOLERANCE_MS, MEMORY_LOOKBACK_COUNT, …) now
 // live in ./constants — single source of truth so a reviewer can audit them in one place.
 import { RAPPORT_THRESHOLD_TURNS } from "./constants";
@@ -50,6 +57,8 @@ export interface SessionState {
   askedQuestionIds: Set<string>;
   /** Set of Ask ids the interviewer has consumed this session. */
   consumedAskIds: Set<string>;
+  /** Intake keys asked this session — prevents re-asking even while the profile field is still null. */
+  askedIntakeKeys: Set<keyof BiographicalProfile>;
   /** Categories the narrator has already covered (from prior stories' tags + this session). */
   coveredCategories: Set<string>;
   /** The most recent narrator utterance, if any — used to surface a "follow_up" Intent. */
@@ -66,6 +75,7 @@ export function createSessionState(narratorPersonId: string): SessionState {
     turnCount: 0,
     askedQuestionIds: new Set(),
     consumedAskIds: new Set(),
+    askedIntakeKeys: new Set(),
     coveredCategories: new Set(),
     lastNarratorUtterance: null,
     distressed: false,
@@ -91,6 +101,13 @@ export type PromptIntent =
       askId: string;
       askerName: string;
       questionText: string;
+    }
+  | {
+      kind: "intake";
+      /** The biographical profile field this intake turn aims to populate. */
+      questionKey: keyof BiographicalProfile;
+      questionText: string;
+      extractionHint: string;
     }
   | {
       kind: "follow_up";
@@ -170,20 +187,25 @@ export function ingestNarratorUtterance(state: SessionState, utterance: string):
 // The picker — the one function the turn loop calls each turn. Pure: given inputs, returns
 // the next Intent. Order of preference:
 //   0. wind_down if off-ramp or distress
-//   1. warm callback on turn 0 if prior stories exist
-//   2. pending Asks (highest priority first)
-//   3. follow_up if the last utterance carried something worth digging into
-//   4. base bank, reminiscence-bump preferred, sensitivity-gated
+//   1. deeplink Ask — a specific askId requested via a notification (jumps the queue)
+//   2. warm callback on turn 0 if prior stories exist
+//   3. intake — next unanswered biographical field (only when we have an anchors record)
+//   4. pending Asks (highest priority first)
+//   5. follow_up if the last utterance carried something worth digging into
+//   6. base bank, reminiscence-bump preferred, sensitivity-gated
 // ---------------------------------------------------------------------------
 
 export interface PickInput {
   state: SessionState;
   pendingAsks: ReadonlyArray<PendingAsk>;
   priorStories: ReadonlyArray<PriorStoryMemory>;
+  anchors: BiographicalAnchors | null;
+  /** An askId the narrator arrived to answer (e.g. tapped a notification) — served first. */
+  targetAskId?: string;
 }
 
 export function pickNextIntent(input: PickInput): PromptIntent {
-  const { state, pendingAsks, priorStories } = input;
+  const { state, pendingAsks, priorStories, anchors, targetAskId } = input;
 
   // 0. Honor an off-ramp / distress signal immediately. The phraser will surface human-support
   // availability when distress was detected (the spec note about "this is not therapy, human
@@ -195,7 +217,17 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     return { kind: "wind_down", reason: "off_ramp", surfaceHumanSupport: false };
   }
 
-  // 1. Warm callback on turn 0 IF there are prior stories. Continuity feels like a relationship.
+  // 1. Deeplink Ask — a specific askId requested via notification. Served before callback and
+  // intake so a narrator who arrives to answer a relative's question is not detoured. Skipped if
+  // already consumed this session, and falls through if the id doesn't match a pending Ask.
+  if (targetAskId && !state.consumedAskIds.has(targetAskId)) {
+    const ask = pendingAsks.find((a) => a.askId === targetAskId);
+    if (ask) {
+      return { kind: "ask", askId: ask.askId, askerName: ask.askerName, questionText: ask.questionText };
+    }
+  }
+
+  // 2. Warm callback on turn 0 IF there are prior stories. Continuity feels like a relationship.
   if (state.turnCount === 0 && priorStories.length > 0) {
     const recent = priorStories[0]!;
     return {
@@ -206,7 +238,17 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     };
   }
 
-  // 2. Pending Asks — sorted by priority (desc), filtered to ones we haven't used this session.
+  // 3. Intake — the next unanswered biographical field, but only when we have an anchors record to
+  // populate. Ephemeral profile-building precedes the general bank so the interviewer "arrives
+  // prepared" before wandering into open-ended reminiscence.
+  if (anchors) {
+    const q = nextIntakeQuestion(anchors.profile, state.askedIntakeKeys);
+    if (q) {
+      return { kind: "intake", questionKey: q.key, questionText: q.text, extractionHint: q.extractionHint };
+    }
+  }
+
+  // 4. Pending Asks — sorted by priority (desc), filtered to ones we haven't used this session.
   const fresh = pendingAsks.filter((a) => !state.consumedAskIds.has(a.askId));
   if (fresh.length > 0) {
     const sorted = fresh
@@ -221,7 +263,7 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     };
   }
 
-  // 3. Follow_up — if the last narrator utterance was substantial, prefer reflecting on it. The
+  // 5. Follow_up — if the last narrator utterance was substantial, prefer reflecting on it. The
   // policy here is conservative: only if the utterance is long enough to imply a real thread.
   // The LLM does the actual semantic work of identifying the thread in the system prompt.
   const last = state.lastNarratorUtterance;
@@ -229,7 +271,7 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     return { kind: "follow_up", threadSeed: last };
   }
 
-  // 4. Base bank. De-dup against already-asked AND categories the narrator has covered. Then
+  // 6. Base bank. De-dup against already-asked AND categories the narrator has covered. Then
   // gate by sensitivity (no `high` until rapport threshold). Among survivors prefer
   // reminiscence-bump phases.
   const eligible = QUESTION_BANK.filter((q) => {
@@ -269,6 +311,9 @@ export function recordTurnCompleted(state: SessionState, intent: PromptIntent): 
       break;
     case "ask":
       state.consumedAskIds.add(intent.askId);
+      break;
+    case "intake":
+      state.askedIntakeKeys.add(intent.questionKey);
       break;
     case "follow_up":
       // The thread has been consumed. Clearing prevents the picker from re-emitting follow_up
