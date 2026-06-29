@@ -16,6 +16,8 @@ import {
   updateDerivedFields,
 } from "@chronicle/core";
 import { ingestRecording } from "@chronicle/capture";
+import { augmentProfileFromStory } from "@chronicle/pipeline";
+import { createCoreAnchorSource } from "@chronicle/interviewer";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 
@@ -75,7 +77,7 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
  * redirect("/hub") is called OUTSIDE the try/catch to avoid catching NEXT_REDIRECT.
  */
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
-  const { db, auth, newPipeline } = await getRuntime();
+  const { db, auth, newPipeline, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -129,6 +131,32 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       narratorPersonId: ctx.personId,
       audienceTier,
     });
+
+    // Best-effort post-approval biographical augmentation: re-read the story (the top-of-function
+    // read ran BEFORE the pipeline, so its transcript was null — the pipeline has now populated it),
+    // then mine the transcript for any biographical-profile fields the narrator hasn't filled in
+    // directly. augmentProfileFromStory only writes currently-null fields, so it never overwrites a
+    // direct intake answer. Wrapped in its own try/catch so a failed inference can never FAIL the
+    // Share. It IS awaited inline — one extra LLM round-trip before the redirect — consistent with
+    // the pipeline's own inline LLM call above; a durable job queue could later move it off the
+    // request path (Next server actions can't safely fire-and-forget after redirect).
+    try {
+      const approved = await getStoryForViewer(db, ctx, storyId);
+      if (approved?.transcript) {
+        await augmentProfileFromStory(
+          approved.transcript,
+          ctx.personId,
+          languageModel,
+          createCoreAnchorSource(db),
+        );
+      }
+    } catch (e) {
+      // Augmentation is a nice-to-have; swallow so the share + redirect always succeed. Log so a
+      // silently-never-working feature still leaves a breadcrumb (matches the turn loop's
+      // best-effort pattern for markRouted / intake extraction).
+      // eslint-disable-next-line no-console
+      console.warn("post-approval profile augmentation failed (story=%s):", storyId, e);
+    }
   } catch {
     return { error: hub.actions.shareFailed };
   }
