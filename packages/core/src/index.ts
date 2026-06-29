@@ -29,6 +29,7 @@ export {
   type OutstandingAnswerDraft,
   type DiscardDraftResult,
   type AppendProseRevisionInput,
+  type SaveProseCorrectionInput,
   persistRecordingAndCreateDraft,
   updateDerivedFields,
   transitionStoryState,
@@ -39,6 +40,7 @@ export {
   discardDraftStory,
   appendProseRevision,
   listProseRevisions,
+  saveProseCorrection,
 } from "./story-repository";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is

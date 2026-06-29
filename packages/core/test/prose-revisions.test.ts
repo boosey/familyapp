@@ -4,6 +4,9 @@ import {
   appendProseRevision,
   listProseRevisions,
   persistRecordingAndCreateDraft,
+  saveProseCorrection,
+  transitionStoryState,
+  updateDerivedFields,
 } from "../src/index";
 import { makePerson } from "./helpers";
 
@@ -22,6 +25,54 @@ async function seedStory(): Promise<{ personId: string; storyId: string }> {
   });
   return { personId: narrator.id, storyId: story.id };
 }
+
+describe("saveProseCorrection", () => {
+  async function seedPendingApproval() {
+    const { personId, storyId } = await seedStory();
+    await updateDerivedFields(db, storyId, { transcript: "t", prose: "polished L2" });
+    await transitionStoryState(db, storyId, "pending_approval");
+    return { personId, storyId };
+  }
+
+  it("sets stories.prose to the correction and appends a human_corrected revision", async () => {
+    const { personId, storyId } = await seedPendingApproval();
+    const story = await saveProseCorrection(db, {
+      storyId,
+      correctedProse: "human edited L3",
+      actorPersonId: personId,
+    });
+    expect(story.prose).toBe("human edited L3");
+
+    const rows = await listProseRevisions(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.level).toBe("human_corrected");
+    expect(rows[0]!.text).toBe("human edited L3");
+    expect(rows[0]!.actorPersonId).toBe(personId);
+  });
+
+  it("rejects a non-owner", async () => {
+    const { storyId } = await seedPendingApproval();
+    const stranger = await makePerson(db, "Stranger");
+    await expect(
+      saveProseCorrection(db, {
+        storyId,
+        correctedProse: "x",
+        actorPersonId: stranger.id,
+      }),
+    ).rejects.toThrow(/not the owner/i);
+  });
+
+  it("rejects a story that is not pending_approval", async () => {
+    const { personId, storyId } = await seedStory(); // still draft
+    await expect(
+      saveProseCorrection(db, {
+        storyId,
+        correctedProse: "x",
+        actorPersonId: personId,
+      }),
+    ).rejects.toThrow(/pending_approval/i);
+  });
+});
 
 describe("appendProseRevision / listProseRevisions", () => {
   it("appends rows and lists them in seq order", async () => {

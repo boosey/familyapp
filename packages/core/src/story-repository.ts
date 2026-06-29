@@ -711,6 +711,56 @@ export async function listProseRevisions(
     .orderBy(asc(proseRevisions.seq));
 }
 
+/**
+ * Persist a narrator's DIRECT prose edit (L3) and append a `human_corrected` revision — in one tx.
+ * Unlike `applyTranscriptCorrection`, this does NOT touch the transcript and does NOT re-run the
+ * LLM: the human is the correction authority and AI runs only once (spec: prose-provenance design).
+ * Gated to the owner and to `pending_approval` (a post-share edit would need a new consent event,
+ * out of scope). Callers should only invoke this when the edited prose differs from the AI polish.
+ */
+export interface SaveProseCorrectionInput {
+  storyId: string;
+  correctedProse: string;
+  /** The narrator editing — must equal the story owner. */
+  actorPersonId: string;
+}
+
+export async function saveProseCorrection(
+  db: Database,
+  input: SaveProseCorrectionInput,
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) throw new Error(`story not found: ${input.storyId}`);
+    if (current.ownerPersonId !== input.actorPersonId) {
+      throw new InvariantViolation(
+        `saveProseCorrection: actor ${input.actorPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "pending_approval") {
+      throw new InvariantViolation(
+        `saveProseCorrection: story must be pending_approval (was ${current.state})`,
+      );
+    }
+    const [row] = await tx
+      .update(stories)
+      .set({ prose: input.correctedProse, updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "human_corrected",
+      text: input.correctedProse,
+      actorPersonId: input.actorPersonId,
+    });
+    return row!;
+  });
+}
+
 export async function getStoryAndRecordingForPipeline(
   db: Database,
   storyId: string,
