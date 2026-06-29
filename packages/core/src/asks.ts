@@ -17,6 +17,7 @@ import type { Ask, AskStatus, Database } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import type { AuthContext } from "./authorization";
 import { viewerPersonId } from "./authorization";
+import { PENDING_ASKS_DEFAULT_LIMIT } from "./constants";
 
 export interface CreateAskInput {
   /** The target narrator the question is for. */
@@ -215,7 +216,7 @@ export async function listPendingAsksForNarrator(
   narratorPersonId: string,
   opts: { limit?: number } = {},
 ): Promise<PendingAskForNarrator[]> {
-  const limit = opts.limit ?? 20;
+  const limit = opts.limit ?? PENDING_ASKS_DEFAULT_LIMIT;
   const rows = await db
     .select({
       ask: asks,

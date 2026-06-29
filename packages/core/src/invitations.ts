@@ -12,8 +12,10 @@ import { families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import { insertActiveMembership, isActiveMember } from "./memberships";
-
-const DEFAULT_TTL_MS = 14 * 86_400_000; // 14 days
+import {
+  MEMBER_INVITATION_DEFAULT_TTL_MS,
+  MEMBER_INVITATION_TOKEN_ENTROPY_BYTES,
+} from "./constants";
 
 /** SHA-256 of the raw token. Lookups hash the incoming token and match on this. */
 function hashToken(rawToken: string): string {
@@ -45,8 +47,8 @@ export async function createInvitation(
   db: Database,
   input: CreateInvitationInput,
 ): Promise<CreateInvitationResult> {
-  const token = randomBytes(32).toString("base64url"); // 256 bits of entropy
-  const ttl = input.ttlMs ?? DEFAULT_TTL_MS;
+  const token = randomBytes(MEMBER_INVITATION_TOKEN_ENTROPY_BYTES).toString("base64url"); // 256 bits of entropy
+  const ttl = input.ttlMs ?? MEMBER_INVITATION_DEFAULT_TTL_MS;
   const expiresAt = new Date(Date.now() + ttl);
 
   // One tx so the membership check and the insert see a consistent snapshot — a membership

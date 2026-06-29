@@ -14,6 +14,13 @@
 import { and, eq } from "drizzle-orm";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
+import {
+  FAMILY_SEARCH_DEFAULT_LIMIT,
+  FAMILY_SEARCH_WEIGHT_DESCRIPTION,
+  FAMILY_SEARCH_WEIGHT_MEMBER,
+  FAMILY_SEARCH_WEIGHT_NAME,
+  FAMILY_SEARCH_WEIGHT_STEWARD,
+} from "./constants";
 
 export interface FamilySearchQuery {
   text: string;
@@ -52,10 +59,6 @@ function overlap(queryTokens: Set<string>, field: string | null): number {
 }
 
 // Weights by signal — a name hit ranks above a steward hit, above description, above a member hit.
-const WEIGHT_NAME = 4;
-const WEIGHT_STEWARD = 3;
-const WEIGHT_DESCRIPTION = 2;
-const WEIGHT_MEMBER = 1;
 
 /**
  * Build a deterministic keyword-based family search bound to `db`. Searches discoverable families
@@ -65,7 +68,7 @@ const WEIGHT_MEMBER = 1;
 export function createKeywordFamilySearch(db: Database): FamilySearch {
   return {
     async search(query: FamilySearchQuery): Promise<FamilySearchResult[]> {
-      const limit = query.limit ?? 10;
+      const limit = query.limit ?? FAMILY_SEARCH_DEFAULT_LIMIT;
       const queryTokens = tokenize(query.text);
       if (queryTokens.size === 0 || limit <= 0) return [];
 
@@ -119,10 +122,10 @@ export function createKeywordFamilySearch(db: Database): FamilySearch {
         for (const name of memberNames) memberHits += overlap(queryTokens, name);
 
         const score =
-          nameHits * WEIGHT_NAME +
-          stewardHits * WEIGHT_STEWARD +
-          descHits * WEIGHT_DESCRIPTION +
-          (memberHits > 0 ? WEIGHT_MEMBER : 0);
+          nameHits * FAMILY_SEARCH_WEIGHT_NAME +
+          stewardHits * FAMILY_SEARCH_WEIGHT_STEWARD +
+          descHits * FAMILY_SEARCH_WEIGHT_DESCRIPTION +
+          (memberHits > 0 ? FAMILY_SEARCH_WEIGHT_MEMBER : 0);
         if (score === 0) continue;
 
         // Reason = the highest-weight signal that fired.
