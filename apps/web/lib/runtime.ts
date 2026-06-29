@@ -23,6 +23,7 @@ import {
   ScriptedTranscriber,
   ScriptedLanguageModel,
   type Pipeline,
+  type LanguageModel,
 } from "@chronicle/pipeline";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
@@ -48,6 +49,13 @@ type Runtime = {
   db: Database;
   storage: MediaStorage;
   auth: AuthProvider;
+  /**
+   * The bare language model (real Anthropic adapter when ANTHROPIC_API_KEY is set, else the
+   * deterministic mock). Exposed for the non-pipeline LLM call sites — intake single-field
+   * extraction (/hub/about-you) and post-approval biographical augmentation — which need a
+   * LanguageModel directly, not a full transcribe→render Pipeline.
+   */
+  languageModel: LanguageModel;
   /**
    * Build a FRESH pipeline (its own in-process JobQueue) for one transcribe→render run. This is a
    * FACTORY, not a singleton, on purpose: the in-process queue's `drain()` has a single-flight
@@ -131,7 +139,7 @@ async function build(): Promise<Runtime> {
   // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
   const newPipeline = (): Pipeline =>
     createPipeline({ db, storage, transcriber, languageModel });
-  return { db, storage, auth, newPipeline };
+  return { db, storage, auth, languageModel, newPipeline };
 }
 
 export function getRuntime(): Promise<Runtime> {

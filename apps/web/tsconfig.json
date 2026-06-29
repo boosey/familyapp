@@ -47,6 +47,9 @@
       "@chronicle/pipeline": [
         "../../packages/pipeline/src/index.ts"
       ],
+      "@chronicle/interviewer": [
+        "../../packages/interviewer/src/index.ts"
+      ],
       "@chronicle/transcribe-groq": [
         "../../packages/transcribe-groq/src/index.ts"
       ],

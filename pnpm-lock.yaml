@@ -35,6 +35,9 @@ importers:
       '@chronicle/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@chronicle/interviewer':
+        specifier: workspace:*
+        version: link:../../packages/interviewer
       '@chronicle/llm-anthropic':
         specifier: workspace:*
         version: link:../../packages/llm-anthropic

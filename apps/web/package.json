@@ -15,6 +15,7 @@
     "@chronicle/capture": "workspace:*",
     "@chronicle/core": "workspace:*",
     "@chronicle/db": "workspace:*",
+    "@chronicle/interviewer": "workspace:*",
     "@chronicle/llm-anthropic": "workspace:*",
     "@chronicle/pipeline": "workspace:*",
     "@chronicle/storage": "workspace:*",
