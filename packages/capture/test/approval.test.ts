@@ -4,6 +4,7 @@
  */
 import {
   getStoryForViewer,
+  listProseRevisions,
   persistRecordingAndCreateDraft,
   transitionStoryState,
   updateDerivedFields,
@@ -341,5 +342,35 @@ describe("captureApproval (voice-only approval gate)", () => {
     ).rejects.toBeInstanceOf(StoryNotApprovableError);
     expect(storage.size).toBe(0);
     expect(await rowCount(db, "consent_records")).toBe(0);
+  });
+
+  it("persists a prose correction (L3) before sharing when correctedProse is provided", async () => {
+    const { storyId, token } = await setup();
+    await captureApproval(db, storage, {
+      actor: { kind: "link_session", token },
+      storyId,
+      audienceTier: "family",
+      audio: { bytes: new Uint8Array([1, 2, 3]), contentType: "audio/webm" },
+      correctedProse: "the narrator's edited prose",
+    });
+
+    const rows = await listProseRevisions(db, storyId);
+    const human = rows.find((r) => r.level === "human_corrected");
+    expect(human).toBeDefined();
+    expect(human!.text).toBe("the narrator's edited prose");
+  });
+
+  it("does NOT write a human_corrected revision when correctedProse is omitted", async () => {
+    const { storyId, token } = await setup();
+    await captureApproval(db, storage, {
+      actor: { kind: "link_session", token },
+      storyId,
+      audienceTier: "family",
+      audio: { bytes: new Uint8Array([1, 2, 3]), contentType: "audio/webm" },
+    });
+
+    const rows = await listProseRevisions(db, storyId);
+    const human = rows.find((r) => r.level === "human_corrected");
+    expect(human).toBeUndefined();
   });
 });

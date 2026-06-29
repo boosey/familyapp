@@ -15,7 +15,7 @@
  * later telephony adapter can deliver it identically — no rebuild.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { approveAndShareStory, getStoryForViewer } from "@chronicle/core";
+import { approveAndShareStory, getStoryForViewer, saveProseCorrection } from "@chronicle/core";
 import type { ApproveAndShareResult } from "@chronicle/core";
 import type { AudienceTier, Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
@@ -71,6 +71,12 @@ export interface CaptureApprovalInput {
   audienceTier: Exclude<AudienceTier, "private">;
   /** The spoken-approval audio clip. */
   audio: CapturedAudio;
+  /**
+   * The narrator's edited prose (L3). OPTIONAL — pass ONLY when the narrator actually changed the
+   * AI-polished prose in the editor. Persisted via saveProseCorrection (which appends a
+   * human_corrected revision) BEFORE the story transitions out of pending_approval.
+   */
+  correctedProse?: string;
   now?: Date;
 }
 
@@ -136,6 +142,16 @@ export async function captureApproval(
     throw new StoryNotApprovableError(
       `story ${input.storyId} is in state ${story.state}; approval requires pending_approval`,
     );
+  }
+
+  // Persist the human correction (L3) while the story is still pending_approval. Only when the UI
+  // sent an edited prose — an unchanged prose sends nothing, so no spurious human_corrected row.
+  if (input.correctedProse !== undefined) {
+    await saveProseCorrection(db, {
+      storyId: input.storyId,
+      correctedProse: input.correctedProse,
+      actorPersonId: resolved.personId,
+    });
   }
 
   // (1) Upload approval audio FIRST. After this line the spoken approval is durable in storage,
