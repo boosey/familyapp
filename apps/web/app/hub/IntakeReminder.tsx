@@ -1,9 +1,9 @@
 /**
  * Hub intake reminder — a banner shown at the top of the hub until the narrator's biographical
- * profile is complete. Presentational server component (no client state): it renders a short
- * nudge plus a link into the introduction flow where the missing facts are collected.
+ * profile is complete. Presentational server component (no client state): a short informational
+ * note. There is intentionally no call-to-action — no hub→intake-session route exists yet, so the
+ * banner only signals that more of their introduction remains.
  */
-import Link from "next/link";
 import type { BiographicalProfile } from "@chronicle/db";
 import { hub } from "@/app/_copy";
 
@@ -30,10 +30,6 @@ export function IntakeReminder({ profile }: Props) {
       role="status"
       aria-label={hub.intake.aria}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 20,
-        flexWrap: "wrap",
         marginBottom: 28,
         background: "var(--surface-card)",
         border: "var(--border-width) solid var(--accent)",
@@ -44,8 +40,6 @@ export function IntakeReminder({ profile }: Props) {
     >
       <p
         style={{
-          flex: 1,
-          minWidth: 0,
           fontFamily: "var(--font-story)",
           fontSize: "var(--text-story)",
           lineHeight: "var(--leading-snug)",
@@ -55,25 +49,6 @@ export function IntakeReminder({ profile }: Props) {
       >
         {hub.intake.body}
       </p>
-      <Link
-        href="/welcome"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "12px 22px",
-          borderRadius: "var(--radius-md)",
-          background: "var(--accent)",
-          color: "var(--accent-on)",
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-sm)",
-          fontWeight: 600,
-          whiteSpace: "nowrap",
-          textDecoration: "none",
-        }}
-      >
-        {hub.intake.cta}
-      </Link>
     </div>
   );
 }

@@ -32,10 +32,10 @@ export const hub = {
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
   },
   intake: {
-    // Banner shown at the top of the hub until the narrator's biographical profile is complete.
-    aria: "Finish your introduction",
-    body: "Tell us a little about yourself — a few questions about where you're from and the life you've lived. It helps every conversation feel more like you.",
-    cta: "Continue your introduction",
+    // Informational banner shown at the top of the hub until the narrator's biographical profile
+    // is complete. No call-to-action — there's no hub→intake route yet.
+    aria: "Your introduction",
+    body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived. They'll come up naturally next time you sit down to talk.",
   },
   questions: {
     title: "Questions for you",
