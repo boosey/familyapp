@@ -26,7 +26,7 @@
  *   - No vendor SDK is imported anywhere in this package; vendors are reached only through the
  *     interfaces in contracts.ts.
  */
-import { transitionStoryState, updateDerivedFields } from "@chronicle/core";
+import { appendProseRevision, transitionStoryState, updateDerivedFields } from "@chronicle/core";
 import { getStoryAndRecordingForPipeline } from "@chronicle/core/pipeline";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
@@ -146,6 +146,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       transcriptWordTimings: wordTimings1x,
     });
 
+    // Record L1 prose provenance: the raw STT output with the transcriber model id.
+    // Placed AFTER the idempotency early-return above, so re-runs never append a duplicate row.
+    await appendProseRevision(deps.db, {
+      storyId: view.storyId,
+      level: "ai_transcribed",
+      text: transcription.text,
+      modelId: transcription.modelId,
+    });
+
     // Cascade to the next stage. enqueue dedupes by (name, storyId) while pending, so re-runs
     // of this stage do not pile up duplicate render_story jobs.
     await queue.enqueue("render_story", { storyId: view.storyId });
@@ -185,6 +194,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       title: render.title,
       summary: render.summary,
       tags: render.tags,
+    });
+
+    // Record L2 prose provenance: the AI-polished output with the LM model id + exact system
+    // prompt. Placed AFTER the idempotency early-return above, so re-runs never append a duplicate.
+    await appendProseRevision(deps.db, {
+      storyId: view.storyId,
+      level: "ai_polished",
+      text: render.prose,
+      modelId: render.modelId,
+      promptText: render.systemPrompt,
     });
 
     // draft -> pending_approval. Story stays `private` (audienceTier is untouched). The

@@ -4,6 +4,7 @@ import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   getStoryForViewer,
+  listProseRevisions,
   persistRecordingAndCreateDraft,
   transitionStoryState,
   updateDerivedFields,
@@ -490,6 +491,50 @@ describe("parseRenderResponse — defensive parsing", () => {
     );
     expect(out.prose).toBe("clean");
     expect(out.title).toBe("t");
+  });
+});
+
+describe("pipeline — prose provenance", () => {
+  it("appends ai_transcribed (L1) and ai_polished (L2) with model ids + render prompt", async () => {
+    const narratorId = await makeNarrator();
+    const canonical = new Uint8Array([1, 2, 3]);
+    const { storyId } = await seedDraftStory(narratorId, canonical);
+
+    const transcriber = new ScriptedTranscriber({
+      text: "I was born on a farm.",
+      modelId: "whisper-test",
+    });
+    const languageModel = new ScriptedLanguageModel({ modelId: "claude-test" });
+    const pipeline = createPipeline({ db, storage, transcriber, languageModel });
+
+    await pipeline.start(storyId);
+    await pipeline.runToCompletion();
+
+    const rows = await listProseRevisions(db, storyId);
+    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_polished"]);
+    const [l1, l2] = rows;
+    expect(l1!.modelId).toBe("whisper-test");
+    expect(l1!.promptText).toBeNull();
+    expect(l2!.modelId).toBe("claude-test");
+    expect(typeof l2!.promptText).toBe("string");
+    expect(l2!.promptText!.length).toBeGreaterThan(0);
+  });
+
+  it("does not append duplicate revisions when the pipeline is re-run (idempotent)", async () => {
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([9, 9]));
+    const transcriber = new ScriptedTranscriber({ text: "A short memory." });
+    const languageModel = new ScriptedLanguageModel();
+    const pipeline = createPipeline({ db, storage, transcriber, languageModel });
+
+    await pipeline.start(storyId);
+    await pipeline.runToCompletion();
+    // Re-run: both stages hit their idempotency early-returns, so no new rows.
+    await pipeline.start(storyId);
+    await pipeline.runToCompletion();
+
+    const rows = await listProseRevisions(db, storyId);
+    expect(rows).toHaveLength(2);
   });
 });
 
