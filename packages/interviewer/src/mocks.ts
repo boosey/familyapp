@@ -2,6 +2,7 @@
  * Deterministic, dependency-free mocks of the interviewer seams. Used by the turn-loop tests and
  * by anyone downstream who wants to exercise the loop without paid vendors.
  */
+import type { BiographicalProfile } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
@@ -77,5 +78,18 @@ export class InMemoryAnchorSource implements AnchorSource {
 
   async loadForNarrator(personId: string): Promise<BiographicalAnchors | null> {
     return this.byNarrator.get(personId) ?? null;
+  }
+
+  async writeProfileField<K extends keyof BiographicalProfile>(
+    personId: string,
+    key: K,
+    value: NonNullable<BiographicalProfile[K]>,
+  ): Promise<void> {
+    const existing = this.byNarrator.get(personId);
+    if (!existing) return;
+    this.byNarrator.set(personId, {
+      ...existing,
+      profile: { ...existing.profile, [key]: value },
+    });
   }
 }

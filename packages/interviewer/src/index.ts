@@ -8,6 +8,7 @@ export type {
   PriorStoryMemory,
   AnchorSource,
   BiographicalAnchors,
+  BiographicalProfile,
 } from "./contracts";
 
 export {

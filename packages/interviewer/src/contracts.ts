@@ -13,6 +13,10 @@
  * package for vendor-SDK imports and fails CI if any leak in.
  */
 
+import type { BiographicalProfile } from "@chronicle/db";
+
+export type { BiographicalProfile };
+
 // ---------------------------------------------------------------------------
 // Voice — TTS for the interviewer's questions ONLY.
 // The chosen voice identity (persona) is configuration; the same warm voice every session is
@@ -106,7 +110,10 @@ export interface MemorySource {
 
 // ---------------------------------------------------------------------------
 // BiographicalAnchors — lightly-held facts the interviewer may use to "arrive prepared." The
-// spec is explicit: these set NAMES and TONE; the interviewer must never invent facts from them.
+// `profile` carries typed biographical context (names, background, and life context such as
+// occupation, sibling context, current location, and whether they have children/grandchildren).
+// Load-bearing rule: these set NAMES and TONE only — the interviewer must never state any of
+// them as fact unless the narrator confirms it.
 // ---------------------------------------------------------------------------
 
 export interface BiographicalAnchors {
@@ -114,12 +121,24 @@ export interface BiographicalAnchors {
   spokenName: string;
   birthYear: number | null;
   /**
-   * Free-form anchors from `persons.biographical_anchors` jsonb (e.g. birthplace, profession).
-   * Treated as hints, never as ground truth — the rendered prompt notes "as far as we know."
+   * Named biographical facts from `persons.biographical_anchors` jsonb — collected by the
+   * ephemeral intake pass and inferred from approved stories (e.g. hometown, sibling context).
+   * Each field is nullable (null = "not yet known"). Treated as hints, never as ground truth —
+   * the rendered prompt notes "as far as we know."
    */
-  anchors: Record<string, unknown>;
+  profile: BiographicalProfile;
 }
 
 export interface AnchorSource {
   loadForNarrator(personId: string): Promise<BiographicalAnchors | null>;
+  /**
+   * Write a single biographical profile field. Called by the turn loop after an intake answer is
+   * extracted, and by the post-approval pipeline step. Never call with null — null means "unknown",
+   * and we never downgrade a known field back to unknown.
+   */
+  writeProfileField<K extends keyof BiographicalProfile>(
+    personId: string,
+    key: K,
+    value: NonNullable<BiographicalProfile[K]>,
+  ): Promise<void>;
 }

@@ -1,3 +1,4 @@
+import type { BiographicalProfile } from "@chronicle/db";
 import { ScriptedLanguageModel } from "@chronicle/pipeline";
 import { describe, expect, it } from "vitest";
 import {
@@ -24,12 +25,21 @@ import {
 
 const NARRATOR = "narrator-1";
 
+const EMPTY_PROFILE: BiographicalProfile = {
+  hometown: null,
+  siblingContext: null,
+  currentLocation: null,
+  occupationSummary: null,
+  hasChildren: null,
+  hasGrandchildren: null,
+};
+
 function makeAnchors(): BiographicalAnchors {
   return {
     personId: NARRATOR,
     spokenName: "Eleanor",
     birthYear: 1942,
-    anchors: { birthplace: "Iowa" },
+    profile: { ...EMPTY_PROFILE, hometown: "Iowa" },
   };
 }
 
@@ -378,5 +388,40 @@ describe("turn loop — composes turn from all four inputs", () => {
     expect(llmUserMsg).toContain("Eleanor");
     expect(llmUserMsg).toContain("1942");
     expect(llmUserMsg).toContain("Iowa"); // from biographicalAnchors jsonb
+  });
+});
+
+describe("BiographicalAnchors — typed profile", () => {
+  it("InMemoryAnchorSource returns typed profile fields", async () => {
+    const source = new InMemoryAnchorSource();
+    source.set({
+      personId: "p1",
+      spokenName: "Eleanor",
+      birthYear: 1943,
+      profile: { ...EMPTY_PROFILE, hometown: "New Orleans", hasChildren: true },
+    });
+    const anchors = await source.loadForNarrator("p1");
+    expect(anchors?.profile.hometown).toBe("New Orleans");
+    expect(anchors?.profile.hasChildren).toBe(true);
+    expect(anchors?.profile.siblingContext).toBeNull();
+  });
+
+  it("writeProfileField updates one field without overwriting others", async () => {
+    const source = new InMemoryAnchorSource();
+    source.set({
+      personId: "p1",
+      spokenName: "Eleanor",
+      birthYear: 1943,
+      profile: { ...EMPTY_PROFILE, hometown: "New Orleans" },
+    });
+    await source.writeProfileField("p1", "siblingContext", "Youngest of three");
+    const updated = await source.loadForNarrator("p1");
+    expect(updated?.profile.siblingContext).toBe("Youngest of three");
+    expect(updated?.profile.hometown).toBe("New Orleans");
+  });
+
+  it("writeProfileField on unknown personId is a safe no-op", async () => {
+    const source = new InMemoryAnchorSource();
+    await expect(source.writeProfileField("nobody", "hometown", "Paris")).resolves.toBeUndefined();
   });
 });
