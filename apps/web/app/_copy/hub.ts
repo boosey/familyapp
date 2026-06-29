@@ -31,6 +31,12 @@ export const hub = {
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
   },
+  intake: {
+    // Banner shown at the top of the hub until the narrator's biographical profile is complete.
+    aria: "Finish your introduction",
+    body: "Tell us a little about yourself — a few questions about where you're from and the life you've lived. It helps every conversation feel more like you.",
+    cta: "Continue your introduction",
+  },
   questions: {
     title: "Questions for you",
     intro: "Your family asked these. Answer whenever you're ready — there's no rush.",

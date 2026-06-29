@@ -16,6 +16,7 @@ import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { HubTabsNav } from "./HubTabsNav";
+import { IntakeReminder } from "./IntakeReminder";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
 import { AskTab } from "./tabs/AskTab";
@@ -107,7 +108,11 @@ export default async function HubPage({
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
     db
-      .select({ spokenName: persons.spokenName, displayName: persons.displayName })
+      .select({
+        spokenName: persons.spokenName,
+        displayName: persons.displayName,
+        biographicalAnchors: persons.biographicalAnchors,
+      })
       .from(persons)
       .where(eq(persons.id, ctx.personId))
       .then((rows) => rows[0] ?? null),
@@ -246,6 +251,7 @@ export default async function HubPage({
 
         {/* Tab content */}
         <section style={{ padding: "28px 0" }}>
+          <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab feed={feed} viewerPersonId={ctx.personId} seenStoryIds={seenStoryIds} />
           )}
