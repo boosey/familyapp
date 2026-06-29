@@ -340,6 +340,35 @@ recap of every fix.
   reseed, because reseed rebuilds from scratch). Prod stays safe — `applySchemaToPostgres` applies
   only if absent and NEVER drops; a real migration tool comes back when the schema stabilizes.
 
+## Prompt storage (deferred — recorded so it's a choice, not an accident)
+
+- **Today: prompts are inline `SYSTEM_PROMPT` consts co-located with their call site.** Each
+  LLM-facing step (`pipeline/render-story.ts`, `pipeline/extract-biography.ts`,
+  `interviewer/phraser.ts`, `interviewer/intake-extraction.ts`) hardcodes its system prompt next
+  to the message builder and response parser that depend on its shape. At 4 prompts, one author,
+  git-versioned, the cost of this is ~zero. We are NOT building a prompt registry yet.
+- **But this is explicitly a deferred decision, not the end state.** Prompts are human text under
+  active development, not code: in a real AI app they are continually eval-scored and improved,
+  they need per-vendor/model variants (a Claude prompt and a Llama prompt for the *same* step
+  diverge on JSON discipline, system-vs-user placement, formatting idiosyncrasies), and they must
+  be versioned, audited, and changeable **without a redeploy**. Inline consts structurally give
+  exactly one prompt per call site and can only change by shipping code — both wrong for that
+  trajectory.
+- **Target design when we build it: split the prompt into contract (code) and wording (data).**
+  The load-bearing constraint is that "hot-swappable prompt" is in direct tension with the
+  prompt→parser coupling (`render-story`'s prompt requests JSON `prose/title/summary/tags` and
+  `parseRenderResponse` is hard-wired to exactly those fields). Resolve it by versioning the two
+  halves differently:
+  - **Output contract** (requested schema + the parser/validator that enforces it) stays in code
+    and is redeploy-gated. A wording change must never be able to silently alter the field set a
+    parser reads in prod.
+  - **Wording** (persona, rules, phrasing, behavior policy like "authenticity beats polish") moves
+    to a versioned store, keyed `purpose → { vendor/model → version }`, recording which version is
+    live. This is the part that gets eval-scored, audited, rolled back, and swapped without deploy.
+- **Trigger to build it:** the first time we need EITHER a second vendor/model variant of an
+  existing prompt OR a prompt change that must ship without a redeploy. Until then, leave the
+  inline consts. (Discussed 2026-06-29; deferred deliberately.)
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
