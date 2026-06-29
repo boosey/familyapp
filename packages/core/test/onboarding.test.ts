@@ -3,8 +3,7 @@
  *
  * Regression focus: `completeOnboarding` must reject dates the old web-layer validation let through
  * — a non-real calendar date (e.g. Feb 31) and a future date — and must stamp `onboarded_at` (the
- * gate the whole app routes on) only on a valid date. `recordInterviewAnchors` must merge without
- * ever clearing previously-saved anchors.
+ * gate the whole app routes on) only on a valid date.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
@@ -13,7 +12,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   InvariantViolation,
   completeOnboarding,
-  recordInterviewAnchors,
 } from "../src/index";
 
 let db: Database;
@@ -35,7 +33,6 @@ async function personRow(personId: string) {
       birthDate: persons.birthDate,
       birthYear: persons.birthYear,
       onboardedAt: persons.onboardedAt,
-      anchors: persons.biographicalAnchors,
     })
     .from(persons)
     .where(eq(persons.id, personId))
@@ -114,46 +111,5 @@ describe("completeOnboarding", () => {
     await expect(
       completeOnboarding(db, personId, { year: 1990, month: 1, day: 0 }),
     ).rejects.toBeInstanceOf(InvariantViolation);
-  });
-});
-
-describe("recordInterviewAnchors", () => {
-  it("adds anchors from the answers", async () => {
-    const personId = await makePerson();
-    await recordInterviewAnchors(db, personId, {
-      birthplace: "Lafayette, Louisiana",
-      placesLived: ["New Orleans", "Houston"],
-      keyMoments: ["The summer at the coast"],
-    });
-    expect((await personRow(personId)).anchors).toEqual({
-      birthplace: "Lafayette, Louisiana",
-      placesLived: ["New Orleans", "Houston"],
-      keyMoments: ["The summer at the coast"],
-    });
-  });
-
-  it("merges across calls without clearing previously-saved anchors (partial-exit safety)", async () => {
-    const personId = await makePerson();
-    await recordInterviewAnchors(db, personId, { birthplace: "Lafayette" });
-    // A later partial save (e.g. user answered one more then exited) must not wipe birthplace.
-    await recordInterviewAnchors(db, personId, { keyMoments: ["A wedding"] });
-    expect((await personRow(personId)).anchors).toEqual({
-      birthplace: "Lafayette",
-      keyMoments: ["A wedding"],
-    });
-  });
-
-  it("trims whitespace and ignores empty/blank entries", async () => {
-    const personId = await makePerson();
-    await recordInterviewAnchors(db, personId, {
-      birthplace: "  Baton Rouge  ",
-      placesLived: ["  ", "Mobile", ""],
-      keyMoments: ["   "],
-    });
-    const anchors = (await personRow(personId)).anchors as Record<string, unknown>;
-    expect(anchors.birthplace).toBe("Baton Rouge");
-    expect(anchors.placesLived).toEqual(["Mobile"]);
-    // An all-blank list contributes no key at all.
-    expect(anchors.keyMoments).toBeUndefined();
   });
 });

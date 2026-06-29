@@ -66,9 +66,7 @@ export {
 } from "./accounts";
 export {
   completeOnboarding,
-  recordInterviewAnchors,
   type CompleteOnboardingInput,
-  type InterviewAnchors,
 } from "./onboarding";
 export {
   createFamily,

@@ -2,7 +2,7 @@ import type { BiographicalProfile } from "@chronicle/db";
 import { createTestDatabase } from "@chronicle/db";
 import { sql } from "drizzle-orm";
 import { createCoreAnchorSource } from "../src/core-adapters";
-import { ScriptedLanguageModel } from "@chronicle/pipeline";
+import { ScriptedLanguageModel, augmentProfileFromStory } from "@chronicle/pipeline";
 import { nextIntakeQuestion, INTAKE_QUESTIONS } from "../src/questions/intake";
 import { extractIntakeAnswer } from "../src/intake-extraction";
 import { describe, expect, it } from "vitest";
@@ -684,5 +684,71 @@ describe("CoreAnchorSource — writeProfileField", () => {
     expect(anchors?.profile.siblingContext).toBeNull();
     expect(anchors?.spokenName).toBe("Eleanor");
     expect(anchors?.birthYear).toBe(1942);
+  });
+});
+
+describe("augmentProfileFromStory — through the real CoreAnchorSource store", () => {
+  it("writes inferred null fields but never overwrites a direct intake answer", async () => {
+    const db = await createTestDatabase();
+    const personId = crypto.randomUUID();
+    await db.execute(sql`
+      INSERT INTO persons (id, display_name, spoken_name, birth_year)
+      VALUES (${personId}, ${"Eleanor R."}, ${"Eleanor"}, ${1942})`);
+    const store = createCoreAnchorSource(db);
+
+    // Direct intake answer the narrator already gave — must be protected from story inference.
+    await store.writeProfileField(personId, "hometown", "New Orleans");
+
+    // The extractor's LLM returns a conflicting hometown plus a new occupation. Only the
+    // currently-null field should be written.
+    const llm = new ScriptedLanguageModel({
+      respond: JSON.stringify({
+        hometown: "Shreveport",
+        occupationSummary: "Teacher",
+        siblingContext: null,
+        currentLocation: null,
+        hasChildren: null,
+        hasGrandchildren: null,
+      }),
+    });
+
+    await augmentProfileFromStory("...a transcript mentioning Shreveport...", personId, llm, store);
+
+    const anchors = await store.loadForNarrator(personId);
+    // The direct answer is preserved — story inference never clobbers a known field.
+    expect(anchors?.profile.hometown).toBe("New Orleans");
+    // The previously-null field is populated from the transcript.
+    expect(anchors?.profile.occupationSummary).toBe("Teacher");
+    // Fields the model returned as null stay null.
+    expect(anchors?.profile.siblingContext).toBeNull();
+  });
+});
+
+// The /hub/about-you server action (submitIntakeAnswer) composes extract → write → next-question.
+// That action lives in apps/web, so here we exercise the SAME composition over PGlite to lock the
+// contract the surface depends on: a confident extraction populates the field and the walk advances
+// to the next still-null question.
+describe("Intake surface composition — extract → write → next question", () => {
+  it("a scripted answer to hometown populates profile.hometown and advances to siblingContext", async () => {
+    const db = await createTestDatabase();
+    const personId = crypto.randomUUID();
+    await db.execute(sql`
+      INSERT INTO persons (id, display_name, spoken_name, birth_year)
+      VALUES (${personId}, ${"Eleanor R."}, ${"Eleanor"}, ${1942})`);
+    const source = createCoreAnchorSource(db);
+    const llm = new ScriptedLanguageModel({ respond: JSON.stringify({ value: "New Orleans" }) });
+
+    const hometownQ = INTAKE_QUESTIONS.find((q) => q.key === "hometown")!;
+    const value = await extractIntakeAnswer(llm, hometownQ, "Oh, I grew up in New Orleans.");
+    expect(value).toBe("New Orleans");
+    if (value !== null) await source.writeProfileField(personId, "hometown", value as never);
+
+    const fresh = await source.loadForNarrator(personId);
+    expect(fresh?.profile.hometown).toBe("New Orleans");
+    expect(fresh?.profile.siblingContext).toBeNull();
+
+    // Threaded asked-keys + fresh DB truth → next still-null question is siblingContext.
+    const next = nextIntakeQuestion(fresh!.profile, new Set(["hometown"]));
+    expect(next?.key).toBe("siblingContext");
   });
 });

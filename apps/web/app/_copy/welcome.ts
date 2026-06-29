@@ -23,46 +23,10 @@ export const welcome = {
   primaryBadge: "PRIMARY",
   hubCardTitle: "Go to the hub",
   hubCardBody: "See your family's stories and start asking questions right away.",
-  tellStoryDuration: "ABOUT 12 MINUTES",
-  tellStoryTitle: "Tell your story",
-  tellStoryBody:
-    "Answer a few gentle questions so your family has something to ask you about.",
-  questionProgress: (i: number, total: number) => `QUESTION ${i} OF ${total}`,
-  voiceUnavailableType: "Voice isn't available here yet — type your answer below.",
-  typeInstead: "Type instead",
-  saving: "Saving…",
-  finish: "Finish",
-  next: "Next",
-  doneEyebrow: "Thank you",
-  doneTitle: "That's a beautiful start.",
-  doneBody:
-    "Your family will see these and have something to ask you about. There's always more to tell whenever you're ready.",
-  takeMeToHub: "Take me to the hub",
-  takeMeToHubArrow: "Take me to the hub →",
+  // Door 2 → the /hub/about-you intake surface. A short structured walk (~6 quick prompts),
+  // NOT a 12-minute story — copy reworded from the retired inline interview.
+  introduceBadge: "A FEW MINUTES",
+  introduceTitle: "Introduce yourself",
+  introduceBody: "A few quick questions about you, so your family has something to ask about.",
   dobSaveError: "Something went wrong saving that. Please try again.",
-  answersSaveError: "We couldn't save your answers. You can still continue to the hub.",
-  // `key` is a stable structural id (not copy); chip/prompt/placeholder/voiceLabel are copy.
-  questions: [
-    {
-      key: "birthplace",
-      chip: "Born in",
-      prompt: "Where were you born?",
-      placeholder: "e.g. Lafayette, Louisiana",
-      voiceLabel: "Tap to answer",
-    },
-    {
-      key: "placesLived",
-      chip: "Lived in",
-      prompt: "Where have you lived since?",
-      placeholder: "e.g. New Orleans, then Houston",
-      voiceLabel: "Tap to answer",
-    },
-    {
-      key: "keyMoments",
-      chip: "A moment",
-      prompt: "What's one moment you'd want remembered?",
-      placeholder: "e.g. The summer we drove out to the coast",
-      voiceLabel: "Tap to answer",
-    },
-  ],
 } as const;

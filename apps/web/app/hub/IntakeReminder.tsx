@@ -1,9 +1,9 @@
 /**
  * Hub intake reminder — a banner shown at the top of the hub until the narrator's biographical
- * profile is complete. Presentational server component (no client state): a short informational
- * note. There is intentionally no call-to-action — no hub→intake-session route exists yet, so the
- * banner only signals that more of their introduction remains.
+ * profile is complete. Presentational server component (no client state). Its call-to-action links
+ * to /hub/about-you (the single intake surface), so the narrator can pick up their introduction.
  */
+import Link from "next/link";
 import type { BiographicalProfile } from "@chronicle/db";
 import { hub } from "@/app/_copy";
 
@@ -49,6 +49,20 @@ export function IntakeReminder({ profile }: Props) {
       >
         {hub.intake.body}
       </p>
+      <Link
+        href="/hub/about-you"
+        style={{
+          display: "inline-block",
+          marginTop: 14,
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-ui-sm)",
+          fontWeight: 600,
+          color: "var(--accent-strong)",
+          textDecoration: "none",
+        }}
+      >
+        {hub.intake.cta}
+      </Link>
     </div>
   );
 }

@@ -32,10 +32,26 @@ export const hub = {
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
   },
   intake: {
-    // Informational banner shown at the top of the hub until the narrator's biographical profile
-    // is complete. No call-to-action — there's no hub→intake route yet.
+    // Banner shown at the top of the hub until the narrator's biographical profile is complete.
+    // Its CTA links to /hub/about-you (the intake surface).
     aria: "Your introduction",
-    body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived. They'll come up naturally next time you sit down to talk.",
+    body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived.",
+    cta: "Continue your introduction",
+  },
+  aboutYou: {
+    // The /hub/about-you intake surface — a short structured walk through the biographical profile.
+    eyebrow: "Your introduction",
+    progress: "A few quick questions",
+    typeInstead: "Type instead",
+    voiceUnavailable: "Voice isn't available here yet — type your answer below.",
+    voiceLabel: "Tap to answer",
+    next: "Next",
+    saving: "Saving…",
+    takeMeToHub: "Take me to the hub →",
+    saveError: "We couldn't save that one. You can keep going.",
+    doneEyebrow: "Thank you",
+    doneTitle: "That's a lovely start.",
+    doneBody: "Your family now has a little more to ask you about. There's always more to tell whenever you're ready.",
   },
   questions: {
     title: "Questions for you",

@@ -65,3 +65,11 @@ export {
   createCoreAnchorSource,
   createCoreAskSource,
 } from "./core-adapters";
+
+export {
+  INTAKE_QUESTIONS,
+  nextIntakeQuestion,
+  type IntakeQuestion,
+} from "./questions/intake";
+
+export { extractIntakeAnswer } from "./intake-extraction";

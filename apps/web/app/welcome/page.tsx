@@ -1,7 +1,8 @@
 /**
- * /welcome — account onboarding host (handoff screens 1–4: welcome → dob → doors →
- * interview). The server component resolves identity + the post-onboarding destination once and
- * hands them to the client state machine; all persistence happens via the server actions in
+ * /welcome — account onboarding host (welcome → dob → doors). The "introduce yourself" door routes
+ * to the single intake surface at /hub/about-you; the inline interview that used to live here is
+ * retired. The server component resolves identity + the post-onboarding destination once and hands
+ * them to the client state machine; all persistence happens via the server actions in
  * ./actions.ts. The destination is precomputed here because memberships don't change mid-onboarding:
  * a Person already in a family lands on /hub, a manual signup with no family on /families/start.
  */
@@ -51,7 +52,6 @@ export default async function WelcomePage({
 
   return (
     <WelcomeFlow
-      fullName={fullName}
       firstName={firstName}
       invited={from === "invite"}
       hubDestination={hubDestination}

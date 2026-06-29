@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * Onboarding state machine (client): welcome → dob → doors → interview → done.
+ * Onboarding state machine (client): welcome → dob → doors.
  *
  * Design rules from the handoff that this preserves:
- *  - Date of birth is the ONE required ask; everything in the interview is optional and exitable.
+ *  - Date of birth is the ONE required ask; the rest of onboarding is optional.
  *  - Voice-first but never voice-only: every voice control is a visible STUB here (no mic in this
  *    environment) paired with a real typed path that is the actual way data is captured.
- *  - The interview can be left at any question via the always-visible "Take me to the hub" exit;
- *    whatever was answered is saved on the way out.
+ *  - The "introduce yourself" door routes to the single intake surface at /hub/about-you (the
+ *    inline interview that used to live here has been retired — one intake surface, reached from
+ *    both onboarding and the hub reminder).
  */
 import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { KindredButton, KindredVoiceButton, KindredChip } from "@/app/_kindred";
-import { saveDob, saveInterviewFacts, type InterviewFacts } from "./actions";
+import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
+import { saveDob } from "./actions";
 import { common, welcome } from "@/app/_copy";
 
-type Step = "welcome" | "dob" | "doors" | "interview" | "done";
+type Step = "welcome" | "dob" | "doors";
 
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
@@ -35,12 +36,10 @@ function daysInMonth(monthStr: string, yearStr: string): number {
 }
 
 export function WelcomeFlow({
-  fullName,
   firstName,
   invited,
   hubDestination,
 }: {
-  fullName: string;
   firstName: string;
   invited: boolean;
   hubDestination: string;
@@ -52,11 +51,6 @@ export function WelcomeFlow({
   const [month, setMonth] = useState("");
   const [day, setDay] = useState("");
   const [year, setYear] = useState("");
-
-  // Interview
-  const [qIndex, setQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
@@ -79,58 +73,6 @@ export function WelcomeFlow({
       setError(welcome.dobSaveError);
     } finally {
       setBusy(false);
-    }
-  }
-
-  function buildFacts(committed: Record<string, string>): InterviewFacts {
-    return {
-      birthplace: committed.birthplace || undefined,
-      placesLived: committed.placesLived ? [committed.placesLived] : undefined,
-      keyMoments: committed.keyMoments ? [committed.keyMoments] : undefined,
-    };
-  }
-
-  /** Commit the current draft into answers and return the merged map. */
-  function commitDraft(): Record<string, string> {
-    const current = welcome.questions[qIndex];
-    const merged = { ...answers };
-    if (current && draft.trim()) merged[current.key] = draft.trim();
-    setAnswers(merged);
-    return merged;
-  }
-
-  async function nextQuestion() {
-    const merged = commitDraft();
-    if (qIndex < welcome.questions.length - 1) {
-      const next = qIndex + 1;
-      const nextQ = welcome.questions[next];
-      setQIndex(next);
-      setDraft(nextQ ? (answers[nextQ.key] ?? "") : "");
-      setVoiceNote(false);
-      return;
-    }
-    // Last question — persist and land on the closing screen.
-    setBusy(true);
-    try {
-      await saveInterviewFacts(buildFacts(merged));
-      setStep("done");
-    } catch {
-      setError(welcome.answersSaveError);
-      setStep("done");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function exitToHub() {
-    const merged = commitDraft();
-    setBusy(true);
-    try {
-      await saveInterviewFacts(buildFacts(merged));
-    } catch {
-      // Best-effort save on exit; never block the user from leaving.
-    } finally {
-      router.push(hubDestination);
     }
   }
 
@@ -352,12 +294,7 @@ export function WelcomeFlow({
 
             <button
               type="button"
-              onClick={() => {
-                setStep("interview");
-                setQIndex(0);
-                setDraft(answers.birthplace ?? "");
-                setVoiceNote(false);
-              }}
+              onClick={() => router.push("/hub/about-you")}
               style={{
                 textAlign: "left",
                 cursor: "pointer",
@@ -376,13 +313,13 @@ export function WelcomeFlow({
                   color: "var(--support)",
                 }}
               >
-                {welcome.tellStoryDuration}
+                {welcome.introduceBadge}
               </div>
               <div style={{ ...serifHeadline, fontSize: "var(--text-story-lg)", margin: "10px 0 8px" }}>
-                {welcome.tellStoryTitle}
+                {welcome.introduceTitle}
               </div>
               <div style={{ ...sub, margin: 0 }}>
-                {welcome.tellStoryBody}
+                {welcome.introduceBody}
               </div>
             </button>
           </div>
@@ -391,114 +328,6 @@ export function WelcomeFlow({
     );
   }
 
-  /* ── Interview ─────────────────────────────────────────────────────────── */
-  if (step === "interview") {
-    const q = welcome.questions[qIndex];
-    if (!q) return null; // qIndex is always in-bounds by construction; defensive for the type-checker.
-    const isLast = qIndex === welcome.questions.length - 1;
-
-    // Captured-facts ribbon: Name ✓, Born ✓, then each interview fact (✓ done · ● current · pending).
-    const ribbon: { label: string; mark: string }[] = [
-      { label: fullName.split(" ")[0] ?? fullName, mark: "✓" },
-      { label: "Born", mark: "✓" },
-      ...welcome.questions.map((item, i) => {
-        const done = Boolean(answers[item.key]) && i < qIndex;
-        const current = i === qIndex;
-        return { label: item.chip, mark: done ? "✓" : current ? "●" : "·" };
-      }),
-    ];
-
-    return (
-      <main style={{ ...page, justifyContent: "flex-start", paddingTop: "clamp(20px, 4vw, 40px)" }}>
-        <div style={{ maxWidth: 620, width: "100%" }}>
-          {/* Top bar: ribbon + exit */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-              marginBottom: 36,
-            }}
-          >
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {ribbon.map((c, i) => (
-                <KindredChip key={i} kind="status" label={`${c.label} ${c.mark}`} />
-              ))}
-            </div>
-            <KindredButton
-              label={welcome.takeMeToHubArrow}
-              variant="ghost"
-              size="small"
-              onClick={exitToHub}
-            />
-          </div>
-
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              letterSpacing: "var(--tracking-mono)",
-              color: "var(--support)",
-              margin: "0 0 12px",
-            }}
-          >
-            {welcome.questionProgress(qIndex + 1, welcome.questions.length)}
-          </p>
-          <h1 style={{ ...serifHeadline, fontSize: "var(--text-prompt)" }}>{q.prompt}</h1>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "32px 0 20px" }}>
-            <KindredVoiceButton label={q.voiceLabel} onClick={showVoiceStub} />
-            {voiceNote ? (
-              <p style={voiceHint}>{welcome.voiceUnavailableType}</p>
-            ) : null}
-          </div>
-
-          <label className="kin-form-label">
-            {welcome.typeInstead}
-            <textarea
-              className="kin-field"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={q.placeholder}
-              style={{ minHeight: 96 }}
-            />
-          </label>
-
-          {error ? <p style={errorBox}>{error}</p> : null}
-
-          <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
-            <KindredButton
-              label={isLast ? (busy ? welcome.saving : welcome.finish) : welcome.next}
-              size="large"
-              disabled={busy}
-              onClick={nextQuestion}
-            />
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  /* ── Done ──────────────────────────────────────────────────────────────── */
-  return (
-    <main style={page}>
-      <div style={{ ...card, textAlign: "center" }}>
-        <div className="kin-eyebrow">{welcome.doneEyebrow}</div>
-        <h1 style={{ ...serifHeadline, marginTop: 12 }}>{welcome.doneTitle}</h1>
-        <p style={{ ...sub, maxWidth: "42ch", margin: "12px auto 0" }}>
-          {welcome.doneBody}
-        </p>
-        {error ? <p style={errorBox}>{error}</p> : null}
-        <div style={{ marginTop: 28 }}>
-          <KindredButton
-            label={welcome.takeMeToHub}
-            size="large"
-            onClick={() => router.push(hubDestination)}
-          />
-        </div>
-      </div>
-    </main>
-  );
+  // `step` is exhaustively handled above (welcome | dob | doors); unreachable.
+  return null;
 }

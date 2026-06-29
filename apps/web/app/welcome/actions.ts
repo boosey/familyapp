@@ -6,11 +6,7 @@
  * which owns the date-of-birth validation and the `onboarded_at` state transition. The web layer's
  * only job here is to turn the request into an authenticated personId and call the domain.
  */
-import {
-  completeOnboarding,
-  recordInterviewAnchors,
-  type InterviewAnchors,
-} from "@chronicle/core";
+import { completeOnboarding } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 
 export interface DobInput {
@@ -24,13 +20,4 @@ export async function saveDob(input: DobInput): Promise<void> {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
   await completeOnboarding(db, ctx.personId, input);
-}
-
-export type InterviewFacts = InterviewAnchors;
-
-export async function saveInterviewFacts(facts: InterviewFacts): Promise<void> {
-  const { db, auth } = await getRuntime();
-  const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") throw new Error("must be signed in");
-  await recordInterviewAnchors(db, ctx.personId, facts);
 }

@@ -44,7 +44,9 @@ export interface NarratorBiographicalContext {
   personId: string;
   spokenName: string;
   birthYear: number | null;
-  /** `persons.biographical_anchors` jsonb — birthplace, profession, etc. Free-form. */
+  /** `persons.biographical_anchors` jsonb — the typed `BiographicalProfile` fields (hometown,
+   *  siblingContext, currentLocation, occupationSummary, hasChildren, hasGrandchildren); read here
+   *  as a loose record because this projection predates the typed profile. */
   anchors: Record<string, unknown>;
 }
 
