@@ -117,6 +117,25 @@ export const joinRequestStatusEnum = pgEnum("join_request_status", [
 ]);
 
 // ---------------------------------------------------------------------------
+// BiographicalProfile — compile-time type for persons.biographical_anchors (JSONB).
+// ---------------------------------------------------------------------------
+
+/**
+ * Named biographical facts collected by the EPHEMERAL intake pass and inferred from approved
+ * stories. Stored in `persons.biographical_anchors` (JSONB). All fields nullable — null means
+ * "not yet known". The picker checks these to decide which intake questions remain. Story
+ * extraction never overwrites a non-null value.
+ */
+export interface BiographicalProfile {
+  hometown: string | null;
+  siblingContext: string | null;
+  currentLocation: string | null;
+  occupationSummary: string | null;
+  hasChildren: boolean | null;
+  hasGrandchildren: boolean | null;
+}
+
+// ---------------------------------------------------------------------------
 // Person — the spine. Permanent, singular, owner of everything expressive.
 // A Person does NOT require a login: many Persons capture their stories through a login-free
 // link session and never create an Account.
@@ -145,7 +164,7 @@ export const persons = pgTable(
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     /** Lightly-held biographical anchors used to warm up the interviewer (place, etc.). */
     biographicalAnchors: jsonb("biographical_anchors")
-      .$type<Record<string, unknown>>()
+      .$type<Partial<BiographicalProfile>>()
       .default(sql`'{}'::jsonb`),
     lifeStatus: lifeStatusEnum("life_status").notNull().default("living"),
     /**

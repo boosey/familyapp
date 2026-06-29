@@ -48,6 +48,7 @@ export type {
   AskStatus,
   InvitationStatus,
   JoinRequestStatus,
+  BiographicalProfile,
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
 export {
