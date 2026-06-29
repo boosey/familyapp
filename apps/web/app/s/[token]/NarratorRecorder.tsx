@@ -7,6 +7,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { KindredVoiceButton } from "@/app/_kindred";
+import { capture, common } from "@/app/_copy";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 
@@ -69,7 +70,7 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
           textAlign: "center",
         }}
       >
-        Thank you. Your family will love hearing this.
+        {capture.narrator.thanks}
       </p>
     );
   }
@@ -81,7 +82,7 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
         className="kin-muted"
         style={{ fontSize: "var(--text-ui-sm)", margin: 0, textAlign: "center", maxWidth: 360 }}
       >
-        Let's pick this up another time. The person who invited you will check in soon.
+        {capture.narrator.pickUpLater}
       </p>
     );
   }
@@ -93,7 +94,7 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       listening={phase === "listening"}
       saving={phase === "saving"}
       size={220}
-      label={phase === "listening" ? "Listening…" : phase === "saving" ? "One moment…" : "Tap to speak"}
+      label={phase === "listening" ? common.voiceButton.listening : phase === "saving" ? common.voiceButton.oneMoment : common.voiceButton.tapToSpeak}
       onClick={onClick}
     />
   );

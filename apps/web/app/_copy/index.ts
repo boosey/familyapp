@@ -5,3 +5,4 @@ export { common } from "./common";
 export { auth } from "./auth";
 export { families } from "./families";
 export { welcome } from "./welcome";
+export { capture } from "./capture";

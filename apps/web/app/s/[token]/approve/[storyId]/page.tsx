@@ -11,6 +11,7 @@ import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ApprovalRecorder } from "./ApprovalRecorder";
 import { KindredListenBar } from "@/app/_kindred";
+import { capture } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function ApprovePage({
             color: "var(--text-body)",
           }}
         >
-          Welcome.
+          {capture.approve.welcome}
         </h1>
         <p
           style={{
@@ -50,7 +51,7 @@ export default async function ApprovePage({
             marginTop: 16,
           }}
         >
-          This link is resting for now. Whoever invited you will help you get started again.
+          {capture.approve.resting}
         </p>
       </main>
     );
@@ -76,7 +77,7 @@ export default async function ApprovePage({
             color: "var(--text-body)",
           }}
         >
-          Thank you.
+          {capture.approve.thanks}
         </h1>
         <p
           style={{
@@ -88,7 +89,7 @@ export default async function ApprovePage({
             marginTop: 16,
           }}
         >
-          This one is already settled. You can close this window whenever you&apos;re ready.
+          {capture.approve.alreadySettled}
         </p>
       </main>
     );
@@ -126,7 +127,7 @@ export default async function ApprovePage({
               color: "var(--text-meta)",
             }}
           >
-            Family Chronicle
+            {capture.approve.brand}
           </span>
           <span
             style={{
@@ -137,7 +138,7 @@ export default async function ApprovePage({
               color: "var(--support)",
             }}
           >
-            Your Story
+            {capture.approve.yourStory}
           </span>
         </div>
 
@@ -152,7 +153,7 @@ export default async function ApprovePage({
             margin: 0,
           }}
         >
-          Ready to share this one?
+          {capture.approve.readyToShare}
         </h1>
 
         {/* Subtext */}
@@ -166,7 +167,7 @@ export default async function ApprovePage({
             maxWidth: "28ch",
           }}
         >
-          Have a listen first. Then tell me who should be able to hear it.
+          {capture.approve.haveAListen}
         </p>
 
         {/* Listen bar */}

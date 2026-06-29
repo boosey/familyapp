@@ -11,6 +11,7 @@ import { getNarratorProfile, listPendingAsksForNarrator } from "@chronicle/core"
 import { getRuntime } from "@/lib/runtime";
 import { NarratorRecorder } from "./NarratorRecorder";
 import { KindredPromptCard } from "@/app/_kindred";
+import { capture } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,9 +29,9 @@ export default async function NarratorPage({
   if (!resolved) {
     return (
       <main className="kin-fullbleed" style={{ alignItems: "center", justifyContent: "center", padding: 32 }}>
-        <h1 style={{ fontFamily: "var(--font-story)", fontSize: "var(--text-display)", fontWeight: 400, margin: 0, color: "var(--text-body)" }}>Welcome.</h1>
+        <h1 style={{ fontFamily: "var(--font-story)", fontSize: "var(--text-display)", fontWeight: 400, margin: 0, color: "var(--text-body)" }}>{capture.resting.welcome}</h1>
         <p style={{ maxWidth: "32ch", textAlign: "center", marginTop: 16, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-ui)" }}>
-          This link is resting for now. Whoever invited you will help you get started again.
+          {capture.resting.body}
         </p>
       </main>
     );
@@ -81,7 +82,7 @@ export default async function NarratorPage({
         </span>
         <div>
           <div style={{ fontSize: 19, fontWeight: 600, color: "var(--text-body)" }}>{spokenName}</div>
-          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Conversation · {dateLabel}</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>{capture.narrator.conversationDate(dateLabel)}</div>
         </div>
       </header>
 
@@ -108,17 +109,17 @@ export default async function NarratorPage({
             margin: 0,
           }}
         >
-          Hello, {spokenName}.
+          {capture.narrator.hello(spokenName)}
         </h1>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui)", margin: 0, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "26ch" }}>
-          Whenever you're ready, tap the button and tell me anything you'd like. Take all the time you want.
+          {capture.narrator.invite}
         </p>
         <KindredPromptCard
-          eyebrow={nextAsk ? `${nextAsk.askerSpokenName} asked` : "A thought to start with"}
+          eyebrow={nextAsk ? capture.narrator.eyebrowAsked(nextAsk.askerSpokenName) : capture.narrator.eyebrowDefault}
           question={
             nextAsk
               ? nextAsk.ask.questionText
-              : "What's something from your day, or from long ago, that's been on your mind?"
+              : capture.narrator.starterPrompt
           }
         />
       </section>

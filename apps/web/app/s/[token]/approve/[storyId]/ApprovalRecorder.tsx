@@ -7,15 +7,10 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { capture, common } from "@/app/_copy";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 type Tier = "family" | "branch" | "public";
-
-const TIERS: { value: Tier; label: string; desc: string }[] = [
-  { value: "family", label: "My whole family",   desc: "Everyone in the family" },
-  { value: "branch", label: "Just one branch",   desc: "A chosen part of the family" },
-  { value: "public", label: "Anyone",             desc: "Shared openly" },
-];
 
 export function ApprovalRecorder({
   token,
@@ -98,7 +93,7 @@ export function ApprovalRecorder({
             margin: 0,
           }}
         >
-          Thank you. Your family will hear it now.
+          {capture.approve.confirmedThanks}
         </p>
       </div>
     );
@@ -117,7 +112,7 @@ export function ApprovalRecorder({
           textAlign: "center",
         }}
       >
-        Let&apos;s pick this up another time. The person who invited you will check in soon.
+        {capture.approve.pickUpLater}
       </p>
     );
   }
@@ -141,7 +136,7 @@ export function ApprovalRecorder({
             margin: 0,
           }}
         >
-          One moment…
+          {capture.approve.oneMoment}
         </p>
       </div>
     );
@@ -171,17 +166,17 @@ export function ApprovalRecorder({
             margin: 0,
           }}
         >
-          Say it in your own words — &quot;Yes, my family can hear this.&quot;
+          {capture.approve.sayInOwnWords}
         </p>
         <KindredVoiceButton
           listening={true}
           size={150}
-          label="Listening…"
+          label={capture.approve.listening}
           onClick={finish}
         />
         <div style={{ width: "100%", maxWidth: 440 }}>
           <KindredButton variant="primary" size="large" fullWidth onClick={finish}>
-            I&apos;m finished
+            {capture.approve.imFinished}
           </KindredButton>
         </div>
       </div>
@@ -205,14 +200,15 @@ export function ApprovalRecorder({
             width: "100%",
           }}
         >
-          Who should hear this?
+          {capture.approve.whoShouldHear}
         </legend>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {TIERS.map((opt) => {
-            const checked = tier === opt.value;
+          {(["family", "branch", "public"] as Tier[]).map((value) => {
+            const opt = common.audienceTiers[value];
+            const checked = tier === value;
             return (
               <label
-                key={opt.value}
+                key={value}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -230,9 +226,9 @@ export function ApprovalRecorder({
                 <input
                   type="radio"
                   name="audienceTier"
-                  value={opt.value}
+                  value={value}
                   checked={checked}
-                  onChange={() => setTier(opt.value)}
+                  onChange={() => setTier(value)}
                   style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
                 />
                 {/* Radio dot */}
@@ -303,7 +299,7 @@ export function ApprovalRecorder({
         <KindredVoiceButton
           listening={false}
           size={150}
-          label="Approve aloud"
+          label={capture.approve.approveAloud}
           onClick={start}
         />
       </div>

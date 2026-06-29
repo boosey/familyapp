@@ -1,0 +1,42 @@
+// apps/web/app/_copy/capture.ts
+// Copy for the s/[token] narrator capture + s/[token]/approve/[storyId] approval surfaces.
+export const capture = {
+  resting: {
+    welcome: "Welcome.",
+    body: "This link is resting for now. Whoever invited you will help you get started again.",
+  },
+  narrator: {
+    conversationDate: (dateLabel: string) => `Conversation · ${dateLabel}`,
+    hello: (spokenName: string) => `Hello, ${spokenName}.`,
+    invite:
+      "Whenever you're ready, tap the button and tell me anything you'd like. Take all the time you want.",
+    eyebrowAsked: (askerSpokenName: string) => `${askerSpokenName} asked`,
+    eyebrowDefault: "A thought to start with",
+    starterPrompt:
+      "What's something from your day, or from long ago, that's been on your mind?",
+    thanks: "Thank you. Your family will love hearing this.",
+    pickUpLater:
+      "Let's pick this up another time. The person who invited you will check in soon.",
+  },
+  approve: {
+    welcome: "Welcome.",
+    resting:
+      "This link is resting for now. Whoever invited you will help you get started again.",
+    thanks: "Thank you.",
+    alreadySettled:
+      "This one is already settled. You can close this window whenever you're ready.",
+    brand: "Family Chronicle",
+    yourStory: "Your Story",
+    readyToShare: "Ready to share this one?",
+    haveAListen: "Have a listen first. Then tell me who should be able to hear it.",
+    confirmedThanks: "Thank you. Your family will hear it now.",
+    pickUpLater:
+      "Let's pick this up another time. The person who invited you will check in soon.",
+    oneMoment: "One moment…",
+    sayInOwnWords: 'Say it in your own words — "Yes, my family can hear this."',
+    listening: "Listening…",
+    imFinished: "I'm finished",
+    whoShouldHear: "Who should hear this?",
+    approveAloud: "Approve aloud",
+  },
+} as const;
