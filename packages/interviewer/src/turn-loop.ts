@@ -10,6 +10,7 @@
  * surface (Phase 1: a thin web page) drives pacing; this module is the brain it consults.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
+import type { BiographicalProfile } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
@@ -30,6 +31,8 @@ import {
 } from "./behavior";
 import { MEMORY_LOOKBACK_COUNT } from "./constants";
 import { phraseIntent } from "./phraser";
+import { extractIntakeAnswer } from "./intake-extraction";
+import { INTAKE_QUESTIONS } from "./questions/intake";
 
 export interface InterviewerDeps {
   languageModel: LanguageModel;
@@ -43,6 +46,8 @@ export interface InterviewerDeps {
 
 export interface InterviewSessionOptions {
   narratorPersonId: string;
+  /** When set, the session was opened via a notification deeplink for this specific Ask. */
+  targetAskId?: string;
 }
 
 export interface Turn {
@@ -58,7 +63,7 @@ export interface InterviewSession {
    * and there is nothing more to say (the loop ends cleanly). */
   nextTurn(): Promise<Turn>;
   /** Feed the narrator's response into the session state so the next turn can react. */
-  recordResponse(utterance: string): void;
+  recordResponse(utterance: string): Promise<void>;
   /** Direct read of the running state (tests & observability). */
   getState(): SessionState;
   /** Direct read of the memory snapshot loaded at start (tests & observability). */
@@ -85,12 +90,18 @@ export async function createInterviewSession(
   ]);
   primeCoveredCategoriesFromPrior(state, priorStories);
 
+  // Tracks the intake field the LAST served turn asked about, so the matching `recordResponse`
+  // knows which extraction to run. Cleared after every response (intake or not).
+  let pendingIntakeKey: keyof BiographicalProfile | null = null;
+
   async function nextTurn(): Promise<Turn> {
-    const intent = pickNextIntent({ state, pendingAsks, priorStories });
+    const intent = pickNextIntent({ state, pendingAsks, priorStories, anchors, targetAskId: opts.targetAskId });
+    if (intent.kind === "intake") pendingIntakeKey = intent.questionKey;
     const phrased = await phraseIntent(deps.languageModel, {
       intent,
       anchors,
       priorStories,
+      isFirstSession: priorStories.length === 0,
     });
     const audio = await deps.voice.speak({
       text: phrased.spokenText,
@@ -112,8 +123,24 @@ export async function createInterviewSession(
     return { intent, spokenText: phrased.spokenText, audio, state };
   }
 
-  function recordResponse(utterance: string): void {
+  async function recordResponse(utterance: string): Promise<void> {
     ingestNarratorUtterance(state, utterance);
+    const key = pendingIntakeKey;
+    pendingIntakeKey = null;
+    if (!key) return;
+    const question = INTAKE_QUESTIONS.find((q) => q.key === key);
+    if (!question) return;
+    try {
+      const value = await extractIntakeAnswer(deps.languageModel, question, utterance);
+      if (value !== null && value !== undefined) {
+        await deps.anchorSource.writeProfileField(state.narratorPersonId, key, value as never);
+      }
+    } catch (e) {
+      // Extraction is best-effort: a failure must not break the session. The field stays null and
+      // the question is re-asked next session (askedIntakeKeys only guards within this session).
+      // eslint-disable-next-line no-console
+      console.warn("intake extraction failed (key=%s):", key, e);
+    }
   }
 
   return {

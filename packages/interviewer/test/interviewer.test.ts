@@ -58,6 +58,15 @@ const PRIOR: PriorStoryMemory[] = [
   { storyId: "s1", title: "The farm", summary: "A farm", tags: [], promptQuestion: null, createdAt: new Date() },
 ];
 
+// Anchors with a fully-populated profile, so the picker has no intake field left to collect and
+// falls through to pending Asks / the base bank — used by ask-routing tests.
+const COMPLETE_ANCHORS: BiographicalAnchors = {
+  personId: NARRATOR,
+  spokenName: "Eleanor",
+  birthYear: 1942,
+  profile: { hometown: "Iowa", siblingContext: "Oldest of three", currentLocation: "Des Moines", occupationSummary: "Schoolteacher", hasChildren: false, hasGrandchildren: null },
+};
+
 function makeDeps(opts: {
   asks?: PendingAsk[];
   stories?: PriorStoryMemory[];
@@ -323,9 +332,9 @@ describe("turn loop — composes turn from all four inputs", () => {
         priority: 10,
       },
     ];
-    const deps = makeDeps({ asks, llmRespond: "Sofia was wondering what Grandpa was like…" });
+    const deps = makeDeps({ asks, anchors: COMPLETE_ANCHORS, llmRespond: "Sofia was wondering what Grandpa was like…" });
     const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
-    // Burn turn 0 by forcing it past callback (no prior stories ⇒ goes straight to ask).
+    // No prior stories and a complete profile (no intake left) ⇒ goes straight to ask.
     const turn = await session.nextTurn();
     expect(turn.intent.kind).toBe("ask");
     const llmUserMsg = deps.languageModel.calls[0]!.messages.find((m) => m.role === "user")!
@@ -338,7 +347,7 @@ describe("turn loop — composes turn from all four inputs", () => {
     const deps = makeDeps({});
     const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     await session.nextTurn(); // base question
-    session.recordResponse("let's skip that, please");
+    await session.recordResponse("let's skip that, please");
     const next = await session.nextTurn();
     expect(next.intent.kind).toBe("wind_down");
   });
@@ -378,7 +387,7 @@ describe("turn loop — composes turn from all four inputs", () => {
         questionText: "Tell me about your wedding.",
       },
     ];
-    const deps = makeDeps({ asks });
+    const deps = makeDeps({ asks, anchors: COMPLETE_ANCHORS });
     const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
     const t = await session.nextTurn();
     expect(t.intent.kind).toBe("ask");
@@ -594,5 +603,60 @@ describe("extractIntakeAnswer", () => {
   it("returns null on unparseable output", async () => {
     const llm = new ScriptedLanguageModel({ respond: "not json" });
     expect(await extractIntakeAnswer(llm, hometownQ, "...")).toBeNull();
+  });
+});
+
+describe("Turn loop — deeplink + intake extraction", () => {
+  function freshAnchors() {
+    const a = new InMemoryAnchorSource();
+    a.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943, profile: EMPTY_PROFILE });
+    return a;
+  }
+  it("serves deeplink ask on turn 0 even with prior stories", async () => {
+    const memory = new InMemoryMemorySource(); memory.setStories("p1", PRIOR);
+    const asks = new InMemoryAskSource(); asks.setAsks("p1", [{ askId: "dl", askerName: "Marcus", questionText: "?", priority: 1 }]);
+    const s = await createInterviewSession(
+      { languageModel: new ScriptedLanguageModel({ respond: "Marcus asked..." }),
+        voice: new ScriptedVoice(), askSource: asks, memorySource: memory, anchorSource: freshAnchors() },
+      { narratorPersonId: "p1", targetAskId: "dl" });
+    const t = await s.nextTurn();
+    expect(t.intent.kind).toBe("ask");
+    expect((t.intent as Extract<PromptIntent, { kind: "ask" }>).askId).toBe("dl");
+  });
+
+  it("after an intake turn, recordResponse extracts + writes the field", async () => {
+    const anchors = freshAnchors();
+    // respond is a FUNCTION: the extractor call's user message contains "EXTRACTION INSTRUCTION"
+    // (return the JSON value); every other call is the phraser (return the question text).
+    const llm = new ScriptedLanguageModel({ respond: (req) => {
+      const user = req.messages.find((m) => m.role === "user")?.content ?? "";
+      return user.includes("EXTRACTION INSTRUCTION")
+        ? JSON.stringify({ value: "New Orleans" })
+        : "Tell me about where you grew up.";
+    }});
+    const s = await createInterviewSession(
+      { languageModel: llm, voice: new ScriptedVoice(), askSource: new InMemoryAskSource(),
+        memorySource: new InMemoryMemorySource(), anchorSource: anchors },
+      { narratorPersonId: "p1" });
+    const t = await s.nextTurn();
+    expect(t.intent.kind).toBe("intake");
+    await s.recordResponse("Oh, I grew up in New Orleans.");
+    const updated = await anchors.loadForNarrator("p1");
+    expect(updated?.profile.hometown).toBe("New Orleans");
+  });
+
+  it("recordResponse after a non-intake turn does not invoke the extractor", async () => {
+    const anchors = new InMemoryAnchorSource();
+    anchors.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943,
+      profile: { hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: false, hasGrandchildren: null } });
+    const llm = new ScriptedLanguageModel({ respond: "Tell me about a childhood meal." });
+    const s = await createInterviewSession(
+      { languageModel: llm, voice: new ScriptedVoice(), askSource: new InMemoryAskSource(),
+        memorySource: new InMemoryMemorySource(), anchorSource: anchors },
+      { narratorPersonId: "p1" });
+    await s.nextTurn();
+    expect(llm.calls.length).toBe(1);          // only the phraser call
+    await s.recordResponse("It was wonderful.");
+    expect(llm.calls.length).toBe(1);          // extractor was NOT invoked
   });
 });
