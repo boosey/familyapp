@@ -19,6 +19,15 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 - **Data-processing agreements.** Spec requires confirming a DPA before sending real narrator
   audio to any transcription vendor. Not actionable by me; flagged for you.
 
+## Parked features — need their own design session
+
+- **Richer biographical "picture of the person" extraction (2026-06-29).** Beyond the current
+  fixed 6-field `augmentProfileFromStory` (hometown, siblingContext, currentLocation,
+  occupationSummary, hasChildren, hasGrandchildren), Alex wants to extract key facts about a
+  person by analyzing the stories they submit — building an evolving portrait, not a fixed schema.
+  Flagged as a new feature deserving its own brainstorming/design session; not in the prose-
+  provenance work (see `docs/superpowers/specs/2026-06-29-prose-provenance-and-human-correction-design.md`).
+
 ## Assumptions made (correct me if wrong)
 
 - **"Branch" audience tier == "family" for enforcement** until branch structure is modeled
