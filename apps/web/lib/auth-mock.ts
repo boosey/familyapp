@@ -34,11 +34,10 @@ import { accounts, mockAuthUsers, persons } from "@chronicle/db/schema";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, MockAuthUser } from "@chronicle/db";
 import type { AuthProvider } from "./auth";
+import { PASSWORD_SALT_BYTES, SCRYPT_KEY_LENGTH_BYTES } from "./constants";
 
 /** httpOnly session cookie name. Value = the Account's `auth_provider_user_id` (opaque). */
 export const DEV_MOCK_SESSION_COOKIE = "chronicle_mock_session";
-
-const SCRYPT_KEYLEN = 64;
 
 // --------------------------------------------------------------------------
 // Password hashing — pure, no DB, no cookies. Exported for direct unit testing.
@@ -46,8 +45,8 @@ const SCRYPT_KEYLEN = 64;
 
 /** Hash a password with a fresh random salt. Format: `scrypt$<saltHex>$<hashHex>`. */
 export function hashPassword(password: string): string {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, SCRYPT_KEYLEN);
+  const salt = randomBytes(PASSWORD_SALT_BYTES);
+  const hash = scryptSync(password, salt, SCRYPT_KEY_LENGTH_BYTES);
   return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
 }
 
