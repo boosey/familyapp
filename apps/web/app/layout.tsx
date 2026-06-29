@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
+import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "../lib/constants";
+import { FONT_SIZE_STORAGE_KEY } from "./_kindred/font-scale-constants";
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
@@ -62,12 +64,11 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`}>
       <head>
-        {/* Apply the persisted reading-size scale BEFORE first paint to avoid a flash/reflow.
-            Mirrors KindredFontScale (key "kin-font-scale", base root 18px) — keep in sync. */}
+        {/* Apply the persisted reading-size step BEFORE first paint to avoid a flash/reflow.
+            Reads the same constants as KindredFontScale — single source of truth. */}
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var n=+localStorage.getItem('kin-font-scale');if(isFinite(n)&&n>0)document.documentElement.style.fontSize=(18*n)+'px';}catch(e){}})()",
+            __html: `(function(){try{var S=${JSON.stringify(FONT_SIZE_STEPS_PT)};var i=+localStorage.getItem(${JSON.stringify(FONT_SIZE_STORAGE_KEY)});if(!(Number.isInteger(i)&&i>=0&&i<S.length))i=${DEFAULT_FONT_SIZE_INDEX};document.documentElement.style.fontSize=S[i]+'pt';}catch(e){}})()`,
           }}
         />
       </head>

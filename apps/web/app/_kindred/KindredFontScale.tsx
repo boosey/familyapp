@@ -8,16 +8,15 @@
  * it survives navigation and reloads. Point sizes live in `font-scale-constants.ts`.
  */
 import { useEffect, useState, type CSSProperties } from "react";
-import {
-  FONT_SIZE_STEPS_PT,
-  DEFAULT_FONT_SIZE_INDEX,
-  FONT_SIZE_STORAGE_KEY,
-} from "./font-scale-constants";
+import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "@/lib/constants";
+import { FONT_SIZE_STORAGE_KEY } from "./font-scale-constants";
 import { common } from "@/app/_copy";
 
 /** Glyph size (px) shown inside each cell so the row reads small → large. Presentational only —
- *  fixed px so the control itself never resizes when it changes the page scale. */
-const GLYPH_PX = [12, 15, 18, 22, 26];
+ *  fixed px so the control itself never resizes when it changes the page scale.
+ *  Deliberately a *compressed* range (not the real point sizes): the A's only need to hint at the
+ *  progression, not literally render at the size they represent — that made the control sprawl. */
+const GLYPH_PX = [13, 15, 17, 19, 21];
 
 function applyStep(idx: number): void {
   document.documentElement.style.fontSize = `${FONT_SIZE_STEPS_PT[idx]}pt`;
@@ -75,8 +74,10 @@ const groupStyle: CSSProperties = {
 
 function cellStyle(on: boolean, idx: number): CSSProperties {
   return {
-    width: 44,
-    height: 40,
+    // Hug the glyph: tight horizontal padding, no fixed width. The control is now sized by its
+    // content (~tap-friendly) instead of five oversized boxes.
+    padding: "0 7px",
+    height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
