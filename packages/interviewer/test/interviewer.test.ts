@@ -1,5 +1,6 @@
 import type { BiographicalProfile } from "@chronicle/db";
 import { ScriptedLanguageModel } from "@chronicle/pipeline";
+import { nextIntakeQuestion, INTAKE_QUESTIONS } from "../src/questions/intake";
 import { describe, expect, it } from "vitest";
 import {
   createInterviewSession,
@@ -423,5 +424,38 @@ describe("BiographicalAnchors — typed profile", () => {
   it("writeProfileField on unknown personId is a safe no-op", async () => {
     const source = new InMemoryAnchorSource();
     await expect(source.writeProfileField("nobody", "hometown", "Paris")).resolves.toBeUndefined();
+  });
+});
+
+describe("Intake question bank", () => {
+  it("returns first question when profile is empty", () => {
+    expect(nextIntakeQuestion(EMPTY_PROFILE, new Set())?.key).toBe("hometown");
+  });
+  it("skips already-asked keys", () => {
+    expect(nextIntakeQuestion(EMPTY_PROFILE, new Set(["hometown"]))?.key).toBe("siblingContext");
+  });
+  it("skips populated fields", () => {
+    expect(nextIntakeQuestion({ ...EMPTY_PROFILE, hometown: "NOLA" }, new Set())?.key).toBe("siblingContext");
+  });
+  it("asks the children question when only children fields remain", () => {
+    const p = { ...EMPTY_PROFILE, hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: null };
+    expect(nextIntakeQuestion(p, new Set())?.key).toBe("hasChildren");
+  });
+  it("skips hasGrandchildren once children asked but inference was null", () => {
+    const p = { ...EMPTY_PROFILE, hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: null };
+    expect(nextIntakeQuestion(p, new Set(["hasChildren"]))).toBeNull();
+  });
+  it("asks hasGrandchildren when hasChildren is true", () => {
+    const p = { ...EMPTY_PROFILE, hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: true };
+    expect(nextIntakeQuestion(p, new Set())?.key).toBe("hasGrandchildren");
+  });
+  it("returns null when all applicable fields populated (no children)", () => {
+    const p: BiographicalProfile = { hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: false, hasGrandchildren: null };
+    expect(nextIntakeQuestion(p, new Set())).toBeNull();
+  });
+  it("no INTAKE question uses yes/no framing", () => {
+    for (const q of INTAKE_QUESTIONS) {
+      expect(q.text.toLowerCase()).not.toMatch(/^(do|did|are|is|have|has|were|was) you/);
+    }
   });
 });
