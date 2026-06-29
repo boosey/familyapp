@@ -536,6 +536,40 @@ describe("pipeline — prose provenance", () => {
     const rows = await listProseRevisions(db, storyId);
     expect(rows).toHaveLength(2);
   });
+
+  it("completes a partially-rendered story on resume without duplicating L2", async () => {
+    // Guards "resume-after-partial-render completes with exactly one L2, no duplicate."
+    // Under the corrected ordering (update prose -> transition state -> append L2), a crash
+    // can leave the story with prose set but state still `draft` and NO ai_polished row yet.
+    // We reconstruct exactly that realistic post-partial-failure state, then re-run the full
+    // pipeline. Transcribe skips (transcript is set); render re-enters (state is still draft)
+    // and must finish with EXACTLY ONE L2 row — never two.
+    const narratorId = await makeNarrator();
+    const { storyId } = await seedDraftStory(narratorId, new Uint8Array([4, 2]));
+    // Set transcript + prose but leave state `draft` and append NO revisions — the precise
+    // state a crash between transition and the L2 append (or before either) would leave behind.
+    await updateDerivedFields(db, storyId, {
+      transcript: "A half-finished memory.",
+      prose: "A half-finished memory, polished.",
+    });
+    expect(await listProseRevisions(db, storyId)).toHaveLength(0);
+
+    const transcriber = new ScriptedTranscriber({ text: "A half-finished memory." });
+    const languageModel = new ScriptedLanguageModel();
+    const pipeline = createPipeline({ db, storage, transcriber, languageModel });
+
+    await pipeline.start(storyId);
+    await pipeline.runToCompletion();
+
+    const rows = await listProseRevisions(db, storyId);
+    expect(rows.filter((r) => r.level === "ai_polished")).toHaveLength(1);
+    const story = await getStoryForViewer(
+      db,
+      { kind: "link_session", personId: narratorId },
+      storyId,
+    );
+    expect(story!.state).toBe("pending_approval");
+  });
 });
 
 describe("pipeline — no vendor SDK imports leak into IP code", () => {

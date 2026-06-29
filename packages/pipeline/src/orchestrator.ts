@@ -196,8 +196,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       tags: render.tags,
     });
 
-    // Record L2 prose provenance: the AI-polished output with the LM model id + exact system
-    // prompt. Placed AFTER the idempotency early-return above, so re-runs never append a duplicate.
+    // draft -> pending_approval. Story stays `private` (audienceTier is untouched). The
+    // approval gate (Increment 5) is the only thing that may move it onward.
+    await transitionStoryState(deps.db, view.storyId, "pending_approval");
+
+    // Append L2 LAST — after BOTH gate conditions (prose set AND state=pending_approval) are
+    // committed — so any retry sees the gate satisfied and skips, never producing a duplicate
+    // ai_polished row. (Mirrors the transcribe stage, whose gate condition also commits before
+    // its L1 append.) Records the AI-polished output with the LM model id + exact system prompt.
     await appendProseRevision(deps.db, {
       storyId: view.storyId,
       level: "ai_polished",
@@ -205,10 +211,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       modelId: render.modelId,
       promptText: render.systemPrompt,
     });
-
-    // draft -> pending_approval. Story stays `private` (audienceTier is untouched). The
-    // approval gate (Increment 5) is the only thing that may move it onward.
-    await transitionStoryState(deps.db, view.storyId, "pending_approval");
   };
 
   queue.register("transcribe", runTranscribeStage);
