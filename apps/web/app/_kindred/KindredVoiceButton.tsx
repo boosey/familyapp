@@ -1,5 +1,6 @@
 "use client";
 import type { CSSProperties } from "react";
+import { Mic, Square } from "lucide-react";
 import { common } from "@/app/_copy";
 
 export interface KindredVoiceButtonProps {
@@ -55,26 +56,9 @@ export function KindredVoiceButton({
         : "none",
   };
 
-  // Mic glyph: rounded-rect body shape (like a mic capsule), white on accent ground.
-  // Stop glyph: 26×26 rounded square for "stop recording".
-  const glyphSize = Math.round(size * 0.27); // ~26px at size=96, scales with size
-  const glyphStyle: CSSProperties = listening
-    ? {
-        width: glyphSize,
-        height: glyphSize,
-        borderRadius: 6,
-        background: "var(--accent)",
-        flexShrink: 0,
-      }
-    : {
-        // mic body
-        width: Math.round(size * 0.3),
-        height: Math.round(size * 0.47),
-        borderRadius: Math.round(size * 0.16),
-        background: "var(--accent-on)",
-        flexShrink: 0,
-        opacity: saving ? 0.55 : 1,
-      };
+  // Mic glyph: lucide microphone, white on accent ground.
+  // Stop glyph: lucide filled square for "stop recording".
+  const glyphSize = Math.round(size * 0.4); // ~38px at size=96, scales with size
 
   const captionColor = listening
     ? "var(--accent)"
@@ -106,7 +90,23 @@ export function KindredVoiceButton({
         aria-pressed={listening}
         style={buttonStyle}
       >
-        <span role="presentation" style={glyphStyle} />
+        {listening ? (
+          <Square
+            size={Math.round(size * 0.27)}
+            color="var(--accent)"
+            fill="var(--accent)"
+            strokeWidth={2}
+            aria-hidden
+          />
+        ) : (
+          <Mic
+            size={glyphSize}
+            color="var(--accent-on)"
+            strokeWidth={2}
+            aria-hidden
+            style={{ opacity: saving ? 0.55 : 1, flexShrink: 0 }}
+          />
+        )}
       </button>
       <span
         style={{
