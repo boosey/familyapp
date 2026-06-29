@@ -32,30 +32,9 @@ import {
   type BaseQuestion,
   type Sensitivity,
 } from "./questions/bank";
-
-// ---------------------------------------------------------------------------
-// Policy constants — single source of truth so a reviewer can audit them and a future tuning
-// pass changes one number, not many.
-// ---------------------------------------------------------------------------
-
-/**
- * Minimum number of completed turns before a `high`-sensitivity question may be picked. This
- * is the "gentle sequencing" guarantee — sensitive topics only after rapport. A future, more
- * sophisticated policy could use signals other than a count, but the count is auditable.
- */
-export const RAPPORT_THRESHOLD_TURNS = 4;
-
-/**
- * How long to wait through silence before nudging the narrator. Silence IS thinking — this is well
- * past what a generic voice assistant uses. The surface honors this; the policy names it.
- */
-export const SILENCE_TOLERANCE_MS = 12_000;
-
-/**
- * How many prior stories the picker considers when composing memory / de-duplication. Keeping
- * this small caps prompt size and surfaces only recent salience.
- */
-export const MEMORY_LOOKBACK_COUNT = 8;
+// Policy constants (RAPPORT_THRESHOLD_TURNS, SILENCE_TOLERANCE_MS, MEMORY_LOOKBACK_COUNT, …) now
+// live in ./constants — single source of truth so a reviewer can audit them in one place.
+import { RAPPORT_THRESHOLD_TURNS } from "./constants";
 
 // ---------------------------------------------------------------------------
 // Session state — accumulated as turns happen. Pure data, owned by the caller; the picker is

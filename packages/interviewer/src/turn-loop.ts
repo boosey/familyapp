@@ -20,7 +20,6 @@ import type {
   VoiceSpeakResult,
 } from "./contracts";
 import {
-  MEMORY_LOOKBACK_COUNT,
   createSessionState,
   ingestNarratorUtterance,
   pickNextIntent,
@@ -29,6 +28,7 @@ import {
   type PromptIntent,
   type SessionState,
 } from "./behavior";
+import { MEMORY_LOOKBACK_COUNT } from "./constants";
 import { phraseIntent } from "./phraser";
 
 export interface InterviewerDeps {

@@ -30,6 +30,9 @@ export {
   RAPPORT_THRESHOLD_TURNS,
   SILENCE_TOLERANCE_MS,
   MEMORY_LOOKBACK_COUNT,
+} from "./constants";
+
+export {
   createSessionState,
   ingestNarratorUtterance,
   detectDistress,

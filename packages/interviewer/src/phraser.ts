@@ -12,6 +12,10 @@
 import type { LanguageModel, LanguageModelMessage } from "@chronicle/pipeline";
 import type { BiographicalAnchors, PriorStoryMemory } from "./contracts";
 import type { PromptIntent } from "./behavior";
+import {
+  INTERVIEWER_PHRASE_LLM_TEMPERATURE,
+  INTERVIEWER_PHRASE_MAX_OUTPUT_TOKENS,
+} from "./constants";
 
 const SYSTEM_PROMPT = `You are the warm voice of the family chronicler. You are speaking to a
 family member who is sharing their life stories. You are not a chatbot and not a therapist.
@@ -58,8 +62,8 @@ export async function phraseIntent(
   const res = await llm.complete({
     messages,
     responseFormat: "text",
-    temperature: 0.4,
-    maxOutputTokens: 250,
+    temperature: INTERVIEWER_PHRASE_LLM_TEMPERATURE,
+    maxOutputTokens: INTERVIEWER_PHRASE_MAX_OUTPUT_TOKENS,
   });
   return { spokenText: res.text.trim(), modelId: res.modelId };
 }
