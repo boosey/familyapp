@@ -53,9 +53,12 @@ describe("prose_revisions table", () => {
       .returning();
 
     expect(l1!.level).toBe("ai_transcribed");
+    expect(l1!.text).toBe("raw transcript");
+    expect(l1!.modelId).toBe("mock-whisper-turbo");
     expect(l1!.promptText).toBeNull();
     expect(l1!.actorPersonId).toBeNull();
     expect(l3!.level).toBe("human_corrected");
+    expect(l3!.text).toBe("edited prose");
     expect(l3!.modelId).toBeNull();
     expect(l3!.actorPersonId).toBe(personId);
     expect(l3!.seq).toBeGreaterThan(l1!.seq);

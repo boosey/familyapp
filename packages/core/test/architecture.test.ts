@@ -58,7 +58,7 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
   },
   { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
   {
-    re: /\.query\.(stories|media)\b/,
+    re: /\.query\.(stories|media|proseRevisions)\b/,
     label: "uses the Drizzle relational API on a content table (db.query.*)",
   },
 ];

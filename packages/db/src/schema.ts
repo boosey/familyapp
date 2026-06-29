@@ -116,8 +116,10 @@ export const joinRequestStatusEnum = pgEnum("join_request_status", [
   "declined",
 ]);
 
-/** The provenance levels of a story's prose, oldest to newest. `ai_verified` is a reserved
- * future seam (an AI verify/judge step) — not produced by Phase 1. */
+/**
+ * The provenance levels of a story's prose, oldest to newest. `ai_verified` is a reserved
+ * future seam (an AI verify/judge step) — not produced by Phase 1.
+ */
 export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
   "ai_transcribed",
   "ai_polished",
@@ -385,7 +387,8 @@ export const proseRevisions = pgTable(
   "prose_revisions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Monotonic total order over a story's revisions — deterministic ordering even within a tx. */
+    /** Monotonic global sequence — provides deterministic per-story ordering even when two
+     * rows share a created_at timestamp. */
     seq: bigserial("seq", { mode: "number" }).notNull(),
     storyId: uuid("story_id")
       .notNull()
