@@ -18,14 +18,6 @@ import { common, welcome } from "@/app/_copy";
 
 type Step = "welcome" | "dob" | "doors" | "interview" | "done";
 
-interface InterviewQuestion {
-  key: "birthplace" | "placesLived" | "keyMoments";
-  chip: string;
-  prompt: string;
-  placeholder: string;
-  voiceLabel: string;
-}
-
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
 
@@ -84,7 +76,7 @@ export function WelcomeFlow({
       await saveDob({ year: Number(year), month: Number(month), day: Number(day) });
       setStep("doors");
     } catch {
-      setError("Something went wrong saving that. Please try again.");
+      setError(welcome.dobSaveError);
     } finally {
       setBusy(false);
     }
@@ -123,7 +115,7 @@ export function WelcomeFlow({
       await saveInterviewFacts(buildFacts(merged));
       setStep("done");
     } catch {
-      setError("We couldn't save your answers. You can still continue to the hub.");
+      setError(welcome.answersSaveError);
       setStep("done");
     } finally {
       setBusy(false);

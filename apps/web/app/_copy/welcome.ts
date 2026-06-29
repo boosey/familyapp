@@ -39,6 +39,8 @@ export const welcome = {
     "Your family will see these and have something to ask you about. There's always more to tell whenever you're ready.",
   takeMeToHub: "Take me to the hub",
   takeMeToHubArrow: "Take me to the hub →",
+  dobSaveError: "Something went wrong saving that. Please try again.",
+  answersSaveError: "We couldn't save your answers. You can still continue to the hub.",
   // `key` is a stable structural id (not copy); chip/prompt/placeholder/voiceLabel are copy.
   questions: [
     {
