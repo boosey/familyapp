@@ -86,7 +86,7 @@ export default async function DevSignIn() {
         <p style={{ marginTop: 20 }}>
           <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-meta)" }}>
             {auth.devSignIn.backToHub}
-</Link>
+          </Link>
         </p>
       </div>
     </main>
