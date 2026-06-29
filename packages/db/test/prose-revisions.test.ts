@@ -69,4 +69,29 @@ describe("prose_revisions table", () => {
       .where(eq(proseRevisions.storyId, storyId));
     expect(rows).toHaveLength(2);
   });
+
+  it("rejects UPDATE of a prose revision", async () => {
+    const { storyId } = await makeStory();
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_polished", text: "v1", modelId: "mock-claude" })
+      .returning();
+    await expect(
+      db
+        .update(proseRevisions)
+        .set({ text: "v2" })
+        .where(eq(proseRevisions.id, row!.id)),
+    ).rejects.toThrow(/append-only/i);
+  });
+
+  it("rejects DELETE of a prose revision", async () => {
+    const { storyId } = await makeStory();
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_polished", text: "v1", modelId: "mock-claude" })
+      .returning();
+    await expect(
+      db.delete(proseRevisions).where(eq(proseRevisions.id, row!.id)),
+    ).rejects.toThrow(/append-only/i);
+  });
 });

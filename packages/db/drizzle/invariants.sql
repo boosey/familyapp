@@ -23,6 +23,13 @@ CREATE TRIGGER consent_records_append_only
   BEFORE UPDATE OR DELETE ON consent_records
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
 
+-- Prose revisions: the prose provenance ledger (L1 transcribed → L2 polished → L3 corrected).
+-- Append-only like the consent ledger — a correction is a NEW row, never an edit. Reuses the
+-- shared chronicle_forbid_mutation() guard defined above.
+CREATE TRIGGER prose_revisions_append_only
+  BEFORE UPDATE OR DELETE ON prose_revisions
+  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+
 -- Media: consent-scoped immutability per ADR-0002.
 --   UPDATE  → always forbidden (we never mutate audio bytes or their metadata).
 --   DELETE  → allowed ONLY when neither the media row nor its owning Story is linked to any
