@@ -14,6 +14,7 @@ import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { KindredButton, KindredVoiceButton, KindredChip } from "@/app/_kindred";
 import { saveDob, saveInterviewFacts, type InterviewFacts } from "./actions";
+import { common, welcome } from "@/app/_copy";
 
 type Step = "welcome" | "dob" | "doors" | "interview" | "done";
 
@@ -24,35 +25,6 @@ interface InterviewQuestion {
   placeholder: string;
   voiceLabel: string;
 }
-
-const QUESTIONS: InterviewQuestion[] = [
-  {
-    key: "birthplace",
-    chip: "Born in",
-    prompt: "Where were you born?",
-    placeholder: "e.g. Lafayette, Louisiana",
-    voiceLabel: "Tap to answer",
-  },
-  {
-    key: "placesLived",
-    chip: "Lived in",
-    prompt: "Where have you lived since?",
-    placeholder: "e.g. New Orleans, then Houston",
-    voiceLabel: "Tap to answer",
-  },
-  {
-    key: "keyMoments",
-    chip: "A moment",
-    prompt: "What's one moment you'd want remembered?",
-    placeholder: "e.g. The summer we drove out to the coast",
-    voiceLabel: "Tap to answer",
-  },
-];
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
@@ -128,7 +100,7 @@ export function WelcomeFlow({
 
   /** Commit the current draft into answers and return the merged map. */
   function commitDraft(): Record<string, string> {
-    const current = QUESTIONS[qIndex];
+    const current = welcome.questions[qIndex];
     const merged = { ...answers };
     if (current && draft.trim()) merged[current.key] = draft.trim();
     setAnswers(merged);
@@ -137,9 +109,9 @@ export function WelcomeFlow({
 
   async function nextQuestion() {
     const merged = commitDraft();
-    if (qIndex < QUESTIONS.length - 1) {
+    if (qIndex < welcome.questions.length - 1) {
       const next = qIndex + 1;
-      const nextQ = QUESTIONS[next];
+      const nextQ = welcome.questions[next];
       setQIndex(next);
       setDraft(nextQ ? (answers[nextQ.key] ?? "") : "");
       setVoiceNote(false);
@@ -227,19 +199,18 @@ export function WelcomeFlow({
     return (
       <main style={page}>
         <div style={card}>
-          <div className="kin-eyebrow">{invited ? "You're invited in" : "Welcome"}</div>
+          <div className="kin-eyebrow">{invited ? welcome.introEyebrowInvited : welcome.introEyebrowDefault}</div>
           <h1 style={{ ...serifHeadline, marginTop: 12 }}>
             {invited
-              ? `Welcome to the family, ${firstName}.`
-              : "Welcome to Family Chronicle."}
+              ? welcome.greetingNamed(firstName)
+              : welcome.greetingDefault}
           </h1>
           <p style={sub}>
-            A couple of quick things and you&apos;ll be in. The only thing we truly need is your
-            birthday — it helps us tell your stories at your pace.
+            {welcome.introBody}
           </p>
           <div style={{ marginTop: 28 }}>
             <KindredButton
-              label="Let's begin"
+              label={welcome.begin}
               size="large"
               onClick={() => setStep("dob")}
             />
@@ -254,22 +225,21 @@ export function WelcomeFlow({
     return (
       <main style={page}>
         <div style={card}>
-          <h1 style={serifHeadline}>Before we go in — when were you born?</h1>
+          <h1 style={serifHeadline}>{welcome.birthdayTitle}</h1>
           <p style={sub}>
-            This is the one thing we ask for. It shapes the questions and the pace we&apos;ll use
-            with you later. Nothing else on this screen is required.
+            {welcome.birthdayBody}
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "28px 0 20px" }}>
-            <KindredVoiceButton label="Say it out loud" onClick={showVoiceStub} />
+            <KindredVoiceButton label={welcome.sayItOutLoud} onClick={showVoiceStub} />
             {voiceNote ? (
-              <p style={voiceHint}>Voice isn&apos;t available here yet — use the fields below.</p>
+              <p style={voiceHint}>{welcome.voiceUnavailableFields}</p>
             ) : null}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr 1fr", gap: 10 }}>
             <label className="kin-form-label">
-              Month
+              {welcome.monthLabel}
               <select
                 className="kin-field"
                 value={month}
@@ -280,8 +250,8 @@ export function WelcomeFlow({
                   if (day !== "" && Number(day) > daysInMonth(m, year)) setDay("");
                 }}
               >
-                <option value="">Month</option>
-                {MONTHS.map((m, i) => (
+                <option value="">{welcome.monthLabel}</option>
+                {common.months.map((m, i) => (
                   <option key={m} value={i + 1}>
                     {m}
                   </option>
@@ -289,9 +259,9 @@ export function WelcomeFlow({
               </select>
             </label>
             <label className="kin-form-label">
-              Day
+              {welcome.dayLabel}
               <select className="kin-field" value={day} onChange={(e) => setDay(e.target.value)}>
-                <option value="">Day</option>
+                <option value="">{welcome.dayLabel}</option>
                 {Array.from({ length: daysInMonth(month, year) }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
                     {d}
@@ -300,7 +270,7 @@ export function WelcomeFlow({
               </select>
             </label>
             <label className="kin-form-label">
-              Year
+              {welcome.yearLabel}
               <select
                 className="kin-field"
                 value={year}
@@ -311,7 +281,7 @@ export function WelcomeFlow({
                   if (day !== "" && Number(day) > daysInMonth(month, y)) setDay("");
                 }}
               >
-                <option value="">Year</option>
+                <option value="">{welcome.yearLabel}</option>
                 {YEARS.map((y) => (
                   <option key={y} value={y}>
                     {y}
@@ -325,7 +295,7 @@ export function WelcomeFlow({
 
           <div style={{ marginTop: 28 }}>
             <KindredButton
-              label={busy ? "One moment…" : "Continue"}
+              label={busy ? welcome.oneMoment : welcome.continue}
               size="large"
               fullWidth
               disabled={!dobComplete || busy}
@@ -343,10 +313,10 @@ export function WelcomeFlow({
       <main style={page}>
         <div style={{ maxWidth: 720, width: "100%" }}>
           <h1 style={{ ...serifHeadline, textAlign: "center" }}>
-            You&apos;re in, {firstName}. Where to first?
+            {welcome.destinationTitle(firstName)}
           </h1>
           <p style={{ ...sub, textAlign: "center", maxWidth: "46ch", margin: "12px auto 0" }}>
-            You can always do the other one later — there&apos;s no wrong choice here.
+            {welcome.destinationBody}
           </p>
 
           <div
@@ -378,13 +348,13 @@ export function WelcomeFlow({
                   color: "var(--accent-strong)",
                 }}
               >
-                PRIMARY
+                {welcome.primaryBadge}
               </div>
               <div style={{ ...serifHeadline, fontSize: "var(--text-story-lg)", margin: "10px 0 8px" }}>
-                Go to the hub
+                {welcome.hubCardTitle}
               </div>
               <div style={{ ...sub, margin: 0 }}>
-                See your family&apos;s stories and start asking questions right away.
+                {welcome.hubCardBody}
               </div>
             </button>
 
@@ -414,13 +384,13 @@ export function WelcomeFlow({
                   color: "var(--support)",
                 }}
               >
-                ABOUT 12 MINUTES
+                {welcome.tellStoryDuration}
               </div>
               <div style={{ ...serifHeadline, fontSize: "var(--text-story-lg)", margin: "10px 0 8px" }}>
-                Tell your story
+                {welcome.tellStoryTitle}
               </div>
               <div style={{ ...sub, margin: 0 }}>
-                Answer a few gentle questions so your family has something to ask you about.
+                {welcome.tellStoryBody}
               </div>
             </button>
           </div>
@@ -431,15 +401,15 @@ export function WelcomeFlow({
 
   /* ── Interview ─────────────────────────────────────────────────────────── */
   if (step === "interview") {
-    const q = QUESTIONS[qIndex];
+    const q = welcome.questions[qIndex];
     if (!q) return null; // qIndex is always in-bounds by construction; defensive for the type-checker.
-    const isLast = qIndex === QUESTIONS.length - 1;
+    const isLast = qIndex === welcome.questions.length - 1;
 
     // Captured-facts ribbon: Name ✓, Born ✓, then each interview fact (✓ done · ● current · pending).
     const ribbon: { label: string; mark: string }[] = [
       { label: fullName.split(" ")[0] ?? fullName, mark: "✓" },
       { label: "Born", mark: "✓" },
-      ...QUESTIONS.map((item, i) => {
+      ...welcome.questions.map((item, i) => {
         const done = Boolean(answers[item.key]) && i < qIndex;
         const current = i === qIndex;
         return { label: item.chip, mark: done ? "✓" : current ? "●" : "·" };
@@ -466,7 +436,7 @@ export function WelcomeFlow({
               ))}
             </div>
             <KindredButton
-              label="Take me to the hub →"
+              label={welcome.takeMeToHubArrow}
               variant="ghost"
               size="small"
               onClick={exitToHub}
@@ -482,19 +452,19 @@ export function WelcomeFlow({
               margin: "0 0 12px",
             }}
           >
-            QUESTION {qIndex + 1} OF {QUESTIONS.length}
+            {welcome.questionProgress(qIndex + 1, welcome.questions.length)}
           </p>
           <h1 style={{ ...serifHeadline, fontSize: "var(--text-prompt)" }}>{q.prompt}</h1>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "32px 0 20px" }}>
             <KindredVoiceButton label={q.voiceLabel} onClick={showVoiceStub} />
             {voiceNote ? (
-              <p style={voiceHint}>Voice isn&apos;t available here yet — type your answer below.</p>
+              <p style={voiceHint}>{welcome.voiceUnavailableType}</p>
             ) : null}
           </div>
 
           <label className="kin-form-label">
-            Type instead
+            {welcome.typeInstead}
             <textarea
               className="kin-field"
               value={draft}
@@ -508,7 +478,7 @@ export function WelcomeFlow({
 
           <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
             <KindredButton
-              label={isLast ? (busy ? "Saving…" : "Finish") : "Next"}
+              label={isLast ? (busy ? welcome.saving : welcome.finish) : welcome.next}
               size="large"
               disabled={busy}
               onClick={nextQuestion}
@@ -523,16 +493,15 @@ export function WelcomeFlow({
   return (
     <main style={page}>
       <div style={{ ...card, textAlign: "center" }}>
-        <div className="kin-eyebrow">Thank you</div>
-        <h1 style={{ ...serifHeadline, marginTop: 12 }}>That&apos;s a beautiful start.</h1>
+        <div className="kin-eyebrow">{welcome.doneEyebrow}</div>
+        <h1 style={{ ...serifHeadline, marginTop: 12 }}>{welcome.doneTitle}</h1>
         <p style={{ ...sub, maxWidth: "42ch", margin: "12px auto 0" }}>
-          Your family will see these and have something to ask you about. There&apos;s always more
-          to tell whenever you&apos;re ready.
+          {welcome.doneBody}
         </p>
         {error ? <p style={errorBox}>{error}</p> : null}
         <div style={{ marginTop: 28 }}>
           <KindredButton
-            label="Take me to the hub"
+            label={welcome.takeMeToHub}
             size="large"
             onClick={() => router.push(hubDestination)}
           />

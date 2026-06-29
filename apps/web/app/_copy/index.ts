@@ -4,3 +4,4 @@
 export { common } from "./common";
 export { auth } from "./auth";
 export { families } from "./families";
+export { welcome } from "./welcome";
