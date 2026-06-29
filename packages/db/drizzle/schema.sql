@@ -166,6 +166,13 @@ CREATE TABLE "stories" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "story_views" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
+	"first_viewed_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN KEY ("asker_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
@@ -192,6 +199,8 @@ ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" 
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
@@ -212,3 +221,5 @@ CREATE UNIQUE INDEX "mock_auth_users_provider_id_uq" ON "mock_auth_users" USING 
 CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_id");
 CREATE INDEX "stories_owner_idx" ON "stories" USING btree ("owner_person_id");
 CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");
+CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
+CREATE INDEX "story_views_person_idx" ON "story_views" USING btree ("person_id");

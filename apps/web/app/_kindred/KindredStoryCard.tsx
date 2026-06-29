@@ -10,6 +10,10 @@ export interface KindredStoryCardProps
   excerpt?: string;
   imageSrc?: string;
   pinned?: boolean;
+  /** Short recorded-date stamp shown in the card's top-right corner, e.g. "JUN 2026". */
+  recordedLabel?: string;
+  /** Renders a "NEW" pill at the start of the meta row (story unseen by the viewer). */
+  isNew?: boolean;
   /* Legacy back-compat fields (hub page still passes these) */
   era?: string;
   byline?: string;
@@ -35,6 +39,8 @@ export function KindredStoryCard({
   excerpt,
   imageSrc,
   pinned = false,
+  recordedLabel,
+  isNew = false,
   era,
   byline,
   meta = [],
@@ -62,8 +68,9 @@ export function KindredStoryCard({
         }
       : {};
 
-  /* Build the metadata row content. Prefer new scalar fields; fall back to legacy. */
-  const newMetaParts = [year, place, duration].filter(Boolean) as string[];
+  /* Build the metadata row content. Prefer new scalar fields; fall back to legacy.
+     Narrator (byline) leads, then the event era / place / duration. */
+  const newMetaParts = [byline, year, place, duration].filter(Boolean) as string[];
   const hasNewMeta = newMetaParts.length > 0;
 
   /* Legacy row: era + byline + meta[] bullets */
@@ -143,18 +150,50 @@ export function KindredStoryCard({
 
       {/* Content column */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Mono metadata row */}
-        {metaLabel ? (
+        {/* Meta header: narrator + era on the left, recorded-date stamp on the right. */}
+        {metaLabel || recordedLabel || isNew ? (
           <div
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              color: "var(--text-meta)",
-              letterSpacing: "var(--tracking-mono)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
               marginBottom: "var(--space-2)",
             }}
           >
-            {metaLabel}
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minWidth: 0,
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-label)",
+                color: "var(--text-meta)",
+                letterSpacing: "var(--tracking-mono)",
+              }}
+            >
+              {isNew ? <NewPill /> : null}
+              {metaLabel ? (
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {metaLabel}
+                </span>
+              ) : null}
+            </span>
+            {recordedLabel ? (
+              <span
+                title={`Recorded ${recordedLabel}`}
+                style={{
+                  flex: "0 0 auto",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-label)",
+                  color: "var(--text-muted)",
+                  letterSpacing: "var(--tracking-mono)",
+                }}
+              >
+                {recordedLabel}
+              </span>
+            ) : null}
           </div>
         ) : null}
 
@@ -233,5 +272,27 @@ export function KindredStoryCard({
         </span>
       ) : null}
     </Tag>
+  );
+}
+
+/** Small accent pill marking a story the viewer hasn't opened yet. */
+function NewPill() {
+  return (
+    <span
+      style={{
+        flex: "0 0 auto",
+        padding: "2px 8px",
+        borderRadius: "var(--radius-pill)",
+        background: "var(--accent)",
+        color: "var(--accent-on)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-label)",
+        letterSpacing: "var(--tracking-mono)",
+        lineHeight: 1.4,
+        textTransform: "uppercase",
+      }}
+    >
+      New
+    </span>
   );
 }

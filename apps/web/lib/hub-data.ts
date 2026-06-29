@@ -5,8 +5,8 @@
  * narrow on purpose: identity-graph reads only.
  */
 import "server-only";
-import { and, eq } from "drizzle-orm";
-import { families, memberships, persons } from "@chronicle/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { families, memberships, persons, storyViews } from "@chronicle/db/schema";
 import { listStoriesForViewer } from "@chronicle/core";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, Family, Person, Story } from "@chronicle/db";
@@ -106,4 +106,39 @@ export async function loadHubFeed(
 /** All persons (dev sign-in picker only). */
 export async function listAllPersons(db: Database): Promise<Person[]> {
   return db.select().from(persons);
+}
+
+/**
+ * Which of `storyIds` the viewer has already opened. Drives the "New" badge: a story is new to a
+ * viewer until a row exists. `story_views` is viewer read-state, not Story content, so it is read
+ * directly (no front-door auth) — the ids themselves were already authorized by the feed load.
+ * Scoped to the candidate ids so the query stays bounded as a viewer's history grows.
+ */
+export async function loadSeenStoryIds(
+  db: Database,
+  personId: string,
+  storyIds: string[],
+): Promise<Set<string>> {
+  if (storyIds.length === 0) return new Set();
+  const rows = await db
+    .select({ storyId: storyViews.storyId })
+    .from(storyViews)
+    .where(and(eq(storyViews.personId, personId), inArray(storyViews.storyId, storyIds)));
+  return new Set(rows.map((r) => r.storyId));
+}
+
+/**
+ * Record that `personId` has opened `storyId`. Idempotent via the (story_id, person_id) unique
+ * index — re-opening a story is a no-op. Called from the story detail page AFTER the read has been
+ * authorized through the front door, so this never grants or implies any content access itself.
+ */
+export async function markStorySeen(
+  db: Database,
+  storyId: string,
+  personId: string,
+): Promise<void> {
+  await db
+    .insert(storyViews)
+    .values({ storyId, personId })
+    .onConflictDoNothing({ target: [storyViews.storyId, storyViews.personId] });
 }

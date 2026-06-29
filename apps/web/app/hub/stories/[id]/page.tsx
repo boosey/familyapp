@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { markStorySeen } from "@/lib/hub-data";
 import { KindredListenBar, KindredChip } from "@/app/_kindred";
 
 export const runtime = "nodejs";
@@ -23,6 +24,12 @@ export default async function StoryDetailPage({
 
   const story = await getStoryForViewer(db, ctx, id);
   if (!story) notFound();
+
+  // Opening an authorized story marks it seen for this viewer, clearing its "New" badge on the hub.
+  // Owners reading their own story still record a view; the badge logic excludes owners anyway.
+  if (ctx.kind === "account") {
+    await markStorySeen(db, story.id, ctx.personId);
+  }
 
   const narrator = await getNarratorProfile(db, story.ownerPersonId);
   const narratorName = narrator?.spokenName ?? "the family";

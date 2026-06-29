@@ -13,7 +13,7 @@
  * "Event" facet has no backing field yet, so it is intentionally absent.
  */
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { KindredStoryCard, KindredListenBar } from "@/app/_kindred";
+import { KindredStoryCard, KindredListenBar, KindredFontScale } from "@/app/_kindred";
 
 export interface StoryItem {
   id: string;
@@ -23,10 +23,14 @@ export interface StoryItem {
   tags: string[];
   personId: string;
   personName: string;
-  /** Mono metadata line, e.g. "1962 · MARCH". */
-  dateLabel: string;
+  /** The era the story is ABOUT, e.g. "1962 · MARCH". Null when unknown. */
+  eventLabel: string | null;
+  /** Short recorded-date stamp for the card corner, e.g. "JUN 2026". */
+  recordedLabel: string;
   /** Decade bucket used by the Era facet, e.g. "1960s". */
   decade: string;
+  /** This story is unseen by the current viewer. */
+  isNew: boolean;
   href: string;
   mediaSrc: string;
 }
@@ -40,8 +44,6 @@ export interface StoryFacets {
 interface StoriesBrowserProps {
   items: StoryItem[];
   facets: StoryFacets;
-  /** Section context line, e.g. "Shared with you". */
-  contextLabel: string;
 }
 
 type FinderMode = "search" | "sentence" | "lists";
@@ -55,7 +57,7 @@ interface Filters {
 
 const DEFAULTS: Filters = { person: "all", era: "all", topic: "all", query: "" };
 
-export function StoriesBrowser({ items, facets, contextLabel }: StoriesBrowserProps) {
+export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
   const [finderOpen, setFinderOpen] = useState(false);
   const [mode, setMode] = useState<FinderMode>("search");
   const [openSlot, setOpenSlot] = useState<null | "person" | "topic" | "era">(null);
@@ -75,7 +77,7 @@ export function StoriesBrowser({ items, facets, contextLabel }: StoriesBrowserPr
       if (filters.era !== "all" && it.decade !== filters.era) return false;
       if (filters.topic !== "all" && !it.tags.includes(filters.topic)) return false;
       if (q) {
-        const hay = [it.title, it.summary, it.prose, it.personName, it.tags.join(" ")]
+        const hay = [it.title, it.summary, it.prose, it.personName, it.eventLabel, it.tags.join(" ")]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -115,25 +117,17 @@ export function StoriesBrowser({ items, facets, contextLabel }: StoriesBrowserPr
 
   return (
     <div>
-      {/* Context + result count row */}
+      {/* Reading-size control (left) + result count (right), above the Find Stories bar. */}
       <div
         style={{
           display: "flex",
-          alignItems: "baseline",
+          alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
           flexWrap: "wrap",
         }}
       >
-        <span
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "var(--text-story-lg)",
-            color: "var(--text-muted)",
-          }}
-        >
-          {contextLabel}
-        </span>
+        <KindredFontScale />
         <span style={monoLabel}>{resultLabel}</span>
       </div>
 
@@ -485,7 +479,10 @@ export function StoriesBrowser({ items, facets, contextLabel }: StoriesBrowserPr
                   <KindredStoryCard
                     key={it.id}
                     title={it.title}
-                    year={it.dateLabel}
+                    byline={it.personName}
+                    year={it.eventLabel ?? undefined}
+                    recordedLabel={it.recordedLabel}
+                    isNew={it.isNew}
                     excerpt={it.summary ?? undefined}
                     href={it.href}
                     style={{ width: "100%" }}
@@ -528,7 +525,45 @@ function FeaturedCard({ item }: { item: StoryItem }) {
         }}
       />
       <div style={{ flex: 1, minWidth: 240 }}>
-        <p style={{ ...monoLabel, margin: 0, color: "var(--text-meta)" }}>{item.dateLabel}</p>
+        {/* Meta header: narrator + era (left), recorded-date stamp (right). */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {item.isNew ? (
+              <span
+                style={{
+                  flex: "0 0 auto",
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-pill)",
+                  background: "var(--accent)",
+                  color: "var(--accent-on)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-label)",
+                  letterSpacing: "var(--tracking-mono)",
+                  lineHeight: 1.4,
+                  textTransform: "uppercase",
+                }}
+              >
+                New
+              </span>
+            ) : null}
+            <span style={{ ...monoLabel, color: "var(--text-meta)" }}>
+              {[item.personName, item.eventLabel].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+          <span
+            title={`Recorded ${item.recordedLabel}`}
+            style={{ ...monoLabel, flex: "0 0 auto", color: "var(--text-muted)" }}
+          >
+            {item.recordedLabel}
+          </span>
+        </div>
         <h3
           style={{
             fontFamily: "var(--font-story)",

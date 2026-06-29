@@ -61,6 +61,16 @@ export default async function RootLayout({
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   return (
     <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`}>
+      <head>
+        {/* Apply the persisted reading-size scale BEFORE first paint to avoid a flash/reflow.
+            Mirrors KindredFontScale (key "kin-font-scale", base root 18px) — keep in sync. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var n=+localStorage.getItem('kin-font-scale');if(isFinite(n)&&n>0)document.documentElement.style.fontSize=(18*n)+'px';}catch(e){}})()",
+          }}
+        />
+      </head>
       {inner}
     </html>
   );

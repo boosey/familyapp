@@ -12,7 +12,7 @@ import { persons } from "@chronicle/db/schema";
 import { listPendingAsksForNarrator, listPendingJoinRequestsForSteward, listOutstandingAnswerDrafts } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
-import { loadHubFeed } from "@/lib/hub-data";
+import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { HubTabsNav } from "./HubTabsNav";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -113,16 +113,20 @@ export default async function HubPage({
     listOutstandingAnswerDrafts(db, ctx.personId),
   ]);
 
+  // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
+  const feedStoryIds = feed.flatMap((slot) => slot.stories.map((s) => s.id));
+  const seenStoryIds = await loadSeenStoryIds(db, ctx.personId, feedStoryIds);
+
   // Build a lookup map so QuestionsTab can render two-state affordances per ask.
   const draftsByAskId = Object.fromEntries(
     answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
   );
 
   /* ── Derived display values ─────────────────────────────────────────────── */
+  // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
+  // joined for now — the multi-family display is a separate design question, deliberately deferred.
   const familyNames = [...new Set(feed.map((s) => s.family.name))];
-  const familyLabel = familyNames.length
-    ? `THE ${familyNames.join(" · ").toUpperCase()} FAMILY`
-    : null;
+  const familyName = familyNames.length ? familyNames.join(" · ") : "Your Chronicle";
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
   const initials = viewerName
@@ -192,7 +196,27 @@ export default async function HubPage({
               flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              {/* Icon placeholder — a future family crest / avatar slot. */}
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 auto",
+                  width: 44,
+                  height: 44,
+                  borderRadius: "var(--radius-md)",
+                  border: "var(--border-width) solid var(--border-strong)",
+                  background: "var(--surface-sunken)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-label)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                {familyName.charAt(0).toUpperCase()}
+              </span>
               <h1
                 style={{
                   fontFamily: "var(--font-story)",
@@ -203,20 +227,8 @@ export default async function HubPage({
                   letterSpacing: "var(--tracking-tight)",
                 }}
               >
-                Family Chronicle
+                {familyName}
               </h1>
-              {familyLabel ? (
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    letterSpacing: "var(--tracking-mono)",
-                    color: "var(--support)",
-                  }}
-                >
-                  {familyLabel}
-                </span>
-              ) : null}
             </div>
             <KindredAccountMenu
               initials={initials}
@@ -233,7 +245,9 @@ export default async function HubPage({
 
         {/* Tab content */}
         <section style={{ padding: "28px 0" }}>
-          {activeTab === "stories" && <StoriesTab feed={feed} />}
+          {activeTab === "stories" && (
+            <StoriesTab feed={feed} viewerPersonId={ctx.personId} seenStoryIds={seenStoryIds} />
+          )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab />}
           {activeTab === "asks" && <AsksTab />}

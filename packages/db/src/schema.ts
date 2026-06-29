@@ -575,6 +575,35 @@ export const mockAuthUsers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// StoryView — per-viewer read state. NOT Story content (it exposes nothing about a story beyond
+// "this person has opened it"), so it lives in the public schema, not behind the /content guard.
+// One row the first time a viewer opens a story; the unique index makes the open idempotent.
+// Drives the "New" badge: a story is new to a viewer until a row exists for them.
+// ---------------------------------------------------------------------------
+
+export const storyViews = pgTable(
+  "story_views",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The story that was viewed. */
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    /** The viewer (the account-person who opened it). */
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("story_views_story_person_uq").on(t.storyId, t.personId),
+    index("story_views_person_idx").on(t.personId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -602,6 +631,8 @@ export type JoinRequest = typeof joinRequests.$inferSelect;
 export type NewJoinRequest = typeof joinRequests.$inferInsert;
 export type MockAuthUser = typeof mockAuthUsers.$inferSelect;
 export type NewMockAuthUser = typeof mockAuthUsers.$inferInsert;
+export type StoryView = typeof storyViews.$inferSelect;
+export type NewStoryView = typeof storyViews.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];

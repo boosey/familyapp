@@ -14,6 +14,7 @@ export {
   memberships,
   mockAuthUsers,
   persons,
+  storyViews,
   // enum objects (exposed for enumValues / typed inserts if a consumer wants them)
   askStatusEnum,
   audienceTierEnum,

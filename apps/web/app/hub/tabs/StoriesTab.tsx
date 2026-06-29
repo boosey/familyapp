@@ -3,20 +3,25 @@ import type { MemberWithStories } from "@/lib/hub-data";
 
 interface StoriesTabProps {
   feed: MemberWithStories[];
-}
-
-function formatDateLabel(d: Date): string {
-  const year = d.getFullYear();
-  const month = d.toLocaleString(undefined, { month: "long" }).toUpperCase();
-  return `${year} · ${month}`;
+  /** The signed-in viewer — their own stories are never flagged "New". */
+  viewerPersonId: string;
+  /** Story ids this viewer has already opened. */
+  seenStoryIds: Set<string>;
 }
 
 function decadeOf(d: Date): string {
   return `${Math.floor(d.getFullYear() / 10) * 10}s`;
 }
 
-/** The era a story is ABOUT, when known, beats the recording date. */
-function eraDateLabel(eraYear: number, eraLabel: string | null): string {
+/** Short recorded-date stamp for the card's right corner, e.g. "JUN 2026". */
+function recordedLabelOf(d: Date): string {
+  const year = d.getFullYear();
+  const month = d.toLocaleString(undefined, { month: "short" }).toUpperCase();
+  return `${month} ${year}`;
+}
+
+/** The era a story is ABOUT, when known. Null when the story has no historical era. */
+function eraLabelOf(eraYear: number, eraLabel: string | null): string {
   return eraLabel ? `${eraYear} · ${eraLabel.toUpperCase()}` : `${eraYear}`;
 }
 
@@ -29,12 +34,13 @@ function eraDecade(eraYear: number): string {
  * finder facets (Person / Era / Topic) from real data, and hands them to the client-side
  * StoriesBrowser (the "Find Stories" finder + featured card + grid).
  */
-export function StoriesTab({ feed }: StoriesTabProps) {
+export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabProps) {
   /* Flatten every authorized story into one serializable list, newest first. */
   const dated = feed.flatMap((slot) =>
     slot.stories.map((story) => {
-      const date = story.approvedAt ?? story.createdAt;
-      // Prefer the historical era the story is ABOUT; fall back to the recording date.
+      // Recency for ordering: most-recently approved (or created) first.
+      const sortDate = story.approvedAt ?? story.createdAt;
+      // The event era the story is ABOUT (when known) — distinct from when it was recorded.
       const hasEra = story.eraYear != null;
       const item: StoryItem = {
         id: story.id,
@@ -44,14 +50,15 @@ export function StoriesTab({ feed }: StoriesTabProps) {
         tags: story.tags ?? [],
         personId: slot.person.id,
         personName: slot.person.spokenName,
-        dateLabel: hasEra
-          ? eraDateLabel(story.eraYear!, story.eraLabel ?? null)
-          : formatDateLabel(date),
-        decade: hasEra ? eraDecade(story.eraYear!) : decadeOf(date),
+        eventLabel: hasEra ? eraLabelOf(story.eraYear!, story.eraLabel ?? null) : null,
+        recordedLabel: recordedLabelOf(story.createdAt),
+        decade: hasEra ? eraDecade(story.eraYear!) : decadeOf(sortDate),
+        // New to this viewer until opened — but a narrator's own stories are never "new" to them.
+        isNew: slot.person.id !== viewerPersonId && !seenStoryIds.has(story.id),
         href: `/hub/stories/${story.id}`,
         mediaSrc: `/api/media/${story.recordingMediaId}`,
       };
-      return { item, sort: date.getTime() };
+      return { item, sort: sortDate.getTime() };
     }),
   );
   dated.sort((a, b) => b.sort - a.sort);
@@ -88,11 +95,5 @@ export function StoriesTab({ feed }: StoriesTabProps) {
     topics: [...topicSet].sort(),
   };
 
-  /* One narrator → name it; several → generic. */
-  const contextLabel =
-    facets.persons.length === 1
-      ? `${facets.persons[0]!.name}’s stories · shared with you`
-      : "Shared with you";
-
-  return <StoriesBrowser items={items} facets={facets} contextLabel={contextLabel} />;
+  return <StoriesBrowser items={items} facets={facets} />;
 }

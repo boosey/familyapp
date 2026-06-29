@@ -36,6 +36,8 @@ export type {
   NewJoinRequest,
   MockAuthUser,
   NewMockAuthUser,
+  StoryView,
+  NewStoryView,
   LifeStatus,
   MembershipRole,
   MembershipStatus,
