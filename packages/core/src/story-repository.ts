@@ -18,8 +18,8 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { and, eq, isNotNull } from "drizzle-orm";
-import { media, stories } from "@chronicle/db/content";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { media, proseRevisions, stories } from "@chronicle/db/content";
 import { asks, consentRecords, persons } from "@chronicle/db/schema";
 import type {
   Ask,
@@ -27,6 +27,8 @@ import type {
   ConsentRecord,
   Database,
   Media,
+  ProseRevision,
+  ProseRevisionLevel,
   Story,
   StoryState,
 } from "@chronicle/db";
@@ -658,6 +660,55 @@ export async function discardDraftStory(
 
     return { storageKeys: [rec.storageKey] };
   });
+}
+
+/**
+ * Append a row to the append-only prose provenance ledger. AI levels carry `modelId` (+ `promptText`
+ * for the polished render); `human_corrected` carries `actorPersonId`. The trigger in invariants.sql
+ * makes the row immutable. This holds prose content, so it lives in this audited file.
+ */
+export interface AppendProseRevisionInput {
+  storyId: string;
+  level: ProseRevisionLevel;
+  text: string;
+  modelId?: string | null;
+  promptText?: string | null;
+  actorPersonId?: string | null;
+}
+
+export async function appendProseRevision(
+  db: Database,
+  input: AppendProseRevisionInput,
+): Promise<ProseRevision> {
+  const [row] = await db
+    .insert(proseRevisions)
+    .values({
+      storyId: input.storyId,
+      level: input.level,
+      text: input.text,
+      modelId: input.modelId ?? null,
+      promptText: input.promptText ?? null,
+      actorPersonId: input.actorPersonId ?? null,
+    })
+    .returning();
+  return row!;
+}
+
+/**
+ * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
+ * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
+ * in this already-allowlisted file; the L2→L3 diff (ai_polished vs human_corrected) is the
+ * prompt/model improvement signal.
+ */
+export async function listProseRevisions(
+  db: Database,
+  storyId: string,
+): Promise<ProseRevision[]> {
+  return db
+    .select()
+    .from(proseRevisions)
+    .where(eq(proseRevisions.storyId, storyId))
+    .orderBy(asc(proseRevisions.seq));
 }
 
 export async function getStoryAndRecordingForPipeline(
