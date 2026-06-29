@@ -76,11 +76,11 @@ function cellStyle(on: boolean, idx: number): CSSProperties {
   return {
     // Hug the glyph: tight horizontal padding, no fixed width. The control is now sized by its
     // content (~tap-friendly) instead of five oversized boxes.
-    padding: "0 7px",
-    height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    padding: "0 7px",
+    height: 28,
     cursor: "pointer",
     border: "none",
     // Vertical separators between cells (not before the first).
@@ -90,6 +90,5 @@ function cellStyle(on: boolean, idx: number): CSSProperties {
     fontFamily: "var(--font-story)",
     fontSize: GLYPH_PX[idx],
     fontWeight: 600,
-    lineHeight: 1,
   };
 }

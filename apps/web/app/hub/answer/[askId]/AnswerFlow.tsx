@@ -15,6 +15,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
+import { relativeShortDate } from "@/lib/relative-time";
 import { recordAnswerAction, shareAnswerAction, discardAnswerAction } from "./actions";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
@@ -44,18 +45,6 @@ function pickMimeType(): string {
     }
   }
   return "audio/webm";
-}
-
-function shortDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 2) return common.relativeTime.justNow;
-  if (diffMins < 60) return common.relativeTime.minsAgo(diffMins);
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return common.relativeTime.hrsAgo(diffHrs);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlowProps) {
@@ -269,7 +258,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             margin: "0 0 20px",
           }}
         >
-          {hub.answer.recordedAt(shortDate(draft.recordedAt))}
+          {hub.answer.recordedAt(relativeShortDate(draft.recordedAt))}
         </p>
 
         {/* Relisten */}
@@ -480,8 +469,8 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           recordPhase === "listening"
             ? hub.answer.listeningTapStop
             : recordPhase === "saving"
-              ? hub.answer.oneMoment
-              : hub.answer.tapToSpeak
+              ? common.voiceButton.oneMoment
+              : common.voiceButton.tapToSpeak
         }
         onClick={voiceClick}
       />

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { PendingAskForNarrator } from "@chronicle/core";
 import type { OutstandingAnswerDraft } from "@chronicle/core";
-import { hub, common } from "@/app/_copy";
+import { hub } from "@/app/_copy";
+import { relativeShortDate } from "@/lib/relative-time";
 
 interface QuestionsTabProps {
   asks: PendingAskForNarrator[];
@@ -78,19 +79,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
             const hasDraft = Boolean(draft);
 
             // Short relative date for the "Recorded X ago" sub-label
-            let recordedLabel: string | null = null;
-            if (draft) {
-              const dt = new Date(draft.recordedAt);
-              const diffMs = Date.now() - dt.getTime();
-              const diffMins = Math.floor(diffMs / 60000);
-              if (diffMins < 2) recordedLabel = common.relativeTime.justNow;
-              else if (diffMins < 60) recordedLabel = common.relativeTime.minsAgo(diffMins);
-              else {
-                const diffHrs = Math.floor(diffMins / 60);
-                if (diffHrs < 24) recordedLabel = common.relativeTime.hrsAgo(diffHrs);
-                else recordedLabel = dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-              }
-            }
+            const recordedLabel = draft ? relativeShortDate(draft.recordedAt) : null;
 
             return (
               <li

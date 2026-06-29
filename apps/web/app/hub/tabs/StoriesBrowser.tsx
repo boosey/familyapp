@@ -127,8 +127,8 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
           flexWrap: "wrap",
         }}
       >
+        <span style={{ ...monoLabel, paddingLeft: 22 }}>{resultLabel}</span>
         <KindredFontScale />
-        <span style={monoLabel}>{resultLabel}</span>
       </div>
 
       {/* Find Stories pill */}
@@ -310,7 +310,9 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                   label={
                     filters.person === "all"
                       ? hub.browser.everyones
-                      : hub.browser.possessive(facets.persons.find((p) => p.id === filters.person)?.name ?? "someone")
+                      : hub.browser.possessive(
+                          facets.persons.find((p) => p.id === filters.person)?.name ?? hub.browser.someone,
+                        )
                   }
                   active={filters.person !== "all"}
                   open={openSlot === "person"}
@@ -484,6 +486,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                     isNew={it.isNew}
                     excerpt={it.summary ?? undefined}
                     href={it.href}
+                    showArrow={false}
                     style={{ width: "100%" }}
                   />
                 ))}

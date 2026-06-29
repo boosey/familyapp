@@ -1,8 +1,13 @@
 // apps/web/app/_copy/hub.ts
 // Copy for the signed-in hub: shell, tabs, story browser, answer flow, server-action errors.
+
+// Shared meta-label formatters — the Questions tab and the Answer screen render these identically.
+const askedBy = (name: string) => `${name.toUpperCase()} ASKED`;
+const recordedAt = (label: string) => `RECORDED ${label.toUpperCase()}`;
+
 export const hub = {
   shell: {
-    brand: "Family Chronicle",
+    // Brand name lives in common.appName — referenced directly by hub/page.tsx.
     signedOut: "Sign in to see your family's stories.",
     signIn: "Sign in",
     createFamily: "Create your family",
@@ -30,8 +35,8 @@ export const hub = {
     title: "Questions for you",
     intro: "Your family asked these. Answer whenever you're ready — there's no rush.",
     caughtUp: "You're all caught up. Nothing waiting.",
-    askedBy: (name: string) => `${name.toUpperCase()} ASKED`,
-    recordedAt: (label: string) => `RECORDED ${label.toUpperCase()}`,
+    askedBy,
+    recordedAt,
     reviewApprove: "Review & approve",
     answer: "Answer",
   },
@@ -50,8 +55,8 @@ export const hub = {
   asks: {
     signedOut: "Sign in to see your asks.",
     title: "Your asks",
-    intro: "The questions you've sent, and where they are.",
-    empty: "You haven't asked anything yet.",
+    intro: "The questions you’ve sent, and where they are.",
+    empty: "You haven’t asked anything yet.",
     forTarget: (name: string) => `For ${name}:`,
     listen: "Listen",
     answeredPrivate: "ANSWERED · PRIVATE",
@@ -106,8 +111,9 @@ export const hub = {
     searchPlaceholder: "Try a name, a place, or a moment…",
     noMatchHint: "Hmm — nothing matched. Try a name, a year, or a word from the story.",
     showMe: "Show me",
-    everyones: "everyone's",
-    possessive: (person: string) => `${person}'s`,
+    everyones: "everyone’s",
+    someone: "someone",
+    possessive: (person: string) => `${person}’s`,
     storiesAbout: "stories about",
     anything: "anything",
     fromConnector: ", from",
@@ -136,10 +142,10 @@ export const hub = {
   },
   answer: {
     backToQuestions: "← Back to questions",
-    askedBy: (name: string) => `${name.toUpperCase()} ASKED`,
+    askedBy,
     assembling: "Putting your story together…",
     assemblingSub: "This takes just a moment.",
-    recordedAt: (label: string) => `RECORDED ${label.toUpperCase()}`,
+    recordedAt,
     whoShouldHear: "Who should hear this?",
     genericError: "Something went wrong. Please try again.",
     shareWithFamily: "Share with family",
@@ -148,8 +154,7 @@ export const hub = {
     micError:
       "Something went wrong with the microphone. Make sure you've allowed microphone access, then refresh the page to try again.",
     listeningTapStop: "Listening… tap to stop",
-    oneMoment: "One moment…",
-    tapToSpeak: "Tap to speak",
+    // "One moment…" / "Tap to speak" live in common.voiceButton (shared with other capture surfaces).
     takeYourTime: "Take your time. Long silences are fine.",
   },
   actions: {

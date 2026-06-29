@@ -22,6 +22,7 @@ export interface KindredStoryCardProps
   /* Behaviour */
   href?: string;
   onClick?: () => void;
+  showArrow?: boolean;
   children?: ReactNode;
 }
 
@@ -47,6 +48,7 @@ export function KindredStoryCard({
   meta = [],
   href,
   onClick,
+  showArrow = true,
   style,
   children,
   ...rest
@@ -237,8 +239,8 @@ export function KindredStoryCard({
         {children}
       </div>
 
-      {/* Arrow — only when interactive */}
-      {interactive ? (
+      {/* Arrow — only when interactive and not suppressed */}
+      {interactive && showArrow ? (
         <span
           style={{
             width: 48,
@@ -264,7 +266,7 @@ export function KindredStoryCard({
           style={{
             position: "absolute",
             top: "var(--space-3)",
-            right: interactive ? 68 : "var(--space-4)",
+            right: interactive && showArrow ? 68 : "var(--space-4)",
             fontSize: 14,
             lineHeight: 1,
           }}

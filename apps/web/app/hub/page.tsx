@@ -14,7 +14,7 @@ import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
 import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
-import { hub } from "@/app/_copy";
+import { hub, common } from "@/app/_copy";
 import { HubTabsNav } from "./HubTabsNav";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
@@ -72,7 +72,7 @@ export default async function HubPage({
               margin: "0 0 12px",
             }}
           >
-            {hub.shell.brand}
+            {common.appName}
           </h1>
           <p
             style={{
