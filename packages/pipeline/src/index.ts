@@ -51,3 +51,9 @@ export {
   applyVoiceCorrection,
   type ApplyVoiceCorrectionInput,
 } from "./correction";
+
+export {
+  extractBiographicalProfile,
+  augmentProfileFromStory,
+  type BiographicalProfileStore,
+} from "./extract-biography";

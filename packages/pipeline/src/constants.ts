@@ -25,3 +25,9 @@ export const PIPELINE_JOB_MAX_ATTEMPTS = 8;
 /** Bounds on audio time-stretch speed factor. */
 export const AUDIO_SPEED_FACTOR_MIN = 1.0;
 export const AUDIO_SPEED_FACTOR_MAX = 2.0;
+
+/** LLM temperature for post-approval biographical extraction (0 = deterministic fact-pull). */
+export const BIOGRAPHY_EXTRACT_LLM_TEMPERATURE = 0;
+
+/** Hard cap on output tokens for biographical extraction (the JSON record is tiny). */
+export const BIOGRAPHY_EXTRACT_MAX_OUTPUT_TOKENS = 300;
