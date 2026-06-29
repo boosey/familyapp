@@ -7,7 +7,7 @@
  * single front door, and refuses anything that isn't `pending_approval`.
  */
 import { resolveLinkSession } from "@chronicle/capture";
-import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
+import { getStoryForViewer } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ApprovalRecorder } from "./ApprovalRecorder";
 import { KindredListenBar } from "@/app/_kindred";
@@ -94,8 +94,6 @@ export default async function ApprovePage({
       </main>
     );
   }
-
-  const profile = await getNarratorProfile(db, resolved.personId);
 
   return (
     <main className="kin-fullbleed">
