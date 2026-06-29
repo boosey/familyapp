@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
+import { common } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default function Home() {
           lineHeight: "var(--leading-tight)",
         }}
       >
-        Family Chronicle
+        {common.appName}
       </h1>
       <p
         style={{
