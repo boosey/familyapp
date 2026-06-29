@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward } from "lucide-react";
 import { common } from "@/app/_copy";
 
 export interface KindredListenBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -281,7 +282,7 @@ export function KindredListenBar({
         }}
       >
         <TransportButton onClick={() => seekTo(0)} title={common.listenBar.startOver} disabled={!isAudioMode}>
-          ⏮
+          <SkipBack size={20} />
         </TransportButton>
 
         <TransportButton
@@ -289,8 +290,7 @@ export function KindredListenBar({
           title={common.listenBar.back10}
           disabled={!isAudioMode}
         >
-          <span style={{ fontSize: 30, lineHeight: 1 }}>↺</span>
-          <span style={skipLabelStyle}>10</span>
+          <SkipNIcon direction="back" />
         </TransportButton>
 
         {/* Play / Pause */}
@@ -311,12 +311,11 @@ export function KindredListenBar({
             alignItems: "center",
             justifyContent: "center",
             color: "var(--accent-on)",
-            fontSize: 24,
             opacity: isAudioMode || onToggle ? 1 : 0.6,
             transition: "background var(--dur-fade) var(--ease-quiet)",
           }}
         >
-          <span style={{ marginLeft: playing ? 0 : 2 }}>{playing ? "❚❚" : "▶"}</span>
+          {playing ? <Pause size={22} /> : <Play size={22} />}
         </button>
 
         <TransportButton
@@ -324,13 +323,12 @@ export function KindredListenBar({
           title={common.listenBar.forward10}
           disabled={!isAudioMode}
         >
-          <span style={{ fontSize: 30, lineHeight: 1 }}>↻</span>
-          <span style={skipLabelStyle}>10</span>
+          <SkipNIcon direction="forward" />
         </TransportButton>
 
         {showNextResolved && (
           <TransportButton onClick={() => onNext?.()} title={common.listenBar.nextStory} disabled={!onNext}>
-            ⏭
+            <SkipForward size={20} />
           </TransportButton>
         )}
       </div>
@@ -341,16 +339,6 @@ export function KindredListenBar({
     </div>
   );
 }
-
-const skipLabelStyle: CSSProperties = {
-  position: "absolute",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -40%)",
-};
 
 function TransportButton({
   onClick,
@@ -404,4 +392,25 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+function SkipNIcon({ direction }: { direction: "back" | "forward" }) {
+  const Icon = direction === "back" ? RotateCcw : RotateCw;
+  return (
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+      <Icon size={24} aria-hidden="true" />
+      <span
+        style={{
+          position: "absolute",
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          fontWeight: 700,
+          marginTop: 4,
+          lineHeight: 1,
+        }}
+      >
+        {SKIP_SECONDS}
+      </span>
+    </span>
+  );
 }

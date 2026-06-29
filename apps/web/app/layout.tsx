@@ -62,7 +62,7 @@ export default async function RootLayout({
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   return (
-    <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`}>
+    <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply the persisted reading-size step BEFORE first paint to avoid a flash/reflow.
             Reads the same constants as KindredFontScale — single source of truth. */}
