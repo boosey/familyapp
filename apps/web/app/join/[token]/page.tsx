@@ -13,6 +13,7 @@ import { getRuntime } from "@/lib/runtime";
 import { acceptInvitation, getInvitationByToken } from "@chronicle/core";
 import { mockSignUp } from "@/lib/auth-mock";
 import { KindredButton } from "@/app/_kindred";
+import { join } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,9 +63,9 @@ async function signUpAndAccept(formData: FormData): Promise<void> {
 }
 
 const SIGNUP_ERRORS: Record<string, string> = {
-  email_taken: "That email already has an account. Sign in first, then open this link again.",
-  invalid: "Please fill in your name, email, and a password.",
-  accept: "We couldn't complete the invite — it may have just been used or expired.",
+  email_taken: join.errorEmailTaken,
+  invalid: join.errorMissing,
+  accept: join.errorInviteUsed,
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -122,7 +123,7 @@ export default async function JoinPage({
             margin: "0 0 10px",
           }}
         >
-          This invite is no longer valid
+          {join.invalidTitle}
         </h1>
         <p
           style={{
@@ -133,11 +134,10 @@ export default async function JoinPage({
             margin: "0 0 24px",
           }}
         >
-          It may have already been used, or it expired. Ask whoever invited you to send a fresh link
-          — or sign in if you already have an account.
+          {join.invalidBody}
         </p>
         <Link href="/sign-in" style={{ textDecoration: "none" }}>
-          <KindredButton label="Sign in" fullWidth />
+          <KindredButton label={join.signIn} fullWidth />
         </Link>
       </Shell>
     );
@@ -187,7 +187,7 @@ export default async function JoinPage({
             color: "var(--support)",
           }}
         >
-          FROM THE INVITE
+          {join.fromTheInvite}
         </div>
         <div
           style={{
@@ -196,7 +196,7 @@ export default async function JoinPage({
             color: "var(--text-body)",
           }}
         >
-          {inviteeName || "A new relative"}
+          {inviteeName || join.aNewRelative}
         </div>
       </div>
     </div>
@@ -204,7 +204,7 @@ export default async function JoinPage({
 
   const heading = (
     <>
-      <div className="kin-eyebrow">An invitation</div>
+      <div className="kin-eyebrow">{join.invitationEyebrow}</div>
       <h1
         style={{
           fontFamily: "var(--font-story)",
@@ -215,7 +215,7 @@ export default async function JoinPage({
           lineHeight: "var(--leading-snug)",
         }}
       >
-        {invite.inviterName} invited you to the {invite.familyName} family.
+        {join.invitedYou(invite.inviterName, invite.familyName)}
       </h1>
       <p
         style={{
@@ -226,7 +226,7 @@ export default async function JoinPage({
           margin: "0 0 22px",
         }}
       >
-        Confirm who you are and come on in.
+        {join.confirm}
       </p>
     </>
   );
@@ -245,19 +245,19 @@ export default async function JoinPage({
         margin: "0 0 20px",
       }}
     >
-      {SIGNUP_ERRORS[error] ?? "Something went wrong. Please try again."}
+      {SIGNUP_ERRORS[error] ?? join.genericError}
     </p>
   ) : null;
 
   const relationshipField = (
     <label className="kin-form-label">
-      Your relationship <span style={{ fontWeight: 400 }}>(edit if it&apos;s not quite right)</span>
+      {join.relationshipLabel} <span style={{ fontWeight: 400 }}>{join.relationshipLabelHint}</span>
       <input
         name="relationshipLabel"
         type="text"
         defaultValue={relationship}
         className="kin-field"
-        placeholder="e.g. Rosa's father"
+        placeholder={join.relationshipPlaceholder}
       />
     </label>
   );
@@ -272,7 +272,7 @@ export default async function JoinPage({
         <form action={acceptAsSignedIn} style={{ display: "grid", gap: 18, marginTop: 14 }}>
           <input type="hidden" name="token" value={token} />
           {relationshipField}
-          <KindredButton type="submit" label="Come in" fullWidth size="large" />
+          <KindredButton type="submit" label={join.comeIn} fullWidth size="large" />
         </form>
       </Shell>
     );
@@ -288,7 +288,7 @@ export default async function JoinPage({
         <input type="hidden" name="token" value={token} />
         {relationshipField}
         <label className="kin-form-label">
-          Your name
+          {join.nameLabel}
           <input
             name="name"
             type="text"
@@ -299,28 +299,28 @@ export default async function JoinPage({
           />
         </label>
         <label className="kin-form-label">
-          Email
+          {join.emailLabel}
           <input
             name="email"
             type="email"
             autoComplete="email"
             required
             className="kin-field"
-            placeholder="you@example.com"
+            placeholder={join.emailPlaceholder}
           />
         </label>
         <label className="kin-form-label">
-          Create a password
+          {join.passwordLabel}
           <input
             name="password"
             type="password"
             autoComplete="new-password"
             required
             className="kin-field"
-            placeholder="Choose a password"
+            placeholder={join.passwordPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label="Create login & come in" fullWidth size="large" />
+        <KindredButton type="submit" label={join.submit} fullWidth size="large" />
       </form>
     </Shell>
   );
