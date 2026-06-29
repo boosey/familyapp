@@ -14,7 +14,7 @@
  */
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { KindredStoryCard, KindredListenBar, KindredFontScale } from "@/app/_kindred";
-import { hub } from "@/app/_copy";
+import { hub, common } from "@/app/_copy";
 
 export interface StoryItem {
   id: string;
@@ -549,7 +549,7 @@ function FeaturedCard({ item }: { item: StoryItem }) {
                   textTransform: "uppercase",
                 }}
               >
-                New
+                {common.storyCard.badgeNew}
               </span>
             ) : null}
             <span style={{ ...monoLabel, color: "var(--text-meta)" }}>

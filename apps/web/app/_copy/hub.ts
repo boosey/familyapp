@@ -162,8 +162,6 @@ export const hub = {
     pickAudience: "Please pick an audience before sharing.",
     storyNotFound: "Story not found.",
     shareFailed: "Something went wrong sharing your story. Please try again.",
-    // Client-side catch handler in handleShare (AnswerFlow.tsx).
-    shareError: "Something went wrong. Please try again.",
     removeFailed: "Could not remove the recording. Please try again.",
   },
   storyDetail: {
@@ -174,3 +172,4 @@ export const hub = {
     noProse: "No prose yet — the original recording above is the whole story for now.",
   },
 } as const;
+
