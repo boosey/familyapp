@@ -1,5 +1,6 @@
 import { StoriesBrowser, type StoryItem, type StoryFacets } from "./StoriesBrowser";
 import type { MemberWithStories } from "@/lib/hub-data";
+import { hub } from "@/app/_copy";
 
 interface StoriesTabProps {
   feed: MemberWithStories[];
@@ -44,7 +45,7 @@ export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabPro
       const hasEra = story.eraYear != null;
       const item: StoryItem = {
         id: story.id,
-        title: story.title ?? "Untitled",
+        title: story.title ?? hub.stories.untitled,
         summary: story.summary ?? null,
         prose: story.prose ?? null,
         tags: story.tags ?? [],
@@ -74,7 +75,7 @@ export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabPro
           margin: 0,
         }}
       >
-        No stories yet. When someone shares a chronicle with you, their stories will appear here.
+        {hub.stories.empty}
       </p>
     );
   }

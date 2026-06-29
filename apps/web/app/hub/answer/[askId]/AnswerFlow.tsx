@@ -14,17 +14,14 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { hub, common } from "@/app/_copy";
 import { recordAnswerAction, shareAnswerAction, discardAnswerAction } from "./actions";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
 type Op = "share" | "rerecord" | "discard" | null;
 
-const TIERS: { value: Tier; label: string; desc: string }[] = [
-  { value: "family", label: "My whole family",  desc: "Everyone in the family" },
-  { value: "branch", label: "Just one branch",  desc: "A chosen part of the family" },
-  { value: "public", label: "Anyone",            desc: "Shared openly" },
-];
+const TIER_ORDER: Tier[] = ["family", "branch", "public"];
 
 export interface DraftInfo {
   storyId: string;
@@ -54,10 +51,10 @@ function shortDate(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 2) return "just now";
-  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffMins < 2) return common.relativeTime.justNow;
+  if (diffMins < 60) return common.relativeTime.minsAgo(diffMins);
   const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return `${diffHrs}h ago`;
+  if (diffHrs < 24) return common.relativeTime.hrsAgo(diffHrs);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -136,7 +133,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       }
       // On success the server action calls redirect("/hub") — navigation happens automatically.
     } catch {
-      setActionError("Something went wrong. Please try again.");
+      setActionError(hub.answer.genericError);
       setOp(null);
     }
   };
@@ -157,7 +154,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       }
       router.refresh(); // discard succeeded → server re-renders with draft=null → record phase
     } catch {
-      setActionError("Could not remove the recording. Please try again.");
+      setActionError(hub.actions.removeFailed);
       setOp(null);
     }
   };
@@ -178,7 +175,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       }
       router.push("/hub?tab=questions");
     } catch {
-      setActionError("Could not remove the recording. Please try again.");
+      setActionError(hub.actions.removeFailed);
       setOp(null);
     }
   };
@@ -195,7 +192,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           margin: "0 0 10px",
         }}
       >
-        {askerName.toUpperCase()} ASKED
+        {hub.answer.askedBy(askerName)}
       </p>
       <p
         style={{
@@ -239,7 +236,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
               margin: 0,
             }}
           >
-            Putting your story together…
+            {hub.answer.assembling}
           </p>
           <p
             style={{
@@ -249,7 +246,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
               margin: 0,
             }}
           >
-            This takes just a moment.
+            {hub.answer.assemblingSub}
           </p>
         </div>
       );
@@ -272,7 +269,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             margin: "0 0 20px",
           }}
         >
-          RECORDED {shortDate(draft.recordedAt).toUpperCase()}
+          {hub.answer.recordedAt(shortDate(draft.recordedAt))}
         </p>
 
         {/* Relisten */}
@@ -303,14 +300,15 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
               width: "100%",
             }}
           >
-            Who should hear this?
+            {hub.answer.whoShouldHear}
           </legend>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {TIERS.map((opt) => {
-              const checked = tier === opt.value;
+            {TIER_ORDER.map((value) => {
+              const opt = common.audienceTiers[value];
+              const checked = tier === value;
               return (
                 <label
-                  key={opt.value}
+                  key={value}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -328,9 +326,9 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
                   <input
                     type="radio"
                     name="audienceTier"
-                    value={opt.value}
+                    value={value}
                     checked={checked}
-                    onChange={() => setTier(opt.value)}
+                    onChange={() => setTier(value)}
                     style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
                   />
                   {/* Radio dot */}
@@ -404,7 +402,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         {/* Share */}
         <div style={{ marginBottom: 14 }}>
           <KindredButton
-            label="Share with family"
+            label={hub.answer.shareWithFamily}
             variant="primary"
             size="large"
             fullWidth
@@ -416,7 +414,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         {/* Re-record / Discard row */}
         <div style={{ display: "flex", gap: 12 }}>
           <KindredButton
-            label="Re-record"
+            label={hub.answer.reRecord}
             variant="secondary"
             size="small"
             fullWidth
@@ -424,7 +422,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             onClick={handleReRecord}
           />
           <KindredButton
-            label="Discard"
+            label={hub.answer.discard}
             variant="ghost"
             size="small"
             fullWidth
@@ -451,8 +449,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             maxWidth: 360,
           }}
         >
-          Something went wrong with the microphone. Make sure you've allowed microphone access,
-          then refresh the page to try again.
+          {hub.answer.micError}
         </p>
       </div>
     );
@@ -481,10 +478,10 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         size={220}
         label={
           recordPhase === "listening"
-            ? "Listening… tap to stop"
+            ? hub.answer.listeningTapStop
             : recordPhase === "saving"
-              ? "One moment…"
-              : "Tap to speak"
+              ? hub.answer.oneMoment
+              : hub.answer.tapToSpeak
         }
         onClick={voiceClick}
       />
@@ -499,7 +496,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             maxWidth: 300,
           }}
         >
-          Take your time. Long silences are fine.
+          {hub.answer.takeYourTime}
         </p>
       )}
     </div>

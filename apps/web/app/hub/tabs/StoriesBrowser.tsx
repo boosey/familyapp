@@ -14,6 +14,7 @@
  */
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { KindredStoryCard, KindredListenBar, KindredFontScale } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 
 export interface StoryItem {
   id: string;
@@ -89,10 +90,9 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
 
   const total = items.length;
   const resultLabel = anyFilter
-    ? `${filtered.length} OF ${total}`
-    : `${total} ${total === 1 ? "STORY" : "STORIES"}`;
-  const resultSentence =
-    filtered.length === 1 ? "1 story matches" : `${filtered.length} stories match`;
+    ? hub.browser.ofTotal(filtered.length, total)
+    : hub.browser.totalStories(total);
+  const resultSentence = hub.browser.matchCount(filtered.length);
 
   function setFacet(group: "person" | "era" | "topic", value: string) {
     setFilters((f) => ({ ...f, [group]: value }));
@@ -166,7 +166,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
               color: "var(--text-body)",
             }}
           >
-            Find stories
+            {hub.browser.findStories}
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: 18, color: "var(--text-muted)" }}>
             {finderOpen ? "▴" : "▾"}
@@ -191,11 +191,11 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                 color: "var(--text-muted)",
               }}
             >
-              {filtered.length} {filtered.length === 1 ? "story" : "stories"}
+              {hub.browser.storyCount(filtered.length)}
               {summaryParts.length ? " · " + summaryParts.join(" · ") : ""}
             </span>
             <button type="button" onClick={clearAll} style={linkButton}>
-              Clear
+              {hub.browser.clear}
             </button>
           </div>
         ) : null}
@@ -263,7 +263,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                   type="text"
                   value={filters.query}
                   onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
-                  placeholder="Try a name, a place, or a moment…"
+                  placeholder={hub.browser.searchPlaceholder}
                   style={{
                     flex: 1,
                     minWidth: 0,
@@ -287,7 +287,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                     margin: "14px 0 0",
                   }}
                 >
-                  Hmm — nothing matched. Try a name, a year, or a word from the story.
+                  {hub.browser.noMatchHint}
                 </p>
               ) : null}
             </div>
@@ -305,33 +305,32 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                   margin: 0,
                 }}
               >
-                Show me{" "}
+                {hub.browser.showMe}{" "}
                 <SlotButton
                   label={
                     filters.person === "all"
-                      ? "everyone’s"
-                      : (facets.persons.find((p) => p.id === filters.person)?.name ?? "someone") +
-                        "’s"
+                      ? hub.browser.everyones
+                      : hub.browser.possessive(facets.persons.find((p) => p.id === filters.person)?.name ?? "someone")
                   }
                   active={filters.person !== "all"}
                   open={openSlot === "person"}
                   onClick={() => setOpenSlot((s) => (s === "person" ? null : "person"))}
                 />{" "}
-                stories about{" "}
+                {hub.browser.storiesAbout}{" "}
                 <SlotButton
-                  label={filters.topic === "all" ? "anything" : filters.topic}
+                  label={filters.topic === "all" ? hub.browser.anything : filters.topic}
                   active={filters.topic !== "all"}
                   open={openSlot === "topic"}
                   onClick={() => setOpenSlot((s) => (s === "topic" ? null : "topic"))}
                 />
-                , from{" "}
+                {hub.browser.fromConnector}{" "}
                 <SlotButton
-                  label={filters.era === "all" ? "any time" : `the ${filters.era}`}
+                  label={filters.era === "all" ? hub.browser.anyTimeLower : hub.browser.theEra(filters.era)}
                   active={filters.era !== "all"}
                   open={openSlot === "era"}
                   onClick={() => setOpenSlot((s) => (s === "era" ? null : "era"))}
                 />
-                .
+                {hub.browser.period}
               </p>
 
               {openSlot ? (
@@ -344,10 +343,10 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
                 >
                   <div style={{ ...monoLabel, marginBottom: 14 }}>
                     {openSlot === "person"
-                      ? "Whose stories?"
+                      ? hub.browser.whoseStories
                       : openSlot === "topic"
-                        ? "About what?"
-                        : "From when?"}
+                        ? hub.browser.aboutWhat
+                        : hub.browser.fromWhen}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                     {slotOptionsFor(openSlot, facets).map((opt) => {
@@ -376,7 +375,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
               <FacetRow
                 label="Person"
                 options={[
-                  { value: "all", label: "Everyone" },
+                  { value: "all", label: hub.browser.everyone },
                   ...facets.persons.map((p) => ({ value: p.id, label: p.name })),
                 ]}
                 selected={filters.person}
@@ -385,7 +384,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
               <FacetRow
                 label="Era"
                 options={[
-                  { value: "all", label: "Any era" },
+                  { value: "all", label: hub.browser.anyEra },
                   ...facets.decades.map((d) => ({ value: d, label: d })),
                 ]}
                 selected={filters.era}
@@ -394,7 +393,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
               <FacetRow
                 label="Topic"
                 options={[
-                  { value: "all", label: "Anything" },
+                  { value: "all", label: hub.browser.anythingOption },
                   ...facets.topics.map((t) => ({ value: t, label: t })),
                 ]}
                 selected={filters.topic}
@@ -427,11 +426,11 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
             <div style={{ display: "flex", gap: 10 }}>
               {anyFilter ? (
                 <button type="button" onClick={clearAll} style={ghostBtn}>
-                  Start over
+                  {hub.browser.startOver}
                 </button>
               ) : null}
               <button type="button" onClick={() => setFinderOpen(false)} style={primaryBtn}>
-                Done
+                {hub.browser.done}
               </button>
             </div>
           </div>
@@ -458,7 +457,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
               margin: 0,
             }}
           >
-            No stories match. Try widening your search.
+            {hub.browser.noMatchWiden}
           </p>
         </div>
       ) : (
@@ -467,7 +466,7 @@ export function StoriesBrowser({ items, facets }: StoriesBrowserProps) {
 
           {earlier.length > 0 ? (
             <>
-              <div style={{ ...monoLabel, margin: "30px 0 16px" }}>Earlier memories</div>
+              <div style={{ ...monoLabel, margin: "30px 0 16px" }}>{hub.browser.earlierMemories}</div>
               <div
                 style={{
                   display: "grid",
@@ -577,7 +576,7 @@ function FeaturedCard({ item }: { item: StoryItem }) {
           {item.title}
         </h3>
         <div style={{ marginTop: 16 }}>
-          <KindredListenBar src={item.mediaSrc} title="The original recording" />
+          <KindredListenBar src={item.mediaSrc} title={hub.browser.originalRecording} />
         </div>
         {item.summary ? (
           <p
@@ -603,7 +602,7 @@ function FeaturedCard({ item }: { item: StoryItem }) {
                 cursor: "pointer",
               }}
             >
-              Read the prose ›
+              {hub.browser.readProse}
             </summary>
             <p
               style={{
@@ -621,7 +620,7 @@ function FeaturedCard({ item }: { item: StoryItem }) {
         ) : null}
         <div style={{ marginTop: 16 }}>
           <a href={item.href} style={{ ...linkButton, fontSize: "var(--text-ui-sm)" }}>
-            Open this story ›
+            {hub.browser.openStory}
           </a>
         </div>
       </div>
@@ -716,18 +715,18 @@ function slotOptionsFor(
 ): { value: string; label: string }[] {
   if (slot === "person") {
     return [
-      { value: "all", label: "Everyone" },
+      { value: "all", label: hub.browser.everyone },
       ...facets.persons.map((p) => ({ value: p.id, label: p.name })),
     ];
   }
   if (slot === "topic") {
     return [
-      { value: "all", label: "Anything" },
+      { value: "all", label: hub.browser.anythingOption },
       ...facets.topics.map((t) => ({ value: t, label: t })),
     ];
   }
   return [
-    { value: "all", label: "Any time" },
+    { value: "all", label: hub.browser.anyTime },
     ...facets.decades.map((d) => ({ value: d, label: d })),
   ];
 }

@@ -23,6 +23,7 @@ import {
   MEMBER_INVITE_FLASH_PATH,
 } from "@/lib/invite-flash";
 import { KindredButton } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
 
@@ -144,7 +145,7 @@ function LinkResult({
             color: "var(--support)",
           }}
         >
-          Personal link — shown once
+          {hub.invite.personalLinkOnce}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
           <code
@@ -193,10 +194,10 @@ export async function InviteTab() {
     const link = `${await origin()}/s/${narratorToken}`;
     return (
       <LinkResult
-        title="Link is ready"
-        blurb="Send this to your narrator however you usually talk — text or email. Tapping it opens their recording page directly. There is no password."
+        title={hub.invite.narratorReadyTitle}
+        blurb={hub.invite.narratorReadyBlurb}
         link={link}
-        note="For safety we keep only a fingerprint — you won't see this link again. Save it now if you need to send it later; switching tabs or refreshing will clear it."
+        note={hub.invite.fingerprintNote}
       />
     );
   }
@@ -206,10 +207,10 @@ export async function InviteTab() {
     const link = `${await origin()}/join/${memberToken}`;
     return (
       <LinkResult
-        title="Invitation link is ready"
-        blurb="Send this to your relative. Opening it lets them create a login and join your family — you don't have to set anything up for them."
+        title={hub.invite.memberReadyTitle}
+        blurb={hub.invite.memberReadyBlurb}
         link={link}
-        note="For safety we keep only a fingerprint — you won't see this link again. Save it now if you need to send it later; switching tabs or refreshing will clear it."
+        note={hub.invite.fingerprintNote}
       />
     );
   }
@@ -227,7 +228,7 @@ export async function InviteTab() {
           color: "var(--text-muted)",
         }}
       >
-        Sign in to invite someone.
+        {hub.invite.signedOut}
       </p>
     );
   }
@@ -281,47 +282,46 @@ export async function InviteTab() {
     <div style={{ maxWidth: 600, display: "grid", gap: 44 }}>
       {/* Member invite */}
       <section>
-        <h2 style={sectionTitle}>Invite a family member</h2>
+        <h2 style={sectionTitle}>{hub.invite.memberHeading}</h2>
         <p style={sectionBlurb}>
-          Send a relative a link to create their own login and join the family. They&apos;ll confirm
-          who they are, then go through a short welcome.
+          {hub.invite.memberBody}
         </p>
         <form action={createMemberInvite} style={{ display: "grid", gap: 20 }}>
           <label className="kin-form-label">
-            Their name
+            {hub.invite.nameLabel}
             <input
               name="inviteeName"
               type="text"
               required
               className="kin-field"
-              placeholder="e.g. Rosa Esposito"
+              placeholder={hub.invite.namePlaceholder}
             />
           </label>
           <label className="kin-form-label">
-            Their email <span style={{ fontWeight: 400 }}>(optional)</span>
+            {hub.invite.emailLabel} <span style={{ fontWeight: 400 }}>{hub.invite.emailLabelOptional}</span>
             <input
               name="inviteeEmail"
               type="email"
               className="kin-field"
-              placeholder="rosa@example.com"
+              placeholder={hub.invite.emailPlaceholder}
             />
           </label>
           <label className="kin-form-label">
-            Relationship <span style={{ fontWeight: 400 }}>(optional)</span>
+            {hub.invite.relationshipLabel} <span style={{ fontWeight: 400 }}>{hub.invite.relationshipLabelOptional}</span>
             <input
               name="relationshipLabel"
               type="text"
               className="kin-field"
-              placeholder="e.g. your cousin"
+              placeholder={hub.invite.relationshipPlaceholder}
             />
           </label>
           <label className="kin-form-label">
-            Family
+            {hub.invite.familyLabel}
             <select name="familyId" className="kin-field" required>
               {familyOptions}
             </select>
           </label>
-          <KindredButton type="submit" label="Create invite link" />
+          <KindredButton type="submit" label={hub.invite.createInviteLink} />
         </form>
       </section>
 
@@ -329,14 +329,13 @@ export async function InviteTab() {
 
       {/* Narrator invite */}
       <section>
-        <h2 style={sectionTitle}>Invite a narrator to record</h2>
+        <h2 style={sectionTitle}>{hub.invite.narratorHeading}</h2>
         <p style={sectionBlurb}>
-          Creates a personal link that opens the narrator&apos;s recording page. No login, no account —
-          the link is the identity.
+          {hub.invite.narratorBody}
         </p>
         <form action={createInvite} style={{ display: "grid", gap: 20 }}>
           <label className="kin-form-label">
-            Narrator
+            {hub.invite.narratorLabel}
             <select name="narratorId" className="kin-field" required>
               {allPeople.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -346,12 +345,12 @@ export async function InviteTab() {
             </select>
           </label>
           <label className="kin-form-label">
-            Family
+            {hub.invite.familyLabel}
             <select name="familyId" className="kin-field" required>
               {familyOptions}
             </select>
           </label>
-          <KindredButton type="submit" label="Create link" />
+          <KindredButton type="submit" label={hub.invite.createLink} />
         </form>
       </section>
     </div>

@@ -11,6 +11,7 @@ import {
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { KindredButton } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 
 async function approve(formData: FormData): Promise<void> {
   "use server";
@@ -48,7 +49,7 @@ export async function RequestsTab() {
           color: "var(--text-muted)",
         }}
       >
-        Sign in to review join requests.
+        {hub.requests.signedOut}
       </p>
     );
   }
@@ -66,7 +67,7 @@ export async function RequestsTab() {
           margin: 0,
         }}
       >
-        Requests to join
+        {hub.requests.title}
       </h2>
       <p
         style={{
@@ -77,7 +78,7 @@ export async function RequestsTab() {
           margin: "12px 0 0",
         }}
       >
-        People asking to join a family you steward. Approving adds them as a member.
+        {hub.requests.intro}
       </p>
     </>
   );
@@ -104,7 +105,7 @@ export async function RequestsTab() {
               margin: 0,
             }}
           >
-            No requests waiting right now.
+            {hub.requests.empty}
           </p>
         </div>
       </div>
@@ -171,11 +172,11 @@ export async function RequestsTab() {
             <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
               <form action={approve}>
                 <input type="hidden" name="joinRequestId" value={r.joinRequestId} />
-                <KindredButton type="submit" label="Approve" size="small" />
+                <KindredButton type="submit" label={hub.requests.approve} size="small" />
               </form>
               <form action={decline}>
                 <input type="hidden" name="joinRequestId" value={r.joinRequestId} />
-                <KindredButton type="submit" label="Decline" variant="ghost" size="small" />
+                <KindredButton type="submit" label={hub.requests.decline} variant="ghost" size="small" />
               </form>
             </div>
           </li>

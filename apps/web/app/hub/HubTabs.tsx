@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { hub } from "@/app/_copy";
 
 export interface HubTab {
   key: string;
@@ -65,7 +66,7 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
   };
 
   return (
-    <nav style={navStyle} role="tablist" aria-label="Hub sections">
+    <nav style={navStyle} role="tablist" aria-label={hub.shell.sectionsAria}>
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -85,7 +86,7 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
         >
           {tab.label}
           {tab.badge != null && tab.badge > 0 && (
-            <span style={badgeStyle} aria-label={`${tab.badge} unread`}>
+            <span style={badgeStyle} aria-label={hub.shell.unreadAria(tab.badge)}>
               {tab.badge}
             </span>
           )}

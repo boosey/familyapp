@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { hub } from "@/app/_copy";
 
 export async function AsksTab() {
   const { db, auth } = await getRuntime();
@@ -20,7 +21,7 @@ export async function AsksTab() {
           color: "var(--text-muted)",
         }}
       >
-        Sign in to see your asks.
+        {hub.asks.signedOut}
       </p>
     );
   }
@@ -52,7 +53,7 @@ export async function AsksTab() {
           margin: 0,
         }}
       >
-        Your asks
+        {hub.asks.title}
       </h2>
       <p
         style={{
@@ -63,7 +64,7 @@ export async function AsksTab() {
           margin: "12px 0 0",
         }}
       >
-        The questions you’ve sent, and where they are.
+        {hub.asks.intro}
       </p>
     </>
   );
@@ -90,7 +91,7 @@ export async function AsksTab() {
               margin: 0,
             }}
           >
-            You haven’t asked anything yet.
+            {hub.asks.empty}
           </p>
         </div>
       </div>
@@ -138,7 +139,7 @@ export async function AsksTab() {
                   }}
                 >
                   <span style={{ color: "var(--text-meta)" }}>
-                    For {m.targetSpokenName}:
+                    {hub.asks.forTarget(m.targetSpokenName)}
                   </span>{" "}
                   {m.ask.questionText}
                 </p>
@@ -160,7 +161,7 @@ export async function AsksTab() {
                     flexShrink: 0,
                   }}
                 >
-                  ▶ {m.storyTitle ?? "Listen"}
+                  ▶ {m.storyTitle ?? hub.asks.listen}
                 </Link>
               ) : m.ask.status === "answered" ? (
                 <span
@@ -173,7 +174,7 @@ export async function AsksTab() {
                     flexShrink: 0,
                   }}
                 >
-                  ANSWERED · PRIVATE
+                  {hub.asks.answeredPrivate}
                 </span>
               ) : (
                 <span
@@ -186,7 +187,7 @@ export async function AsksTab() {
                     flexShrink: 0,
                   }}
                 >
-                  IN THE QUEUE
+                  {hub.asks.inQueue}
                 </span>
               )}
             </li>

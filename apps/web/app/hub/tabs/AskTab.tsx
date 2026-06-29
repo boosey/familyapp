@@ -8,6 +8,7 @@ import { createAsk } from "@chronicle/core";
 import { memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 
 async function submitAsk(formData: FormData): Promise<void> {
   "use server";
@@ -33,7 +34,7 @@ export async function AskTab() {
           color: "var(--text-muted)",
         }}
       >
-        Sign in to ask a question.
+        {hub.ask.signedOut}
       </p>
     );
   }
@@ -72,7 +73,7 @@ export async function AskTab() {
           margin: "0 0 8px",
         }}
       >
-        Ask a question
+        {hub.ask.heading}
       </h2>
       <p
         style={{
@@ -83,20 +84,19 @@ export async function AskTab() {
           margin: "12px 0 28px",
         }}
       >
-        Your question goes into the queue. It will be asked next time they sit down to talk —
-        never as an interruption.
+        {hub.ask.intro}
       </p>
 
       <div style={{ marginBottom: 24 }}>
         <KindredPromptCard
-          eyebrow="What would you love to hear?"
-          question="A good ask is small and human — a name, a smell, a feeling, a Sunday."
+          eyebrow={hub.ask.promptEyebrow}
+          question={hub.ask.promptQuestion}
         />
       </div>
 
       <form action={submitAsk} style={{ display: "grid", gap: 20 }}>
         <label className="kin-form-label">
-          For
+          {hub.ask.forLabel}
           <select name="targetPersonId" className="kin-field" required>
             {candidates.map((p) => (
               <option key={p.id} value={p.id}>
@@ -106,16 +106,16 @@ export async function AskTab() {
           </select>
         </label>
         <label className="kin-form-label">
-          Your question
+          {hub.ask.questionLabel}
           <textarea
             name="questionText"
             className="kin-field"
             rows={5}
             required
-            placeholder="e.g. What was your mother singing on Sunday mornings?"
+            placeholder={hub.ask.questionPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label="Send to the queue" />
+        <KindredButton type="submit" label={hub.ask.submit} />
       </form>
     </div>
   );

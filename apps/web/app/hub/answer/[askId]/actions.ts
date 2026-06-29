@@ -17,6 +17,7 @@ import {
 } from "@chronicle/core";
 import { ingestRecording } from "@chronicle/capture";
 import { getRuntime } from "@/lib/runtime";
+import { hub } from "@/app/_copy";
 
 export type ActionResult = { error: string } | undefined;
 
@@ -28,12 +29,12 @@ export type ActionResult = { error: string } | undefined;
 export async function recordAnswerAction(formData: FormData): Promise<ActionResult> {
   const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") return { error: "Not signed in." };
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   const audio = formData.get("audio");
   const askIdField = formData.get("askId");
   if (!(audio instanceof Blob) || typeof askIdField !== "string" || !askIdField) {
-    return { error: "Invalid input." };
+    return { error: hub.actions.invalidInput };
   }
 
   // Defense: confirm the ask is targeted at this exact person before recording anything.
@@ -43,17 +44,17 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
     .where(eq(asks.id, askIdField))
     .limit(1);
   if (!askRow || askRow.targetPersonId !== ctx.personId) {
-    return { error: "This question is not for you." };
+    return { error: hub.actions.notForYou };
   }
   // Only queued/routed asks are answerable. Recording into an already-answered ask would create
   // a dead draft whose Share can never close (approveAndShareStory rejects a second answer for an
   // already-answered ask) — SF-4. Reject before ingesting anything.
   if (askRow.status !== "queued" && askRow.status !== "routed") {
-    return { error: "That question has already been answered." };
+    return { error: hub.actions.alreadyAnswered };
   }
 
   const bytes = new Uint8Array(await audio.arrayBuffer());
-  if (bytes.byteLength === 0) return { error: "Recording was empty. Please try again." };
+  if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
 
   try {
     await ingestRecording(db, storage, {
@@ -62,7 +63,7 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
       askId: askIdField,
     });
   } catch {
-    return { error: "Could not save your recording. Please try again." };
+    return { error: hub.actions.saveFailed };
   }
 }
 
@@ -76,18 +77,18 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
   const { db, auth, newPipeline } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") return { error: "Not signed in." };
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   const storyId = formData.get("storyId");
   const tierRaw = formData.get("audienceTier");
   if (typeof storyId !== "string" || !storyId || typeof tierRaw !== "string") {
-    return { error: "Invalid input." };
+    return { error: hub.actions.invalidInput };
   }
 
   const validTiers = ["family", "branch", "public"] as const;
   type ValidTier = (typeof validTiers)[number];
   if (!(validTiers as readonly string[]).includes(tierRaw)) {
-    return { error: "Please pick an audience before sharing." };
+    return { error: hub.actions.pickAudience };
   }
   const audienceTier = tierRaw as ValidTier;
 
@@ -95,7 +96,7 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
     // Ownership check via the front door. The owner can always see their own story (any state).
     const story = await getStoryForViewer(db, ctx, storyId);
     if (!story || story.ownerPersonId !== ctx.personId) {
-      return { error: "Story not found." };
+      return { error: hub.actions.storyNotFound };
     }
 
     // Pipeline runs inline: transcribe → render_story → story moves to pending_approval.
@@ -129,7 +130,7 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       audienceTier,
     });
   } catch {
-    return { error: "Something went wrong sharing your story. Please try again." };
+    return { error: hub.actions.shareFailed };
   }
 
   // Called outside try/catch: redirect() throws NEXT_REDIRECT which Next.js intercepts.
@@ -144,10 +145,10 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
 export async function discardAnswerAction(formData: FormData): Promise<ActionResult> {
   const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") return { error: "Not signed in." };
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   const storyId = formData.get("storyId");
-  if (typeof storyId !== "string" || !storyId) return { error: "Invalid input." };
+  if (typeof storyId !== "string" || !storyId) return { error: hub.actions.invalidInput };
 
   try {
     const { storageKeys } = await discardDraftStory(db, {
@@ -160,6 +161,6 @@ export async function discardAnswerAction(formData: FormData): Promise<ActionRes
       await storage.delete(key).catch(() => {});
     }
   } catch {
-    return { error: "Could not remove the recording. Please try again." };
+    return { error: hub.actions.removeFailed };
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { hub } from "@/app/_copy";
 
 /** Copy-to-clipboard button for the one-time invite link. */
 export function CopyButton({ value }: { value: string }) {
@@ -33,7 +34,7 @@ export function CopyButton({ value }: { value: string }) {
 
   return (
     <button type="button" onClick={copy} style={btn}>
-      {copied ? "Copied ✓" : "Copy"}
+      {copied ? hub.copyButton.copied : hub.copyButton.copy}
     </button>
   );
 }

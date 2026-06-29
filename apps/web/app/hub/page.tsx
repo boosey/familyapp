@@ -14,6 +14,7 @@ import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
 import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 import { HubTabsNav } from "./HubTabsNav";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
@@ -71,7 +72,7 @@ export default async function HubPage({
               margin: "0 0 12px",
             }}
           >
-            Family Chronicle
+            {hub.shell.brand}
           </h1>
           <p
             style={{
@@ -81,14 +82,14 @@ export default async function HubPage({
               margin: "0 0 28px",
             }}
           >
-            Sign in to see your family's stories.
+            {hub.shell.signedOut}
           </p>
           <div style={{ display: "grid", gap: 12, maxWidth: 260 }}>
             <Link href="/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label="Sign in" fullWidth />
+              <KindredButton label={hub.shell.signIn} fullWidth />
             </Link>
             <Link href="/sign-up" style={{ textDecoration: "none" }}>
-              <KindredButton label="Create your family" variant="secondary" fullWidth />
+              <KindredButton label={hub.shell.createFamily} variant="secondary" fullWidth />
             </Link>
           </div>
         </div>
@@ -126,7 +127,7 @@ export default async function HubPage({
   // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
   // joined for now — the multi-family display is a separate design question, deliberately deferred.
   const familyNames = [...new Set(feed.map((s) => s.family.name))];
-  const familyName = familyNames.length ? familyNames.join(" · ") : "Your Chronicle";
+  const familyName = familyNames.length ? familyNames.join(" · ") : hub.shell.chronicle;
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
   const initials = viewerName
@@ -139,26 +140,26 @@ export default async function HubPage({
     : "Y";
 
   const tabs = [
-    { key: "stories", label: "Stories" },
+    { key: "stories", label: hub.shell.tabStories },
     {
       key: "questions",
-      label: "Questions for you",
+      label: hub.shell.tabQuestions,
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
-    { key: "ask", label: "Ask a question" },
-    { key: "asks", label: "Your asks" },
-    { key: "invite", label: "Invite" },
+    { key: "ask", label: hub.shell.tabAsk },
+    { key: "asks", label: hub.shell.tabAsks },
+    { key: "invite", label: hub.shell.tabInvite },
     ...(pendingRequests.length > 0
-      ? [{ key: "requests", label: "Requests", badge: pendingRequests.length }]
+      ? [{ key: "requests", label: hub.shell.tabRequests, badge: pendingRequests.length }]
       : []),
   ];
 
   const accountItems: AccountMenuItem[] = [
-    { key: "profile", label: "Your profile", href: "/hub" /* stub: no backend yet */ },
-    { key: "settings", label: "Settings", href: "/hub" /* stub: no backend yet */ },
-    { key: "manage-family", label: "Manage family", href: "/hub" /* stub: no backend yet */ },
-    { key: "switch-user", label: "Switch user", href: "/dev/sign-in" },
-    { key: "log-out", label: "Log out", onSelect: logOut },
+    { key: "profile", label: hub.shell.menuProfile, href: "/hub" /* stub: no backend yet */ },
+    { key: "settings", label: hub.shell.menuSettings, href: "/hub" /* stub: no backend yet */ },
+    { key: "manage-family", label: hub.shell.menuManageFamily, href: "/hub" /* stub: no backend yet */ },
+    { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
+    { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */

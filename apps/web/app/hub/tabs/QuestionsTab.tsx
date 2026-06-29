@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PendingAskForNarrator } from "@chronicle/core";
 import type { OutstandingAnswerDraft } from "@chronicle/core";
+import { hub, common } from "@/app/_copy";
 
 interface QuestionsTabProps {
   asks: PendingAskForNarrator[];
@@ -25,7 +26,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
           margin: 0,
         }}
       >
-        Questions for you
+        {hub.questions.title}
       </h2>
       <p
         style={{
@@ -36,7 +37,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
           margin: "12px 0 0",
         }}
       >
-        Your family asked these. Answer whenever you're ready — there's no rush.
+        {hub.questions.intro}
       </p>
 
       {asks.length === 0 ? (
@@ -58,7 +59,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
               margin: 0,
             }}
           >
-            You're all caught up. Nothing waiting.
+            {hub.questions.caughtUp}
           </p>
         </div>
       ) : (
@@ -82,11 +83,11 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
               const dt = new Date(draft.recordedAt);
               const diffMs = Date.now() - dt.getTime();
               const diffMins = Math.floor(diffMs / 60000);
-              if (diffMins < 2) recordedLabel = "just now";
-              else if (diffMins < 60) recordedLabel = `${diffMins} min ago`;
+              if (diffMins < 2) recordedLabel = common.relativeTime.justNow;
+              else if (diffMins < 60) recordedLabel = common.relativeTime.minsAgo(diffMins);
               else {
                 const diffHrs = Math.floor(diffMins / 60);
-                if (diffHrs < 24) recordedLabel = `${diffHrs}h ago`;
+                if (diffHrs < 24) recordedLabel = common.relativeTime.hrsAgo(diffHrs);
                 else recordedLabel = dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
               }
             }
@@ -114,7 +115,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
                       letterSpacing: "var(--tracking-mono)",
                     }}
                   >
-                    {item.askerSpokenName.toUpperCase()} ASKED
+                    {hub.questions.askedBy(item.askerSpokenName)}
                   </span>
                   <p
                     style={{
@@ -137,7 +138,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
                         margin: "6px 0 0",
                       }}
                     >
-                      RECORDED {recordedLabel.toUpperCase()}
+                      {hub.questions.recordedAt(recordedLabel)}
                     </p>
                   ) : null}
                 </div>
@@ -160,7 +161,7 @@ export function QuestionsTab({ asks, draftsByAskId }: QuestionsTabProps) {
                     textDecoration: "none",
                   }}
                 >
-                  {hasDraft ? "Review & approve" : "Answer"}
+                  {hasDraft ? hub.questions.reviewApprove : hub.questions.answer}
                 </Link>
               </li>
             );

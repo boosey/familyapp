@@ -13,6 +13,7 @@ import Link from "next/link";
 import { getStoryForViewer, listOutstandingAnswerDrafts } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
+import { hub } from "@/app/_copy";
 import { AnswerFlow } from "./AnswerFlow";
 import type { DraftInfo } from "./AnswerFlow";
 
@@ -99,7 +100,7 @@ export default async function AnswerPage({
             gap: 6,
           }}
         >
-          ← Back to questions
+          {hub.answer.backToQuestions}
         </Link>
       </div>
 

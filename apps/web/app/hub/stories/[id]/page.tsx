@@ -9,6 +9,7 @@ import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { markStorySeen } from "@/lib/hub-data";
 import { KindredListenBar, KindredChip } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function StoryDetailPage({
               textDecoration: "none",
             }}
           >
-            <span style={{ fontSize: 22 }}>‹</span> Stories
+            <span style={{ fontSize: 22 }}>‹</span> {hub.storyDetail.back}
           </Link>
         </div>
 
@@ -79,7 +80,7 @@ export default async function StoryDetailPage({
             margin: "14px 0 18px",
           }}
         >
-          {story.title ?? "Untitled"}
+          {story.title ?? hub.stories.untitled}
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--text-meta)", fontSize: 15 }}>
           <span
@@ -98,7 +99,7 @@ export default async function StoryDetailPage({
           >
             {narratorName.charAt(0).toUpperCase()}
           </span>
-          Told by {narratorName} · Recorded {recordedAt}
+          {hub.storyDetail.byline(narratorName, recordedAt)}
         </div>
 
         <div style={{ margin: "22px 0" }}>
@@ -133,7 +134,7 @@ export default async function StoryDetailPage({
           </p>
         ) : (
           <p className="kin-muted" style={{ marginTop: 26 }}>
-            No prose yet — the original recording above is the whole story for now.
+            {hub.storyDetail.noProse}
           </p>
         )}
 
