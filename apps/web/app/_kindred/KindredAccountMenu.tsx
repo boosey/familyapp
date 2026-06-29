@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { common } from "@/app/_copy";
 
 export interface AccountMenuItem {
   key: string;
@@ -132,7 +133,7 @@ export function KindredAccountMenu({
     <div ref={containerRef} style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        aria-label="Your account"
+        aria-label={common.account.yourAccount}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -148,7 +149,7 @@ export function KindredAccountMenu({
       </button>
 
       {open && (
-        <div style={dropdownStyle} role="menu" aria-label="Account menu">
+        <div style={dropdownStyle} role="menu" aria-label={common.account.accountMenu}>
           {(displayName || email) && (
             <div style={headerStyle}>
               {displayName && <div style={displayNameStyle}>{displayName}</div>}

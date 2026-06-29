@@ -5,6 +5,7 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { common } from "@/app/_copy";
 
 export function AuthScreen({
   title,
@@ -51,8 +52,8 @@ export function AuthScreen({
             textDecoration: "none",
           }}
         >
-          Family Chronicle
-        </Link>
+          {common.authScreenBrand}
+</Link>
         <h1
           style={{
             fontFamily: "var(--font-story)",

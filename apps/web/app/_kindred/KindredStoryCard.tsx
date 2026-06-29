@@ -1,4 +1,5 @@
 import type { HTMLAttributes, KeyboardEvent, ReactNode } from "react";
+import { common } from "@/app/_copy";
 
 export interface KindredStoryCardProps
   extends Omit<HTMLAttributes<HTMLElement>, "title" | "onClick"> {
@@ -143,8 +144,8 @@ export function KindredStoryCard({
               color: "var(--text-muted)",
             }}
           >
-            photo
-          </span>
+            {common.storyCard.photo}
+</span>
         </div>
       )}
 
@@ -182,7 +183,7 @@ export function KindredStoryCard({
             </span>
             {recordedLabel ? (
               <span
-                title={`Recorded ${recordedLabel}`}
+                title={common.storyCard.recordedTitle(recordedLabel)}
                 style={{
                   flex: "0 0 auto",
                   fontFamily: "var(--font-mono)",
@@ -259,7 +260,7 @@ export function KindredStoryCard({
       {/* Pin indicator */}
       {pinned ? (
         <span
-          aria-label="Pinned"
+          aria-label={common.storyCard.pinned}
           style={{
             position: "absolute",
             top: "var(--space-3)",
@@ -292,7 +293,7 @@ function NewPill() {
         textTransform: "uppercase",
       }}
     >
-      New
-    </span>
+      {common.storyCard.badgeNew}
+</span>
   );
 }

@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { common } from "@/app/_copy";
 
 export interface KindredListenBarProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Audio source URL. When provided, the bar self-manages playback via a real <audio> element. */
@@ -217,7 +218,7 @@ export function KindredListenBar({
           onKeyDown={handleTrackKeyDown}
           role={isAudioMode ? "slider" : undefined}
           tabIndex={isAudioMode ? 0 : undefined}
-          aria-label={isAudioMode ? "Seek" : undefined}
+          aria-label={isAudioMode ? common.listenBar.seek : undefined}
           aria-valuemin={isAudioMode ? 0 : undefined}
           aria-valuemax={isAudioMode ? Math.round(totalSec) : undefined}
           aria-valuenow={isAudioMode ? Math.round(curSec) : undefined}
@@ -279,13 +280,13 @@ export function KindredListenBar({
           marginTop: "var(--space-3)",
         }}
       >
-        <TransportButton onClick={() => seekTo(0)} title="Start over" disabled={!isAudioMode}>
+        <TransportButton onClick={() => seekTo(0)} title={common.listenBar.startOver} disabled={!isAudioMode}>
           ⏮
         </TransportButton>
 
         <TransportButton
           onClick={() => seekTo(curSec - SKIP_SECONDS)}
-          title="Back 10 seconds"
+          title={common.listenBar.back10}
           disabled={!isAudioMode}
         >
           <span style={{ fontSize: 30, lineHeight: 1 }}>↺</span>
@@ -296,7 +297,7 @@ export function KindredListenBar({
         <button
           type="button"
           onClick={handleToggle}
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={playing ? common.listenBar.pause : common.listenBar.play}
           disabled={!isAudioMode && !onToggle}
           style={{
             width: 62,
@@ -320,7 +321,7 @@ export function KindredListenBar({
 
         <TransportButton
           onClick={() => seekTo(curSec + SKIP_SECONDS)}
-          title="Forward 10 seconds"
+          title={common.listenBar.forward10}
           disabled={!isAudioMode}
         >
           <span style={{ fontSize: 30, lineHeight: 1 }}>↻</span>
@@ -328,7 +329,7 @@ export function KindredListenBar({
         </TransportButton>
 
         {showNextResolved && (
-          <TransportButton onClick={() => onNext?.()} title="Next story" disabled={!onNext}>
+          <TransportButton onClick={() => onNext?.()} title={common.listenBar.nextStory} disabled={!onNext}>
             ⏭
           </TransportButton>
         )}

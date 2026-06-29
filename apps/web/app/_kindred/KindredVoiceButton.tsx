@@ -1,5 +1,6 @@
 "use client";
 import type { CSSProperties } from "react";
+import { common } from "@/app/_copy";
 
 export interface KindredVoiceButtonProps {
   listening?: boolean;
@@ -80,10 +81,10 @@ export function KindredVoiceButton({
     : "var(--text-meta)";
 
   const defaultLabel = saving
-    ? "One moment…"
+    ? common.voiceButton.oneMoment
     : listening
-      ? "Listening…"
-      : "Tap to speak";
+      ? common.voiceButton.listening
+      : common.voiceButton.tapToSpeak;
 
   const caption = label ?? defaultLabel;
 

@@ -1,81 +1,60 @@
 "use client";
 
 /**
- * Reading-size control — a row of boxed "A"s, smallest to largest, that scales ALL rem-based text
- * across the app. The Kindred type scale is defined in `rem` (see tokens.css), so setting the root
- * element's font size rescales every token at once. The choice is persisted in localStorage and
- * re-applied on mount, so it survives navigation and reloads.
- *
- * Base root size is 18px (globals.css sets html { font-size: var(--text-ui-sm) } = 1.125rem). A
- * scale of 1 reproduces that; the larger steps multiply it. Inline pixel sizes (a few icons/arrows)
- * don't scale — the vast majority of UI text uses rem tokens and does.
+ * Reading-size control — a single radiused segmented control: a row of "A" cells, smallest to
+ * largest, divided by vertical separators. Choosing a cell sets the root element's font size (in
+ * points), which rescales ALL rem-based text across the app at once (the Kindred type scale is
+ * rem-based; see tokens.css). The choice is persisted in localStorage and re-applied on mount, so
+ * it survives navigation and reloads. Point sizes live in `font-scale-constants.ts`.
  */
 import { useEffect, useState, type CSSProperties } from "react";
+import {
+  FONT_SIZE_STEPS_PT,
+  DEFAULT_FONT_SIZE_INDEX,
+  FONT_SIZE_STORAGE_KEY,
+} from "./font-scale-constants";
+import { common } from "@/app/_copy";
 
-const STORAGE_KEY = "kin-font-scale";
-const BASE_ROOT_PX = 18;
+/** Glyph size (px) shown inside each cell so the row reads small → large. Presentational only —
+ *  fixed px so the control itself never resizes when it changes the page scale. */
+const GLYPH_PX = [12, 15, 18, 22, 26];
 
-interface Step {
-  label: string;
-  scale: number;
-  /** Glyph size (px) shown inside the box so the row reads small → large. */
-  glyph: number;
-}
-
-const STEPS: Step[] = [
-  { label: "Small text", scale: 1, glyph: 13 },
-  { label: "Medium text", scale: 1.15, glyph: 17 },
-  { label: "Large text", scale: 1.3, glyph: 22 },
-];
-
-function applyScale(scale: number): void {
-  document.documentElement.style.fontSize = `${BASE_ROOT_PX * scale}px`;
-}
-
-function nearestIndex(scale: number): number {
-  let best = 0;
-  for (let i = 1; i < STEPS.length; i++) {
-    if (Math.abs(STEPS[i]!.scale - scale) < Math.abs(STEPS[best]!.scale - scale)) best = i;
-  }
-  return best;
+function applyStep(idx: number): void {
+  document.documentElement.style.fontSize = `${FONT_SIZE_STEPS_PT[idx]}pt`;
 }
 
 export function KindredFontScale() {
-  // Default to the first step until the persisted choice is read on mount (avoids SSR mismatch).
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(DEFAULT_FONT_SIZE_INDEX);
 
   useEffect(() => {
-    const stored = Number(window.localStorage.getItem(STORAGE_KEY));
-    if (Number.isFinite(stored) && stored > 0) {
-      const idx = nearestIndex(stored);
-      setActive(idx);
-      applyScale(STEPS[idx]!.scale);
-    }
+    const stored = Number(window.localStorage.getItem(FONT_SIZE_STORAGE_KEY));
+    const idx =
+      Number.isInteger(stored) && stored >= 0 && stored < FONT_SIZE_STEPS_PT.length
+        ? stored
+        : DEFAULT_FONT_SIZE_INDEX;
+    setActive(idx);
+    applyStep(idx);
   }, []);
 
   function choose(idx: number): void {
     setActive(idx);
-    applyScale(STEPS[idx]!.scale);
-    window.localStorage.setItem(STORAGE_KEY, String(STEPS[idx]!.scale));
+    applyStep(idx);
+    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(idx));
   }
 
   return (
-    <div
-      role="group"
-      aria-label="Text size"
-      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-    >
-      {STEPS.map((step, idx) => {
+    <div role="group" aria-label={common.fontScale.control} style={groupStyle}>
+      {FONT_SIZE_STEPS_PT.map((_, idx) => {
         const on = idx === active;
         return (
           <button
-            key={step.label}
+            key={idx}
             type="button"
             onClick={() => choose(idx)}
-            aria-label={step.label}
+            aria-label={common.fontScale.labels[idx]}
             aria-pressed={on}
-            title={step.label}
-            style={boxStyle(on, step.glyph)}
+            title={common.fontScale.labels[idx]}
+            style={cellStyle(on, idx)}
           >
             A
           </button>
@@ -85,23 +64,31 @@ export function KindredFontScale() {
   );
 }
 
-function boxStyle(on: boolean, glyph: number): CSSProperties {
+const groupStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "stretch",
+  borderRadius: "var(--radius-md, 10px)",
+  border: "var(--border-width) solid var(--border-strong)",
+  background: "var(--surface-card)",
+  overflow: "hidden",
+};
+
+function cellStyle(on: boolean, idx: number): CSSProperties {
   return {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 40,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    borderRadius: "var(--radius-sm, 8px)",
-    border: `var(--border-width) solid ${on ? "var(--accent)" : "var(--border-strong)"}`,
-    background: on ? "var(--accent)" : "var(--surface-card)",
+    border: "none",
+    // Vertical separators between cells (not before the first).
+    borderLeft: idx === 0 ? "none" : "var(--border-width) solid var(--border-strong)",
+    background: on ? "var(--accent)" : "transparent",
     color: on ? "var(--accent-on)" : "var(--text-body)",
-    /* Fixed px so the control itself never resizes when it changes the page scale. */
     fontFamily: "var(--font-story)",
-    fontSize: glyph,
+    fontSize: GLYPH_PX[idx],
     fontWeight: 600,
     lineHeight: 1,
-    flex: "0 0 auto",
   };
 }
