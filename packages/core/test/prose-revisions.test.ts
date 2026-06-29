@@ -1,4 +1,6 @@
 import { createTestDatabase, type Database } from "@chronicle/db";
+import { stories } from "@chronicle/db/content";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   appendProseRevision,
@@ -50,6 +52,15 @@ describe("saveProseCorrection", () => {
     expect(rows[0]!.actorPersonId).toBe(personId);
   });
 
+  async function readProse(storyId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ prose: stories.prose })
+      .from(stories)
+      .where(eq(stories.id, storyId))
+      .limit(1);
+    return row!.prose;
+  }
+
   it("rejects a non-owner", async () => {
     const { storyId } = await seedPendingApproval();
     const stranger = await makePerson(db, "Stranger");
@@ -60,6 +71,9 @@ describe("saveProseCorrection", () => {
         actorPersonId: stranger.id,
       }),
     ).rejects.toThrow(/not the owner/i);
+    // The gate must leave the DB untouched: no revision row, prose unchanged.
+    expect(await listProseRevisions(db, storyId)).toHaveLength(0);
+    expect(await readProse(storyId)).toBe("polished L2");
   });
 
   it("rejects a story that is not pending_approval", async () => {
@@ -71,6 +85,9 @@ describe("saveProseCorrection", () => {
         actorPersonId: personId,
       }),
     ).rejects.toThrow(/pending_approval/i);
+    // The gate must leave the DB untouched: no revision row, prose not set to "x".
+    expect(await listProseRevisions(db, storyId)).toHaveLength(0);
+    expect(await readProse(storyId)).not.toBe("x");
   });
 });
 
