@@ -116,6 +116,15 @@ export const joinRequestStatusEnum = pgEnum("join_request_status", [
   "declined",
 ]);
 
+/** The provenance levels of a story's prose, oldest to newest. `ai_verified` is a reserved
+ * future seam (an AI verify/judge step) — not produced by Phase 1. */
+export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
+  "ai_transcribed",
+  "ai_polished",
+  "human_corrected",
+  "ai_verified",
+]);
+
 // ---------------------------------------------------------------------------
 // BiographicalProfile — compile-time type for persons.biographical_anchors (JSONB).
 // ---------------------------------------------------------------------------
@@ -362,6 +371,39 @@ export const stories = pgTable(
     index("stories_owner_idx").on(t.ownerPersonId),
     index("stories_state_idx").on(t.state),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// ProseRevision — append-only provenance of a story's prose at each stage
+// (L1 raw transcript → L2 AI-polished → L3 human-corrected). Holds prose CONTENT,
+// so the table object lives behind @chronicle/db/content. Immutable: a trigger
+// (invariants.sql) forbids UPDATE/DELETE. The L2→L3 diff is the prompt/model signal;
+// modelId + promptText record exactly what produced each AI level.
+// ---------------------------------------------------------------------------
+
+export const proseRevisions = pgTable(
+  "prose_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic total order over a story's revisions — deterministic ordering even within a tx. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    level: proseRevisionLevelEnum("level").notNull(),
+    /** The prose text at this stage. */
+    text: text("text").notNull(),
+    /** AI model that produced this level; null for human_corrected. */
+    modelId: text("model_id"),
+    /** Exact prompt that produced this level; null for ai_transcribed (STT) and human_corrected. */
+    promptText: text("prompt_text"),
+    /** The person who produced a human_corrected revision; null for AI levels. */
+    actorPersonId: uuid("actor_person_id").references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("prose_revisions_story_idx").on(t.storyId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -652,6 +694,8 @@ export type MockAuthUser = typeof mockAuthUsers.$inferSelect;
 export type NewMockAuthUser = typeof mockAuthUsers.$inferInsert;
 export type StoryView = typeof storyViews.$inferSelect;
 export type NewStoryView = typeof storyViews.$inferInsert;
+export type ProseRevision = typeof proseRevisions.$inferSelect;
+export type NewProseRevision = typeof proseRevisions.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
@@ -664,3 +708,5 @@ export type AskStatus = (typeof askStatusEnum.enumValues)[number];
 export type InvitationStatus = (typeof invitationStatusEnum.enumValues)[number];
 export type JoinRequestStatus =
   (typeof joinRequestStatusEnum.enumValues)[number];
+export type ProseRevisionLevel =
+  (typeof proseRevisionLevelEnum.enumValues)[number];

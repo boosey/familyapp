@@ -26,4 +26,5 @@ export {
   membershipRoleEnum,
   membershipStatusEnum,
   storyStateEnum,
+  proseRevisionLevelEnum,
 } from "./schema";

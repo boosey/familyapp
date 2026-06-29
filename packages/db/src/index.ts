@@ -49,6 +49,9 @@ export type {
   InvitationStatus,
   JoinRequestStatus,
   BiographicalProfile,
+  ProseRevision,
+  NewProseRevision,
+  ProseRevisionLevel,
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
 export {

@@ -12,6 +12,7 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."prose_revision_level" AS ENUM('ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
 CREATE TABLE "accounts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -145,6 +146,18 @@ CREATE TABLE "persons" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "prose_revisions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"story_id" uuid NOT NULL,
+	"level" "prose_revision_level" NOT NULL,
+	"text" text NOT NULL,
+	"model_id" text,
+	"prompt_text" text,
+	"actor_person_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "stories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_person_id" uuid NOT NULL,
@@ -197,6 +210,8 @@ ALTER TABLE "media" ADD CONSTRAINT "media_owner_person_id_persons_id_fk" FOREIGN
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
@@ -219,6 +234,7 @@ CREATE INDEX "memberships_family_idx" ON "memberships" USING btree ("family_id")
 CREATE UNIQUE INDEX "mock_auth_users_email_uq" ON "mock_auth_users" USING btree ("email");
 CREATE UNIQUE INDEX "mock_auth_users_provider_id_uq" ON "mock_auth_users" USING btree ("auth_provider_user_id");
 CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_id");
+CREATE INDEX "prose_revisions_story_idx" ON "prose_revisions" USING btree ("story_id");
 CREATE INDEX "stories_owner_idx" ON "stories" USING btree ("owner_person_id");
 CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
