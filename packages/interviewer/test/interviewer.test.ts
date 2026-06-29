@@ -1,4 +1,7 @@
 import type { BiographicalProfile } from "@chronicle/db";
+import { createTestDatabase } from "@chronicle/db";
+import { sql } from "drizzle-orm";
+import { createCoreAnchorSource } from "../src/core-adapters";
 import { ScriptedLanguageModel } from "@chronicle/pipeline";
 import { nextIntakeQuestion, INTAKE_QUESTIONS } from "../src/questions/intake";
 import { extractIntakeAnswer } from "../src/intake-extraction";
@@ -658,5 +661,28 @@ describe("Turn loop — deeplink + intake extraction", () => {
     expect(llm.calls.length).toBe(1);          // only the phraser call
     await s.recordResponse("It was wonderful.");
     expect(llm.calls.length).toBe(1);          // extractor was NOT invoked
+  });
+});
+
+describe("CoreAnchorSource — writeProfileField", () => {
+  it("writes fields to biographical_anchors without overwriting others", async () => {
+    const db = await createTestDatabase();
+    const personId = crypto.randomUUID();
+    await db.execute(sql`
+      INSERT INTO persons (id, display_name, spoken_name, birth_year)
+      VALUES (${personId}, ${"Eleanor R."}, ${"Eleanor"}, ${1942})`);
+    const source = createCoreAnchorSource(db);
+
+    await source.writeProfileField(personId, "hometown", "New Orleans");
+    await source.writeProfileField(personId, "hasChildren", true);
+
+    const anchors = await source.loadForNarrator(personId);
+    // both sequential single-field writes persist (the JSONB merge does not clobber)
+    expect(anchors?.profile.hometown).toBe("New Orleans");
+    expect(anchors?.profile.hasChildren).toBe(true);
+    // unset fields map to null (JSONB → typed profile)
+    expect(anchors?.profile.siblingContext).toBeNull();
+    expect(anchors?.spokenName).toBe("Eleanor");
+    expect(anchors?.birthYear).toBe(1942);
   });
 });

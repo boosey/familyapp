@@ -10,13 +10,14 @@
  * Biographical anchors are non-content (the persons table is on the open schema), so a thin
  * pass-through to `getNarratorBiographicalContext` is the whole adapter.
  */
+import { sql } from "drizzle-orm";
 import {
   getNarratorBiographicalContext,
   listNarratorMemoryForInterviewer,
   listPendingAsksForNarrator,
   markAskRouted,
 } from "@chronicle/core";
-import type { Database } from "@chronicle/db";
+import type { BiographicalProfile, Database } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
@@ -70,17 +71,46 @@ export function createCoreAskSource(db: Database): AskSource {
   };
 }
 
+/**
+ * Build an `AnchorSource` over the narrator's `persons.biographical_anchors` JSONB. `loadForNarrator`
+ * maps the stored bag into the typed `profile` (each unset field → null); `writeProfileField` sets a
+ * SINGLE key via a JSONB merge that never touches the others. The `persons` row is on the OPEN schema
+ * (identity, not expressive content), so these are non-content reads/writes — no story/media
+ * front-door bypass and no architecture-allowlist entry is needed.
+ */
 export function createCoreAnchorSource(db: Database): AnchorSource {
   return {
     async loadForNarrator(personId: string): Promise<BiographicalAnchors | null> {
       const ctx = await getNarratorBiographicalContext(db, personId);
       if (!ctx) return null;
+      const stored = (ctx.anchors ?? {}) as Partial<BiographicalProfile>;
       return {
         personId: ctx.personId,
         spokenName: ctx.spokenName,
         birthYear: ctx.birthYear,
-        anchors: ctx.anchors,
+        profile: {
+          hometown: stored.hometown ?? null,
+          siblingContext: stored.siblingContext ?? null,
+          currentLocation: stored.currentLocation ?? null,
+          occupationSummary: stored.occupationSummary ?? null,
+          hasChildren: stored.hasChildren ?? null,
+          hasGrandchildren: stored.hasGrandchildren ?? null,
+        },
       };
+    },
+    async writeProfileField<K extends keyof BiographicalProfile>(
+      personId: string,
+      key: K,
+      value: NonNullable<BiographicalProfile[K]>,
+    ): Promise<void> {
+      // JSONB merge — set ONE key, never touching the others. The bound parameter carries the
+      // single-key patch as text and casts to jsonb, so `key`/`value` are never interpolated into
+      // the SQL string.
+      await db.execute(sql`
+        UPDATE persons
+        SET biographical_anchors = COALESCE(biographical_anchors, '{}'::jsonb) || ${JSON.stringify({ [key]: value })}::jsonb,
+            updated_at = now()
+        WHERE id = ${personId}`);
     },
   };
 }
