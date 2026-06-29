@@ -40,6 +40,8 @@ export interface RenderOutput {
   summary: string;
   tags: string[];
   modelId: string;
+  /** The exact system prompt used — recorded as prose-revision provenance. */
+  systemPrompt: string;
 }
 
 const SYSTEM_PROMPT = `You are a careful oral-history editor preparing a family member's spoken
@@ -89,7 +91,11 @@ export async function renderStoryFromTranscript(
     temperature: STORY_RENDER_LLM_TEMPERATURE,
     maxOutputTokens: STORY_RENDER_MAX_OUTPUT_TOKENS,
   });
-  return { ...parseRenderResponse(res.text, input.transcript), modelId: res.modelId };
+  return {
+    ...parseRenderResponse(res.text, input.transcript),
+    modelId: res.modelId,
+    systemPrompt: SYSTEM_PROMPT,
+  };
 }
 
 /**
@@ -100,7 +106,7 @@ export async function renderStoryFromTranscript(
 export function parseRenderResponse(
   text: string,
   fallbackProse: string,
-): Omit<RenderOutput, "modelId"> {
+): Omit<RenderOutput, "modelId" | "systemPrompt"> {
   const json = tryParseJson(text);
   if (json) {
     return {
