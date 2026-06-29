@@ -14,7 +14,7 @@ export const families = {
       "We couldn't send that request — you may already be a member, or already have a request waiting for that family.",
     searchPlaceholder: "Search by family name, a relative's name, or describe them…",
     search: "Search",
-    noMatches: (query: string) => `No families matched "${query}". Try another name or spelling.`,
+    noMatches: (query: string) => `No families matched “${query}”. Try a relative's name, or ask them for an invite link instead.`,
     resultMeta: (steward: string, reason: string) =>
       `STEWARD · ${steward.toUpperCase()} · MATCH: ${reason.toUpperCase()}`,
     notePlaceholder: "Add a note for the steward (optional) — e.g. “I’m Rosa’s cousin.”",
@@ -27,7 +27,8 @@ export const families = {
     errorNoName: "Please give your family a name.",
     nameLabel: "Family name",
     namePlaceholder: "Boudreaux",
-    descLabel: "Description (optional)",
+    descLabel: "Description",
+    descLabelOptional: "(optional)",
     descPlaceholder: "The Boudreaux family of Lafayette, Louisiana.",
     discoverableLabel: "Let other relatives find this family",
     discoverableHint: "They can search for it and ask to join. You approve every request.",

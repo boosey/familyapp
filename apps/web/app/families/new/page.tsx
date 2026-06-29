@@ -130,7 +130,7 @@ export default async function FamiliesNewPage({
             />
           </label>
           <label className="kin-form-label">
-            {families.new.descLabel}
+            {families.new.descLabel} <span style={{ fontWeight: 400 }}>{families.new.descLabelOptional}</span>
             <textarea
               name="description"
               className="kin-field"
