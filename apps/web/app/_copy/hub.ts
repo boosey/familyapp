@@ -169,6 +169,7 @@ export const hub = {
     assemblingSub: "This takes just a moment.",
     recordedAt,
     whoShouldHear: "Who should hear this?",
+    reviewYourWords: "Read it over — edit anything that isn't quite right",
     genericError: "Something went wrong. Please try again.",
     shareWithFamily: "Share with family",
     reRecord: "Re-record",

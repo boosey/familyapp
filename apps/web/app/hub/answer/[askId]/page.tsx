@@ -64,6 +64,7 @@ export default async function AnswerPage({
         storyId: story.id,
         recordedAt: draftEntry.recordedAt.toISOString(),
         mediaUrl: `/api/media/${story.recordingMediaId}`,
+        prose: story.prose ?? "",
       };
     }
   }

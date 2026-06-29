@@ -14,6 +14,7 @@ import {
   approveAndShareStory,
   discardDraftStory,
   updateDerivedFields,
+  saveProseCorrection,
 } from "@chronicle/core";
 import { ingestRecording } from "@chronicle/capture";
 import { augmentProfileFromStory } from "@chronicle/pipeline";
@@ -83,14 +84,15 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
 }
 
 /**
- * Share an answer: run the pipeline (transcribe + render, draft → pending_approval), then
- * approve+share (tap approval per ADR-0004 — no spoken approval clip). The pipeline is
- * idempotent: if the story is already pending_approval, the pipeline stages are no-ops.
+ * Share an answer: persists an optional prose correction (L3) if the narrator edited the
+ * AI-polished prose, then approves+shares (tap approval per ADR-0004 — no spoken approval clip),
+ * then augments the biographical profile from the transcript. The pipeline ran at record time
+ * (recordAnswerAction), so the story is already pending_approval here.
  *
  * redirect("/hub") is called OUTSIDE the try/catch to avoid catching NEXT_REDIRECT.
  */
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
-  const { db, auth, newPipeline, languageModel } = await getRuntime();
+  const { db, auth, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -129,6 +131,20 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       }
     }
 
+    // Persist an optional prose correction (L3). Only sent when the narrator changed the
+    // AI-polished prose in the review editor; otherwise the field is absent from FormData.
+    // saveProseCorrection requires pending_approval (the pipeline set that at record time) and
+    // the actor to be the owner (established above) — placed before approveAndShareStory, which
+    // transitions the story to approved/shared.
+    const correctedProse = formData.get("correctedProse");
+    if (typeof correctedProse === "string" && correctedProse.length > 0) {
+      await saveProseCorrection(db, {
+        storyId,
+        correctedProse,
+        actorPersonId: ctx.personId,
+      });
+    }
+
     // Tap approval (ADR-0004): no approvalAudio clip. Consent record is written with
     // approvalAudioMediaId = NULL (the column is nullable since ADR-0004 landed).
     await approveAndShareStory(db, {
@@ -137,14 +153,15 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       audienceTier,
     });
 
-    // Best-effort post-approval biographical augmentation: re-read the story (the top-of-function
-    // read ran BEFORE the pipeline, so its transcript was null — the pipeline has now populated it),
-    // then mine the transcript for any biographical-profile fields the narrator hasn't filled in
-    // directly. augmentProfileFromStory only writes currently-null fields, so it never overwrites a
+    // Best-effort post-approval biographical augmentation: re-read the story after approval —
+    // the pre-approval getStoryForViewer above was used only for the ownership check; a fresh
+    // read fetches the now-approved (and possibly corrected) story, including its transcript.
+    // Mine the transcript for biographical-profile fields the narrator hasn't filled in directly.
+    // augmentProfileFromStory only writes currently-null fields, so it never overwrites a
     // direct intake answer. Wrapped in its own try/catch so a failed inference can never FAIL the
-    // Share. It IS awaited inline — one extra LLM round-trip before the redirect — consistent with
-    // the pipeline's own inline LLM call above; a durable job queue could later move it off the
-    // request path (Next server actions can't safely fire-and-forget after redirect).
+    // Share. It IS awaited inline — one extra LLM round-trip before the redirect; a durable job
+    // queue could later move it off the request path (Next server actions can't safely
+    // fire-and-forget after redirect).
     try {
       const approved = await getStoryForViewer(db, ctx, storyId);
       if (approved?.transcript) {

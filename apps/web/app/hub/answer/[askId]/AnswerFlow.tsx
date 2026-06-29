@@ -13,7 +13,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import { recordAnswerAction, shareAnswerAction, discardAnswerAction } from "./actions";
@@ -28,6 +28,7 @@ export interface DraftInfo {
   storyId: string;
   recordedAt: string; // ISO string (serialized from Date by the server component)
   mediaUrl: string;
+  prose: string;
 }
 
 interface AnswerFlowProps {
@@ -60,6 +61,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   const [tier, setTier] = useState<Tier>("family");
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
 
   // ── Record phase handlers ───────────────────────────────────────────────────
   const uploadRecording = useCallback(async () => {
@@ -115,6 +117,9 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       const form = new FormData();
       form.append("storyId", draft!.storyId);
       form.append("audienceTier", tier);
+      if (proseDraft !== draft!.prose) {
+        form.append("correctedProse", proseDraft);
+      }
       const result = await shareAnswerAction(form);
       if (result?.error) {
         setActionError(result.error);
@@ -274,6 +279,27 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             borderRadius: "var(--radius-md)",
           }}
         />
+
+        {/* Read + edit the polished prose before sharing */}
+        <div style={{ marginBottom: 32 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--support)",
+              margin: "0 0 14px",
+            }}
+          >
+            {hub.answer.reviewYourWords}
+          </p>
+          <KindredProseEditor
+            value={proseDraft}
+            onChange={setProseDraft}
+            disabled={isRemoving}
+          />
+        </div>
 
         {/* Tier picker (mirrors ApprovalRecorder) */}
         <fieldset style={{ border: "none", padding: 0, margin: "0 0 32px" }}>
