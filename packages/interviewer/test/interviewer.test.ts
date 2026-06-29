@@ -1,6 +1,7 @@
 import type { BiographicalProfile } from "@chronicle/db";
 import { ScriptedLanguageModel } from "@chronicle/pipeline";
 import { nextIntakeQuestion, INTAKE_QUESTIONS } from "../src/questions/intake";
+import { extractIntakeAnswer } from "../src/intake-extraction";
 import { describe, expect, it } from "vitest";
 import {
   createInterviewSession,
@@ -569,5 +570,29 @@ describe("recordTurnCompleted — intake", () => {
     recordTurnCompleted(s, { kind: "intake", questionKey: "hometown", questionText: "?", extractionHint: "h" });
     expect(s.askedIntakeKeys.has("hometown")).toBe(true);
     expect(s.turnCount).toBe(1);
+  });
+});
+
+describe("extractIntakeAnswer", () => {
+  const hometownQ = INTAKE_QUESTIONS.find((q) => q.key === "hometown")!;
+  const childrenQ = INTAKE_QUESTIONS.find((q) => q.key === "hasChildren")!;
+
+  it("extracts a string field", async () => {
+    const llm = new ScriptedLanguageModel({ respond: JSON.stringify({ value: "New Orleans" }) });
+    const v = await extractIntakeAnswer(llm, hometownQ, "Oh, I grew up in New Orleans.");
+    expect(v).toBe("New Orleans");
+  });
+  it("infers a boolean field", async () => {
+    const llm = new ScriptedLanguageModel({ respond: JSON.stringify({ value: true }) });
+    const v = await extractIntakeAnswer(llm, childrenQ, "Yes, three of them.");
+    expect(v).toBe(true);
+  });
+  it("returns null when the model returns null", async () => {
+    const llm = new ScriptedLanguageModel({ respond: JSON.stringify({ value: null }) });
+    expect(await extractIntakeAnswer(llm, hometownQ, "I'd rather not say.")).toBeNull();
+  });
+  it("returns null on unparseable output", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "not json" });
+    expect(await extractIntakeAnswer(llm, hometownQ, "...")).toBeNull();
   });
 });
