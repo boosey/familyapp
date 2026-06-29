@@ -6,7 +6,7 @@
  * button. Preserves the approval POST to `/api/capture/approve` with audienceTier.
  */
 import { useCallback, useRef, useState } from "react";
-import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
 import { capture, common } from "@/app/_copy";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
@@ -15,12 +15,15 @@ type Tier = "family" | "branch" | "public";
 export function ApprovalRecorder({
   token,
   storyId,
+  prose,
 }: {
   token: string;
   storyId: string;
+  prose: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [tier, setTier] = useState<Tier>("family");
+  const [proseDraft, setProseDraft] = useState(prose);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -34,12 +37,15 @@ export function ApprovalRecorder({
       form.append("storyId", storyId);
       form.append("audienceTier", tier);
       form.append("audio", blob, "approval.webm");
+      if (proseDraft !== prose) {
+        form.append("correctedProse", proseDraft);
+      }
       const res = await fetch("/api/capture/approve", { method: "POST", body: form });
       setPhase(res.ok ? "done" : "softfail");
     } catch {
       setPhase("softfail");
     }
-  }, [token, storyId, tier]);
+  }, [token, storyId, tier, prose, proseDraft]);
 
   const start = useCallback(async () => {
     try {
@@ -186,6 +192,11 @@ export function ApprovalRecorder({
   // ── idle ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      {/* Read + edit the polished prose before approving */}
+      <div style={{ marginBottom: 28 }}>
+        <KindredProseEditor value={proseDraft} onChange={setProseDraft} />
+      </div>
+
       {/* Tier picker */}
       <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
         <legend

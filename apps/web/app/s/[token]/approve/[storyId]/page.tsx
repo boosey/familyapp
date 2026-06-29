@@ -182,7 +182,7 @@ export default async function ApprovePage({
             flexDirection: "column",
           }}
         >
-          <ApprovalRecorder token={token} storyId={story.id} />
+          <ApprovalRecorder token={token} storyId={story.id} prose={story.prose ?? ""} />
         </div>
       </section>
     </main>

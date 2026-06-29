@@ -52,6 +52,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
+  const correctedProse = form.get("correctedProse");
+
   try {
     // The tier is validated inside `captureApproval` (the domain owns the shareable-tier rule);
     // the cast just satisfies the input type at this untrusted boundary.
@@ -60,6 +62,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       storyId,
       audienceTier: tierField as Exclude<AudienceTier, "private">,
       audio: { bytes, contentType: audio.type || "audio/webm" },
+      ...(typeof correctedProse === "string" && correctedProse.length > 0
+        ? { correctedProse }
+        : {}),
     });
     return NextResponse.json({ ok: true, storyId: result.story.id });
   } catch (err) {
