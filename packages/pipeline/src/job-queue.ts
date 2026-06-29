@@ -17,14 +17,11 @@ import type {
   JobPayload,
   JobQueue,
 } from "./contracts";
-
-/**
- * Hard cap on attempts per job-id in the in-process queue. A handler that re-enqueues itself
- * (e.g. render_story re-queueing transcribe when the transcript isn't ready) under a real bug
- * could otherwise spin forever — production Inngest caps retries, this matches that behavior.
- * Crossed-cap jobs raise so a test/reviewer sees the loop instead of pegged CPU.
- */
-const MAX_ATTEMPTS_PER_JOB_ID = 8;
+// PIPELINE_JOB_MAX_ATTEMPTS: hard cap on attempts per job-id in the in-process queue. A handler
+// that re-enqueues itself (e.g. render_story re-queueing transcribe when the transcript isn't
+// ready) under a real bug could otherwise spin forever — production Inngest caps retries, this
+// matches that behavior. Crossed-cap jobs raise so a test/reviewer sees the loop instead of CPU.
+import { PIPELINE_JOB_MAX_ATTEMPTS } from "./constants";
 
 export class InProcessJobQueue implements JobQueue {
   private readonly queue: EnqueuedJob[] = [];
@@ -69,9 +66,9 @@ export class InProcessJobQueue implements JobQueue {
         const key = `${job.name}|${job.payload.storyId}`;
         const attempts = (this.attemptsById.get(key) ?? 0) + 1;
         this.attemptsById.set(key, attempts);
-        if (attempts > MAX_ATTEMPTS_PER_JOB_ID) {
+        if (attempts > PIPELINE_JOB_MAX_ATTEMPTS) {
           throw new Error(
-            `job '${job.name}' for story '${job.payload.storyId}' exceeded ${MAX_ATTEMPTS_PER_JOB_ID} attempts in one drain — likely a handler re-queueing itself in a loop`,
+            `job '${job.name}' for story '${job.payload.storyId}' exceeded ${PIPELINE_JOB_MAX_ATTEMPTS} attempts in one drain — likely a handler re-queueing itself in a loop`,
           );
         }
         job.attempts = attempts;

@@ -15,6 +15,15 @@ import type {
   LanguageModel,
   LanguageModelMessage,
 } from "./contracts";
+import {
+  STORY_RENDER_LLM_TEMPERATURE,
+  STORY_RENDER_MAX_OUTPUT_TOKENS,
+  STORY_SUMMARY_FALLBACK_MAX_CHARS,
+  STORY_SUMMARY_MAX_CHARS,
+  STORY_TAGS_MAX_COUNT,
+  STORY_TITLE_FALLBACK_MAX_CHARS,
+  STORY_TITLE_MAX_CHARS,
+} from "./constants";
 
 export interface RenderInput {
   transcript: string;
@@ -77,8 +86,8 @@ export async function renderStoryFromTranscript(
   const res = await llm.complete({
     messages,
     responseFormat: "json",
-    temperature: 0.2,
-    maxOutputTokens: 4000,
+    temperature: STORY_RENDER_LLM_TEMPERATURE,
+    maxOutputTokens: STORY_RENDER_MAX_OUTPUT_TOKENS,
   });
   return { ...parseRenderResponse(res.text, input.transcript), modelId: res.modelId };
 }
@@ -98,24 +107,24 @@ export function parseRenderResponse(
       prose: typeof json.prose === "string" ? json.prose : fallbackProse,
       title:
         typeof json.title === "string" && json.title.trim()
-          ? json.title.slice(0, 200)
-          : firstLineFallback(fallbackProse, 80),
+          ? json.title.slice(0, STORY_TITLE_MAX_CHARS)
+          : firstLineFallback(fallbackProse, STORY_TITLE_FALLBACK_MAX_CHARS),
       summary:
         typeof json.summary === "string" && json.summary.trim()
-          ? json.summary.slice(0, 400)
-          : firstLineFallback(fallbackProse, 200),
+          ? json.summary.slice(0, STORY_SUMMARY_MAX_CHARS)
+          : firstLineFallback(fallbackProse, STORY_SUMMARY_FALLBACK_MAX_CHARS),
       tags: Array.isArray(json.tags)
         ? json.tags
             .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
-            .slice(0, 8)
+            .slice(0, STORY_TAGS_MAX_COUNT)
         : [],
     };
   }
   // Plain-text fallback: treat the whole response as prose.
   return {
     prose: text.trim() || fallbackProse,
-    title: firstLineFallback(text || fallbackProse, 80),
-    summary: firstLineFallback(text || fallbackProse, 200),
+    title: firstLineFallback(text || fallbackProse, STORY_TITLE_FALLBACK_MAX_CHARS),
+    summary: firstLineFallback(text || fallbackProse, STORY_SUMMARY_FALLBACK_MAX_CHARS),
     tags: [],
   };
 }

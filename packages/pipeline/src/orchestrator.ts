@@ -45,6 +45,7 @@ import {
   createDefaultWorkingCopyTransformer,
 } from "./working-copy";
 import { renderStoryFromTranscript } from "./render-story";
+import { AUDIO_SPEED_FACTOR_MAX, AUDIO_SPEED_FACTOR_MIN } from "./constants";
 
 export interface PipelineDeps {
   db: Database;
@@ -102,7 +103,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // Defense in depth: the spec hard-caps time-stretch at ~2x. A buggy real adapter that
     // reports a higher factor would silently miscompute persisted timings. Refuse here so the
     // bug surfaces loudly at the orchestrator boundary rather than as wrong-by-Nx word offsets.
-    if (working.speedFactor < 1.0 || working.speedFactor > 2.0) {
+    if (
+      working.speedFactor < AUDIO_SPEED_FACTOR_MIN ||
+      working.speedFactor > AUDIO_SPEED_FACTOR_MAX
+    ) {
       throw new Error(
         `WorkingCopyTransformer reported out-of-spec speedFactor ${working.speedFactor} ` +
           `(must be 1.0..2.0); refusing to persist timings that would be silently wrong.`,
