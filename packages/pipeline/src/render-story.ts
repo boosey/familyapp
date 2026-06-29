@@ -94,7 +94,7 @@ export async function renderStoryFromTranscript(
   return {
     ...parseRenderResponse(res.text, input.transcript),
     modelId: res.modelId,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: messages.find((m) => m.role === "system")!.content,
   };
 }
 
