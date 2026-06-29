@@ -6,6 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
 import { listActiveMembershipsForPerson } from "@chronicle/core";
+import { families } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,8 +105,8 @@ export default async function FamiliesStartPage() {
             lineHeight: "var(--leading-tight)",
           }}
         >
-          Let&apos;s find your family
-        </h1>
+          {families.start.title}
+</h1>
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -115,7 +116,7 @@ export default async function FamiliesStartPage() {
             lineHeight: "var(--leading-body)",
           }}
         >
-          Start a brand-new family space, or join one a relative has already created.
+          {families.start.intro}
         </p>
         <div
           style={{
@@ -126,16 +127,16 @@ export default async function FamiliesStartPage() {
         >
           <Door
             href="/families/new"
-            eyebrow="Start fresh"
-            title="Start a new family"
-            body="Name your family and become its steward. You'll invite relatives and narrators next."
+            eyebrow={families.start.freshEyebrow}
+            title={families.start.freshTitle}
+            body={families.start.freshBody}
             primary
           />
           <Door
             href="/families/find"
-            eyebrow="Join existing"
-            title="Find your family"
-            body="Search for a family a relative already set up, and ask to join it."
+            eyebrow={families.start.joinEyebrow}
+            title={families.start.joinTitle}
+            body={families.start.joinBody}
           />
         </div>
       </div>

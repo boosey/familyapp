@@ -3,3 +3,4 @@
 // as they are created. A later next-intl migration serializes these objects.
 export { common } from "./common";
 export { auth } from "./auth";
+export { families } from "./families";

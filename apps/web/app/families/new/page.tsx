@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
 import { createFamily } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
+import { families } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,8 +86,8 @@ export default async function FamiliesNewPage({
             lineHeight: "var(--leading-tight)",
           }}
         >
-          Name your family
-        </h1>
+          {families.new.title}
+</h1>
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -96,7 +97,7 @@ export default async function FamiliesNewPage({
             lineHeight: "var(--leading-body)",
           }}
         >
-          This is the space your stories live in. You can change the details later.
+          {families.new.intro}
         </p>
 
         {error === "name" ? (
@@ -113,27 +114,27 @@ export default async function FamiliesNewPage({
               margin: "0 0 20px",
             }}
           >
-            Please give your family a name.
+            {families.new.errorNoName}
           </p>
         ) : null}
 
         <form action={create} style={{ display: "grid", gap: 20 }}>
           <label className="kin-form-label">
-            Family name
+            {families.new.nameLabel}
             <input
               name="name"
               type="text"
               required
               className="kin-field"
-              placeholder="Boudreaux"
+              placeholder={families.new.namePlaceholder}
             />
           </label>
           <label className="kin-form-label">
-            Description <span style={{ fontWeight: 400 }}>(optional)</span>
+            {families.new.descLabel}
             <textarea
               name="description"
               className="kin-field"
-              placeholder="The Boudreaux family of Lafayette, Louisiana."
+              placeholder={families.new.descPlaceholder}
               style={{ minHeight: 96 }}
             />
           </label>
@@ -154,7 +155,7 @@ export default async function FamiliesNewPage({
               style={{ width: 22, height: 22, marginTop: 2, accentColor: "var(--accent)" }}
             />
             <span>
-              Let other relatives find this family
+              {families.new.discoverableLabel}
               <span
                 style={{
                   display: "block",
@@ -163,11 +164,11 @@ export default async function FamiliesNewPage({
                   marginTop: 2,
                 }}
               >
-                They can search for it and ask to join. You approve every request.
+                {families.new.discoverableHint}
               </span>
             </span>
           </label>
-          <KindredButton type="submit" label="Create family" fullWidth size="large" />
+          <KindredButton type="submit" label={families.new.submit} fullWidth size="large" />
         </form>
       </div>
     </main>

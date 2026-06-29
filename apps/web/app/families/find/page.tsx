@@ -15,6 +15,7 @@ import {
   listJoinRequestsByRequester,
 } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
+import { families } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,9 +47,9 @@ async function requestToJoin(formData: FormData): Promise<void> {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "Waiting for the steward",
-  approved: "Approved — welcome in",
-  declined: "Not accepted",
+  pending: families.find.statusWaiting,
+  approved: families.find.statusApproved,
+  declined: families.find.statusNotAccepted,
 };
 
 export default async function FamiliesFindPage({
@@ -100,8 +101,8 @@ export default async function FamiliesFindPage({
             lineHeight: "var(--leading-tight)",
           }}
         >
-          Find your family
-        </h1>
+          {families.find.title}
+</h1>
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -111,8 +112,7 @@ export default async function FamiliesFindPage({
             lineHeight: "var(--leading-body)",
           }}
         >
-          Search for a family a relative already created, then ask to join. The steward approves
-          every request.
+          {families.find.intro}
         </p>
 
         {pending ? (
@@ -129,7 +129,7 @@ export default async function FamiliesFindPage({
               color: "var(--accent-strong)",
             }}
           >
-            Your request is on its way — it&apos;s waiting for the family&apos;s steward to say yes.
+            {families.find.requestSent}
           </div>
         ) : null}
 
@@ -147,8 +147,7 @@ export default async function FamiliesFindPage({
               color: "var(--text-meta)",
             }}
           >
-            We couldn&apos;t send that request — you may already be a member, or already have a
-            request waiting for that family.
+            {families.find.requestFailed}
           </div>
         ) : null}
 
@@ -159,10 +158,10 @@ export default async function FamiliesFindPage({
             type="text"
             defaultValue={query}
             className="kin-field"
-            placeholder="Search by family name, a relative's name, or describe them…"
+            placeholder={families.find.searchPlaceholder}
             style={{ flex: 1 }}
           />
-          <KindredButton type="submit" label="Search" />
+          <KindredButton type="submit" label={families.find.search} />
         </form>
 
         {/* Results */}
@@ -176,8 +175,7 @@ export default async function FamiliesFindPage({
                   color: "var(--text-muted)",
                 }}
               >
-                No families matched “{query}”. Try a relative&apos;s name, or ask them for an invite
-                link instead.
+                {families.find.noMatches(query)}
               </p>
             ) : (
               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 16 }}>
@@ -212,7 +210,7 @@ export default async function FamiliesFindPage({
                         marginBottom: 16,
                       }}
                     >
-                      STEWARD · {r.stewardName.toUpperCase()} · MATCH: {r.matchReason.toUpperCase()}
+                      {families.find.resultMeta(r.stewardName, r.matchReason)}
                     </div>
                     <form action={requestToJoin} style={{ display: "grid", gap: 12 }}>
                       <input type="hidden" name="familyId" value={r.familyId} />
@@ -220,11 +218,11 @@ export default async function FamiliesFindPage({
                       <textarea
                         name="message"
                         className="kin-field"
-                        placeholder="Add a note for the steward (optional) — e.g. “I'm Rosa's cousin.”"
+                        placeholder={families.find.notePlaceholder}
                         style={{ minHeight: 72 }}
                       />
                       <div>
-                        <KindredButton type="submit" label="Request to join" variant="secondary" />
+                        <KindredButton type="submit" label={families.find.requestToJoin} variant="secondary" />
                       </div>
                     </form>
                   </li>
@@ -246,8 +244,8 @@ export default async function FamiliesFindPage({
                 margin: "0 0 14px",
               }}
             >
-              Your requests
-            </h2>
+              {families.find.yourRequests}
+</h2>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
               {myRequests.map((r) => (
                 <li
