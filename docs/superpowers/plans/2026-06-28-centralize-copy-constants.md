@@ -20,6 +20,8 @@
   `grep -rn "<CONST_NAME>" --include=*.ts packages apps | grep -v .next`
   and update every site (including `index.ts` re-exports and tests).
 - **Do not touch:** route paths, discriminant/enum string values, CSS var strings, `className`, DOM `name=` attributes, `dev-seed.ts` fixtures, HTTP/SQLSTATE codes.
+- **ORIGINAL SOURCE IS AUTHORITATIVE (behavior preservation).** This is a byte-identical extraction. Some skeleton strings in the tasks below were paraphrased or truncated when the plan was drafted — they are a *guide to which copy to extract*, not the source of truth for the exact text. Before extracting any string, read the actual literal in the source file (or `git show <parent>:<file>`) and copy it **byte-for-byte**: same wording, same straight vs. curly quotes (`'` U+0027 vs `’` U+2019, `"` vs `“ ”`), same em-dash/ellipsis glyphs, same `&apos;`/`&mdash;`-decoded characters. If the skeleton text differs from the source, **the source wins.**
+- **Preserve inline markup/styling.** If a label wraps part of its text in a styled element (e.g. `Description <span style={{ fontWeight: 400 }}>(optional)</span>`), do NOT collapse it into one flat string — that changes the rendering. Split the copy into separate keys (e.g. `label` + `labelOptional`) and keep the `<span>` in JSX wrapping the extracted suffix.
 - **Commit after every task.** Use Co-Authored-By trailer:
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 - **Verification commands** (note: `apps/web` has no component tests today, so its safety net is typecheck + build):
@@ -283,10 +285,13 @@ export const families = {
       "We couldn't send that request — you may already be a member, or already have a request waiting for that family.",
     searchPlaceholder: "Search by family name, a relative's name, or describe them…",
     search: "Search",
-    noMatches: (query: string) => `No families matched "${query}". Try another name or spelling.`,
+    // ORIGINAL (byte-for-byte): curly double-quotes “ ” around the query, straight apostrophe in "relative's".
+    noMatches: (query: string) =>
+      `No families matched “${query}”. Try a relative's name, or ask them for an invite link instead.`,
     resultMeta: (steward: string, reason: string) =>
       `STEWARD · ${steward.toUpperCase()} · MATCH: ${reason.toUpperCase()}`,
-    notePlaceholder: 'Add a note for the steward (optional) — e.g. "I\'m Rosa\'s cousin."',
+    // ORIGINAL uses curly double-quotes “ ” around the example, straight apostrophes inside.
+    notePlaceholder: "Add a note for the steward (optional) — e.g. “I'm Rosa's cousin.”",
     requestToJoin: "Request to join",
     yourRequests: "Your requests",
   },
@@ -296,7 +301,9 @@ export const families = {
     errorNoName: "Please give your family a name.",
     nameLabel: "Family name",
     namePlaceholder: "Boudreaux",
-    descLabel: "Description (optional)",
+    // Original wraps "(optional)" in a lighter-weight span — keep it split, render the span in JSX.
+    descLabel: "Description",
+    descLabelOptional: "(optional)",
     descPlaceholder: "The Boudreaux family of Lafayette, Louisiana.",
     discoverableLabel: "Let other relatives find this family",
     discoverableHint: "They can search for it and ask to join. You approve every request.",
