@@ -17,7 +17,7 @@ export const families = {
     noMatches: (query: string) => `No families matched “${query}”. Try a relative's name, or ask them for an invite link instead.`,
     resultMeta: (steward: string, reason: string) =>
       `STEWARD · ${steward.toUpperCase()} · MATCH: ${reason.toUpperCase()}`,
-    notePlaceholder: "Add a note for the steward (optional) — e.g. “I’m Rosa’s cousin.”",
+    notePlaceholder: "Add a note for the steward (optional) — e.g. “I'm Rosa's cousin.”",
     requestToJoin: "Request to join",
     yourRequests: "Your requests",
   },

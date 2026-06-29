@@ -102,7 +102,7 @@ export default async function FamiliesFindPage({
           }}
         >
           {families.find.title}
-</h1>
+        </h1>
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -245,7 +245,7 @@ export default async function FamiliesFindPage({
               }}
             >
               {families.find.yourRequests}
-</h2>
+            </h2>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
               {myRequests.map((r) => (
                 <li

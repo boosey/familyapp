@@ -106,7 +106,7 @@ export default async function FamiliesStartPage() {
           }}
         >
           {families.start.title}
-</h1>
+        </h1>
         <p
           style={{
             fontFamily: "var(--font-ui)",
