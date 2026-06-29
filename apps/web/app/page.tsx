@@ -6,7 +6,7 @@
  */
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
-import { common } from "@/app/_copy";
+import { common, auth } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ export default function Home() {
         textAlign: "center",
       }}
     >
-      <div className="kin-eyebrow">Est. 2026</div>
+      <div className="kin-eyebrow">{auth.landing.eyebrow}</div>
       <h1
         style={{
           fontFamily: "var(--font-story)",
@@ -49,8 +49,7 @@ export default function Home() {
           lineHeight: "var(--leading-body)",
         }}
       >
-        A warm place to gather your family&apos;s stories — and to help the people you love tell
-        theirs before they&apos;re lost.
+        {auth.landing.tagline}
       </p>
 
       <div
@@ -63,10 +62,10 @@ export default function Home() {
         }}
       >
         <Link href="/sign-up" style={{ textDecoration: "none" }}>
-          <KindredButton label="Create your family" size="large" />
+          <KindredButton label={auth.landing.createFamily} size="large" />
         </Link>
         <Link href="/sign-in" style={{ textDecoration: "none" }}>
-          <KindredButton label="Sign in" variant="secondary" size="large" />
+          <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
         </Link>
       </div>
 
@@ -79,7 +78,7 @@ export default function Home() {
           margin: "8px 0 0",
         }}
       >
-        Invited a narrator to record? They open their own personal link — they never sign in here.
+        {auth.landing.narratorNote}
       </p>
     </main>
   );

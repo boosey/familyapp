@@ -9,6 +9,7 @@ import { mockSignIn } from "@/lib/auth-mock";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { KindredButton } from "@/app/_kindred";
 import { AuthScreen } from "@/app/_auth/AuthScreen";
+import { auth } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,9 +37,9 @@ export default async function SignInPage({
   const { error } = await searchParams;
   return (
     <AuthScreen
-      title="Welcome back"
-      subtitle="Sign in to see your family's stories."
-      error={error ? "That email and password don't match. Please try again." : null}
+      title={auth.signIn.title}
+      subtitle={auth.signIn.subtitle}
+      error={error ? auth.signIn.error : null}
       footer={
         <p
           style={{
@@ -48,37 +49,37 @@ export default async function SignInPage({
             margin: 0,
           }}
         >
-          New here?{" "}
+          {auth.signIn.newHere}{" "}
           <Link href="/sign-up" style={{ fontWeight: 600 }}>
-            Create your family
+            {auth.signIn.createFamily}
           </Link>
         </p>
       }
     >
       <form action={signIn} style={{ display: "grid", gap: 18 }}>
         <label className="kin-form-label">
-          Email
+          {auth.signIn.emailLabel}
           <input
             name="email"
             type="email"
             autoComplete="email"
             required
             className="kin-field"
-            placeholder="you@example.com"
+            placeholder={auth.signIn.emailPlaceholder}
           />
         </label>
         <label className="kin-form-label">
-          Password
+          {auth.signIn.passwordLabel}
           <input
             name="password"
             type="password"
             autoComplete="current-password"
             required
             className="kin-field"
-            placeholder="Your password"
+            placeholder={auth.signIn.passwordPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label="Sign in" fullWidth size="large" />
+        <KindredButton type="submit" label={auth.signIn.submit} fullWidth size="large" />
       </form>
     </AuthScreen>
   );

@@ -53,7 +53,7 @@ export function AuthScreen({
           }}
         >
           {common.authScreenBrand}
-</Link>
+        </Link>
         <h1
           style={{
             fontFamily: "var(--font-story)",

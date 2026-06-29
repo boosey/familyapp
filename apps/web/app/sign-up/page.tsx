@@ -11,6 +11,7 @@ import { mockSignUp } from "@/lib/auth-mock";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { KindredButton } from "@/app/_kindred";
 import { AuthScreen } from "@/app/_auth/AuthScreen";
+import { auth } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,8 +33,8 @@ async function signUp(formData: FormData): Promise<void> {
 }
 
 const ERRORS: Record<string, string> = {
-  email_taken: "That email already has an account. Try signing in instead.",
-  invalid: "Please fill in your name, email, and a password.",
+  email_taken: auth.signUp.errorEmailTaken,
+  invalid: auth.signUp.errorMissing,
 };
 
 export default async function SignUpPage({
@@ -44,8 +45,8 @@ export default async function SignUpPage({
   const { error } = await searchParams;
   return (
     <AuthScreen
-      title="Create your family"
-      subtitle="Start a space for your family's stories. You can invite relatives and narrators once you're in."
+      title={auth.signUp.title}
+      subtitle={auth.signUp.subtitle}
       error={error ? ERRORS[error] ?? null : null}
       footer={
         <p
@@ -56,48 +57,48 @@ export default async function SignUpPage({
             margin: 0,
           }}
         >
-          Already have an account?{" "}
+          {auth.signUp.haveAccount}{" "}
           <Link href="/sign-in" style={{ fontWeight: 600 }}>
-            Sign in
+            {auth.signUp.signIn}
           </Link>
         </p>
       }
     >
       <form action={signUp} style={{ display: "grid", gap: 18 }}>
         <label className="kin-form-label">
-          Your name
+          {auth.signUp.nameLabel}
           <input
             name="name"
             type="text"
             autoComplete="name"
             required
             className="kin-field"
-            placeholder="Sofia Boudreaux"
+            placeholder={auth.signUp.namePlaceholder}
           />
         </label>
         <label className="kin-form-label">
-          Email
+          {auth.signUp.emailLabel}
           <input
             name="email"
             type="email"
             autoComplete="email"
             required
             className="kin-field"
-            placeholder="you@example.com"
+            placeholder={auth.signUp.emailPlaceholder}
           />
         </label>
         <label className="kin-form-label">
-          Password
+          {auth.signUp.passwordLabel}
           <input
             name="password"
             type="password"
             autoComplete="new-password"
             required
             className="kin-field"
-            placeholder="Choose a password"
+            placeholder={auth.signUp.passwordPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label="Create account" fullWidth size="large" />
+        <KindredButton type="submit" label={auth.signUp.submit} fullWidth size="large" />
       </form>
     </AuthScreen>
   );

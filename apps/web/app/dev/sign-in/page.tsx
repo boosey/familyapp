@@ -14,6 +14,7 @@ import { accounts, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { DEV_MOCK_SESSION_COOKIE } from "@/lib/auth-mock";
 import { KindredButton } from "@/app/_kindred";
+import { auth } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,11 +53,10 @@ export default async function DevSignIn() {
   return (
     <main className="kin-page">
       <div className="kin-frame" style={{ padding: "clamp(28px, 5vw, 56px)" }}>
-        <span className="kin-dev-banner">dev · localhost</span>
-        <h1 style={{ fontSize: "var(--text-display)", margin: "14px 0 8px" }}>Dev sign-in</h1>
+        <span className="kin-dev-banner">{auth.devSignIn.eyebrow}</span>
+        <h1 style={{ fontSize: "var(--text-display)", margin: "14px 0 8px" }}>{auth.devSignIn.title}</h1>
         <p className="kin-ink-2" style={{ fontSize: "var(--text-ui)", margin: 0 }}>
-          Local development only. One click to act as any seeded user — sets the mock session and
-          takes you straight to the hub.
+          {auth.devSignIn.body}
         </p>
 
         <div
@@ -71,22 +71,22 @@ export default async function DevSignIn() {
           {people.map((p) => (
             <form key={p.id} action={signInAs}>
               <input type="hidden" name="authProviderUserId" value={p.authProviderUserId} />
-              <KindredButton type="submit" label={`Become ${p.displayName}`} fullWidth />
+              <KindredButton type="submit" label={auth.devSignIn.become(p.displayName)} fullWidth />
             </form>
           ))}
 
           <div style={{ marginTop: 8 }}>
             <form action={signInAs}>
               <input type="hidden" name="authProviderUserId" value="" />
-              <KindredButton type="submit" label="Sign out" variant="secondary" fullWidth />
+              <KindredButton type="submit" label={auth.devSignIn.signOut} variant="secondary" fullWidth />
             </form>
           </div>
         </div>
 
         <p style={{ marginTop: 20 }}>
           <Link href="/hub" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-meta)" }}>
-            ‹ Back to hub
-          </Link>
+            {auth.devSignIn.backToHub}
+</Link>
         </p>
       </div>
     </main>

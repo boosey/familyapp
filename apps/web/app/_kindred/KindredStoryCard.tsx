@@ -145,7 +145,7 @@ export function KindredStoryCard({
             }}
           >
             {common.storyCard.photo}
-</span>
+          </span>
         </div>
       )}
 
@@ -294,6 +294,6 @@ function NewPill() {
       }}
     >
       {common.storyCard.badgeNew}
-</span>
+    </span>
   );
 }
