@@ -13,11 +13,16 @@ import {
   getStoryForViewer,
   approveAndShareStory,
   discardDraftStory,
-  updateDerivedFields,
   saveProseCorrection,
 } from "@chronicle/core";
 import { ingestRecording } from "@chronicle/capture";
-import { augmentProfileFromStory } from "@chronicle/pipeline";
+import {
+  augmentProfileFromStory,
+  beginLogContext,
+  plog,
+  plogError,
+  startTimer,
+} from "@chronicle/pipeline";
 import { createCoreAnchorSource } from "@chronicle/interviewer";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
@@ -30,6 +35,8 @@ export type ActionResult = { error: string } | undefined;
  * personId is taken from the server session, never from the client.
  */
 export async function recordAnswerAction(formData: FormData): Promise<ActionResult> {
+  // Correlate every log line for this answer run (ingest → queue → stages → AI seams).
+  beginLogContext();
   const { db, storage, auth, newPipeline } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
@@ -59,6 +66,14 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
 
+  const totalTimer = startTimer();
+  plog("answer", "recordAnswer: received", {
+    person: ctx.personId,
+    ask: askIdField,
+    bytes: bytes.byteLength,
+    contentType: audio.type || "audio/webm",
+  });
+
   let storyId: string;
   try {
     const result = await ingestRecording(db, storage, {
@@ -67,9 +82,14 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
       askId: askIdField,
     });
     storyId = result.storyId;
-  } catch {
+  } catch (err) {
+    plogError("answer", "recordAnswer: ingest failed", {
+      ask: askIdField,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { error: hub.actions.saveFailed };
   }
+  plog("answer", "recordAnswer: ingested → draft story created", { story: storyId });
 
   // Render BEFORE review (prose-provenance design): transcribe → polish so the review phase can
   // show the polished prose for the narrator to read and edit. A fresh pipeline per call isolates
@@ -78,9 +98,18 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
     const pipeline = newPipeline();
     await pipeline.start(storyId);
     await pipeline.runToCompletion();
-  } catch {
+  } catch (err) {
+    plogError("answer", "recordAnswer: render pipeline failed", {
+      story: storyId,
+      ms: totalTimer(),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { error: hub.actions.saveFailed };
   }
+  plog("answer", "recordAnswer: complete (story pending_approval)", {
+    story: storyId,
+    ms: totalTimer(),
+  });
 }
 
 /**
@@ -92,6 +121,8 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
  * redirect("/hub") is called OUTSIDE the try/catch to avoid catching NEXT_REDIRECT.
  */
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
+  // Correlate every log line for this share run (approve/share → augmentation AI call).
+  beginLogContext();
   const { db, auth, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
@@ -109,26 +140,14 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
   }
   const audienceTier = tierRaw as ValidTier;
 
+  const totalTimer = startTimer();
+  plog("answer", "shareAnswer: begin", { story: storyId, person: ctx.personId, tier: audienceTier });
+
   try {
     // Ownership check via the front door. The owner can always see their own story (any state).
     const story = await getStoryForViewer(db, ctx, storyId);
     if (!story || story.ownerPersonId !== ctx.personId) {
       return { error: hub.actions.storyNotFound };
-    }
-
-    // TEMPORARY (no-AI phase): until real transcription/rendering lands, the mock language model
-    // derives every title from the same placeholder transcript, so all new cards look alike. Use
-    // the question itself as the title instead — it's the most meaningful label we have without AI.
-    // Remove this block once the real Groq/Anthropic adapters are producing genuine titles.
-    if (story.askId) {
-      const [askRow] = await db
-        .select({ questionText: asks.questionText })
-        .from(asks)
-        .where(eq(asks.id, story.askId))
-        .limit(1);
-      if (askRow?.questionText) {
-        await updateDerivedFields(db, storyId, { title: askRow.questionText });
-      }
     }
 
     // Persist an optional prose correction (L3). Only sent when the narrator changed the
@@ -143,6 +162,10 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
         correctedProse,
         actorPersonId: ctx.personId,
       });
+      plog("answer", "shareAnswer: saved L3 prose correction", {
+        story: storyId,
+        proseChars: correctedProse.length,
+      });
     }
 
     // Tap approval (ADR-0004): no approvalAudio clip. Consent record is written with
@@ -151,6 +174,10 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       storyId,
       narratorPersonId: ctx.personId,
       audienceTier,
+    });
+    plog("answer", "shareAnswer: approved & shared + consent recorded", {
+      story: storyId,
+      tier: audienceTier,
     });
 
     // Best-effort post-approval biographical augmentation: re-read the story after approval —
@@ -165,6 +192,10 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
     try {
       const approved = await getStoryForViewer(db, ctx, storyId);
       if (approved?.transcript) {
+        plog("answer", "shareAnswer: augmenting profile from transcript", {
+          story: storyId,
+          transcriptChars: approved.transcript.length,
+        });
         await augmentProfileFromStory(
           approved.transcript,
           ctx.personId,
@@ -176,13 +207,16 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       // Augmentation is a nice-to-have; swallow so the share + redirect always succeed. Log so a
       // silently-never-working feature still leaves a breadcrumb (matches the turn loop's
       // best-effort pattern for markRouted / intake extraction).
-      // eslint-disable-next-line no-console
-      console.warn("post-approval profile augmentation failed (story=%s):", storyId, e);
+      plogError("answer", "shareAnswer: profile augmentation failed (non-fatal)", {
+        story: storyId,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
     }
   } catch {
     return { error: hub.actions.shareFailed };
   }
 
+  plog("answer", "shareAnswer: complete → redirect /hub", { story: storyId, ms: totalTimer() });
   // Called outside try/catch: redirect() throws NEXT_REDIRECT which Next.js intercepts.
   redirect("/hub");
 }

@@ -12,12 +12,16 @@
  * the hub routes does not apply to this login-free surface.
  */
 import { ingestRecording, InvalidSessionError } from "@chronicle/capture";
+import { beginLogContext, plog, plogError, startTimer } from "@chronicle/pipeline";
 import { NextResponse } from "next/server";
 import { getRuntime } from "@/lib/runtime";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // Bind a correlation id to this request so every downstream log line (ingest → queue → stages →
+  // AI seams) shares one greppable tag. Must run before the first plog below.
+  beginLogContext();
   const { db, storage, newPipeline } = await getRuntime();
 
   let form: FormData;
@@ -43,6 +47,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   // member's question). The approval write later flips the Ask to `answered` atomically.
   const askId = typeof askIdField === "string" && askIdField !== "" ? askIdField : undefined;
 
+  const totalTimer = startTimer();
+  plog("capture", "POST /api/capture: received (link_session)", {
+    bytes: bytes.byteLength,
+    contentType: audio.type || "audio/webm",
+    askId,
+  });
+
   let storyId: string;
   try {
     const result = await ingestRecording(db, storage, {
@@ -57,10 +68,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     storyId = result.storyId;
   } catch (err) {
     if (err instanceof InvalidSessionError) {
+      plogError("capture", "POST /api/capture: invalid session (401)", { ms: totalTimer() });
       return NextResponse.json({ ok: false }, { status: 401 });
     }
+    plogError("capture", "POST /api/capture: ingest failed (500)", {
+      ms: totalTimer(),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return NextResponse.json({ ok: false }, { status: 500 });
   }
+  plog("capture", "POST /api/capture: ingested → draft story created", { story: storyId });
 
   // Render BEFORE review (prose-provenance design): transcribe → polish so the approve page can
   // show L2 prose for the narrator to read and edit. Mirrors the in-hub recordAnswerAction.
@@ -74,10 +91,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Server-side breadcrumb only: this login-free surface has no other error-reporting path, so a
     // silent 500 would make render failures invisible to ops. Detail is NEVER returned to the
     // client (the response below carries none). Matches the augmentation catch in shareAnswerAction.
-    // eslint-disable-next-line no-console
-    console.error("capture: render pipeline failed after ingest (story=%s):", storyId, err);
+    plogError("capture", "POST /api/capture: render pipeline failed after ingest (500)", {
+      story: storyId,
+      ms: totalTimer(),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
+  plog("capture", "POST /api/capture: complete (story pending_approval)", {
+    story: storyId,
+    ms: totalTimer(),
+  });
   return NextResponse.json({ ok: true, storyId });
 }

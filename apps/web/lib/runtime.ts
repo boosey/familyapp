@@ -22,6 +22,8 @@ import {
   createPipeline,
   ScriptedTranscriber,
   ScriptedLanguageModel,
+  withTranscriberLogging,
+  withLanguageModelLogging,
   type Pipeline,
   type LanguageModel,
 } from "@chronicle/pipeline";
@@ -129,23 +131,45 @@ async function build(): Promise<Runtime> {
   // CI, or any environment without secrets — fall back to deterministic in-process mocks so
   // the pipeline can run end-to-end without any paid vendor call. Mirrors the Clerk-vs-mock
   // pattern above.
-  const transcriber = process.env.GROQ_API_KEY
-    ? createGroqTranscriber({})
-    : new ScriptedTranscriber({
-        text: "(Dev mode: no GROQ_API_KEY set — this is placeholder transcript text so the pipeline can run end to end.)",
-      });
+  const transcriberName = process.env.GROQ_API_KEY ? "groq-whisper" : "scripted-mock";
+  const llmName = process.env.GROQ_API_KEY
+    ? "groq-llm"
+    : process.env.ANTHROPIC_API_KEY
+      ? "anthropic"
+      : "scripted-mock";
+  // The logging wrappers are TRANSPARENT (see observability.ts): they observe each AI call's
+  // input size / latency / model / output and re-throw on error, adding no behavior. Wrapping
+  // here — once, at the wiring seam — means EVERY AI call through these instances is logged
+  // (transcribe, story render, post-approval augmentation, intake extraction), no matter the
+  // call site. Logging itself is gated in @chronicle/pipeline's logger (dev-on, prod/test-off).
+  const transcriber = withTranscriberLogging(
+    process.env.GROQ_API_KEY
+      ? createGroqTranscriber({})
+      : new ScriptedTranscriber({
+          text: "(Dev mode: no GROQ_API_KEY set — this is placeholder transcript text so the pipeline can run end to end.)",
+        }),
+    transcriberName,
+  );
   // Phase-1 verification pass: run EVERY LLM task on Groq (one model, minimal new surface) when a
   // GROQ_API_KEY is present — the same key already drives the Groq transcriber above, so setting it
   // exercises the whole transcribe→render pipeline on one vendor. `GROQ_LLM_MODEL` overrides the
   // adapter default (`llama-3.3-70b-versatile`) without a code change. Anthropic remains available
   // as a fallback when only ANTHROPIC_API_KEY is set; with neither, the deterministic mock runs.
-  const languageModel = process.env.GROQ_API_KEY
-    ? createGroqLanguageModel(
-        process.env.GROQ_LLM_MODEL ? { model: process.env.GROQ_LLM_MODEL } : {},
-      )
-    : process.env.ANTHROPIC_API_KEY
-      ? createAnthropicLanguageModel({})
-      : new ScriptedLanguageModel();
+  const languageModel = withLanguageModelLogging(
+    process.env.GROQ_API_KEY
+      ? createGroqLanguageModel(
+          process.env.GROQ_LLM_MODEL ? { model: process.env.GROQ_LLM_MODEL } : {},
+        )
+      : process.env.ANTHROPIC_API_KEY
+        ? createAnthropicLanguageModel({})
+        : new ScriptedLanguageModel(),
+    llmName,
+  );
+  // Make the silent mock-fallback visible: a misplaced key (e.g. left in the monorepo-root .env,
+  // which `next dev` does not load) means the pipeline quietly runs on scripted stubs. Log which
+  // adapters are actually live so "am I on real AI?" is answerable from the dev console.
+  // eslint-disable-next-line no-console
+  console.info(`[chronicle] live adapters → transcriber=${transcriberName} languageModel=${llmName}`);
   // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
   const newPipeline = (): Pipeline =>
     createPipeline({ db, storage, transcriber, languageModel });

@@ -46,6 +46,7 @@ import {
 } from "./working-copy";
 import { renderStoryFromTranscript } from "./render-story";
 import { AUDIO_SPEED_FACTOR_MAX, AUDIO_SPEED_FACTOR_MIN } from "./constants";
+import { plog, startTimer } from "./logger";
 
 export interface PipelineDeps {
   db: Database;
@@ -75,12 +76,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   const queue = deps.jobQueue ?? new InProcessJobQueue();
 
   const runTranscribeStage = async (payload: JobPayload): Promise<void> => {
+    const done = startTimer();
+    plog("pipeline", "transcribe: begin", { story: payload.storyId });
     const view = await getStoryAndRecordingForPipeline(deps.db, payload.storyId);
-    if (!view) return; // story removed; nothing to do
+    if (!view) {
+      plog("pipeline", "transcribe: skip (story gone)", { story: payload.storyId, ms: done() });
+      return; // story removed; nothing to do
+    }
     // Idempotency gate: if a transcript is already present, the stage has run. Skip the
     // expensive vendor call and just ensure render_story is enqueued (a retry of an already-
     // completed transcribe should still drive the pipeline forward).
     if (view.transcript !== null && view.transcript.length > 0) {
+      plog("pipeline", "transcribe: skip (already transcribed) → enqueue render_story", {
+        story: view.storyId,
+        transcriptChars: view.transcript.length,
+        ms: done(),
+      });
       await queue.enqueue("render_story", { storyId: view.storyId });
       return;
     }
@@ -91,6 +102,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         `canonical recording missing from storage: ${view.recording.storageKey}`,
       );
     }
+    plog("pipeline", "transcribe: loaded canonical audio", {
+      story: view.storyId,
+      key: view.recording.storageKey,
+      bytes: canonicalBytes.length,
+      contentType: view.recording.contentType,
+    });
 
     // Working copy is a brand-new Uint8Array. The canonical bytes are not aliased forward.
     const working = await transformer.transform({
@@ -112,6 +129,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           `(must be 1.0..2.0); refusing to persist timings that would be silently wrong.`,
       );
     }
+    plog("pipeline", "transcribe: working copy ready", {
+      story: view.storyId,
+      bytes: working.bytes.length,
+      speedFactor: working.speedFactor,
+      segments: working.segments.length,
+      notes: working.notes,
+    });
 
     const transcription = await deps.transcriber.transcribe({
       bytes: working.bytes,
@@ -154,6 +178,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       text: transcription.text,
       modelId: transcription.modelId,
     });
+    plog("pipeline", "transcribe: persisted transcript + L1 provenance → enqueue render_story", {
+      story: view.storyId,
+      model: transcription.modelId,
+      transcriptChars: transcription.text.length,
+      words: wordTimings1x.length,
+      ms: done(),
+    });
 
     // Cascade to the next stage. enqueue dedupes by (name, storyId) while pending, so re-runs
     // of this stage do not pile up duplicate render_story jobs.
@@ -161,12 +192,21 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   };
 
   const runRenderStoryStage = async (payload: JobPayload): Promise<void> => {
+    const done = startTimer();
+    plog("pipeline", "render: begin", { story: payload.storyId });
     const view = await getStoryAndRecordingForPipeline(deps.db, payload.storyId);
-    if (!view) return;
+    if (!view) {
+      plog("pipeline", "render: skip (story gone)", { story: payload.storyId, ms: done() });
+      return;
+    }
     if (view.transcript === null || view.transcript.length === 0) {
       // Out-of-order: the transcribe stage has not produced a transcript yet. Re-queue and
       // try again later. The in-proc queue runs FIFO so this self-corrects after transcribe
       // completes; a durable queue would naturally retry.
+      plog("pipeline", "render: no transcript yet → re-enqueue transcribe", {
+        story: view.storyId,
+        ms: done(),
+      });
       await queue.enqueue("transcribe", { storyId: view.storyId });
       return;
     }
@@ -179,8 +219,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // this stage re-call the LLM. This is the spec's "first-write does NOT win" rule made
     // explicit: derived fields are not sticky, they are gated on emptiness.
     if (view.prose !== null && view.prose.length > 0 && view.state === "pending_approval") {
+      plog("pipeline", "render: skip (already pending_approval with prose)", {
+        story: view.storyId,
+        proseChars: view.prose.length,
+        ms: done(),
+      });
       return;
     }
+    plog("pipeline", "render: transcript ready → calling language model", {
+      story: view.storyId,
+      transcriptChars: view.transcript.length,
+      hasPromptQuestion: view.promptQuestion !== null,
+    });
 
     const render = await renderStoryFromTranscript(deps.languageModel, {
       transcript: view.transcript,
@@ -195,10 +245,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       summary: render.summary,
       tags: render.tags,
     });
+    plog("pipeline", "render: persisted prose/title/summary/tags", {
+      story: view.storyId,
+      model: render.modelId,
+      proseChars: render.prose.length,
+      title: render.title,
+      tags: render.tags.join(","),
+    });
 
     // draft -> pending_approval. Story stays `private` (audienceTier is untouched). The
     // approval gate (Increment 5) is the only thing that may move it onward.
     await transitionStoryState(deps.db, view.storyId, "pending_approval");
+    plog("pipeline", "render: draft → pending_approval", { story: view.storyId });
 
     // Append L2 LAST — after BOTH gate conditions (prose set AND state=pending_approval) are
     // committed — so any retry sees the gate satisfied and skips, never producing a duplicate
@@ -211,6 +269,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       modelId: render.modelId,
       promptText: render.systemPrompt,
     });
+    plog("pipeline", "render: appended L2 provenance (done)", {
+      story: view.storyId,
+      model: render.modelId,
+      ms: done(),
+    });
   };
 
   queue.register("transcribe", runTranscribeStage);
@@ -221,10 +284,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     runTranscribeStage,
     runRenderStoryStage,
     async start(storyId: string) {
+      plog("pipeline", "start → enqueue transcribe", { story: storyId });
       await queue.enqueue("transcribe", { storyId });
     },
     async runToCompletion() {
+      const done = startTimer();
+      plog("pipeline", "runToCompletion: draining queue", { pending: queue.pending().length });
       await queue.drain();
+      plog("pipeline", "runToCompletion: queue drained", { ms: done() });
     },
   };
 }

@@ -57,3 +57,20 @@ export {
   augmentProfileFromStory,
   type BiographicalProfileStore,
 } from "./extract-biography";
+
+export {
+  withTranscriberLogging,
+  withLanguageModelLogging,
+} from "./observability";
+
+export {
+  plog,
+  plogError,
+  preview,
+  startTimer,
+  errMsg,
+  pipelineLogEnabled,
+  beginLogContext,
+  withLogContext,
+  newCorrelationId,
+} from "./logger";
