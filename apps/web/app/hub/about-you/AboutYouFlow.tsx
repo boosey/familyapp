@@ -90,7 +90,10 @@ export function AboutYouFlow({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "clamp(24px, 5vw, 56px) 16px",
+    paddingTop: "clamp(24px, 5vw, 56px)",
+    paddingBottom: "clamp(24px, 5vw, 56px)",
+    paddingLeft: 16,
+    paddingRight: 16,
   };
   const card: CSSProperties = {
     maxWidth: 560,
