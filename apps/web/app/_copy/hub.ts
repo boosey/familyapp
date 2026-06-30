@@ -179,6 +179,10 @@ export const hub = {
     listeningTapStop: "Listening… tap to stop",
     // "One moment…" / "Tap to speak" live in common.voiceButton (shared with other capture surfaces).
     takeYourTime: "Take your time. Long silences are fine.",
+    // Optimistic review: shown over the editor slot while transcribe+render runs.
+    polishing: "Polishing your words…",
+    polishingSub: "Your recording is saved — this just takes a moment.",
+    recordAgain: "Record again",
   },
   actions: {
     notSignedIn: "Not signed in.",

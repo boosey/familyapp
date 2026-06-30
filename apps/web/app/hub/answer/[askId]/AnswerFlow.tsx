@@ -11,12 +11,13 @@
  * chrome. All server mutations go through the three server actions in actions.ts — personId is
  * never sent by the client.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import { recordAnswerAction, shareAnswerAction, discardAnswerAction } from "./actions";
+import { AnswerReviewPending } from "./AnswerReviewPending";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -63,23 +64,49 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   const [actionError, setActionError] = useState<string | null>(null);
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
 
+  // ── Optimistic review-pending state ─────────────────────────────────────────
+  // Set the instant recording stops: a local object URL of the take, shown (with a polishing
+  // spinner) while recordAnswerAction runs. Discarded when the draft prop arrives (keyed remount).
+  const [localTake, setLocalTake] = useState<{ url: string } | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
+  // Revoke the object URL when localTake changes or the component unmounts (the remount into
+  // review-ready unmounts this instance), so we don't leak blob URLs.
+  useEffect(() => {
+    if (!localTake) return;
+    return () => URL.revokeObjectURL(localTake.url);
+  }, [localTake]);
+
+  const recordAgain = useCallback(() => {
+    setPendingError(null);
+    setLocalTake(null); // triggers the effect cleanup above → revokes the URL
+    setRecordPhase("idle");
+  }, []);
+
   // ── Record phase handlers ───────────────────────────────────────────────────
   const uploadRecording = useCallback(async () => {
     try {
       const type = mediaRecorderRef.current?.mimeType ?? "audio/webm";
       const blob = new Blob(chunksRef.current, { type });
+      // Show the review screen immediately, playing the take from a local object URL, while the
+      // pipeline (transcribe + render) runs server-side below.
+      setPendingError(null);
+      setLocalTake({ url: URL.createObjectURL(blob) });
+
       const form = new FormData();
       form.append("audio", blob, "recording.webm");
       form.append("askId", askId);
       const result = await recordAnswerAction(form);
       if (result?.error) {
-        setRecordPhase("softfail");
+        // Stay on the review-pending screen and surface the error with a "Record again" retry.
+        setPendingError(result.error);
       } else {
-        // Refresh the server component to pick up the new draft (transitions to review phase).
+        // Render is done; pull the pending_approval draft (with prose) through the server read.
+        // The arriving draft prop flips the page key → remount into review-ready.
         router.refresh();
       }
     } catch {
-      setRecordPhase("softfail");
+      setPendingError(hub.answer.genericError);
     }
   }, [askId, router]);
 
@@ -446,6 +473,19 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           />
         </div>
       </div>
+    );
+  }
+
+  // ── REVIEW-PENDING PHASE ────────────────────────────────────────────────────
+  // Recorded locally; render is in flight (or failed). Shown until the draft prop arrives.
+  if (localTake) {
+    return (
+      <AnswerReviewPending
+        audioUrl={localTake.url}
+        error={pendingError}
+        onRecordAgain={recordAgain}
+        header={questionHeader}
+      />
     );
   }
 

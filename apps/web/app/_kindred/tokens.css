@@ -119,8 +119,17 @@
   0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
   50%      { box-shadow: 0 0 0 14px var(--accent-soft-0); }
 }
+@keyframes kindred-spin { to { transform: rotate(360deg); } }
+.kindred-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: kindred-spin 0.8s linear infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-fade: 0s; --dur-settle: 0s; }
+  .kindred-spinner { animation-duration: 1.8s; }
 }
 
 

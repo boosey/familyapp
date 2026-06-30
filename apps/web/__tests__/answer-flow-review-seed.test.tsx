@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { AnswerFlow, type DraftInfo } from "@/app/hub/answer/[askId]/AnswerFlow";
+import { AnswerReviewPending } from "@/app/hub/answer/[askId]/AnswerReviewPending";
 
 // AnswerFlow calls useRouter() at the top; the handlers that use it aren't exercised here.
 vi.mock("next/navigation", () => ({
@@ -89,5 +90,44 @@ describe("AnswerFlow record→review editor seeding", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(here, "../app/hub/answer/[askId]/page.tsx"), "utf8");
     expect(src).toContain('key={draft?.storyId ?? "record"}');
+  });
+});
+
+describe("AnswerReviewPending presentation", () => {
+  it("shows audio + the polishing spinner/message, and NO editor", () => {
+    const { container } = render(
+      <AnswerReviewPending
+        audioUrl="blob:fake-take"
+        error={null}
+        onRecordAgain={() => {}}
+        header={<div>header</div>}
+      />,
+    );
+    // Editor is hidden until prose is ready.
+    expect(screen.queryByRole("textbox")).toBeNull();
+    // Polishing status is announced and the spinner is present.
+    expect(screen.getByRole("status")).toBeTruthy();
+    expect(screen.getByText(/Polishing your words/)).toBeTruthy();
+    expect(container.querySelector(".kindred-spinner")).not.toBeNull();
+    // The recording is replayable (one <audio> with the local URL).
+    const audio = container.querySelector("audio");
+    expect(audio?.getAttribute("src")).toBe("blob:fake-take");
+  });
+
+  it("shows an error + 'Record again' button (no spinner) when render failed", () => {
+    const onRecordAgain = vi.fn();
+    const { container } = render(
+      <AnswerReviewPending
+        audioUrl="blob:fake-take"
+        error="Could not save your recording. Please try again."
+        onRecordAgain={onRecordAgain}
+        header={<div>header</div>}
+      />,
+    );
+    expect(container.querySelector(".kindred-spinner")).toBeNull();
+    expect(screen.getByText(/Could not save your recording/)).toBeTruthy();
+    const btn = screen.getByRole("button", { name: /Record again/ });
+    btn.click();
+    expect(onRecordAgain).toHaveBeenCalledOnce();
   });
 });
