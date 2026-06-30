@@ -497,18 +497,20 @@ export async function applyTranscriptCorrection(
 }
 
 /**
- * Outstanding answer-drafts for a narrator — the record-now-approve-later state the Questions tab
- * needs to show "Review & approve" (with the recorded time) instead of "Answer". A draft is a
- * Story the narrator recorded against an Ask but has NOT yet approved: `state = 'draft'` AND
- * `askId IS NOT NULL`, owned by the narrator.
+ * Outstanding answer stories awaiting the narrator's review/approval — the record-at-capture state
+ * the Questions tab needs to show "Review & approve" (with the recorded time) instead of "Answer".
+ * A story is outstanding when `state = 'pending_approval'` AND `askId IS NOT NULL`, owned by the
+ * narrator. Render now runs at record time, so a successful answer lands in `pending_approval` with
+ * prose already populated; a leftover `draft` means record/render did not complete and is NOT a
+ * ready-to-review answer.
  *
  * This MUST live here (the audited write/read surface) because it reads the guarded `stories`
  * table — `asks.ts` cannot. The web layer merges this with `listPendingAsksForNarrator` (which
  * returns the still-pending Asks) to render the per-ask two-state affordance. Returned keyed by
- * Ask id; if more than one draft somehow points at the same Ask, the most recently recorded wins
- * (re-record + discard should keep this 1:1, but we never surface a stale earlier take).
+ * Ask id; if more than one pending-approval story points at the same Ask, the most recently
+ * recorded wins (re-record + discard should keep this 1:1, but we never surface a stale take).
  *
- * AuthZ: a system-actor read scoped to the narrator's OWN drafts (`ownerPersonId === narrator`) —
+ * AuthZ: a system-actor read scoped to the narrator's OWN stories (`ownerPersonId === narrator`) —
  * the owner branch of the authorization function. No content (transcript/prose/audio key) is
  * selected; only the lifecycle pointer + timestamp.
  */
@@ -535,7 +537,7 @@ export async function listOutstandingAnswerDrafts(
     .where(
       and(
         eq(stories.ownerPersonId, narratorPersonId),
-        eq(stories.state, "draft"),
+        eq(stories.state, "pending_approval"),
         isNotNull(stories.askId),
       ),
     );
@@ -612,13 +614,16 @@ export async function discardDraftStory(
       );
     }
 
-    // 3. State: only `draft` stories are deletable. Once a story has left `draft` it may
-    //    carry consent (pending_approval is the gate before approval; approved/shared carry
-    //    consent records). ADR-0002: immutability protects CONSENTED audio; the draft is
-    //    the ONLY consent-free, deletable state.
-    if (story.state !== "draft") {
+    // 3. State: only `draft` and `pending_approval` stories are deletable. Both are consent-free:
+    //    `draft` never reaches the approval gate; `pending_approval` is the pre-approval review
+    //    window and consent is written ONLY by approveAndShareStory, which transitions OUT of
+    //    pending_approval atomically — so a pending_approval story has zero consent rows.
+    //    Step 4's zero-consent check is the real structural guarantee that consented audio is
+    //    never deleted; this state gate is a fast-path guard that rejects post-approval states.
+    //    ADR-0002.
+    if (story.state !== "draft" && story.state !== "pending_approval") {
       throw new InvariantViolation(
-        `discardDraftStory: story ${input.storyId} is not a draft (state=${story.state}); only never-consented drafts may be discarded`,
+        `discardDraftStory: story ${input.storyId} is in state=${story.state}; only consent-free stories (draft, pending_approval) may be discarded`,
       );
     }
 

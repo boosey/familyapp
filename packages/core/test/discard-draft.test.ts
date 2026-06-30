@@ -97,8 +97,39 @@ describe("discardDraftStory — ownership guard", () => {
   });
 });
 
+describe("discardDraftStory — pending_approval (consent-free pre-approval window)", () => {
+  it("discards a consent-free pending_approval story: deletes both rows and returns the storageKey", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const { story, recording, storageKey } = await makeDraft(narrator.id);
+
+    // Advance to pending_approval — render has run, but narrator hasn't approved yet.
+    await transitionStoryState(db, story.id, "pending_approval");
+
+    const result = await discardDraftStory(db, {
+      storyId: story.id,
+      narratorPersonId: narrator.id,
+    });
+
+    expect(result.storageKeys).toEqual([storageKey]);
+
+    // Story row is gone.
+    const storyRows = await db
+      .select({ id: stories.id })
+      .from(stories)
+      .where(eq(stories.id, story.id));
+    expect(storyRows).toHaveLength(0);
+
+    // Media row is gone.
+    const mediaRows = await db
+      .select({ id: media.id })
+      .from(media)
+      .where(eq(media.id, recording.id));
+    expect(mediaRows).toHaveLength(0);
+  });
+});
+
 describe("discardDraftStory — state guard", () => {
-  it("refuses when the story has left draft (e.g. shared); the shared story's media survives", async () => {
+  it("refuses when the story is in a post-approval state (e.g. shared); the shared story's media survives", async () => {
     const narrator = await makePerson(db, "Eleanor");
     const { story, recording } = await makeDraft(narrator.id);
 
