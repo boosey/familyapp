@@ -41,6 +41,9 @@ importers:
       '@chronicle/llm-anthropic':
         specifier: workspace:*
         version: link:../../packages/llm-anthropic
+      '@chronicle/llm-groq':
+        specifier: workspace:*
+        version: link:../../packages/llm-groq
       '@chronicle/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
@@ -177,6 +180,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
+  packages/llm-groq:
+    dependencies:
+      '@chronicle/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
   packages/pipeline:
     dependencies:
       '@chronicle/core':
@@ -235,6 +251,19 @@ importers:
         version: 2.1.9(@types/node@22.20.0)
 
   packages/transcribe-groq:
+    dependencies:
+      '@chronicle/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
+  packages/transcribe-xai:
     dependencies:
       '@chronicle/pipeline':
         specifier: workspace:*

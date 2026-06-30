@@ -48,6 +48,9 @@ export default defineConfig({
       "@chronicle/llm-anthropic": fileURLToPath(
         new URL("../../packages/llm-anthropic/src/index.ts", import.meta.url),
       ),
+      "@chronicle/llm-groq": fileURLToPath(
+        new URL("../../packages/llm-groq/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {

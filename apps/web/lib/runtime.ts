@@ -26,6 +26,7 @@ import {
   type LanguageModel,
 } from "@chronicle/pipeline";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
+import { createGroqLanguageModel } from "@chronicle/llm-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
 import { type AuthProvider } from "./auth";
 import { createClerkAuthProvider } from "./auth-clerk";
@@ -133,9 +134,18 @@ async function build(): Promise<Runtime> {
     : new ScriptedTranscriber({
         text: "(Dev mode: no GROQ_API_KEY set — this is placeholder transcript text so the pipeline can run end to end.)",
       });
-  const languageModel = process.env.ANTHROPIC_API_KEY
-    ? createAnthropicLanguageModel({})
-    : new ScriptedLanguageModel();
+  // Phase-1 verification pass: run EVERY LLM task on Groq (one model, minimal new surface) when a
+  // GROQ_API_KEY is present — the same key already drives the Groq transcriber above, so setting it
+  // exercises the whole transcribe→render pipeline on one vendor. `GROQ_LLM_MODEL` overrides the
+  // adapter default (`llama-3.3-70b-versatile`) without a code change. Anthropic remains available
+  // as a fallback when only ANTHROPIC_API_KEY is set; with neither, the deterministic mock runs.
+  const languageModel = process.env.GROQ_API_KEY
+    ? createGroqLanguageModel(
+        process.env.GROQ_LLM_MODEL ? { model: process.env.GROQ_LLM_MODEL } : {},
+      )
+    : process.env.ANTHROPIC_API_KEY
+      ? createAnthropicLanguageModel({})
+      : new ScriptedLanguageModel();
   // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
   const newPipeline = (): Pipeline =>
     createPipeline({ db, storage, transcriber, languageModel });

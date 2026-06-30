@@ -17,6 +17,7 @@
     "@chronicle/db": "workspace:*",
     "@chronicle/interviewer": "workspace:*",
     "@chronicle/llm-anthropic": "workspace:*",
+    "@chronicle/llm-groq": "workspace:*",
     "@chronicle/pipeline": "workspace:*",
     "@chronicle/storage": "workspace:*",
     "@chronicle/transcribe-groq": "workspace:*",
