@@ -70,7 +70,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     const pipeline = newPipeline();
     await pipeline.start(storyId);
     await pipeline.runToCompletion();
-  } catch {
+  } catch (err) {
+    // Server-side breadcrumb only: this login-free surface has no other error-reporting path, so a
+    // silent 500 would make render failures invisible to ops. Detail is NEVER returned to the
+    // client (the response below carries none). Matches the augmentation catch in shareAnswerAction.
+    // eslint-disable-next-line no-console
+    console.error("capture: render pipeline failed after ingest (story=%s):", storyId, err);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
