@@ -133,6 +133,50 @@ Gates: `pnpm -r typecheck`, `pnpm -r test` (all packages), `pnpm --filter @chron
 architecture allowlist canaries unchanged. Two adversarial cold-reviewer passes (trigger+capture, answer
 flow) → all findings closed.
 
+## Increment 9 — REAL CLERK AUTH  ⬜
+Turn on the production identity adapter. The Clerk seam is already scaffolded (`auth-clerk.ts`
+resolves session→userId→Account→Person; `clerk-config.ts`/`runtime.ts`/`layout.tsx`/`middleware.ts`
+gate on `isClerkConfigured()`). This increment fills the four real gaps: provisioning, the hosted
+sign-up/in UI, the invitation rework, and the magic-link sign-in-token path. Decisions:
+ADR-0005 (JIT provisioning), ADR-0003 §"Clerk implementation" (sign-in tokens), DECISIONS.md
+(dev-runs-Clerk, Clerk-mode seed).
+
+**Slice 0 — manual prerequisite (Clerk dashboard, no code):**
+- [ ] Set **Name → required** (User & Authentication → Personal information).
+- [ ] Create test users for the seed personas (Sofia, Marco, …) with the **same emails** the seed uses.
+
+**Slice 1 — core Clerk loop.**  *Acceptance: sign up via Clerk → `/auth/callback` provisions →
+`/welcome` → DOB → `/hub`, verified live on the dev Clerk instance.*  *PROD KEYS STAY OFF.*
+- [ ] Env: `sk_test_`/`pk_test_` into `apps/web/.env.local` (NOT repo-root `.env`); confirm
+      `isClerkConfigured()` flips and the Clerk adapter is wired.
+- [ ] `/sign-in` + `/sign-up` → optional catch-all `[[...]]`; conditional render (Clerk
+      `<SignIn/>`/`<SignUp/>` when configured, existing mock form otherwise); `forceRedirectUrl`
+      → `/auth/callback`. Themed via Clerk `appearance` (cosmetic, can defer).
+- [ ] `/auth/callback` — the single post-Clerk landing: JIT provision (`clerkClient().users.getUser`
+      → `createAccountWithPerson`, idempotent on duplicate `authProviderUserId`) → apply pending-invite
+      cookie if present → `resolvePostAuthRoute`.
+- [ ] Middleware matcher — VERIFY against Clerk v6 docs first; broaden for `/__clerk/:path*` + the auth
+      routes; **keep `/s/[token]` and `/a/[token]` excluded** (existing carve-out).
+- [ ] `/join/[token]` rework — anonymous branch sets httpOnly pending-invite cookie {token,
+      relationshipLabel} → Clerk sign-up → `/auth/callback` accepts + clears cookie. Signed-in
+      direct-accept path preserved. Relationship label stays collected up front.
+- [ ] Sign-out — custom Kindred control; Clerk-configured → client `useClerk().signOut({redirectUrl:'/'})`,
+      else existing mock server action. No `<UserButton/>`.
+- [ ] Clerk-mode seed — bind personas to real Clerk users by `getUserList({ emailAddress })`; store real
+      `userId` as `authProviderUserId`; skip `mock_auth_users` insert; skip-with-warning if unmatched.
+      Seed stays authoritative for persona `displayName`/`spokenName`.
+- [ ] Regression: JIT provision idempotency + concurrent-landing race; `/auth/callback` pending-invite
+      apply; route mode-switch (Clerk vs mock).
+
+**Slice 2 — magic-link via Clerk sign-in tokens.**  *Acceptance: mint a sign-in token → redeem →
+land authed on `/hub/answer/[askId]`.*  **GATE: prod Clerk keys may go live only after this slice.**
+- [ ] `/a/[token]/[askId]` (Clerk path) — mint `clerkClient().signInTokens.createSignInToken({ userId })`
+      → redirect to redemption route. Mock path unchanged.
+- [ ] `/auth/redeem` — client route: `signIn.create({ strategy: 'ticket', ticket })` → forward to dest.
+- [ ] Remove the throws-and-degrades branch for the Clerk adapter's `establishAccountSession` seam.
+- [ ] Regression: ticket lands the correct Person on `/hub/answer/[askId]`; expired/invalid ticket
+      warm-degrades to `/s/[token]`.
+
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /
 timeline-map-tree · steward console & succession · avatar consent gate & story-will ·

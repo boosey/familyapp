@@ -12,6 +12,21 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   is). See ADR-0001.
 - **Natural-language family search is a `FamilySearch` seam** with a deterministic keyword impl now;
   an LLM slots behind the same interface later, keeping vendor calls off the offline-test path.
+- **Clerk identities are provisioned just-in-time, not by webhook.** A new Clerk user becomes an
+  Account + Person at the `/auth/callback` landing (name pulled from Clerk), idempotently. Full
+  rationale + rejected webhook in `docs/adr/0005-clerk-identities-are-provisioned-just-in-time.md`.
+- **The domain magic-link is implemented under Clerk via sign-in tokens (`ticket`), not Clerk's
+  email-magic-link strategy.** See the "Clerk implementation" section of ADR-0003.
+- **Dev runs real Clerk; the mock is the keys-absent (CI/offline) fallback.** The presence of valid
+  `sk_*`/`pk_*` keys IS the mode switch (`isClerkConfigured()`). Clerk-on means real Clerk sign-up
+  into fresh accounts and `/dev/sign-in` is inert (it sets a cookie the Clerk adapter ignores); for
+  seeded-family demos, run with keys absent (mock + `/dev/sign-in`).
+- **Clerk-mode seed binds personas to real Clerk users by email.** Rather than create Clerk users (a
+  reseed would pollute Clerk), the seed queries `clerkClient().users.getUserList({ emailAddress })`
+  for personas whose emails match pre-created Clerk test users, stores the real `userId` as the
+  Account's `authProviderUserId`, and skips the `mock_auth_users` credential insert. A persona with no
+  matching Clerk user is skipped with a warning (never half-bound). The seed stays authoritative for
+  seeded personas' `displayName`/`spokenName` — name-from-Clerk applies only to net-new sign-ups.
 - **Mock auth provider for dev/test** (the `mock_auth_users` table plays Clerk's user store). Account
   still stores only `authProviderUserId`, never a password — credentials live in the mock store and
   production swaps in the Clerk adapter unchanged.
