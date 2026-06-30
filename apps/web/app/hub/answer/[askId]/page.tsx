@@ -118,7 +118,15 @@ export default async function AnswerPage({
           boxSizing: "border-box",
         }}
       >
+        {/*
+         * `key` flips on the record→review transition (and back on re-record). router.refresh()
+         * updates the server props but does NOT remount a client component, so without this key
+         * AnswerFlow's state (proseDraft seeded from draft.prose, op, tier, …) stays stuck at its
+         * record-phase mount values — the review editor would render empty even though draft.prose
+         * is populated. Keying on the draft identity forces a fresh mount that re-seeds all state.
+         */}
         <AnswerFlow
+          key={draft?.storyId ?? "record"}
           askId={askId}
           questionText={askDetail.questionText}
           askerName={askDetail.askerSpokenName}

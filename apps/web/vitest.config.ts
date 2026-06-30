@@ -53,8 +53,13 @@ export default defineConfig({
       ),
     },
   },
+  // .tsx component tests render with the automatic JSX runtime (no `import React`).
+  // The app tsconfig uses jsx:"preserve" for Next; esbuild needs an explicit transform here.
+  esbuild: { jsx: "automatic" },
   test: {
-    include: ["__tests__/**/*.test.ts"],
+    // Component tests are .tsx and opt into jsdom per-file via `// @vitest-environment jsdom`;
+    // the default node environment is kept for the logic-only .ts suites.
+    include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
     exclude: ["__tests__/**/*-shim.ts", "node_modules/**"],
   },
 });
