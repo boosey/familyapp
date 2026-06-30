@@ -51,11 +51,20 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   permits this ("the Python service is a recommendation, not a requirement"); one language
   maximizes agent velocity and keeps the whole pipeline in one testable toolchain. Interface
   boundary to vendors is identical either way.
-- **ORM/DB: Drizzle ORM + PGlite for dev/test, Postgres (Supabase) for prod.** Spec offers
+- **ORM/DB: Drizzle ORM + PGlite for dev/test, Postgres (Neon) for prod.** Spec offers
   "Prisma OR Drizzle". Chose Drizzle because its PGlite integration runs *real Postgres
   in-process*, so the append-only ledger trigger and permission joins are exercised by tests
   with zero server to provision — the load-bearing invariants become genuinely testable. Same
-  Postgres dialect ships to Supabase/Neon unchanged.
+  Postgres dialect ships to any vanilla Postgres unchanged.
+  - **Prod target: Neon (was Supabase).** We deliberately unbundled — Clerk for auth, R2 for
+    storage, Inngest for the queue, all behind seams — so Supabase's integrated BaaS value
+    (Auth/Storage/Realtime/auto-API) would be paid for and ignored, and partly *conflict*: its
+    idiomatic Row-Level Security model runs against our load-bearing **single front door**
+    (authorization lives in `@chronicle/core` app code, never in the DB). Neon is "just
+    Postgres," which matches the commodity-Postgres-behind-Drizzle philosophy. It also fits the
+    dev workflow: copy-on-write branches per PR/preview, scale-to-zero (≈free at idle for a
+    low-traffic family app), and a serverless HTTP driver for Next.js. PGlite remains the
+    dev/test DB; nothing about the schema or invariants changes.
 - **Queue: Inngest (named prod) behind a `JobQueue` interface.** Spec offers "Inngest OR
   Trigger.dev". Both TS-native; picked Inngest. The pipeline IP (idempotent stages, invariants)
   runs against an in-process JobQueue impl in dev/test so it is testable without the Inngest
@@ -337,7 +346,7 @@ recap of every fix.
   deduped server-side; this is intended). `signingKey` was removed from the client
   constructor options — it is a `serve()` concern (the receiving HTTP handler verifies
   signatures), not a client concern; leaving it on the client gave false safety.
-- **Supabase Postgres — `Database` type narrowed so `db.query.stories` is a COMPILE
+- **Prod Postgres (Neon) — `Database` type narrowed so `db.query.stories` is a COMPILE
   error; migration race fixed via INSERT-as-lock; SSL `require` by default; in-process
   bootstrap gated by `CHRONICLE_RUN_MIGRATIONS=1`.** The single most load-bearing
   decision: the Drizzle client's `Database` type parameter is narrowed to
