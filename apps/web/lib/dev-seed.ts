@@ -10,7 +10,7 @@
  * Sample content (every write goes through the audited core path; storage-first ordering):
  *   - Five Stories approved+shared at family tier (visible in /hub when signed in as Sofia/Marco/Eleanor)
  *   - Four pending Asks for Eleanor (Sofia × 2, Marco × 2) so her "Questions for you" tab has a queue
- *   - One DRAFT Story linked to the first Ask — hub shows "Review & approve" immediately for that ask
+ *   - One `pending_approval` Story linked to the first Ask (with AI-polished prose) — hub shows "Review & approve" immediately for that ask
  *   - One link session for Eleanor (convenience deep-link / magic-link test; NOT the primary UI entry)
  *
  * Sign-in is the headline entry point: /dev/sign-in (one-click) or /sign-in with credentials.
@@ -29,6 +29,7 @@ import {
   persons,
 } from "@chronicle/db/schema";
 import {
+  appendProseRevision,
   approveAndShareStory,
   createAsk,
   createInvitation,
@@ -81,8 +82,9 @@ export interface SeedResult {
    *  NOT presented as the primary entry on the seed page — sign-in is the headline path. */
   narratorToken: string;
   narratorPersonId: string;
-  /** Eleanor's one seeded DRAFT story (linked to an Ask). The hub's Questions tab shows
-   *  "Review & approve" immediately for the linked Ask when signed in as Eleanor. */
+  /** Eleanor's one seeded ask-linked story in `pending_approval` with AI-polished prose.
+   *  The hub's Questions tab shows "Review & approve" immediately for the linked Ask when signed in
+   *  as Eleanor. Named `draftStoryId` for historical continuity; the story is no longer in draft. */
   draftStoryId: string;
   /** A seeded account you can sign in as through the real mock flow (the steward). */
   stewardSignInEmail: string;
@@ -284,7 +286,7 @@ export async function seedInto(
   ]);
 
   // Four pending Asks for Eleanor so her "Questions for you" tab has a real queue.
-  // The FIRST ask is the one the seeded DRAFT story answers (state=draft, askId=ask1.id).
+  // The FIRST ask is the one the seeded pending_approval story answers (askId=ask1.id).
   const ask1 = await createAsk(
     db,
     { kind: "account", personId: sofia!.id },
@@ -325,8 +327,9 @@ export async function seedInto(
     },
   );
 
-  // One DRAFT story linked to ask1 — when signed in as Eleanor, the Questions tab shows
-  // "Review & approve" for that ask immediately. No transcript/prose: the pipeline runs at approval.
+  // One ask-linked story for Eleanor in `pending_approval` with AI-polished prose — the render
+  // pipeline now runs at record time (not approval), so a recorded answer lands here ready for the
+  // narrator to read/edit on the Questions-tab "Review & approve" screen.
   const draftAudio = tinyWav();
   const draftKey = `story-audio/${eleanor!.id}/${randomUUID()}.wav`;
   await storage.put({
@@ -345,6 +348,40 @@ export async function seedInto(
     },
     { promptQuestion: ask1.questionText, askId: ask1.id },
   );
+  // Simulate the render pipeline: L1 (transcribed) → L2 (AI-polished) → pending_approval.
+  const askAnswerTranscript =
+    "Oh, my grandmother. Her name was Odette and she lived down by the bayou. " +
+    "She used to say she could tell the weather by the way the Spanish moss moved. " +
+    "I must have been four or five the first time she let me help her shell butter beans on the porch. " +
+    "I can still smell that afternoon.";
+  const askAnswerProse =
+    "Her name was Odette, and she lived down by the bayou. She used to say she could tell the weather " +
+    "by the way the Spanish moss moved — and I believed her. My earliest memory of her is sitting on " +
+    "her porch, four or five years old, helping shell butter beans in the afternoon heat. I can still " +
+    "smell that afternoon.";
+  await appendProseRevision(db, {
+    storyId: draftStory.id,
+    level: "ai_transcribed",
+    text: askAnswerTranscript,
+    modelId: "mock-whisper-turbo",
+  });
+  await appendProseRevision(db, {
+    storyId: draftStory.id,
+    level: "ai_polished",
+    text: askAnswerProse,
+    modelId: "mock-claude",
+    promptText: "[dev-seed] representative render system prompt",
+  });
+  await updateDerivedFields(db, draftStory.id, {
+    transcript: askAnswerTranscript,
+    prose: askAnswerProse,
+    title: "My grandmother Odette",
+    summary: "Eleanor's earliest memory of her grandmother shelling butter beans on the bayou porch.",
+    tags: ["grandparents", "childhood", "louisiana"],
+    eraYear: 1947,
+    eraLabel: "the bayou",
+  });
+  await transitionStoryState(db, draftStory.id, "pending_approval");
 
   // --- Onboarding + family-flow demo data --------------------------------------------------
   // Give Eleanor + Sofia + Marco real login credentials (the mock provider plays Clerk locally) so

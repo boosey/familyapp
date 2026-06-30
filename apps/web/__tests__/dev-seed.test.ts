@@ -10,13 +10,14 @@
  * account distinction — the capture/question link is only a convenience login into an existing
  * account. These tests lock that in so a future seed edit can't regress a narrator to account-less.
  *
- * Additional shape checks: Eleanor must have ≥ 4 pending Asks and exactly one DRAFT story linked
- * to an Ask (state='draft', askId not null) so the hub's Questions tab shows "Review & approve"
- * immediately.
+ * Additional shape checks: Eleanor must have ≥ 4 pending Asks and exactly one recorded answer
+ * awaiting review (state='pending_approval', askId not null, prose populated) so the hub's
+ * Questions tab shows "Review & approve" immediately with the AI-polished prose ready to edit.
  */
 import { describe, expect, it } from "vitest";
 import { eq, isNull } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
+import { stories } from "@chronicle/db/content";
 import { accounts, asks, persons } from "@chronicle/db/schema";
 import { listOutstandingAnswerDrafts } from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
@@ -73,11 +74,19 @@ describe("dev seed — Eleanor's question queue", () => {
     expect(pending.every((a) => a.status === "queued")).toBe(true);
   });
 
-  it("seeds exactly one outstanding DRAFT story linked to an Ask for Eleanor", async () => {
+  it("seeds exactly one recorded answer awaiting review (pending_approval, askId not null, prose populated) for Eleanor", async () => {
     const { db, result } = await seededDb();
     const drafts = await listOutstandingAnswerDrafts(db, result.narratorPersonId);
     expect(drafts).toHaveLength(1);
     expect(drafts[0]!.askId).not.toBeNull();
     expect(drafts[0]!.storyId).toBe(result.draftStoryId);
+
+    // The prose must be populated so the "Review & approve" editor is not blank.
+    const [row] = await db
+      .select({ prose: stories.prose })
+      .from(stories)
+      .where(eq(stories.id, result.draftStoryId));
+    expect(typeof row?.prose).toBe("string");
+    expect((row?.prose ?? "").length).toBeGreaterThan(0);
   });
 });
