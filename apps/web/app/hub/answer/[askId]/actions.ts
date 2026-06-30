@@ -26,15 +26,25 @@ import {
 import { createCoreAnchorSource } from "@chronicle/interviewer";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
+import { mapStoryStateToStatus, type AnswerStatusResult } from "@/lib/answer-status";
 
 export type ActionResult = { error: string } | undefined;
+
+/**
+ * recordAnswerAction returns the freshly-created `storyId` so the client can poll its processing
+ * status (slice 2b). In prod the durable pipeline may still be running when this returns — the
+ * client polls `getAnswerStatusAction` until `ready`, then refreshes into the review phase.
+ */
+export type RecordAnswerResult = { storyId: string } | { error: string };
+
+export type AnswerStatusActionResult = AnswerStatusResult | { error: string };
 
 /**
  * Record an answer to an ask. Validates that the ask is targeted at the signed-in person,
  * then ingests the audio blob via the account capture path (actor.kind = "account") — the
  * personId is taken from the server session, never from the client.
  */
-export async function recordAnswerAction(formData: FormData): Promise<ActionResult> {
+export async function recordAnswerAction(formData: FormData): Promise<RecordAnswerResult> {
   // Correlate every log line for this answer run (ingest → queue → stages → AI seams).
   beginLogContext();
   const rt = await getRuntime();
@@ -107,10 +117,34 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
     });
     return { error: hub.actions.saveFailed };
   }
-  plog("answer", "recordAnswer: complete (story pending_approval)", {
+  plog("answer", "recordAnswer: dispatched (synchronous in dev → pending_approval; enqueued in prod)", {
     story: storyId,
     ms: totalTimer(),
   });
+  // Return the storyId so the client can poll processing status. In dev/CI dispatch ran to
+  // completion above (the first poll returns `ready`); in prod the durable pipeline is still
+  // running and the client polls until it reaches `pending_approval`.
+  return { storyId };
+}
+
+/**
+ * Viewer-scoped processing-status read for the in-hub answer flow (slice 2b). Account-auth: the
+ * personId comes from the server session, never the client. The story is read through the SINGLE
+ * FRONT DOOR (`getStoryForViewer`), which already enforces owner-only visibility of a not-yet-shared
+ * draft — a non-owner gets `null` here (→ storyNotFound), so this cannot be used to probe foreign
+ * stories. Maps the story state to the small `{ status, storyId }` contract; no content is returned.
+ */
+export async function getAnswerStatusAction(storyId: string): Promise<AnswerStatusActionResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+  if (typeof storyId !== "string" || !storyId) return { error: hub.actions.invalidInput };
+
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story || story.ownerPersonId !== ctx.personId) {
+    return { error: hub.actions.storyNotFound };
+  }
+  return { status: mapStoryStateToStatus(story.state), storyId: story.id };
 }
 
 /**

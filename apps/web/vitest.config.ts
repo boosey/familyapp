@@ -42,6 +42,9 @@ export default defineConfig({
       "@chronicle/pipeline": fileURLToPath(
         new URL("../../packages/pipeline/src/index.ts", import.meta.url),
       ),
+      "@chronicle/interviewer": fileURLToPath(
+        new URL("../../packages/interviewer/src/index.ts", import.meta.url),
+      ),
       "@chronicle/transcribe-groq": fileURLToPath(
         new URL("../../packages/transcribe-groq/src/index.ts", import.meta.url),
       ),

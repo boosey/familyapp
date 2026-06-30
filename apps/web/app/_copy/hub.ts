@@ -183,6 +183,10 @@ export const hub = {
     polishing: "Polishing your words…",
     polishingSub: "Your recording is saved — this just takes a moment.",
     recordAgain: "Record again",
+    // Soft cap: the processing poll ran past its window without the story becoming ready. The
+    // recording is safe (it's slow or stuck out-of-band); never spin forever — say so warmly.
+    takingLonger:
+      "This is taking longer than usual. Your recording is safe — check back in a little while.",
   },
   actions: {
     notSignedIn: "Not signed in.",

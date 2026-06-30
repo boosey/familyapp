@@ -16,7 +16,13 @@ import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
-import { recordAnswerAction, shareAnswerAction, discardAnswerAction } from "./actions";
+import {
+  recordAnswerAction,
+  shareAnswerAction,
+  discardAnswerAction,
+  getAnswerStatusAction,
+} from "./actions";
+import { pollUntilReady } from "@/lib/poll-status";
 import { AnswerReviewPending } from "./AnswerReviewPending";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
@@ -69,16 +75,22 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   // spinner) while recordAnswerAction runs. Discarded when the draft prop arrives (keyed remount).
   const [localTake, setLocalTake] = useState<{ url: string } | null>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  // Abort the processing poll if this instance unmounts (e.g. the keyed remount into review-ready).
+  const pollAbortRef = useRef<AbortController | null>(null);
 
   // Revoke the object URL when localTake changes or the component unmounts (the remount into
-  // review-ready unmounts this instance), so we don't leak blob URLs.
+  // review-ready unmounts this instance), so we don't leak blob URLs. Also abort any in-flight poll.
   useEffect(() => {
     if (!localTake) return;
-    return () => URL.revokeObjectURL(localTake.url);
+    return () => {
+      URL.revokeObjectURL(localTake.url);
+      pollAbortRef.current?.abort();
+    };
   }, [localTake]);
 
   const recordAgain = useCallback(() => {
     setPendingError(null);
+    pollAbortRef.current?.abort();
     setLocalTake(null); // triggers the effect cleanup above → revokes the URL
     setRecordPhase("idle");
   }, []);
@@ -97,14 +109,33 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       form.append("audio", blob, "recording.webm");
       form.append("askId", askId);
       const result = await recordAnswerAction(form);
-      if (result?.error) {
+      if ("error" in result) {
         // Stay on the review-pending screen and surface the error with a "Record again" retry.
         setPendingError(result.error);
-      } else {
-        // Render is done; pull the pending_approval draft (with prose) through the server read.
-        // The arriving draft prop flips the page key → remount into review-ready.
-        router.refresh();
+        return;
       }
+
+      // Ingest succeeded; the story may still be rendering out-of-band (prod durable queue) or be
+      // ready already (dev/CI synchronous dispatch). Poll the viewer-scoped status until it's
+      // `ready`, keeping the optimistic local-audio "Polishing…" screen up meanwhile. On ready,
+      // router.refresh() pulls the pending_approval draft (with prose) → the keyed remount swaps in
+      // the review editor. On the soft cap, show a warm "taking longer" message (never hang).
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      const outcome = await pollUntilReady({
+        getStatus: async () => {
+          const status = await getAnswerStatusAction(result.storyId);
+          if ("error" in status) throw new Error(status.error);
+          return status.status;
+        },
+        signal: controller.signal,
+      });
+      if (outcome === "ready") {
+        router.refresh();
+      } else if (outcome === "timeout") {
+        setPendingError(hub.answer.takingLonger);
+      }
+      // "aborted" → the component unmounted; do nothing.
     } catch {
       setPendingError(hub.answer.genericError);
     }
