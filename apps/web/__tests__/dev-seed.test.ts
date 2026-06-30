@@ -96,6 +96,27 @@ describe("dev seed — every Person has an Account", () => {
       .where(eq(persons.id, result.narratorPersonId!));
     expect(eleanor?.onboardedAt).not.toBeNull();
   });
+
+  it("reconciles Eleanor's profile with the real Clerk test user (1956 / Zachary / IBM wins)", async () => {
+    // The seed's Eleanor was merged with the live eleanor+clerk_test profile: her entered birth
+    // year + intake biographical_anchors override the old 1942/Lafayette seed values. This locks
+    // that in so a future edit can't silently revert her (the data the user typed live).
+    const { db, result } = await seededDb();
+    const [eleanor] = await db
+      .select({
+        birthYear: persons.birthYear,
+        birthDate: persons.birthDate,
+        anchors: persons.biographicalAnchors,
+      })
+      .from(persons)
+      .where(eq(persons.id, result.narratorPersonId!));
+    expect(eleanor?.birthYear).toBe(1956);
+    expect(eleanor?.birthDate).toBe("1956-12-18");
+    expect(eleanor?.anchors?.hometown).toBe("Zachary, LA");
+    expect(eleanor?.anchors?.siblingContext).toBe("Youngest of five");
+    expect(eleanor?.anchors?.occupationSummary).toContain("IBM");
+    expect(eleanor?.anchors?.hasGrandchildren).toBe(true);
+  });
 });
 
 describe("dev seed — Eleanor's question queue", () => {

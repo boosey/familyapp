@@ -103,8 +103,8 @@ export default async function DevSeedPage({
               </li>
               <li>
                 <div className="kin-muted" style={{ fontSize: 13 }}>
-                  Find a family · search &ldquo;Lafayette&rdquo;, &ldquo;Eleanor&rdquo;,
-                  &ldquo;teachers&rdquo; · Theo has a pending join request for Sofia to approve
+                  Find a family · search &ldquo;Zachary&rdquo;, &ldquo;Eleanor&rdquo;,
+                  &ldquo;IBM&rdquo; · Theo has a pending join request for Sofia to approve
                 </div>
                 <Link href="/families/find" className="mono">
                   /families/find
