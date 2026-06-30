@@ -51,6 +51,9 @@ export default defineConfig({
       "@chronicle/llm-groq": fileURLToPath(
         new URL("../../packages/llm-groq/src/index.ts", import.meta.url),
       ),
+      "@chronicle/queue-inngest": fileURLToPath(
+        new URL("../../packages/queue-inngest/src/index.ts", import.meta.url),
+      ),
     },
   },
   // .tsx component tests render with the automatic JSX runtime (no `import React`).

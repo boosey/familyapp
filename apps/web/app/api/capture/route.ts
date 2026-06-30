@@ -22,7 +22,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Bind a correlation id to this request so every downstream log line (ingest → queue → stages →
   // AI seams) shares one greppable tag. Must run before the first plog below.
   beginLogContext();
-  const { db, storage, newPipeline } = await getRuntime();
+  const rt = await getRuntime();
+  const { db, storage } = rt;
 
   let form: FormData;
   try {
@@ -81,12 +82,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Render BEFORE review (prose-provenance design): transcribe → polish so the approve page can
   // show L2 prose for the narrator to read and edit. Mirrors the in-hub recordAnswerAction.
-  // A fresh pipeline per call isolates its in-process queue. Pipeline stages are idempotent, so
-  // a retry of this endpoint on an already-rendered story is a no-op — safe to retry on soft-fail.
+  // dispatchPipeline hides the durable-vs-synchronous decision: in dev/CI it runs the in-process
+  // pipeline to completion in-request (story reaches pending_approval before this returns); in prod
+  // it enqueues onto the durable Inngest queue and returns. Pipeline stages are idempotent, so a
+  // retry of this endpoint on an already-rendered story is a no-op — safe to retry on soft-fail.
   try {
-    const pipeline = newPipeline();
-    await pipeline.start(storyId);
-    await pipeline.runToCompletion();
+    await rt.dispatchPipeline(storyId);
   } catch (err) {
     // Server-side breadcrumb only: this login-free surface has no other error-reporting path, so a
     // silent 500 would make render failures invisible to ops. Detail is NEVER returned to the

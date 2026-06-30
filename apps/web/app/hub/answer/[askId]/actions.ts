@@ -37,7 +37,8 @@ export type ActionResult = { error: string } | undefined;
 export async function recordAnswerAction(formData: FormData): Promise<ActionResult> {
   // Correlate every log line for this answer run (ingest → queue → stages → AI seams).
   beginLogContext();
-  const { db, storage, auth, newPipeline } = await getRuntime();
+  const rt = await getRuntime();
+  const { db, storage, auth } = rt;
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -92,12 +93,12 @@ export async function recordAnswerAction(formData: FormData): Promise<ActionResu
   plog("answer", "recordAnswer: ingested → draft story created", { story: storyId });
 
   // Render BEFORE review (prose-provenance design): transcribe → polish so the review phase can
-  // show the polished prose for the narrator to read and edit. A fresh pipeline per call isolates
-  // its in-process queue. Idempotent if re-run.
+  // show the polished prose for the narrator to read and edit. dispatchPipeline hides the
+  // durable-vs-synchronous decision: dev/CI runs it in-process to completion (story reaches
+  // pending_approval before this returns); prod enqueues onto the durable Inngest queue.
+  // Idempotent if re-run.
   try {
-    const pipeline = newPipeline();
-    await pipeline.start(storyId);
-    await pipeline.runToCompletion();
+    await rt.dispatchPipeline(storyId);
   } catch (err) {
     plogError("answer", "recordAnswer: render pipeline failed", {
       story: storyId,

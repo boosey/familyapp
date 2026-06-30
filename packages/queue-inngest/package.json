@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@chronicle/pipeline": "workspace:*",
-    "inngest": "^3.27.0"
+    "inngest": "^3.54.0"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

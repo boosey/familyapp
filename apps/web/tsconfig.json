@@ -50,6 +50,9 @@
       "@chronicle/interviewer": [
         "../../packages/interviewer/src/index.ts"
       ],
+      "@chronicle/queue-inngest": [
+        "../../packages/queue-inngest/src/index.ts"
+      ],
       "@chronicle/transcribe-groq": [
         "../../packages/transcribe-groq/src/index.ts"
       ],

@@ -30,12 +30,20 @@ import {
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createGroqLanguageModel } from "@chronicle/llm-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
+import { Inngest } from "inngest";
+import { createInngestJobQueue } from "@chronicle/queue-inngest";
+import type { InngestFunction } from "inngest";
 import { type AuthProvider } from "./auth";
 import { createClerkAuthProvider } from "./auth-clerk";
 import { createMockAuthProvider } from "./auth-mock";
 import { isClerkConfigured } from "./clerk-config";
+import { isInngestConfigured, assertInngestServeable } from "./inngest-config";
+import { makeDispatchPipeline, type DispatchPipeline } from "./dispatch-pipeline";
 
-export { isClerkConfigured };
+export { isClerkConfigured, isInngestConfigured };
+
+/** Stable app id for the Inngest client — also the dashboard app name. */
+const INNGEST_APP_ID = "family-chronicle";
 
 // Anchor relative paths to the apps/web package dir, not process.cwd(). On Windows Next dev's
 // recursive `mkdirSync` against a relative path occasionally ENOENTs even when the directory
@@ -69,6 +77,28 @@ type Runtime = {
    * dev/CI in-process path.) The vendor adapters are stateless, so they are built once and reused.
    */
   newPipeline: () => Pipeline;
+  /**
+   * Dispatch the transcribe→render pipeline for a freshly-ingested story. The SINGLE entrypoint
+   * the capture call sites use — it hides the durable-vs-synchronous decision:
+   *   - Inngest configured (prod): enqueue onto the shared Inngest pipeline and return (Inngest
+   *     drives the stages out-of-band).
+   *   - Inngest unconfigured (dev/CI): build a fresh in-process pipeline and run it to completion
+   *     in-request, exactly as the call sites did before this seam existed.
+   * See `lib/dispatch-pipeline.ts`.
+   */
+  dispatchPipeline: DispatchPipeline;
+  /**
+   * True when `INNGEST_EVENT_KEY` is set, i.e. `dispatchPipeline` takes the durable enqueue path.
+   * (In prod the serve route ALSO needs `INNGEST_SIGNING_KEY`; see `lib/inngest-config.ts`.)
+   */
+  inngestConfigured: boolean;
+  /**
+   * The Inngest client + the registered stage `functions`, for the `/api/inngest` serve route to
+   * mount via `serve({ client, functions })`. Present ONLY when `inngestConfigured` is true — the
+   * serve route must construct nothing of its own (one client per process). `undefined` in
+   * dev/CI, where there is no durable queue to serve.
+   */
+  inngest?: { client: Inngest; functions: InngestFunction.Any[] };
 };
 
 // Survive HMR in dev: cache on globalThis so we don't reopen PGlite on every reload.
@@ -173,7 +203,51 @@ async function build(): Promise<Runtime> {
   // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
   const newPipeline = (): Pipeline =>
     createPipeline({ db, storage, transcriber, languageModel });
-  return { db, storage, auth, languageModel, newPipeline };
+
+  // Runtime switch: when INNGEST_EVENT_KEY is present (prod durable path), build ONE module-scope-
+  // shared Inngest pipeline. createPipeline registers the REAL transcribe/render_story handlers
+  // onto whatever JobQueue it is given, so wiring the Inngest adapter here means the adapter's
+  // `functions` getter carries the real stage handlers — that array is what the /api/inngest serve
+  // route mounts. We read the `functions` AFTER createPipeline returns (handlers are registered in
+  // its constructor). Absent the key — dev, CI, no secrets — we leave this undefined and
+  // dispatchPipeline falls back to the synchronous in-process path (newPipeline). Mirrors the
+  // Clerk-vs-mock / Groq-vs-mock switches above.
+  const inngestConfigured = isInngestConfigured();
+  let inngest: Runtime["inngest"];
+  let inngestPipeline: Pipeline | undefined;
+  if (inngestConfigured) {
+    // Fail-fast on the half-configured signing-key trap BEFORE constructing anything: an event key
+    // without a signing key would enqueue + register but never execute (silent forever-draft).
+    assertInngestServeable();
+    // One client per process. eventKey defaults to INNGEST_EVENT_KEY inside the adapter, but we
+    // pass the explicit client so the serve route reuses THIS instance (never a second client).
+    const client = new Inngest({
+      id: INNGEST_APP_ID,
+      ...(process.env.INNGEST_EVENT_KEY ? { eventKey: process.env.INNGEST_EVENT_KEY } : {}),
+    });
+    const jobQueue = createInngestJobQueue({ client });
+    inngestPipeline = createPipeline({ db, storage, transcriber, languageModel, jobQueue });
+    inngest = { client, functions: jobQueue.functions };
+  }
+
+  // Single dispatch helper the capture call sites use. Branch selection lives in the pure
+  // makeDispatchPipeline (unit-tested in dispatch-pipeline.test.ts).
+  const dispatchPipeline = makeDispatchPipeline({
+    inngestConfigured,
+    newPipeline,
+    ...(inngestPipeline ? { inngestPipeline } : {}),
+  });
+
+  return {
+    db,
+    storage,
+    auth,
+    languageModel,
+    newPipeline,
+    dispatchPipeline,
+    inngestConfigured,
+    ...(inngest ? { inngest } : {}),
+  };
 }
 
 export function getRuntime(): Promise<Runtime> {
