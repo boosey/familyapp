@@ -15,6 +15,19 @@
  *
  * Sign-in is the headline entry point: /dev/sign-in (one-click) or /sign-in with credentials.
  *
+ * Auth modes:
+ *   - Mock mode (default when Clerk keys are absent): personas use `dev:xxx` authProviderUserId and
+ *     get a `mock_auth_users` credential row for email+password sign-in at /sign-in.
+ *   - Clerk mode (when isClerkConfigured()): personas are bound to pre-created Clerk test users via
+ *     `getUserList({ emailAddress })`. The real Clerk userId is stored as `authProviderUserId`;
+ *     `mock_auth_users` is never written. A persona with no matching Clerk user is skipped with a
+ *     warning — never half-bound. If any CORE persona (Eleanor/Sofia/Marco) is missing from Clerk,
+ *     the family content block is skipped entirely.
+ *
+ * All persona emails use the `+clerk_test@example.com` convention uniformly (one source of truth):
+ *   - Mock mode: email+password sign-in (the email value itself is arbitrary).
+ *   - Clerk mode: Clerk bypasses delivery for these addresses; verification code is always 424242.
+ *
  * TRUNCATE bypasses the BEFORE UPDATE/DELETE triggers on consent_records/media, so re-running
  * this seed cleanly resets the dataset without fighting the immutability invariants.
  */
@@ -41,8 +54,11 @@ import {
 import { createLinkSession } from "@chronicle/capture";
 import { getRuntime } from "./runtime";
 import { seedMockCredential } from "./auth-mock";
+import { isClerkConfigured } from "./clerk-config";
+import { getClerkUserIdByEmail } from "./clerk-server";
+import type { GetClerkUserIdByEmail } from "./clerk-server";
 
-/** Shared dev password handed to every seeded account credential. */
+/** Shared dev password handed to every seeded account credential (mock mode only). */
 const SEED_PASSWORD = "password";
 
 const SAMPLE_AUDIO_CONTENT_TYPE = "audio/wav";
@@ -79,23 +95,41 @@ function checksumOf(bytes: Uint8Array): string {
 
 export interface SeedResult {
   /** Eleanor's link-session token. Usable via /s/<token> for magic-link tests;
-   *  NOT presented as the primary entry on the seed page — sign-in is the headline path. */
-  narratorToken: string;
-  narratorPersonId: string;
+   *  NOT presented as the primary entry on the seed page — sign-in is the headline path.
+   *  Undefined if the family content block was skipped (Clerk mode + core persona missing). */
+  narratorToken?: string;
+  /** Eleanor's Person id. Undefined if Eleanor was skipped (Clerk mode + no matching Clerk user). */
+  narratorPersonId?: string;
   /** Eleanor's one seeded ask-linked story in `pending_approval` with AI-polished prose.
    *  The hub's Questions tab shows "Review & approve" immediately for the linked Ask when signed in
-   *  as Eleanor. Named `draftStoryId` for historical continuity; the story is no longer in draft. */
-  draftStoryId: string;
-  /** A seeded account you can sign in as through the real mock flow (the steward). */
+   *  as Eleanor. Named `draftStoryId` for historical continuity; the story is no longer in draft.
+   *  Undefined if the family content block was skipped. */
+  draftStoryId?: string;
+  /** Sofia's email — the steward account. Mock mode: sign in at /sign-in with this + seedPassword.
+   *  Clerk mode: sign in via Clerk with this email (verification code: 424242). */
   stewardSignInEmail: string;
-  /** The shared password for every seeded credential (Eleanor, Sofia, Marco, Theo). */
+  /** The shared password for every seeded credential in mock mode. Clerk mode: use code 424242. */
   seedPassword: string;
-  /** The discoverable Boudreaux family — drives family-search + the steward requests surface. */
-  boudreauxFamilyId: string;
-  /** The non-member who has a PENDING join request to Boudreaux awaiting Sofia's approval. */
+  /** The discoverable Boudreaux family — drives family-search + the steward requests surface.
+   *  Undefined if the family content block was skipped. */
+  boudreauxFamilyId?: string;
+  /** The non-member who has a PENDING join request to Boudreaux awaiting Sofia's approval.
+   *  Undefined if Theo was skipped (Clerk mode + no matching Clerk user) or family was skipped. */
   theoJoinRequestPersonId?: string;
-  /** Raw token for a PENDING member invitation to Boudreaux — feeds a working /join/<token> link. */
-  memberInviteToken: string;
+  /** Raw token for a PENDING member invitation to Boudreaux — feeds a working /join/<token> link.
+   *  Undefined if the family content block was skipped. */
+  memberInviteToken?: string;
+}
+
+/**
+ * Options for {@link seedInto}. Both overrides exist so tests can drive Clerk mode with a stub
+ * resolver without importing Clerk or hitting the network.
+ */
+export interface SeedOpts {
+  /** Override the Clerk-configured detection. Default: `isClerkConfigured()`. */
+  clerkConfigured?: boolean;
+  /** Override the Clerk email→userId resolver. Default: the real `getClerkUserIdByEmail`. */
+  getClerkUserIdByEmail?: GetClerkUserIdByEmail;
 }
 
 interface ExtraStorySpec {
@@ -183,102 +217,182 @@ export async function runSeed(): Promise<SeedResult> {
  * The seed itself, against an injected db + storage. Split out from {@link runSeed} so it can run
  * against a test database (see dev-seed.test.ts) without going through getRuntime's persistent
  * PGlite + filesystem store.
+ *
+ * The optional {@link SeedOpts} let tests drive Clerk mode without real Clerk keys or network calls:
+ * pass `{ clerkConfigured: true, getClerkUserIdByEmail: stub }` to exercise the binding logic
+ * against a deterministic stub.
  */
 export async function seedInto(
   db: Awaited<ReturnType<typeof getRuntime>>["db"],
   storage: Awaited<ReturnType<typeof getRuntime>>["storage"],
+  opts?: SeedOpts,
 ): Promise<SeedResult> {
   // Single-schema dev model: blow the whole DB away and re-apply the CURRENT schema, rather than
   // TRUNCATE-ing a fixed table list. This means a schema change (edit src/schema.ts → regenerate)
   // lands on the very next reseed with no migration bookkeeping and no stale-state archaeology.
   await resetSchema(db);
 
-  const [eleanor] = await db
-    .insert(persons)
-    .values({
-      displayName: "Eleanor Boudreaux",
-      spokenName: "Eleanor",
-      birthYear: 1942,
-      biographicalAnchors: { hometown: "Lafayette, Louisiana" },
-    })
-    .returning();
-  const [sofia] = await db
-    .insert(persons)
-    .values({
-      displayName: "Sofia Boudreaux",
-      spokenName: "Sofia",
-      birthYear: 1988,
-    })
-    .returning();
-  const [marco] = await db
-    .insert(persons)
-    .values({
-      displayName: "Marco Boudreaux",
-      spokenName: "Marco",
-      birthYear: 1985,
-    })
-    .returning();
+  const usingClerk = opts?.clerkConfigured ?? isClerkConfigured();
+  // Wrap the real getClerkUserIdByEmail so its optional second arg stays internal.
+  const lookupClerkId: GetClerkUserIdByEmail =
+    opts?.getClerkUserIdByEmail ?? ((email) => getClerkUserIdByEmail(email));
 
-  const [eleanorAcct] = await db
-    .insert(accounts)
-    .values({
-      authProviderUserId: "dev:eleanor",
-      email: "eleanor@example.test",
-      displayName: "Eleanor Boudreaux",
-    })
-    .returning();
-  const [sofiaAcct] = await db
-    .insert(accounts)
-    .values({
-      authProviderUserId: "dev:sofia",
-      email: "sofia@example.test",
-      displayName: "Sofia Boudreaux",
-    })
-    .returning();
-  const [marcoAcct] = await db
-    .insert(accounts)
-    .values({
-      authProviderUserId: "dev:marco",
-      email: "marco@example.test",
-      displayName: "Marco Boudreaux",
-    })
-    .returning();
-  await db
-    .update(persons)
-    .set({ accountId: eleanorAcct!.id })
-    .where(eq(persons.id, eleanor!.id));
-  await db
-    .update(persons)
-    .set({ accountId: sofiaAcct!.id })
-    .where(eq(persons.id, sofia!.id));
-  await db
-    .update(persons)
-    .set({ accountId: marcoAcct!.id })
-    .where(eq(persons.id, marco!.id));
+  // --- Clerk mode: resolve all Clerk userIds BEFORE any DB writes -------------------------
+  // Null means no matching Clerk user exists for that email → persona skipped.
+  // Never create an Account with a fabricated authProviderUserId (never half-bind).
+  let eleanorAuthId: string | null = "dev:eleanor";
+  let sofiaAuthId: string | null = "dev:sofia";
+  let marcoAuthId: string | null = "dev:marco";
+  let theoAuthId: string | null = "dev:theo";
+
+  if (usingClerk) {
+    [eleanorAuthId, sofiaAuthId, marcoAuthId, theoAuthId] = await Promise.all([
+      lookupClerkId("eleanor+clerk_test@example.com"),
+      lookupClerkId("sofia+clerk_test@example.com"),
+      lookupClerkId("marco+clerk_test@example.com"),
+      lookupClerkId("theo+clerk_test@example.com"),
+    ]);
+
+    const coreMissing: string[] = [
+      eleanorAuthId === null ? "Eleanor (eleanor+clerk_test@example.com)" : null,
+      sofiaAuthId === null ? "Sofia (sofia+clerk_test@example.com)" : null,
+      marcoAuthId === null ? "Marco (marco+clerk_test@example.com)" : null,
+    ].filter((m): m is string => m !== null);
+
+    if (coreMissing.length > 0) {
+      console.warn(
+        `[dev-seed] Clerk mode: core persona(s) not found in Clerk — the family demo cannot be ` +
+        `built. Missing: ${coreMissing.join(", ")}. ` +
+        `Pre-create these test users in the Clerk dashboard (email + code 424242), then reseed. ` +
+        `Family content block will be skipped.`,
+      );
+    }
+    if (theoAuthId === null) {
+      console.warn(
+        `[dev-seed] Clerk mode: Theo (theo+clerk_test@example.com) not found in Clerk — ` +
+        `skipping Theo persona and join request.`,
+      );
+    }
+  }
+
+  // Can the full family demo be built? Requires all three core personas to have auth IDs.
+  const canBuildFamily =
+    eleanorAuthId !== null && sofiaAuthId !== null && marcoAuthId !== null;
+
+  // --- Core personas: Eleanor, Sofia, Marco -----------------------------------------------
+  // Each is created only when its authId is non-null (always in mock mode; conditional in Clerk
+  // mode). In Clerk mode the real Clerk userId is the authProviderUserId; seedMockCredential is
+  // skipped because Clerk owns the credential store.
+
+  let eleanor: { id: string } | undefined;
+  let sofia: { id: string } | undefined;
+  let marco: { id: string } | undefined;
+
+  if (eleanorAuthId !== null) {
+    const [p] = await db
+      .insert(persons)
+      .values({
+        displayName: "Eleanor Boudreaux",
+        spokenName: "Eleanor",
+        birthYear: 1942,
+        biographicalAnchors: { hometown: "Lafayette, Louisiana" },
+      })
+      .returning();
+    const [a] = await db
+      .insert(accounts)
+      .values({
+        authProviderUserId: eleanorAuthId,
+        email: "eleanor+clerk_test@example.com",
+        displayName: "Eleanor Boudreaux",
+      })
+      .returning();
+    await db.update(persons).set({ accountId: a!.id }).where(eq(persons.id, p!.id));
+    eleanor = p;
+  }
+
+  if (sofiaAuthId !== null) {
+    const [p] = await db
+      .insert(persons)
+      .values({
+        displayName: "Sofia Boudreaux",
+        spokenName: "Sofia",
+        birthYear: 1988,
+      })
+      .returning();
+    const [a] = await db
+      .insert(accounts)
+      .values({
+        authProviderUserId: sofiaAuthId,
+        email: "sofia+clerk_test@example.com",
+        displayName: "Sofia Boudreaux",
+      })
+      .returning();
+    await db.update(persons).set({ accountId: a!.id }).where(eq(persons.id, p!.id));
+    sofia = p;
+  }
+
+  if (marcoAuthId !== null) {
+    const [p] = await db
+      .insert(persons)
+      .values({
+        displayName: "Marco Boudreaux",
+        spokenName: "Marco",
+        birthYear: 1985,
+      })
+      .returning();
+    const [a] = await db
+      .insert(accounts)
+      .values({
+        authProviderUserId: marcoAuthId,
+        email: "marco+clerk_test@example.com",
+        displayName: "Marco Boudreaux",
+      })
+      .returning();
+    await db.update(persons).set({ accountId: a!.id }).where(eq(persons.id, p!.id));
+    marco = p;
+  }
+
+  // --- Early exit: family demo cannot be built -------------------------------------------
+  // If any core persona is missing (Clerk mode without matching test users), skip the entire
+  // family content block. Seeded personas still have their Account/Person rows; only the family
+  // graph and all dependent content are absent.
+  if (!canBuildFamily) {
+    return {
+      narratorPersonId: eleanor?.id,
+      stewardSignInEmail: "sofia+clerk_test@example.com",
+      seedPassword: SEED_PASSWORD,
+    };
+  }
+
+  // From here: eleanor, sofia, marco are all non-null (TypeScript doesn't narrow through
+  // canBuildFamily, so we assert — consistent with the mock-mode non-null pattern throughout).
+  const eleanorId = eleanor!.id;
+  const sofiaId = sofia!.id;
+  const marcoId = marco!.id;
 
   const [family] = await db
     .insert(families)
     .values({
       name: "Boudreaux",
-      creatorPersonId: sofia!.id,
-      stewardPersonId: sofia!.id,
+      creatorPersonId: sofiaId,
+      stewardPersonId: sofiaId,
     })
     .returning();
   await db.insert(memberships).values([
     {
-      personId: eleanor!.id,
+      personId: eleanorId,
       familyId: family!.id,
       role: "narrator",
       status: "active",
     },
     {
-      personId: sofia!.id,
+      personId: sofiaId,
       familyId: family!.id,
       role: "member",
       status: "active",
     },
     {
-      personId: marco!.id,
+      personId: marcoId,
       familyId: family!.id,
       role: "steward",
       status: "active",
@@ -289,18 +403,18 @@ export async function seedInto(
   // The FIRST ask is the one the seeded pending_approval story answers (askId=ask1.id).
   const ask1 = await createAsk(
     db,
-    { kind: "account", personId: sofia!.id },
+    { kind: "account", personId: sofiaId },
     {
-      targetPersonId: eleanor!.id,
+      targetPersonId: eleanorId,
       familyId: family!.id,
       questionText: "Grandma, what's your earliest memory of your own grandmother?",
     },
   );
   await createAsk(
     db,
-    { kind: "account", personId: sofia!.id },
+    { kind: "account", personId: sofiaId },
     {
-      targetPersonId: eleanor!.id,
+      targetPersonId: eleanorId,
       familyId: family!.id,
       questionText:
         "What's the best meal you remember from your childhood? Can you describe it?",
@@ -308,9 +422,9 @@ export async function seedInto(
   );
   await createAsk(
     db,
-    { kind: "account", personId: marco!.id },
+    { kind: "account", personId: marcoId },
     {
-      targetPersonId: eleanor!.id,
+      targetPersonId: eleanorId,
       familyId: family!.id,
       questionText:
         "Tell me about a time you felt really proud of one of your children.",
@@ -318,9 +432,9 @@ export async function seedInto(
   );
   await createAsk(
     db,
-    { kind: "account", personId: marco!.id },
+    { kind: "account", personId: marcoId },
     {
-      targetPersonId: eleanor!.id,
+      targetPersonId: eleanorId,
       familyId: family!.id,
       questionText:
         "What do you wish you'd known when you were twenty years old?",
@@ -331,7 +445,7 @@ export async function seedInto(
   // pipeline now runs at record time (not approval), so a recorded answer lands here ready for the
   // narrator to read/edit on the Questions-tab "Review & approve" screen.
   const draftAudio = tinyWav();
-  const draftKey = `story-audio/${eleanor!.id}/${randomUUID()}.wav`;
+  const draftKey = `story-audio/${eleanorId}/${randomUUID()}.wav`;
   await storage.put({
     key: draftKey,
     bytes: draftAudio,
@@ -340,7 +454,7 @@ export async function seedInto(
   const { story: draftStory } = await persistRecordingAndCreateDraft(
     db,
     {
-      ownerPersonId: eleanor!.id,
+      ownerPersonId: eleanorId,
       storageKey: draftKey,
       contentType: SAMPLE_AUDIO_CONTENT_TYPE,
       durationSeconds: 1,
@@ -386,36 +500,39 @@ export async function seedInto(
   // --- Onboarding + family-flow demo data --------------------------------------------------
   // Give Eleanor + Sofia + Marco real login credentials (the mock provider plays Clerk locally) so
   // the /sign-in flow works, and mark them already-onboarded (onboarded_at + birth_date set) so they
-  // land straight on the hub instead of the /welcome onboarding gate. Every Person has an Account —
-  // "narrator" is a role, not an account distinction; Eleanor's link token is a convenience login,
-  // not her identity.
-  await seedMockCredential(db, {
-    email: "eleanor@example.test",
-    password: SEED_PASSWORD,
-    authProviderUserId: "dev:eleanor",
-  });
-  await seedMockCredential(db, {
-    email: "sofia@example.test",
-    password: SEED_PASSWORD,
-    authProviderUserId: "dev:sofia",
-  });
-  await seedMockCredential(db, {
-    email: "marco@example.test",
-    password: SEED_PASSWORD,
-    authProviderUserId: "dev:marco",
-  });
+  // land straight on the hub instead of the /welcome onboarding gate. In Clerk mode, Clerk owns the
+  // credentials — seedMockCredential is skipped.
+  if (!usingClerk) {
+    // In mock mode eleanorAuthId/sofiaAuthId/marcoAuthId are always non-null "dev:xxx" strings;
+    // TypeScript cannot narrow them through canBuildFamily, so we assert here.
+    await seedMockCredential(db, {
+      email: "eleanor+clerk_test@example.com",
+      password: SEED_PASSWORD,
+      authProviderUserId: eleanorAuthId!,
+    });
+    await seedMockCredential(db, {
+      email: "sofia+clerk_test@example.com",
+      password: SEED_PASSWORD,
+      authProviderUserId: sofiaAuthId!,
+    });
+    await seedMockCredential(db, {
+      email: "marco+clerk_test@example.com",
+      password: SEED_PASSWORD,
+      authProviderUserId: marcoAuthId!,
+    });
+  }
   await db
     .update(persons)
     .set({ onboardedAt: sql`now()`, birthDate: "1942-05-10" })
-    .where(eq(persons.id, eleanor!.id));
+    .where(eq(persons.id, eleanorId));
   await db
     .update(persons)
     .set({ onboardedAt: sql`now()`, birthDate: "1988-03-12" })
-    .where(eq(persons.id, sofia!.id));
+    .where(eq(persons.id, sofiaId));
   await db
     .update(persons)
     .set({ onboardedAt: sql`now()`, birthDate: "1985-07-22" })
-    .where(eq(persons.id, marco!.id));
+    .where(eq(persons.id, marcoId));
 
   // Make Boudreaux discoverable with a blurb so the family-search demo returns a real hit.
   await db
@@ -429,53 +546,57 @@ export async function seedInto(
     .where(eq(families.id, family!.id));
 
   // A non-member (Theo) with a PENDING join request, so Sofia (the steward) has one to approve.
-  const [theo] = await db
-    .insert(persons)
-    .values({ displayName: "Theo Marchetti", spokenName: "Theo" })
-    .returning();
-  const [theoAcct] = await db
-    .insert(accounts)
-    .values({
-      authProviderUserId: "dev:theo",
-      email: "theo@example.test",
-      displayName: "Theo Marchetti",
-    })
-    .returning();
-  await db
-    .update(persons)
-    .set({ accountId: theoAcct!.id })
-    .where(eq(persons.id, theo!.id));
-  await seedMockCredential(db, {
-    email: "theo@example.test",
-    password: SEED_PASSWORD,
-    authProviderUserId: "dev:theo",
-  });
-  await createJoinRequest(db, {
-    familyId: family!.id,
-    requesterPersonId: theo!.id,
-    message:
-      "Hi Sofia — I'm your cousin Theo from the Marchetti side, hoping to follow Eleanor's stories.",
-  });
+  // In Clerk mode, Theo is skipped if no matching Clerk user was found.
+  let theo: { id: string } | undefined;
+  if (theoAuthId !== null) {
+    const [p] = await db
+      .insert(persons)
+      .values({ displayName: "Theo Marchetti", spokenName: "Theo" })
+      .returning();
+    const [a] = await db
+      .insert(accounts)
+      .values({
+        authProviderUserId: theoAuthId,
+        email: "theo+clerk_test@example.com",
+        displayName: "Theo Marchetti",
+      })
+      .returning();
+    await db.update(persons).set({ accountId: a!.id }).where(eq(persons.id, p!.id));
+    if (!usingClerk) {
+      await seedMockCredential(db, {
+        email: "theo+clerk_test@example.com",
+        password: SEED_PASSWORD,
+        authProviderUserId: theoAuthId,
+      });
+    }
+    await createJoinRequest(db, {
+      familyId: family!.id,
+      requesterPersonId: p!.id,
+      message:
+        "Hi Sofia — I'm your cousin Theo from the Marchetti side, hoping to follow Eleanor's stories.",
+    });
+    theo = p;
+  }
 
   // A PENDING member invitation to someone not yet in the system — its raw token feeds a working
   // /join/<token> welcome link. Sofia (an active member) is the inviter.
   const { token: memberInviteToken } = await createInvitation(db, {
     familyId: family!.id,
-    inviterPersonId: sofia!.id,
+    inviterPersonId: sofiaId,
     inviteeName: "Maya Boudreaux",
-    inviteeEmail: "maya@example.test",
+    inviteeEmail: "maya+clerk_test@example.com",
     relationshipLabel: "Sofia's cousin",
   });
 
   const { token } = await createLinkSession(db, {
-    personId: eleanor!.id,
+    personId: eleanorId,
     familyId: family!.id,
-    invitedByPersonId: sofia!.id,
+    invitedByPersonId: sofiaId,
   });
 
   // Story 1 — approved+shared at family tier (visible on the hub).
   const storyAudio = tinyWav();
-  const storyKey = `story-audio/${eleanor!.id}/${randomUUID()}.wav`;
+  const storyKey = `story-audio/${eleanorId}/${randomUUID()}.wav`;
   await storage.put({
     key: storyKey,
     bytes: storyAudio,
@@ -484,7 +605,7 @@ export async function seedInto(
   const { story } = await persistRecordingAndCreateDraft(
     db,
     {
-      ownerPersonId: eleanor!.id,
+      ownerPersonId: eleanorId,
       storageKey: storyKey,
       contentType: SAMPLE_AUDIO_CONTENT_TYPE,
       durationSeconds: 1,
@@ -507,7 +628,7 @@ export async function seedInto(
   });
   await transitionStoryState(db, story.id, "pending_approval");
   const approvalAudio = tinyWav();
-  const approvalKey = `approval-audio/${eleanor!.id}/${randomUUID()}.wav`;
+  const approvalKey = `approval-audio/${eleanorId}/${randomUUID()}.wav`;
   await storage.put({
     key: approvalKey,
     bytes: approvalAudio,
@@ -515,7 +636,7 @@ export async function seedInto(
   });
   await approveAndShareStory(db, {
     storyId: story.id,
-    narratorPersonId: eleanor!.id,
+    narratorPersonId: eleanorId,
     audienceTier: "family",
     approvalAudio: {
       storageKey: approvalKey,
@@ -585,17 +706,17 @@ export async function seedInto(
     },
   ];
   for (const spec of extras) {
-    await seedApprovedStory(db, storage, eleanor!.id, spec);
+    await seedApprovedStory(db, storage, eleanorId, spec);
   }
 
   return {
     narratorToken: token,
-    narratorPersonId: eleanor!.id,
+    narratorPersonId: eleanorId,
     draftStoryId: draftStory.id,
-    stewardSignInEmail: "sofia@example.test",
+    stewardSignInEmail: "sofia+clerk_test@example.com",
     seedPassword: SEED_PASSWORD,
     boudreauxFamilyId: family!.id,
-    theoJoinRequestPersonId: theo!.id,
+    theoJoinRequestPersonId: theo?.id,
     memberInviteToken,
   };
 }

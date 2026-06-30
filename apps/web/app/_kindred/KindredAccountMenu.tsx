@@ -1,7 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { common } from "@/app/_copy";
+
+/**
+ * Dynamic import creates a code-split boundary: @clerk/nextjs lands in its own chunk
+ * that the browser only fetches when <ClerkSignOutItemDynamic> actually renders — i.e.
+ * when `clerkSignOut` is true. In mock/dev mode the component never mounts, so the
+ * Clerk chunk is never requested even though this dynamic() call sits at module level.
+ */
+const ClerkSignOutItemDynamic = dynamic(
+  () => import("./ClerkSignOutItem").then((m) => ({ default: m.ClerkSignOutItem })),
+  { ssr: false },
+);
 
 export interface AccountMenuItem {
   key: string;
@@ -16,6 +28,13 @@ export interface KindredAccountMenuProps {
   displayName?: string;
   email?: string;
   items: AccountMenuItem[];
+  /**
+   * When true, the menu replaces the `key: "log-out"` item's click handler with a
+   * dynamically-imported ClerkSignOutItem that calls useClerk().signOut(). The flag
+   * must only be set when ClerkProvider is mounted (i.e. isClerkConfigured() is true)
+   * — in mock mode ClerkProvider is absent and useClerk() would throw.
+   */
+  clerkSignOut?: boolean;
 }
 
 export function KindredAccountMenu({
@@ -23,6 +42,7 @@ export function KindredAccountMenu({
   displayName,
   email,
   items,
+  clerkSignOut = false,
 }: KindredAccountMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -158,6 +178,20 @@ export function KindredAccountMenu({
           )}
 
           {items.map((item) => {
+            // In Clerk mode, the log-out row is handled by the dynamically-imported
+            // ClerkSignOutItemDynamic so useClerk() is only called when ClerkProvider
+            // is mounted. The item's onSelect (the mock server action) is not invoked.
+            if (clerkSignOut && item.key === "log-out") {
+              return (
+                <ClerkSignOutItemDynamic
+                  key={item.key}
+                  label={item.label}
+                  style={itemBaseStyle}
+                  onClose={() => setOpen(false)}
+                />
+              );
+            }
+
             const content = (
               <>
                 {item.icon && (

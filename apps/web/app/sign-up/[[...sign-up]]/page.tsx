@@ -1,11 +1,18 @@
 /**
- * /sign-up — create a Account+Person via the mock auth provider. A fresh account
- * is never onboarded, so resolvePostAuthRoute always lands a new signup on /welcome. Inline errors
- * (email already taken / invalid input) come back through the ?error= searchParam — the server
- * action redirects to itself on failure so there is no client boundary here.
+ * /sign-up — the catch-all route lets Clerk's multi-step hosted UI embed sub-routes
+ * (e.g. /sign-up/verify-email-address, /sign-up/continue) without a 404.
+ *
+ * When Clerk is configured, renders the hosted <SignUp/> component with
+ * `forceRedirectUrl="/auth/callback"` so every sign-up lands on our JIT-provision gate.
+ * When Clerk is NOT configured (mock / CI), renders the existing create-account form
+ * with identical behavior to the old page.tsx — no behavior change for the mock path.
+ *
+ * The `<SignUp/>` import is inside a dynamic import (`await import(...)`) so it is NEVER
+ * pulled into the mock-mode module graph — mirrors the ClerkProvider pattern in layout.tsx.
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { isClerkConfigured } from "@/lib/clerk-config";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignUp } from "@/lib/auth-mock";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -42,6 +49,19 @@ export default async function SignUpPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  if (isClerkConfigured()) {
+    // Dynamic import keeps @clerk/nextjs out of the mock build's module graph.
+    // Mirrors the ClerkProvider pattern in layout.tsx.
+    const { SignUp } = await import("@clerk/nextjs");
+    return (
+      <SignUp
+        forceRedirectUrl="/auth/callback"
+        signInForceRedirectUrl="/auth/callback"
+        signInUrl="/sign-in"
+      />
+    );
+  }
+
   const { error } = await searchParams;
   return (
     <AuthScreen

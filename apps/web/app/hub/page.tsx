@@ -12,6 +12,7 @@ import { persons } from "@chronicle/db/schema";
 import { listPendingAsksForNarrator, listPendingJoinRequestsForSteward, listOutstandingAnswerDrafts } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
+import { isClerkConfigured } from "@/lib/clerk-config";
 import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
@@ -128,6 +129,9 @@ export default async function HubPage({
     answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
   );
 
+  // True when Clerk is wired up; drives the sign-out path selection below.
+  const clerkSignOut = isClerkConfigured();
+
   /* ── Derived display values ─────────────────────────────────────────────── */
   // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
   // joined for now — the multi-family display is a separate design question, deliberately deferred.
@@ -240,6 +244,7 @@ export default async function HubPage({
               initials={initials}
               displayName={viewerName ?? undefined}
               items={accountItems}
+              clerkSignOut={clerkSignOut}
             />
           </div>
 

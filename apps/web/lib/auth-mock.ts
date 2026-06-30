@@ -33,7 +33,7 @@ import { eq } from "drizzle-orm";
 import { accounts, mockAuthUsers, persons } from "@chronicle/db/schema";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, MockAuthUser } from "@chronicle/db";
-import type { AuthProvider } from "./auth";
+import type { AuthProvider, EstablishAccountSessionResult } from "./auth";
 import { PASSWORD_SALT_BYTES, SCRYPT_KEY_LENGTH_BYTES } from "./constants";
 
 /** httpOnly session cookie name. Value = the Account's `auth_provider_user_id` (opaque). */
@@ -157,7 +157,9 @@ export function createMockAuthProvider(db: Database): AuthProvider {
         return { kind: "anonymous" };
       }
     },
-    async establishAccountSession(personId: string): Promise<void> {
+    async establishAccountSession(
+      personId: string,
+    ): Promise<EstablishAccountSessionResult> {
       // Magic-link sign-in (ADR-0003): resolve the Person to their Account's opaque
       // `auth_provider_user_id` (the mock session value, exactly what a Clerk session would carry)
       // and set the session cookie. Throws if the Person has no Account — the caller must only
@@ -174,6 +176,8 @@ export function createMockAuthProvider(db: Database): AuthProvider {
         );
       }
       await setSessionCookie(row.authProviderUserId);
+      // The mock owns the session store, so the cookie IS the session — no client redemption hop.
+      return { kind: "established" };
     },
   };
 }

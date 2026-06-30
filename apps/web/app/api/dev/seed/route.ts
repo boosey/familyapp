@@ -23,6 +23,8 @@ export async function POST(): Promise<NextResponse> {
     ok: true,
     narratorPersonId,
     draftStoryId,
-    narratorLink: `/s/${narratorToken}`,
+    // narratorToken is absent in degraded Clerk-mode seeds (a core persona had no matching Clerk
+    // user); only surface a link when there's a real token, never `/s/undefined`.
+    narratorLink: narratorToken ? `/s/${narratorToken}` : null,
   });
 }

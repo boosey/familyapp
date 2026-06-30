@@ -43,3 +43,55 @@ everything is the one authenticated in-hub flow.
   identity for someone who has an account — contradicts the glossary, litters `link_sessions`);
   (b) keep her on `link_session` in the hub (every page handles two identity kinds; she never
   "logs in").
+
+## Clerk implementation (added 2026-06-29)
+
+The domain **Magic link** above is realized under Clerk via **sign-in tokens (the `ticket`
+strategy)** — NOT Clerk's "Email magic link" sign-in strategy. These are different things and the
+distinction is load-bearing:
+
+- **Clerk's Email magic link** is a *strategy where Clerk emails its own link to a Clerk-known
+  address* and manages the round-trip. It cannot implement our flow: our link arrives via our own
+  SMS/email carrying our own token, lands on our route `/a/[token]/[askId]`, and must convert that
+  token into a Clerk session with no second Clerk email and no typing. (It also defaults to "require
+  same device and browser," which would break the text-on-phone, open-on-phone reality — but we never
+  route through it.)
+- **Sign-in tokens** are the correct primitive: the `/a/[token]/[askId]` Route Handler resolves the
+  token → Person → Account's Clerk `userId`, mints `clerkClient().signInTokens.createSignInToken({
+  userId })`, then redirects to a small **client** redemption route (`/auth/redeem`) that calls
+  `signIn.create({ strategy: 'ticket', ticket })` and forwards to `/hub/answer/[askId]`. Available via
+  the Backend API regardless of any dashboard toggle.
+
+Consequence for the seam: `establishAccountSession` stays a method on `AuthProvider`, but the Clerk
+adapter can no longer implement it as a synchronous server "set cookie + redirect" (Clerk forbids
+forging a session from a `userId` server-side). The Clerk path mints the ticket and hands off to the
+client redemption route; the mock adapter keeps its synchronous cookie path. Until this lands, the
+Clerk adapter throws and `/a/[token]/[askId]` warm-degrades to `/s/[token]` — so **prod Clerk keys
+must not go live until the sign-in-token slice ships**, or every "Sofia asked you a question" link
+drops the narrator onto the account-less surface instead of their hub.
+
+Naming discipline: "Magic link" is the domain term (our texted deep link). The Clerk mechanism is
+referred to as a "sign-in token / ticket," never "Clerk magic link," to keep the two from colliding.
+
+### Update — implemented (2026-06-30, Increment 9 Slice 2)
+
+The sign-in-token path is now built (all automated gates green; live acceptance on the dev Clerk
+instance pending the Slice-0 dashboard prerequisite — see PLAN.md). Concrete shape:
+
+- `establishAccountSession` was widened from `Promise<void>` to return a discriminated result
+  (`{ kind: "established" } | { kind: "handoff"; ticket: string }`) — the method stays on
+  `AuthProvider` as this ADR anticipated. Mock/dev set the cookie and return `established`; the Clerk
+  adapter mints the ticket (`clerk-server.ts mintSignInToken` → `clerkClient().signInTokens
+  .createSignInToken({ userId })`) and returns `handoff`. The reverse lookup Person → Clerk userId is
+  `auth-clerk.ts resolveAuthProviderUserId`. (See DECISIONS.md for the full rationale + rejected
+  route-branch alternative.)
+- The `/a/[token]/[askId]` route is now provider-agnostic: it switches on the result kind via the
+  pure `lib/magic-link.ts resolveMagicLinkTarget` and redirects either to the destination
+  (`established`) or to `/auth/redeem?ticket=..&dest=..&token=..` (`handoff`). The old "Clerk adapter
+  throws → warm-degrade" branch is gone; a genuine mint/DB failure still warm-degrades to `/s/[token]`.
+- `/auth/redeem` is a client route (`useSignIn().signIn.create({ strategy: "ticket", ticket })` →
+  `setActive` → hard-nav to the destination); an expired/invalid/used ticket warm-degrades to
+  `/s/[token]`. Destinations are open-redirect-guarded (`safeInternalDest`) on both server and client.
+
+Consequence for the prod-keys gate (still binding): prod `sk_live_`/`pk_live_` keys may go live only
+after live acceptance of this slice on the dev instance passes.

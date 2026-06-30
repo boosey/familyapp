@@ -9,9 +9,10 @@
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getRuntime } from "@/lib/runtime";
+import { getRuntime, isClerkConfigured } from "@/lib/runtime";
 import { acceptInvitation, getInvitationByToken } from "@chronicle/core";
 import { mockSignUp } from "@/lib/auth-mock";
+import { beginClerkJoinAction } from "@/lib/join-actions";
 import { KindredButton } from "@/app/_kindred";
 import { join } from "@/app/_copy";
 
@@ -35,6 +36,13 @@ async function acceptAsSignedIn(formData: FormData): Promise<void> {
     redirect(`/join/${token}?error=accept`);
   }
   redirect("/welcome?from=invite");
+}
+
+async function beginClerkJoin(formData: FormData): Promise<void> {
+  "use server";
+  const tok = String(formData.get("token") ?? "");
+  const label = String(formData.get("relationshipLabel") ?? "").trim();
+  await beginClerkJoinAction(tok, label || undefined);
 }
 
 async function signUpAndAccept(formData: FormData): Promise<void> {
@@ -144,6 +152,7 @@ export default async function JoinPage({
   }
 
   const ctx = await auth.getCurrentAuthContext();
+  const clerk = isClerkConfigured();
   const inviteeName = invite.inviteeName ?? "";
   const relationship = invite.relationshipLabel ?? "";
 
@@ -278,7 +287,24 @@ export default async function JoinPage({
     );
   }
 
-  /* ── Anonymous: create a login, then accept ──────────────────────────────── */
+  /* ── Anonymous + Clerk configured: stash invite cookie, hand off to Clerk sign-up ── */
+  if (clerk) {
+    return (
+      <Shell>
+        {heading}
+        {identityCard}
+        {errorBox}
+        {/* Clerk collects name / email / password — we only need the relationship label up front. */}
+        <form action={beginClerkJoin} style={{ display: "grid", gap: 18, marginTop: 14 }}>
+          <input type="hidden" name="token" value={token} />
+          {relationshipField}
+          <KindredButton type="submit" label={join.clerkContinue} fullWidth size="large" />
+        </form>
+      </Shell>
+    );
+  }
+
+  /* ── Anonymous + no Clerk (mock): create a login, then accept ──────────────── */
   return (
     <Shell>
       {heading}

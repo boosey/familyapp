@@ -96,7 +96,7 @@ export default async function DevSeedPage({
                 <div className="kin-muted" style={{ fontSize: 13 }}>
                   Or sign in with credentials — steward account
                 </div>
-                <span className="mono">sofia@example.test · password</span>{" "}
+                <span className="mono">sofia+clerk_test@example.com · password</span>{" "}
                 <Link href="/sign-in" style={{ fontWeight: 600 }}>
                   → /sign-in
                 </Link>

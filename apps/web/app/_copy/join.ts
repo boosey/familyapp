@@ -27,4 +27,6 @@ export const join = {
   passwordLabel: "Create a password",
   passwordPlaceholder: "Choose a password",
   submit: "Create login & come in",
+  /** Clerk-path: the visitor already gave us the relationship label; Clerk collects credentials. */
+  clerkContinue: "Continue to sign up",
 } as const;

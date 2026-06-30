@@ -23,7 +23,8 @@ async function seeded() {
 describe("loadHubFeed — viewer sees their own stories", () => {
   it("includes the logged-in owner's own stories (the Eleanor bug)", async () => {
     const { db, result } = await seeded();
-    const eleanor = result.narratorPersonId;
+    // result.narratorPersonId is always defined in mock mode; assert non-null for TS.
+    const eleanor = result.narratorPersonId!;
     const ctx: AuthContext = { kind: "account", personId: eleanor };
 
     const feed = await loadHubFeed(db, ctx);
@@ -37,7 +38,7 @@ describe("loadHubFeed — viewer sees their own stories", () => {
 
   it("lists each person at most once (no duplicate slots)", async () => {
     const { db, result } = await seeded();
-    const ctx: AuthContext = { kind: "account", personId: result.narratorPersonId };
+    const ctx: AuthContext = { kind: "account", personId: result.narratorPersonId! };
     const feed = await loadHubFeed(db, ctx);
     const ids = feed.map((slot) => slot.person.id);
     expect(ids.length).toBe(new Set(ids).size);

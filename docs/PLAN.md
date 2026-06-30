@@ -133,6 +133,85 @@ Gates: `pnpm -r typecheck`, `pnpm -r test` (all packages), `pnpm --filter @chron
 architecture allowlist canaries unchanged. Two adversarial cold-reviewer passes (trigger+capture, answer
 flow) → all findings closed.
 
+## Increment 9 — REAL CLERK AUTH  ⬜
+Turn on the production identity adapter. The Clerk seam is already scaffolded (`auth-clerk.ts`
+resolves session→userId→Account→Person; `clerk-config.ts`/`runtime.ts`/`layout.tsx`/`middleware.ts`
+gate on `isClerkConfigured()`). This increment fills the four real gaps: provisioning, the hosted
+sign-up/in UI, the invitation rework, and the magic-link sign-in-token path. Decisions:
+ADR-0005 (JIT provisioning), ADR-0003 §"Clerk implementation" (sign-in tokens), DECISIONS.md
+(dev-runs-Clerk, Clerk-mode seed).
+
+**Slice 0 — manual prerequisite (Clerk dashboard, no code):**
+- [ ] Set **Name → required** (User & Authentication → Personal information).
+- [ ] Create test users for the seed personas (Sofia, Marco, …) with the **same emails** the seed uses.
+
+**Slice 1 — core Clerk loop.**  🔨 *code-complete + all automated gates green (typecheck/test/build);
+LIVE acceptance on the dev Clerk instance + env wiring still PENDING the dev Clerk keys.*
+*Acceptance: sign up via Clerk → `/auth/callback` provisions → `/welcome` → DOB → `/hub`, verified
+live on the dev Clerk instance.*  *PROD KEYS STAY OFF.*
+- [ ] Env: `sk_test_`/`pk_test_` into `apps/web/.env.local` (NOT repo-root `.env`); confirm
+      `isClerkConfigured()` flips and the Clerk adapter is wired.  *(USER STEP — needs the dev Clerk
+      keys; code reads them already, `isClerkConfigured()` covered by unit tests.)*
+- [x] `/sign-in` + `/sign-up` → optional catch-all `[[...]]`; conditional render (Clerk
+      `<SignIn/>`/`<SignUp/>` when configured, existing mock form otherwise); `forceRedirectUrl`
+      → `/auth/callback`. Themed via Clerk `appearance` (cosmetic, can defer). — `app/sign-in/[[...sign-in]]`,
+      `app/sign-up/[[...sign-up]]`; old non-catch-all pages deleted.
+- [x] `/auth/callback` — the single post-Clerk landing: JIT provision (`clerkClient().users.getUser`
+      → `createAccountWithPerson`, idempotent on duplicate `authProviderUserId`) → apply pending-invite
+      cookie if present → `resolvePostAuthRoute`. — GET Route Handler `app/auth/callback/route.ts` +
+      `lib/clerk-server.ts` (`provisionOrResolveClerkUser`, race-safe) + `lib/auth-callback.ts`.
+- [x] Middleware matcher — VERIFY against Clerk v6 docs first; broaden for `/__clerk/:path*` + the auth
+      routes; **keep `/s/[token]` and `/a/[token]` excluded** (existing carve-out). — Clerk-canonical
+      negative-lookahead (verified via context7) + `/s/`,`/a/` carve-out. NOTE: `/api/media` stays
+      MATCHED on purpose — the authenticated hub resolves Clerk `auth()` there; only PAGE token
+      surfaces are excluded (a reviewer suggestion to also carve out `/api/media` was rejected as it
+      would break hub playback).
+- [x] `/join/[token]` rework — anonymous branch sets httpOnly pending-invite cookie {token,
+      relationshipLabel} → Clerk sign-up → `/auth/callback` accepts + clears cookie. Signed-in
+      direct-accept path preserved. Relationship label stays collected up front. — `lib/pending-invite.ts`
+      + `lib/join-actions.ts`; mock path unchanged.
+- [x] Sign-out — custom Kindred control; Clerk-configured → client `useClerk().signOut({redirectUrl:'/'})`,
+      else existing mock server action. No `<UserButton/>`. — `_kindred/ClerkSignOutItem.tsx` code-split
+      via `next/dynamic` so Clerk never enters the mock bundle.
+- [x] Clerk-mode seed — bind personas to real Clerk users by `getUserList({ emailAddress })`; store real
+      `userId` as `authProviderUserId`; skip `mock_auth_users` insert; skip-with-warning if unmatched.
+      Seed stays authoritative for persona `displayName`/`spokenName`. — personas use
+      `+clerk_test@example.com` emails uniformly; degrades (skips family block) if a CORE persona is unmatched.
+- [x] Regression: JIT provision idempotency + concurrent-landing race; `/auth/callback` pending-invite
+      apply; route mode-switch (Clerk vs mock). — `clerk-server.test.ts`, `auth-callback.test.ts`,
+      `pending-invite.test.ts`, `join-clerk.test.ts`, `dev-seed.test.ts` (Clerk-mode).
+
+**Slice 2 — magic-link via Clerk sign-in tokens.**  ✅ *DONE — all automated gates green
+(typecheck / `-r test` / web build) + architecture canaries unchanged; four cold adversarial review
+passes closed (one per task + a holistic pass); LIVE acceptance PASSED on the dev Clerk instance
+(2026-06-30, dev `sk_test_`/`pk_test_`).*
+*Acceptance: mint a sign-in token → redeem → land authed on `/hub/answer/[askId]`.*
+**GATE satisfied: prod Clerk keys (`sk_live_`/`pk_live_`) may now go live — still a deliberate,
+separately-confirmed step, not automatic.**
+*Live evidence (dev Clerk, Eleanor = `eleanor+clerk_test@example.com`, port 3100):* from a
+logged-OUT browser, `/a/<eleanorToken>/<realAskId>` minted a Clerk sign-in token → `/auth/redeem`
+redeemed it client-side (`signIn.create({strategy:'ticket'})` → `setActive`) → landed AUTHED on
+`/hub/answer/<realAskId>` showing Sofia's seeded question (account menu confirmed identity = Eleanor;
+Clerk loaded with dev keys on the redeem route). An invalid ticket at `/auth/redeem` warm-degraded to
+`/s/<eleanorToken>` (verified twice). Clerk-mode seed bound all four `+clerk_test` personas live.
+- [x] `/a/[token]/[askId]` (Clerk path) — mint `clerkClient().signInTokens.createSignInToken({ userId })`
+      → redirect to redemption route. Mock path unchanged. — seam widened to a discriminated result
+      (`{kind:"established"}` vs `{kind:"handoff";ticket}`, ADR-0003); Clerk adapter reverse-looks-up
+      (`auth-clerk.ts resolveAuthProviderUserId`) + mints (`clerk-server.ts mintSignInToken`, injectable
+      seam); route stays provider-agnostic via pure `lib/magic-link.ts resolveMagicLinkTarget`.
+- [x] `/auth/redeem` — client route: `signIn.create({ strategy: 'ticket', ticket })` → `setActive` →
+      hard-nav to dest. — server gate `page.tsx` (gates on `isClerkConfigured()`+ticket) → `next/dynamic`
+      `RedeemClientLoader` → `RedeemClient` (the sole `useSignIn` importer, code-split out of the mock
+      bundle); single-use-ticket ran-once guard; open-redirect-guarded dest (`safeInternalDest`).
+- [x] Remove the throws-and-degrades branch for the Clerk adapter's `establishAccountSession` seam. —
+      old "not supported in Phase 1" throw gone; route's expected-throw degrade branch replaced by a
+      genuine try/catch that warm-degrades to `/s/[token]` only on a real mint/DB failure.
+- [x] Regression (unit): seam handoff/established + reverse lookup + mint
+      (`__tests__/magic-link-handoff.test.ts`); redirect/open-redirect helpers
+      (`__tests__/magic-link-url.test.ts`, incl. percent-encoded `//` bypass). LIVE regression PASSED
+      on dev Clerk (2026-06-30): ticket landed Eleanor on `/hub/answer/<realAskId>`; invalid ticket
+      warm-degraded to `/s/<token>`.
+
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /
 timeline-map-tree · steward console & succession · avatar consent gate & story-will ·

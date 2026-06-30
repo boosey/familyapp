@@ -148,11 +148,48 @@ describe("isClerkConfigured", () => {
 });
 
 describe("middleware matcher", () => {
-  it("excludes the narrator token surface (/s/...) and includes /hub/", () => {
-    // Clerk must NEVER intercept the narrator token surface — it authenticates by URL token, not
-    // by Clerk session, and any redirect/auth flow would break the wedge.
+  it("does not contain a positive /s/ or /a/ entry", () => {
+    // Load-bearing invariant: token-bearer surfaces authenticate by URL token, NOT by Clerk
+    // session. Clerk must NEVER intercept them — a Clerk redirect would break both the narrator
+    // recording wedge (/s/) and the magic-link surface (/a/).
     const serialized = JSON.stringify(middlewareConfig.matcher);
-    expect(serialized).not.toContain("/s/");
-    expect(serialized).toContain("/hub/");
+    // No matcher entry may begin with /s/ or /a/ as a positive path match.
+    expect(serialized).not.toContain('"/s/');
+    expect(serialized).not.toContain('"/a/');
+    // Clerk's internal handshake routes must be explicitly covered.
+    expect(serialized).toContain("__clerk");
+  });
+
+  it("negative-lookahead pattern excludes /s/ and /a/ and matches protected routes", () => {
+    // Behaviorally verify the regex: extract the first (lookahead) entry and test it as a regex.
+    // Anchor with ^ so we replicate how Next.js tests paths (from the start). Without anchoring,
+    // .test("/s/sometoken") would find the inner "/" at position 2 and falsely return true.
+    // This catches regressions where someone rewrites the pattern and breaks the carve-outs.
+    const firstPattern = (middlewareConfig.matcher as string[])[0]!;
+    const re = new RegExp("^" + firstPattern + "$");
+
+    // Must NOT match token-bearer surfaces.
+    expect(re.test("/s/sometoken")).toBe(false);
+    expect(re.test("/a/sometoken")).toBe(false);
+
+    // Must match protected pages: hub, auth UI routes, auth callback.
+    expect(re.test("/hub/dashboard")).toBe(true);
+    expect(re.test("/sign-in")).toBe(true);
+    expect(re.test("/sign-up")).toBe(true);
+    expect(re.test("/auth/callback")).toBe(true);
+
+    // Must NOT match Next.js internals or common static file extensions.
+    expect(re.test("/_next/static/chunk.js")).toBe(false);
+    expect(re.test("/favicon.ico")).toBe(false);
+    expect(re.test("/logo.png")).toBe(false);
+
+    // MUST match /api/media — it calls getCurrentAuthContext(), and in Clerk mode Clerk's auth()
+    // only resolves on requests the middleware has processed. The authenticated hub plays media
+    // through it; excluding it would break hub playback. (Regression guard for that bug.)
+    expect(re.test("/api/media/abc123")).toBe(true);
+    expect(re.test("/api/hub/clear-invite-flash")).toBe(true);
+    // A page route that merely starts with "a"/"s" but not "a/"/"s/" must stay matched.
+    expect(re.test("/settings")).toBe(true);
+    expect(re.test("/api-docs")).toBe(true);
   });
 });

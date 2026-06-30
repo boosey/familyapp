@@ -23,20 +23,34 @@ import type { Database } from "@chronicle/db";
 
 const DEV_COOKIE = "chronicle_dev_person_id";
 
+/**
+ * Result of establishing a magic-link account session (ADR-0003).
+ *  - "established": the provider set a server-side session cookie. Caller redirects to the destination.
+ *  - "handoff": the provider minted a one-time, browser-redeemable credential (a Clerk sign-in token
+ *    a.k.a. "ticket"). Clerk forbids forging a session server-side from a userId, so the BROWSER must
+ *    redeem it; the caller hands off to the client redemption route carrying this ticket.
+ */
+export type EstablishAccountSessionResult =
+  | { kind: "established" }
+  | { kind: "handoff"; ticket: string };
+
 export interface AuthProvider {
   /** Resolve the inbound request to an AuthContext. Never throws — anonymous on failure. */
   getCurrentAuthContext(): Promise<AuthContext>;
   /**
    * Establish (sign in) an account session for the given Person — the magic-link path (ADR-0003):
    * a texted deep link whose token resolves to a Person who HAS an Account becomes a passwordless
-   * login to that account. The dev/mock adapters set the session cookie; the Clerk adapter mints
-   * and redeems a Clerk sign-in token (not wired in Phase 1 — see auth-clerk.ts).
+   * login to that account. The dev/mock adapters set the session cookie and signal "established";
+   * the Clerk adapter mints a one-time Clerk sign-in token (Clerk forbids forging a session
+   * server-side from a userId) and signals "handoff" so the BROWSER redeems it (see auth-clerk.ts).
    *
    * Throws if the Person has no Account to sign in as (the caller — the `/a/[token]` route — must
    * only call this for a Person with an Account; a Person without one stays on the login-free
    * `/s/[token]` link-session surface).
    */
-  establishAccountSession(personId: string): Promise<void>;
+  establishAccountSession(
+    personId: string,
+  ): Promise<EstablishAccountSessionResult>;
 }
 
 /**
@@ -60,7 +74,9 @@ export function createDevCookieAuthProvider(db: Database): AuthProvider {
       if (!p) return { kind: "anonymous" };
       return { kind: "account", personId: p.id };
     },
-    async establishAccountSession(personId: string): Promise<void> {
+    async establishAccountSession(
+      personId: string,
+    ): Promise<EstablishAccountSessionResult> {
       // The dev-cookie provider's session value IS the Person id. Confirm the Person exists before
       // writing a session for them (never sign in a phantom).
       const [p] = await db
@@ -75,6 +91,8 @@ export function createDevCookieAuthProvider(db: Database): AuthProvider {
       }
       const jar = await cookies();
       jar.set(DEV_COOKIE, p.id, { httpOnly: true, sameSite: "lax", path: "/" });
+      // Cookie is set on this response — the caller may redirect straight to the destination.
+      return { kind: "established" };
     },
   };
 }

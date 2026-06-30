@@ -24,7 +24,8 @@ import { eq } from "drizzle-orm";
 import { accounts, persons } from "@chronicle/db/schema";
 import type { AuthContext } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
-import type { AuthProvider } from "./auth";
+import type { AuthProvider, EstablishAccountSessionResult } from "./auth";
+import { mintSignInToken, type MintSignInToken } from "./clerk-server";
 
 /**
  * The shape of Clerk's `auth()` helper we depend on. We type only `userId` so a Clerk SDK bump
@@ -35,6 +36,26 @@ export type ClerkAuthFn = () => Promise<{ userId: string | null | undefined }>;
 export interface ClerkAuthProviderOptions {
   /** Inject Clerk's `auth()` (tests pass a stub; prod omits and we lazy-import the real one). */
   readonly auth?: ClerkAuthFn;
+  /** Inject Clerk's sign-in token mint (tests stub; prod resolves the real Backend client). */
+  readonly mint?: MintSignInToken;
+}
+
+/**
+ * Resolve a Person to their Account's Clerk userId (`accounts.authProviderUserId`), or null. Inner
+ * join: a value comes back ONLY if the Person has an Account (mirrors the join in auth-mock.ts).
+ * Exported for unit testing.
+ */
+export async function resolveAuthProviderUserId(
+  db: Database,
+  personId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ authProviderUserId: accounts.authProviderUserId })
+    .from(persons)
+    .innerJoin(accounts, eq(accounts.id, persons.accountId))
+    .where(eq(persons.id, personId))
+    .limit(1);
+  return row?.authProviderUserId ?? null;
 }
 
 export function createClerkAuthProvider(
@@ -80,17 +101,24 @@ export function createClerkAuthProvider(
         return { kind: "anonymous" };
       }
     },
-    async establishAccountSession(_personId: string): Promise<void> {
-      // ADR-0003 magic-link account login. Clerk does NOT permit forging a server-side session
-      // from a Person id: a passwordless login goes through a Clerk *sign-in token* (createSignInToken)
-      // that the browser redeems. Wiring that (Clerk Backend SDK + a redeem redirect) is out of
-      // Phase-1 scope — Clerk itself is unconfigured in dev/CI, where the mock adapter is used. This
-      // throws loudly rather than silently no-op so a production magic-link wire-up is a deliberate,
-      // visible follow-up, not a quietly-broken path.
-      throw new Error(
-        "establishAccountSession is not supported by the Clerk adapter in Phase 1 " +
-          "(magic-link login requires Clerk sign-in tokens redeemed client-side; see ADR-0003).",
-      );
+    async establishAccountSession(
+      personId: string,
+    ): Promise<EstablishAccountSessionResult> {
+      // ADR-0003 magic-link account login. Clerk does NOT permit forging a server-side session from
+      // a Person id, so we mint a one-time Clerk *sign-in token* (ticket) here and hand off to the
+      // client redemption route, which redeems it via the `ticket` strategy to establish the session.
+      const userId = await resolveAuthProviderUserId(db, personId);
+      if (!userId) {
+        // Defensive: the `/a/[token]` route guards accountId before calling, so this only fires on a
+        // genuine inconsistency (a Person lost its Account between the guard and here).
+        throw new Error(
+          "establishAccountSession: Person " +
+            personId +
+            " has no Clerk Account to sign in as",
+        );
+      }
+      const ticket = await mintSignInToken(userId, { mint: options.mint });
+      return { kind: "handoff", ticket };
     },
   };
 }
