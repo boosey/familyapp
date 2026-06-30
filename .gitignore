@@ -34,3 +34,10 @@ Thumbs.db
 
 # local media-storage adapter (FilesystemMediaStorage in dev)
 .media/
+.media-e2e/
+
+# playwright e2e artifacts
+test-results/
+playwright-report/
+blob-report/
+.last-run.json

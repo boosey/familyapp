@@ -53,6 +53,7 @@ import {
 } from "@chronicle/core";
 import { createLinkSession } from "@chronicle/capture";
 import { getRuntime } from "./runtime";
+import { tinyWav } from "./wav-util";
 import { seedMockCredential } from "./auth-mock";
 import { isClerkConfigured } from "./clerk-config";
 import { getClerkUserIdByEmail } from "./clerk-server";
@@ -62,32 +63,6 @@ import type { GetClerkUserIdByEmail } from "./clerk-server";
 const SEED_PASSWORD = "password";
 
 const SAMPLE_AUDIO_CONTENT_TYPE = "audio/wav";
-
-/** A 1-second mono 8 kHz 16-bit PCM WAV of silence. Smallest valid playable thing. */
-function tinyWav(): Uint8Array {
-  const sampleRate = 8000;
-  const numSamples = sampleRate;
-  const dataSize = numSamples * 2;
-  const buf = new ArrayBuffer(44 + dataSize);
-  const v = new DataView(buf);
-  const writeAscii = (offset: number, s: string): void => {
-    for (let i = 0; i < s.length; i++) v.setUint8(offset + i, s.charCodeAt(i));
-  };
-  writeAscii(0, "RIFF");
-  v.setUint32(4, 36 + dataSize, true);
-  writeAscii(8, "WAVE");
-  writeAscii(12, "fmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sampleRate, true);
-  v.setUint32(28, sampleRate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  writeAscii(36, "data");
-  v.setUint32(40, dataSize, true);
-  return new Uint8Array(buf);
-}
 
 function checksumOf(bytes: Uint8Array): string {
   return `seed:${bytes.byteLength}:${randomUUID()}`;
