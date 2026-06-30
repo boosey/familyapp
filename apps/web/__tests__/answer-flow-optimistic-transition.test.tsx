@@ -91,4 +91,35 @@ describe("AnswerFlow optimistic transition", () => {
     resolveRecord(undefined);
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
+
+  it("surfaces a render failure on the pending screen and returns to record on retry", async () => {
+    render(
+      <AnswerFlow
+        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
+        questionText="What have you learned about being a grandparent?"
+        askerName="Sam"
+        draft={null}
+      />,
+    );
+
+    // Record then stop → review-pending while the action is in flight.
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
+
+    // Render fails: the error lands on the pending screen (no refresh, no remount).
+    resolveRecord({ error: "Could not save your recording. Please try again." });
+    await waitFor(() =>
+      expect(screen.getByText(/Could not save your recording/)).toBeTruthy(),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Polishing your words/)).toBeNull(); // spinner gone
+
+    // "Record again" clears the take (revoking its URL) and returns to the record screen.
+    fireEvent.click(screen.getByRole("button", { name: /Record again/ }));
+    expect(screen.getByRole("button", { name: /Tap to speak/ })).toBeTruthy();
+    expect(screen.queryByText(/Could not save your recording/)).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:local-take");
+  });
 });
