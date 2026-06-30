@@ -41,7 +41,7 @@
 
 **Scope.** Mode 1 in its thinnest complete form: the AI interviewer running a gentle session; voice-first, zero-app entry for the narrator (start with one channel — phone call or a single-tap link — not all of them); the oral-history question engine (open-ended, non-leading, one at a time, reminiscence-bump weighted, from the vision's base question sets); recording, transcription, and speech-to-story synthesis *with original voice preserved*; voice-only approval by the narrator; and a basic family hub where members hear the result. Plus the answered-question loop (a member asks → routed into the narrator's next session → answer returned), because the Journey Map shows that loop is the relay's core and the Engagement Engine names it the highest-leverage trigger.
 
-**Out of scope (deliberately).** External-data enrichment, avatars, mysteries, ambient capture, multiple entry channels, the steward console. All later.
+**Out of scope (deliberately).** External-data enrichment, the asker-avatar feature, mysteries, ambient capture, multiple entry channels, the steward console, narrator interactive testimony. All later.
 
 **Build vs. buy.** *Buy* transcription/speech-to-text (mature, commoditized) and telephony (a voice/phone API) — building these is wasted effort. *Buy* the LLM for synthesis and the interviewer. *Build* the interviewer's *behavior* — the oral-history technique, pacing, silence tolerance, session memory, and reminiscence weighting — because generic chatbot patterns are exactly what the vision says to avoid, and this craft is differentiating. *Build* the narrator's zero-friction entry experience; it's the wedge's whole point.
 
@@ -55,7 +55,7 @@
 
 **Goal.** Turn captured stories into something the family returns to, and start the heartbeat so the chronicle doesn't go quiet after the first burst. Retain, don't just capture.
 
-**Scope.** Mode 4 as a real explore surface (timeline, story feed, photo gallery, audio player with original voice — mobile-first); richer Mode 3 question-asking with suggested prompts so no one faces a blank box; and the cheapest, stickiest engagement triggers from the Engagement Engine's recommended first wave — the social loop (Group D) and the weekly "this week in family history" digest (A2), which run on the family's own warmth and existing content with no new data sources. Add photo upload so the family can enrich stories with images.
+**Scope.** Mode 4 as a real explore surface (timeline, story feed, photo gallery, audio player with original voice — mobile-first); richer Mode 3 question-asking with suggested prompts so no one faces a blank box; the asker-avatar feature — when a family member submits a question, their own face and voice deliver it to the narrator in-session rather than the AI paraphrasing it (consent is simple: the asker records and consents to their clip being played to the narrator); and the cheapest, stickiest engagement triggers from the Engagement Engine's recommended first wave — the social loop (Group D) and the weekly "this week in family history" digest (A2), which run on the family's own warmth and existing content with no new data sources. Add photo upload so the family can enrich stories with images.
 
 **Build vs. buy.** *Build* the explore surfaces and the trigger orchestration (the per-person cadence rules — this is product craft). *Buy* nothing major new; this phase leans on Phase 1's foundation.
 
@@ -81,29 +81,31 @@
 
 ## Phase 4 — The Institution: Stewardship, Custody & Governance
 
-**Goal.** Make the chronicle safe to grow and to inherit — the institutional layer that separates a perpetual chronicle from a memoir that dies in a drawer. This is also the gate that must precede avatars.
+**Goal.** Make the chronicle safe to grow and to inherit — the institutional layer that separates a perpetual chronicle from a memoir that dies in a drawer. This is also the gate that must precede narrator interactive testimony.
 
 **Scope.** Mode 5: the steward console (membership, the legible permissions/access map, the consent ledger surfaced for review, gap/quality review); custody hand-off and successor naming; the "story will" / digital-estate instrument; time-gated release (release on an 18th birthday, open after death, seal for N years); and full AI disclosure across all artifacts. This is the Consent & Estate Framework's "governance, second" tier built out.
 
 **Build vs. buy.** *Build* — this is bespoke product and the family's trust depends on it being legible, not bolted on. *Buy* durable backup/storage primitives; honestly answer the durability and data-portability questions the steward (Diane) will ask, including what happens to the archive if the company disappears.
 
-**Risk retired.** That growth and longevity outrun governance — a privacy mistake, an orphaned archive, or an inability to answer "who holds the keys in eighty years?" Also retires the ethical precondition for Phase 5.
+**Risk retired.** That growth and longevity outrun governance — a privacy mistake, an orphaned archive, or an inability to answer "who holds the keys in eighty years?" Also establishes the ethical precondition for Phase 5 (narrator interactive testimony).
 
 **Exit criteria.** A steward can govern membership and per-story visibility legibly; consents are auditable; a successor can be named and custody handed off; time-gated releases fire correctly. The chronicle could outlive its founder.
 
 ---
 
-## Phase 5 — The Powerful, Dangerous Features: Avatars (gated)
+## Phase 5 — The Powerful, Governance-Gated Feature: Narrator Interactive Testimony
 
-**Goal.** Ship the most powerful capability — voice and conversational avatars — only now, behind the governance built in Phase 4. The vision and the Consent & Estate Framework both make this strictly conditional.
+**Goal.** Allow family members and future descendants to pose questions and receive responses drawn from a narrator's real recorded archive. This is the "talk to a relative" experience — and it's strictly gated behind the governance built in Phase 4.
 
-**Scope.** Voice avatars first (a synthesized voice answering in the relative's *real recorded words*), then optionally conversational video. Living-person avatars before posthumous ones — they're co-authored, consented in real time, and far safer to learn on. Every avatar passes the four-check consent gate (consent in the ledger → "their words only" enforced → mutual consent + family governance → disclosure + a retirement procedure). Built on the StoryFile retrieval model, never a generative ghost.
+**What this is not.** The asker-avatar feature (a living family member's clip delivering their question to the narrator) shipped in Phase 2 with simple, living-person consent. This phase is categorically different: it surfaces the narrator's own words in response to questions, which requires the narrator's explicit, recorded consent and the full governance framework.
 
-**Build vs. buy.** *Buy/partner* for voice synthesis and avatar rendering technology where mature. *Build* the consent enforcement, the "their words only" retrieval constraint, and the retirement procedures — the governance is the IP and the ethical line, and it cannot be outsourced.
+**Scope.** Living-narrator interactive testimony first (co-authored, consented in real time, fully under the narrator's control) before posthumous use — the living case is far safer to learn on. Every testimony instance passes the consent gate: consent recorded in the ledger → "their words only" enforced technically (retrieval over real recordings, never generative fabrication; if the narrator never recorded an answer, the system says so) → mutual consent and family governance satisfied → visible AI disclosure → retirement procedure in place. Built on the StoryFile retrieval model.
 
-**Risk retired.** This phase doesn't retire risk — it *introduces* the product's highest risk, which is precisely why it's last and gated. The earlier phases exist partly to make this one safe to attempt.
+**Build vs. buy.** *Buy/partner* for voice rendering technology where mature. *Build* the consent enforcement, the "their words only" retrieval constraint, and the retirement procedures — the governance layer is the IP and the ethical line, and cannot be outsourced.
 
-**Exit criteria.** An avatar can only be created and interacted with when every consent gate passes; "their words only" holds (no fabricated statements); retirement works; disclosure is visible. Ship to living-person co-authored cases first; treat posthumous as a further, deliberate step.
+**Risk introduced.** This phase doesn't retire risk — it introduces the product's highest-risk capability, which is precisely why it is last and gated. The earlier phases exist partly to make this one safe to attempt.
+
+**Exit criteria.** A testimony instance can only be created and interacted with when every consent gate passes; "their words only" holds with no fabricated statements; retirement works; disclosure is visible. Posthumous use is a further, deliberate step beyond this phase — not a Phase 5 deliverable.
 
 ---
 
@@ -129,8 +131,8 @@ Each phase makes the next *buildable* or *safe*:
 - **Phase 1** proves narrators engage and stories matter — without which nothing else is worth building.  
 - **Phase 2** proves people return — converting capture into retention.  
 - **Phase 3** builds the moat — enrichment that needs Phase 0's data model and Phase 1's stories to enrich.  
-- **Phase 4** makes it an institution — and is the ethical gate for what follows.  
-- **Phase 5** ships the dangerous feature — only because Phase 4 made it safe.  
+- **Phase 4** makes it an institution — and is the ethical gate for narrator interactive testimony.  
+- **Phase 5** ships the governance-gated feature (narrator testimony) — only because Phase 4 made it safe.  
 - **Phase 6+** widens into the full north star on a stable, trusted base.
 
 The through-line matches the whole document set: start with what needs only the family and the calendar, add what needs data, then what needs time — and never let a powerful feature precede its guardrail.

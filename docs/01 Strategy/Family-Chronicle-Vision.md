@@ -10,7 +10,7 @@
 - **One chronicle underneath; many interaction modes on top.** Every member is, over a lifetime, a narrator, an interviewer, a subject, an archivist, and an audience — and those roles rotate. The system is the continuous spine holding it all together. Different scenarios get different UX modes (see §0). **Guided narration is Mode One — the first mode built and the primary entry point — but it is one mode within the larger chronicle, not the whole product.** Elders are its launch audience, but "narrator" is a role anyone can occupy, not an age.  
 - **Time runs in two directions.** The chronicle recovers the past *and* captures a present that will become someone's treasured past. The most valuable entry fifty years from now may be a mundane Tuesday-dinner recording made today — which argues for low-ceremony, ongoing, ambient capture as a core behavior, not a special occasion.  
 - **Design every narration touchpoint around dignity, low cognitive load, and emotional safety.** The evidence base is strong: a meta-analysis of 128 controlled studies (Pinquart & Forstmeier, 2012) found reminiscence/life-review interventions produce moderate improvements in ego-integrity (g=0.64) and depression (g=0.57). The AI interviewer should be built on oral-history and reminiscence-therapy technique, not generic chatbot patterns.  
-- **Treat avatars and "digital afterlife" features as the most powerful AND most ethically dangerous capability.** Adopt a consent-first, "their words only" design with explicit living-vs-deceased rules. Public acceptance of posthumous avatars collapses without prior consent.
+- **The primary avatar feature is the asker's avatar, not the narrator's.** When a family member submits a question, their avatar — their own face and voice — delivers that question to the narrator inside the session, rather than the AI paraphrasing it. This makes the question relay feel personal and warm without grief-bot complexity. Posthumous narrator avatars are a separate, future consideration with distinct consent requirements.
 
 ---
 
@@ -132,13 +132,10 @@ For each category: what it provides, how it enriches the story, notable provider
 
 **Live/synchronous:** AI-co-piloted family video calls; the AI suggests questions, retrieves records, and transcribes — turning a casual call into archived oral history.
 
-**Avatars (explored deeply):**
+**Avatars:**
 
-- **Voice avatars:** a synthesized version of a relative's voice that "answers" using their actual recorded stories (HereAfter AI's model).  
-- **Visual avatars:** animated photos (MyHeritage Deep Nostalgia–style) up to conversational video (StoryFile's interactive testimony, used for Holocaust survivors and WWII veterans).  
-- **"Talk to" a relative:** interactive testimony built ONLY from the person's real recordings — not generative fabrication.  
-- **Living vs. deceased:** living relatives co-author and consent in real time; deceased relatives require pre-death consent and family governance.  
-- **Ethical/emotional considerations:** griefbot research warns avatars can interfere with healthy grieving and that acceptance collapses without consent. Rules in §10 and Caveats.
+- **Asker avatar (primary feature):** when a family member submits a question for a narrator's session, their avatar — their own recorded face and voice asking the question — is played to the narrator directly, rather than the AI reading it aloud on their behalf. The narrator hears Sofia saying "Grandma, I've always wanted to know…" in Sofia's own voice. Consent is simple: the asker records the question and consents to it being shown to the narrator.
+- **Narrator avatar (future, separate):** an interactive testimony built from a narrator's real recordings — following the StoryFile model — so future descendants can "ask" questions answered from the archive. This is a distinct feature with distinct governance: it requires explicit narrator consent, applies "their words only" (retrieval, not generative fabrication), and has its own retirement procedure. It is not the grief-bot scenario and should not be conflated with it, but it does require care around posthumous use and requires the governance framework in §10 before it ships.
 
 ---
 
@@ -198,7 +195,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 
 **Audio/visual:** original-voice audio stories with QR access, narrated audiobook, documentary-style mini-films, restored/colorized/animated photos, interactive timeline, migration map, "day in history" context cards, photo-with-voice narration.
 
-**Avatars:** voice avatar answering in the relative's own words; conversational video avatar for a "museum of one family"; a "future descendants can interview great-grandma" experience.
+**Avatars:** asker avatar delivering a question in the asker's own voice to the narrator (primary feature); narrator interactive testimony built from real recordings for future-descendant access (future, governance-gated).
 
 **Editions (snapshots of the living chronicle):** *periodic editions* (the family's annual), *event editions* (wedding, birth, death), *on-demand cuts* (everything about a person, place, or era). None is "the end" — each is a render of the chronicle's current state.
 
@@ -252,7 +249,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 - **Ambient / passive collection (Mode 6, opt-in):** capture spontaneous dinner-table stories via a home device, consent-gated and reviewable.  
 - **Smart-home "story corner":** a simple voice-activated device — no screen, no login — that just listens when the narrator wants to talk.  
 - **"Interview your future descendants" / time-capsule messages:** record answers and letters to be released on a grandchild's 18th birthday or wedding.  
-- **The future-descendant interview:** descendants not yet born can someday "ask" the avatar — built with consent and "their words only" guardrails.  
+- **The future-descendant interview:** descendants not yet born can someday query a narrator's archive via interactive testimony — built with explicit narrator consent and "their words only" retrieval (never generative fabrication). Distinct from the asker-avatar feature; requires the governance framework before shipping.  
 - **Digital estate & "story will" (Mode 5 infrastructure):** who controls the archive, what may be released when, whether a posthumous avatar is permitted, and a documented mutual-consent standard. Load-bearing, not optional.  
 - **Health-adjacent reminiscence mode:** a clinically-informed mode for elders with early dementia (reminiscence therapy is established in dementia care), with caregiver tools — clearly non-diagnostic.  
 - **Cross-family historical "match":** connect with unrelated families who lived through the same event/place/ship for shared context (privacy-gated).  
@@ -266,7 +263,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 
 1. **Anchor the product spine on the perpetual chronicle + multi-mode model**, with guided narration as Mode One — the on-ramp, not the ceiling. This is the defensible differentiation versus the crowded one-year-book layer.  
 2. **Lead with narrator comfort in Mode 1** (elders are the launch audience). Zero-friction voice/phone entry and AI-led sessions are non-negotiable; any required login on the narrator's side is a bug.  
-3. **Build the consent/estate framework (Mode 5) before any avatar feature ships.** "Their words only," explicit pre-death consent for posthumous avatars, mutual-consent for interaction, family veto power, visible AI-disclosure.  
+3. **Distinguish the two avatar features in sequencing.** The asker-avatar (living family member's face/voice delivering a question) can ship early — consent is simple and there are no posthumous concerns. The narrator interactive-testimony feature (future descendants querying the archive) must wait until the consent/estate framework (Mode 5) is complete: "their words only" technically enforced, explicit narrator pre-death consent recorded, mutual-consent for interaction, family veto, visible AI disclosure.  
 4. **Resolve the two foundational questions early** (multi-family identity model; the engagement engine) — both are surfaced by the chronicle frame and both shape the data model.  
 5. **Sequence data-source integrations by enrichment-per-effort:** start with free/high-coverage sources (FamilySearch, Chronicling America, Ellis Island, census) and user-linked Ancestry/MyHeritage accounts; treat DNA as a later, strictly opt-in module.  
 6. **Ground the question engine in life-review/oral-history method**, weighted toward the reminiscence bump.  
@@ -276,7 +273,7 @@ Grounded in oral-history practice (Smithsonian, Oral History Association) and re
 
 ## Caveats
 
-- **Avatars/griefbots carry real psychological risk.** Posthumous avatars can interfere with healthy grieving, and acceptance collapses without prior consent. Build slowly, with opt-outs, avatar-retirement procedures, and human-support off-ramps. The product is not therapy and must say so.  
+- **The two avatar features carry very different risk profiles.** The asker-avatar feature (a living family member's face/voice delivering their question) is low-risk: consent is straightforward, no posthumous concerns, no grief dynamics. The narrator interactive-testimony feature (future descendants querying the archive) requires care: narrator must have consented before death for posthumous use, "their words only" must be enforced technically, and retirement procedures must exist. These are distinct features and must not be conflated. The product is not therapy and must say so.  
 - **Data-source access is uneven and legally constrained.** Living-person records, recent census/vitals, and recent military files are restricted; church/land records are decentralized; DNA is the most sensitive (surprise kin, law-enforcement use, insurer loopholes, the 23andMe breach and bankruptcy). Integrations require partnerships, user-linked accounts, and careful consent UX with deletion rights.  
 - **Authenticity vs. polish tension.** AI "Speech-to-Story" rewriting can drift from the person's real words; always preserve and foreground the original voice/recording alongside any synthesized prose.  
 - **The chronicle's hardest problem is longevity, not capture.** Keeping a multi-decade institution alive (engagement, custody hand-off, data durability, business continuity) is harder than recording stories. Treat it as a first-class design problem, not an afterthought.  

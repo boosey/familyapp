@@ -1,14 +1,18 @@
 # Consent & Estate Framework — The Institutional Layer (Mode 5)
 
-*Companion to the North Star Vision, Personas, Journey Map, and Engagement Engine. This is the governance backbone of the chronicle: who controls the archive, who may see what, what happens to a person's stories after they die, whether a posthumous avatar is ever permitted, and who holds the keys across generations. The vision is unambiguous: build this framework **before any avatar feature ships**. It is infrastructure, not an edge feature — and Diane, the steward, is the human who operates it.*
+*Companion to the North Star Vision, Personas, Journey Map, and Engagement Engine. This is the governance backbone of the chronicle: who controls the archive, who may see what, what happens to a person's stories after they die, and who holds the keys across generations. It is infrastructure, not an edge feature — and Diane, the steward, is the human who operates it. Note: the primary avatar feature (an asker's avatar delivering their question to a narrator) is a living-person feature with simple consent and is not what this framework governs. This framework governs the narrator interactive-testimony feature — future descendants querying the archive — which requires explicit pre-death consent and must not ship until Components 1–3 are live.*
 
 ---
 
-## Why this comes before the avatar
+## Why this comes before the narrator interactive-testimony feature
 
-The vision treats avatars and "digital afterlife" features as "the most powerful AND most ethically dangerous capability." That's not caution for its own sake. The research backs it: studies of griefbots and deadbots find that posthumous AI replicas can interfere with healthy grieving, that public acceptance collapses without prior consent, and that the responsible-development consensus rests on consent, postmortem privacy, deadbot-retirement procedures, transparency about capabilities and risks, and the mutual consent of both the person whose data it is and the people who interact with it.
+There are two avatar features in the product and they are not the same thing:
 
-The practical consequence is a sequencing rule: **you cannot ethically build the powerful feature until the governance that constrains it exists.** An avatar without a consent ledger, a "their words only" guarantee, and a retirement procedure is exactly the product the ethics literature warns against. So this framework ships first. It also happens to be a trust feature for every other part of the product — Eleanor approves her own stories, Diane controls who sees them, and the family trusts the chronicle with its most private material precisely because this layer exists.
+**The asker avatar** (primary feature, ships early) — a living family member records a question and their avatar — their own face and voice — delivers it to the narrator inside the session. Consent is simple (the asker records and consents to the clip being played to one narrator). No posthumous concerns, no grief dynamics, no governance gate beyond normal session flow.
+
+**The narrator interactive testimony** (future feature, governance-gated) — future descendants query a narrator's archive; the system retrieves what the narrator actually said. This is where the ethics literature applies: studies of griefbots and deadbots find that posthumous AI replicas can interfere with healthy grieving, that public acceptance collapses without prior consent, and that the responsible-development consensus requires consent, postmortem privacy, retirement procedures, and mutual consent of both the subject and the people who interact with it.
+
+The practical consequence is a sequencing rule for the narrator feature specifically: **you cannot ethically build it until the governance that constrains it exists.** A narrator interactive-testimony feature without a consent ledger, a "their words only" guarantee, and a retirement procedure is exactly the product the ethics literature warns against. So this framework ships first. It also happens to be a trust feature for everything else — Eleanor approves her own stories, Diane controls who sees them, and the family trusts the chronicle with its most private material precisely because this layer exists.
 
 ---
 
@@ -16,7 +20,7 @@ The practical consequence is a sequencing rule: **you cannot ethically build the
 
 These are the non-negotiables. Every feature in this document is an implementation of one or more of them.
 
-**1. Their words only.** Following the StoryFile model, any avatar or "talk to a relative" experience is built strictly from the person's *real recordings* — a retrieval system that surfaces what they actually said, never a generative system that fabricates new statements in their voice. The chronicle does not put words in anyone's mouth, living or dead. This is the single brightest line in the product.
+**1. Their words only.** Any narrator interactive-testimony feature is built strictly from the person's *real recordings* — a retrieval system that surfaces what they actually said, never a generative system that fabricates new statements in their voice. The chronicle does not put words in anyone's mouth. This principle applies to narrator testimony; the asker-avatar feature plays the asker's own recording unmodified and is not affected by it.
 
 **2. Consent is explicit, recorded, and revocable.** Consent is never assumed from silence or from a relationship. It is captured, logged in a durable ledger, scoped to specific uses, and — for the living — revocable. The person is the author and owner of their own material.
 
@@ -66,17 +70,21 @@ This is the ethical heart of the framework, and a distinction that matters more 
 
 ---
 
-## Component 4 — Avatar governance (the highest-risk feature)
+## Component 4 — Narrator interactive-testimony governance
 
-Avatars get their own governance gate because they carry the most concentrated risk. Nothing here ships until Components 1–3 are live.
+This component governs the narrator interactive-testimony feature: future family members or descendants querying the archive and receiving responses drawn from the narrator's real recordings. It does **not** govern the asker-avatar feature (see below), which has simple, living-person consent and needs no governance gate beyond normal session flow.
 
-**The "their words only" guarantee, enforced technically.** The avatar is a retrieval interface over real recordings (the StoryFile model), explicitly not a generative ghost. If the person never recorded an answer, the avatar says so — it does not invent one. This is enforced in the system design, not just promised in a policy.
+**What this is not.** The asker avatar — a living family member's face and voice delivering their question to a narrator — is a separate, earlier-shipping feature. The asker consents to their own clip being played. No posthumous concerns, no retrieval system, no governance gate here.
 
-**Consent gates, checked at every step.** Before an avatar can be created: pre-death consent in the ledger (for the deceased) or active real-time consent (for the living). Before it can be interacted with: mutual-consent and family governance satisfied. At all times: visible AI disclosure.
+**What this governs.** A narrator interactive-testimony feature allows someone to pose a question and receive a response surfaced from what the narrator actually recorded. This is a retrieval interface over real recordings (the StoryFile model), explicitly not a generative system. If the narrator never recorded an answer, the system says so — it does not fabricate one. This is enforced in system design, not just policy.
 
-**Retirement and off-ramps.** Every avatar has a retirement procedure — a dignified way to pause or take it down, invocable by the steward or family if it's interfering with healthy grief. The product surfaces human-support resources where appropriate and states plainly that it is not therapy.
+**Nothing in this component ships until Components 1–3 are live.**
 
-**Living-person avatars are co-authored.** A living relative's avatar is built with them, consented in real time, and fully under their control — a different and far safer case than the posthumous one, and a reasonable place to learn before touching the posthumous version at all.
+**Consent gates, checked at every step.** Before interactive testimony can be created: narrator's explicit recorded consent in the ledger (pre-death for posthumous use; real-time for living narrators). Before it can be interacted with: mutual-consent and family governance satisfied. At all times: visible AI disclosure.
+
+**Retirement and off-ramps.** Every narrator testimony feature has a retirement procedure — a dignified way to pause or take it down, invocable by the steward or family. The product surfaces human-support resources where appropriate and states plainly that it is not therapy.
+
+**Living-narrator testimony is co-authored.** A living narrator's interactive testimony is built with them, consented in real time, and fully under their control — a safer and simpler case than posthumous use, and a reasonable place to start before building the posthumous version.
 
 ---
 
@@ -125,7 +133,7 @@ The dependencies are strict, because the whole point is that powerful features c
 
 **Governance, second:** living-vs-deceased rules (Component 3), custody and the story will (Component 5), and AI disclosure (Component 6). This is the full institutional layer; it makes the chronicle safe to grow and to inherit.
 
-**High-risk features, only after:** avatar governance (Component 4) — and therefore avatars themselves. The vision's instruction is the gate: *build the consent/estate framework before any avatar feature ships.* This document is that framework; the avatar waits behind it.
+**High-risk features, only after:** narrator interactive-testimony governance (Component 4) — and therefore the narrator testimony feature itself. This document is that framework; narrator testimony waits behind it. (The asker-avatar feature — a living family member's clip delivering their question — does not wait; it can ship once the capture + session infrastructure supports it.)
 
 ---
 
