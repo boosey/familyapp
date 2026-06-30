@@ -9,7 +9,14 @@ const nextConfig = {
     "@chronicle/storage",
   ],
   // PGlite ships a wasm asset and uses Node APIs; keep server externals happy in dev.
-  serverExternalPackages: ["@electric-sql/pglite"],
+  // The R2 media adapter (@chronicle/storage's r2.ts) pulls the AWS S3 SDK; it is server-only
+  // (the media route is `runtime = "nodejs"`). Externalize it so Next doesn't try to bundle the
+  // large, Node-API-using SDK into the server output.
+  serverExternalPackages: [
+    "@electric-sql/pglite",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+  ],
 };
 
 export default nextConfig;
