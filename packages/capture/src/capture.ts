@@ -118,7 +118,13 @@ export async function ingestRecording(
       durationSeconds: input.audio.durationSeconds,
       checksum,
     },
-    { promptQuestion: input.promptQuestion, askId: input.askId },
+    {
+      promptQuestion: input.promptQuestion,
+      askId: input.askId,
+      // Carry the link-session's family onto the draft as its originating context (ADR-0010), so
+      // approval can default-target the story into the family it was told for. Null for account.
+      originatingFamilyId: resolved.originatingFamilyId ?? undefined,
+    },
   );
 
   return { storyId: story.id, recordingMediaId: recording.id, storageKey: key };

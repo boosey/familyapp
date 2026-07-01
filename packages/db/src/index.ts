@@ -38,6 +38,8 @@ export type {
   NewMockAuthUser,
   StoryView,
   NewStoryView,
+  StoryFamily,
+  NewStoryFamily,
   LifeStatus,
   MembershipRole,
   MembershipStatus,

@@ -174,9 +174,17 @@ CREATE TABLE "stories" (
 	"era_label" text,
 	"prompt_question" text,
 	"ask_id" uuid,
+	"originating_family_id" uuid,
 	"approved_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "story_families" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"family_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE "story_views" (
@@ -214,6 +222,9 @@ ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_id_stories_i
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "stories" ADD CONSTRAINT "stories_originating_family_id_families_id_fk" FOREIGN KEY ("originating_family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_families" ADD CONSTRAINT "story_families_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_families" ADD CONSTRAINT "story_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
@@ -237,5 +248,8 @@ CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_i
 CREATE INDEX "prose_revisions_story_idx" ON "prose_revisions" USING btree ("story_id");
 CREATE INDEX "stories_owner_idx" ON "stories" USING btree ("owner_person_id");
 CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");
+CREATE UNIQUE INDEX "story_families_story_family_uq" ON "story_families" USING btree ("story_id","family_id");
+CREATE INDEX "story_families_story_idx" ON "story_families" USING btree ("story_id");
+CREATE INDEX "story_families_family_idx" ON "story_families" USING btree ("family_id");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
 CREATE INDEX "story_views_person_idx" ON "story_views" USING btree ("person_id");

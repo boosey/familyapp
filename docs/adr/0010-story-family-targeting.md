@@ -60,3 +60,25 @@ sub-group *within* a targeted family (enforced as family in Phase 0).
 - **Asymmetry with Ask, on purpose:** an `Ask` carries a single `familyId` (one raised question in one
   context); a Story carries a *set* of target families (one telling, surfaced into several). Not
   unified.
+
+## Implementation status (wired 2026-07-01)
+
+The read seam and the write side landed together (so the hub never narrows reads without a writer):
+
+- **`story_families`** table added; visibility enforced by `decideStoryRead` + the SQL predicate
+  (ADR-0011). `stories.originating_family_id` (nullable FK) records the family a recording was
+  **captured for** — threaded from `link_sessions.familyId` through `resolveCaptureActor` →
+  `ingestRecording` → the draft. Absent for the in-hub account path (no session family).
+- **Default targeting is wired into `approveAndShareStory`** (same transaction as the state walk +
+  consent row). The rule is a single pure function, `computeDefaultFamilyTargets` (exported and
+  unit-tested in isolation): *originating family (then the ask's family), restricted to
+  the owner's active families → else the owner's sole active family → else target nothing.* A
+  multi-family narrator with no signal yields `ambiguousDefaultTarget: true` on the result (surfaced,
+  not swallowed — the future LLM-suggestion hook). An explicit pre-approval target set is never
+  clobbered. `public`/`private` skip targeting.
+- **No backfill of existing data.** There are **no users yet** (active development, no migrations),
+  so there are no pre-existing untargeted shared stories to repair, and dev-seed approves through
+  `approveAndShareStory` (which already default-targets). A one-shot backfill was considered and
+  deliberately **not** kept — the go-forward approval path covers every new story, and a repair pass
+  is trivially re-derivable from `computeDefaultFamilyTargets` if a future import ever needs one.
+- **No migration needed:** the new column rides the reseed workflow, per the single-schema policy.
