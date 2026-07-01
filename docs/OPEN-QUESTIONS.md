@@ -21,12 +21,54 @@ would require real-world action (paid accounts, vendor signup, real personal dat
 
 ## Parked features — need their own design session
 
+- **Asker-avatar: video forms (2026-07-01).** Phase 2 ships the *voice* asker-avatar only (the
+  asker's real audio recording delivered to the teller in-session). Video is deferred, and when it
+  lands it may take any of four forms — noted now so it's designed deliberately, not defaulted:
+  1. an **actual video recording** of the asker;
+  2. a **synthesized avatar** lip-syncing the asker's **audio recording**;
+  3. a **synthesized avatar** speaking a **typed** question (TTS);
+  4. a **synthesized avatar** speaking an **AI rephrasing** of a recorded or typed question.
+  Forms 2–4 are governance-heavy (synthetic likeness + minor PII) and belong at/after the Phase-4
+  consent/estate layer. Full-AI-rephrase of the question (form 4, and its audio equivalent) is the
+  same "no rewrite yet" deferral already taken for the voice ask.
+- **Asker-avatar: consent scope (2026-07-01).** Deferred by decision. Basic functionality first:
+  the recording is a permanent Media linked to the Ask and travels **asker → teller only**. The
+  data model must reserve the seam now (a `deliveredToTeller` flag + a nullable consent pointer on
+  the Ask recording) so consent is a fill-in, not a retrofit. Family-wide visibility of the clip,
+  retraction (esp. a minor retracting at majority), and the dual-ownership of a Q&A artifact
+  (asker owns the clip, narrator owns the answer) all wait for the big consent discussion.
+- **Asker-avatar: safety/moderation of the asker's clip (2026-07-01).** Unflagged risk to surface
+  later: an asker's recording is *unmoderated human content* played into the narrator's dignified,
+  "sacrosanct" space. A distressing or inappropriate clip could reach a vulnerable elder. Options
+  to weigh when designed: trust the closed family group; let the narrator/steward pre-screen;
+  transcribe the clip and run the existing `behavior.ts` sensitivity gate over the transcript
+  before it may play in-session. Not built now; noted so shipping the clip path is a conscious
+  choice, not an oversight.
+
 - **Richer biographical "picture of the person" extraction (2026-06-29).** Beyond the current
   fixed 6-field `augmentProfileFromStory` (hometown, siblingContext, currentLocation,
   occupationSummary, hasChildren, hasGrandchildren), Alex wants to extract key facts about a
   person by analyzing the stories they submit — building an evolving portrait, not a fixed schema.
   Flagged as a new feature deserving its own brainstorming/design session; not in the prose-
   provenance work (see `docs/superpowers/specs/2026-06-29-prose-provenance-and-human-correction-design.md`).
+
+- **Depicted-third-party consent for story imagery (2026-07-01).** A family photo can show people
+  other than the uploader. Alex's intended (deferred) model: uploading a photo IS the uploader's
+  consent, and no further consent is needed to reuse that photo anywhere in the system. A *depicted*
+  third party's control is a later feature — **with facial recognition**, a recognized person may
+  suppress a photo they appear in system-wide; **without it**, a withdrawal is only a *request to the
+  uploader* to suppress. This is deliberately more third-party control than public social media offers
+  (and arguably overkill given this is a private, non-public network) — recorded as intent, not built
+  in v1. No `consent_records` involvement for images; images are mutable presentation (see CONTEXT.md
+  "Story imagery").
+
+- **Story imagery: suggestion/search, external source, and photo-library integration (2026-07-01).**
+  The album + attachment model is designed (ADR-0009), but three sizable sub-features were
+  deliberately *not* grilled and should not ship as one increment: (1) the **suggestion/search**
+  mechanism (a content→image vendor seam, how story tags/prose feed it, family-album search vs.
+  external, ranking, the pipeline stage); (2) the **external open-license source** (which provider,
+  license/attribution capture, legal); (3) **Apple/Google Photos** integration (OAuth-heavy — likely
+  its own phase). Each needs its own design pass.
 
 ## Assumptions made (correct me if wrong)
 
