@@ -16,6 +16,7 @@ import { createLinkSession } from "@chronicle/capture";
 import { createInvitation } from "@chronicle/core";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
+import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
   INVITE_FLASH_COOKIE,
   INVITE_FLASH_PATH,
@@ -29,9 +30,14 @@ import { ClearInviteFlash } from "./ClearInviteFlash";
 
 async function origin(): Promise<string> {
   const h = await headers();
-  const host = h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+  // Prefer the configured public origin (APP_BASE_URL); fall back to request headers. In prod this
+  // never emits a localhost link — resolvePublicOrigin throws if it can't determine a real origin.
+  return resolvePublicOrigin({
+    configuredBaseUrl: process.env.APP_BASE_URL,
+    host: h.get("host"),
+    forwardedProto: h.get("x-forwarded-proto"),
+    isProduction: process.env.NODE_ENV === "production",
+  });
 }
 
 async function createInvite(formData: FormData): Promise<void> {
