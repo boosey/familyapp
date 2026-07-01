@@ -62,6 +62,40 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   in v1. No `consent_records` involvement for images; images are mutable presentation (see CONTEXT.md
   "Story imagery").
 
+- **LLM-suggested family targeting (2026-07-01).** A futures item on top of ADR-0010's story→family
+  targeting: when a new item (Story, and later Caption/Ask) is created, an LLM evaluates its content
+  and **suggests which families it belongs to** — e.g. recognizing a wedding story spans both Boudreaux
+  and Carney, or that a childhood story is Boudreaux-only. A suggestion, never an auto-apply: the
+  narrator confirms, preserving the "never over-share by default" rule. Same weight class as the other
+  content→metadata engines (imagery suggestion, `eraYear` inference) and shares their deferral. Its
+  grounding must respect that targeting can only offer families the owner actually belongs to.
+
+- **Mode 4 "Ask the archive" Q&A engine (2026-07-01).** Deferred out of Explore v1. Keyword/
+  full-text **search** ships in v1 (a pure projection over `title`/`summary`/`transcript`/`prose`/
+  `tags`/`eraLabel`). The natural-language **Q&A synthesis** — retrieval + LLM over the chronicle —
+  is a new vendor seam (embeddings, grounding/citation policy) of the same weight class as the
+  imagery-suggestion engine, and it carries the product's sharpest risk: its grounding corpus MUST be
+  exactly the per-viewer visible-story projection, or a synthesized answer becomes a **consent leak**
+  (quoting/alluding to a story the explorer may not read). Its own design pass owns the grounding-set
+  authorization and no-fabrication guarantees. The one link to the existing **Ask**: when the archive
+  comes up empty, offer to **escalate** the question into a real Ask to the relevant narrator (the
+  loop-closer). "Ask the archive" is otherwise read-only and creates no content and no consent event.
+
+- **Mode 4 map surface (2026-07-01).** Deferred out of Explore v1. The timeline/feed/search
+  surfaces are pure projections over the existing spine; the **map is not** — `stories.eraLabel` is
+  free text ("Naples", "Cherry Street") with no coordinates and no place entity. A map needs its own
+  design pass: geocoding `eraLabel`, and the choice of whether **Place** becomes a first-class,
+  reusable entity ("everything that happened in Naples") or just a lat/lng stamped per story. Not a
+  view over the current model — a new model.
+
+- **Mode 4 family-tree surface (2026-07-01).** Deferred out of Explore v1, and the sharpest deferral:
+  the domain has **no person-to-person kinship at all**. `memberships` is a flat Person↔Family set
+  carrying a DB role; the only kinship signal is `invitations.relationshipLabel`, a free-text display
+  string, not a traversable edge. A real family tree is a genealogy graph — a new relationship model
+  that contradicts the current flat-membership shape. Its own design pass must first decide whether
+  kinship edges belong in this product at all, or whether "tree" is better served lightly (e.g.
+  grouping the feed by narrator) without a genealogy model.
+
 - **Story imagery: suggestion/search, external source, and photo-library integration (2026-07-01).**
   The album + attachment model is designed (ADR-0009), but three sizable sub-features were
   deliberately *not* grilled and should not ship as one increment: (1) the **suggestion/search**

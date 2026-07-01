@@ -57,8 +57,17 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   first story. Gated by `Person.onboardedAt`.
 
 ## Narrative & consent
+- **Surfaced-into (family targeting)** — the set of Families a Story is shared into (many-to-many).
+  A Story is owned by one Person and is **never duplicated** per family; targeting only scopes *which*
+  of the owner's families may see it (it is not a per-family copy). `family`/`branch`-tier visibility
+  = a viewer co-membered with the owner in a family the story is **targeted to** *and* that the owner
+  still belongs to — NOT every family the owner happens to be in. This lets a Person in two families
+  (e.g. Boudreaux and Carney) put the wedding story in **both** while keeping a Boudreaux-only story
+  **out** of Carney. `private` = owner only (targeting irrelevant); `public` = everyone. Contrast the
+  **Ask**, which carries a single family context, not a set. See ADR-0010.
 - **Story** — the unit of narrative, owned by one Person, surfaced into Families per its
-  **audience tier** (`private` | `branch` | `family` | `public`). Stories have a `kind`:
+  **audience tier** (`private` | `branch` | `family` | `public`) **and its family targeting** (see
+  *Surfaced-into*). Stories have a `kind`:
   `voice` (audio recording is canonical; transcript/prose are derived and regenerable) or
   `text` (typed response is canonical; no recording). A user may switch to keyboard at any
   time; the resulting story is a text story, not a failed voice story.
@@ -169,3 +178,35 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 - **Warm callback** — the interviewer's opening on turn 0 when prior stories exist: a brief,
   concrete reference to something the user said in a previous session. Makes sessions feel like
   a continuing relationship. Fires after any deeplink ask is handled; intake resumes from turn 1.
+
+## Explore (Mode 4 — the payoff surface)
+- **Explore surface** — the read/browse side of the chronicle (Mode 4): where members read, listen,
+  and wander. **Exploring is an action/lens, not a user type** (like Narrating and Asking) — the same
+  rich surface serves the curious grandchild and the elderly narrator alike; simplifications for an
+  elder are options layered *on top*, never a lesser or separate surface. Every explorer is an
+  **authenticated member** with an authorization disposition; there is no anonymous/external viewer
+  and **no external sharing** in v1 (the `public` tier remains a stored seam with no read surface,
+  so external sharing is not irreversibly prohibited — just not built). Everything Explore shows is
+  read through the **single front door**; it adds no new authorization, only new *shapes* of the same
+  authorized read, and is **family-scoped** — an explorer sees all content they are authorized to see
+  across all their families in one login, filterable to a single family. See ADR-0011.
+- **Story feed** — the reverse-chronological (by recording time) stream of stories an explorer may
+  see. A view over the visible-story projection; not a new artifact. The per-viewer "New" badge rides
+  the existing `story_views` read-state.
+- **Timeline** — the same visible stories arranged by the era they are *about* (`eraYear`), not when
+  recorded. Stories with no era gather in an explicit **Undated** section (never silently dropped).
+  Default scope is one narrator's life; a whole-family toggle is the same projection widened.
+  Inferring `eraYear` from prose is a deferred extraction step; v1 uses the era already supplied.
+- **Chronicle search** — keyword/full-text search *within* the stories an explorer may see (title,
+  summary, transcript, prose, tags, place label). DISTINCT from **Family search**, which finds a
+  *discoverable family to join*: chronicle search reads inside families you are already in; family
+  search finds new families. Opposite directions.
+- **Ask the archive** — a read-only question answered from the chronicle the explorer may already
+  see. **NOT an Ask**: it targets the corpus, creates no Story, waits for no human, writes no consent
+  event. Its one link to Ask is the **escalation** — when the archive has no answer, it offers to send
+  a real Ask to the relevant narrator (closing the loop). The Q&A synthesis engine is deferred (its
+  grounding corpus must equal the per-viewer visible projection or it becomes a consent leak); v1
+  ships **Chronicle search** only.
+- **Clip** — a time-range selection over a Story's canonical recording `(story, start, end)`, **not a
+  new Media** (no re-encode, no new consent artifact) — a way to point at a moment. Trimming UI and
+  any external sharing are deferred; v1 exploration is in-app and whole-story.
