@@ -17,7 +17,11 @@ import {
   createPostgresDatabase,
   type Database,
 } from "@chronicle/db";
-import { FilesystemMediaStorage, type MediaStorage } from "@chronicle/storage";
+import {
+  FilesystemMediaStorage,
+  R2MediaStorage,
+  type MediaStorage,
+} from "@chronicle/storage";
 import {
   createPipeline,
   ScriptedTranscriber,
@@ -47,6 +51,77 @@ function anchor(p: string): string {
 
 const DEV_DB_DIR = anchor(process.env.CHRONICLE_DB_DIR ?? "./.pglite/dev");
 const DEV_MEDIA_DIR = anchor(process.env.CHRONICLE_MEDIA_DIR ?? "./.media");
+
+// Required R2 (S3-compatible) env vars. R2MediaStorage is selected only when ALL FOUR are present
+// and non-empty: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET.
+// (R2_PRESIGN_EXPIRY_SECONDS is intentionally NOT read — see selectMediaStorage below: this app
+// never calls getUrl, so presign expiry is moot.)
+type StorageEnv = NodeJS.ProcessEnv | Record<string, string | undefined>;
+
+const R2_ENV_VARS = [
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+] as const;
+
+/** A value "counts" as present only if it is a non-blank string (whitespace-only is NOT set). */
+function present(v: string | undefined): boolean {
+  return typeof v === "string" && v.trim() !== "";
+}
+
+/**
+ * PURE env→MediaStorage decision, extracted from `build()` so it can be unit-tested without
+ * opening PGlite (see __tests__/media-storage-selection.test.ts).
+ *
+ * Runtime switch (mirrors the DATABASE_URL / Clerk / GROQ_API_KEY switches in build()): in PROD,
+ * the host sets the four R2_* vars and we persist audio to Cloudflare R2 — the Vercel/serverless
+ * filesystem is ephemeral, so FilesystemMediaStorage would silently lose every uploaded recording.
+ * Anywhere those vars are absent — local dev, CI — we stay on the filesystem store so `pnpm dev`
+ * works with no object-store to provision.
+ *
+ * FAIL LOUD on PARTIAL config: if SOME (but not all four) R2 vars are set, we THROW rather than
+ * silently falling back to the ephemeral filesystem store. A half-configured prod deploy is the
+ * data-loss trap this whole change exists to prevent — every upload would be lost with zero
+ * signal. An immediate boot crash naming the missing vars is the correct, debuggable failure.
+ * "Present" means non-blank: a whitespace-only value (e.g. "   ") does NOT count, so it can't
+ * sneak a garbage accountId/bucket into the R2 client that would only fail at first network call.
+ *
+ * CRITICAL — single front door (see CLAUDE.md): the ONLY byte surface is the audited
+ * /api/media/[id] route, which runs core authorization then calls `storage.getBytes(key)`.
+ * `getUrl` is never called in apps/web. We construct R2MediaStorage WITHOUT a `publicBaseUrl`, so
+ * the only URL it could ever produce is a presigned (signed, expiring) one — and even that is
+ * never produced, because nothing here calls getUrl. (Filesystem sets publicBaseUrl only to
+ * satisfy the MediaStorage interface; that "/media" string is NOT a real route — there is no
+ * /media handler, only /api/media/[id] — so if getUrl were ever called it would return a path
+ * that does NOT go through the audited route. The safety rests on getUrl being unused.)
+ */
+export function selectMediaStorage(env: StorageEnv): MediaStorage {
+  const presentCount = R2_ENV_VARS.filter((name) => present(env[name])).length;
+
+  if (presentCount > 0 && presentCount < R2_ENV_VARS.length) {
+    const missing = R2_ENV_VARS.filter((name) => !present(env[name]));
+    throw new Error(
+      `Partial R2 configuration: ${presentCount} of ${R2_ENV_VARS.length} set. ` +
+        `Missing: ${missing.join(", ")}. Set all four or none.`,
+    );
+  }
+
+  if (presentCount === R2_ENV_VARS.length) {
+    return new R2MediaStorage({
+      accountId: env.R2_ACCOUNT_ID!.trim(),
+      accessKeyId: env.R2_ACCESS_KEY_ID!.trim(),
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY!.trim(),
+      bucket: env.R2_BUCKET!.trim(),
+      // publicBaseUrl intentionally omitted — do NOT set it; see the note above.
+    });
+  }
+
+  return new FilesystemMediaStorage({
+    baseDir: anchor(env.CHRONICLE_MEDIA_DIR ?? "./.media"),
+    publicBaseUrl: "/media",
+  });
+}
 
 type Runtime = {
   db: Database;
@@ -93,7 +168,6 @@ function ensureDir(p: string): void {
 }
 
 async function build(): Promise<Runtime> {
-  ensureDir(DEV_MEDIA_DIR);
   // Runtime switch: in PROD, hosts set DATABASE_URL (Supabase / Neon / any managed Postgres)
   // and we use the postgres-js Drizzle adapter. Otherwise — local dev, CI, anywhere unset —
   // stay on PGlite so `pnpm dev` keeps working with no external Postgres to provision.
@@ -114,10 +188,13 @@ async function build(): Promise<Runtime> {
     // RESEEDING — the dev seed blows the DB away and re-applies the current schema (resetSchema).
     await applySchema(db.$pglite!);
   }
-  const storage = new FilesystemMediaStorage({
-    baseDir: DEV_MEDIA_DIR,
-    publicBaseUrl: "/media",
-  });
+  // Env switch (R2 in prod, filesystem in dev) — see selectMediaStorage. The dev media dir is only
+  // pre-created when we actually use the filesystem store: on Vercel/serverless the package dir is
+  // read-only, so an unconditional mkdir there would throw at boot when R2 is configured.
+  const storage = selectMediaStorage(process.env);
+  if (storage instanceof FilesystemMediaStorage) {
+    ensureDir(DEV_MEDIA_DIR);
+  }
   // Runtime switch: production hosts set both Clerk keys with valid prefixes and get the Clerk
   // adapter; local dev and CI leave them unset (or use placeholders) and get the mock provider —
   // a real email+password store (`mock_auth_users`) so `pnpm dev` exercises the actual signup /
