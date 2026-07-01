@@ -26,6 +26,7 @@
     "@chronicle/storage": "workspace:*",
     "@chronicle/transcribe-groq": "workspace:*",
     "@clerk/nextjs": "^6.9.6",
+    "@sentry/nextjs": "^10.62.0",
     "drizzle-orm": "^0.38.3",
     "inngest": "^3.54.0",
     "lucide-react": "^1.22.0",

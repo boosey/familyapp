@@ -597,6 +597,11 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "trigger.dev",
       "@trigger.dev/sdk",
     ];
+    // Scope-prefix bans: any import under one of these npm scopes is forbidden, regardless of the
+    // concrete package (e.g. "@sentry/nextjs", "@sentry/node", "@sentry/core"). Sentry lives only
+    // in apps/web — it must never leak into the IP packages. Matched on the quoted import prefix so
+    // a future `import ... from "@sentry/anything"` fails CI.
+    const forbiddenPrefixes = ["@sentry/"];
     const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
     const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src", "packages/interviewer/src"];
     // Documented exception: `packages/storage/src/r2.ts` is the production R2 adapter and is the
@@ -613,6 +618,11 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
         for (const f of forbidden) {
           if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
             offenders.push(`${full} imports ${f}`);
+          }
+        }
+        for (const p of forbiddenPrefixes) {
+          if (contents.includes(`"${p}`) || contents.includes(`'${p}`)) {
+            offenders.push(`${full} imports ${p}*`);
           }
         }
       });
