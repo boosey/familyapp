@@ -42,6 +42,9 @@ export default defineConfig({
       "@chronicle/pipeline": fileURLToPath(
         new URL("../../packages/pipeline/src/index.ts", import.meta.url),
       ),
+      "@chronicle/interviewer": fileURLToPath(
+        new URL("../../packages/interviewer/src/index.ts", import.meta.url),
+      ),
       "@chronicle/transcribe-groq": fileURLToPath(
         new URL("../../packages/transcribe-groq/src/index.ts", import.meta.url),
       ),
@@ -50,6 +53,9 @@ export default defineConfig({
       ),
       "@chronicle/llm-groq": fileURLToPath(
         new URL("../../packages/llm-groq/src/index.ts", import.meta.url),
+      ),
+      "@chronicle/queue-inngest": fileURLToPath(
+        new URL("../../packages/queue-inngest/src/index.ts", import.meta.url),
       ),
     },
   },

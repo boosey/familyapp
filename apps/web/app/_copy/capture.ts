@@ -17,6 +17,12 @@ export const capture = {
     thanks: "Thank you. Your family will love hearing this.",
     pickUpLater:
       "Let's pick this up another time. The person who invited you will check in soon.",
+    // Slice 2b: shown while the out-of-band pipeline renders the story (poll until ready).
+    preparing: "One moment — we're getting your story ready…",
+    preparingSub: "Your recording is safe.",
+    // Soft cap: processing ran past its window. Never spin forever — reassure and let go.
+    takingLonger:
+      "This is taking a little longer than usual. Your recording is safe — you can check back in a bit.",
   },
   approve: {
     welcome: "Welcome.",
@@ -38,5 +44,11 @@ export const capture = {
     imFinished: "I'm finished",
     whoShouldHear: "Who should hear this?",
     approveAloud: "Approve aloud",
+    // Slice 2b: the narrator reached this page while the story is still rendering (draft). Show a
+    // warm "check back" view that polls and reveals the approve UI the moment it's ready.
+    preparingTitle: "Almost ready…",
+    preparingBody: "We're getting your story ready to hear. This page will update on its own.",
+    takingLonger:
+      "This is taking a little longer than usual. Your recording is safe — you can come back to this page in a bit.",
   },
 } as const;

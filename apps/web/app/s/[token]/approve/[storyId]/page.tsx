@@ -10,6 +10,7 @@ import { resolveLinkSession } from "@chronicle/capture";
 import { getStoryForViewer } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { ApprovalRecorder } from "./ApprovalRecorder";
+import { ApprovePending } from "./ApprovePending";
 import { KindredListenBar } from "@/app/_kindred";
 import { capture } from "@/app/_copy";
 
@@ -62,6 +63,14 @@ export default async function ApprovePage({
     { kind: "link_session", personId: resolved.personId },
     storyId,
   );
+
+  // Draft-tolerant (slice 2b): the narrator may arrive while the durable pipeline is still
+  // rendering (story === draft). Show the "almost ready" polling view, which reveals this same
+  // approve UI the moment the story reaches pending_approval. The owner always sees their own
+  // draft (front door), so this stays scoped to the narrator's own story.
+  if (story && story.ownerPersonId === resolved.personId && story.state === "draft") {
+    return <ApprovePending token={token} storyId={story.id} />;
+  }
 
   if (!story || story.ownerPersonId !== resolved.personId || story.state !== "pending_approval") {
     return (

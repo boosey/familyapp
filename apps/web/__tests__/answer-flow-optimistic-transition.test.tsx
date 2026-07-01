@@ -13,15 +13,28 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, push: () => {} }),
 }));
 
+const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
+
 // A controllable record action: resolves only when we call `resolveRecord`, so the test can
 // assert the pending screen WHILE the action is still awaiting.
-let resolveRecord: (v: { error: string } | undefined) => void;
+let resolveRecord: (v: { storyId: string } | { error: string }) => void;
 const recordAnswerAction = vi.fn(
   (..._args: unknown[]) =>
-    new Promise<{ error: string } | undefined>((res) => (resolveRecord = res)),
+    new Promise<{ storyId: string } | { error: string }>((res) => (resolveRecord = res)),
+);
+// Status poll: defaults to "ready" on the first probe (the dev/CI synchronous-dispatch case).
+// Individual tests can override the queued return values.
+const getAnswerStatusAction = vi.fn(
+  async (
+    ..._args: unknown[]
+  ): Promise<{ status: "processing" | "ready"; storyId: string }> => ({
+    status: "ready",
+    storyId: STORY_ID,
+  }),
 );
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   recordAnswerAction: (...args: unknown[]) => recordAnswerAction(...args),
+  getAnswerStatusAction: (...args: unknown[]) => getAnswerStatusAction(...args),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
 }));
@@ -87,10 +100,43 @@ describe("AnswerFlow optimistic transition", () => {
     const audio = document.querySelector("audio");
     expect(audio?.getAttribute("src")).toBe("blob:local-take");
 
-    // On success the client refreshes (the keyed remount to review-ready is covered elsewhere).
-    resolveRecord(undefined);
+    // On success the action returns a storyId; the status poll returns `ready` (dev/CI synchronous
+    // dispatch) and the client refreshes (the keyed remount to review-ready is covered elsewhere).
+    resolveRecord({ storyId: STORY_ID });
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(getAnswerStatusAction).toHaveBeenCalledWith(STORY_ID);
   });
+
+  it("keeps the processing screen until the status poll reports ready, then transitions", async () => {
+    // Story is still rendering: first probe returns processing, the next returns ready (the prod
+    // durable-queue path — exercised without Inngest via the mocked status poll).
+    getAnswerStatusAction
+      .mockResolvedValueOnce({ status: "processing", storyId: STORY_ID })
+      .mockResolvedValueOnce({ status: "ready", storyId: STORY_ID });
+
+    render(
+      <AnswerFlow
+        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
+        questionText="What have you learned about being a grandparent?"
+        askerName="Sam"
+        draft={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
+
+    resolveRecord({ storyId: STORY_ID });
+
+    // While processing, the polishing screen stays up and no refresh fires yet.
+    await waitFor(() => expect(getAnswerStatusAction).toHaveBeenCalled());
+    expect(screen.getByText(/Polishing your words/)).toBeTruthy();
+
+    // The second probe (after the ~2.5s poll interval) returns ready → refresh into review.
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce(), { timeout: 8000 });
+  }, 12000);
 
   it("surfaces a render failure on the pending screen and returns to record on retry", async () => {
     render(
