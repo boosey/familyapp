@@ -65,3 +65,13 @@ export {
 } from "./postgres-client";
 export { createTestDatabase } from "./testing";
 export { applySchema, resetSchema, applySchemaToPostgres } from "./migrate";
+export {
+  parseExpectedSchema,
+  introspectSchema,
+  diffSchema,
+  assertSchemaParity,
+  assertPostgresSchemaParity,
+  type SchemaShape,
+  type SqlRunner,
+  type AssertSchemaParityOptions,
+} from "./schema-parity";

@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   applySchema,
   applySchemaToPostgres,
+  assertPostgresSchemaParity,
   createPgliteDatabase,
   createPostgresDatabase,
   type Database,
@@ -217,6 +218,17 @@ async function build(): Promise<Runtime> {
     // for bootstrapping a fresh Supabase/Neon project. Set `CHRONICLE_RUN_MIGRATIONS=1` to run it.
     if (db.$postgres && process.env.CHRONICLE_RUN_MIGRATIONS === "1") {
       await applySchemaToPostgres(db.$postgres);
+    }
+    // FAIL LOUD on schema drift (mirrors selectMediaStorage's fail-loud on partial R2 config).
+    // applySchemaToPostgres only bootstraps a FRESH DB — it no-ops once `persons` exists — so any
+    // table/column/enum-value added after first boot is NEVER applied to a live Neon DB. That is
+    // how prod drifted (missing stories.originating_family_id, story_families, intake_answers,
+    // intake_origin, media_kind='intake_audio'): deploys succeeded and the app 500'd at query time
+    // with Postgres 42703 "column ... does not exist", invisible until a user hit the page. This
+    // assertion crashes boot with a descriptive list of what's missing instead. UNCONDITIONAL
+    // (not gated behind CHRONICLE_RUN_MIGRATIONS) — the whole point is it always runs in prod.
+    if (db.$postgres) {
+      await assertPostgresSchemaParity(db.$postgres);
     }
   } else {
     ensureDir(DEV_DB_DIR);

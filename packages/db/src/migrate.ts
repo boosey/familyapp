@@ -28,8 +28,12 @@ function readSql(rel: string): string {
   return readFileSync(path, "utf8").replaceAll("--> statement-breakpoint", "");
 }
 
-/** The full schema SQL (table DDL then invariants), concatenated. */
-function schemaSql(): string {
+/**
+ * The full schema SQL (table DDL then invariants), concatenated. Exported so the schema-parity
+ * guard can derive the EXPECTED schema from the same source of truth these apply primitives use
+ * (see schema-parity.ts) — never re-read or duplicate the file path logic elsewhere.
+ */
+export function schemaSql(): string {
   return SCHEMA_FILES.map(readSql).join("\n");
 }
 
