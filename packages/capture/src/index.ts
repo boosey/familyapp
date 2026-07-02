@@ -23,3 +23,8 @@ export {
   type CaptureApprovalInput,
   type CaptureApprovalResult,
 } from "./approval";
+export {
+  ingestIntakeRecording,
+  type IngestIntakeInput,
+  type IngestIntakeResult,
+} from "./intake-capture";

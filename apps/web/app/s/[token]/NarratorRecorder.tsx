@@ -10,31 +10,32 @@ import { useRouter } from "next/navigation";
 import { KindredVoiceButton } from "@/app/_kindred";
 import { capture, common } from "@/app/_copy";
 import { pollUntilReady } from "@/lib/poll-status";
+import { useMicRecorder } from "@/lib/use-mic-recorder";
 
 // `processing` = capture saved, pipeline rendering out-of-band; `slow` = soft cap reached.
-type Phase = "idle" | "listening" | "saving" | "processing" | "slow" | "done" | "softfail";
+type Phase = "processing" | "slow" | "done" | "softfail";
 
 export function NarratorRecorder({ token, askId = null }: { token: string; askId?: string | null }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("idle");
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  // null while recording is active (mic phase drives UI); set once recording completes.
+  const [phase, setPhase] = useState<Phase | null>(null);
   const pollAbortRef = useRef<AbortController | null>(null);
 
   // Abort any in-flight processing poll on unmount.
   useEffect(() => () => pollAbortRef.current?.abort(), []);
 
-  const upload = useCallback(async () => {
-    // Create + register the abort controller as the FIRST statement, before any await: if the
-    // component unmounts DURING the capture POST (which happens before we'd otherwise reach the
-    // poll), the unmount cleanup must see a live controller to abort. Otherwise the upload would
-    // resume as a zombie and could router.push() a user who already navigated away (ghost nav).
+  const upload = useCallback(async (blob: Blob) => {
+    // Commit to the processing screen before the first await so there is no idle-flash window
+    // between onstop (which resets micPhase → idle) and the POST resolving. The processing
+    // screen is the correct optimistic state: the audio is captured, the pipeline is next.
+    setPhase("processing");
+    // Create + register the abort controller as the next statement, still before any await: if
+    // the component unmounts DURING the capture POST the unmount cleanup must see a live
+    // controller to abort. Otherwise the upload would resume as a zombie and could router.push()
+    // a user who already navigated away (ghost nav).
     const controller = new AbortController();
     pollAbortRef.current = controller;
     try {
-      const type = mediaRecorderRef.current?.mimeType ?? "audio/webm";
-      const blob = new Blob(chunksRef.current, { type });
       const form = new FormData();
       form.append("token", token);
       form.append("audio", blob, "recording.webm");
@@ -58,7 +59,6 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       // The story may still be rendering out-of-band (prod durable queue) or already ready
       // (dev/CI synchronous dispatch). Poll the token-scoped status until ready, then route to
       // the approval surface. On the soft cap, show a warm "taking longer" message (never hang).
-      setPhase("processing");
       const outcome = await pollUntilReady({
         getStatus: async () => {
           const r = await fetch(
@@ -89,31 +89,10 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     }
   }, [token, askId, router]);
 
-  const start = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-      });
-      streamRef.current = stream;
-      chunksRef.current = [];
-      const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      mr.onstop = () => void upload();
-      mediaRecorderRef.current = mr;
-      mr.start();
-      setPhase("listening");
-    } catch {
-      setPhase("softfail");
-    }
-  }, [upload]);
-
-  const finish = useCallback(() => {
-    setPhase("saving");
-    mediaRecorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, []);
+  const { phase: micPhase, start, finish } = useMicRecorder({
+    onRecorded: (blob) => void upload(blob),
+    onError: () => setPhase("softfail"),
+  });
 
   if (phase === "processing") {
     return (
@@ -190,25 +169,15 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     );
   }
 
-  const onClick = phase === "listening" ? finish : phase === "idle" ? start : undefined;
+  const onClick = micPhase === "listening" ? finish : micPhase === "idle" ? start : undefined;
 
   return (
     <KindredVoiceButton
-      listening={phase === "listening"}
-      saving={phase === "saving"}
+      listening={micPhase === "listening"}
+      saving={micPhase === "saving"}
       size={220}
-      label={phase === "listening" ? common.voiceButton.listening : phase === "saving" ? common.voiceButton.oneMoment : common.voiceButton.tapToSpeak}
+      label={micPhase === "listening" ? common.voiceButton.listening : micPhase === "saving" ? common.voiceButton.oneMoment : common.voiceButton.tapToSpeak}
       onClick={onClick}
     />
   );
-}
-
-function pickMimeType(): string {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4"];
-  if (typeof MediaRecorder !== "undefined") {
-    for (const c of candidates) {
-      if (MediaRecorder.isTypeSupported(c)) return c;
-    }
-  }
-  return "audio/webm";
 }

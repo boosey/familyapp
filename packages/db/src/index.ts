@@ -54,6 +54,9 @@ export type {
   ProseRevision,
   NewProseRevision,
   ProseRevisionLevel,
+  IntakeAnswer,
+  NewIntakeAnswer,
+  IntakeOrigin,
 } from "./schema";
 export { createPgliteDatabase, type Database } from "./client";
 export {

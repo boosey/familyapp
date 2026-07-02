@@ -74,3 +74,5 @@ export {
   withLogContext,
   newCorrelationId,
 } from "./logger";
+
+export { transcribeIntakeAudio, type IntakeAudio } from "./transcribe-intake";

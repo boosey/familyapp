@@ -10,7 +10,9 @@
  * non-content read — no @chronicle/core front-door bypass and no architecture-allowlist entry.
  */
 import { redirect } from "next/navigation";
-import { createCoreAnchorSource, nextIntakeQuestion } from "@chronicle/interviewer";
+import type { BiographicalProfile } from "@chronicle/db";
+import { createCoreAnchorSource, nextIntakeQuestion, INTAKE_QUESTIONS } from "@chronicle/interviewer";
+import { listAnsweredQuestionKeys } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { AboutYouFlow } from "./AboutYouFlow";
 
@@ -26,8 +28,11 @@ export default async function AboutYouPage() {
   // No person row / unreadable profile → nothing to ask. Bounce to the hub.
   if (!anchors) redirect("/hub");
 
-  const first = nextIntakeQuestion(anchors.profile, new Set());
-  // Profile already complete → nothing to ask. Bounce to the hub.
+  const answered = new Set<string>(await listAnsweredQuestionKeys(db, ctx.personId));
+  const askedSet = new Set<keyof BiographicalProfile>();
+  for (const q of INTAKE_QUESTIONS) if (answered.has(q.key)) askedSet.add(q.key);
+  const first = nextIntakeQuestion(anchors.profile, askedSet);
+  // Profile already complete (or all questions already answered) → nothing to ask. Bounce to the hub.
   if (!first) redirect("/hub");
 
   return (

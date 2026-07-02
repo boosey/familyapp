@@ -10,11 +10,12 @@
  * the only producer in Phase 1; a later telephony adapter just produces the same `CapturedAudio`
  * and calls this exact function — no rebuild of capture.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { persistRecordingAndCreateDraft } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
 import { resolveCaptureActor } from "./identity";
+import { sha256Hex, extensionFor } from "./audio-util";
 
 /** The audio entry channel. The pipeline behind this is identical for every value. */
 export type CaptureSource = "web_link" | "telephony";
@@ -68,25 +69,6 @@ export class InvalidSessionError extends Error {
   }
 }
 
-function sha256Hex(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
-const EXT_BY_TYPE: Record<string, string> = {
-  "audio/webm": "webm",
-  "audio/ogg": "ogg",
-  "audio/wav": "wav",
-  "audio/x-wav": "wav",
-  "audio/wave": "wav",
-  "audio/mpeg": "mp3",
-  "audio/mp4": "m4a",
-  "audio/aac": "aac",
-  "audio/flac": "flac",
-};
-
-function extensionFor(contentType: string): string {
-  return EXT_BY_TYPE[contentType.split(";")[0]!.trim().toLowerCase()] ?? "bin";
-}
 
 export async function ingestRecording(
   db: Database,
