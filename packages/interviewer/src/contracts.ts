@@ -13,7 +13,7 @@
  * package for vendor-SDK imports and fails CI if any leak in.
  */
 
-import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
 
 export type { BiographicalProfile };
 
@@ -141,4 +141,41 @@ export interface AnchorSource {
     key: K,
     value: NonNullable<BiographicalProfile[K]>,
   ): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// FollowUpEvaluator — the propose side of propose-then-dispose (ADR-0013). The bought LLM reads a
+// take's transcript + light context and PROPOSES ranked tagged candidate threads. It decides
+// NOTHING about the loop: our code (decideFollowUp in behavior.ts) applies the caps, the rapport
+// gate, the distress short-circuit, the anti-repeat, and the emotional-door veto over these tags.
+// Vendor SDKs live only in adapters — the architecture test scans this package and fails CI on any
+// SDK import here. Phase 1 ships the mock (ScriptedFollowUpEvaluator); prod plugs Anthropic in.
+// ---------------------------------------------------------------------------
+
+export type { FollowUpCandidate };
+
+export interface FollowUpEvaluationInput {
+  /** Transcript of the take just recorded (the evaluator's primary input). */
+  answerTranscript: string;
+  /** The prompt this answer responded to (the Ask question, or the prior follow-up line). */
+  promptText: string;
+  /** Thread seeds already pursued this sitting — the model must propose only NOVEL threads. */
+  alreadyAskedSeeds: ReadonlyArray<string>;
+  /** Categories the narrator has already covered (novelty hint for the model). */
+  coveredCategories: ReadonlyArray<string>;
+  /** Follow-ups already asked in THIS thread (context only; code enforces the cap). */
+  followUpsAskedInThread: number;
+  /** True once the rapport threshold is met — a hint the model may weigh sensitivity against. */
+  rapportEstablished: boolean;
+}
+
+export interface FollowUpEvaluation {
+  /** Candidates (the model may rank; code re-ranks by confidence + tie-break authoritatively). */
+  candidates: FollowUpCandidate[];
+  /** Vendor model id, recorded in the decision record for replay/provenance. */
+  modelId: string;
+}
+
+export interface FollowUpEvaluator {
+  evaluate(input: FollowUpEvaluationInput): Promise<FollowUpEvaluation>;
 }

@@ -73,3 +73,11 @@ export {
 } from "./questions/intake";
 
 export { extractIntakeAnswer } from "./intake-extraction";
+
+export * from "./follow-up-policy";
+export type {
+  FollowUpEvaluationInput,
+  FollowUpEvaluation,
+  FollowUpEvaluator,
+  FollowUpCandidate,
+} from "./contracts";

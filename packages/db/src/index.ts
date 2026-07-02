@@ -58,6 +58,15 @@ export type {
   NewIntakeAnswer,
   IntakeOrigin,
 } from "./schema";
+export type {
+  FollowUpType,
+  FollowUpSensitivity,
+  FollowUpCandidate,
+  FollowUpDispositionReason,
+  CandidateDisposition,
+  FollowUpOutcome,
+  FollowUpPolicy,
+} from "./follow-up-types";
 export { createPgliteDatabase, type Database } from "./client";
 export {
   createPostgresDatabase,
