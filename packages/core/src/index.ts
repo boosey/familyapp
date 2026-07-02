@@ -1,6 +1,7 @@
 export {
   type AuthContext,
   type AuthDecision,
+  type ListStoriesForViewerOptions,
   viewerPersonId,
   decideStoryRead,
   decideMediaRead,

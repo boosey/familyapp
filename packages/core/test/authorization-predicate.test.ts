@@ -31,7 +31,8 @@ import {
   revokeConsent,
   targetStoryToFamily,
 } from "./helpers";
-import { consentRecords } from "@chronicle/db/schema";
+import { consentRecords, families, memberships, storyFamilies } from "@chronicle/db/schema";
+import { eq } from "drizzle-orm";
 
 /** mulberry32 — a tiny deterministic PRNG so property failures reproduce from their seed. */
 function mulberry32(seed: number): () => number {
@@ -146,6 +147,32 @@ describe("ADR-0011: SQL visibility predicate agrees with the oracle row-for-row"
       // The full population of stories, read directly (test-only) to drive the oracle.
       const allStories = await db.select().from(storiesTable);
 
+      // World facts needed to independently predict the family-scope filter's expected output.
+      const familyIds = (await db.select({ id: families.id }).from(families)).map(
+        (r) => r.id,
+      );
+      const targetRows = await db
+        .select({ storyId: storyFamilies.storyId, familyId: storyFamilies.familyId })
+        .from(storyFamilies);
+      const storiesTargetedToFamily = new Map<string, Set<string>>();
+      for (const r of targetRows) {
+        (storiesTargetedToFamily.get(r.familyId) ?? // ensure a set exists
+          storiesTargetedToFamily.set(r.familyId, new Set()).get(r.familyId)!).add(
+          r.storyId,
+        );
+      }
+      const activeMemberRows = await db
+        .select({ personId: memberships.personId, familyId: memberships.familyId })
+        .from(memberships)
+        .where(eq(memberships.status, "active"));
+      const activeFamiliesByPerson = new Map<string, Set<string>>();
+      for (const r of activeMemberRows) {
+        (activeFamiliesByPerson.get(r.personId) ??
+          activeFamiliesByPerson
+            .set(r.personId, new Set())
+            .get(r.personId)!).add(r.familyId);
+      }
+
       // Every viewer we test: each person (as an authenticated account) plus the anonymous surface.
       const viewers: AuthContext[] = [
         ...personIds.map((id) => ({ kind: "account" as const, personId: id })),
@@ -172,6 +199,27 @@ describe("ADR-0011: SQL visibility predicate agrees with the oracle row-for-row"
           [...predicateIds].sort(),
           `predicate/oracle disagreement for ${who} (seed ${seed >>> 0})`,
         ).toEqual([...oracleIds].sort());
+
+        // Family-scope invariant: for every family, the scoped feed must equal exactly
+        // { oracle-visible stories } ∩ { stories targeted to F } ∩ (viewer active in F ? all : ∅).
+        // This proves the filter only NARROWS and never reveals a family the viewer isn't in.
+        const viewerActive =
+          ctx.kind === "anonymous"
+            ? new Set<string>()
+            : activeFamiliesByPerson.get(ctx.personId) ?? new Set<string>();
+        for (const familyId of familyIds) {
+          const targeted = storiesTargetedToFamily.get(familyId) ?? new Set<string>();
+          const expected = viewerActive.has(familyId)
+            ? [...oracleIds].filter((id) => targeted.has(id))
+            : [];
+          const scoped = (
+            await listStoriesForViewer(db, ctx, { familyId })
+          ).map((s) => s.id);
+          expect(
+            [...scoped].sort(),
+            `family-scope disagreement for ${who} family ${familyId} (seed ${seed >>> 0})`,
+          ).toEqual([...expected].sort());
+        }
       }
     });
   }

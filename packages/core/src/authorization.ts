@@ -285,27 +285,90 @@ export function storyVisibilityPredicate(viewer: string | null): SQL {
 }
 
 /**
- * Lists stories visible to the viewer, optionally narrowed to one owner (e.g. the hub showing a
- * single narrator's approved stories). Instead of materializing every row and filtering in a JS
- * loop (N+1 consent/membership queries per story), this issues ONE query whose `WHERE` clause is
- * `storyVisibilityPredicate` — the same allow/deny logic as the single-item oracle, provably so
- * via the predicate↔oracle property test. Extra filters (owner scope here; future pagination /
- * sort / era / family-scope for Explore) compose as additional ANDed conditions.
+ * A composable `WHERE` fragment for Explore's family-scope filter ("show me just the Carney
+ * chronicle"). It matches a story iff it is TARGETED to `familyId` AND the VIEWER is an active
+ * member of that family. Two properties make it safe:
+ *   - It only ever NARROWS: it is ANDed with `storyVisibilityPredicate`, so a story the viewer
+ *     couldn't already read stays hidden even under its own family's filter. It is not an auth grant.
+ *   - It reveals nothing about families the viewer isn't in: a non-member (or anonymous) viewer
+ *     matches zero rows for that `familyId` — the `vm.person_id = viewer` join yields nothing — so
+ *     you can only browse the chronicles of families you actually belong to.
+ */
+function storyInFamilyForViewer(viewer: string | null, familyId: string): SQL {
+  return sql`EXISTS (
+    SELECT 1
+    FROM ${storyFamilies} sf
+    JOIN ${memberships} vm
+      ON vm.family_id = sf.family_id
+     AND vm.person_id = ${viewer}
+     AND vm.status = 'active'
+    WHERE sf.story_id = ${stories.id}
+      AND sf.family_id = ${familyId}
+  )`;
+}
+
+export interface ListStoriesForViewerOptions {
+  /** Narrow to a single owner (e.g. the hub showing one narrator's stories). */
+  ownerPersonId?: string;
+  /**
+   * Scope to one family's chronicle (Explore's "filter to just Carney"): only stories TARGETED to
+   * this family, and only when the VIEWER is an active member of it. Strictly narrowing — see
+   * `storyInFamilyForViewer`. A non-member/anonymous viewer gets an empty result for that family.
+   */
+  familyId?: string;
+  /** Page size (offset pagination). Omit for all rows. */
+  limit?: number;
+  /** Rows to skip. Omit for none. */
+  offset?: number;
+}
+
+/**
+ * Lists stories visible to the viewer, optionally narrowed to one owner and/or one family's
+ * chronicle, most-recent first, with offset pagination. Instead of materializing every row and
+ * filtering in a JS loop (N+1 consent/membership queries per story), this issues ONE query whose
+ * `WHERE` clause is `storyVisibilityPredicate` — the same allow/deny logic as the single-item
+ * oracle, provably so via the predicate↔oracle property test. Every option composes as an
+ * ADDITIONAL ANDed condition that can only narrow, never widen, the authorized set.
+ *
+ * Order is `COALESCE(approvedAt, createdAt) DESC` (when a story became visible — shared time, or
+ * creation for the owner's own drafts) with `id DESC` as a tiebreak, so it is a total order and
+ * offset pages are stable within a snapshot. NOTE: this is OFFSET pagination — on a live feed a
+ * story shared between two page fetches can shift the offset and skip/duplicate a row across pages.
+ * That is acceptable for the current read; switch to keyset/cursor pagination when Explore needs
+ * real-time-correct paging.
  */
 export async function listStoriesForViewer(
   db: Database,
   ctx: AuthContext,
-  opts: { ownerPersonId?: string } = {},
+  opts: ListStoriesForViewerOptions = {},
 ): Promise<Story[]> {
   const viewer = viewerPersonId(ctx);
   const conditions: SQL[] = [storyVisibilityPredicate(viewer)];
   if (opts.ownerPersonId) {
     conditions.push(eq(stories.ownerPersonId, opts.ownerPersonId));
   }
-  return db
+  if (opts.familyId) {
+    conditions.push(storyInFamilyForViewer(viewer, opts.familyId));
+  }
+
+  let q = db
     .select()
     .from(stories)
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .orderBy(
+      sql`COALESCE(${stories.approvedAt}, ${stories.createdAt}) DESC`,
+      desc(stories.id),
+    )
+    .$dynamic();
+  // Defensive clamp: a route may pass user-supplied pagination straight through. Ignore a
+  // non-positive/invalid limit rather than let a negative OFFSET raise at Postgres.
+  if (opts.limit != null && Number.isFinite(opts.limit) && opts.limit >= 0) {
+    q = q.limit(opts.limit);
+  }
+  if (opts.offset != null && Number.isFinite(opts.offset) && opts.offset > 0) {
+    q = q.offset(opts.offset);
+  }
+  return q;
 }
 
 /** Returns the Media iff the viewer is authorized; otherwise null. */
