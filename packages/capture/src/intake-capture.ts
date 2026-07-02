@@ -52,5 +52,6 @@ export async function ingestIntakeRecording(
     checksum,
   });
 
+  // always set: createIntakeRecording writes a media row before the intake_answers upsert
   return { intakeAnswerId: answer.id, mediaId: answer.mediaId!, storageKey: key };
 }
