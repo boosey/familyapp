@@ -49,8 +49,9 @@ const sentryBuildOptions = {
   // Skip Sentry's telemetry to the Sentry org during builds.
   telemetry: false,
   // Don't let the build auto-create Vercel cron monitors on deploy — opt in explicitly elsewhere
-  // if/when we actually want them.
-  automaticVercelMonitors: false,
+  // if/when we actually want them. (Nested under `webpack` since @sentry/nextjs deprecated the
+  // top-level `automaticVercelMonitors`.)
+  webpack: { automaticVercelMonitors: false },
 };
 
 export default withSentryConfig(nextConfig, sentryBuildOptions);
