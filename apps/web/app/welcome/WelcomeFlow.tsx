@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * Onboarding state machine (client): welcome → dob → doors.
+ * Onboarding state machine (client): welcome → dob.
  *
  * Design rules from the handoff that this preserves:
  *  - Date of birth is the ONE required ask; the rest of onboarding is optional.
  *  - Voice-first but never voice-only: every voice control is a visible STUB here (no mic in this
  *    environment) paired with a real typed path that is the actual way data is captured.
- *  - The "introduce yourself" door routes to the single intake surface at /hub/about-you (the
- *    inline interview that used to live here has been retired — one intake surface, reached from
- *    both onboarding and the hub reminder).
+ *  - Saving DOB routes straight into the single intake surface at /hub/about-you. The old "doors"
+ *    fork (which let a user skip family creation) is gone; family creation now happens earlier via
+ *    the /families/start path.
  */
 import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
@@ -17,7 +17,7 @@ import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
 import { saveDob } from "./actions";
 import { common, welcome } from "@/app/_copy";
 
-type Step = "welcome" | "dob" | "doors";
+type Step = "welcome" | "dob";
 
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
@@ -38,11 +38,9 @@ function daysInMonth(monthStr: string, yearStr: string): number {
 export function WelcomeFlow({
   firstName,
   invited,
-  hubDestination,
 }: {
   firstName: string;
   invited: boolean;
-  hubDestination: string;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("welcome");
@@ -68,10 +66,9 @@ export function WelcomeFlow({
     setError(null);
     try {
       await saveDob({ year: Number(year), month: Number(month), day: Number(day) });
-      setStep("doors");
+      router.push("/hub/about-you");
     } catch {
       setError(welcome.dobSaveError);
-    } finally {
       setBusy(false);
     }
   }
@@ -241,93 +238,6 @@ export function WelcomeFlow({
     );
   }
 
-  /* ── Doors (the fork) ──────────────────────────────────────────────────── */
-  if (step === "doors") {
-    return (
-      <main style={page}>
-        <div style={{ maxWidth: 720, width: "100%" }}>
-          <h1 style={{ ...serifHeadline, textAlign: "center" }}>
-            {welcome.destinationTitle(firstName)}
-          </h1>
-          <p style={{ ...sub, textAlign: "center", maxWidth: "46ch", margin: "12px auto 0" }}>
-            {welcome.destinationBody}
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 18,
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              marginTop: 32,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => router.push(hubDestination)}
-              style={{
-                textAlign: "left",
-                cursor: "pointer",
-                background: "var(--accent-soft)",
-                border: "var(--border-width) solid var(--accent)",
-                borderRadius: "var(--radius-xl)",
-                boxShadow: "var(--shadow-card)",
-                padding: "clamp(24px, 4vw, 36px)",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-label)",
-                  letterSpacing: "var(--tracking-mono)",
-                  color: "var(--accent-strong)",
-                }}
-              >
-                {welcome.primaryBadge}
-              </div>
-              <div style={{ ...serifHeadline, fontSize: "var(--text-story-lg)", margin: "10px 0 8px" }}>
-                {welcome.hubCardTitle}
-              </div>
-              <div style={{ ...sub, margin: 0 }}>
-                {welcome.hubCardBody}
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/hub/about-you")}
-              style={{
-                textAlign: "left",
-                cursor: "pointer",
-                background: "var(--surface-card)",
-                border: "var(--border-width) solid var(--border-strong)",
-                borderRadius: "var(--radius-xl)",
-                boxShadow: "var(--shadow-card)",
-                padding: "clamp(24px, 4vw, 36px)",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-label)",
-                  letterSpacing: "var(--tracking-mono)",
-                  color: "var(--support)",
-                }}
-              >
-                {welcome.introduceBadge}
-              </div>
-              <div style={{ ...serifHeadline, fontSize: "var(--text-story-lg)", margin: "10px 0 8px" }}>
-                {welcome.introduceTitle}
-              </div>
-              <div style={{ ...sub, margin: 0 }}>
-                {welcome.introduceBody}
-              </div>
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // `step` is exhaustively handled above (welcome | dob | doors); unreachable.
+  // `step` is exhaustively handled above (welcome | dob); unreachable.
   return null;
 }

@@ -1,15 +1,12 @@
 /**
- * /welcome — account onboarding host (welcome → dob → doors). The "introduce yourself" door routes
- * to the single intake surface at /hub/about-you; the inline interview that used to live here is
- * retired. The server component resolves identity + the post-onboarding destination once and hands
- * them to the client state machine; all persistence happens via the server actions in
- * ./actions.ts. The destination is precomputed here because memberships don't change mid-onboarding:
- * a Person already in a family lands on /hub, a manual signup with no family on /families/start.
+ * /welcome — account onboarding host (welcome → dob). Saving DOB routes straight into the single
+ * intake surface at /hub/about-you; the old "doors" fork (which let a user skip family creation) is
+ * retired. The server component resolves identity and hands it to the client state machine; all
+ * persistence happens via the server actions in ./actions.ts.
  */
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import { listActiveMembershipsForPerson } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { WelcomeFlow } from "./WelcomeFlow";
@@ -44,9 +41,6 @@ export default async function WelcomePage({
     redirect(await resolvePostAuthRoute(db, ctx.personId));
   }
 
-  const active = await listActiveMembershipsForPerson(db, ctx.personId);
-  const hubDestination = active.length > 0 ? "/hub" : "/families/start";
-
   const fullName = row?.displayName ?? "there";
   const firstName = row?.spokenName ?? fullName.split(" ")[0] ?? "there";
 
@@ -54,7 +48,6 @@ export default async function WelcomePage({
     <WelcomeFlow
       firstName={firstName}
       invited={from === "invite"}
-      hubDestination={hubDestination}
     />
   );
 }
