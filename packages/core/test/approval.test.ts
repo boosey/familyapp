@@ -181,6 +181,10 @@ describe("authorization regression: full visibility lifecycle", () => {
     await addMembership(db, cousin.id, family.id);
 
     const storyId = await makeApprovableStory({ ownerPersonId: narrator.id });
+    // NOTE: no manual family targeting here on purpose — this is the regression guard for the
+    // "hub goes dark" bug. Eleanor is in exactly one family (Boudreaux), so approving at `family`
+    // must DEFAULT-target the story into it (ADR-0010) and the cousin must see it, with nobody
+    // having to pick a family. If default targeting regresses, Stage B below fails.
     const cousinCtx = { kind: "account" as const, personId: cousin.id };
 
     // Stage A: pending_approval — family CANNOT see it.

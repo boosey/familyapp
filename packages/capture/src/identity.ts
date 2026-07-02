@@ -35,19 +35,23 @@ export async function resolveCaptureActor(
   db: Database,
   actor: CaptureActor,
   opts?: { now?: Date },
-): Promise<{ personId: string }> {
+): Promise<{ personId: string; originatingFamilyId: string | null }> {
   if (actor.kind === "link_session") {
     const resolved = await resolveLinkSession(db, actor.token, opts);
     if (!resolved) throw new InvalidSessionError();
-    return { personId: resolved.personId };
+    // The link session is scoped to one family (NOT NULL) — that is the originating family context
+    // the recording is captured FOR, threaded onto the draft story so approval can default-target
+    // it (ADR-0010).
+    return { personId: resolved.personId, originatingFamilyId: resolved.familyId };
   }
 
-  // account branch: trust the personId (auth happened upstream) but reject phantoms.
+  // account branch: trust the personId (auth happened upstream) but reject phantoms. The in-hub
+  // account flow carries no session family, so there is no originating family context here.
   const [row] = await db
     .select({ id: persons.id })
     .from(persons)
     .where(eq(persons.id, actor.personId))
     .limit(1);
   if (!row) throw new InvalidSessionError();
-  return { personId: actor.personId };
+  return { personId: actor.personId, originatingFamilyId: null };
 }

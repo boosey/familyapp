@@ -20,7 +20,13 @@
  */
 import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { media, proseRevisions, stories } from "@chronicle/db/content";
-import { asks, consentRecords, persons } from "@chronicle/db/schema";
+import {
+  asks,
+  consentRecords,
+  memberships,
+  persons,
+  storyFamilies,
+} from "@chronicle/db/schema";
 import type {
   Ask,
   AudienceTier,
@@ -49,6 +55,12 @@ export interface DraftStoryInput {
   promptQuestion?: string;
   /** The Ask this answers, if it came from the family relay. */
   askId?: string;
+  /**
+   * The family the recording was captured for (the link-session's family). Recorded on the story
+   * as its originating context so approval can DEFAULT-target it into that family (ADR-0010).
+   * Absent for the in-hub account capture path, which carries no session family.
+   */
+  originatingFamilyId?: string;
 }
 
 export interface PersistedRecording {
@@ -88,6 +100,7 @@ export async function persistRecordingAndCreateDraft(
         audienceTier: "private",
         promptQuestion: draft.promptQuestion ?? null,
         askId: draft.askId ?? null,
+        originatingFamilyId: draft.originatingFamilyId ?? null,
       })
       .returning();
 
@@ -307,6 +320,55 @@ export interface ApproveAndShareResult {
   consentRecord: ConsentRecord;
   /** The Ask that was flipped to `answered` in the same tx, if the Story pointed at one. */
   answeredAsk: Ask | null;
+  /**
+   * The families this story was DEFAULT-targeted into at approval (ADR-0010), so it is immediately
+   * visible to co-members in the hub. Empty when the tier needs no targeting (`public`), when
+   * targeting was already set explicitly before approval (in which case this reflects that set), or
+   * when the default was ambiguous (multi-family narrator, no originating signal) and the story was
+   * left owner-only pending an explicit choice — see `ambiguousDefaultTarget`.
+   */
+  targetedFamilyIds: string[];
+  /**
+   * True when a family/branch story could NOT be default-targeted because the narrator belongs to
+   * more than one family and there was no originating signal to disambiguate. The story is shared
+   * but owner-only until the narrator picks families explicitly. Surfaced (not silently swallowed)
+   * so a caller/UI can prompt — this is the hook ADR-0010's futures list earmarks for LLM-suggested
+   * targeting.
+   */
+  ambiguousDefaultTarget: boolean;
+}
+
+/**
+ * The DEFAULT family-target rule (ADR-0010), applied by approval-time targeting. Exported as a pure
+ * function so the decision is unit-testable in isolation and reusable if a future import/repair path
+ * ever needs the same logic. Given a story's originating signals and the owner's currently-active
+ * families, decide which families a `family`/`branch` story is surfaced into by default:
+ *   1. Prefer explicit ORIGINATING context — the family the recording was captured for, then the
+ *      ask's family — restricted to families the owner is STILL active in.
+ *   2. Else, if the owner is active in EXACTLY ONE family, target it (unambiguous; no leak possible).
+ *      NOTE: if an originating family exists but the owner has LEFT it and is now sole-active in a
+ *      DIFFERENT family, this surfaces the story into that other family. That is a conscious choice —
+ *      it is the OWNER's own content following them to their current family, not a cross-person leak —
+ *      but it does move a story into a family it was not originally told for.
+ *   3. Else — owner active in several families with no originating signal — target NOTHING and flag
+ *      `ambiguous`. NEVER "all owner families": that reintroduces the cross-family over-share ADR-0010
+ *      exists to prevent (the Boudreaux/Carney case). Owner active in ZERO families ⇒ no targets,
+ *      not ambiguous (there is simply nothing to surface into).
+ */
+export function computeDefaultFamilyTargets(args: {
+  originatingFamilyId: string | null;
+  askFamilyId: string | null;
+  ownerActiveFamilyIds: Set<string>;
+}): { targets: string[]; ambiguous: boolean } {
+  const { originatingFamilyId, askFamilyId, ownerActiveFamilyIds } = args;
+  const originating = [...new Set([originatingFamilyId, askFamilyId])].filter(
+    (f): f is string => f !== null && ownerActiveFamilyIds.has(f),
+  );
+  if (originating.length > 0) return { targets: originating, ambiguous: false };
+  if (ownerActiveFamilyIds.size === 1) {
+    return { targets: [...ownerActiveFamilyIds], ambiguous: false };
+  }
+  return { targets: [], ambiguous: ownerActiveFamilyIds.size > 1 };
 }
 
 export async function approveAndShareStory(
@@ -325,6 +387,7 @@ export async function approveAndShareStory(
         ownerPersonId: stories.ownerPersonId,
         state: stories.state,
         askId: stories.askId,
+        originatingFamilyId: stories.originatingFamilyId,
       })
       .from(stories)
       .where(eq(stories.id, input.storyId))
@@ -403,9 +466,15 @@ export async function approveAndShareStory(
     //    `routed` (interviewer marked it). `answered` with same storyId is idempotent; with a
     //    different storyId raises — an Ask answers exactly one Story.
     let answeredAsk: Ask | null = null;
+    // The ask's family (if any) is a secondary originating signal for default targeting (step 6).
+    let askFamilyId: string | null = null;
     if (current.askId !== null) {
       const [askCurrent] = await tx
-        .select({ status: asks.status, storyId: asks.storyId })
+        .select({
+          status: asks.status,
+          storyId: asks.storyId,
+          familyId: asks.familyId,
+        })
         .from(asks)
         .where(eq(asks.id, current.askId))
         .limit(1);
@@ -414,6 +483,7 @@ export async function approveAndShareStory(
           `story ${input.storyId} references missing ask ${current.askId}`,
         );
       }
+      askFamilyId = askCurrent.familyId;
       if (askCurrent.status === "answered" && askCurrent.storyId !== input.storyId) {
         throw new InvariantViolation(
           `ask ${current.askId} already answered by a different story`,
@@ -441,11 +511,62 @@ export async function approveAndShareStory(
       }
     }
 
+    // 6. DEFAULT family targeting (ADR-0010). A `family`/`branch` story is invisible to co-members
+    //    until it is surfaced into a family (`story_families`). Compute a conservative default IN
+    //    THIS TX so an approved story is immediately visible where it was told — without ever
+    //    leaking a multi-family narrator's story across families. Any EXISTING target set (an
+    //    explicit pre-approval choice) WINS — we never overwrite it; `public`/`private`-excluded
+    //    tiers skip this.
+    //
+    //    KNOWN LIMITATION: "explicit set" is inferred from the presence of ≥1 story_families row.
+    //    An explicit *empty* set (a narrator clearing targeting to mean "owner-only at family tier")
+    //    is indistinguishable from "never chosen", so it would be re-defaulted here. That path is
+    //    unreachable today (no UI clears targeting before approval); if owner-only-at-family becomes
+    //    a real user choice, add an explicit sentinel (e.g. a `targetingFinalized` flag) rather than
+    //    overloading emptiness.
+    let targetedFamilyIds: string[] = [];
+    let ambiguousDefaultTarget = false;
+    if (input.audienceTier === "family" || input.audienceTier === "branch") {
+      const existing = await tx
+        .select({ familyId: storyFamilies.familyId })
+        .from(storyFamilies)
+        .where(eq(storyFamilies.storyId, input.storyId))
+        .orderBy(storyFamilies.familyId);
+      if (existing.length > 0) {
+        // Sorted above so the returned set is deterministic regardless of row insertion order.
+        targetedFamilyIds = existing.map((r) => r.familyId);
+      } else {
+        const ownerActive = await tx
+          .select({ familyId: memberships.familyId })
+          .from(memberships)
+          .where(
+            and(
+              eq(memberships.personId, current.ownerPersonId),
+              eq(memberships.status, "active"),
+            ),
+          );
+        const { targets, ambiguous } = computeDefaultFamilyTargets({
+          originatingFamilyId: current.originatingFamilyId,
+          askFamilyId,
+          ownerActiveFamilyIds: new Set(ownerActive.map((r) => r.familyId)),
+        });
+        ambiguousDefaultTarget = ambiguous;
+        if (targets.length > 0) {
+          await tx
+            .insert(storyFamilies)
+            .values(targets.map((familyId) => ({ storyId: input.storyId, familyId })));
+          targetedFamilyIds = targets;
+        }
+      }
+    }
+
     return {
       story: updatedStory!,
       approvalAudio: approvalMedia,
       consentRecord: consent!,
       answeredAsk,
+      targetedFamilyIds,
+      ambiguousDefaultTarget,
     };
   });
 }
@@ -659,7 +780,15 @@ export async function discardDraftStory(
       );
     }
 
-    // 6. Delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale).
+    // 6. Delete the story's `story_families` targeting rows FIRST. Those rows reference the story
+    //    (child → parent) with an `ON DELETE no action` FK, so deleting the story while any target
+    //    row exists raises an FK violation. A draft/pending story CAN have target rows: the
+    //    pre-approval targeting primitives (`setStoryFamilyTargets`) let a narrator pick families
+    //    before approving. Clear them here (no consent implication — targeting is not content).
+    await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
+
+    // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
+    //    story references the media (story is the CHILD of media there), so the story goes first.
     await tx.delete(stories).where(eq(stories.id, input.storyId));
     await tx.delete(media).where(eq(media.id, story.recordingMediaId));
 
@@ -763,6 +892,79 @@ export async function saveProseCorrection(
       actorPersonId: input.actorPersonId,
     });
     return row!;
+  });
+}
+
+/**
+ * Story→family targeting primitive (Mode 4, ADR-0010). REPLACES the story's target set with
+ * `familyIds` (dedup'd): deletes the existing story_families rows for the story, then inserts the
+ * given set. Targeting scopes which of the owner's families a `family`/`branch`-tier story is
+ * surfaced into — the set the authorization function intersects with owner+viewer active
+ * memberships.
+ *
+ * VALIDATION: every target family must be one the story's OWNER currently holds an ACTIVE
+ * membership in — you cannot surface a story into a family the owner isn't in (that would be an
+ * over-share the visibility rule would refuse anyway, but we reject it at the write layer so the
+ * targeting set never contains a family that can never grant visibility). Violations throw
+ * `InvariantViolation`. Passing `[]` clears targeting (story becomes owner-only).
+ *
+ * This is JUST the primitive — approval-time default targeting (the originating family context)
+ * is a later increment and is intentionally NOT wired here.
+ *
+ * ACTOR AUTHORIZATION is the CALLER's responsibility. Like the other write primitives in this
+ * file, `setStoryFamilyTargets` takes no `AuthContext`; it validates only that the targets are the
+ * OWNER's families, not that the *actor* invoking it is allowed to retarget this story. Whoever
+ * wires the approval/retargeting UI MUST gate the actor (story owner or family steward) before
+ * calling this. It can never widen visibility beyond the owner's own families, so the blast radius
+ * of a missing gate is bounded — but it is not a substitute for an actor check.
+ */
+export async function setStoryFamilyTargets(
+  db: Database,
+  storyId: string,
+  familyIds: string[],
+): Promise<void> {
+  const unique = [...new Set(familyIds)];
+  return db.transaction(async (tx) => {
+    const [story] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId })
+      .from(stories)
+      .where(eq(stories.id, storyId))
+      .limit(1);
+    if (!story) {
+      throw new InvariantViolation(
+        `setStoryFamilyTargets: story ${storyId} not found`,
+      );
+    }
+
+    if (unique.length > 0) {
+      // The families the owner is an ACTIVE member of — the only families a story may target.
+      const ownerActive = await tx
+        .select({ familyId: memberships.familyId })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.personId, story.ownerPersonId),
+            eq(memberships.status, "active"),
+          ),
+        );
+      const ownerActiveSet = new Set(ownerActive.map((r) => r.familyId));
+      for (const familyId of unique) {
+        if (!ownerActiveSet.has(familyId)) {
+          throw new InvariantViolation(
+            `setStoryFamilyTargets: story owner ${story.ownerPersonId} is not an active member of ` +
+              `family ${familyId}; cannot surface a story into a family its owner isn't in`,
+          );
+        }
+      }
+    }
+
+    // Replace the target set: clear, then re-insert the validated, dedup'd families.
+    await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, storyId));
+    if (unique.length > 0) {
+      await tx
+        .insert(storyFamilies)
+        .values(unique.map((familyId) => ({ storyId, familyId })));
+    }
   });
 }
 

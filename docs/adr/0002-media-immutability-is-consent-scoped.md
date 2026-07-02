@@ -1,6 +1,8 @@
 # ADR-0002 — Media immutability is consent-scoped; never-consented draft audio is deletable
 
-Status: Accepted (2026-06-28)
+Status: Accepted (2026-06-28) — amended by ADR-0008 (deletion is always available; audio is
+un-detachable while its item lives but cascades on item deletion; "immutable forever" below is
+superseded by that narrower rule, and it generalizes beyond Story to any voice-origin content).
 Context: Phase 1 "complete the ask→answer→approve loop in the hub", with record-now-approve-later.
 
 ## Context

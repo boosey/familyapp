@@ -19,9 +19,14 @@ import {
   persistRecordingAndCreateDraft,
   transitionStoryState,
 } from "../src/index";
-import { makePerson } from "./helpers";
+import {
+  addMembership,
+  makeFamily,
+  makePerson,
+  targetStoryToFamily,
+} from "./helpers";
 import { media, stories } from "@chronicle/db/content";
-import { consentRecords } from "@chronicle/db/schema";
+import { consentRecords, storyFamilies } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 
 let db: Database;
@@ -125,6 +130,42 @@ describe("discardDraftStory — pending_approval (consent-free pre-approval wind
       .from(media)
       .where(eq(media.id, recording.id));
     expect(mediaRows).toHaveLength(0);
+  });
+});
+
+describe("discardDraftStory — targeted draft (ADR-0010 regression)", () => {
+  it("discards a draft that has explicit story_families targeting rows, leaving no orphan target rows", async () => {
+    // Regression: story_families.story_id → stories.id is ON DELETE no action, so deleting a story
+    // that still has targeting rows raises an FK violation. A pre-approval story CAN carry target
+    // rows (the narrator picked families before approving via setStoryFamilyTargets). discard must
+    // clear them first. Before the fix this threw a raw FK error and the draft was undeletable.
+    const narrator = await makePerson(db, "Eleanor");
+    const family = await makeFamily(db, "Boudreaux", narrator.id);
+    await addMembership(db, narrator.id, family.id);
+    const { story, recording, storageKey } = await makeDraft(narrator.id);
+
+    await transitionStoryState(db, story.id, "pending_approval");
+    await targetStoryToFamily(db, story.id, family.id);
+
+    const result = await discardDraftStory(db, {
+      storyId: story.id,
+      narratorPersonId: narrator.id,
+    });
+    expect(result.storageKeys).toEqual([storageKey]);
+
+    // Story, media, AND the targeting rows are all gone — no orphan story_families row survives.
+    expect(
+      await db.select({ id: stories.id }).from(stories).where(eq(stories.id, story.id)),
+    ).toHaveLength(0);
+    expect(
+      await db.select({ id: media.id }).from(media).where(eq(media.id, recording.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: storyFamilies.id })
+        .from(storyFamilies)
+        .where(eq(storyFamilies.storyId, story.id)),
+    ).toHaveLength(0);
   });
 });
 

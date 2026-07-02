@@ -321,7 +321,9 @@ export const media = pgTable(
 
 // ---------------------------------------------------------------------------
 // Story — the unit of narrative. Owned by exactly one Person. Points to its canonical
-// Recording (required). NEVER duplicated per family — there is no story<->family table.
+// Recording (required). A Story is a SINGLE row, never copied per family; which of the owner's
+// families a `family`/`branch`-tier Story is surfaced into is a many-to-many recorded in
+// `story_families` (ADR-0010), NOT a per-family duplicate of the Story.
 // ---------------------------------------------------------------------------
 
 export const stories = pgTable(
@@ -360,6 +362,14 @@ export const stories = pgTable(
     promptQuestion: text("prompt_question"),
     /** If it came from a family member's ask, a pointer to that Ask. */
     askId: uuid("ask_id"),
+    /**
+     * The family the recording was CAPTURED FOR — the originating family context (ADR-0010). Set
+     * from the link-session's `familyId` (NOT NULL there) at draft creation; nullable because the
+     * in-hub account capture path carries no session family. Drives approval-time DEFAULT family
+     * targeting (`story_families`) so a family/branch story is surfaced into the family it was told
+     * for without the narrator having to pick. NOT the visibility set itself — that is `story_families`.
+     */
+    originatingFamilyId: uuid("originating_family_id").references(() => families.id),
     // --- lifecycle ---
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -372,6 +382,39 @@ export const stories = pgTable(
   (t) => [
     index("stories_owner_idx").on(t.ownerPersonId),
     index("stories_state_idx").on(t.state),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// StoryFamily — the story→family targeting set (Mode 4, ADR-0010). The many-to-many that scopes
+// which of the owner's families a `family`/`branch`-tier Story is surfaced into. The Story stays a
+// SINGLE row owned by one Person (never duplicated per family); this table is a visibility-scoping
+// set, not a per-family copy. It is an AUTHZ INPUT (like `memberships`/`consentRecords`), NOT
+// Story content — so it lives in the OPEN schema, freely importable, not behind the /content guard.
+// `family`/`branch` visibility = targetFamilies ∩ owner-active-families ∩ viewer-active-families.
+// Empty target set ⇒ the story is visible to the OWNER ONLY (deliberately no "all families"
+// fallback — that would reintroduce the over-share ADR-0010 exists to prevent).
+// ---------------------------------------------------------------------------
+
+export const storyFamilies = pgTable(
+  "story_families",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // A story is targeted to a given family at most once.
+    uniqueIndex("story_families_story_family_uq").on(t.storyId, t.familyId),
+    index("story_families_story_idx").on(t.storyId),
+    index("story_families_family_idx").on(t.familyId),
   ],
 );
 
@@ -697,6 +740,8 @@ export type MockAuthUser = typeof mockAuthUsers.$inferSelect;
 export type NewMockAuthUser = typeof mockAuthUsers.$inferInsert;
 export type StoryView = typeof storyViews.$inferSelect;
 export type NewStoryView = typeof storyViews.$inferInsert;
+export type StoryFamily = typeof storyFamilies.$inferSelect;
+export type NewStoryFamily = typeof storyFamilies.$inferInsert;
 export type ProseRevision = typeof proseRevisions.$inferSelect;
 export type NewProseRevision = typeof proseRevisions.$inferInsert;
 

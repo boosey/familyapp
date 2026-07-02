@@ -4,6 +4,7 @@ import {
   families,
   memberships,
   persons,
+  storyFamilies,
 } from "@chronicle/db/schema";
 import type {
   AudienceTier,
@@ -72,7 +73,11 @@ export async function makeApprovalAudio(db: Database, ownerPersonId: string) {
   return m!;
 }
 
-/** Create a story in a chosen state/tier. If `shared`, also append an approval consent row. */
+/**
+ * Create a story in a chosen state/tier. If `withApprovalConsent`, also append an approval consent
+ * row. If `targetFamilyIds` is given, surface the story into those families (story_families rows) —
+ * required for a `family`/`branch`-tier story to be visible to any non-owner (ADR-0010).
+ */
 export async function makeStory(
   db: Database,
   opts: {
@@ -80,6 +85,10 @@ export async function makeStory(
     state?: StoryState;
     audienceTier?: AudienceTier;
     withApprovalConsent?: boolean;
+    targetFamilyIds?: string[];
+    /** The originating family context (ADR-0010) — what a link-session capture stamps on the draft. */
+    originatingFamilyId?: string;
+    askId?: string;
   },
 ) {
   const recording = await makeRecording(db, opts.ownerPersonId);
@@ -90,6 +99,8 @@ export async function makeStory(
       recordingMediaId: recording.id,
       state: opts.state ?? "draft",
       audienceTier: opts.audienceTier ?? "private",
+      originatingFamilyId: opts.originatingFamilyId ?? null,
+      askId: opts.askId ?? null,
     })
     .returning();
   if (opts.withApprovalConsent) {
@@ -101,7 +112,25 @@ export async function makeStory(
       resultingState: "shared",
     });
   }
+  if (opts.targetFamilyIds && opts.targetFamilyIds.length > 0) {
+    for (const familyId of opts.targetFamilyIds) {
+      await targetStoryToFamily(db, story!.id, familyId);
+    }
+  }
   return { story: story!, recording };
+}
+
+/** Surface a story into a family (insert a story_families targeting row). */
+export async function targetStoryToFamily(
+  db: Database,
+  storyId: string,
+  familyId: string,
+) {
+  const [row] = await db
+    .insert(storyFamilies)
+    .values({ storyId, familyId })
+    .returning();
+  return row!;
 }
 
 export async function revokeConsent(

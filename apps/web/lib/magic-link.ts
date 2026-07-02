@@ -43,8 +43,11 @@ export function safeInternalDest(
   // A scheme like "javascript:" or "http:" must never survive (even behind a leading-slash trick).
   if (dest.includes(":")) return fallback;
   // Control chars (incl. tab/newline/CR) can be stripped by a browser, changing where the path
-  // points; reject anything with a char below 0x20.
-  if (/[\u0000-\u001f]/.test(dest)) return fallback;
+  // points; reject anything with a char below 0x20. Scanned by code point rather than a
+  // control-char regex (which linters flag as an easy source of accidental range bugs).
+  for (let i = 0; i < dest.length; i++) {
+    if (dest.charCodeAt(i) < 0x20) return fallback;
+  }
   return dest;
 }
 

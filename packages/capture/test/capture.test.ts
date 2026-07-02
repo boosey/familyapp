@@ -369,6 +369,40 @@ describe("ingestRecording (capture path)", () => {
     expect(story?.recordingMediaId).toBe(result.recordingMediaId);
   });
 
+  it("link_session capture stamps the session's family onto the draft as its originating context (ADR-0010)", async () => {
+    const { narrator, inviter, family } = await makeNarratorAndFamily();
+    const { token } = await createLinkSession(db, {
+      personId: narrator.id,
+      familyId: family.id,
+      invitedByPersonId: inviter.id,
+    });
+    const { storyId } = await ingestRecording(db, storage, {
+      actor: { kind: "link_session", token },
+      audio: { bytes: new Uint8Array([1, 2, 3]), contentType: "audio/webm" },
+    });
+    const story = await getStoryForViewer(
+      db,
+      { kind: "link_session", personId: narrator.id },
+      storyId,
+    );
+    // The originating family is the link session's family — the signal approval default-targets on.
+    expect(story?.originatingFamilyId).toBe(family.id);
+  });
+
+  it("account capture leaves originatingFamilyId null (no session family)", async () => {
+    const { narrator } = await makeNarratorAndFamily();
+    const { storyId } = await ingestRecording(db, storage, {
+      actor: { kind: "account", personId: narrator.id },
+      audio: { bytes: new Uint8Array([4, 5]), contentType: "audio/webm" },
+    });
+    const story = await getStoryForViewer(
+      db,
+      { kind: "account", personId: narrator.id },
+      storyId,
+    );
+    expect(story?.originatingFamilyId).toBeNull();
+  });
+
   it("account actor: rejects a phantom personId that has no row in persons (InvalidSessionError)", async () => {
     // A manually-crafted request that bypasses auth might supply a non-existent personId.
     // capture must reject it before touching storage or DB content tables.

@@ -41,3 +41,6 @@ test-results/
 playwright-report/
 blob-report/
 .last-run.json
+
+.vercel
+.env*

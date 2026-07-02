@@ -1,6 +1,7 @@
 export {
   type AuthContext,
   type AuthDecision,
+  type ListStoriesForViewerOptions,
   viewerPersonId,
   decideStoryRead,
   decideMediaRead,
@@ -41,6 +42,8 @@ export {
   appendProseRevision,
   listProseRevisions,
   saveProseCorrection,
+  setStoryFamilyTargets,
+  computeDefaultFamilyTargets,
 } from "./story-repository";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is

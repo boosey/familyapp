@@ -106,6 +106,8 @@ describe("family-tier access", () => {
       state: "shared",
       audienceTier: tier,
       withApprovalConsent: true,
+      // ADR-0010: a family/branch story is only visible once surfaced into a shared family.
+      targetFamilyIds: [fam.id],
     });
     return { e, sofia, stranger, fam, sofiaMembership, story };
   }
@@ -150,6 +152,7 @@ describe("family-tier access", () => {
       state: "shared",
       audienceTier: "family",
       withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
     });
     expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
       false,
@@ -166,6 +169,7 @@ describe("family-tier access", () => {
       ownerPersonId: e.id,
       state: "pending_approval",
       audienceTier: "family",
+      targetFamilyIds: [fam.id],
     });
     expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
       false,
@@ -182,6 +186,120 @@ describe("family-tier access", () => {
     expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
       false,
     );
+  });
+
+  // --- ADR-0010 story→family targeting -------------------------------------------------------
+
+  it("(a) targeted to family A, viewer co-member in A → visible", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, famA.id, "active");
+    await addMembership(db, sofia.id, famA.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [famA.id],
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      true,
+    );
+  });
+
+  it("(b) targeted to A, viewer co-member only in B (owner in both) → DENIED", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "Boudreaux", e.id);
+    const famB = await makeFamily(db, "Carney", e.id);
+    // Owner is active in BOTH families.
+    await addMembership(db, e.id, famA.id, "active");
+    await addMembership(db, e.id, famB.id, "active");
+    // Viewer shares only family B with the owner.
+    await addMembership(db, sofia.id, famB.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      // ...but the story is surfaced into A only.
+      targetFamilyIds: [famA.id],
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("(c) empty target set, co-member in the owner's family → DENIED (owner-only)", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      // No targetFamilyIds — the story is surfaced into nothing.
+    });
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+    // But the owner still sees their own untargeted story.
+    expect((await decideStoryRead(db, account(e.id), story)).allowed).toBe(true);
+  });
+
+  it("(d) owner LEFT the targeted family (owner membership ended) → co-member DENIED", async () => {
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id);
+    const ownerMembership = await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
+    });
+    // Visible while the owner still belongs to the targeted family.
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      true,
+    );
+    // Owner leaves the targeted family: the three-way intersection is now empty.
+    await endMembership(db, ownerMembership.id);
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
+      false,
+    );
+  });
+
+  it("(e) Boudreaux/Carney: owner in both, story targeted to Boudreaux only", async () => {
+    const e = await makePerson(db, "Eleanor"); // married into both families
+    const bMember = await makePerson(db, "Boudreaux cousin");
+    const cMember = await makePerson(db, "Carney cousin");
+    const boudreaux = await makeFamily(db, "Boudreaux", e.id);
+    const carney = await makeFamily(db, "Carney", e.id);
+    await addMembership(db, e.id, boudreaux.id, "active");
+    await addMembership(db, e.id, carney.id, "active");
+    await addMembership(db, bMember.id, boudreaux.id, "active");
+    await addMembership(db, cMember.id, carney.id, "active");
+    const { story } = await makeStory(db, {
+      ownerPersonId: e.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      // A Boudreaux-only childhood story.
+      targetFamilyIds: [boudreaux.id],
+    });
+    // The Boudreaux member sees it; the Carney-only member does not.
+    expect(
+      (await decideStoryRead(db, account(bMember.id), story)).allowed,
+    ).toBe(true);
+    expect(
+      (await decideStoryRead(db, account(cMember.id), story)).allowed,
+    ).toBe(false);
   });
 
   it("denies even a co-member for a PRIVATE story (private = author only)", async () => {
@@ -222,6 +340,7 @@ describe("media authorization", () => {
       state: "shared",
       audienceTier: "family",
       withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
     });
     expect(
       (await decideMediaRead(db, account(sofia.id), recording)).allowed,
@@ -267,12 +386,14 @@ describe("the single front door never leaks via the list helper", () => {
       ownerPersonId: e.id,
       state: "pending_approval",
       audienceTier: "family",
+      targetFamilyIds: [fam.id],
     });
     const { story: visible } = await makeStory(db, {
       ownerPersonId: e.id,
       state: "shared",
       audienceTier: "family",
       withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
     });
 
     const forSofia = await listStoriesForViewer(db, account(sofia.id), {

@@ -20,7 +20,6 @@ import { describe, expect, it, vi } from "vitest";
 import { createTestDatabase } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
 import { createAccountWithPerson } from "@chronicle/core";
-import type { Database } from "@chronicle/db";
 import {
   createClerkAuthProvider,
   resolveAuthProviderUserId,
