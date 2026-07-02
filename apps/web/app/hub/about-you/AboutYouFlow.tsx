@@ -7,14 +7,15 @@
  * Design rules this preserves:
  *  - One open question at a time; question text is rendered VERBATIM (already written warm — no
  *    per-question LLM phrasing on this surface).
- *  - Voice-first but never voice-only: the voice control is a visible STUB (no mic here) paired with
- *    a real typed path that is the actual way answers are captured.
+ *  - Voice-first but never voice-only: the voice control uses `useMicRecorder` to capture audio,
+ *    calls `submitIntakeRecording` to transcribe it, and seeds the editable textarea. The typed
+ *    path is always available — voice just pre-fills the box.
  *  - Exit anytime via the always-visible "Take me to the hub" control; the current draft is saved
  *    on the way out (best-effort).
  *
  * This component receives ONLY plain data (question {key,text}, strings). It must NOT import from
  * @chronicle/interviewer — that index transitively pulls core-adapters → db, which cannot be in a
- * client bundle. The next question is always computed server-side by `submitIntakeAnswer`, which
+ * client bundle. The next question is always computed server-side by `saveIntakeAnswer`, which
  * makes the turn loop's in-session `askedIntakeKeys` stateless across HTTP.
  */
 import { useState, type CSSProperties } from "react";
@@ -22,7 +23,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { submitIntakeAnswer, type NextQuestion } from "./actions";
+import { submitIntakeRecording, saveIntakeAnswer, type NextQuestion } from "./actions";
+import { useMicRecorder } from "@/lib/use-mic-recorder";
 
 export function AboutYouFlow({
   initialQuestion,
@@ -36,9 +38,26 @@ export function AboutYouFlow({
   const [askedKeys, setAskedKeys] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [voiceNote, setVoiceNote] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const { phase: micPhase, start, finish } = useMicRecorder({
+    onRecorded: async (blob) => {
+      setTranscribing(true);
+      try {
+        const form = new FormData();
+        form.append("audio", blob, "intake.webm");
+        const { transcript } = await submitIntakeRecording(current!.key, form);
+        if (transcript) setDraft(transcript);
+      } catch {
+        setError(hub.aboutYou.saveError);
+      } finally {
+        setTranscribing(false);
+      }
+    },
+    onError: () => setError(hub.aboutYou.micError),
+  });
 
   async function next() {
     if (!current || busy) return;
@@ -46,10 +65,9 @@ export function AboutYouFlow({
     setError(null);
     const answeredKey = current.key;
     try {
-      const result = await submitIntakeAnswer(askedKeys, answeredKey, draft);
+      const result = await saveIntakeAnswer(askedKeys, answeredKey, draft);
       setAskedKeys((prev) => [...prev, answeredKey]);
       setDraft("");
-      setVoiceNote(false);
       if (result.nextQuestion) {
         setCurrent(result.nextQuestion);
       } else {
@@ -74,7 +92,7 @@ export function AboutYouFlow({
     if (current && draft.trim()) {
       setBusy(true);
       try {
-        await submitIntakeAnswer(askedKeys, current.key, draft);
+        await saveIntakeAnswer(askedKeys, current.key, draft);
       } catch {
         // Best-effort save on exit; never block the user from leaving.
       }
@@ -128,13 +146,6 @@ export function AboutYouFlow({
     borderRadius: "var(--radius-md)",
     padding: "12px 16px",
     margin: "20px 0 0",
-  };
-  const voiceHint: CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-label)",
-    color: "var(--text-muted)",
-    textAlign: "center",
-    margin: "10px 0 0",
   };
   const monoEyebrow: CSSProperties = {
     fontFamily: "var(--font-mono)",
@@ -201,8 +212,18 @@ export function AboutYouFlow({
         <h1 style={{ ...serifHeadline, fontSize: "var(--text-prompt)" }}>{current.text}</h1>
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "32px 0 20px" }}>
-          <KindredVoiceButton label={hub.aboutYou.voiceLabel} onClick={() => setVoiceNote(true)} />
-          {voiceNote ? <p style={voiceHint}>{hub.aboutYou.voiceUnavailable}</p> : null}
+          <KindredVoiceButton
+            listening={micPhase === "listening"}
+            saving={micPhase === "saving" || transcribing}
+            label={
+              transcribing
+                ? hub.aboutYou.transcribing
+                : micPhase === "listening"
+                  ? hub.aboutYou.voiceStop
+                  : hub.aboutYou.voiceLabel
+            }
+            onClick={micPhase === "listening" ? finish : micPhase === "idle" ? start : undefined}
+          />
         </div>
 
         <label className="kin-form-label">
