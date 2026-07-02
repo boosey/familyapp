@@ -16,6 +16,7 @@ import {
   listOutstandingAnswerDrafts,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { mockSignOut } from "@/lib/auth-mock";
 import { isClerkConfigured } from "@/lib/clerk-config";
 import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
@@ -103,6 +104,14 @@ export default async function HubPage({
       </main>
     );
   }
+
+  /* ── Family-first gate ──────────────────────────────────────────────────────
+   * The hub sits at the end of the onboarding spine, so guard it independently:
+   * an account that is family-less or not yet onboarded and lands here directly
+   * (stale bookmark, back button, /dev/sign-in) is bounced to the step it still
+   * owes. resolvePostAuthRoute returns "/hub" only for an onboarded member. */
+  const dest = await resolvePostAuthRoute(db, ctx.personId);
+  if (dest !== "/hub") redirect(dest);
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
   const { tab: tabParam } = await searchParams;
