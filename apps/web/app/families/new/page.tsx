@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
 import { createFamily } from "@chronicle/core";
 import { families } from "@/app/_copy";
+import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { CreateFamilyForm } from "./CreateFamilyForm";
 
 export const runtime = "nodejs";
@@ -30,7 +31,7 @@ async function create(formData: FormData): Promise<void> {
     discoverable,
     creatorPersonId: ctx.personId,
   });
-  redirect("/hub");
+  redirect(await resolvePostAuthRoute(db, ctx.personId));
 }
 
 export default async function FamiliesNewPage({
