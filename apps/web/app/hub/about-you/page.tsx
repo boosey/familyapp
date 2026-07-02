@@ -14,6 +14,7 @@ import type { BiographicalProfile } from "@chronicle/db";
 import { createCoreAnchorSource, nextIntakeQuestion, INTAKE_QUESTIONS } from "@chronicle/interviewer";
 import { listAnsweredQuestionKeys } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { AboutYouFlow } from "./AboutYouFlow";
 
 export const runtime = "nodejs";
@@ -24,21 +25,23 @@ export default async function AboutYouPage() {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
 
+  const dest = await resolvePostAuthRoute(db, ctx.personId);
+
   const anchors = await createCoreAnchorSource(db).loadForNarrator(ctx.personId);
-  // No person row / unreadable profile → nothing to ask. Bounce to the hub.
-  if (!anchors) redirect("/hub");
+  // No person row / unreadable profile → nothing to ask. Bounce to wherever they belong.
+  if (!anchors) redirect(dest);
 
   const answered = new Set<string>(await listAnsweredQuestionKeys(db, ctx.personId));
   const askedSet = new Set<keyof BiographicalProfile>();
   for (const q of INTAKE_QUESTIONS) if (answered.has(q.key)) askedSet.add(q.key);
   const first = nextIntakeQuestion(anchors.profile, askedSet);
-  // Profile already complete (or all questions already answered) → nothing to ask. Bounce to the hub.
-  if (!first) redirect("/hub");
+  // Profile already complete (or all questions already answered) → nothing to ask. Bounce to wherever they belong.
+  if (!first) redirect(dest);
 
   return (
     <AboutYouFlow
       initialQuestion={{ key: first.key, text: first.text }}
-      hubHref="/hub"
+      hubHref={dest}
     />
   );
 }
