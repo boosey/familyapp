@@ -42,6 +42,8 @@ export function useMicRecorder(opts: {
       mr.start();
       setPhase("listening");
     } catch {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
       setPhase("idle");
       optsRef.current.onError?.();
     }

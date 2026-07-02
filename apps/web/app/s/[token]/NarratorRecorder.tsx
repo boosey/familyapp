@@ -17,6 +17,7 @@ type Phase = "processing" | "slow" | "done" | "softfail";
 
 export function NarratorRecorder({ token, askId = null }: { token: string; askId?: string | null }) {
   const router = useRouter();
+  // null while recording is active (mic phase drives UI); set once recording completes.
   const [phase, setPhase] = useState<Phase | null>(null);
   const pollAbortRef = useRef<AbortController | null>(null);
 
