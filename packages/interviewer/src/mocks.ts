@@ -2,11 +2,14 @@
  * Deterministic, dependency-free mocks of the interviewer seams. Used by the turn-loop tests and
  * by anyone downstream who wants to exercise the loop without paid vendors.
  */
-import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
   BiographicalAnchors,
+  FollowUpEvaluation,
+  FollowUpEvaluationInput,
+  FollowUpEvaluator,
   MemorySource,
   PendingAsk,
   PriorStoryMemory,
@@ -91,5 +94,25 @@ export class InMemoryAnchorSource implements AnchorSource {
       ...existing,
       profile: { ...existing.profile, [key]: value },
     });
+  }
+}
+
+/**
+ * Deterministic evaluator mock. `script[n]` is the candidate list returned on the n-th `evaluate`
+ * call, so a test can drive a multi-turn thread (turn 0 proposes, turn 1 proposes again, …).
+ * Missing/exhausted entries return an empty candidate list (→ thread ends).
+ */
+export class ScriptedFollowUpEvaluator implements FollowUpEvaluator {
+  readonly calls: FollowUpEvaluationInput[] = [];
+
+  constructor(
+    private readonly script: FollowUpCandidate[][] = [],
+    private readonly modelId: string = "mock-follow-up-evaluator",
+  ) {}
+
+  async evaluate(input: FollowUpEvaluationInput): Promise<FollowUpEvaluation> {
+    const idx = this.calls.length;
+    this.calls.push(input);
+    return { candidates: this.script[idx] ?? [], modelId: this.modelId };
   }
 }

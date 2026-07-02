@@ -16,6 +16,7 @@ export {
   InMemoryAskSource,
   InMemoryMemorySource,
   InMemoryAnchorSource,
+  ScriptedFollowUpEvaluator,
 } from "./mocks";
 
 export {
