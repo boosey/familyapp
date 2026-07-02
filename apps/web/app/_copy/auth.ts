@@ -41,7 +41,7 @@ export const auth = {
     eyebrow: "Est. 2026",
     tagline:
       "A warm place to gather your family's stories — and to help the people you love tell theirs before they're lost.",
-    createFamily: "Create your family",
+    signUp: "Sign up",
     signIn: "Sign in",
     narratorNote:
       "Invited a narrator to record? They open their own personal link — they never sign in here.",

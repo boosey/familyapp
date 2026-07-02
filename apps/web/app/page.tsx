@@ -62,7 +62,7 @@ export default function Home() {
         }}
       >
         <Link href="/sign-up" style={{ textDecoration: "none" }}>
-          <KindredButton label={auth.landing.createFamily} size="large" />
+          <KindredButton label={auth.landing.signUp} size="large" />
         </Link>
         <Link href="/sign-in" style={{ textDecoration: "none" }}>
           <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
