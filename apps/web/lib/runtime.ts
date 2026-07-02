@@ -13,7 +13,6 @@ import { fileURLToPath } from "node:url";
 import {
   applySchema,
   applySchemaToPostgres,
-  assertPostgresSchemaParity,
   createPgliteDatabase,
   createPostgresDatabase,
   type Database,
@@ -219,17 +218,16 @@ async function build(): Promise<Runtime> {
     if (db.$postgres && process.env.CHRONICLE_RUN_MIGRATIONS === "1") {
       await applySchemaToPostgres(db.$postgres);
     }
-    // FAIL LOUD on schema drift (mirrors selectMediaStorage's fail-loud on partial R2 config).
-    // applySchemaToPostgres only bootstraps a FRESH DB — it no-ops once `persons` exists — so any
-    // table/column/enum-value added after first boot is NEVER applied to a live Neon DB. That is
-    // how prod drifted (missing stories.originating_family_id, story_families, intake_answers,
-    // intake_origin, media_kind='intake_audio'): deploys succeeded and the app 500'd at query time
-    // with Postgres 42703 "column ... does not exist", invisible until a user hit the page. This
-    // assertion crashes boot with a descriptive list of what's missing instead. UNCONDITIONAL
-    // (not gated behind CHRONICLE_RUN_MIGRATIONS) — the whole point is it always runs in prod.
-    if (db.$postgres) {
-      await assertPostgresSchemaParity(db.$postgres);
-    }
+    // Schema-drift detection lives at the DEPLOY GATE, not here. It used to run on every cold start
+    // (assertPostgresSchemaParity), but a request-path guard is the wrong venue: (1) ANY failure —
+    // including a transient introspection error or a missing build asset — takes down the WHOLE app,
+    // a strictly larger blast radius than the targeted Postgres 42703 it was preventing; (2) it read
+    // drizzle/schema.sql off disk on every cold start, coupling every request to a build asset the
+    // serverless bundle didn't trace (that IS the outage this replaced). The parity check now runs
+    // once, before deploy, in the Vercel build command (see apps/web/vercel.json →
+    // `pnpm --filter @chronicle/db db:check-parity` → packages/db/scripts/check-parity.ts): drift
+    // fails the BUILD, so a schema-behind database can never reach production instead of 500ing a
+    // live one.
   } else {
     ensureDir(DEV_DB_DIR);
     db = createPgliteDatabase(DEV_DB_DIR);

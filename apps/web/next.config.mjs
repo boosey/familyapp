@@ -1,4 +1,8 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs";
+
+const projectDir = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -10,6 +14,19 @@ const nextConfig = {
     "@chronicle/capture",
     "@chronicle/storage",
   ],
+  // @chronicle/db reads packages/db/drizzle/{schema,invariants}.sql at RUNTIME (migrate.ts →
+  // schemaSql(), used by applySchema/resetSchema AND — the load-bearing case — the boot-time
+  // assertPostgresSchemaParity guard that runs on every cold start in prod). Those `.sql` files are
+  // plain assets read via `readFileSync(fileURLToPath(new URL(...)))`, which Next's file tracer
+  // (@vercel/nft) does NOT follow — so on Vercel they were absent from the serverless bundle and the
+  // guard crashed with `ENOENT ... schema.sql`, which /auth/callback caught and turned into
+  // `/sign-in?error=callback` for every sign-in / create-family / hub load. Force them into the
+  // trace. `outputFileTracingRoot` must reach the monorepo root for these sibling-package files to
+  // be traceable; the include globs are resolved relative to THIS project dir (apps/web).
+  outputFileTracingRoot: path.join(projectDir, "../.."),
+  outputFileTracingIncludes: {
+    "/**": ["../../packages/db/drizzle/*.sql"],
+  },
   // PGlite ships a wasm asset and uses Node APIs; keep server externals happy in dev.
   // The R2 media adapter (@chronicle/storage's r2.ts) pulls the AWS S3 SDK; it is server-only
   // (the media route is `runtime = "nodejs"`). Externalize it so Next doesn't try to bundle the

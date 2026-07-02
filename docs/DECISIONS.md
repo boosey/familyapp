@@ -405,6 +405,34 @@ recap of every fix.
   existing prompt OR a prompt change that must ship without a redeploy. Until then, leave the
   inline consts. (Discussed 2026-06-29; deferred deliberately.)
 
+## Schema-parity check: deploy gate, not runtime guard (2026-07-02)
+
+- **Context.** `applySchemaToPostgres` is bootstrap-only (no-ops once `persons` exists), so schema
+  objects added after first boot never reach a live Neon DB — prod drifted (missing
+  `stories.originating_family_id`, `story_families`, `intake_answers`, `intake_origin`,
+  `media_kind='intake_audio'`) and 500'd at query time with Postgres 42703. The first fix
+  (commit `a9a9bd8`) added `assertPostgresSchemaParity` and called it **unconditionally on every
+  cold start** in `apps/web/lib/runtime.ts`.
+- **That runtime placement caused a worse outage.** The guard calls `schemaSql()`, which
+  `readFileSync`s `packages/db/drizzle/{schema,invariants}.sql`. Next's file tracer (`@vercel/nft`)
+  does not follow a `readFileSync(fileURLToPath(new URL(...)))` read, so those assets were absent
+  from the Vercel serverless bundle → the guard threw `ENOENT ... schema.sql` on **every** cold
+  start → `/auth/callback` caught it and bounced every sign-in / create-family / hub load to
+  `/sign-in?error=callback`. A request-path guard turns *any* failure into a total-app outage — a
+  strictly larger blast radius than the targeted 42703 it was meant to catch.
+- **Decision.** The parity check **moved out of the request path and onto the deploy gate**
+  (`apps/web/vercel.json` → `buildCommand: "pnpm --filter @chronicle/db db:check-parity && next build"`,
+  script `packages/db/scripts/check-parity.ts`). Drift now fails the **build**, so a schema-behind
+  database can never reach production — and it can never take down a running app. The check runs
+  once per deploy against the live Neon branch via `DATABASE_URL`, and **fails loud** if
+  `DATABASE_URL` is absent (a gate that can't verify must not pass).
+- **Prerequisite.** `DATABASE_URL` must be present in the Vercel **build** env for each deploying
+  target (Production has it; add it to Preview if preview deploys should also be gated).
+- **Defense-in-depth kept.** `outputFileTracingIncludes` in `next.config.mjs` still force-bundles
+  the `.sql` files, because `schemaSql()` is *also* read at runtime by the opt-in
+  `CHRONICLE_RUN_MIGRATIONS=1` fresh-DB bootstrap — a latent ENOENT trap on any serverless target
+  without the trace include.
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
