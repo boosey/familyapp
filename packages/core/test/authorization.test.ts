@@ -23,7 +23,6 @@ import {
   makePerson,
   makeStory,
   revokeConsent,
-  targetStoryToFamily,
 } from "./helpers";
 
 let db: Database;
