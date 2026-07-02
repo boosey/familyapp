@@ -6,9 +6,10 @@
  * creates) is one transaction so the request can never read `approved` without the membership
  * having landed.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { families, joinRequests, persons } from "@chronicle/db/schema";
 import type { Database, JoinRequestStatus } from "@chronicle/db";
+import { DECIDED_JOIN_REQUESTS_DEFAULT_LIMIT } from "./constants";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import {
   getStewardPersonId,
@@ -160,6 +161,57 @@ export async function listPendingJoinRequestsForSteward(
   return rows;
 }
 
+/** A join request the steward has already decided (approved or declined). */
+export interface DecidedJoinRequest {
+  joinRequestId: string;
+  familyId: string;
+  familyName: string;
+  requesterPersonId: string;
+  requesterName: string;
+  message: string | null;
+  createdAt: Date;
+  status: JoinRequestStatus;
+  decidedAt: Date | null;
+}
+
+/**
+ * Recently-decided (approved/declined) requests across the families this steward stewards, newest
+ * decision first. Lets the requests surface show a resolved row in place rather than vanishing it
+ * the moment it's decided. Capped so an old family's history can't unbound the list.
+ */
+export async function listDecidedJoinRequestsForSteward(
+  db: Database,
+  stewardPersonId: string,
+  opts: { limit?: number } = {},
+): Promise<DecidedJoinRequest[]> {
+  const limit = opts.limit ?? DECIDED_JOIN_REQUESTS_DEFAULT_LIMIT;
+  if (limit <= 0) return [];
+  const rows = await db
+    .select({
+      joinRequestId: joinRequests.id,
+      familyId: joinRequests.familyId,
+      familyName: families.name,
+      requesterPersonId: joinRequests.requesterPersonId,
+      requesterName: persons.displayName,
+      message: joinRequests.message,
+      createdAt: joinRequests.createdAt,
+      status: joinRequests.status,
+      decidedAt: joinRequests.decidedAt,
+    })
+    .from(joinRequests)
+    .innerJoin(families, eq(families.id, joinRequests.familyId))
+    .innerJoin(persons, eq(persons.id, joinRequests.requesterPersonId))
+    .where(
+      and(
+        eq(families.stewardPersonId, stewardPersonId),
+        ne(joinRequests.status, "pending"),
+      ),
+    )
+    .orderBy(desc(joinRequests.decidedAt))
+    .limit(limit);
+  return rows;
+}
+
 /**
  * Load a still-pending request and verify the decider is its family's steward. Shared by approve +
  * decline. Throws `InvariantViolation` if the request is missing or already decided, and
@@ -251,6 +303,8 @@ export interface RequesterJoinRequest {
   joinRequestId: string;
   familyId: string;
   familyName: string;
+  /** The steward the request is waiting on — safe to show a requester (their own request). */
+  stewardName: string;
   status: JoinRequestStatus;
   createdAt: Date;
 }
@@ -265,11 +319,13 @@ export async function listJoinRequestsByRequester(
       joinRequestId: joinRequests.id,
       familyId: joinRequests.familyId,
       familyName: families.name,
+      stewardName: persons.displayName,
       status: joinRequests.status,
       createdAt: joinRequests.createdAt,
     })
     .from(joinRequests)
     .innerJoin(families, eq(families.id, joinRequests.familyId))
+    .innerJoin(persons, eq(persons.id, families.stewardPersonId))
     .where(eq(joinRequests.requesterPersonId, requesterPersonId))
     .orderBy(desc(joinRequests.createdAt));
   return rows;

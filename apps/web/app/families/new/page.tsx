@@ -7,8 +7,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
 import { createFamily } from "@chronicle/core";
-import { KindredButton } from "@/app/_kindred";
 import { families } from "@/app/_copy";
+import { CreateFamilyForm } from "./CreateFamilyForm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,58 +118,7 @@ export default async function FamiliesNewPage({
           </p>
         ) : null}
 
-        <form action={create} style={{ display: "grid", gap: 20 }}>
-          <label className="kin-form-label">
-            {families.new.nameLabel}
-            <input
-              name="name"
-              type="text"
-              required
-              className="kin-field"
-              placeholder={families.new.namePlaceholder}
-            />
-          </label>
-          <label className="kin-form-label">
-            {families.new.descLabel} <span style={{ fontWeight: 400 }}>{families.new.descLabelOptional}</span>
-            <textarea
-              name="description"
-              className="kin-field"
-              placeholder={families.new.descPlaceholder}
-              style={{ minHeight: 96 }}
-            />
-          </label>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 12,
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              color: "var(--text-body)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              name="discoverable"
-              type="checkbox"
-              style={{ width: 22, height: 22, marginTop: 2, accentColor: "var(--accent)" }}
-            />
-            <span>
-              {families.new.discoverableLabel}
-              <span
-                style={{
-                  display: "block",
-                  fontSize: "var(--text-label)",
-                  color: "var(--text-muted)",
-                  marginTop: 2,
-                }}
-              >
-                {families.new.discoverableHint}
-              </span>
-            </span>
-          </label>
-          <KindredButton type="submit" label={families.new.submit} fullWidth size="large" />
-        </form>
+        <CreateFamilyForm action={create} />
       </div>
     </main>
   );

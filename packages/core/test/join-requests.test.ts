@@ -14,6 +14,7 @@ import {
   createJoinRequest,
   declineJoinRequest,
   isActiveMember,
+  listDecidedJoinRequestsForSteward,
   listJoinRequestsByRequester,
   listPendingJoinRequestsForSteward,
 } from "../src/index";
@@ -187,5 +188,65 @@ describe("declineJoinRequest", () => {
     await expect(
       declineJoinRequest(db, { joinRequestId, deciderPersonId: interloper.id }),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
+describe("listJoinRequestsByRequester", () => {
+  it("carries the steward name so the requester can see who to wait on", async () => {
+    const { familyId } = await discoverableFamily(); // steward "Rosa"
+    const requester = await makePerson(db, "Cousin");
+    await createJoinRequest(db, { familyId, requesterPersonId: requester.id });
+    const own = await listJoinRequestsByRequester(db, requester.id);
+    expect(own).toHaveLength(1);
+    expect(own[0]?.stewardName).toBe("Rosa");
+  });
+});
+
+describe("listDecidedJoinRequestsForSteward", () => {
+  it("lists decided requests and excludes still-pending ones", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    const approved = await makePerson(db, "Approved One");
+    const declined = await makePerson(db, "Declined One");
+    const stillPending = await makePerson(db, "Pending One");
+    const a = await createJoinRequest(db, { familyId, requesterPersonId: approved.id });
+    const d = await createJoinRequest(db, { familyId, requesterPersonId: declined.id });
+    await createJoinRequest(db, { familyId, requesterPersonId: stillPending.id });
+
+    await approveJoinRequest(db, { joinRequestId: a.joinRequestId, deciderPersonId: steward.id });
+    await declineJoinRequest(db, { joinRequestId: d.joinRequestId, deciderPersonId: steward.id });
+
+    const decided = await listDecidedJoinRequestsForSteward(db, steward.id);
+    expect(decided).toHaveLength(2);
+    const byName = new Map(decided.map((r) => [r.requesterName, r.status]));
+    expect(byName.get("Approved One")).toBe("approved");
+    expect(byName.get("Declined One")).toBe("declined");
+    expect(byName.has("Pending One")).toBe(false);
+    // Still-pending remains visible on the pending list.
+    const pending = await listPendingJoinRequestsForSteward(db, steward.id);
+    expect(pending.map((p) => p.requesterName)).toEqual(["Pending One"]);
+  });
+
+  it("excludes decided requests for families this person does not steward", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    const requester = await makePerson(db, "Cousin");
+    const other = await makePerson(db, "Other");
+    const { joinRequestId } = await createJoinRequest(db, {
+      familyId,
+      requesterPersonId: requester.id,
+    });
+    await declineJoinRequest(db, { joinRequestId, deciderPersonId: steward.id });
+    expect(await listDecidedJoinRequestsForSteward(db, other.id)).toHaveLength(0);
+  });
+
+  it("honors the limit", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    const r1 = await makePerson(db, "One");
+    const r2 = await makePerson(db, "Two");
+    const j1 = await createJoinRequest(db, { familyId, requesterPersonId: r1.id });
+    const j2 = await createJoinRequest(db, { familyId, requesterPersonId: r2.id });
+    await declineJoinRequest(db, { joinRequestId: j1.joinRequestId, deciderPersonId: steward.id });
+    await declineJoinRequest(db, { joinRequestId: j2.joinRequestId, deciderPersonId: steward.id });
+    expect(await listDecidedJoinRequestsForSteward(db, steward.id, { limit: 1 })).toHaveLength(1);
+    expect(await listDecidedJoinRequestsForSteward(db, steward.id, { limit: 0 })).toHaveLength(0);
   });
 });

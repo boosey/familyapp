@@ -9,6 +9,7 @@ import {
   addMembership,
   createFamily,
   createKeywordFamilySearch,
+  listDiscoverableFamilies,
 } from "../src/index";
 import { makePerson } from "./helpers";
 
@@ -128,5 +129,55 @@ describe("createKeywordFamilySearch", () => {
     expect(
       await createKeywordFamilySearch(db).search({ text: "   " }),
     ).toHaveLength(0);
+  });
+});
+
+describe("listDiscoverableFamilies", () => {
+  it("lists discoverable families (name + steward only), sorted by name", async () => {
+    const s1 = await makePerson(db, "Rosa Esposito");
+    const s2 = await makePerson(db, "Ada Byron");
+    await createFamily(db, { name: "Zappa", discoverable: true, creatorPersonId: s1.id });
+    await createFamily(db, { name: "Abbott", discoverable: true, creatorPersonId: s2.id });
+
+    const list = await listDiscoverableFamilies(db);
+    expect(list.map((f) => f.familyName)).toEqual(["Abbott", "Zappa"]);
+    expect(list[0]?.stewardName).toBe("Ada Byron");
+    // Name + steward only — the shape carries no member/story fields.
+    expect(Object.keys(list[0] ?? {}).sort()).toEqual(
+      ["familyId", "familyName", "stewardName"].sort(),
+    );
+  });
+
+  it("excludes non-discoverable families", async () => {
+    const steward = await makePerson(db, "Rosa");
+    await createFamily(db, { name: "Private", discoverable: false, creatorPersonId: steward.id });
+    await createFamily(db, { name: "Open", discoverable: true, creatorPersonId: steward.id });
+
+    const list = await listDiscoverableFamilies(db);
+    expect(list.map((f) => f.familyName)).toEqual(["Open"]);
+  });
+
+  it("never leaks member names into the browse list", async () => {
+    const steward = await makePerson(db, "Rosa");
+    const { familyId } = await createFamily(db, {
+      name: "The Bakers",
+      discoverable: true,
+      creatorPersonId: steward.id,
+    });
+    const member = await makePerson(db, "Salvatore Verdi");
+    await addMembership(db, { personId: member.id, familyId });
+
+    const list = await listDiscoverableFamilies(db);
+    expect(JSON.stringify(list)).not.toContain("Salvatore");
+    expect(JSON.stringify(list)).not.toContain("Verdi");
+  });
+
+  it("respects the limit", async () => {
+    const steward = await makePerson(db, "Rosa");
+    await createFamily(db, { name: "Alpha", discoverable: true, creatorPersonId: steward.id });
+    await createFamily(db, { name: "Beta", discoverable: true, creatorPersonId: steward.id });
+    const list = await listDiscoverableFamilies(db, { limit: 1 });
+    expect(list).toHaveLength(1);
+    expect(list[0]?.familyName).toBe("Alpha");
   });
 });

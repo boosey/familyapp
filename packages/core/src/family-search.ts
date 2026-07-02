@@ -15,6 +15,7 @@ import { and, eq } from "drizzle-orm";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import {
+  DISCOVERABLE_FAMILIES_DEFAULT_LIMIT,
   FAMILY_SEARCH_DEFAULT_LIMIT,
   FAMILY_SEARCH_WEIGHT_DESCRIPTION,
   FAMILY_SEARCH_WEIGHT_MEMBER,
@@ -157,4 +158,39 @@ export function createKeywordFamilySearch(db: Database): FamilySearch {
       return scored.slice(0, limit).map((s) => s.result);
     },
   };
+}
+
+/** A discoverable family reduced to the only fields discovery may surface: name + steward. */
+export interface DiscoverableFamily {
+  familyId: string;
+  familyName: string;
+  stewardName: string;
+}
+
+/**
+ * List every discoverable family (name + steward only — the SAME minimal exposure as the search
+ * seam; members and stories are never surfaced). Ordered by family name for a stable browse list.
+ *
+ * This backs the "find your family" default browse list. The find surface hands the full list to
+ * the client and filters it live on name/steward — so the leak-safe contract still holds: nothing
+ * beyond family name + steward name ever crosses to the browser.
+ */
+export async function listDiscoverableFamilies(
+  db: Database,
+  opts: { limit?: number } = {},
+): Promise<DiscoverableFamily[]> {
+  const limit = opts.limit ?? DISCOVERABLE_FAMILIES_DEFAULT_LIMIT;
+  if (limit <= 0) return [];
+  const rows = await db
+    .select({
+      familyId: families.id,
+      familyName: families.name,
+      stewardName: persons.displayName,
+    })
+    .from(families)
+    .innerJoin(persons, eq(persons.id, families.stewardPersonId))
+    .where(eq(families.discoverable, true))
+    .orderBy(families.name)
+    .limit(limit);
+  return rows;
 }

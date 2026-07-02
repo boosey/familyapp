@@ -9,11 +9,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import { listPendingAsksForNarrator, listPendingJoinRequestsForSteward, listOutstandingAnswerDrafts } from "@chronicle/core";
+import {
+  listPendingAsksForNarrator,
+  listPendingJoinRequestsForSteward,
+  listDecidedJoinRequestsForSteward,
+  listOutstandingAnswerDrafts,
+} from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignOut } from "@/lib/auth-mock";
 import { isClerkConfigured } from "@/lib/clerk-config";
-import { loadHubFeed, loadSeenStoryIds } from "@/lib/hub-data";
+import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
 import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { HubTabsNav } from "./HubTabsNav";
@@ -104,10 +109,11 @@ export default async function HubPage({
   const validTabs = new Set(["stories", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
-  const [feed, pendingAsks, pendingRequests, viewerRow, answerDrafts] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, answerDrafts] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
+    listDecidedJoinRequestsForSteward(db, ctx.personId),
     db
       .select({
         spokenName: persons.spokenName,
@@ -124,6 +130,15 @@ export default async function HubPage({
   const feedStoryIds = feed.flatMap((slot) => slot.stories.map((s) => s.id));
   const seenStoryIds = await loadSeenStoryIds(db, ctx.personId, feedStoryIds);
 
+  // The Stories-tab family-scope filter options, and each feed story's target families (already
+  // intersected with the viewer's families) for the family-tag pills. Both are open-schema reads.
+  const viewerFamilies = await loadViewerFamilies(db, ctx);
+  const familyTargets = await loadStoryFamilyTargets(
+    db,
+    feedStoryIds,
+    viewerFamilies.map((f) => f.id),
+  );
+
   // Build a lookup map so QuestionsTab can render two-state affordances per ask.
   const draftsByAskId = Object.fromEntries(
     answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
@@ -139,6 +154,8 @@ export default async function HubPage({
   const familyName = familyNames.length ? familyNames.join(" · ") : hub.shell.chronicle;
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
+  // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
+  const viewerDisplayName = viewerName ?? "You";
   const initials = viewerName
     ? viewerName
         .split(" ")
@@ -158,8 +175,16 @@ export default async function HubPage({
     { key: "ask", label: hub.shell.tabAsk },
     { key: "asks", label: hub.shell.tabAsks },
     { key: "invite", label: hub.shell.tabInvite },
-    ...(pendingRequests.length > 0
-      ? [{ key: "requests", label: hub.shell.tabRequests, badge: pendingRequests.length }]
+    // Tab stays visible while there are pending OR recently-decided requests; the badge counts
+    // only still-pending ones (the steward's actionable queue).
+    ...(pendingRequests.length > 0 || decidedRequests.length > 0
+      ? [
+          {
+            key: "requests",
+            label: hub.shell.tabRequests,
+            badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
+          },
+        ]
       : []),
   ];
 
@@ -258,7 +283,14 @@ export default async function HubPage({
         <section style={{ padding: "28px 0" }}>
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
-            <StoriesTab feed={feed} viewerPersonId={ctx.personId} seenStoryIds={seenStoryIds} />
+            <StoriesTab
+              feed={feed}
+              viewerPersonId={ctx.personId}
+              seenStoryIds={seenStoryIds}
+              familyTargets={familyTargets}
+              viewerFamilies={viewerFamilies}
+              viewerName={viewerDisplayName}
+            />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab />}

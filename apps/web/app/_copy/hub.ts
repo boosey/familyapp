@@ -13,7 +13,9 @@ export const hub = {
     createFamily: "Create your family",
     chronicle: "Your Chronicle",
     tabStories: "Stories",
-    tabQuestions: "Questions for you",
+    // Tab label follows the "Story Browse (Hub)" design ("To answer"); the section heading inside
+    // the tab stays "Questions for you" (hub.questions.title).
+    tabQuestions: "To answer",
     tabAsk: "Ask a question",
     tabAsks: "Your asks",
     tabInvite: "Invite",
@@ -121,44 +123,52 @@ export const hub = {
   requests: {
     signedOut: "Sign in to review join requests.",
     title: "Requests to join",
-    intro: "People asking to join a family you steward. Approving adds them as a member.",
+    intro:
+      "As steward, you approve everyone who joins. Nothing is shared with a requester until you say yes.",
     empty: "No requests waiting right now.",
     approve: "Approve",
     decline: "Decline",
+    // Mono status shown in place once a request is decided (uppercased in the view).
+    statusApproved: "Approved",
+    statusDeclined: "Declined",
   },
-  browser: {
-    ofTotal: (shown: number, total: number) => `${shown} OF ${total}`,
-    totalStories: (total: number) => `${total} ${total === 1 ? "STORY" : "STORIES"}`,
-    matchCount: (n: number) => `${n} ${n === 1 ? "story matches" : "stories match"}`,
-    findStories: "Find stories",
-    storyCount: (n: number) => `${n} ${n === 1 ? "story" : "stories"}`,
-    searchPlaceholder: "Try a name, a place, or a moment…",
-    noMatchHint: "Hmm — nothing matched. Try a name, a year, or a word from the story.",
-    showMe: "Show me",
-    everyones: "everyone’s",
-    someone: "someone",
-    possessive: (person: string) => `${person}’s`,
-    storiesAbout: "stories about",
-    anything: "anything",
-    fromConnector: ", from",
-    anyTimeLower: "any time",
-    theEra: (era: string) => `the ${era}`,
-    period: ".",
-    whoseStories: "Whose stories?",
-    aboutWhat: "About what?",
-    fromWhen: "From when?",
-    everyone: "Everyone",
-    anyEra: "Any era",
-    anythingOption: "Anything",
-    clear: "Clear",
-    startOver: "Start over",
-    done: "Done",
-    noMatchWiden: "No stories match. Try widening your search.",
-    earlierMemories: "Earlier memories",
-    originalRecording: "The original recording",
-    readProse: "Read the prose ›",
-    openStory: "Open this story ›",
-    anyTime: "Any time",
+  // "Story Browse (Hub)" surface — Feed / Timeline / Search modes + family-scope filter + the
+  // restyled Read view.
+  browse: {
+    // Mode segmented control
+    modeFeed: "Feed",
+    modeTimeline: "Timeline",
+    modeSearch: "Search",
+    // Family-scope filter
+    scopeAll: "All families",
+    // Feed empty state (scope-aware). scopeName: "your families" or "the {family} family".
+    scopeNameAll: "your families",
+    scopeNameFamily: (family: string) => `the ${family} family`,
+    feedEmpty: (scopeName: string) => `Nothing shared with you yet in ${scopeName}.`,
+    feedEmptySub:
+      "Once someone in the family answers a question or tells a story, it will appear here for you to listen to or read.",
+    // Timeline
+    timelineHeadingWhole: "The whole family, by era",
+    timelineHeadingNarrator: (name: string) => `${name}’s life, by era`,
+    widenWhole: "Whole family",
+    widenNarrator: (name: string) => `Just ${name}`,
+    undated: "Undated",
+    // Chronicle Search
+    searchPlaceholder: "Search titles, places, moments…",
+    searchIdle:
+      "Search across everything shared with you — titles, summaries, places, and tags.",
+    searchCount: (n: number) => `${n} ${n === 1 ? "story matches" : "stories match"}`,
+    searchNoResults: (query: string) => `No stories match “${query}”`,
+    searchNoResultsHint:
+      "Try a name, a place, or a moment like “wedding” or “the storm”.",
+    // Read + Listen view
+    back: "Back",
+    toldBy: (name: string) => `Told by ${name}`,
+    readListenTitle: (name: string) => `${name}’s voice — the original recording`,
+    readStory: "Story",
+    readTranscript: "Transcript",
+    readNoProse: "No prose yet — the original recording above is the whole story for now.",
+    readNoTranscript: "No transcript yet.",
   },
   copyButton: {
     copied: "Copied ✓",

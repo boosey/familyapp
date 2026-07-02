@@ -53,8 +53,8 @@ describe("appendInviteParam", () => {
   });
 
   it("appends &from=invite when the path already has a query string", () => {
-    expect(appendInviteParam("/families/find?pending=1")).toBe(
-      "/families/find?pending=1&from=invite",
+    expect(appendInviteParam("/hub?tab=stories")).toBe(
+      "/hub?tab=stories&from=invite",
     );
   });
 

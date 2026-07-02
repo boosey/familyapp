@@ -102,18 +102,22 @@ export {
 export {
   createJoinRequest,
   listPendingJoinRequestsForSteward,
+  listDecidedJoinRequestsForSteward,
   approveJoinRequest,
   declineJoinRequest,
   listJoinRequestsByRequester,
   type CreateJoinRequestInput,
   type PendingJoinRequest,
+  type DecidedJoinRequest,
   type RequesterJoinRequest,
 } from "./join-requests";
 export {
   createKeywordFamilySearch,
+  listDiscoverableFamilies,
   type FamilySearchQuery,
   type FamilySearchResult,
   type FamilySearch,
+  type DiscoverableFamily,
 } from "./family-search";
 export {
   createIntakeRecording,

@@ -14,7 +14,7 @@ import { resolvePostAuthRoute } from "./post-auth-route";
 
 /**
  * Append `?from=invite` to a destination path, or `&from=invite` if the path already
- * carries a query string (e.g. `/families/find?pending=1` → `/families/find?pending=1&from=invite`).
+ * carries a query string (e.g. `/hub?tab=stories` → `/hub?tab=stories&from=invite`).
  */
 export function appendInviteParam(dest: string): string {
   return dest.includes("?") ? `${dest}&from=invite` : `${dest}?from=invite`;
