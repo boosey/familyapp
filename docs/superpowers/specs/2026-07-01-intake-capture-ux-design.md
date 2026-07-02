@@ -63,8 +63,11 @@ intake_answers
 ```
 
 - New media kind `intake_audio` added to `media_kind` enum (distinct from `story_audio`).
-- Deleting an `intake_answers` row cascades its `media` row (matches the deletion / content-audio
-  rule: content audio is an un-detachable artifact that cascades on item delete).
+- Deleting an intake answer's kept audio is a **two-step delete** (remove the `intake_answers` row
+  first, then its `media` row) — the FK is `ON DELETE no action`, not a cascade. The media trigger
+  permits this because `intake_audio` rows are never consent-linked. (This preserves the deletion /
+  content-audio intent — content audio is an un-detachable artifact of the item — without a DB-level
+  cascade; `packages/db/test/intake-answers.test.ts` validates the two-step ordering.)
 - No `promotedStoryId` column now (YAGNI); promotion adds it later.
 - `intake_answers` lives in the main (non-content) schema. Reads of its `text` are owner-only and
   need no front-door authorization gate. Only the `media` writes touch the guarded wall.
