@@ -116,6 +116,7 @@ export async function saveIntakeText(
   return row!;
 }
 
+/** Owner-scoped point-read — no tier-auth check; intake answers are private-to-owner by design. */
 export async function getIntakeAnswer(
   db: Database,
   personId: string,
@@ -129,6 +130,7 @@ export async function getIntakeAnswer(
   return row ?? null;
 }
 
+/** Owner-scoped list — returns only the caller's own answered keys; no tier-auth check needed. */
 export async function listAnsweredQuestionKeys(db: Database, personId: string): Promise<string[]> {
   const rows = await db
     .select({ questionKey: intakeAnswers.questionKey })
