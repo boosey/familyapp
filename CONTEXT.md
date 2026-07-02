@@ -70,7 +70,15 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   *Surfaced-into*). Stories have a `kind`:
   `voice` (audio recording is canonical; transcript/prose are derived and regenerable) or
   `text` (typed response is canonical; no recording). A user may switch to keyboard at any
-  time; the resulting story is a text story, not a failed voice story.
+  time; the resulting story is a text story, not a failed voice story. A `voice` Story may hold
+  **more than one Take** when a **Follow-up thread** occurs — the canonical audio is then the
+  *ordered set* of takes, and the derived transcript/prose are rendered over their stitched
+  sequence. One approval covers the whole thread.
+- **Take** — one recording within a Story. A single-answer Story has one take; a Story deepened by
+  **Follow-ups** has several, kept in the order they were spoken. NOTE the shift from the earlier
+  glossary sense: a take used to be *the* (single) current recording that **Re-record** replaced;
+  takes now **coexist**. Re-record still supersedes — but only the *latest* take being worked on,
+  not the earlier consented-into-the-thread takes.
 - **Draft** — a recorded-but-not-yet-approved Story: durable audio + row, **no transcript/prose**
   (the pipeline is deferred until approval, so no tokens are spent on a take that may be discarded).
   A draft is the narrator's *approve-later* work — it is never auto-deleted. It is deletable (audio
@@ -178,6 +186,36 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 - **Warm callback** — the interviewer's opening on turn 0 when prior stories exist: a brief,
   concrete reference to something the user said in a previous session. Makes sessions feel like
   a continuing relationship. Fires after any deeplink ask is handled; intake resumes from turn 1.
+- **Follow-up** — a gentle deepening question the interviewer asks *after evaluating* an answer,
+  within the same sitting, to draw out a thread the narrator just opened. Distinct from an **Ask**
+  (which comes from a relative) and from a **base** question (pre-authored bank): a follow-up is
+  *generated from what the narrator just said*. Its answer is another **Take** on the *same* Story,
+  not a new Story. The narrator can always decline a follow-up and move on — declining is a
+  first-class path, never a dead end.
+- **Emotional-door rule** — the interviewer follows an emotional thread *only when the narrator
+  themselves opened it*; it never manufactures an emotional probe. A follow-up on grief, loss, or
+  joy is eligible only when the narrator's own words surfaced that feeling first. This is "never
+  push into pain" made mechanical, and it is the one case where policy vetoes an otherwise
+  high-ranked **Follow-up** candidate.
+- **Follow-up thread** — an initial prompt (Ask, base, or intake) plus the follow-ups it spawns and
+  their takes, all resolving to **one Story and one approval**. A thread of length one (no
+  follow-up asked) is exactly today's one-answer behaviour.
+- **Follow-up decision record** — the append-only audit trail of every follow-up turn: the answer
+  that was evaluated, *all* candidate threads the evaluation proposed with their tags, the
+  disposition of each (kept or dropped, with a coded reason), the one selected, the line the
+  narrator heard, and what the narrator did (answered / skipped / off-ramped). Nothing is discarded
+  without a recorded reason — the same append-only-provenance discipline as the **Consent ledger**
+  and the L1→L2→L3 prose revisions.
+- **Ask suggestion** — compose-time coaching on a *drafted* Ask: the AI evaluates the asker's own
+  question against the same "good question" rubric the interviewer holds *itself* to (open-ended,
+  concrete, non-leading, never yes/no) and *offers* a better wording. **Detect-and-offer**: silent
+  unless a clear rule violation is caught (e.g. a yes/no question). NEVER auto-applied — the asker
+  accepts or keeps their own. This is the *opt-in* case of the **Ask**'s "never reworded" rule: the
+  guarantee is against *silent* rewording, so an asker who taps to accept has *adopted* new words
+  (they become the asker's own); reject and the original is sent verbatim. Distinct from a
+  **Follow-up** (asker not narrator; before-send not after-answer; a suggested edit not a spoken
+  turn). Its own on/off control, independent of narrator follow-ups. Same audited-disposition
+  discipline (surfaced / stayed-silent) as the **Follow-up decision record**.
 
 ## Explore (Mode 4 — the payoff surface)
 - **Explore surface** — the read/browse side of the chronicle (Mode 4): where members read, listen,
