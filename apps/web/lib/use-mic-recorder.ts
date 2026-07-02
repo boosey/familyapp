@@ -37,6 +37,10 @@ export function useMicRecorder(opts: {
         const type = mr.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type });
         void optsRef.current.onRecorded(blob, type);
+        // Reset so the button is re-usable for the next question (AboutYouFlow recycles the
+        // same hook across questions). NarratorRecorder is unaffected — it renders a done
+        // screen off its own component state, not micPhase.
+        setPhase("idle");
       };
       recorderRef.current = mr;
       mr.start();

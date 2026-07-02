@@ -242,7 +242,7 @@ export function AboutYouFlow({
           <KindredButton
             label={busy ? hub.aboutYou.saving : hub.aboutYou.next}
             size="large"
-            disabled={busy}
+            disabled={busy || transcribing || micPhase !== "idle"}
             onClick={next}
           />
         </div>

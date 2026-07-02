@@ -5,7 +5,7 @@
  * the editable textarea). Mocks the two server actions and the mic hook so no real MediaRecorder
  * or network call is needed.
  */
-import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach, type Mock } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { AboutYouFlow } from "@/app/hub/about-you/AboutYouFlow";
 
@@ -63,5 +63,64 @@ describe("AboutYouFlow", () => {
     await waitFor(() =>
       expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain("Metairie"),
     );
+  });
+
+  it("I2 regression: Next is disabled while transcription is in flight", async () => {
+    // submitIntakeRecording returns a pending promise so we can assert the disabled state
+    // while the async onRecorded handler is suspended mid-flight (transcribing = true).
+    let resolveTranscribe!: (val: { transcript: string }) => void;
+    (submitIntakeRecording as Mock).mockReturnValueOnce(
+      new Promise<{ transcript: string }>((res) => {
+        resolveTranscribe = res;
+      }),
+    );
+
+    render(
+      <AboutYouFlow
+        initialQuestion={{ key: "hometown", text: "Where did you grow up?" }}
+        hubHref="/hub"
+      />,
+    );
+
+    // Tap record — the mock start() calls onRecorded synchronously. onRecorded sets
+    // transcribing=true (before the first await) then suspends at submitIntakeRecording.
+    fireEvent.click(screen.getByRole("button", { name: /tap to answer/i }));
+
+    // While the transcription is pending, the Next button must be disabled.
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /next/i }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+
+    // Resolve transcription → transcribing flips back to false → button re-enabled.
+    resolveTranscribe({ transcript: "New Orleans" });
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /next/i }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+  });
+
+  it("m2: empty transcript leaves the textbox empty and shows no error", async () => {
+    (submitIntakeRecording as Mock).mockResolvedValueOnce({ transcript: "" });
+
+    render(
+      <AboutYouFlow
+        initialQuestion={{ key: "hometown", text: "Where did you grow up?" }}
+        hubHref="/hub"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /tap to answer/i }));
+    await waitFor(() => expect(submitIntakeRecording).toHaveBeenCalledOnce());
+
+    // With transcript = "" the `if (transcript) setDraft(...)` guard skips the setter.
+    await waitFor(() =>
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(""),
+    );
+    // No error message surfaced — graceful degradation, not a failure.
+    expect(screen.queryByText(/couldn't save/i)).toBeNull();
+    expect(screen.queryByText(/microphone/i)).toBeNull();
   });
 });
