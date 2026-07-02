@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { StoryBrowse } from "./StoryBrowse";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
@@ -81,11 +82,13 @@ export function StoriesTab({
   }
 
   return (
-    <StoryBrowse
-      items={items}
-      viewerFamilies={viewerFamilies}
-      viewerPersonId={viewerPersonId}
-      viewerName={viewerName}
-    />
+    <Suspense>
+      <StoryBrowse
+        items={items}
+        viewerFamilies={viewerFamilies}
+        viewerPersonId={viewerPersonId}
+        viewerName={viewerName}
+      />
+    </Suspense>
   );
 }
