@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
+import { kindredClerkAppearance } from "../lib/clerk-appearance";
 import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "../lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "./_kindred/font-scale-constants";
 
@@ -80,5 +81,5 @@ export default async function RootLayout({
 async function wrapWithClerk(body: React.ReactElement): Promise<React.ReactElement> {
   // Dynamic import keeps @clerk/nextjs out of the dev bundle entirely when Clerk is not wired.
   const { ClerkProvider } = await import("@clerk/nextjs");
-  return <ClerkProvider>{body}</ClerkProvider>;
+  return <ClerkProvider appearance={kindredClerkAppearance}>{body}</ClerkProvider>;
 }

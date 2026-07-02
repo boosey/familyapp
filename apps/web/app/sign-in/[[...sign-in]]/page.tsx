@@ -19,6 +19,7 @@ import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { KindredButton } from "@/app/_kindred";
 import { AuthScreen } from "@/app/_auth/AuthScreen";
 import { auth } from "@/app/_copy";
+import { kindredClerkAppearance } from "@/lib/clerk-appearance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,11 +49,14 @@ export default async function SignInPage({
     // Mirrors the ClerkProvider pattern in layout.tsx.
     const { SignIn } = await import("@clerk/nextjs");
     return (
-      <SignIn
-        forceRedirectUrl="/auth/callback"
-        signUpForceRedirectUrl="/auth/callback"
-        signUpUrl="/sign-up"
-      />
+      <AuthScreen title={auth.signIn.title} subtitle={auth.signIn.subtitle}>
+        <SignIn
+          appearance={kindredClerkAppearance}
+          forceRedirectUrl="/auth/callback"
+          signUpForceRedirectUrl="/auth/callback"
+          signUpUrl="/sign-up"
+        />
+      </AuthScreen>
     );
   }
 
