@@ -25,10 +25,14 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
   useEffect(() => () => pollAbortRef.current?.abort(), []);
 
   const upload = useCallback(async (blob: Blob) => {
-    // Create + register the abort controller as the FIRST statement, before any await: if the
-    // component unmounts DURING the capture POST (which happens before we'd otherwise reach the
-    // poll), the unmount cleanup must see a live controller to abort. Otherwise the upload would
-    // resume as a zombie and could router.push() a user who already navigated away (ghost nav).
+    // Commit to the processing screen before the first await so there is no idle-flash window
+    // between onstop (which resets micPhase → idle) and the POST resolving. The processing
+    // screen is the correct optimistic state: the audio is captured, the pipeline is next.
+    setPhase("processing");
+    // Create + register the abort controller as the next statement, still before any await: if
+    // the component unmounts DURING the capture POST the unmount cleanup must see a live
+    // controller to abort. Otherwise the upload would resume as a zombie and could router.push()
+    // a user who already navigated away (ghost nav).
     const controller = new AbortController();
     pollAbortRef.current = controller;
     try {
@@ -55,7 +59,6 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       // The story may still be rendering out-of-band (prod durable queue) or already ready
       // (dev/CI synchronous dispatch). Poll the token-scoped status until ready, then route to
       // the approval surface. On the soft cap, show a warm "taking longer" message (never hang).
-      setPhase("processing");
       const outcome = await pollUntilReady({
         getStatus: async () => {
           const r = await fetch(

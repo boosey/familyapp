@@ -85,6 +85,35 @@ async function recordAndStop() {
 }
 
 describe("NarratorRecorder async-aware capture", () => {
+  it("processing screen shows immediately after recording stops, before capture POST resolves — FIX 1 regression", async () => {
+    // Hold the capture POST at a pending promise to prove setPhase("processing") fires before it.
+    let releaseFetch!: (r: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Promise<Response>((res) => {
+            releaseFetch = res;
+          }),
+      ),
+    );
+
+    render(<NarratorRecorder token={TOKEN} />);
+    await recordAndStop();
+
+    // Processing screen must appear while the POST is still pending — no idle-flash.
+    await waitFor(() => expect(screen.getByText(/getting your story ready/)).toBeTruthy());
+    expect(push).not.toHaveBeenCalled();
+
+    // Release the fetch so no unhandled promise is left dangling after the test.
+    releaseFetch(
+      new Response(JSON.stringify({ ok: true, storyId: STORY_ID }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+
   it("routes straight to the approval surface when the story is already ready (dev/CI case)", async () => {
     statusQueue = ["ready"];
     render(<NarratorRecorder token={TOKEN} />);

@@ -84,6 +84,12 @@ export function AboutYouFlow({
   }
 
   async function exitToHub() {
+    // If a recording transcription is in-flight, skip the best-effort draft save entirely:
+    // the draft is empty/stale and would overwrite the transcript that's about to land.
+    if (transcribing) {
+      router.push(hubHref);
+      return;
+    }
     if (busy) {
       router.push(hubHref);
       return;

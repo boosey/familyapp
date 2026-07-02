@@ -15,7 +15,10 @@ vi.mock("@/app/hub/about-you/actions", () => ({
     nextQuestion: { key: "occupationSummary", text: "Tell me about your work." },
   })),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// Module-level push spy so tests can assert router.push calls (e.g. exit-during-transcription).
+// clearAllMocks() in beforeEach resets the call log between tests.
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 // Mock the mic hook: start() synchronously delivers a stub blob to onRecorded, so the record path
 // runs without a real MediaRecorder. The component's record button calls the returned start().
@@ -122,5 +125,61 @@ describe("AboutYouFlow", () => {
     // No error message surfaced — graceful degradation, not a failure.
     expect(screen.queryByText(/couldn't save/i)).toBeNull();
     expect(screen.queryByText(/microphone/i)).toBeNull();
+  });
+
+  it("exit-during-transcription: navigates to hub without saving when transcription is in flight", async () => {
+    // Hold submitIntakeRecording at a pending promise so transcribing stays true.
+    let resolveTranscribe!: (val: { transcript: string }) => void;
+    (submitIntakeRecording as Mock).mockReturnValueOnce(
+      new Promise<{ transcript: string }>((res) => {
+        resolveTranscribe = res;
+      }),
+    );
+
+    render(
+      <AboutYouFlow
+        initialQuestion={{ key: "hometown", text: "Where did you grow up?" }}
+        hubHref="/hub"
+      />,
+    );
+
+    // Start the record path — transcribing = true, submitIntakeRecording is pending.
+    fireEvent.click(screen.getByRole("button", { name: /tap to answer/i }));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /next/i }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+
+    // Click exit while transcription is still in flight.
+    fireEvent.click(screen.getByRole("button", { name: /take me to the hub/i }));
+
+    // exitToHub's transcribing guard fires: push immediately, no save attempted.
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/hub"));
+    expect(saveIntakeAnswer).not.toHaveBeenCalled();
+
+    // Clean up the dangling promise so Vitest doesn't warn about unhandled rejections.
+    resolveTranscribe({ transcript: "" });
+  });
+
+  it("submitIntakeRecording error: shows saveError copy and does not crash", async () => {
+    (submitIntakeRecording as Mock).mockRejectedValueOnce(new Error("network failure"));
+
+    render(
+      <AboutYouFlow
+        initialQuestion={{ key: "hometown", text: "Where did you grow up?" }}
+        hubHref="/hub"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /tap to answer/i }));
+
+    // The catch block in onRecorded sets the saveError copy.
+    await screen.findByText(/couldn't save that one/i);
+    // The textbox and Next button remain usable — user can still type and continue.
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /next/i }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
