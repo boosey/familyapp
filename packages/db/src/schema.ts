@@ -70,10 +70,11 @@ export const audienceTierEnum = pgEnum("audience_tier", [
   "public",
 ]);
 
-/** photo/document are seams for later media kinds; Phase 1 uses the two audio kinds. */
+/** photo/document are seams for later media kinds; Phase 1 uses the audio kinds. */
 export const mediaKindEnum = pgEnum("media_kind", [
   "story_audio",
   "approval_audio",
+  "intake_audio",
   "photo",
   "document",
 ]);
@@ -317,6 +318,43 @@ export const media = pgTable(
       .defaultNow(),
   },
   (t) => [index("media_owner_idx").on(t.ownerPersonId)],
+);
+
+// ---------------------------------------------------------------------------
+// IntakeAnswer — a durable, PRIVATE biographical intake answer (voice- or text-origin).
+// NOT a Story (the intake/story wall is preserved): it is owner-only, never shared, and feeds
+// persons.biographical_anchors. A member may later promote one into a Story (follow-up, not built
+// here). `text` is the saved answer — an edited transcript OR typed text. `text` is mutable (the
+// user edits it); there is no append-only trigger on this table.
+// ---------------------------------------------------------------------------
+
+export const intakeOriginEnum = pgEnum("intake_origin", ["voice", "typed"]);
+
+export const intakeAnswers = pgTable(
+  "intake_answers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** A `keyof BiographicalProfile` (e.g. "hometown"). Stored as text — the app owns the enum. */
+    questionKey: text("question_key").notNull(),
+    /** The verbatim question text shown to the narrator, snapshotted for durability. */
+    promptQuestion: text("prompt_question").notNull(),
+    origin: intakeOriginEnum("origin").notNull(),
+    /** The kept audio (kind=intake_audio). NULL for a typed answer. */
+    mediaId: uuid("media_id").references(() => media.id),
+    /** Raw ASR output. NULL for a typed answer. */
+    transcript: text("transcript"),
+    /** The saved answer: edited transcript OR typed text. Empty string until transcription seeds it. */
+    text: text("text").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("intake_answers_person_idx").on(t.personId),
+    uniqueIndex("intake_answers_person_question_uq").on(t.personId, t.questionKey),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -758,3 +796,6 @@ export type JoinRequestStatus =
   (typeof joinRequestStatusEnum.enumValues)[number];
 export type ProseRevisionLevel =
   (typeof proseRevisionLevelEnum.enumValues)[number];
+export type IntakeAnswer = typeof intakeAnswers.$inferSelect;
+export type NewIntakeAnswer = typeof intakeAnswers.$inferInsert;
+export type IntakeOrigin = (typeof intakeOriginEnum.enumValues)[number];

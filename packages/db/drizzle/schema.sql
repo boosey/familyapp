@@ -6,10 +6,11 @@
 CREATE TYPE "public"."ask_status" AS ENUM('queued', 'routed', 'answered');
 CREATE TYPE "public"."audience_tier" AS ENUM('private', 'branch', 'family', 'public');
 CREATE TYPE "public"."consent_action" AS ENUM('approved_for_sharing', 'set_audience_tier', 'revoked', 'paused_membership');
+CREATE TYPE "public"."intake_origin" AS ENUM('voice', 'typed');
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');
 CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'declined');
 CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
-CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'photo', 'document');
+CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
 CREATE TYPE "public"."prose_revision_level" AS ENUM('ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
@@ -59,6 +60,19 @@ CREATE TABLE "families" (
 	"creator_person_id" uuid NOT NULL,
 	"steward_person_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "intake_answers" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"person_id" uuid NOT NULL,
+	"question_key" text NOT NULL,
+	"prompt_question" text NOT NULL,
+	"origin" "intake_origin" NOT NULL,
+	"media_id" uuid,
+	"transcript" text,
+	"text" text DEFAULT '' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE "invitations" (
@@ -204,6 +218,8 @@ ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_med
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_creator_person_id_persons_id_fk" FOREIGN KEY ("creator_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_steward_person_id_persons_id_fk" FOREIGN KEY ("steward_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_inviter_person_id_persons_id_fk" FOREIGN KEY ("inviter_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_accepted_person_id_persons_id_fk" FOREIGN KEY ("accepted_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -232,6 +248,8 @@ CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
 CREATE INDEX "consent_story_idx" ON "consent_records" USING btree ("story_id");
+CREATE INDEX "intake_answers_person_idx" ON "intake_answers" USING btree ("person_id");
+CREATE UNIQUE INDEX "intake_answers_person_question_uq" ON "intake_answers" USING btree ("person_id","question_key");
 CREATE UNIQUE INDEX "invitations_token_hash_uq" ON "invitations" USING btree ("token_hash");
 CREATE INDEX "invitations_family_idx" ON "invitations" USING btree ("family_id");
 CREATE INDEX "join_requests_family_idx" ON "join_requests" USING btree ("family_id");
