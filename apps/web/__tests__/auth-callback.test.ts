@@ -72,7 +72,7 @@ describe("appendInviteParam", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveCallbackDestination", () => {
-  it("routes an un-onboarded person to /welcome when no invite is present", async () => {
+  it("routes an un-onboarded, family-less person to /families/start when no invite is present", async () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_001",
@@ -81,7 +81,7 @@ describe("resolveCallbackDestination", () => {
     });
 
     const dest = await resolveCallbackDestination(db, personId, null);
-    expect(dest).toBe("/welcome");
+    expect(dest).toBe("/families/start");
   });
 
   it("still routes normally and logs a warning when the invite token is stale/invalid", async () => {
@@ -99,7 +99,7 @@ describe("resolveCallbackDestination", () => {
     });
 
     // A stale invite must NOT block the user — routing continues normally.
-    expect(dest).toBe("/welcome");
+    expect(dest).toBe("/families/start");
     // The warning must be logged so the stale invite is not silently swallowed.
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("[auth/callback]"),
@@ -130,7 +130,7 @@ describe("resolveCallbackDestination", () => {
     warnSpy.mockRestore();
   });
 
-  it("routes to /welcome with no from=invite when there is no invite", async () => {
+  it("routes to /families/start with no from=invite when there is no invite", async () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_004",
@@ -139,7 +139,7 @@ describe("resolveCallbackDestination", () => {
     });
 
     const dest = await resolveCallbackDestination(db, personId, null);
-    expect(dest).toBe("/welcome");
+    expect(dest).toBe("/families/start");
     expect(dest).not.toContain("from=invite");
   });
 
