@@ -30,6 +30,7 @@ import {
   withLanguageModelLogging,
   type Pipeline,
   type LanguageModel,
+  type Transcriber,
 } from "@chronicle/pipeline";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createGroqLanguageModel } from "@chronicle/llm-groq";
@@ -142,6 +143,13 @@ type Runtime = {
    * LanguageModel directly, not a full transcribe→render Pipeline.
    */
   languageModel: LanguageModel;
+  /**
+   * The bare transcriber (real Groq Whisper adapter when GROQ_API_KEY is set, else the
+   * deterministic mock). Exposed for the non-pipeline transcription call site — intake audio
+   * capture (/hub/about-you) — which transcribes a single short clip directly, not through a
+   * full transcribe→render Pipeline.
+   */
+  transcriber: Transcriber;
   /**
    * Build a FRESH pipeline (its own in-process JobQueue) for one transcribe→render run. This is a
    * FACTORY, not a singleton, on purpose: the in-process queue's `drain()` has a single-flight
@@ -320,6 +328,7 @@ async function build(): Promise<Runtime> {
     storage,
     auth,
     languageModel,
+    transcriber,
     newPipeline,
     dispatchPipeline,
     inngestConfigured,
