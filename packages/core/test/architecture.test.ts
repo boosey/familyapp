@@ -27,6 +27,7 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const ALLOWLIST = new Set<string>([
   "packages/core/src/authorization.ts", // the single read front door
   "packages/core/src/story-repository.ts", // the single write path
+  "packages/core/src/intake-answer-repository.ts", // audited intake media + answer writes
 ]);
 
 /**
@@ -174,6 +175,7 @@ describe("single front door (architecture guard)", () => {
       [
         "packages/core/src/authorization.ts",
         "packages/core/src/story-repository.ts",
+        "packages/core/src/intake-answer-repository.ts",
       ].sort(),
     );
   });

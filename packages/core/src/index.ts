@@ -115,3 +115,11 @@ export {
   type FamilySearchResult,
   type FamilySearch,
 } from "./family-search";
+export {
+  createIntakeRecording,
+  saveIntakeTranscript,
+  saveIntakeText,
+  getIntakeAnswer,
+  listAnsweredQuestionKeys,
+  type CreateIntakeRecordingInput,
+} from "./intake-answer-repository";
