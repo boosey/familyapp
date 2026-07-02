@@ -14,6 +14,15 @@ export const FAMILY_SEARCH_WEIGHT_MEMBER = 1;
 /** Default number of family-search results returned. */
 export const FAMILY_SEARCH_DEFAULT_LIMIT = 10;
 
+/**
+ * Default cap on the discoverable-family browse list. The find surface filters this list
+ * client-side, so the cap bounds what crosses to the browser (name + steward only).
+ */
+export const DISCOVERABLE_FAMILIES_DEFAULT_LIMIT = 100;
+
+/** Default cap on recently-decided join requests shown to a steward. */
+export const DECIDED_JOIN_REQUESTS_DEFAULT_LIMIT = 20;
+
 /** Default TTL (ms) for member invitation tokens (14 days). */
 export const MEMBER_INVITATION_DEFAULT_TTL_MS = 14 * 86_400_000;
 

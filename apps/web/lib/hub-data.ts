@@ -6,7 +6,7 @@
  */
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
-import { families, memberships, persons, storyViews } from "@chronicle/db/schema";
+import { families, memberships, persons, storyFamilies, storyViews } from "@chronicle/db/schema";
 import { listStoriesForViewer } from "@chronicle/core";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, Family, Person, Story } from "@chronicle/db";
@@ -15,6 +15,12 @@ export interface MemberWithStories {
   person: Person;
   family: Family;
   stories: Story[];
+}
+
+/** A family the viewer belongs to — the options for the Stories-tab family-scope filter. */
+export interface ViewerFamilyRef {
+  id: string;
+  name: string;
 }
 
 /** Set of family ids the viewer holds an ACTIVE membership in. */
@@ -106,6 +112,56 @@ export async function loadHubFeed(
 /** All persons (dev sign-in picker only). */
 export async function listAllPersons(db: Database): Promise<Person[]> {
   return db.select().from(persons);
+}
+
+/**
+ * The families the account viewer belongs to (active membership) — the options for the Stories-tab
+ * family-scope filter. Anonymous viewers get none. Identity-graph read over the open schema.
+ */
+export async function loadViewerFamilies(
+  db: Database,
+  ctx: AuthContext,
+): Promise<ViewerFamilyRef[]> {
+  if (ctx.kind !== "account") return [];
+  const fams = await viewerFamilyIds(db, ctx.personId);
+  return fams.map((f) => ({ id: f.id, name: f.name }));
+}
+
+/**
+ * For each of `storyIds`, the families it is TARGETED to (`story_families`) — but ONLY families the
+ * viewer themselves is an active member of (the intersection is done in SQL via `viewerFamilyIds`).
+ * This keeps a story card from ever naming a family the viewer isn't in, and mirrors exactly which
+ * scopes the family-scope filter can select. `story_families` is an authz INPUT in the open schema
+ * (ADR-0010), not Story content, so it is read directly — the story ids were already authorized by
+ * the feed load. Stories with no in-scope target simply have no entry in the returned map.
+ */
+export async function loadStoryFamilyTargets(
+  db: Database,
+  storyIds: string[],
+  viewerFamilyIds: string[],
+): Promise<Map<string, ViewerFamilyRef[]>> {
+  const map = new Map<string, ViewerFamilyRef[]>();
+  if (storyIds.length === 0 || viewerFamilyIds.length === 0) return map;
+  const rows = await db
+    .select({
+      storyId: storyFamilies.storyId,
+      familyId: families.id,
+      familyName: families.name,
+    })
+    .from(storyFamilies)
+    .innerJoin(families, eq(families.id, storyFamilies.familyId))
+    .where(
+      and(
+        inArray(storyFamilies.storyId, storyIds),
+        inArray(storyFamilies.familyId, viewerFamilyIds),
+      ),
+    );
+  for (const r of rows) {
+    const arr = map.get(r.storyId);
+    if (arr) arr.push({ id: r.familyId, name: r.familyName });
+    else map.set(r.storyId, [{ id: r.familyId, name: r.familyName }]);
+  }
+  return map;
 }
 
 /**

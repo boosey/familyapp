@@ -73,7 +73,7 @@ export default async function SignInPage({
         >
           {auth.signIn.newHere}{" "}
           <Link href="/sign-up" style={{ fontWeight: 600 }}>
-            {auth.signIn.createFamily}
+            {auth.signIn.createAccount}
           </Link>
         </p>
       }

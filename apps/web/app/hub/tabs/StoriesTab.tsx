@@ -1,4 +1,5 @@
-import { StoriesBrowser, type StoryItem, type StoryFacets } from "./StoriesBrowser";
+import { StoryBrowse } from "./StoryBrowse";
+import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 
@@ -8,41 +9,40 @@ interface StoriesTabProps {
   viewerPersonId: string;
   /** Story ids this viewer has already opened. */
   seenStoryIds: Set<string>;
+  /** For each story id, the families it targets, ALREADY intersected with the viewer's families. */
+  familyTargets: Map<string, ViewerFamily[]>;
+  /** The viewer's active families — the options for the family-scope filter. */
+  viewerFamilies: ViewerFamily[];
+  /** The viewer's display name — labels the Timeline "Just {viewer}" toggle. */
+  viewerName: string;
 }
 
-function decadeOf(d: Date): string {
-  return `${Math.floor(d.getFullYear() / 10) * 10}s`;
-}
-
-/** Short recorded-date stamp for the card's right corner, e.g. "JUN 2026". */
-function recordedLabelOf(d: Date): string {
-  const year = d.getFullYear();
-  const month = d.toLocaleString(undefined, { month: "short" }).toUpperCase();
-  return `${month} ${year}`;
-}
-
-/** The era a story is ABOUT, when known. Null when the story has no historical era. */
-function eraLabelOf(eraYear: number, eraLabel: string | null): string {
+/** The era a story is ABOUT, when known: "1962 · MARCH" with a place note, else "1962". Null when
+ *  the story has no era year (it becomes an Undated Timeline entry). */
+function eventLabelOf(eraYear: number | null, eraLabel: string | null): string | null {
+  if (eraYear === null) return null;
   return eraLabel ? `${eraYear} · ${eraLabel.toUpperCase()}` : `${eraYear}`;
 }
 
-function eraDecade(eraYear: number): string {
-  return `${Math.floor(eraYear / 10) * 10}s`;
-}
-
 /**
- * Stories tab — flattens the per-member authorized feed into a single browsable pool, derives the
- * finder facets (Person / Era / Topic) from real data, and hands them to the client-side
- * StoriesBrowser (the "Find Stories" finder + featured card + grid).
+ * Stories tab — the server producer for the Story Browse surface. Flattens the per-member authorized
+ * feed into one serializable pool of StoryItems (pre-sorted reverse-chronological by shared/recorded
+ * time), then hands it to the client StoryBrowse component (Feed / Timeline / Search + family scope).
+ * All authorization already happened upstream in `loadHubFeed` → `listStoriesForViewer`.
  */
-export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabProps) {
-  /* Flatten every authorized story into one serializable list, newest first. */
+export function StoriesTab({
+  feed,
+  viewerPersonId,
+  seenStoryIds,
+  familyTargets,
+  viewerFamilies,
+  viewerName,
+}: StoriesTabProps) {
   const dated = feed.flatMap((slot) =>
     slot.stories.map((story) => {
-      // Recency for ordering: most-recently approved (or created) first.
+      // Recency for the reverse-chronological feed order: most-recently approved (or created) first.
       const sortDate = story.approvedAt ?? story.createdAt;
-      // The event era the story is ABOUT (when known) — distinct from when it was recorded.
-      const hasEra = story.eraYear != null;
+      const eraYear = story.eraYear ?? null;
       const item: StoryItem = {
         id: story.id,
         title: story.title ?? hub.stories.untitled,
@@ -51,13 +51,13 @@ export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabPro
         tags: story.tags ?? [],
         personId: slot.person.id,
         personName: slot.person.spokenName,
-        eventLabel: hasEra ? eraLabelOf(story.eraYear!, story.eraLabel ?? null) : null,
-        recordedLabel: recordedLabelOf(story.createdAt),
-        decade: hasEra ? eraDecade(story.eraYear!) : decadeOf(sortDate),
+        eraYear,
+        eraLabel: story.eraLabel ?? null,
+        eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),
+        families: familyTargets.get(story.id) ?? [],
         // New to this viewer until opened — but a narrator's own stories are never "new" to them.
         isNew: slot.person.id !== viewerPersonId && !seenStoryIds.has(story.id),
         href: `/hub/stories/${story.id}`,
-        mediaSrc: `/api/media/${story.recordingMediaId}`,
       };
       return { item, sort: sortDate.getTime() };
     }),
@@ -80,21 +80,12 @@ export function StoriesTab({ feed, viewerPersonId, seenStoryIds }: StoriesTabPro
     );
   }
 
-  /* Derive facets from the real data only. */
-  const personMap = new Map<string, string>();
-  const decadeSet = new Set<string>();
-  const topicSet = new Set<string>();
-  for (const it of items) {
-    personMap.set(it.personId, it.personName);
-    decadeSet.add(it.decade);
-    for (const t of it.tags) topicSet.add(t);
-  }
-
-  const facets: StoryFacets = {
-    persons: [...personMap].map(([id, name]) => ({ id, name })),
-    decades: [...decadeSet].sort(),
-    topics: [...topicSet].sort(),
-  };
-
-  return <StoriesBrowser items={items} facets={facets} />;
+  return (
+    <StoryBrowse
+      items={items}
+      viewerFamilies={viewerFamilies}
+      viewerPersonId={viewerPersonId}
+      viewerName={viewerName}
+    />
+  );
 }

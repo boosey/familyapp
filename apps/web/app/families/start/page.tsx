@@ -13,13 +13,13 @@ export const dynamic = "force-dynamic";
 
 function Door({
   href,
-  eyebrow,
+  icon,
   title,
   body,
   primary,
 }: {
   href: string;
-  eyebrow: string;
+  icon: string;
   title: string;
   body: string;
   primary?: boolean;
@@ -33,20 +33,12 @@ function Door({
         background: primary ? "var(--accent-soft)" : "var(--surface-card)",
         border: `var(--border-width) solid ${primary ? "var(--accent)" : "var(--border-strong)"}`,
         borderRadius: "var(--radius-xl)",
-        boxShadow: "var(--shadow-card)",
+        boxShadow: primary ? "var(--shadow-card)" : "var(--shadow-sm)",
         padding: "clamp(24px, 4vw, 36px)",
       }}
     >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "var(--tracking-mono)",
-          textTransform: "uppercase",
-          color: primary ? "var(--accent-strong)" : "var(--support)",
-        }}
-      >
-        {eyebrow}
+      <div aria-hidden="true" style={{ fontSize: 38, lineHeight: 1 }}>
+        {icon}
       </div>
       <h2
         style={{
@@ -127,14 +119,14 @@ export default async function FamiliesStartPage() {
         >
           <Door
             href="/families/new"
-            eyebrow={families.start.freshEyebrow}
+            icon={families.start.freshIcon}
             title={families.start.freshTitle}
             body={families.start.freshBody}
             primary
           />
           <Door
             href="/families/find"
-            eyebrow={families.start.joinEyebrow}
+            icon={families.start.joinIcon}
             title={families.start.joinTitle}
             body={families.start.joinBody}
           />

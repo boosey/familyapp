@@ -49,7 +49,7 @@
 
             <!-- WELCOME -->
             <sc-if value="{{ isWelcome }}" hint-placeholder-val="{{ true }}">
-              <div style="width:640px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; text-align:center; gap:28px;">
+              <div style="width:640px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:28px;">
                 <h1 style="font-family:var(--font-story); font-weight:400; font-size:48px; line-height:1.1; letter-spacing:-0.01em; color:var(--text-body); margin:0;">Rosa invited you to the Esposito family.</h1>
                 <div style="width:100%; display:flex; align-items:center; gap:18px; background:var(--surface-card); border:1.5px solid var(--border); border-radius:18px; box-shadow:var(--shadow-card); padding:22px 24px; text-align:left;">
                   <span style="flex:0 0 auto; width:64px; height:64px; border-radius:50%; background:var(--accent); color:var(--accent-on); display:inline-flex; align-items:center; justify-content:center; font-family:var(--font-story); font-size:26px; font-weight:500;">SE</span>
@@ -74,7 +74,7 @@
 
             <!-- DOB -->
             <sc-if value="{{ isDob }}" hint-placeholder-val="{{ false }}">
-              <div style="width:660px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; text-align:center; gap:24px;">
+              <div style="width:660px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:24px;">
                 <h1 style="font-family:var(--font-story); font-weight:400; font-size:44px; line-height:1.12; color:var(--text-body); margin:0;">Before we go in — when were you born?</h1>
                 <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:0; max-width:34ch;">It quietly shapes the questions and pace Kindred uses with you. Say it out loud, or choose below.</p>
                 <x-import component-from-global-scope="KindredDesignSystem_495fbf.KindredVoiceButton" dc-props="{{ dobVoiceProps }}" hint-size="150px,160px"></x-import>
@@ -103,7 +103,7 @@
 
             <!-- DOORS -->
             <sc-if value="{{ isDoors }}" hint-placeholder-val="{{ false }}">
-              <div style="width:820px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; gap:30px;">
+              <div style="width:820px; display:flex; flex-direction:column; align-items:center; gap:30px;">
                 <div style="text-align:center;">
                   <h1 style="font-family:var(--font-story); font-weight:400; font-size:46px; line-height:1.1; color:var(--text-body); margin:0;">You're in, Sal. Where to first?</h1>
                   <p style="font-family:var(--font-ui); font-size:19px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">Either way, you can do the other one whenever you like.</p>
@@ -127,7 +127,7 @@
 
             <!-- INTERVIEW -->
             <sc-if value="{{ isInterview }}" hint-placeholder-val="{{ false }}">
-              <div style="width:760px; animation:kfade .2s ease; display:flex; flex-direction:column; align-items:center; gap:30px;">
+              <div style="width:760px; display:flex; flex-direction:column; align-items:center; gap:30px;">
                 <!-- facts ribbon -->
                 <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
                   <sc-for list="{{ ribbon }}" as="f" hint-placeholder-count="5">
@@ -159,7 +159,7 @@
 
       <!-- ============ HUB ============ -->
       <sc-if value="{{ isHub }}" hint-placeholder-val="{{ false }}">
-        <div style="height:100%; display:flex; flex-direction:column; animation:kfade .2s ease;">
+        <div style="height:100%; display:flex; flex-direction:column;">
           <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 36px; border-bottom:1.5px solid var(--border); background:var(--surface-card);">
             <div style="display:flex; align-items:baseline; gap:14px;">
               <span style="font-family:var(--font-story); font-size:28px; color:var(--text-body);">Family Chronicle</span>
@@ -240,10 +240,10 @@ class Component extends DCLogic {
 
   interviewQs = [
     { key: 'birthplace', label: 'Birthplace', q: 'Where were you born?' },
-    { key: 'places', label: 'Places lived', q: 'And the places you’ve called home since?' },
-    { key: 'moments', label: 'Big moments', q: 'A moment you’d never want forgotten?' },
+    { key: 'places', label: 'Places lived', q: 'And the places you\u2019ve called home since?' },
+    { key: 'moments', label: 'Big moments', q: 'A moment you\u2019d never want forgotten?' },
   ];
-  seedText = { birthplace: 'Naples, 1949', places: 'Naples → Brooklyn', moments: 'A wedding at St. Rocco’s' };
+  seedText = { birthplace: 'Naples, 1949', places: 'Naples \u2192 Brooklyn', moments: 'A wedding at St. Rocco\u2019s' };
 
   familyStories = [
     { title: 'The bakery on Via Roma', year: '1958', place: 'Naples', duration: '4:12', excerpt: 'My father baked before light; the whole street woke to the smell.' },
@@ -324,7 +324,7 @@ class Component extends DCLogic {
     const ribbon = ribbonBase.map((f, i) => {
       const done = f.key === '_name' || f.key === '_born' || s.captured.includes(f.key);
       const isActive = asking && cur && f.key === cur.key;
-      const mark = done ? '✓' : (isActive ? '●' : '·');
+      const mark = done ? '\u2713' : (isActive ? '\u25CF' : '\u00B7');
       const bg = done ? 'var(--accent-soft)' : (isActive ? 'var(--surface-card)' : 'transparent');
       const col = done ? 'var(--accent-strong)' : (isActive ? 'var(--text-body)' : 'var(--text-muted)');
       const bd = done ? 'var(--accent)' : (isActive ? 'var(--accent)' : 'var(--border)');
@@ -332,7 +332,7 @@ class Component extends DCLogic {
     });
 
     // hub seeds
-    const seedChips = ['Born · March 1949', ...s.captured.map(k => this.seedText[k])];
+    const seedChips = ['Born \u00b7 March 1949', ...s.captured.map(k => this.seedText[k])];
     const pinPositions = [6, ...s.captured.map((_, i) => 30 + i * 26)];
     const timelinePins = pinPositions.map(left => ({
       style: `position:absolute; left:${left}%; top:-4px; width:14px; height:14px; border-radius:50%; background:var(--accent); border:2px solid var(--surface-card);`,
@@ -361,7 +361,7 @@ class Component extends DCLogic {
       onMonth: this.onMonth, onDay: this.onDay, onYear: this.onYear,
       dobIncomplete: !dobComplete,
       dobContinueProps: { onClick: dobComplete ? this.dobContinue : () => {} },
-      dobVoiceProps: { listening: s.dobListening, label: s.dobListening ? 'Listening…' : 'Say it out loud', onClick: this.dobVoice, size: 110 },
+      dobVoiceProps: { listening: s.dobListening, label: s.dobListening ? 'Listening\u2026' : 'Say it out loud', onClick: this.dobVoice, size: 110 },
 
       // doors
       goInterview: this.goInterview,
@@ -370,7 +370,7 @@ class Component extends DCLogic {
       ribbon,
       interviewAsking: asking, interviewDone: !asking,
       currentQ: cur ? cur.q : '',
-      interviewVoiceProps: { listening: s.intListening, label: s.intListening ? 'Listening…' : 'Tap to answer', onClick: this.intVoice, size: 150 },
+      interviewVoiceProps: { listening: s.intListening, label: s.intListening ? 'Listening\u2026' : 'Tap to answer', onClick: this.intVoice, size: 150 },
       doneToHubProps: { onClick: this.doneToHub },
 
       // hub
@@ -378,8 +378,8 @@ class Component extends DCLogic {
       familyStories: this.familyStories,
       startInterview: this.startInterview,
       restart: this.restart,
-      bannerHeadline: s.didInterview ? 'There’s always more to tell.' : 'Your story is just beginning.',
-      bannerSub: s.didInterview ? 'Sit down for another short interview whenever you like.' : 'Sit for a short interview whenever you like — there’s no rush.',
+      bannerHeadline: s.didInterview ? 'There\u2019s always more to tell.' : 'Your story is just beginning.',
+      bannerSub: s.didInterview ? 'Sit down for another short interview whenever you like.' : 'Sit for a short interview whenever you like — there\u2019s no rush.',
       bannerCta: s.didInterview ? 'Continue' : 'Start',
     };
   }

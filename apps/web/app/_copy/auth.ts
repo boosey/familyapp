@@ -3,10 +3,10 @@
 export const auth = {
   signIn: {
     title: "Welcome back",
-    subtitle: "Sign in to see your family's stories.",
+    subtitle: "Sign in to Family Chronicle.",
     error: "That email and password don't match. Please try again.",
     newHere: "New here?",
-    createFamily: "Create your family",
+    createAccount: "Create an account",
     emailLabel: "Email",
     emailPlaceholder: "you@example.com",
     passwordLabel: "Password",
@@ -17,8 +17,7 @@ export const auth = {
     errorEmailTaken: "That email already has an account. Try signing in instead.",
     errorMissing: "Please fill in your name, email, and a password.",
     title: "Create your family",
-    subtitle:
-      "Start a space for your family's stories. You can invite relatives and narrators once you're in.",
+    subtitle: "Start keeping your family's stories.",
     haveAccount: "Already have an account?",
     signIn: "Sign in",
     nameLabel: "Your name",
