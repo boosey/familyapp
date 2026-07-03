@@ -18,8 +18,8 @@ import {
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
 import { hub } from "@/app/_copy";
-import { AnswerFlow } from "./AnswerFlow";
-import type { DraftInfo } from "./AnswerFlow";
+import { StoryComposer } from "../../StoryComposer";
+import type { DraftInfo } from "../../StoryComposer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +77,7 @@ export default async function AnswerPage({
         recordedAt: draftEntry.recordedAt.toISOString(),
         mediaUrl: `/api/media/${story.recordingMediaId}`,
         prose: story.prose ?? "",
+        title: story.title ?? "",
         takes,
       };
     }
@@ -134,15 +135,18 @@ export default async function AnswerPage({
         {/*
          * `key` flips on the record→review transition (and back on re-record). router.refresh()
          * updates the server props but does NOT remount a client component, so without this key
-         * AnswerFlow's state (proseDraft seeded from draft.prose, op, tier, …) stays stuck at its
+         * StoryComposer's state (proseDraft/titleDraft seeded from draft, op, tier, …) stays stuck at its
          * record-phase mount values — the review editor would render empty even though draft.prose
          * is populated. Keying on the draft identity forces a fresh mount that re-seeds all state.
          */}
-        <AnswerFlow
+        <StoryComposer
           key={draft?.storyId ?? "record"}
-          askId={askId}
-          questionText={askDetail.questionText}
-          askerName={askDetail.askerSpokenName}
+          mode="answer"
+          ask={{
+            id: askId,
+            questionText: askDetail.questionText,
+            askerName: askDetail.askerSpokenName,
+          }}
           draft={draft}
         />
       </div>

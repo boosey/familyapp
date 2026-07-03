@@ -1,15 +1,22 @@
 "use client";
 
 /**
- * Two-phase answer flow — record then review (relisten + tier-pick + share/re-record/discard).
+ * Two-phase story composer — capture then review (relisten + tier-pick + share/re-record/discard).
  *
- * Phase is server-driven: if `draft` is null, the narrator hasn't recorded yet (record phase);
- * if `draft` is non-null, they have a saved take ready to review (review phase). The server
- * component re-renders after each action via router.refresh(), updating the props.
+ * Generalized from the answer flow (ADR-0007): ONE component parameterized by an optional `ask`.
+ *  - `mode="answer"` + `ask` present → the in-hub answer flow (question header, follow-up loop).
+ *  - `mode="tell"`   + `ask` null    → a self-initiated telling (no question header, no ask to seed
+ *    the follow-up evaluator). `/hub/tell` renders this variant.
  *
- * Mirrors NarratorRecorder (record UX) and ApprovalRecorder (tier-picker pattern) in Kindred
- * chrome. All server mutations go through the three server actions in actions.ts — personId is
- * never sent by the client.
+ * Capture offers a voice⇄text toggle: speak (the canonical path) or type it (ADR-0007 text stories).
+ *
+ * Phase is server-driven: if `draft` is null, nothing is captured yet (capture phase); if `draft` is
+ * non-null, there is a saved take ready to review (review phase). The server component re-renders
+ * after each action via router.refresh(), updating the props.
+ *
+ * All server mutations go through the server actions in answer/[askId]/actions.ts — personId is
+ * never sent by the client. The initial capture posts to `composeStoryAction` (the ask-optional
+ * front door that branches text vs. voice); follow-up takes stay on `recordFollowUpTakeAction`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -17,7 +24,7 @@ import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_ki
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import {
-  recordAnswerAction,
+  composeStoryAction,
   recordFollowUpTakeAction,
   finishThreadAction,
   dropTakeAction,
@@ -26,14 +33,15 @@ import {
   getAnswerStatusAction,
   polishAnswerProseAction,
   type ThreadStep,
-} from "./actions";
+} from "./answer/[askId]/actions";
 import { pollUntilReady } from "@/lib/poll-status";
-import { AnswerReviewPending } from "./AnswerReviewPending";
-import { FollowUpPrompt } from "./FollowUpPrompt";
+import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
+import { FollowUpPrompt } from "./answer/[askId]/FollowUpPrompt";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
 type Op = "share" | "rerecord" | "discard" | "drop" | null;
+type InputMode = "voice" | "text";
 
 const TIER_ORDER: Tier[] = ["family", "branch", "public"];
 
@@ -50,13 +58,14 @@ export interface DraftInfo {
   recordedAt: string; // ISO string (serialized from Date by the server component)
   mediaUrl: string;
   prose: string;
+  title: string;
   takes: TakeInfo[];
 }
 
-interface AnswerFlowProps {
-  askId: string;
-  questionText: string;
-  askerName: string;
+interface StoryComposerProps {
+  mode: "answer" | "tell";
+  /** The ask being answered (answer mode) or `null`/absent for a self-initiated telling (tell mode). */
+  ask?: { id: string; questionText: string; askerName: string } | null;
   draft: DraftInfo | null;
 }
 
@@ -70,11 +79,13 @@ function pickMimeType(): string {
   return "audio/webm";
 }
 
-export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlowProps) {
+export function StoryComposer({ mode: _mode, ask = null, draft }: StoryComposerProps) {
   const router = useRouter();
 
-  // ── Record phase state ──────────────────────────────────────────────────────
+  // ── Capture phase state ─────────────────────────────────────────────────────
   const [recordPhase, setRecordPhase] = useState<RecordPhase>("idle");
+  const [inputMode, setInputMode] = useState<InputMode>("voice");
+  const [textDraft, setTextDraft] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -84,10 +95,12 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
+  const [titleDraft, setTitleDraft] = useState(draft?.title ?? "");
 
   // ── Optimistic review-pending state ─────────────────────────────────────────
-  // Set the instant recording stops: a local object URL of the take, shown (with a polishing
-  // spinner) while recordAnswerAction runs. Discarded when the draft prop arrives (keyed remount).
+  // Set the instant recording stops (or a typed telling is submitted): a local object URL of the
+  // take (empty for text — there is no audio), shown with a polishing spinner while
+  // composeStoryAction runs. Discarded when the draft prop arrives (keyed remount).
   const [localTake, setLocalTake] = useState<{ url: string } | null>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
   // Abort the processing poll if this instance unmounts (e.g. the keyed remount into review-ready).
@@ -106,7 +119,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   useEffect(() => {
     if (!localTake) return;
     return () => {
-      URL.revokeObjectURL(localTake.url);
+      if (localTake.url) URL.revokeObjectURL(localTake.url);
       pollAbortRef.current?.abort();
     };
   }, [localTake]);
@@ -170,7 +183,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     [router],
   );
 
-  // ── Record phase handlers ───────────────────────────────────────────────────
+  // ── Capture phase handlers ──────────────────────────────────────────────────
   const uploadRecording = useCallback(async () => {
     try {
       const type = mediaRecorderRef.current?.mimeType ?? "audio/webm";
@@ -182,20 +195,21 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
 
       const form = new FormData();
       form.append("audio", blob, "recording.webm");
-      // A follow-up take posts against the active story; the initial answer posts against the ask.
+      // A follow-up take posts against the active story; the initial answer posts against the ask
+      // (when there is one) via the ask-optional compose front door.
       let result: ThreadStep;
       if (followUp && activeStoryId) {
         form.append("storyId", activeStoryId);
         result = await recordFollowUpTakeAction(form);
       } else {
-        form.append("askId", askId);
-        result = await recordAnswerAction(form);
+        if (ask) form.append("askId", ask.id);
+        result = await composeStoryAction(form);
       }
       await handleStep(result);
     } catch {
       setPendingError(hub.answer.genericError);
     }
-  }, [askId, followUp, activeStoryId, handleStep]);
+  }, [ask, followUp, activeStoryId, handleStep]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -230,6 +244,24 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     else if (recordPhase === "idle") void startRecording();
   }, [recordPhase, startRecording, stopRecording]);
 
+  // Submit a typed telling (ADR-0007 text story). Reuses the optimistic pending screen (no audio
+  // url); composeStoryAction takes the text branch (ingestTextStory → render), then handleStep polls
+  // + refreshes into review — the same downstream path as the voice take.
+  const submitText = useCallback(async () => {
+    if (textDraft.trim().length === 0) return;
+    try {
+      setPendingError(null);
+      setLocalTake({ url: "" }); // reuse the pending screen; no audio to play back for text
+      const form = new FormData();
+      form.set("text", textDraft);
+      if (ask) form.set("askId", ask.id);
+      const step = await composeStoryAction(form);
+      await handleStep(step);
+    } catch {
+      setPendingError(hub.answer.genericError);
+    }
+  }, [textDraft, ask, handleStep]);
+
   // ── Follow-up finish handler ────────────────────────────────────────────────
   // "That's all for now" — decline the current follow-up and finish the thread (a first-class path,
   // never a dead end). finishThreadAction stitches the takes so far → the resulting `ready` step
@@ -260,6 +292,11 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       form.append("audienceTier", tier);
       if (proseDraft !== draft!.prose) {
         form.append("correctedProse", proseDraft);
+      }
+      // Send an edited title only when the narrator actually changed it (empty/unchanged → the
+      // server leaves the AI-derived title as-is).
+      if (titleDraft.trim() && titleDraft.trim() !== draft!.title) {
+        form.append("correctedTitle", titleDraft.trim());
       }
       const result = await shareAnswerAction(form);
       if (result?.error) {
@@ -345,7 +382,9 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   };
 
   // ── Shared question header ──────────────────────────────────────────────────
-  const questionHeader = (
+  // Rendered only in answer mode (an ask is present). A self-initiated telling has no question, so
+  // the header is null and the capture phase shows a warm tell-prompt instead.
+  const questionHeader = ask ? (
     <div style={{ marginBottom: 32, textAlign: "center" }}>
       <p
         style={{
@@ -356,7 +395,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           margin: "0 0 10px",
         }}
       >
-        {hub.answer.askedBy(askerName)}
+        {hub.answer.askedBy(ask.askerName)}
       </p>
       <p
         style={{
@@ -370,10 +409,10 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           marginRight: "auto",
         }}
       >
-        {questionText}
+        {ask.questionText}
       </p>
     </div>
-  );
+  ) : null;
 
   // ── REVIEW PHASE ────────────────────────────────────────────────────────────
   if (draft) {
@@ -437,7 +476,8 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         </p>
 
         {/* Relisten. A thread-of-one keeps the original single-take control (backward-compatible);
-            a multi-take thread lists each take with its own relisten + a drop for follow-up takes. */}
+            a multi-take thread lists each take with its own relisten + a drop for follow-up takes.
+            A text story has no audio (takes: [], mediaUrl: "") → the audio block is omitted. */}
         {draft.takes.length > 1 ? (
           <div style={{ margin: "0 auto 32px", maxWidth: 480 }}>
             {draft.takes.map((take) => (
@@ -478,7 +518,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
               </div>
             ))}
           </div>
-        ) : (
+        ) : draft.mediaUrl ? (
           /* eslint-disable-next-line jsx-a11y/media-has-caption */
           <audio
             controls
@@ -491,7 +531,21 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
               borderRadius: "var(--radius-md)",
             }}
           />
-        )}
+        ) : null}
+
+        {/* Editable title — prepopulated from the AI-derived title, saved on Share only if changed. */}
+        <div style={{ marginBottom: 24 }}>
+          <label className="kin-form-label">
+            {hub.compose.titleLabel}
+            <input
+              type="text"
+              className="kin-field"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              disabled={isRemoving}
+            />
+          </label>
+        </div>
 
         {/* Read + edit the polished prose before sharing */}
         <div style={{ marginBottom: 32 }}>
@@ -516,7 +570,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             onPolish={async (text) => {
               const form = new FormData();
               form.append("prose", text);
-              form.append("promptQuestion", questionText);
+              form.append("promptQuestion", ask?.questionText ?? "");
               const res = await polishAnswerProseAction(form);
               if ("error" in res) throw new Error(res.error);
               return res.prose;
@@ -673,7 +727,8 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   }
 
   // ── REVIEW-PENDING PHASE ────────────────────────────────────────────────────
-  // Recorded locally; render is in flight (or failed). Shown until the draft prop arrives.
+  // Captured locally; render is in flight (or failed). Shown until the draft prop arrives. A typed
+  // telling has no audio url — the pending screen still shows the polishing spinner + message.
   if (localTake) {
     return (
       <AnswerReviewPending
@@ -685,7 +740,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     );
   }
 
-  // ── RECORD PHASE ────────────────────────────────────────────────────────────
+  // ── RECORD PHASE (soft mic failure) ─────────────────────────────────────────
   if (recordPhase === "softfail") {
     return (
       <div style={{ textAlign: "center" }}>
@@ -723,6 +778,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     );
   }
 
+  // ── CAPTURE PHASE (initial voice⇄text capture) ──────────────────────────────
   return (
     <div
       style={{
@@ -733,33 +789,137 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       }}
     >
       {questionHeader}
-      <KindredVoiceButton
-        listening={recordPhase === "listening"}
-        saving={recordPhase === "saving"}
-        size={220}
-        label={
-          recordPhase === "listening"
-            ? hub.answer.listeningTapStop
-            : recordPhase === "saving"
-              ? common.voiceButton.oneMoment
-              : common.voiceButton.tapToSpeak
-        }
-        onClick={voiceClick}
-      />
-      {recordPhase === "idle" && (
+      {/* Tell mode has no question header — show a warm prompt so the capture screen isn't blank. */}
+      {!ask && (
         <p
           style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-meta)",
+            fontFamily: "var(--font-story)",
+            fontSize: "clamp(1.35rem, 3.5vw, var(--text-story-lg))",
+            lineHeight: "var(--leading-snug)",
+            color: "var(--text-body)",
             margin: 0,
+            maxWidth: "24ch",
             textAlign: "center",
-            maxWidth: 300,
           }}
         >
-          {hub.answer.takeYourTime}
+          {hub.compose.tellPrompt}
         </p>
       )}
+
+      {/* Voice⇄text toggle — speak (canonical) or type it (ADR-0007 text story). */}
+      <div
+        role="group"
+        aria-label={hub.compose.inputModeAria}
+        style={{
+          display: "inline-flex",
+          gap: 4,
+          padding: 4,
+          borderRadius: "var(--radius-pill)",
+          background: "var(--surface-card)",
+          border: "var(--border-width) solid var(--border)",
+        }}
+      >
+        <ToggleOption
+          label={hub.compose.speak}
+          active={inputMode === "voice"}
+          onClick={() => setInputMode("voice")}
+        />
+        <ToggleOption
+          label={hub.compose.typeIt}
+          active={inputMode === "text"}
+          onClick={() => setInputMode("text")}
+        />
+      </div>
+
+      {inputMode === "voice" ? (
+        <>
+          <KindredVoiceButton
+            listening={recordPhase === "listening"}
+            saving={recordPhase === "saving"}
+            size={220}
+            label={
+              recordPhase === "listening"
+                ? hub.answer.listeningTapStop
+                : recordPhase === "saving"
+                  ? common.voiceButton.oneMoment
+                  : common.voiceButton.tapToSpeak
+            }
+            onClick={voiceClick}
+          />
+          {recordPhase === "idle" && (
+            <p
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                color: "var(--text-meta)",
+                margin: 0,
+                textAlign: "center",
+                maxWidth: 300,
+              }}
+            >
+              {hub.answer.takeYourTime}
+            </p>
+          )}
+        </>
+      ) : (
+        <div style={{ width: "100%", maxWidth: 480 }}>
+          <label className="kin-form-label">
+            {hub.compose.typeIt}
+            <textarea
+              className="kin-field"
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              rows={8}
+              style={{ minHeight: 160 }}
+              placeholder={hub.compose.textPlaceholder}
+            />
+          </label>
+          <div style={{ marginTop: 16 }}>
+            <KindredButton
+              label={hub.compose.continueLabel}
+              variant="primary"
+              size="large"
+              fullWidth
+              disabled={textDraft.trim().length === 0}
+              onClick={submitText}
+            />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ── Capture-mode toggle option ────────────────────────────────────────────── */
+function ToggleOption({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        minHeight: 36,
+        padding: "0 18px",
+        borderRadius: "var(--radius-pill)",
+        border: "none",
+        background: active ? "var(--accent)" : "transparent",
+        color: active ? "var(--accent-on)" : "var(--text-muted)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-ui-sm)",
+        fontWeight: 600,
+        cursor: "pointer",
+        transition: "background var(--dur-fade), color var(--dur-fade)",
+      }}
+    >
+      {label}
+    </button>
   );
 }

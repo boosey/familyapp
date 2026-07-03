@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AnswerFlow } from "@/app/hub/answer/[askId]/AnswerFlow";
+import { StoryComposer } from "@/app/hub/StoryComposer";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -14,11 +14,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
+const ASK = {
+  id: "11834dd1-04f4-44a4-b611-24fdd9c3d8fd",
+  questionText: "What have you learned about being a grandparent?",
+  askerName: "Sam",
+};
 
-// A controllable record action: resolves only when we call `resolveRecord`, so the test can
-// assert the pending screen WHILE the action is still awaiting.
+// A controllable compose action (the initial-capture front door): resolves only when we call
+// `resolveRecord`, so the test can assert the pending screen WHILE the action is still awaiting.
 let resolveRecord: (v: { storyId: string } | { error: string }) => void;
-const recordAnswerAction = vi.fn(
+const composeStoryAction = vi.fn(
   (..._args: unknown[]) =>
     new Promise<{ storyId: string } | { error: string }>((res) => (resolveRecord = res)),
 );
@@ -33,7 +38,7 @@ const getAnswerStatusAction = vi.fn(
   }),
 );
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
-  recordAnswerAction: (...args: unknown[]) => recordAnswerAction(...args),
+  composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
   getAnswerStatusAction: (...args: unknown[]) => getAnswerStatusAction(...args),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
@@ -75,27 +80,27 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("AnswerFlow optimistic transition", () => {
+// The capture screen now has a voice⇄text toggle, so several buttons coexist — target the voice
+// control by its aria-label rather than the (now-ambiguous) bare button role.
+const clickVoiceIdle = () =>
+  fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ }));
+const clickVoiceListening = () =>
+  fireEvent.click(screen.getByRole("button", { name: /Listening/ }));
+
+describe("StoryComposer optimistic transition", () => {
   it("shows the review-pending screen the moment recording stops", async () => {
-    render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
-    );
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     // Start: click the voice button (idle → listening, async getUserMedia).
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceIdle();
     await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
 
     // Stop: click again → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceListening();
 
-    // Review-pending appears while recordAnswerAction is still pending.
+    // Review-pending appears while composeStoryAction is still pending.
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
-    expect(recordAnswerAction).toHaveBeenCalledOnce();
+    expect(composeStoryAction).toHaveBeenCalledOnce();
     expect(screen.queryByRole("textbox")).toBeNull(); // editor hidden
     const audio = document.querySelector("audio");
     expect(audio?.getAttribute("src")).toBe("blob:local-take");
@@ -114,18 +119,11 @@ describe("AnswerFlow optimistic transition", () => {
       .mockResolvedValueOnce({ status: "processing", storyId: STORY_ID })
       .mockResolvedValueOnce({ status: "ready", storyId: STORY_ID });
 
-    render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
-    );
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceIdle();
     await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceListening();
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
     resolveRecord({ storyId: STORY_ID });
@@ -139,19 +137,12 @@ describe("AnswerFlow optimistic transition", () => {
   }, 12000);
 
   it("surfaces a render failure on the pending screen and returns to record on retry", async () => {
-    render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
-    );
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     // Record then stop → review-pending while the action is in flight.
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceIdle();
     await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button"));
+    clickVoiceListening();
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
     // Render fails: the error lands on the pending screen (no refresh, no remount).

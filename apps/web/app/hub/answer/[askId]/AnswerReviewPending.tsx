@@ -30,19 +30,22 @@ export function AnswerReviewPending({
     <div>
       {header}
 
-      {/* Relisten the take they just gave (local object URL). */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio
-        controls
-        src={audioUrl}
-        style={{
-          width: "100%",
-          maxWidth: 480,
-          display: "block",
-          margin: "0 auto 32px",
-          borderRadius: "var(--radius-md)",
-        }}
-      />
+      {/* Relisten the take they just gave (local object URL). A typed telling has no audio, so the
+          audio control is omitted (an empty src would trigger a spurious network fetch). */}
+      {audioUrl ? (
+        /* eslint-disable-next-line jsx-a11y/media-has-caption */
+        <audio
+          controls
+          src={audioUrl}
+          style={{
+            width: "100%",
+            maxWidth: 480,
+            display: "block",
+            margin: "0 auto 32px",
+            borderRadius: "var(--radius-md)",
+          }}
+        />
+      ) : null}
 
       {error ? (
         <div style={{ textAlign: "center" }}>

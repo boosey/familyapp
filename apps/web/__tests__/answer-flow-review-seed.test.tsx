@@ -20,10 +20,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { AnswerFlow, type DraftInfo } from "@/app/hub/answer/[askId]/AnswerFlow";
+import { StoryComposer, type DraftInfo } from "@/app/hub/StoryComposer";
 import { AnswerReviewPending } from "@/app/hub/answer/[askId]/AnswerReviewPending";
 
-// AnswerFlow calls useRouter() at the top; the handlers that use it aren't exercised here.
+// StoryComposer calls useRouter() at the top; the handlers that use it aren't exercised here.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: () => {}, push: () => {} }),
 }));
@@ -31,6 +31,7 @@ vi.mock("next/navigation", () => ({
 // actions.ts is a "use server" module that pulls getRuntime()/db at import time. The review
 // editor never invokes it in this test, so stub it to keep the unit test free of server wiring.
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
+  composeStoryAction: vi.fn(),
   recordAnswerAction: vi.fn(),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
@@ -45,6 +46,7 @@ const draft: DraftInfo = {
   recordedAt: new Date(0).toISOString(),
   mediaUrl: "/api/media/m1",
   prose: PROSE,
+  title: "A grandparent's wish",
   // Thread-of-one: exactly the initial take → the single-take review path.
   takes: [{ position: 0, mediaUrl: "/api/media/m1", isInitial: true }],
 };
@@ -52,29 +54,36 @@ const draft: DraftInfo = {
 // Mirror page.tsx exactly: the key flips on the record→review transition (and back on re-record).
 const mountKey = (d: DraftInfo | null) => d?.storyId ?? "record";
 
+// The review phase now has TWO textboxes (the title input + the prose editor); target the prose
+// editor by its stable aria-label so the seeding assertion stays unambiguous.
+const proseEditor = () =>
+  screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement;
+
 function Harness({ draft: d, keyed }: { draft: DraftInfo | null; keyed: boolean }) {
   return (
-    <AnswerFlow
+    <StoryComposer
       key={keyed ? mountKey(d) : "static"}
-      askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-      questionText="What have you learned about being a grandparent?"
-      askerName="Sam"
+      mode="answer"
+      ask={{
+        id: "11834dd1-04f4-44a4-b611-24fdd9c3d8fd",
+        questionText: "What have you learned about being a grandparent?",
+        askerName: "Sam",
+      }}
       draft={d}
     />
   );
 }
 
-describe("AnswerFlow record→review editor seeding", () => {
+describe("StoryComposer record→review editor seeding", () => {
   it("seeds the review editor with draft.prose after the keyed remount (the fix)", () => {
-    // Record phase: draft is null, there is no editor yet.
+    // Record phase: draft is null, there is no prose editor yet.
     const { rerender } = render(<Harness draft={null} keyed />);
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /your story, in your words/i })).toBeNull();
 
     // router.refresh() populates the draft; the key change remounts the client component.
     rerender(<Harness draft={draft} keyed />);
 
-    const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
-    expect(editor.value).toBe(PROSE);
+    expect(proseEditor().value).toBe(PROSE);
   });
 
   it("CONTROL: without the key the editor stays empty across the same transition (the bug)", () => {
@@ -82,8 +91,7 @@ describe("AnswerFlow record→review editor seeding", () => {
     rerender(<Harness draft={draft} keyed={false} />);
 
     // Same component instance is reused (no remount) → proseDraft stuck at its initial "".
-    const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
-    expect(editor.value).toBe("");
+    expect(proseEditor().value).toBe("");
   });
 
   // The behavioral tests above apply the key in their own harness; this guards that page.tsx

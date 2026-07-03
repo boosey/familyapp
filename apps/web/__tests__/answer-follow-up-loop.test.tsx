@@ -10,8 +10,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AnswerFlow } from "@/app/hub/answer/[askId]/AnswerFlow";
-import type { DraftInfo } from "@/app/hub/answer/[askId]/AnswerFlow";
+import { StoryComposer } from "@/app/hub/StoryComposer";
+import type { DraftInfo } from "@/app/hub/StoryComposer";
+
+const ASK = {
+  id: "11834dd1-04f4-44a4-b611-24fdd9c3d8fd",
+  questionText: "What have you learned about being a grandparent?",
+  askerName: "Sam",
+};
 
 const refresh = vi.fn();
 const push = vi.fn();
@@ -27,7 +33,7 @@ type Step =
   | { kind: "discarded" }
   | { error: string };
 
-const recordAnswerAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
+const composeStoryAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
   kind: "follow_up",
   storyId: STORY_ID,
   prompt: "Tell me about the stained glass.",
@@ -52,7 +58,7 @@ const getAnswerStatusAction = vi.fn(
 );
 
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
-  recordAnswerAction: (...args: unknown[]) => recordAnswerAction(...args),
+  composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
   recordFollowUpTakeAction: (...args: unknown[]) => recordFollowUpTakeAction(...args),
   finishThreadAction: (...args: unknown[]) => finishThreadAction(...args),
   dropTakeAction: (...args: unknown[]) => dropTakeAction(...args),
@@ -106,15 +112,10 @@ async function recordOnce() {
   fireEvent.click(screen.getByRole("button", { name: /Listening/ })); // listening → stop
 }
 
-describe("AnswerFlow follow-up loop", () => {
+describe("StoryComposer follow-up loop", () => {
   it("shows the follow-up prompt and 'That's all for now' after a follow_up step", async () => {
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={null} />,
     );
 
     await recordOnce();
@@ -122,18 +123,13 @@ describe("AnswerFlow follow-up loop", () => {
     await waitFor(() =>
       expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
     );
-    expect(recordAnswerAction).toHaveBeenCalledOnce();
+    expect(composeStoryAction).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: /That's all for now/ })).toBeTruthy();
   });
 
   it("finishes the thread when 'That's all for now' is tapped → polls + refreshes", async () => {
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={null} />,
     );
 
     await recordOnce();
@@ -154,6 +150,7 @@ describe("AnswerFlow follow-up loop", () => {
       recordedAt: new Date().toISOString(),
       mediaUrl: "/api/media/m0",
       prose: "The stitched prose of both takes.",
+      title: "The chapel window",
       takes: [
         { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
         { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
@@ -161,12 +158,7 @@ describe("AnswerFlow follow-up loop", () => {
     };
 
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={draft}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={draft} />,
     );
 
     // Two labelled relisten controls, one per take.
@@ -186,6 +178,7 @@ describe("AnswerFlow follow-up loop", () => {
       recordedAt: new Date().toISOString(),
       mediaUrl: "/api/media/m0",
       prose: "The stitched prose of both takes.",
+      title: "The chapel window",
       takes: [
         { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
         { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
@@ -193,12 +186,7 @@ describe("AnswerFlow follow-up loop", () => {
     };
 
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={draft}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={draft} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Remove this part/ }));
@@ -219,12 +207,7 @@ describe("AnswerFlow follow-up loop", () => {
     finishThreadAction.mockResolvedValueOnce({ error: "Could not finish. Please try again." });
 
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={null} />,
     );
 
     await recordOnce();
@@ -242,14 +225,9 @@ describe("AnswerFlow follow-up loop", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("records a follow-up take via recordFollowUpTakeAction (not recordAnswerAction)", async () => {
+  it("records a follow-up take via recordFollowUpTakeAction (not composeStoryAction)", async () => {
     render(
-      <AnswerFlow
-        askId="11834dd1-04f4-44a4-b611-24fdd9c3d8fd"
-        questionText="What have you learned about being a grandparent?"
-        askerName="Sam"
-        draft={null}
-      />,
+      <StoryComposer mode="answer" ask={ASK} draft={null} />,
     );
 
     // Initial answer → follow_up screen.
@@ -257,14 +235,14 @@ describe("AnswerFlow follow-up loop", () => {
     await waitFor(() =>
       expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
     );
-    expect(recordAnswerAction).toHaveBeenCalledOnce();
+    expect(composeStoryAction).toHaveBeenCalledOnce();
 
     // Record the follow-up take → the FOLLOW-UP action fires against the active story, not the
-    // initial record action.
+    // initial compose action.
     await recordOnce();
     await waitFor(() => expect(recordFollowUpTakeAction).toHaveBeenCalledOnce());
     const form = recordFollowUpTakeAction.mock.calls[0]![0] as FormData;
     expect(form.get("storyId")).toBe(STORY_ID);
-    expect(recordAnswerAction).toHaveBeenCalledOnce(); // still only the initial answer
+    expect(composeStoryAction).toHaveBeenCalledOnce(); // still only the initial answer
   });
 });

@@ -208,6 +208,17 @@ export const hub = {
     dropTake: "Remove this part",
     initialAnswerLabel: "Your answer",
   },
+  // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
+  // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).
+  compose: {
+    titleLabel: "Title",
+    typeIt: "Type it",
+    speak: "Speak",
+    tellPrompt: "What do you want to remember?",
+    textPlaceholder: "Write it however it comes to you.",
+    continueLabel: "Continue",
+    inputModeAria: "How would you like to tell this?",
+  },
   actions: {
     notSignedIn: "Not signed in.",
     invalidInput: "Invalid input.",
