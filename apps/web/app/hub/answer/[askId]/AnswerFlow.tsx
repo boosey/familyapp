@@ -18,24 +18,38 @@ import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import {
   recordAnswerAction,
+  recordFollowUpTakeAction,
+  finishThreadAction,
+  dropTakeAction,
   shareAnswerAction,
   discardAnswerAction,
   getAnswerStatusAction,
+  type ThreadStep,
 } from "./actions";
 import { pollUntilReady } from "@/lib/poll-status";
 import { AnswerReviewPending } from "./AnswerReviewPending";
+import { FollowUpPrompt } from "./FollowUpPrompt";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
-type Op = "share" | "rerecord" | "discard" | null;
+type Op = "share" | "rerecord" | "discard" | "drop" | null;
 
 const TIER_ORDER: Tier[] = ["family", "branch", "public"];
+
+/** One recorded take in a (possibly multi-take) draft thread. Ordered by `position`; position 0 is
+ * the initial answer, positions > 0 are follow-up takes. */
+export interface TakeInfo {
+  position: number;
+  mediaUrl: string;
+  isInitial: boolean;
+}
 
 export interface DraftInfo {
   storyId: string;
   recordedAt: string; // ISO string (serialized from Date by the server component)
   mediaUrl: string;
   prose: string;
+  takes: TakeInfo[];
 }
 
 interface AnswerFlowProps {
@@ -78,6 +92,14 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
   // Abort the processing poll if this instance unmounts (e.g. the keyed remount into review-ready).
   const pollAbortRef = useRef<AbortController | null>(null);
 
+  // ── Follow-up thread state ──────────────────────────────────────────────────
+  // `followUp` holds the interviewer's current follow-up prompt (null = not in a follow-up). The
+  // active storyId is carried across takes here — the first `ready`/`follow_up` step supplies it,
+  // and every follow-up take posts against it (draft.storyId only exists in the review phase).
+  const [followUp, setFollowUp] = useState<{ prompt: string } | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
+
   // Revoke the object URL when localTake changes or the component unmounts (the remount into
   // review-ready unmounts this instance), so we don't leak blob URLs. Also abort any in-flight poll.
   useEffect(() => {
@@ -95,36 +117,43 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     setRecordPhase("idle");
   }, []);
 
-  // ── Record phase handlers ───────────────────────────────────────────────────
-  const uploadRecording = useCallback(async () => {
-    try {
-      const type = mediaRecorderRef.current?.mimeType ?? "audio/webm";
-      const blob = new Blob(chunksRef.current, { type });
-      // Show the review screen immediately, playing the take from a local object URL, while the
-      // pipeline (transcribe + render) runs server-side below.
-      setPendingError(null);
-      setLocalTake({ url: URL.createObjectURL(blob) });
-
-      const form = new FormData();
-      form.append("audio", blob, "recording.webm");
-      form.append("askId", askId);
-      const result = await recordAnswerAction(form);
-      if ("error" in result) {
-        // Stay on the review-pending screen and surface the error with a "Record again" retry.
-        setPendingError(result.error);
+  // ── Thread-step router ──────────────────────────────────────────────────────
+  // Central interpreter for every ThreadStep a record/follow-up/finish/drop action resolves to.
+  // Branches on `kind` BEFORE touching `storyId` (the `discarded` variant has none). This is the
+  // single place that decides what screen comes next:
+  //   - error      → surface it (stay on the current screen; pending screen shows it if a take is up)
+  //   - follow_up  → show the follow-up prompt (carry the active storyId)
+  //   - discarded  → the whole draft is gone → back to the hub
+  //   - ready      → thread finished + stitched → poll processing, then refresh into review
+  const handleStep = useCallback(
+    async (step: ThreadStep) => {
+      if ("error" in step) {
+        setPendingError(step.error);
+        setRecordPhase("idle");
         return;
       }
-
-      // Ingest succeeded; the story may still be rendering out-of-band (prod durable queue) or be
-      // ready already (dev/CI synchronous dispatch). Poll the viewer-scoped status until it's
-      // `ready`, keeping the optimistic local-audio "Polishing…" screen up meanwhile. On ready,
-      // router.refresh() pulls the pending_approval draft (with prose) → the keyed remount swaps in
-      // the review editor. On the soft cap, show a warm "taking longer" message (never hang).
+      if (step.kind === "follow_up") {
+        setActiveStoryId(step.storyId);
+        setLocalTake(null); // clear the optimistic in-flight take → show the follow-up screen
+        setFollowUp({ prompt: step.prompt });
+        setRecordPhase("idle");
+        return;
+      }
+      if (step.kind === "discarded") {
+        router.push("/hub?tab=questions");
+        return;
+      }
+      // step.kind === "ready" — thread complete + stitched. The story may still be rendering
+      // out-of-band (prod durable queue) or be ready already (dev/CI synchronous dispatch). Poll the
+      // viewer-scoped status, keeping the optimistic local-audio "Polishing…" screen up meanwhile. On
+      // ready, router.refresh() pulls the pending_approval draft (with prose) → the keyed remount
+      // swaps in the review editor. On the soft cap, show a warm "taking longer" message (never hang).
+      setActiveStoryId(step.storyId);
       const controller = new AbortController();
       pollAbortRef.current = controller;
       const outcome = await pollUntilReady({
         getStatus: async () => {
-          const status = await getAnswerStatusAction(result.storyId);
+          const status = await getAnswerStatusAction(step.storyId);
           if ("error" in status) throw new Error(status.error);
           return status.status;
         },
@@ -136,10 +165,36 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         setPendingError(hub.answer.takingLonger);
       }
       // "aborted" → the component unmounted; do nothing.
+    },
+    [router],
+  );
+
+  // ── Record phase handlers ───────────────────────────────────────────────────
+  const uploadRecording = useCallback(async () => {
+    try {
+      const type = mediaRecorderRef.current?.mimeType ?? "audio/webm";
+      const blob = new Blob(chunksRef.current, { type });
+      // Show the review-pending screen immediately, playing the take from a local object URL, while
+      // the server action (ingest → transcribe → evaluate/render) runs below.
+      setPendingError(null);
+      setLocalTake({ url: URL.createObjectURL(blob) });
+
+      const form = new FormData();
+      form.append("audio", blob, "recording.webm");
+      // A follow-up take posts against the active story; the initial answer posts against the ask.
+      let result: ThreadStep;
+      if (followUp && activeStoryId) {
+        form.append("storyId", activeStoryId);
+        result = await recordFollowUpTakeAction(form);
+      } else {
+        form.append("askId", askId);
+        result = await recordAnswerAction(form);
+      }
+      await handleStep(result);
     } catch {
       setPendingError(hub.answer.genericError);
     }
-  }, [askId, router]);
+  }, [askId, followUp, activeStoryId, handleStep]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -166,6 +221,33 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     mediaRecorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
   }, []);
+
+  // Voice-button click: start when idle, stop when listening, no-op while saving (the button is
+  // blocked then anyway). Shared by the record phase and the follow-up screen.
+  const voiceClick = useCallback(() => {
+    if (recordPhase === "listening") stopRecording();
+    else if (recordPhase === "idle") void startRecording();
+  }, [recordPhase, startRecording, stopRecording]);
+
+  // ── Follow-up finish handler ────────────────────────────────────────────────
+  // "That's all for now" — decline the current follow-up and finish the thread (a first-class path,
+  // never a dead end). finishThreadAction stitches the takes so far → the resulting `ready` step
+  // polls + refreshes into the (multi-take) review phase.
+  const onFinish = useCallback(async () => {
+    if (!activeStoryId) return;
+    setPendingError(null); // clear any prior finish error before retrying
+    setFinishing(true);
+    try {
+      const form = new FormData();
+      form.set("storyId", activeStoryId);
+      const step = await finishThreadAction(form);
+      await handleStep(step);
+    } catch {
+      setPendingError(hub.answer.genericError);
+    } finally {
+      setFinishing(false);
+    }
+  }, [activeStoryId, handleStep]);
 
   // ── Review phase handlers ───────────────────────────────────────────────────
   const handleShare = async () => {
@@ -226,6 +308,35 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
         return;
       }
       router.push("/hub?tab=questions");
+    } catch {
+      setActionError(hub.actions.removeFailed);
+      setOp(null);
+    }
+  };
+
+  // Drop one take from a multi-take thread. Dropping the initial take (position 0) discards the
+  // whole thread server-side (→ `discarded` → hub); dropping a follow-up take re-stitches the
+  // survivors (→ `ready` → re-poll + refresh into the updated review). A hard failure surfaces the
+  // error inline (never a silent dead end); non-error steps are delegated to handleStep.
+  const handleDropTake = async (position: number) => {
+    setActionError(null);
+    setOp("drop");
+    try {
+      const form = new FormData();
+      form.append("storyId", draft!.storyId);
+      form.append("position", String(position));
+      const result = await dropTakeAction(form);
+      if ("error" in result) {
+        setActionError(result.error);
+        setOp(null);
+        return;
+      }
+      await handleStep(result);
+      // Reset op like the sibling handlers. A drop does NOT change storyId, so the review is NOT
+      // remounted by the `key={draft.storyId}` on the ready path — without this, isRemoving stays
+      // true and Share/re-record/discard/drop are all disabled forever. Harmless on the discarded
+      // (position 0) path since handleStep has already navigated away.
+      setOp(null);
     } catch {
       setActionError(hub.actions.removeFailed);
       setOp(null);
@@ -304,7 +415,7 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
       );
     }
 
-    const isRemoving = op === "rerecord" || op === "discard";
+    const isRemoving = op === "rerecord" || op === "discard" || op === "drop";
 
     return (
       <div>
@@ -324,19 +435,62 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
           {hub.answer.recordedAt(relativeShortDate(draft.recordedAt))}
         </p>
 
-        {/* Relisten */}
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <audio
-          controls
-          src={draft.mediaUrl}
-          style={{
-            width: "100%",
-            maxWidth: 480,
-            display: "block",
-            margin: "0 auto 32px",
-            borderRadius: "var(--radius-md)",
-          }}
-        />
+        {/* Relisten. A thread-of-one keeps the original single-take control (backward-compatible);
+            a multi-take thread lists each take with its own relisten + a drop for follow-up takes. */}
+        {draft.takes.length > 1 ? (
+          <div style={{ margin: "0 auto 32px", maxWidth: 480 }}>
+            {draft.takes.map((take) => (
+              <div key={take.position} style={{ marginBottom: 20 }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-label)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--support)",
+                    margin: "0 0 8px",
+                  }}
+                >
+                  {take.isInitial ? hub.answer.initialAnswerLabel : hub.answer.followUpTakeLabel}
+                </p>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <audio
+                  controls
+                  src={take.mediaUrl}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    borderRadius: "var(--radius-md)",
+                  }}
+                />
+                {!take.isInitial && (
+                  <div style={{ marginTop: 8, textAlign: "right" }}>
+                    <KindredButton
+                      label={hub.answer.dropTake}
+                      variant="ghost"
+                      size="small"
+                      disabled={isRemoving}
+                      onClick={() => handleDropTake(take.position)}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* eslint-disable-next-line jsx-a11y/media-has-caption */
+          <audio
+            controls
+            src={draft.mediaUrl}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              display: "block",
+              margin: "0 auto 32px",
+              borderRadius: "var(--radius-md)",
+            }}
+          />
+        )}
 
         {/* Read + edit the polished prose before sharing */}
         <div style={{ marginBottom: 32 }}>
@@ -541,12 +695,22 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
     );
   }
 
-  const voiceClick =
-    recordPhase === "listening"
-      ? stopRecording
-      : recordPhase === "idle"
-        ? startRecording
-        : undefined;
+  // ── FOLLOW-UP PHASE ─────────────────────────────────────────────────────────
+  // The interviewer proposed a deepening question. Shown after the record/pending/softfail branches
+  // so the optimistic in-flight take (localTake) still owns the window between stopping a follow-up
+  // recording and the next step resolving. recordPhase is narrowed to non-"softfail" here.
+  if (followUp) {
+    return (
+      <FollowUpPrompt
+        prompt={followUp.prompt}
+        recordPhase={recordPhase}
+        onVoiceClick={voiceClick}
+        onFinish={onFinish}
+        finishing={finishing}
+        error={pendingError ?? undefined}
+      />
+    );
+  }
 
   return (
     <div

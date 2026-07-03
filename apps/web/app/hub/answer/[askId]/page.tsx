@@ -10,7 +10,11 @@
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getStoryForViewer, listOutstandingAnswerDrafts } from "@chronicle/core";
+import {
+  getStoryForViewer,
+  listOutstandingAnswerDrafts,
+  listStoryRecordings,
+} from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
 import { hub } from "@/app/_copy";
@@ -60,11 +64,20 @@ export default async function AnswerPage({
   if (draftEntry) {
     const story = await getStoryForViewer(db, ctx, draftEntry.storyId);
     if (story) {
+      // Ordered takes for the multi-take review (relisten per take + drop a follow-up take). Each
+      // maps to the authorized /api/media route. A thread-of-one still yields exactly one take.
+      const takeRows = await listStoryRecordings(db, story.id);
+      const takes = takeRows.map((t) => ({
+        position: t.position,
+        mediaUrl: `/api/media/${t.mediaId}`,
+        isInitial: t.position === 0,
+      }));
       draft = {
         storyId: story.id,
         recordedAt: draftEntry.recordedAt.toISOString(),
         mediaUrl: `/api/media/${story.recordingMediaId}`,
         prose: story.prose ?? "",
+        takes,
       };
     }
   }

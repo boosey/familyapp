@@ -199,6 +199,16 @@ export const hub = {
     // recording is safe (it's slow or stuck out-of-band); never spin forever — say so warmly.
     takingLonger:
       "This is taking longer than usual. Your recording is safe — check back in a little while.",
+    // Follow-up thread (Task 7): the interviewer proposes a deepening question; declining is a
+    // first-class, peer-level path — never a dead end.
+    followUpIntro: "One more, if you'd like:",
+    thatsAllForNow: "That's all for now",
+    // Shown on the follow-up screen while finishThreadAction stitches + polishes (a multi-second
+    // inline render) so the decline tap visibly registers — declining is never a dead end.
+    finishing: "One moment…",
+    followUpTakeLabel: "Follow-up",
+    dropTake: "Remove this part",
+    initialAnswerLabel: "Your answer",
   },
   actions: {
     notSignedIn: "Not signed in.",

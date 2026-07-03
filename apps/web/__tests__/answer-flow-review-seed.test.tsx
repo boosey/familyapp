@@ -45,6 +45,8 @@ const draft: DraftInfo = {
   recordedAt: new Date(0).toISOString(),
   mediaUrl: "/api/media/m1",
   prose: PROSE,
+  // Thread-of-one: exactly the initial take → the single-take review path.
+  takes: [{ position: 0, mediaUrl: "/api/media/m1", isInitial: true }],
 };
 
 // Mirror page.tsx exactly: the key flips on the record→review transition (and back on re-record).
