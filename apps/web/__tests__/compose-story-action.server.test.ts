@@ -17,6 +17,7 @@ let runtimeDb: Database;
 let runtimeStorage: InMemoryMediaStorage;
 let runtimeLlm: LanguageModel;
 let runtimeTranscriber: Transcriber;
+let runtimeEvaluator: FollowUpEvaluator;
 let runtimeDispatch: (storyId: string) => Promise<void>;
 let authCtx: { kind: string; personId?: string };
 
@@ -26,14 +27,16 @@ vi.mock("@/lib/runtime", () => ({
     storage: runtimeStorage,
     auth: { getCurrentAuthContext: async () => authCtx },
     languageModel: runtimeLlm,
+    followUpEvaluator: runtimeEvaluator,
     transcriber: runtimeTranscriber,
     dispatchPipeline: (storyId: string) => runtimeDispatch(storyId),
   }),
 }));
 
-import { createTestDatabase, type Database } from "@chronicle/db";
-import { persons } from "@chronicle/db/schema";
+import { createTestDatabase, type Database, type FollowUpCandidate } from "@chronicle/db";
+import { persons, asks } from "@chronicle/db/schema";
 import { getStoryForViewer, type AuthContext } from "@chronicle/core";
+import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/interviewer";
 import {
   ScriptedLanguageModel,
   ScriptedTranscriber,
@@ -44,7 +47,7 @@ import {
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { sql } from "drizzle-orm";
 import { hub } from "@/app/_copy";
-import { composeStoryAction } from "@/app/hub/answer/[askId]/actions";
+import { composeStoryAction, recordAnswerAction } from "@/app/hub/answer/[askId]/actions";
 
 // Valid render output for the render_story stage (responseFormat: "json").
 const RENDER_JSON = JSON.stringify({
@@ -54,10 +57,41 @@ const RENDER_JSON = JSON.stringify({
   tags: ["childhood"],
 });
 
-function scriptedLlm(): ScriptedLanguageModel {
+// Renders JSON for the render_story/stitch stages; returns `phrasedLine` for the follow-up phraser
+// (text requests). Text-path tests only hit the json branch.
+function scriptedLlm(phrasedLine = "unused"): ScriptedLanguageModel {
   return new ScriptedLanguageModel({
-    respond: (req) => (req.responseFormat === "json" ? RENDER_JSON : "unused"),
+    respond: (req) => (req.responseFormat === "json" ? RENDER_JSON : phrasedLine),
   });
+}
+
+// A neutral, above-word-floor answer (16 words) — not thin, not distressed, no off-ramp — so the
+// strong candidate is selected (mirrors answer-follow-up-loop.server.test.ts's ANSWER).
+const NEUTRAL_ANSWER =
+  "It had a beautiful stained glass window in the front hall that my grandmother truly loved.";
+
+const STRONG_CANDIDATE: FollowUpCandidate = {
+  threadSeed: "the stained glass window",
+  type: "sensory",
+  sensitivity: "low",
+  confidence: 0.9,
+  narratorOpened: false,
+};
+
+async function seedAnswerableAsk(
+  db: Database,
+  targetPersonId: string,
+  questionText: string,
+): Promise<string> {
+  const [asker] = await db
+    .insert(persons)
+    .values({ displayName: "Asker", spokenName: "Asker" })
+    .returning();
+  const [ask] = await db
+    .insert(asks)
+    .values({ askerPersonId: asker!.id, targetPersonId, questionText, status: "queued" })
+    .returning();
+  return ask!.id;
 }
 
 function ownerCtx(personId: string): AuthContext {
@@ -89,6 +123,7 @@ describe("composeStoryAction — text path (Task 7)", () => {
     runtimeDb = await createTestDatabase();
     runtimeStorage = new InMemoryMediaStorage();
     runtimeLlm = scriptedLlm();
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
     runtimeTranscriber = new ScriptedTranscriber({ text: "unused" });
     runtimeDispatch = async (storyId: string) => {
       // A REAL in-process pipeline: the text story routes straight to render_story (skips
@@ -144,5 +179,59 @@ describe("composeStoryAction — text path (Task 7)", () => {
     authCtx = { kind: "none" };
     const result = await composeStoryAction(form({ text: "A memory." }));
     expect(result).toEqual({ error: hub.actions.notSignedIn });
+  });
+});
+
+/**
+ * Direct regression for the crux of Task 7: the follow-up prompt is seeded from the ask's
+ * `questionText`, which now flows through the newly-EXTRACTED `assertAnswerableAsk`. No other test
+ * drives the REAL `recordAnswerAction` with a real ask (the follow-up server test enters at
+ * `runFollowUpStep`; the `.tsx` tests mock the action). This locks that the extraction still returns
+ * the correct `questionText` AND that it reaches the evaluator's `promptText` seed — and that the
+ * `{ askId }` spread reaches ingest, binding the draft to the ask.
+ */
+describe("recordAnswerAction — real ask, flag ON (follow-up prompt-seed regression)", () => {
+  beforeEach(() => {
+    // Match how answer-follow-up-loop.server.test.ts enables the follow-up policy.
+    process.env.FOLLOW_UPS_ENABLED = "1";
+  });
+  afterAll(() => {
+    delete process.env.FOLLOW_UPS_ENABLED;
+  });
+
+  it("seeds the follow-up prompt from the ask questionText and binds askId onto the draft", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+    const QUESTION = "What was your childhood home like?";
+    const askId = await seedAnswerableAsk(runtimeDb, personId, QUESTION);
+
+    const evaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    runtimeEvaluator = evaluator;
+    runtimeLlm = scriptedLlm("Tell me more about that stained glass window.");
+    runtimeTranscriber = new ScriptedTranscriber({ text: NEUTRAL_ANSWER });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
+    );
+
+    // With-ask branch under flag ON ENTERED the follow-up loop (follow_up, not ready).
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that stained glass window.");
+
+    // CRUX: the ask questionText (returned by the extracted assertAnswerableAsk) reached the
+    // evaluator's promptText seed — the whole point of this task's refactor.
+    expect(evaluator.calls).toHaveLength(1);
+    expect(evaluator.calls[0]!.promptText).toBe(QUESTION);
+
+    // The { askId } spread reached ingestRecording → the draft is bound to the ask. Read ask_id
+    // via raw SQL (the front-door view doesn't project it); confirm the story is voice-origin.
+    const res = await runtimeDb.execute(
+      sql`select ask_id, kind from stories where id = ${result.storyId}`,
+    );
+    const row = (res as unknown as { rows: Array<{ ask_id: string; kind: string }> }).rows[0];
+    expect(row?.ask_id).toBe(askId);
+    expect(row?.kind).toBe("voice");
   });
 });
