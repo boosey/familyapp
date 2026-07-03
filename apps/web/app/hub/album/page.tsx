@@ -16,11 +16,16 @@
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { listActiveFamiliesForPerson, listAlbumPhotos } from "@chronicle/core";
+import {
+  getStewardPersonId,
+  listActiveFamiliesForPerson,
+  listAlbumPhotos,
+} from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { hub } from "@/app/_copy";
 import { AlbumUploader } from "./AlbumUploader";
+import { AlbumGrid } from "./AlbumGrid";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +51,22 @@ export default async function AlbumPage({
   const current = active.find((f) => f.familyId === requested) ?? active[0];
 
   const photos = current ? await listAlbumPhotos(db, ctx, current.familyId) : [];
+
+  // #18: a tile shows management controls when the viewer may manage the photo — they are its
+  // CONTRIBUTOR, or the STEWARD of the album on screen. NOTE this checks stewardship of the
+  // ON-SCREEN family ONLY — a deliberate UI approximation for this slice. It can UNDER-show controls
+  // (a viewer who is steward of a DIFFERENT family the photo is also placed in won't see the controls
+  // from this family's view) but it never OVER-grants: the seam re-checks stewardship of ANY
+  // placed-in family and is authoritative, so `canManage` only decides visibility, never authority.
+  const viewer = ctx.personId;
+  const stewardId = current
+    ? await getStewardPersonId(db, current.familyId)
+    : null;
+  const gridPhotos = photos.map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    canManage: p.contributorPersonId === viewer || stewardId === viewer,
+  }));
 
   return (
     <main
@@ -140,35 +161,7 @@ export default async function AlbumPage({
             {hub.album.empty}
           </p>
         ) : (
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: "0 0 24px",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-              gap: 12,
-            }}
-          >
-            {photos.map((photo) => (
-              <li key={photo.id} style={{ margin: 0 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our
-                    audited auth route, not a static asset; next/image would proxy/optimize it. */}
-                <img
-                  src={`/api/album-photo/${photo.id}`}
-                  alt={hub.album.photoAlt(photo.caption)}
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    display: "block",
-                    background: "var(--surface-sunken, #eee)",
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
+          <AlbumGrid photos={gridPhotos} />
         )}
 
         {current ? (

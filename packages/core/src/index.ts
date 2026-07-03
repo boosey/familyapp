@@ -147,6 +147,8 @@ export {
   listAlbumPhotos,
   authorizeAlbumPhotoRead,
   getAlbumPhotoForViewer,
+  setAlbumPhotoCaption,
+  softDeleteAlbumPhoto,
   type CreateAlbumPhotoInput,
   type AlbumPhotoView,
 } from "./album-repository";

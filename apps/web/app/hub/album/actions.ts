@@ -18,12 +18,20 @@ import { revalidatePath } from "next/cache";
 import {
   createAlbumPhoto,
   listActiveFamiliesForPerson,
+  setAlbumPhotoCaption,
+  softDeleteAlbumPhoto,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 
 export type AlbumUploadResult = { ok: true; photoId: string } | { error: string };
+
+/** Result of a caption edit / delete: success, or a user-facing error string. */
+export type AlbumManageResult = { ok: true } | { error: string };
+
+/** The longest caption we accept (it doubles as alt text — a label, not prose). */
+const MAX_CAPTION_LENGTH = 500;
 
 export async function uploadAlbumPhotoAction(
   formData: FormData,
@@ -83,5 +91,71 @@ export async function uploadAlbumPhotoAction(
     return { ok: true, photoId: created.id };
   } catch {
     return { error: hub.actions.photoUploadFailed };
+  }
+}
+
+/**
+ * Edit (or clear) a photo's caption. Like every hub action it re-resolves auth on the server and
+ * forwards the AuthContext to the audited seam, which re-checks the contributor/steward rule — the
+ * client is NEVER trusted for identity. A caption longer than the label cap is rejected up front; a
+ * seam DENY (not the contributor and not a steward) surfaces a single non-committal error.
+ */
+export async function editAlbumCaptionAction(
+  formData: FormData,
+): Promise<AlbumManageResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  if (typeof photoId !== "string" || photoId === "") {
+    return { error: hub.actions.invalidInput };
+  }
+  const raw = formData.get("caption");
+  // A missing field or a non-string clears the caption; the seam normalizes empty/whitespace → null.
+  const caption = typeof raw === "string" ? raw : null;
+  // Server-authoritative length, measured on the NORMALIZED (trimmed) caption to match the seam —
+  // leading/trailing whitespace must not spuriously reject a caption that stores as ≤500 chars.
+  if (caption !== null && caption.trim().length > MAX_CAPTION_LENGTH) {
+    return { error: hub.actions.captionTooLong };
+  }
+
+  try {
+    const decision = await setAlbumPhotoCaption(db, ctx, photoId, caption);
+    if (!decision.allowed) return { error: hub.actions.notAllowedToManagePhoto };
+    revalidatePath("/hub/album");
+    return { ok: true };
+  } catch {
+    // An unexpected DB/seam throw becomes a friendly inline error instead of an unhandled
+    // rejection in the client transition (mirrors uploadAlbumPhotoAction's photoUploadFailed guard).
+    return { error: hub.album.captionSaveError };
+  }
+}
+
+/**
+ * Soft-delete a photo. Re-resolves auth and forwards the AuthContext to the audited seam, which
+ * re-checks the contributor/steward rule. A single shared row → an authorized delete removes it from
+ * every album it was in; the bytes route 404s thereafter. A DENY surfaces a non-committal error.
+ */
+export async function deleteAlbumPhotoAction(
+  formData: FormData,
+): Promise<AlbumManageResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  if (typeof photoId !== "string" || photoId === "") {
+    return { error: hub.actions.invalidInput };
+  }
+
+  try {
+    const decision = await softDeleteAlbumPhoto(db, ctx, photoId);
+    if (!decision.allowed) return { error: hub.actions.notAllowedToManagePhoto };
+    revalidatePath("/hub/album");
+    return { ok: true };
+  } catch {
+    // Unexpected throw → friendly inline error, not an unhandled rejection in the transition.
+    return { error: hub.album.photoDeleteError };
   }
 }

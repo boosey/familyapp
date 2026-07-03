@@ -242,6 +242,8 @@ export const hub = {
     noAlbumChosen: "Choose at least one album for this photo.",
     photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
+    captionTooLong: "That caption is too long. Please shorten it.",
+    notAllowedToManagePhoto: "You can't change this photo.",
   },
   album: {
     title: "Family album",
@@ -251,6 +253,18 @@ export const hub = {
     chooseAlbums: "Which albums?",
     switcherAria: "Choose which family album to view",
     photoAlt: (caption: string | null) => caption ?? "Family photo",
+    // #18 — per-photo management controls (contributor or steward).
+    addCaption: "Add a caption",
+    captionLabel: "Caption",
+    captionPlaceholder: "e.g. Wedding day, 1961",
+    save: "Save",
+    cancel: "Cancel",
+    deletePhoto: "Delete",
+    confirmDelete: "Tap again to remove",
+    managePhotoAria: (caption: string | null) =>
+      caption ? `Manage “${caption}”` : "Manage photo",
+    captionSaveError: "Couldn't save that caption. Please try again.",
+    photoDeleteError: "Couldn't remove that photo. Please try again.",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.

@@ -16,7 +16,7 @@
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { familyPhotoFamilies, familyPhotos } from "@chronicle/db/content";
-import { memberships } from "@chronicle/db/schema";
+import { families, memberships } from "@chronicle/db/schema";
 import type { Database, FamilyPhoto, PhotoSource } from "@chronicle/db";
 import {
   type AuthContext,
@@ -199,6 +199,107 @@ export async function authorizeAlbumPhotoRead(
     .where(eq(familyPhotos.id, photoId))
     .limit(1);
   return decideAlbumPhotoRead(db, ctx, photo);
+}
+
+/**
+ * May `ctx`'s viewer MANAGE (caption/delete) this photo? The album's management authority (ADR-0009
+ * caption · ADR-0008 delete) is NOT the read model: reading is membership-based, but managing is
+ * contributor-or-steward. ALLOW iff the viewer is the photo's CONTRIBUTOR (erasure of their own
+ * content) OR the STEWARD of any family the (non-deleted) photo is placed in (moderation — "a steward
+ * may delete anything in their Family"). A plain member, a non-member, an anonymous viewer, and a
+ * soft-deleted / absent photo are all DENIED. Fetches the placed-in families' steward ids in one
+ * query. The contributor is authorized regardless of current membership, so they can always erase
+ * their own artifact even after leaving a family.
+ */
+async function decideAlbumPhotoManage(
+  db: Database,
+  ctx: AuthContext,
+  photo: Pick<FamilyPhoto, "id" | "contributorPersonId" | "deletedAt"> | undefined,
+): Promise<AuthDecision> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) {
+    return DENY("anonymous request cannot manage an album photo");
+  }
+  if (!photo || photo.deletedAt !== null) {
+    return DENY("photo does not exist or has been deleted");
+  }
+  if (photo.contributorPersonId === viewer) return ALLOW;
+  // Steward of any family the photo is placed in? One query joins placements → their families'
+  // steward. `families.stewardPersonId` is BY DEFINITION the family's current steward, so no separate
+  // active-membership check is needed here (unlike the contributor path above, which is authorized
+  // regardless of membership so a contributor can always erase their own artifact).
+  const stewards = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(familyPhotoFamilies)
+    .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
+    .where(eq(familyPhotoFamilies.photoId, photo.id));
+  for (const { stewardPersonId } of stewards) {
+    if (stewardPersonId === viewer) return ALLOW;
+  }
+  return DENY(
+    "viewer is neither the contributor nor a steward of any family the photo is placed in",
+  );
+}
+
+/** Fetch the minimal photo row the manage-decision needs (id + contributor + deletedAt), or undefined. */
+async function loadManageablePhoto(
+  db: Database,
+  photoId: string,
+): Promise<Pick<FamilyPhoto, "id" | "contributorPersonId" | "deletedAt"> | undefined> {
+  const [photo] = await db
+    .select({
+      id: familyPhotos.id,
+      contributorPersonId: familyPhotos.contributorPersonId,
+      deletedAt: familyPhotos.deletedAt,
+    })
+    .from(familyPhotos)
+    .where(eq(familyPhotos.id, photoId))
+    .limit(1);
+  return photo;
+}
+
+/**
+ * Set (or clear) a photo's caption iff the viewer may manage it (contributor or a placed-in family's
+ * steward). Last-write-wins, writes NO `consent_records` row — the caption is OFF every ledger
+ * (ADR-0009) and doubles as alt text. A null / empty / whitespace-only caption clears it (stores
+ * null); otherwise the trimmed text is stored. Returns the AuthDecision (caption written iff allowed).
+ */
+export async function setAlbumPhotoCaption(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+  caption: string | null,
+): Promise<AuthDecision> {
+  const photo = await loadManageablePhoto(db, photoId);
+  const decision = await decideAlbumPhotoManage(db, ctx, photo);
+  if (!decision.allowed) return decision;
+  const normalized = caption && caption.trim() !== "" ? caption.trim() : null;
+  await db
+    .update(familyPhotos)
+    .set({ caption: normalized })
+    .where(eq(familyPhotos.id, photoId));
+  return decision;
+}
+
+/**
+ * Soft-delete a photo (set `deletedAt`) iff the viewer may manage it. A photo is a single shared row,
+ * so an authorized delete removes it from EVERY family it was placed in and its bytes route 404s
+ * thereafter (ADR-0008; bytes are left in storage — purge is a later lifecycle concern).
+ * Idempotent-guarded: an already-deleted or absent photo DENYs. Returns the AuthDecision.
+ */
+export async function softDeleteAlbumPhoto(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<AuthDecision> {
+  const photo = await loadManageablePhoto(db, photoId);
+  const decision = await decideAlbumPhotoManage(db, ctx, photo);
+  if (!decision.allowed) return decision;
+  await db
+    .update(familyPhotos)
+    .set({ deletedAt: new Date() })
+    .where(eq(familyPhotos.id, photoId));
+  return decision;
 }
 
 /**

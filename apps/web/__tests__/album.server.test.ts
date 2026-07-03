@@ -35,7 +35,11 @@ import {
   type AuthContext,
 } from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
-import { uploadAlbumPhotoAction } from "@/app/hub/album/actions";
+import {
+  uploadAlbumPhotoAction,
+  editAlbumCaptionAction,
+  deleteAlbumPhotoAction,
+} from "@/app/hub/album/actions";
 import { GET as albumPhotoGet } from "@/app/api/album-photo/[photoId]/route";
 import { hub } from "@/app/_copy";
 
@@ -340,5 +344,121 @@ describe("/api/album-photo/[photoId] bytes route", () => {
     authCtx = account(await makePerson("Whoever"));
     const res = await call("00000000-0000-0000-0000-000000000000");
     expect(res.status).toBe(404);
+  });
+});
+
+// #18 — the album's first MANAGEMENT surface: caption edit + delete, each re-resolving auth on the
+// server and forwarding the AuthContext to the audited seam (which re-runs the contributor/steward
+// check). The client is never trusted for identity.
+describe("album management actions (#18)", () => {
+  function captionForm(photoId: string, caption: string | null): FormData {
+    const fd = new FormData();
+    fd.append("photoId", photoId);
+    if (caption !== null) fd.append("caption", caption);
+    return fd;
+  }
+  function deleteForm(photoId: string): FormData {
+    const fd = new FormData();
+    fd.append("photoId", photoId);
+    return fd;
+  }
+  function callBytes(photoId: string): Promise<Response> {
+    return albumPhotoGet(new Request("http://localhost/api/album-photo/x"), {
+      params: Promise.resolve({ photoId }),
+    });
+  }
+
+  // steward = the family creator; contributor + plainMember are separate active members.
+  async function seedManaged(): Promise<{
+    steward: string;
+    contributor: string;
+    plainMember: string;
+    familyId: string;
+    photoId: string;
+  }> {
+    const steward = await makePerson("Nonna");
+    const contributor = await makePerson("Rosa");
+    const plainMember = await makePerson("Sal");
+    const familyId = await makeFamily("Esposito", steward);
+    await addMember(steward, familyId);
+    await addMember(contributor, familyId);
+    await addMember(plainMember, familyId);
+    const storageKey = "family-photos/manage-test";
+    await runtimeStorage.put({ key: storageKey, bytes: PNG_BYTES, contentType: "image/png" });
+    const photo = await createAlbumPhoto(runtimeDb, {
+      contributorPersonId: contributor,
+      familyIds: [familyId],
+      source: "upload",
+      storageKey,
+      caption: null,
+    });
+    return { steward, contributor, plainMember, familyId, photoId: photo.id };
+  }
+
+  describe("editAlbumCaptionAction", () => {
+    it("lets the contributor set a caption (reflected on the grid)", async () => {
+      const { contributor, familyId, photoId } = await seedManaged();
+      authCtx = account(contributor);
+      const result = await editAlbumCaptionAction(captionForm(photoId, "Wedding, 1961"));
+      expect(result).toEqual({ ok: true });
+      const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+      expect(album[0]!.caption).toBe("Wedding, 1961");
+    });
+
+    it("rejects a plain member and leaves the caption unchanged", async () => {
+      const { contributor, plainMember, familyId, photoId } = await seedManaged();
+      // Seed an existing caption as the contributor first.
+      authCtx = account(contributor);
+      await editAlbumCaptionAction(captionForm(photoId, "Original"));
+      // A plain member cannot change it.
+      authCtx = account(plainMember);
+      const result = await editAlbumCaptionAction(captionForm(photoId, "Hijacked"));
+      expect(result).toEqual({ error: hub.actions.notAllowedToManagePhoto });
+      const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+      expect(album[0]!.caption).toBe("Original");
+    });
+
+    it("rejects a caption longer than 500 characters", async () => {
+      const { contributor, photoId } = await seedManaged();
+      authCtx = account(contributor);
+      const result = await editAlbumCaptionAction(captionForm(photoId, "x".repeat(501)));
+      expect(result).toEqual({ error: hub.actions.captionTooLong });
+    });
+
+    it("rejects an unauthenticated caller", async () => {
+      const { photoId } = await seedManaged();
+      authCtx = { kind: "anonymous" };
+      const result = await editAlbumCaptionAction(captionForm(photoId, "nope"));
+      expect(result).toEqual({ error: hub.actions.notSignedIn });
+    });
+  });
+
+  describe("deleteAlbumPhotoAction", () => {
+    it("lets the contributor delete: gone from the grid, bytes route 404s", async () => {
+      const { contributor, familyId, photoId } = await seedManaged();
+      authCtx = account(contributor);
+      const result = await deleteAlbumPhotoAction(deleteForm(photoId));
+      expect(result).toEqual({ ok: true });
+      const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+      expect(album).toEqual([]);
+      const res = await callBytes(photoId);
+      expect(res.status).toBe(404);
+    });
+
+    it("rejects a plain member; the photo stays", async () => {
+      const { contributor, plainMember, familyId, photoId } = await seedManaged();
+      authCtx = account(plainMember);
+      const result = await deleteAlbumPhotoAction(deleteForm(photoId));
+      expect(result).toEqual({ error: hub.actions.notAllowedToManagePhoto });
+      const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+      expect(album.map((p) => p.id)).toEqual([photoId]);
+    });
+
+    it("rejects an unauthenticated caller", async () => {
+      const { photoId } = await seedManaged();
+      authCtx = { kind: "anonymous" };
+      const result = await deleteAlbumPhotoAction(deleteForm(photoId));
+      expect(result).toEqual({ error: hub.actions.notSignedIn });
+    });
   });
 });
