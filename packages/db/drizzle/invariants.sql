@@ -134,6 +134,17 @@ CREATE TRIGGER story_recordings_post_consent_immutable
   FOR EACH ROW EXECUTE FUNCTION chronicle_story_recording_delete_guard();
 
 -- ---------------------------------------------------------------------------
+-- (1f) ADR-0007: a Story is origin-typed. A 'voice' story MUST have a canonical recording; a
+--      'text' story MUST NOT (its typed words are canonical). This is an INSERT-time consistency
+--      guarantee, complementing the recording-pointer immutability trigger above (an UPDATE guard).
+--      drizzle-kit does not model CHECK constraints, so it lives here.
+-- ---------------------------------------------------------------------------
+ALTER TABLE stories ADD CONSTRAINT stories_kind_recording_ck CHECK (
+  (kind = 'voice' AND recording_media_id IS NOT NULL) OR
+  (kind = 'text'  AND recording_media_id IS NULL)
+);
+
+-- ---------------------------------------------------------------------------
 -- (2) At most one ACTIVE membership per (person, family). Ended/paused rows may coexist, so a
 --     person can leave and rejoin a family over time without violating this. A partial unique
 --     index is the right tool; drizzle-kit cannot express the WHERE clause.
