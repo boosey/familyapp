@@ -9,6 +9,7 @@ import {
   createTextDraft,
   appendVoiceTakeContribution,
   appendTypedTakeContribution,
+  finishDraft,
   listProseRevisions,
   listStoryRecordings,
   transitionStoryState,
@@ -165,6 +166,80 @@ describe("appendTypedTakeContribution (ADR-0014 §4)", () => {
     const { story } = await createTextDraft(db, { ownerPersonId: narrator.id, text: "Opener." });
     await expect(appendTypedTakeContribution(db, {
       storyId: story.id, ownerPersonId: intruder.id, text: "x", priorProse: null,
+    })).rejects.toThrow(/owner/i);
+  });
+});
+
+describe("finishDraft (ADR-0014 §4)", () => {
+  it("seals an edited draft: snapshots human_corrected, writes metadata, transitions to pending_approval", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Cleaned prose.",
+      transcribeModelId: "w", cleanupModelId: "c", cleanupPromptText: "p", priorProse: null,
+    });
+    const finished = await finishDraft(db, {
+      storyId: story.id, ownerPersonId: narrator.id,
+      finalText: "Cleaned prose, then hand-edited.",
+      metadata: { title: "Naples", summary: "A birth in Naples.", tags: ["childhood", "italy"] },
+    });
+    expect(finished.state).toBe("pending_approval");
+    expect(finished.prose).toBe("Cleaned prose, then hand-edited.");
+    expect(finished.title).toBe("Naples");
+    expect(finished.summary).toBe("A birth in Naples.");
+    expect(finished.tags).toEqual(["childhood", "italy"]);
+
+    const revs = await listProseRevisions(db, story.id);
+    const corrected = revs.filter((r) => r.level === "human_corrected");
+    expect(corrected.length).toBe(1);
+    expect(corrected[0]!.text).toBe("Cleaned prose, then hand-edited.");
+    expect(corrected[0]!.actorPersonId).toBe(narrator.id);
+  });
+
+  it("does NOT snapshot human_corrected when finalText equals current prose", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Unchanged prose.",
+      transcribeModelId: "w", cleanupModelId: "c", cleanupPromptText: "p", priorProse: null,
+    });
+    const finished = await finishDraft(db, {
+      storyId: story.id, ownerPersonId: narrator.id, finalText: "Unchanged prose.",
+      metadata: { title: "T", summary: "S", tags: [] },
+    });
+    expect(finished.state).toBe("pending_approval");
+    const corrected = (await listProseRevisions(db, story.id)).filter((r) => r.level === "human_corrected");
+    expect(corrected.length).toBe(0);
+  });
+
+  it("rejects empty finalText (never clears prose)", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    await expect(finishDraft(db, {
+      storyId: story.id, ownerPersonId: narrator.id, finalText: "   ",
+      metadata: { title: "T", summary: "S", tags: [] },
+    })).rejects.toThrow(/empty|non-empty/i);
+  });
+
+  it("rejects a non-owner", async () => {
+    const narrator = await makePerson("Owner");
+    const intruder = await makePerson("Intruder");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    await expect(finishDraft(db, {
+      storyId: story.id, ownerPersonId: intruder.id, finalText: "x",
+      metadata: { title: "T", summary: "S", tags: [] },
     })).rejects.toThrow(/owner/i);
   });
 });

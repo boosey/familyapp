@@ -1125,6 +1125,80 @@ export async function appendTypedTakeContribution(
 }
 
 /**
+ * Seal a composition (ADR-0014 §4). `finalText` is the client's final editor text; `metadata`
+ * (title/summary/tags) is already derived by the caller. When `finalText` differs from the current
+ * `stories.prose`, snapshots ONE `human_corrected` provenance row (the narrator's own final edit);
+ * when they match, no correction row is written. Persists metadata + `finalText` and transitions
+ * `draft → pending_approval` via `assertStoryTransition`. Owner + `draft`-gated. NEVER clears prose —
+ * an empty/whitespace `finalText` is rejected. Returns the updated Story.
+ */
+export async function finishDraft(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    finalText: string;
+    metadata: { title: string; summary: string; tags: string[] };
+  },
+): Promise<Story> {
+  const finalText = input.finalText.trim();
+  if (finalText.length === 0) {
+    throw new InvariantViolation(
+      "finishDraft: finalText must be non-empty (Finish never clears prose)",
+    );
+  }
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        ownerPersonId: stories.ownerPersonId,
+        state: stories.state,
+        prose: stories.prose,
+      })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(`finishDraft: story ${input.storyId} not found`);
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `finishDraft: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `finishDraft: story must be draft (was ${current.state})`,
+      );
+    }
+    if (current.prose !== finalText) {
+      await tx.insert(proseRevisions).values({
+        storyId: input.storyId,
+        level: "human_corrected",
+        text: finalText,
+        modelId: null,
+        promptText: null,
+        actorPersonId: input.ownerPersonId,
+        storyRecordingId: null,
+      });
+    }
+    assertStoryTransition(current.state, "pending_approval");
+    const [row] = await tx
+      .update(stories)
+      .set({
+        prose: finalText,
+        title: input.metadata.title,
+        summary: input.metadata.summary,
+        tags: input.metadata.tags,
+        state: "pending_approval",
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+    return row!;
+  });
+}
+
+/**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
  * in this already-allowlisted file; the L2→L3 diff (ai_cleaned vs human_corrected) is the
