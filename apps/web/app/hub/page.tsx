@@ -24,6 +24,7 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { IntakeReminder } from "./IntakeReminder";
+import { AlbumSurface } from "./album/AlbumSurface";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
 import { AskTab } from "./tabs/AskTab";
@@ -44,7 +45,7 @@ async function logOut(): Promise<void> {
 export default async function HubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; family?: string }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -68,8 +69,8 @@ export default async function HubPage({
   if (dest !== "/hub") redirect(dest);
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
-  const { tab: tabParam } = await searchParams;
-  const validTabs = new Set(["stories", "questions", "ask", "asks", "invite", "requests"]);
+  const { tab: tabParam, family: familyParam } = await searchParams;
+  const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
   const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts] = await Promise.all([
@@ -137,6 +138,7 @@ export default async function HubPage({
 
   const tabs = [
     { key: "stories", label: hub.shell.tabStories },
+    { key: "album", label: hub.shell.tabAlbum },
     {
       key: "questions",
       label: hub.shell.tabQuestions,
@@ -261,6 +263,14 @@ export default async function HubPage({
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}
+            />
+          )}
+          {activeTab === "album" && (
+            <AlbumSurface
+              db={db}
+              ctx={ctx}
+              requestedFamily={familyParam}
+              familyHref={(id) => `/hub?tab=album&family=${encodeURIComponent(id)}`}
             />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}

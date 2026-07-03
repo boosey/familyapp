@@ -1,31 +1,20 @@
 /**
- * /hub/album — the Family album grid (ADR-0009 · #15 · #16).
+ * /hub/album — the Family album, as a standalone deep-link route (ADR-0009 · #15–#18 · #19).
  *
- * A server component: it resolves which family album is on screen (the `?family=` context, falling
- * back to the viewer's first active family) and lists that album's photos through the album front
- * door (`listAlbumPhotos`, which enforces active membership). Each tile points at the audited bytes
- * route (`/api/album-photo/[photoId]`), which re-checks authorization on every request. A photo-less
- * album shows an empty note, not a spinner.
- *
- * #16 — a contributor in >=2 families gets a family switcher atop the grid (view each album) plus a
- * multi-family placement picker in the uploader; the switcher's current family is the context the
- * uploader defaults its selection to.
+ * The album surface itself lives in the shared `AlbumSurface` component, mounted here AND in the hub's
+ * 'Album' tab (`/hub?tab=album`). This route contributes only the page chrome — `<main>`, the
+ * container, the back-link (to the album's tab home), and the `<h1>` — and hands the `?family=`
+ * context to the surface, which does its own audited reads.
  *
  * Auth: account only, gated like the rest of the hub (anonymous → landing; family-less /
  * not-onboarded → the step they still owe).
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  getStewardPersonId,
-  listActiveFamiliesForPerson,
-  listAlbumPhotos,
-} from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { hub } from "@/app/_copy";
-import { AlbumUploader } from "./AlbumUploader";
-import { AlbumGrid } from "./AlbumGrid";
+import { AlbumSurface } from "./AlbumSurface";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,31 +31,8 @@ export default async function AlbumPage({
   const dest = await resolvePostAuthRoute(db, ctx.personId);
   if (dest !== "/hub") redirect(dest);
 
-  // #16: the album on screen is the `?family=` context (re-validated against the viewer's OWN active
-  // families), falling back to their first active family. `current` is undefined only when they have
-  // no active membership.
-  const active = await listActiveFamiliesForPerson(db, ctx.personId);
   const params = await searchParams;
   const requested = typeof params.family === "string" ? params.family : undefined;
-  const current = active.find((f) => f.familyId === requested) ?? active[0];
-
-  const photos = current ? await listAlbumPhotos(db, ctx, current.familyId) : [];
-
-  // #18: a tile shows management controls when the viewer may manage the photo — they are its
-  // CONTRIBUTOR, or the STEWARD of the album on screen. NOTE this checks stewardship of the
-  // ON-SCREEN family ONLY — a deliberate UI approximation for this slice. It can UNDER-show controls
-  // (a viewer who is steward of a DIFFERENT family the photo is also placed in won't see the controls
-  // from this family's view) but it never OVER-grants: the seam re-checks stewardship of ANY
-  // placed-in family and is authoritative, so `canManage` only decides visibility, never authority.
-  const viewer = ctx.personId;
-  const stewardId = current
-    ? await getStewardPersonId(db, current.familyId)
-    : null;
-  const gridPhotos = photos.map((p) => ({
-    id: p.id,
-    caption: p.caption,
-    canManage: p.contributorPersonId === viewer || stewardId === viewer,
-  }));
 
   return (
     <main
@@ -87,7 +53,7 @@ export default async function AlbumPage({
         }}
       >
         <Link
-          href="/hub?tab=stories"
+          href="/hub?tab=album"
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui-sm)",
@@ -95,7 +61,7 @@ export default async function AlbumPage({
             textDecoration: "none",
           }}
         >
-          {hub.compose.backToStories}
+          {hub.album.backToAlbum}
         </Link>
 
         <h1
@@ -109,64 +75,12 @@ export default async function AlbumPage({
           {hub.album.title}
         </h1>
 
-        {active.length > 1 ? (
-          <nav
-            aria-label={hub.album.switcherAria}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              margin: "0 0 24px",
-            }}
-          >
-            {active.map((f) => {
-              const isCurrent = current?.familyId === f.familyId;
-              return (
-                <Link
-                  key={f.familyId}
-                  href={`/hub/album?family=${encodeURIComponent(f.familyId)}`}
-                  aria-current={isCurrent ? "page" : undefined}
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-ui-sm)",
-                    padding: "8px 14px",
-                    borderRadius: 999,
-                    textDecoration: "none",
-                    border: "1px solid var(--border-subtle, #ddd)",
-                    background: isCurrent
-                      ? "var(--accent, #333)"
-                      : "var(--surface-raised, transparent)",
-                    color: isCurrent
-                      ? "var(--on-accent, #fff)"
-                      : "var(--text-meta)",
-                    fontWeight: isCurrent ? 600 : 400,
-                  }}
-                >
-                  {f.familyName}
-                </Link>
-              );
-            })}
-          </nav>
-        ) : null}
-
-        {photos.length === 0 ? (
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-md)",
-              color: "var(--text-meta)",
-              margin: "0 0 24px",
-            }}
-          >
-            {hub.album.empty}
-          </p>
-        ) : (
-          <AlbumGrid photos={gridPhotos} />
-        )}
-
-        {current ? (
-          <AlbumUploader families={active} currentFamilyId={current.familyId} />
-        ) : null}
+        <AlbumSurface
+          db={db}
+          ctx={ctx}
+          requestedFamily={requested}
+          familyHref={(id) => `/hub/album?family=${encodeURIComponent(id)}`}
+        />
       </div>
     </main>
   );
