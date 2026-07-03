@@ -212,6 +212,33 @@ Clerk loaded with dev keys on the redeem route). An invalid ticket at `/auth/red
       on dev Clerk (2026-06-30): ticket landed Eleanor on `/hub/answer/<realAskId>`; invalid ticket
       warm-degraded to `/s/<token>`.
 
+## Increment — DIRECT STORY CREATION + text-origin stories (ADR-0007)  ✅
+*DONE — all automated gates green (`pnpm -r typecheck` / `pnpm -r test` / oxlint clean for touched files);
+subagent-driven build, each task closed by a fresh cold adversarial reviewer. Manual dev-server smoke of
+the two capture flows is still OUTSTANDING (see note). Implements the Accepted ADR-0007.*
+A person can now create a Story on their own initiative ("tell a story", no Ask), by voice OR typed text,
+with an AI-generated-then-editable title — reusing the answer flow as one generalized composer.
+- [x] Schema: `story_kind` enum (`voice|text`); `stories.kind NOT NULL DEFAULT 'voice'`; nullable
+      `recording_media_id`; CHECK `stories_kind_recording_ck`; `user_authored` prose level. — `@chronicle/db`
+- [x] Core: `createTextDraft` (text draft + `user_authored` L1, no media); `listOutstandingDrafts`
+      (self-initiated + ask-backed) with `listOutstandingAnswerDrafts` preserved as latest-per-ask wrapper;
+      `discardDraftStory` tolerates null recording. — `@chronicle/core` `story-repository.ts`
+- [x] Capture: `ingestTextStory` (no storage write). — `@chronicle/capture`
+- [x] Pipeline: `start()` routes text → `render_story` (skips `transcribe`); pipeline view media join
+      → LEFT join so null-recording text stories resolve. — `@chronicle/pipeline`
+- [x] Web: `composeStoryAction` (voice-or-text, ask-optional) + `shareAnswerAction` persists edited title;
+      `AnswerFlow` → `StoryComposer` (voice⇄text toggle, editable title, answer+tell modes); `/hub/tell`
+      (+ `/hub/tell/[storyId]` resume); Stories-tab "Tell a story" entry + self-draft resume list. — `apps/web`
+- [x] AI-polish reuse: `polishAnswerProseAction` was already ask-optional; folds in via `KindredProseEditor`
+      `onPolish` in the shared composer — no new task.
+- Note (LOAD-BEARING, needs sign-off): draft discard for stories carrying prose revisions required relaxing
+      the `prose_revisions` delete guard from blanket-immutable to **consent-scoped** (mirrors
+      media/take guards; fixes a latent rendered-voice-draft discard bug). `consent_records` untouched;
+      post-consent lineage still frozen. Dev/prod Neon branches need a **reseed** to pick up the new trigger.
+      See ADR-0007 "Load-bearing amendment".
+- Note: dev-server manual smoke (type-a-story → share; record-a-story → share) is unverified in this
+      headless env (no browser/mic), consistent with Increment 2's capture-path note.
+
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /
 timeline-map-tree · steward console & succession · avatar consent gate & story-will ·
