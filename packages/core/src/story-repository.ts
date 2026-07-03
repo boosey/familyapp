@@ -989,6 +989,85 @@ export async function appendProseRevision(
   return row!;
 }
 
+/** Concatenate a new segment onto prior working prose with a blank-line separator, skipping
+ *  empty parts (ADR-0014: an empty Cleanup segment is a no-op, not a stray blank line). */
+function concatProse(priorProse: string | null, segment: string): string {
+  return [priorProse ?? "", segment]
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .join("\n\n");
+}
+
+/**
+ * Voice take contribution (ADR-0014 §4). Persists the two AUTOMATIC per-take provenance rows —
+ * `ai_transcribed` (raw transcript) and `ai_cleaned` (disfluency-cleaned segment), both keyed to
+ * the take (`storyRecordingId`) — then sets `stories.prose` to the prior working text plus the
+ * cleaned segment (blank-line join). Asserts `kind='voice'` idempotently; the authoritative kind
+ * flipper is `persistTakeRecording` (which flips a typed-first draft co-transactionally on take 0),
+ * so this UPDATE is a defensive no-op re-assert for the already-voice draft. Owner + `draft`-gated.
+ */
+export async function appendVoiceTakeContribution(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    storyRecordingId: string;
+    rawTranscript: string;
+    cleanedSegment: string;
+    transcribeModelId: string;
+    cleanupModelId: string;
+    cleanupPromptText: string;
+    priorProse: string | null;
+  },
+): Promise<{ prose: string; appendedSegment: string }> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state, kind: stories.kind })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: story ${input.storyId} not found`,
+      );
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: story must be draft (was ${current.state})`,
+      );
+    }
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_transcribed",
+      text: input.rawTranscript,
+      modelId: input.transcribeModelId,
+      promptText: null,
+      actorPersonId: null,
+      storyRecordingId: input.storyRecordingId,
+    });
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_cleaned",
+      text: input.cleanedSegment,
+      modelId: input.cleanupModelId,
+      promptText: input.cleanupPromptText,
+      actorPersonId: null,
+      storyRecordingId: input.storyRecordingId,
+    });
+    const prose = concatProse(input.priorProse, input.cleanedSegment);
+    await tx
+      .update(stories)
+      .set({ prose, kind: "voice", updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId));
+    return { prose, appendedSegment: input.cleanedSegment };
+  });
+}
+
 /**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
