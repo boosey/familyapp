@@ -11,7 +11,7 @@
  * and calls this exact function — no rebuild of capture.
  */
 import { randomUUID } from "node:crypto";
-import { persistRecordingAndCreateDraft, persistTakeRecording } from "@chronicle/core";
+import { createTextDraft, persistRecordingAndCreateDraft, persistTakeRecording } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
 import { resolveCaptureActor } from "./identity";
@@ -110,6 +110,43 @@ export async function ingestRecording(
   );
 
   return { storyId: story.id, recordingMediaId: recording.id, storageKey: key };
+}
+
+export interface IngestTextStoryInput {
+  /** WHO is capturing — a link-session token or a signed-in account (ADR-0003). */
+  actor: CaptureActor;
+  /** The typed words — canonical for a text story. */
+  text: string;
+  promptQuestion?: string;
+  askId?: string;
+  now?: Date;
+}
+
+export interface IngestTextResult {
+  storyId: string;
+}
+
+/**
+ * Text-origin sibling of `ingestRecording` (ADR-0007). No object storage — there are no audio
+ * bytes. Resolves WHO is capturing exactly like the voice path, then writes a text draft via the
+ * audited core write. The pipeline (start-at-render for text stories) turns the typed text into
+ * prose/title just as it does a voice transcript.
+ */
+export async function ingestTextStory(
+  db: Database,
+  input: IngestTextStoryInput,
+): Promise<IngestTextResult> {
+  const resolved = await resolveCaptureActor(db, input.actor, { now: input.now });
+  const { story } = await createTextDraft(db, {
+    ownerPersonId: resolved.personId,
+    text: input.text,
+    ...(input.promptQuestion !== undefined ? { promptQuestion: input.promptQuestion } : {}),
+    ...(input.askId !== undefined ? { askId: input.askId } : {}),
+    // Carry the link-session's family onto the draft as its originating context (ADR-0010) so
+    // approval can default-target the story into the family it was told for. Null for account.
+    ...(resolved.originatingFamilyId ? { originatingFamilyId: resolved.originatingFamilyId } : {}),
+  });
+  return { storyId: story.id };
 }
 
 /**

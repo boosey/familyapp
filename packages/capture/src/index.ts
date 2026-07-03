@@ -10,12 +10,15 @@ export {
 export {
   ingestRecording,
   ingestFollowUpTake,
+  ingestTextStory,
   InvalidSessionError,
   type CaptureActor,
   type CaptureSource,
   type CapturedAudio,
   type IngestRecordingInput,
   type IngestResult,
+  type IngestTextStoryInput,
+  type IngestTextResult,
 } from "./capture";
 export {
   captureApproval,
