@@ -10,6 +10,7 @@ import {
   appendVoiceTakeContribution,
   appendTypedTakeContribution,
   finishDraft,
+  logPolish,
   listProseRevisions,
   listStoryRecordings,
   transitionStoryState,
@@ -240,6 +241,62 @@ describe("finishDraft (ADR-0014 §4)", () => {
     await expect(finishDraft(db, {
       storyId: story.id, ownerPersonId: intruder.id, finalText: "x",
       metadata: { title: "T", summary: "S", tags: [] },
+    })).rejects.toThrow(/owner/i);
+  });
+});
+
+describe("logPolish (ADR-0014 §4)", () => {
+  it("appends ai_polished and updates prose in draft", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Rambly first draft.",
+      transcribeModelId: "w", cleanupModelId: "c", cleanupPromptText: "p", priorProse: null,
+    });
+    const res = await logPolish(db, {
+      storyId: story.id, ownerPersonId: narrator.id,
+      polishedProse: "A tighter, polished draft.", modelId: "claude-polish", promptText: "polish v1",
+    });
+    expect(res.prose).toBe("A tighter, polished draft.");
+    const polished = (await listProseRevisions(db, story.id)).filter((r) => r.level === "ai_polished");
+    expect(polished.length).toBe(1);
+    expect(polished[0]!.text).toBe("A tighter, polished draft.");
+    expect(polished[0]!.modelId).toBe("claude-polish");
+    expect(polished[0]!.promptText).toBe("polish v1");
+    expect(polished[0]!.storyRecordingId).toBeNull();
+  });
+
+  it("is allowed in pending_approval too", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Body.", transcribeModelId: "w", cleanupModelId: "c",
+      cleanupPromptText: "p", priorProse: null,
+    });
+    await transitionStoryState(db, story.id, "pending_approval");
+    const res = await logPolish(db, {
+      storyId: story.id, ownerPersonId: narrator.id,
+      polishedProse: "Polished in review.", modelId: "m", promptText: "p",
+    });
+    expect(res.prose).toBe("Polished in review.");
+  });
+
+  it("rejects a non-owner", async () => {
+    const narrator = await makePerson("Owner");
+    const intruder = await makePerson("Intruder");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    await expect(logPolish(db, {
+      storyId: story.id, ownerPersonId: intruder.id, polishedProse: "x", modelId: "m", promptText: "p",
     })).rejects.toThrow(/owner/i);
   });
 });

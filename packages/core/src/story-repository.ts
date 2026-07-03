@@ -1199,6 +1199,60 @@ export async function finishDraft(
 }
 
 /**
+ * Log a manual Polish tap (ADR-0014 §4). Appends ONE `ai_polished` provenance row (carrying
+ * `modelId` + `promptText`) AND updates `stories.prose` to the polished text — every Polish is
+ * recorded, so the prose lineage stays complete. Owner-gated; allowed in `draft` AND
+ * `pending_approval` (a narrator may polish while composing or while reviewing before approval).
+ * Returns the updated Story.
+ */
+export async function logPolish(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    polishedProse: string;
+    modelId: string;
+    promptText: string;
+  },
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(`logPolish: story ${input.storyId} not found`);
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `logPolish: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft" && current.state !== "pending_approval") {
+      throw new InvariantViolation(
+        `logPolish: story must be draft or pending_approval (was ${current.state})`,
+      );
+    }
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_polished",
+      text: input.polishedProse,
+      modelId: input.modelId,
+      promptText: input.promptText,
+      actorPersonId: null,
+      storyRecordingId: null,
+    });
+    const [row] = await tx
+      .update(stories)
+      .set({ prose: input.polishedProse, updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+    return row!;
+  });
+}
+
+/**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
  * in this already-allowlisted file; the L2→L3 diff (ai_cleaned vs human_corrected) is the
