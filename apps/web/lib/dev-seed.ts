@@ -10,7 +10,7 @@
  * Sample content (every write goes through the audited core path; storage-first ordering):
  *   - Five Stories approved+shared at family tier (visible in /hub when signed in as Sofia/Marco/Eleanor)
  *   - Four pending Asks for Eleanor (Sofia × 2, Marco × 2) so her "Questions for you" tab has a queue
- *   - One `pending_approval` Story linked to the first Ask (with AI-polished prose) — hub shows "Review & approve" immediately for that ask
+ *   - One `pending_approval` Story linked to the first Ask (with AI-cleaned prose) — hub shows "Review & approve" immediately for that ask
  *   - One link session for Eleanor (convenience deep-link / magic-link test; NOT the primary UI entry)
  *
  * Sign-in is the headline entry point: /dev/sign-in (one-click) or /sign-in with credentials.
@@ -75,7 +75,7 @@ export interface SeedResult {
   narratorToken?: string;
   /** Eleanor's Person id. Undefined if Eleanor was skipped (Clerk mode + no matching Clerk user). */
   narratorPersonId?: string;
-  /** Eleanor's one seeded ask-linked story in `pending_approval` with AI-polished prose.
+  /** Eleanor's one seeded ask-linked story in `pending_approval` with AI-cleaned prose.
    *  The hub's Questions tab shows "Review & approve" immediately for the linked Ask when signed in
    *  as Eleanor. Named `draftStoryId` for historical continuity; the story is no longer in draft.
    *  Undefined if the family content block was skipped. */
@@ -428,7 +428,7 @@ export async function seedInto(
     },
   );
 
-  // One ask-linked story for Eleanor in `pending_approval` with AI-polished prose — the render
+  // One ask-linked story for Eleanor in `pending_approval` with AI-cleaned prose — the render
   // pipeline now runs at record time (not approval), so a recorded answer lands here ready for the
   // narrator to read/edit on the Questions-tab "Review & approve" screen.
   const draftAudio = tinyWav();
@@ -449,7 +449,7 @@ export async function seedInto(
     },
     { promptQuestion: ask1.questionText, askId: ask1.id },
   );
-  // Simulate the render pipeline: L1 (transcribed) → L2 (AI-polished) → pending_approval.
+  // Simulate the render pipeline: L1 (transcribed) → L2 (AI-cleaned) → pending_approval.
   const askAnswerTranscript =
     "Oh, my grandmother. Her name was Odette and she lived just up the road from us in Zachary. " +
     "She used to say she could read the coming weather right off the pecan trees. " +
