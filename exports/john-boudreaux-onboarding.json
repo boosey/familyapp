@@ -1,0 +1,103 @@
+{
+  "exported_at": "2026-07-03",
+  "source": "Neon prod (project familyapp / purple-wind-80755689, branch production / br-wispy-resonance-ats2pprr)",
+  "note": "4 person records named 'John Boudreaux' exist in prod (duplicate/test signups). Only 2 have intake_answers. Answers grouped by person_id below.",
+  "persons": [
+    {
+      "person_id": "18c1d2b3-3929-44ac-aaf1-436e4c1f72a4",
+      "birth_date": "2012-02-18",
+      "onboarded_at": "2026-07-02T18:10:29.781Z",
+      "answer_count": 6,
+      "answers": [
+        {
+          "question_key": "hometown",
+          "prompt_question": "Tell me about where you grew up — the town, the neighborhood, the place it was.",
+          "origin": "typed",
+          "text": "I grew up in Zachary, Louisiana since I was 5 years old. I was born when we lived at 421 Day Dr in Baker, LA. In Zachary, we lived on 26 acres on Rollins Rd. We moved there in 1969.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:27:49.490Z"
+        },
+        {
+          "question_key": "siblingContext",
+          "prompt_question": "Tell me about your brothers and sisters, if you had any growing up.",
+          "origin": "typed",
+          "text": "I have 3 sisters, Michelle, nicknamed Pookie, Stephanie, nicknamed Beetle, and Robyn. I have one brother, Brent. I am in youngest. Everyone calls me Boosey because I am the caboose of the family.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:30:18.781Z"
+        },
+        {
+          "question_key": "currentLocation",
+          "prompt_question": "Where has life taken you since — where do you call home these days?",
+          "origin": "typed",
+          "text": "After graduating college in 1987 in Computer Science, I moved to Raleigh, NC working for IBM. After 4 years and a marriage, we moved to Mandeville, LA where we raised our family. In 2017, we moved to downtown New Orleans in a condo in the CBD. In 2022, we moved to the Irish Channel at 3137 St Thomas St in New Orleans.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:32:52.426Z"
+        },
+        {
+          "question_key": "occupationSummary",
+          "prompt_question": "Tell me about the work you've done over the years.",
+          "origin": "typed",
+          "text": "I have worked for IBM or within the IBM ecosystem all my career. I retired in 2024.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:33:27.165Z"
+        },
+        {
+          "question_key": "hasChildren",
+          "prompt_question": "Tell me about your children, if you have any.",
+          "origin": "typed",
+          "text": "We have 3 children Zach, born in 1994, Alex in 1997, and Emily in 1999. All graduated college and are a CRNA, AI Engineer, and Cardiac Cath Lab Nurse, respectively.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:34:50.778Z"
+        },
+        {
+          "question_key": "hasGrandchildren",
+          "prompt_question": "And your grandchildren — tell me about them.",
+          "origin": "typed",
+          "text": "We have 2 grandchildren, Billy, Zach and Emma's son who is 21 months and Belle, Alex and Catherine's daughter who is 11 months.",
+          "transcript": null,
+          "media_id": null,
+          "created_at": "2026-07-02T23:36:31.200Z"
+        }
+      ]
+    },
+    {
+      "person_id": "f3fda65b-be25-4b89-b2f5-c6797ae3d5f6",
+      "birth_date": "1964-12-09",
+      "onboarded_at": "2026-07-02T17:50:02.557Z",
+      "answer_count": 1,
+      "answers": [
+        {
+          "question_key": "hometown",
+          "prompt_question": "Tell me about where you grew up — the town, the neighborhood, the place it was.",
+          "origin": "voice",
+          "text": ".",
+          "transcript": ".",
+          "media_id": "df173923-66a6-47bc-a3ff-dff0237527ef",
+          "media_storage_key": "intake-audio/f3fda65b-be25-4b89-b2f5-c6797ae3d5f6/421d084e-78d2-4ddb-8e6c-5ee75442ef38.webm",
+          "media_content_type": "audio/webm",
+          "media_checksum": "sha256:39cabe7745b98db82b36eeffdb1bb7665106717f45e3de1a4d07d7ed93032645",
+          "created_at": "2026-07-02T17:50:22.772Z"
+        }
+      ]
+    },
+    {
+      "person_id": "21cfd38d-74f4-4c1e-8f18-4aca0a0256c7",
+      "birth_date": null,
+      "onboarded_at": null,
+      "answer_count": 0,
+      "answers": []
+    },
+    {
+      "person_id": "8a0c2b78-1c9f-4af8-87f2-fb4501e573d3",
+      "birth_date": "1975-12-09",
+      "onboarded_at": "2026-07-02T18:07:37.117Z",
+      "answer_count": 0,
+      "answers": []
+    }
+  ]
+}
