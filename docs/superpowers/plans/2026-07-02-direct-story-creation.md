@@ -1057,13 +1057,16 @@ git commit -m "refactor(web): AnswerFlow → StoryComposer (mode, voice⇄text t
 
 - [ ] **Step 1: Create the new-telling page**
 
-`apps/web/app/hub/tell/page.tsx` — a server component mirroring `apps/web/app/hub/answer/[askId]/page.tsx` minus the ask lookup. Resolve the account session (redirect to sign-in if not an account), then render:
+`apps/web/app/hub/tell/page.tsx` — a server component mirroring `apps/web/app/hub/answer/[askId]/page.tsx` minus the ask lookup. Resolve the account session. **Match the current hub gate convention** (`apps/web/app/hub/page.tsx` lines 57-67): an anonymous visitor redirects to `"/"`, and a not-yet-onboarded/family-less account is bounced via `resolvePostAuthRoute` — reuse that same guard:
 
 ```tsx
 export default async function TellPage() {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") redirect("/welcome");
+  if (ctx.kind === "anonymous") redirect("/");
+  if (ctx.kind !== "account") redirect("/");
+  const dest = await resolvePostAuthRoute(db, ctx.personId);
+  if (dest !== "/hub") redirect(dest);
   return (
     <HubChrome> {/* match how the answer page wraps its content */}
       <StoryComposer mode="tell" ask={null} draft={null} />
@@ -1095,26 +1098,39 @@ git commit -m "feat(web): /hub/tell — start or resume a self-initiated story"
 ### Task 11: Stories tab — "Tell a story" entry + self-initiated drafts
 
 **Files:**
-- Modify: `apps/web/app/hub/page.tsx` (load `listOutstandingDrafts`; pass self-initiated drafts to StoriesTab, 135/152/304)
+- Modify: `apps/web/app/hub/page.tsx` (swap `listOutstandingAnswerDrafts` for `listOutstandingDrafts` and derive both subsets; pass `selfDrafts` to `StoriesTab`)
 - Modify: `apps/web/app/hub/tabs/StoriesTab.tsx` (add the entry button + drafts list)
 - Test: `apps/web/__tests__/stories-tab-tell.test.tsx` (create)
 
+> Current anchors (verified against `master` `5eb266b`): `page.tsx` imports `listOutstandingAnswerDrafts` at line 15 and calls it inside the `Promise.all` at line 88; `draftsByAskId` is built at line 105; `<StoriesTab .../>` is rendered at lines 247-256. **`StoriesTab`'s real props are `feed`, `viewerPersonId`, `seenStoryIds`, `familyTargets`, `viewerFamilies`, `viewerName`** — it does NOT take a `stories` prop. You are ADDING a `selfDrafts` prop.
+
 - [ ] **Step 1: Write the failing test**
 
+Render `StoriesTab` with its real props (minimal/empty values) plus the new `selfDrafts`:
+
 ```tsx
+const baseProps = {
+  feed: [],
+  viewerPersonId: "v1",
+  seenStoryIds: new Set<string>(),
+  familyTargets: new Map(),
+  viewerFamilies: [],
+  viewerName: "You",
+};
+
 it("shows a 'Tell a story' entry linking to /hub/tell", () => {
-  render(<StoriesTab stories={[]} selfDrafts={[]} />);
+  render(<StoriesTab {...baseProps} selfDrafts={[]} />);
   const link = screen.getByRole("link", { name: /tell a story/i });
   expect(link.getAttribute("href")).toBe("/hub/tell");
 });
 
 it("lists a self-initiated pending draft with a resume link", () => {
-  render(<StoriesTab stories={[]} selfDrafts={[{ storyId: "s1", kind: "text", recordedAt: new Date().toISOString() }]} />);
+  render(<StoriesTab {...baseProps} selfDrafts={[{ storyId: "s1", kind: "text", recordedAt: new Date().toISOString() }]} />);
   expect(screen.getByRole("link", { name: /finish|resume/i }).getAttribute("href")).toBe("/hub/tell/s1");
 });
 ```
 
-Match `StoriesTab`'s actual current props by reading the file first; add a `selfDrafts` prop.
+> Confirm `StoriesTab`'s exact prop types before writing (they're at `StoriesTab.tsx` lines 7-19). `selfDrafts` is `Array<{ storyId: string; kind: "voice" | "text"; recordedAt: string }>` (serialize `recordedAt` to ISO in the server component, matching how `draftsByAskId` serializes).
 
 - [ ] **Step 2: Run red**
 
@@ -1123,14 +1139,23 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-In `hub/page.tsx`, alongside the existing `listOutstandingAnswerDrafts(db, ctx.personId)` call (135), also call `listOutstandingDrafts(db, ctx.personId)` and derive the self-initiated subset:
+In `hub/page.tsx`: (a) change the import (line 15) from `listOutstandingAnswerDrafts` to `listOutstandingDrafts`; (b) in the `Promise.all` (line 88) replace `listOutstandingAnswerDrafts(db, ctx.personId)` with `listOutstandingDrafts(db, ctx.personId)` — bind it to `allDrafts` instead of `answerDrafts`; (c) derive both subsets from it before building `draftsByAskId` (line 105):
 
 ```ts
-const allDrafts = await listOutstandingDrafts(db, ctx.personId);
-const selfDrafts = allDrafts.filter((d) => d.askId === null);
+// allDrafts is the Promise.all result that replaced answerDrafts
+const answerDrafts = allDrafts.filter((d) => d.askId !== null);
+const selfDrafts = allDrafts
+  .filter((d) => d.askId === null)
+  .map((d) => ({ storyId: d.storyId, kind: d.kind, recordedAt: d.recordedAt.toISOString() }));
+
+const draftsByAskId = Object.fromEntries(
+  answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
+);
 ```
 
-Pass `selfDrafts` to `<StoriesTab ... selfDrafts={selfDrafts} />` (304). In `StoriesTab.tsx`, add a prominent "Tell a story" `<Link href="/hub/tell">` (styled as a primary Kindred button/card) and, if `selfDrafts.length`, a "Finish what you started" list where each item links to `/hub/tell/${d.storyId}`.
+Then pass `selfDrafts={selfDrafts}` into `<StoriesTab .../>` (lines 247-256). In `StoriesTab.tsx`, add `selfDrafts` to `StoriesTabProps` (lines 7-19) and destructure it (lines 35-40); render a prominent "Tell a story" `<Link href="/hub/tell">` (styled as a primary Kindred button/card) and, if `selfDrafts.length`, a "Finish what you started" list where each item links to `/hub/tell/${d.storyId}`.
+
+> `draftsByAskId` currently consumes `d.recordedAt` as a `Date` (the answer-drafts type). After this change `answerDrafts` is the `askId != null` subset of `OutstandingDraft`, whose `recordedAt` is still a `Date` — so `draftsByAskId` is unchanged in shape. Only `selfDrafts` serializes to ISO (it crosses into a client sub-list).
 
 - [ ] **Step 4: Run green**
 
