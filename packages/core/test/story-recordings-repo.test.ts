@@ -2,6 +2,7 @@ import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   appendStoryRecording,
+  createTextDraft,
   discardDraftStory,
   dropStoryRecording,
   listStoryRecordings,
@@ -10,7 +11,7 @@ import {
 } from "../src/story-repository";
 import { InvariantViolation } from "../src/errors";
 import { makePerson } from "./helpers";
-import { media } from "@chronicle/db/content";
+import { media, stories } from "@chronicle/db/content";
 import { eq } from "drizzle-orm";
 
 let db: Database;
@@ -159,5 +160,54 @@ describe("story_recordings repo (ordered take set, ADR-0012)", () => {
     expect(
       await db.select({ id: media.id }).from(media).where(eq(media.id, take1.id)),
     ).toHaveLength(0);
+  });
+
+  it("flips kind text→voice when the first take is appended to a typed-first draft", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const { story } = await createTextDraft(db, {
+      ownerPersonId: narrator.id,
+      text: "I typed this first.",
+    });
+    expect(story.kind).toBe("text");
+
+    const { storyRecording } = await persistTakeRecording(
+      db,
+      {
+        ownerPersonId: narrator.id,
+        storageKey: "s3://b/take0.wav",
+        contentType: "audio/wav",
+        checksum: "c",
+      },
+      story.id,
+    );
+    expect(storyRecording.position).toBe(0);
+
+    const [after] = await db.select().from(stories).where(eq(stories.id, story.id));
+    expect(after!.kind).toBe("voice");
+    // recording_media_id stays NULL for a typed-first draft (contract §3: pointer is not re-aimed).
+    expect(after!.recordingMediaId).toBeNull();
+  });
+
+  it("leaves kind=voice unchanged when appending a follow-up take to a voice story", async () => {
+    const narrator = await makePerson(db, "Sal");
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id,
+      storageKey: "s3://b/v0.wav",
+      contentType: "audio/wav",
+      checksum: "c0",
+    });
+    const { storyRecording } = await persistTakeRecording(
+      db,
+      {
+        ownerPersonId: narrator.id,
+        storageKey: "s3://b/v1.wav",
+        contentType: "audio/wav",
+        checksum: "c1",
+      },
+      story.id,
+    );
+    expect(storyRecording.position).toBe(1);
+    const [after] = await db.select().from(stories).where(eq(stories.id, story.id));
+    expect(after!.kind).toBe("voice");
   });
 });

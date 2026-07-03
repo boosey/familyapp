@@ -102,6 +102,23 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
 
+  -- DELETE: check (c) — ADR-0014 fork #2. Defense-in-depth + a consent-semantic error message for
+  -- take-backing media. The FK (story_recordings.media_id NO ACTION) plus the
+  -- story_recordings_post_consent_immutable trigger already prevent losing this audio; this check
+  -- restates that invariant at the media layer and yields a consent-worded error instead of a raw
+  -- FK violation. Covers position >= 1 takes AND typed-first mixed-take audio that check (b)'s
+  -- recording_media_id pointer never sees.
+  IF EXISTS (
+    SELECT 1 FROM story_recordings sr
+    INNER JOIN consent_records cr ON cr.story_id = sr.story_id
+    WHERE sr.media_id = OLD.id
+  ) THEN
+    RAISE EXCEPTION
+      'Cannot delete media %: it backs a take of a story with consent records. Consented take audio is immutable forever.',
+      OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
   RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
@@ -159,15 +176,72 @@ CREATE TRIGGER story_recordings_post_consent_immutable
   FOR EACH ROW EXECUTE FUNCTION chronicle_story_recording_delete_guard();
 
 -- ---------------------------------------------------------------------------
--- (1f) ADR-0007: a Story is origin-typed. A 'voice' story MUST have a canonical recording; a
---      'text' story MUST NOT (its typed words are canonical). This is an INSERT-time consistency
---      guarantee, complementing the recording-pointer immutability trigger above (an UPDATE guard).
---      drizzle-kit does not model CHECK constraints, so it lives here.
+-- (1f) ADR-0014 §3: the kind ⇔ recording invariant for MIXED drafts (supersedes the ADR-0007
+--      take-0-only CHECK). A draft is a live composition of interleaved voice + typed takes;
+--      "any audio ⇒ voice". Enforced in two parts:
+--        (a) a single-table CHECK for the text-half (needs no cross-table lookup);
+--        (b) a DEFERRABLE INITIALLY DEFERRED constraint trigger for the voice biconditional,
+--            checked at COMMIT so the audited repo may, within one tx, insert the first take and
+--            flip kind in either order.
 -- ---------------------------------------------------------------------------
-ALTER TABLE stories ADD CONSTRAINT stories_kind_recording_ck CHECK (
-  (kind = 'voice' AND recording_media_id IS NOT NULL) OR
-  (kind = 'text'  AND recording_media_id IS NULL)
+
+-- (a) text ⇒ no canonical recording pointer. (voice MAY have a NULL pointer — a typed-first draft
+--     that later gets a voice take keeps recording_media_id = NULL; its audio is the take set.)
+ALTER TABLE stories ADD CONSTRAINT stories_text_no_recording_ck CHECK (
+  NOT (kind = 'text' AND recording_media_id IS NOT NULL)
 );
+
+-- (b) The biconditional (kind = 'voice') ⟺ (EXISTS a story_recordings row for the story).
+--     Deferred to COMMIT. The function is shared by triggers on BOTH stories and story_recordings
+--     and re-derives the affected story id from whichever table fired. If the story no longer
+--     exists (whole-draft discard deletes its takes AND the story in one tx), there is nothing to
+--     enforce — return cleanly.
+CREATE OR REPLACE FUNCTION chronicle_story_kind_recording_biconditional()
+RETURNS trigger AS $$
+DECLARE
+  v_story_id uuid;
+  v_kind story_kind;
+  v_has_recording boolean;
+BEGIN
+  IF TG_TABLE_NAME = 'stories' THEN
+    v_story_id := NEW.id;              -- fired on stories INSERT/UPDATE
+  ELSE
+    v_story_id := COALESCE(NEW.story_id, OLD.story_id);  -- story_recordings INSERT/DELETE
+  END IF;
+
+  SELECT kind INTO v_kind FROM stories WHERE id = v_story_id;
+  IF NOT FOUND THEN
+    RETURN NULL;  -- story deleted in this tx (discard); nothing to enforce.
+  END IF;
+
+  v_has_recording := EXISTS (SELECT 1 FROM story_recordings WHERE story_id = v_story_id);
+
+  IF (v_kind = 'voice') <> v_has_recording THEN
+    RAISE EXCEPTION
+      'story % violates the ADR-0014 kind/recording invariant: kind=%, has_recording=% (voice ⟺ ≥1 story_recordings row)',
+      v_story_id, v_kind, v_has_recording
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  RETURN NULL;  -- AFTER trigger: return value ignored.
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER stories_kind_recording_biconditional
+  AFTER INSERT OR UPDATE ON stories
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION chronicle_story_kind_recording_biconditional();
+
+-- Fires only on INSERT/DELETE (not UPDATE): a take's story_id is assumed IMMUTABLE — takes are
+-- inserted and deleted, never re-parented to another story (moving a take between stories is not a
+-- modeled operation), so the pair of affected stories can only change on those two ops. Covering
+-- UPDATE would also be costly: a constraint trigger cannot take a WHEN clause, so an UPDATE variant
+-- could not be scoped to story_id changes and would re-run the biconditional at COMMIT on every
+-- transcript backfill — the hot path.
+CREATE CONSTRAINT TRIGGER story_recordings_kind_recording_biconditional
+  AFTER INSERT OR DELETE ON story_recordings
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION chronicle_story_kind_recording_biconditional();
 
 -- ---------------------------------------------------------------------------
 -- (2) At most one ACTIVE membership per (person, family). Ended/paused rows may coexist, so a

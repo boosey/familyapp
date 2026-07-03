@@ -666,33 +666,61 @@ export async function applyTranscriptCorrection(
   storyId: string,
   correctedTranscript: string,
 ): Promise<Story> {
-  const [current] = await db
-    .select({ state: stories.state })
-    .from(stories)
-    .where(eq(stories.id, storyId))
-    .limit(1);
-  if (!current) throw new Error(`story not found: ${storyId}`);
-  // A correction is the narrator editing in-session before sharing; refuse on a story already
-  // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
-  if (current.state !== "pending_approval") {
-    throw new InvariantViolation(
-      `applyTranscriptCorrection: story must be pending_approval (was ${current.state})`,
-    );
-  }
-  const [row] = await db
-    .update(stories)
-    .set({
-      transcript: correctedTranscript,
-      transcriptWordTimings: null,
-      prose: null,
-      title: null,
-      summary: null,
-      tags: [],
-      updatedAt: new Date(),
-    })
-    .where(eq(stories.id, storyId))
-    .returning();
-  return row!;
+  return db.transaction(async (tx) => {
+    // The tx is for this file's write-path convention + future-proofing, NOT TOCTOU closure: under
+    // READ COMMITTED the authored-lineage SELECT and the UPDATE take separate snapshots, so a
+    // concurrent authored-row insert between them isn't fenced (acceptable on the single-narrator
+    // composing surface; truly closing it would need SELECT ... FOR UPDATE).
+    const [current] = await tx
+      .select({ state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, storyId))
+      .limit(1);
+    if (!current) throw new Error(`story not found: ${storyId}`);
+    // A correction is the narrator editing in-session before sharing; refuse on a story already
+    // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
+    if (current.state !== "pending_approval") {
+      throw new InvariantViolation(
+        `applyTranscriptCorrection: story must be pending_approval (was ${current.state})`,
+      );
+    }
+    // ADR-0014 §7: authored prose is never blindly regenerated. Refuse to null prose when the story
+    // has any user_authored or human_corrected lineage row (typed takes / hand-edits), which
+    // clearing-to-re-render would silently destroy. The block set is intentionally
+    // user_authored/human_corrected ONLY — ai_polished (and ai_transcribed/ai_cleaned) are
+    // regenerable AI output and are deliberately NOT protected, so a Polished-then-corrected
+    // pure-voice story re-renders as expected.
+    const authored = await tx
+      .select({ id: proseRevisions.id })
+      .from(proseRevisions)
+      .where(
+        and(
+          eq(proseRevisions.storyId, storyId),
+          inArray(proseRevisions.level, ["user_authored", "human_corrected"]),
+        ),
+      )
+      .limit(1);
+    if (authored.length > 0) {
+      throw new InvariantViolation(
+        `applyTranscriptCorrection: story ${storyId} has authored prose lineage ` +
+          `(user_authored/human_corrected); its prose is authored and must never be regenerated (ADR-0014 §7)`,
+      );
+    }
+    const [row] = await tx
+      .update(stories)
+      .set({
+        transcript: correctedTranscript,
+        transcriptWordTimings: null,
+        prose: null,
+        title: null,
+        summary: null,
+        tags: [],
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, storyId))
+      .returning();
+    return row!;
+  });
 }
 
 /**
@@ -966,6 +994,8 @@ export interface AppendProseRevisionInput {
   modelId?: string | null;
   promptText?: string | null;
   actorPersonId?: string | null;
+  /** ADR-0014 §2: the audio take this row derives from (per-take automatic levels). */
+  storyRecordingId?: string | null;
 }
 
 export async function appendProseRevision(
@@ -981,15 +1011,291 @@ export async function appendProseRevision(
       modelId: input.modelId ?? null,
       promptText: input.promptText ?? null,
       actorPersonId: input.actorPersonId ?? null,
+      storyRecordingId: input.storyRecordingId ?? null,
     })
     .returning();
   return row!;
 }
 
+/** Concatenate a new segment onto prior working prose with a blank-line separator, skipping
+ *  empty parts (ADR-0014: an empty Cleanup segment is a no-op, not a stray blank line). */
+function concatProse(priorProse: string | null, segment: string): string {
+  return [priorProse ?? "", segment]
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .join("\n\n");
+}
+
+/**
+ * Voice take contribution (ADR-0014 §4). Persists the two AUTOMATIC per-take provenance rows —
+ * `ai_transcribed` (raw transcript) and `ai_cleaned` (disfluency-cleaned segment), both keyed to
+ * the take (`storyRecordingId`) — then sets `stories.prose` to the prior working text plus the
+ * cleaned segment (blank-line join). Asserts `kind='voice'` idempotently; the authoritative kind
+ * flipper is `persistTakeRecording` (which flips a typed-first draft co-transactionally on take 0),
+ * so this UPDATE is a defensive no-op re-assert for the already-voice draft. Owner + `draft`-gated.
+ *
+ * The new prose is authored from the caller-supplied `priorProse` (the client editor's current text),
+ * NOT re-read from `stories.prose` — so the last writer wins and a concurrent polish/append in the
+ * same draft is clobbered. Acceptable on the single-narrator composing surface.
+ */
+export async function appendVoiceTakeContribution(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    storyRecordingId: string;
+    rawTranscript: string;
+    cleanedSegment: string;
+    transcribeModelId: string;
+    cleanupModelId: string;
+    cleanupPromptText: string;
+    priorProse: string | null;
+  },
+): Promise<{ prose: string; appendedSegment: string }> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state, kind: stories.kind })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: story ${input.storyId} not found`,
+      );
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `appendVoiceTakeContribution: story must be draft (was ${current.state})`,
+      );
+    }
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_transcribed",
+      text: input.rawTranscript,
+      modelId: input.transcribeModelId,
+      promptText: null,
+      actorPersonId: null,
+      storyRecordingId: input.storyRecordingId,
+    });
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_cleaned",
+      text: input.cleanedSegment,
+      modelId: input.cleanupModelId,
+      promptText: input.cleanupPromptText,
+      actorPersonId: null,
+      storyRecordingId: input.storyRecordingId,
+    });
+    const prose = concatProse(input.priorProse, input.cleanedSegment);
+    await tx
+      .update(stories)
+      .set({ prose, kind: "voice", updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId));
+    return { prose, appendedSegment: input.cleanedSegment };
+  });
+}
+
+/**
+ * Typed take contribution (ADR-0014 §4). Appends ONE `user_authored` provenance row keyed to the
+ * narrator (`actorPersonId`, `storyRecordingId=null` — a typed take has no audio) and concatenates
+ * the text onto the prior working prose (blank-line join). Creates NO `story_recordings` row and
+ * does NOT change `kind` — a typed contribution on a voice draft leaves it voice; on a text draft
+ * leaves it text. Owner + `draft`-gated; empty/whitespace text rejected.
+ *
+ * The new prose is authored from the caller-supplied `priorProse` (the client editor's current text),
+ * NOT re-read from `stories.prose` — so the last writer wins and a concurrent polish/append in the
+ * same draft is clobbered. Acceptable on the single-narrator composing surface.
+ */
+export async function appendTypedTakeContribution(
+  db: Database,
+  input: { storyId: string; ownerPersonId: string; text: string; priorProse: string | null },
+): Promise<{ prose: string; appendedSegment: string }> {
+  const text = input.text.trim();
+  if (text.length === 0) {
+    throw new InvariantViolation(
+      "appendTypedTakeContribution: a typed take must have non-empty text",
+    );
+  }
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: story ${input.storyId} not found`,
+      );
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: story must be draft (was ${current.state})`,
+      );
+    }
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "user_authored",
+      text,
+      modelId: null,
+      promptText: null,
+      actorPersonId: input.ownerPersonId,
+      storyRecordingId: null,
+    });
+    const prose = concatProse(input.priorProse, text);
+    await tx
+      .update(stories)
+      .set({ prose, updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId));
+    return { prose, appendedSegment: text };
+  });
+}
+
+/**
+ * Seal a composition (ADR-0014 §4). `finalText` is the client's final editor text; `metadata`
+ * (title/summary/tags) is already derived by the caller. When `finalText` differs from the current
+ * `stories.prose`, snapshots ONE `human_corrected` provenance row (the narrator's own final edit);
+ * when they match, no correction row is written. Persists metadata + `finalText` and transitions
+ * `draft → pending_approval` via `assertStoryTransition`. Owner + `draft`-gated. NEVER clears prose —
+ * an empty/whitespace `finalText` is rejected. Returns the updated Story.
+ */
+export async function finishDraft(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    finalText: string;
+    metadata: { title: string; summary: string; tags: string[] };
+  },
+): Promise<Story> {
+  const finalText = input.finalText.trim();
+  if (finalText.length === 0) {
+    throw new InvariantViolation(
+      "finishDraft: finalText must be non-empty (Finish never clears prose)",
+    );
+  }
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        ownerPersonId: stories.ownerPersonId,
+        state: stories.state,
+        prose: stories.prose,
+      })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(`finishDraft: story ${input.storyId} not found`);
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `finishDraft: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `finishDraft: story must be draft (was ${current.state})`,
+      );
+    }
+    if (current.prose !== finalText) {
+      await tx.insert(proseRevisions).values({
+        storyId: input.storyId,
+        level: "human_corrected",
+        text: finalText,
+        modelId: null,
+        promptText: null,
+        actorPersonId: input.ownerPersonId,
+        storyRecordingId: null,
+      });
+    }
+    assertStoryTransition(current.state, "pending_approval");
+    const [row] = await tx
+      .update(stories)
+      .set({
+        prose: finalText,
+        title: input.metadata.title,
+        summary: input.metadata.summary,
+        tags: input.metadata.tags,
+        state: "pending_approval",
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+    return row!;
+  });
+}
+
+/**
+ * Log a manual Polish tap (ADR-0014 §4). Appends ONE `ai_polished` provenance row (carrying
+ * `modelId` + `promptText`) AND updates `stories.prose` to the polished text — every Polish is
+ * recorded, so the prose lineage stays complete. Owner-gated; allowed in `draft` AND
+ * `pending_approval` (a narrator may polish while composing or while reviewing before approval).
+ * Returns the updated Story.
+ */
+export async function logPolish(
+  db: Database,
+  input: {
+    storyId: string;
+    ownerPersonId: string;
+    polishedProse: string;
+    modelId: string;
+    promptText: string;
+  },
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(`logPolish: story ${input.storyId} not found`);
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `logPolish: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft" && current.state !== "pending_approval") {
+      throw new InvariantViolation(
+        `logPolish: story must be draft or pending_approval (was ${current.state})`,
+      );
+    }
+    // Trim so the stored prose is whitespace-normalized like `concatProse`/`finishDraft` — otherwise
+    // a later no-op Finish would spuriously snapshot a `human_corrected` row differing only by
+    // trailing whitespace.
+    const polishedProse = input.polishedProse.trim();
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "ai_polished",
+      text: polishedProse,
+      modelId: input.modelId,
+      promptText: input.promptText,
+      actorPersonId: null,
+      storyRecordingId: null,
+    });
+    const [row] = await tx
+      .update(stories)
+      .set({ prose: polishedProse, updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+    return row!;
+  });
+}
+
 /**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
- * in this already-allowlisted file; the L2→L3 diff (ai_polished vs human_corrected) is the
+ * in this already-allowlisted file; the L2→L3 diff (ai_cleaned vs human_corrected) is the
  * prompt/model improvement signal.
  */
 export async function listProseRevisions(
@@ -1257,6 +1563,22 @@ export async function persistTakeRecording(
       .insert(storyRecordings)
       .values({ storyId, position: nextPosition, mediaId: rec!.id })
       .returning();
+    // ADR-0014 §3.3 (amended): the FIRST take on a typed-first (kind='text') draft flips
+    // kind→voice CO-TRANSACTIONALLY, so the deferred biconditional holds at THIS commit. The
+    // recording_media_id pointer is NOT re-aimed (it stays NULL — the take set is the audio).
+    if (nextPosition === 0) {
+      const [current] = await tx
+        .select({ kind: stories.kind })
+        .from(stories)
+        .where(eq(stories.id, storyId))
+        .limit(1);
+      if (current && current.kind === "text") {
+        await tx
+          .update(stories)
+          .set({ kind: "voice", updatedAt: new Date() })
+          .where(eq(stories.id, storyId));
+      }
+    }
     return { recording: rec!, storyRecording: row! };
   });
 }

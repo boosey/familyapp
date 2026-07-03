@@ -16,7 +16,7 @@ CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'inta
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
-CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
+CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified');
 CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
 CREATE TABLE "accounts" (
@@ -210,6 +210,7 @@ CREATE TABLE "prose_revisions" (
 	"model_id" text,
 	"prompt_text" text,
 	"actor_person_id" uuid,
+	"story_recording_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -293,6 +294,7 @@ ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" 
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_recording_id_story_recordings_id_fk" FOREIGN KEY ("story_recording_id") REFERENCES "public"."story_recordings"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_originating_family_id_families_id_fk" FOREIGN KEY ("originating_family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;

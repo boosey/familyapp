@@ -280,11 +280,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     // Append L2 LAST — after BOTH gate conditions (prose set AND state=pending_approval) are
     // committed — so any retry sees the gate satisfied and skips, never producing a duplicate
-    // ai_polished row. (Mirrors the transcribe stage, whose gate condition also commits before
-    // its L1 append.) Records the AI-polished output with the LM model id + exact system prompt.
+    // ai_cleaned row. (Mirrors the transcribe stage, whose gate condition also commits before
+    // its L1 append.) Records the cleaned (Cleanup) output with the LM model id + exact system prompt.
     await appendProseRevision(deps.db, {
       storyId: view.storyId,
-      level: "ai_polished",
+      level: "ai_cleaned",
       text: render.prose,
       modelId: render.modelId,
       promptText: render.systemPrompt,

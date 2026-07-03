@@ -1,6 +1,13 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { consentRecords, media, persons, proseRevisions, stories } from "../src/schema";
+import {
+  consentRecords,
+  media,
+  persons,
+  proseRevisions,
+  stories,
+  storyRecordings,
+} from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
 let db: Database;
@@ -9,25 +16,61 @@ beforeEach(async () => {
 });
 
 async function makeStory(): Promise<{ personId: string; storyId: string }> {
-  const [p] = await db
-    .insert(persons)
-    .values({ displayName: "Eleanor", spokenName: "Eleanor" })
-    .returning();
+  const p = await makePerson();
   const [rec] = await db
     .insert(media)
     .values({
-      ownerPersonId: p!.id,
+      ownerPersonId: p.id,
       kind: "story_audio",
       storageKey: "s3://bucket/o.wav",
       contentType: "audio/wav",
       checksum: "abc",
     })
     .returning();
-  const [s] = await db
-    .insert(stories)
-    .values({ ownerPersonId: p!.id, recordingMediaId: rec!.id })
+  const storyId = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId: p.id, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!.id;
+  });
+  return { personId: p.id, storyId };
+}
+
+async function makePerson(displayName = "Eleanor") {
+  const [p] = await db
+    .insert(persons)
+    .values({ displayName, spokenName: displayName })
     .returning();
-  return { personId: p!.id, storyId: s!.id };
+  return p!;
+}
+
+async function makeVoiceStoryWithTake(ownerPersonId: string) {
+  return db.transaction(async (tx) => {
+    const [rec] = await tx
+      .insert(media)
+      .values({
+        ownerPersonId,
+        kind: "story_audio",
+        storageKey: `s3://b/${crypto.randomUUID()}.wav`,
+        contentType: "audio/wav",
+        checksum: "c",
+      })
+      .returning();
+    const [story] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, kind: "voice", recordingMediaId: rec!.id })
+      .returning();
+    const [take] = await tx
+      .insert(storyRecordings)
+      .values({ storyId: story!.id, position: 0, mediaId: rec!.id })
+      .returning();
+    return { story: story!, take: take! };
+  });
 }
 
 describe("prose_revisions table", () => {
@@ -114,5 +157,70 @@ describe("prose_revisions table", () => {
     await expect(
       db.delete(proseRevisions).where(eq(proseRevisions.id, frozen!.id)),
     ).rejects.toThrow(/immutable after sharing/);
+  });
+
+  it("accepts ai_cleaned and ai_polished as distinct, insertable levels (ADR-0014)", async () => {
+    // ai_cleaned = the automatic per-take Cleanup pass; ai_polished = the manual holistic Polish
+    // button. Both must be valid, distinct enum values in the prose lineage.
+    const { storyId } = await makeStory();
+    await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_cleaned", text: "cleaned prose", modelId: "mock-claude" });
+    await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_polished", text: "polished prose", modelId: "mock-claude" });
+
+    const rows = await db
+      .select()
+      .from(proseRevisions)
+      .where(eq(proseRevisions.storyId, storyId));
+    const levels = rows.map((r) => r.level);
+    expect(levels).toContain("ai_cleaned");
+    expect(levels).toContain("ai_polished");
+  });
+});
+
+describe("prose_revisions.story_recording_id FK (ADR-0014 §2)", () => {
+  it("accepts a row keyed to a real story_recordings id", async () => {
+    const narrator = await makePerson();
+    const { story, take } = await makeVoiceStoryWithTake(narrator.id);
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({
+        storyId: story.id,
+        level: "ai_cleaned",
+        text: "cleaned",
+        storyRecordingId: take.id,
+      })
+      .returning();
+    expect(row!.storyRecordingId).toBe(take.id);
+  });
+
+  it("accepts a null story_recording_id (holistic / typed rows)", async () => {
+    const narrator = await makePerson();
+    const { story } = await makeVoiceStoryWithTake(narrator.id);
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({
+        storyId: story.id,
+        level: "ai_polished",
+        text: "polished",
+        storyRecordingId: null,
+      })
+      .returning();
+    expect(row!.storyRecordingId).toBeNull();
+  });
+
+  it("rejects a story_recording_id that references no take", async () => {
+    const narrator = await makePerson();
+    const { story } = await makeVoiceStoryWithTake(narrator.id);
+    await expect(
+      db.insert(proseRevisions).values({
+        storyId: story.id,
+        level: "ai_cleaned",
+        text: "x",
+        storyRecordingId: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/foreign key|violates/i);
   });
 });

@@ -14,6 +14,7 @@ import {
   media,
   persons,
   stories,
+  storyRecordings,
 } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
@@ -47,11 +48,18 @@ async function makeStoryWithRecording(ownerPersonId: string) {
       checksum: crypto.randomUUID(),
     })
     .returning();
-  const [story] = await db
-    .insert(stories)
-    .values({ ownerPersonId, recordingMediaId: rec!.id })
-    .returning();
-  return { recording: rec!, story: story! };
+  const story = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!;
+  });
+  return { recording: rec!, story };
 }
 
 /** Insert an approval-audio media row (not attached to any story). */
@@ -86,9 +94,12 @@ describe("test 1 — never-consented draft: DELETE succeeds", () => {
       .where(eq(consentRecords.storyId, story.id));
     expect(rows).toHaveLength(0);
 
-    // The story FK (recording_media_id NOT NULL) must be cleared first — exactly what
-    // discardDraftStory does in a transaction before deleting the media row.
-    await db.delete(stories).where(eq(stories.id, story.id));
+    // Whole-draft discard (ADR-0014): the takes and the story go together in one transaction
+    // (the take-0 row pins the story FK), then the reclaimed media row can be deleted.
+    await db.transaction(async (tx) => {
+      await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, story.id));
+      await tx.delete(stories).where(eq(stories.id, story.id));
+    });
 
     // The trigger should now permit the delete (no consent linkage).
     await expect(
@@ -264,5 +275,50 @@ describe("test 5 — consent_records append-only guard not regressed", () => {
     await expect(
       db.delete(consentRecords).where(eq(consentRecords.id, row!.id)),
     ).rejects.toThrow(/append-only/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 6: consented story's follow-up-take media (ADR-0014 fork #2): DELETE raises
+// ---------------------------------------------------------------------------
+
+describe("test 6 — consented story's follow-up-take media (ADR-0014 fork #2): DELETE raises", () => {
+  it("rejects DELETE of a position≥1 take's media when the story has consent", async () => {
+    const narrator = await makePerson();
+    const { recording: rec0, story } = await makeStoryWithRecording(narrator.id); // now seeds take-0
+    // Add a follow-up take (position 1) with its own media (kind already voice).
+    const rec1 = (
+      await db
+        .insert(media)
+        .values({
+          ownerPersonId: narrator.id,
+          kind: "story_audio",
+          storageKey: `s3://b/${crypto.randomUUID()}.wav`,
+          contentType: "audio/wav",
+          checksum: crypto.randomUUID(),
+        })
+        .returning()
+    )[0]!;
+    await db
+      .insert(storyRecordings)
+      .values({ storyId: story.id, position: 1, mediaId: rec1.id });
+    // Consent the story.
+    await db.insert(consentRecords).values({
+      personId: narrator.id,
+      actorPersonId: narrator.id,
+      storyId: story.id,
+      action: "approved_for_sharing",
+      resultingState: "shared",
+    });
+    // NB: the FK + story_recordings_post_consent_immutable also block these deletes; the regex
+    // asserts check (c)'s consent-semantic message fired first (defense-in-depth), not otherwise-lost data.
+    // Take-1's media must now be un-deletable.
+    await expect(
+      db.delete(media).where(eq(media.id, rec1.id)),
+    ).rejects.toThrow(/immutable|restrict|consent/i);
+    // (Regression companion: take-0 media still protected via check (b).)
+    await expect(
+      db.delete(media).where(eq(media.id, rec0.id)),
+    ).rejects.toThrow(/immutable|restrict|consent/i);
   });
 });

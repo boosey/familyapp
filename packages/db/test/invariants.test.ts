@@ -18,6 +18,7 @@ import {
   memberships,
   persons,
   stories,
+  storyRecordings,
 } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
@@ -46,11 +47,18 @@ async function makeStoryWithRecording(ownerPersonId: string) {
       checksum: "abc123",
     })
     .returning();
-  const [story] = await db
-    .insert(stories)
-    .values({ ownerPersonId, recordingMediaId: rec!.id })
-    .returning();
-  return { recording: rec!, story: story! };
+  const story = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!;
+  });
+  return { recording: rec!, story };
 }
 
 describe("a story is born private + draft (authenticity/consent defaults)", () => {
@@ -66,14 +74,21 @@ describe("a story is born private + draft (authenticity/consent defaults)", () =
         checksum: "abc123",
       })
       .returning();
-    const [story] = await db
-      .insert(stories)
-      .values({ ownerPersonId: narrator.id, recordingMediaId: rec!.id })
-      .returning();
-    expect(story!.state).toBe("draft");
-    expect(story!.audienceTier).toBe("private");
-    expect(story!.approvedAt).toBeNull();
-    expect(story!.prose).toBeNull();
+    const story = await db.transaction(async (tx) => {
+      const [s] = await tx
+        .insert(stories)
+        .values({ ownerPersonId: narrator.id, recordingMediaId: rec!.id })
+        .returning();
+      // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+      await tx
+        .insert(storyRecordings)
+        .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+      return s!;
+    });
+    expect(story.state).toBe("draft");
+    expect(story.audienceTier).toBe("private");
+    expect(story.approvedAt).toBeNull();
+    expect(story.prose).toBeNull();
   });
 });
 

@@ -495,7 +495,7 @@ describe("parseRenderResponse — defensive parsing", () => {
 });
 
 describe("pipeline — prose provenance", () => {
-  it("appends ai_transcribed (L1) and ai_polished (L2) with model ids + render prompt", async () => {
+  it("appends ai_transcribed (L1) and ai_cleaned (L2) with model ids + render prompt", async () => {
     const narratorId = await makeNarrator();
     const canonical = new Uint8Array([1, 2, 3]);
     const { storyId } = await seedDraftStory(narratorId, canonical);
@@ -511,7 +511,7 @@ describe("pipeline — prose provenance", () => {
     await pipeline.runToCompletion();
 
     const rows = await listProseRevisions(db, storyId);
-    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_polished"]);
+    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_cleaned"]);
     const [l1, l2] = rows;
     expect(l1!.modelId).toBe("whisper-test");
     expect(l1!.promptText).toBeNull();
@@ -540,7 +540,7 @@ describe("pipeline — prose provenance", () => {
   it("completes a partially-rendered story on resume without duplicating L2", async () => {
     // Guards "resume-after-partial-render completes with exactly one L2, no duplicate."
     // Under the corrected ordering (update prose -> transition state -> append L2), a crash
-    // can leave the story with prose set but state still `draft` and NO ai_polished row yet.
+    // can leave the story with prose set but state still `draft` and NO ai_cleaned row yet.
     // We reconstruct exactly that realistic post-partial-failure state, then re-run the full
     // pipeline. Transcribe skips (transcript is set); render re-enters (state is still draft)
     // and must finish with EXACTLY ONE L2 row — never two.
@@ -562,7 +562,7 @@ describe("pipeline — prose provenance", () => {
     await pipeline.runToCompletion();
 
     const rows = await listProseRevisions(db, storyId);
-    expect(rows.filter((r) => r.level === "ai_polished")).toHaveLength(1);
+    expect(rows.filter((r) => r.level === "ai_cleaned")).toHaveLength(1);
     const story = await getStoryForViewer(
       db,
       { kind: "link_session", personId: narratorId },

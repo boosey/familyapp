@@ -144,9 +144,9 @@ describe("multi-take pipeline — per-take transcribe + stitch-then-polish-once 
     // Still private — the polish stage never touches consent/audience.
     expect(story!.audienceTier).toBe("private");
 
-    // Provenance: L1 (stitched transcript) then L2 (polished) — the single audited lineage.
+    // Provenance: L1 (stitched transcript) then L2 (cleaned) — the single audited lineage.
     const rows = await listProseRevisions(db, storyId);
-    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_polished"]);
+    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_cleaned"]);
     expect(rows[0]!.text).toBe("take zero words\n\ntake one words");
     expect(rows[1]!.modelId).toBe("mock-claude");
     expect(rows[1]!.promptText!.length).toBeGreaterThan(0);
