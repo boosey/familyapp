@@ -8,8 +8,9 @@
  * media row, not under the immutability trigger (ADR-0009).
  *
  * #15 scope: SINGLE-family placement. The target family is resolved from the contributor's OWN
- * active memberships (so they are always an active member of the album they place into). EXIF is
- * left null here — #17 populates it at import.
+ * active memberships (so they are always an active member of the album they place into). #17
+ * populates EXIF (capture-date + GPS) at import — read from the SAME bytes below, never failing the
+ * upload.
  */
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -18,6 +19,7 @@ import {
   listActiveMembershipsForPerson,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 
 export type AlbumUploadResult = { ok: true; photoId: string } | { error: string };
@@ -47,6 +49,16 @@ export async function uploadAlbumPhotoAction(
   const contentType = photo.type || "application/octet-stream";
   const storageKey = `family-photos/${randomUUID()}`;
 
+  // #17: read capture-date + GPS from the SAME bytes (no second round-trip). The helper never
+  // throws, but keep the extraction OUTSIDE the storage/db try and belt-and-suspenders it anyway, so
+  // even a hypothetical future throw yields null EXIF + a successful upload — never a failed upload.
+  let exif: PhotoExif = { capturedAt: null, gps: null };
+  try {
+    exif = await extractPhotoExif(bytes);
+  } catch {
+    /* never fail the upload on EXIF */
+  }
+
   try {
     await storage.put({ key: storageKey, bytes, contentType });
     const created = await createAlbumPhoto(db, {
@@ -55,6 +67,8 @@ export async function uploadAlbumPhotoAction(
       source: "upload",
       storageKey,
       caption: null,
+      exifCapturedAt: exif.capturedAt,
+      exifGps: exif.gps,
     });
     revalidatePath("/hub/album");
     return { ok: true, photoId: created.id };

@@ -28,7 +28,12 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { families, memberships, persons } from "@chronicle/db/schema";
-import { listAlbumPhotos, createAlbumPhoto, type AuthContext } from "@chronicle/core";
+import {
+  listAlbumPhotos,
+  createAlbumPhoto,
+  getAlbumPhotoForViewer,
+  type AuthContext,
+} from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { uploadAlbumPhotoAction } from "@/app/hub/album/actions";
 import { GET as albumPhotoGet } from "@/app/api/album-photo/[photoId]/route";
@@ -57,6 +62,17 @@ async function addMember(personId: string, familyId: string): Promise<void> {
 
 // A 1x1 PNG's leading magic bytes — enough for the route's content-type sniff.
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+
+// A hand-built minimal JPEG carrying an EXIF APP1 segment with DateTimeOriginal "2015:06:15 14:30:00"
+// and GPS 37°48'30"N 122°25'09"W (lat +37.808333, lng -122.419167). Verified to round-trip through
+// exifr; see apps/web/__tests__/exif.test.ts for the full fixture notes. Used to prove #17 persists
+// EXIF end-to-end through the upload action.
+const JPEG_WITH_EXIF = new Uint8Array(
+  Buffer.from(
+    "/9j/4QC6RXhpZgAASUkqAAgAAAACAGmHBAABAAAAJgAAACWIBAABAAAATAAAAAAAAAABAAOQAgAUAAAAOAAAAAAAAAAyMDE1OjA2OjE1IDE0OjMwOjAwAAQAAQACAAIAAABOAAAAAgAFAAMAAACCAAAAAwACAAIAAABXAAAABAAFAAMAAACaAAAAAAAAACUAAAABAAAAMAAAAAEAAAAeAAAAAQAAAHoAAAABAAAAGQAAAAEAAAAJAAAAAQAAAP/Z",
+    "base64",
+  ),
+);
 
 function photoForm(bytes: Uint8Array, type = "image/png"): FormData {
   const fd = new FormData();
@@ -104,6 +120,44 @@ describe("uploadAlbumPhotoAction", () => {
     const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
     expect("error" in result).toBe(true);
     expect(runtimeStorage.size).toBe(0);
+  });
+
+  it("populates exif capture-date + gps from an uploaded photo that carries EXIF (#17)", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const result = await uploadAlbumPhotoAction(photoForm(JPEG_WITH_EXIF, "image/jpeg"));
+    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+
+    // exifCapturedAt is surfaced on the grid view; the tz-naive EXIF stamp is stored as a
+    // deterministic UTC instant (host-TZ-independent), so pin the absolute ISO value.
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    const captured = album[0]!.exifCapturedAt;
+    expect(captured).toBeInstanceOf(Date);
+    expect(captured!.toISOString()).toBe("2015-06-15T14:30:00.000Z");
+
+    // exifGps is NOT on the grid view — read it through the audited full-row seam.
+    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), result.photoId);
+    expect(full!.exifGps).not.toBeNull();
+    expect(full!.exifGps!.lat).toBeCloseTo(37.808333, 5);
+    expect(full!.exifGps!.lng).toBeCloseTo(-122.419167, 5);
+  });
+
+  it("leaves exif columns null for a photo with no readable EXIF (#17)", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
+    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album[0]!.exifCapturedAt).toBeNull();
+    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), result.photoId);
+    expect(full!.exifGps).toBeNull();
   });
 
   it("rejects an empty file", async () => {
