@@ -966,6 +966,8 @@ export interface AppendProseRevisionInput {
   modelId?: string | null;
   promptText?: string | null;
   actorPersonId?: string | null;
+  /** ADR-0014 §2: the audio take this row derives from (per-take automatic levels). */
+  storyRecordingId?: string | null;
 }
 
 export async function appendProseRevision(
@@ -981,6 +983,7 @@ export async function appendProseRevision(
       modelId: input.modelId ?? null,
       promptText: input.promptText ?? null,
       actorPersonId: input.actorPersonId ?? null,
+      storyRecordingId: input.storyRecordingId ?? null,
     })
     .returning();
   return row!;

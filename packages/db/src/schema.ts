@@ -507,6 +507,14 @@ export const proseRevisions = pgTable(
     promptText: text("prompt_text"),
     /** The person who produced a human_corrected revision; null for AI levels. */
     actorPersonId: uuid("actor_person_id").references(() => persons.id),
+    /**
+     * ADR-0014 §2: the audio take this row derives from, for PER-TAKE automatic levels
+     * (ai_transcribed / ai_cleaned). NULL for holistic rows (ai_polished, human_corrected) and
+     * for typed takes (user_authored). A nullable FK — "not tied to one audio take".
+     */
+    storyRecordingId: uuid("story_recording_id").references(
+      (): AnyPgColumn => storyRecordings.id,
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

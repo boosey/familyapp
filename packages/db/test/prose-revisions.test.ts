@@ -1,6 +1,13 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { consentRecords, media, persons, proseRevisions, stories } from "../src/schema";
+import {
+  consentRecords,
+  media,
+  persons,
+  proseRevisions,
+  stories,
+  storyRecordings,
+} from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
 let db: Database;
@@ -28,6 +35,38 @@ async function makeStory(): Promise<{ personId: string; storyId: string }> {
     .values({ ownerPersonId: p!.id, recordingMediaId: rec!.id })
     .returning();
   return { personId: p!.id, storyId: s!.id };
+}
+
+async function makePerson(displayName = "Eleanor") {
+  const [p] = await db
+    .insert(persons)
+    .values({ displayName, spokenName: displayName })
+    .returning();
+  return p!;
+}
+
+async function makeVoiceStoryWithTake(db: Database, ownerPersonId: string) {
+  return db.transaction(async (tx) => {
+    const [rec] = await tx
+      .insert(media)
+      .values({
+        ownerPersonId,
+        kind: "story_audio",
+        storageKey: `s3://b/${crypto.randomUUID()}.wav`,
+        contentType: "audio/wav",
+        checksum: "c",
+      })
+      .returning();
+    const [story] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, kind: "voice", recordingMediaId: rec!.id })
+      .returning();
+    const [take] = await tx
+      .insert(storyRecordings)
+      .values({ storyId: story!.id, position: 0, mediaId: rec!.id })
+      .returning();
+    return { story: story!, take: take! };
+  });
 }
 
 describe("prose_revisions table", () => {
@@ -134,5 +173,50 @@ describe("prose_revisions table", () => {
     const levels = rows.map((r) => r.level);
     expect(levels).toContain("ai_cleaned");
     expect(levels).toContain("ai_polished");
+  });
+});
+
+describe("prose_revisions.story_recording_id FK (ADR-0014 §2)", () => {
+  it("accepts a row keyed to a real story_recordings id", async () => {
+    const narrator = await makePerson();
+    const { story, take } = await makeVoiceStoryWithTake(db, narrator.id);
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({
+        storyId: story.id,
+        level: "ai_cleaned",
+        text: "cleaned",
+        storyRecordingId: take.id,
+      })
+      .returning();
+    expect(row!.storyRecordingId).toBe(take.id);
+  });
+
+  it("accepts a null story_recording_id (holistic / typed rows)", async () => {
+    const narrator = await makePerson();
+    const { story } = await makeVoiceStoryWithTake(db, narrator.id);
+    const [row] = await db
+      .insert(proseRevisions)
+      .values({
+        storyId: story.id,
+        level: "ai_polished",
+        text: "polished",
+        storyRecordingId: null,
+      })
+      .returning();
+    expect(row!.storyRecordingId).toBeNull();
+  });
+
+  it("rejects a story_recording_id that references no take", async () => {
+    const narrator = await makePerson();
+    const { story } = await makeVoiceStoryWithTake(db, narrator.id);
+    await expect(
+      db.insert(proseRevisions).values({
+        storyId: story.id,
+        level: "ai_cleaned",
+        text: "x",
+        storyRecordingId: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/foreign key|violates/i);
   });
 });
