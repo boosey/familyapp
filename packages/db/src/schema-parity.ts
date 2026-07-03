@@ -67,7 +67,7 @@ export function parseExpectedSchema(schemaSqlText: string): SchemaShape {
 
     if (currentTable) {
       // Block end: a line that closes the CREATE TABLE ( ... ).
-      if (/^\)/.test(line)) {  // drizzle-kit always closes CREATE TABLE at col 0
+      if (line.startsWith(')')) {  // drizzle-kit always closes CREATE TABLE at col 0
         currentTable = null;
         continue;
       }

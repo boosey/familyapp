@@ -20,5 +20,5 @@ export const DEFAULT_FOLLOW_UP_POLICY: FollowUpPolicy = {
 };
 
 export function resolveFollowUpPolicy(overrides?: Partial<FollowUpPolicy>): FollowUpPolicy {
-  return { ...DEFAULT_FOLLOW_UP_POLICY, ...(overrides ?? {}) };
+  return { ...DEFAULT_FOLLOW_UP_POLICY, ...overrides };
 }
