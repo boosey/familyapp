@@ -215,6 +215,12 @@ CREATE CONSTRAINT TRIGGER stories_kind_recording_biconditional
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION chronicle_story_kind_recording_biconditional();
 
+-- Fires only on INSERT/DELETE (not UPDATE): a take's story_id is assumed IMMUTABLE — takes are
+-- inserted and deleted, never re-parented to another story (moving a take between stories is not a
+-- modeled operation), so the pair of affected stories can only change on those two ops. Covering
+-- UPDATE would also be costly: a constraint trigger cannot take a WHEN clause, so an UPDATE variant
+-- could not be scoped to story_id changes and would re-run the biconditional at COMMIT on every
+-- transcript backfill — the hot path.
 CREATE CONSTRAINT TRIGGER story_recordings_kind_recording_biconditional
   AFTER INSERT OR DELETE ON story_recordings
   DEFERRABLE INITIALLY DEFERRED
