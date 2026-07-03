@@ -67,27 +67,49 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   **Ask**, which carries a single family context, not a set. See ADR-0010.
 - **Story** — the unit of narrative, owned by one Person, surfaced into Families per its
   **audience tier** (`private` | `branch` | `family` | `public`) **and its family targeting** (see
-  *Surfaced-into*). Stories have a `kind`:
-  `voice` (audio recording is canonical; transcript/prose are derived and regenerable) or
-  `text` (typed response is canonical; no recording). A user may switch to keyboard at any
-  time; the resulting story is a text story, not a failed voice story. A `voice` Story may hold
-  **more than one Take** when a **Follow-up thread** occurs — the canonical audio is then the
-  *ordered set* of takes, and the derived transcript/prose are rendered over their stitched
-  sequence. One approval covers the whole thread.
+  *Surfaced-into*). Stories have a `kind`: **`voice`** (the draft holds at least one recorded take)
+  or **`text`** (every take was typed; no audio). A person may switch between mic and keyboard freely
+  *within a single draft* — takes of both origins **interleave in one ordered set** — and **any audio
+  at all makes the story `voice`-kind** (ADR-0007). A voice or text draft may hold **more than one
+  Take** — the narrator kept going, or an interviewer **Follow-up** drew out another. The prose is the
+  **ordered concatenation** of each take's contribution (a voice take's Cleanup, or a typed take's
+  words), each appended in isolation — earlier text is never re-rendered, and hand-edits are
+  preserved. One approval covers the whole (possibly multi-take, possibly mixed) draft.
+- **Source of truth vs. audio of record** — the story's **source of truth is its approved prose**: a
+  *composite* of every input (spoken takes + typed takes + hand-corrections + Polish), sealed at
+  approval. The **audio is the permanent *original record*** — kept forever for playback, audit, and
+  improvement, and immutable once consented — but it is **not** the source of truth and the prose is
+  **not** regenerable from it. Only a voice take's raw **transcript** is regenerable (re-run STT on
+  that take's audio); the **prose is authored** (it carries typed words and human corrections that do
+  not exist in any audio), so it must be persisted and **never blindly regenerated**. ("Canonical
+  audio" in older ADRs means exactly this: un-discardable original record, *not* regenerable-source.)
 - **Take** — one recording within a Story. A single-answer Story has one take; a Story deepened by
   **Follow-ups** has several, kept in the order they were spoken. NOTE the shift from the earlier
   glossary sense: a take used to be *the* (single) current recording that **Re-record** replaced;
   takes now **coexist**. Re-record still supersedes — but only the *latest* take being worked on,
   not the earlier consented-into-the-thread takes.
-- **Draft** — a recorded-but-not-yet-approved Story: durable audio + row, **no transcript/prose**
-  (the pipeline is deferred until approval, so no tokens are spent on a take that may be discarded).
-  A draft is the narrator's *approve-later* work — it is never auto-deleted. It is deletable (audio
-  blob + row) only because it was never consented; once approved, its audio can no longer be mutated
-  or detached — it stays the canonical source for as long as the Story exists, and is removed only
-  when the Story itself is deleted (ADR-0008). Deletion is always available (owner erasure, steward
-  moderation); the guarantee is against *silent swap*, not against deletion.
-- **Discard / re-record** — the two events that delete a draft's audio (event-driven cleanup; no
-  time-based sweep). Re-record supersedes the prior take.
+- **Draft** — a Story being **composed** but not yet consented. It is the narrator's live working
+  surface: it holds the durable audio **take(s)** *and* the working, editable text (the raw
+  **transcript** plus the disfluency-cleaned **prose** shown in the editor). Recording stays active
+  — the narrator can record more takes (each is disfluency-cleaned in isolation and **appended**;
+  earlier text is never re-rendered) and can hand-edit the prose freely; hand-edits are permanent
+  and survive later appends. Composition ends at an explicit **Finish**, after which the narrator
+  chooses an audience tier and gives **Consent** — a separate, deliberate act (Finish is not
+  Share). (Earlier drafts held no text — the pipeline was deferred until approval to save tokens;
+  that model is retired. Transcription + the disfluency pass now run per take at record time, so a
+  draft that is later discarded has spent those tokens — an accepted cost of an editable working
+  surface.) A draft is the narrator's *approve-later* work — it is never auto-deleted. It is
+  deletable (audio blob + row) only because it was never consented; once approved, its audio can no
+  longer be mutated or detached — it stays the canonical source for as long as the Story exists, and
+  is removed only when the Story itself is deleted (ADR-0008). Deletion is always available (owner
+  erasure, steward moderation); the guarantee is against *silent swap*, not against deletion.
+- **Discard / drop** — the two **deliberate** removals that delete draft audio (event-driven
+  cleanup; no time-based sweep): **Discard** removes the whole draft (all takes); **Drop** removes
+  one specific take (e.g. a bad take just recorded). "Record more" only ever **appends** a take and
+  never deletes. Retention rule: audio is never *silently* discarded after transcription — every kept
+  take keeps its canonical audio; only these explicit user actions delete (the ADR-0008 line:
+  guarantee is against silent swap, not against deletion). (The earlier whole-draft "re-record"
+  supersede mode is retired — append + drop replace it.)
 - **Consent ledger** — append-only record of approvals/revocations. Nothing is shared until the
   author approves; revocation is a new superseding row, never an edit.
 - **Ask** — a question one Person submits for another Person who is narrating; becomes the
@@ -96,13 +118,47 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   Person** (a pending invitee): the Ask queues and surfaces to them only *after* they onboard, as a
   warm "your family is waiting" hook — never delivered pre-acceptance. The floor is the Invitation:
   no asking a total stranger (ADR-0006). Like a Story, an Ask has a **kind** (`voice` | `text`). A
-  voice Ask is recorded and transcribed; the transcript is the asker's to edit, with only light
-  **disfluency cleaning** applied. The question reaches the narrator in the asker's own words, framed
+  voice Ask is recorded and transcribed; the transcript is the asker's to edit, with only
+  **Cleanup** (see below) applied. The question reaches the narrator in the asker's own words, framed
   warmly by the interviewer persona but never reworded. This mirrors the *answer* side: a Story's
-  "prose" render is likewise disfluency-cleaning that preserves the speaker's actual words, never a
-  literary rewrite (`render-story.ts`). For both question and answer the **first version is always in
-  the person's own words**; a fuller **AI re-render is opt-in** (a planned icon-button action near the
-  edit field), not the default — and deferred. **Text is always available** (durable record + fallback).
+  editor text is likewise Cleanup that preserves the speaker's actual words, never a literary
+  rewrite. For both question and answer the **first version is always in the person's own words**; a
+  fuller **Polish is opt-in** (the ✨ button near the edit field), not the default. **Text is always
+  available** (durable record + fallback).
+
+### The four text operations (the prose lineage)
+A recorded telling passes through up to four named text stages; together they are the **prose
+lineage**, recorded append-only (the immutable `prose_revisions` ledger beside the story's current
+text — same discipline as the **Consent ledger**). No stage ever mutates the canonical audio.
+- **Transcription** — raw speech-to-text of a **Take**, verbatim (disfluencies and all). The L1
+  source; one per take.
+- **Cleanup** — the **automatic**, per-take pass applied the moment a take is recorded, producing
+  the text that lands in the editor. Removes filler ("uh", "um"), false starts, and accidental
+  repetition; joins broken sentences; and **resolves the speaker's own self-corrections *within that
+  take*** — keeps the value they landed on and drops the false start and scaffolding ("oh wait",
+  "actually"), *but keeps their hedge when it is genuinely unclear which value they settled on*
+  (never guesses). Cleanup is **order-preserving and faithful** and **sees only the single take** —
+  the result is still the person's own words, which is why it may run automatically before review. It
+  **never reorders** and never touches earlier takes. A self-correction that spans takes ("in 1985" /
+  next take "no, 1987") is therefore *out of Cleanup's scope* — only **Polish** resolves it.
+- **Polish** — the **human-confirmed**, holistic pass, and the **only** operation that sees the
+  **whole accumulated text** at once. It may **restructure** — de-ramble and reorder circular passages
+  for readability — and, because it is holistic, it is also what resolves **cross-take
+  self-corrections**. Triggered two ways, both the same operation and both logged (`ai_polished`, one
+  row per run): the **✨ button** in the editor, or **accepting the Finish check** (below). Never
+  runs unconfirmed, always reversible (undo/redo); the audio original record is untouched. (Formerly
+  the "AI re-render"; no longer deferred for stories.)
+- **Finish check** — at **Finish**, a holistic scan looks for **unresolved self-corrections** the
+  narrator left behind (e.g. a cross-take "1985 … no, 1987" they never Polished). It **never applies
+  silently** — it *offers* ("tidy these up?") with a preview; accepting runs a Polish, declining ships
+  the words as-is. Same **detect-and-offer** discipline as the **Ask suggestion** and **Follow-up
+  decision record** (surfaced/stayed-silent is itself recorded).
+- **The pass-scope invariant** — *automatic passes (Transcription, Cleanup) see exactly one take; every
+  holistic pass is human-confirmed (the ✨ Polish button or the Finish check) — never silent.* This is
+  why appending a take can never silently rewrite earlier words: nothing automatic is ever holistic,
+  and nothing holistic is ever unconfirmed.
+- **Correction** — the narrator's own **hand-edit** in the editor. The human-authored layer; it wins
+  over any AI stage and survives later appended takes.
 - **Asker-avatar** — the asker's actual recording (voice now; face/video later) delivered to the
   teller in-session, so the narrator hears the real relative ask rather than a synthetic voice. The
   asker opts in per Ask (`deliveredToTeller`); if they don't, the teller gets the text. The
@@ -136,10 +192,25 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 - **Family album** — a Family-scoped shared pool of photos. A photo in the album is visible to and
   usable by any Person sharing an **active membership** with its contributor (the same rule the
   `family` audience tier already uses). Modeled like a shared Apple/Google album: contributed, not
-  owned. NOT "anywhere in the system" — a photo never escapes the family it was contributed into.
-  **Every** uploaded photo lands in the album regardless of path (direct add, during story creation,
-  during Ask creation); there is no photo stored outside the album. Being in the album *is* the
-  contributor's consent for the family to see it — so there is no "private photo".
+  owned. A photo belongs to **one *or more* family albums** (photo↔family is many-to-many, mirroring
+  ADR-0010's multi-family Story targeting): the wedding *photo* can live in both Boudreaux and Carney
+  just as the wedding *story* can, and attaching a photo to a Story that targets a new family
+  **extends** its album membership into that family (the contributor's deliberate attach+target act is
+  the consent). It still never escapes into families the contributor has *not* placed it in — NOT
+  "anywhere in the system". **Every** uploaded photo lands in at least one album regardless of path
+  (direct add, during story creation, during Ask creation); there is no photo stored outside an album.
+  Being in a family's album *is* the contributor's consent for that family to see it — so there is no
+  "private photo". (Amends ADR-0009's "Family-scoped (singular)".)
+- **Photo import** — the single way a photo enters the album, from one of several **sources**
+  (`upload` | `google_picker` | ... ). Import always **copies the bytes** into the family album
+  (write-once object storage); it never stores a live reference to an external library. There is no
+  "connect your photo account" concept on web: **Google Photos** is a *Picker* import (the user picks
+  items in Google's hosted picker; we copy those bytes; no stored refresh token, no background sync,
+  no whole-library browse — Google removed the broad Library-API read scopes in 2025), and **Apple
+  Photos** has no web API at all, so on web it is simply the OS file picker (which already offers the
+  device photo library) — indistinguishable from an `upload`. A true on-device PhotoKit integration
+  is possible only inside a future native iOS app and is out of scope. The photo's `source` is
+  recorded for provenance; it changes nothing about how the album row behaves afterward.
 - **Contributor** — the Person who uploaded a photo. A photo has a contributor, **not an owner**:
   uploading IS consent for any family member to view or use it, and no further consent is asked to
   reuse it on any story within that family. (This is the one asset that departs from the CONTEXT
@@ -157,18 +228,34 @@ conversation uses a word that conflicts with a definition here, the conflict is 
     subject (e.g. a stock photo of red beans and rice). Nobody in the family owns it; it makes **no**
     authenticity claim and the surface must label it as illustrative, never as a family photo.
 - **Cover** — the single Story image shown on the story card in a feed. The others appear when the
-  story is opened. Every Story image is either the cover or a non-cover member of the story's set.
+  story is opened. Every Story image is either the cover or a non-cover member of the story's set. A
+  Story with **no** attached image shows **no placeholder** on its card — a text-only card is a
+  first-class layout, never a decorated-with-a-stock-blank one.
 - **Suggested image** — a candidate surfaced to the narrator based on the story's content, family-
   album sources preferred over external ones. A suggestion is not attached until a narrator picks it.
-- **Subject photo** — the photo a piece of text is *about* (as opposed to a **Story image**, which
-  merely accompanies). A **Caption** is a short Story about one Subject photo; an **Ask** may target
-  one or more Subject photos ("tell me about these"). The subject relationship is separate from the
-  accompaniment relationship — the same photo can play either role on different items.
-- **Caption** — a short **Story** whose subject is a photo, not a separate lightweight artifact.
-  Same pipeline as any Story (author, approval, consent); it is simply *short* and photo-bound.
-  Several UXs lead to the one artifact: the photo's contributor adding a line, or a Person answering
-  an **Ask** that targets a photo. Because it is a Story, a caption authored by a non-owner is that
-  person's testimony and follows the normal approval/consent path before the family sees it.
+  It has two surfacings, both **editor-time** (never a spoken interviewer turn — the voice loop stays
+  photo-free): a **silent** ranked candidate in the photo-picker, and a **photo nudge** — an
+  editor-time prompt ("you mentioned the wedding — add a photo?") that is the *system-initiated*
+  ("asked") counterpart to the narrator self-attaching. Both are the same engine; the nudge merely
+  frames a suggestion as a question. Suggestion is **ranking layered over browse**: a narrator can
+  always browse the album and pick unaided, so the engine is additive, never a gate.
+- **Caption** — the short descriptive label **on a photo itself** ("Mardi Gras with friends, 1987").
+  Photo metadata on the `family_photos` row: contributor-authored, freely editable, **not a Story**,
+  off every ledger (mutable presentation, like the attachment links). Addable at import, during album
+  browse, or at attachment time. It doubles as **alt text** and is the primary human-authored signal
+  the suggestion engine matches story text against. **Adding a caption does NOT place the photo in the
+  stories feed** — only turning the photo into a Story does. (This REVERSES the earlier "a caption is a
+  short Story" definition — see ADR-0009, now amended.)
+- **Story from a photo** — an ordinary **Story** whose **subject** is a photo
+  (`stories.subject_photo_id`), created by a deliberate "tell the story of this photo" act (distinct
+  from merely *captioning* it). Full Story — same author/approval/consent path — and it is what lands
+  in the stories feed. A photo may carry a cheap **Caption** *and*, separately, be the subject of a
+  **Story from a photo**; different layers. An **Ask** may likewise target one or more subject photos
+  ("tell me about these"), and the answer is a Story from that photo.
+- **Subject photo** — the photo a Story (or Ask) is *about* (`stories.subject_photo_id` / the
+  `ask_subject_photos` join), as opposed to a **Story image**, which merely *accompanies*. The subject
+  relationship is separate from the accompaniment relationship — the same photo can play either role on
+  different items.
 
 ## Interviewer
 - **Biographical anchors** — a named-field record on Person with known keys: `hometown`,
@@ -176,10 +263,28 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   Populated by the intake pass (direct answers) or by LLM extraction from approved stories (never
   overwrites a directly-answered field). Used by the interviewer to personalize phrasing and
   skip redundant questions.
+- **Memory extraction** — the step, present in **every** capture mode, that mines what a Person said
+  into what the system remembers about them: **anchor augmentation** (into still-empty anchor fields,
+  as above) now, and a **broader narrator memory** later (the deferred "picture of the person" model;
+  the seam is ready because transcripts are retained). Governing principle: **audit retention is
+  unconditional, but memory extraction is consent-gated.** For a **Story** it fires **only
+  post-approval** (a discarded or never-shared draft never feeds memory, even though its audio is
+  still retained). **Intake** is the one exception — it extracts at **Save**, because answering a
+  direct biographical question *is* the consent to build the profile. Best-effort throughout.
 - **Intake** — a structured 6-question first pass run at the start of a Person's first narrating
   sessions, before the open story bank. Collects biographical anchors. Resumable across sessions
   (stops where the user left off). Complete when all 6 anchor fields are populated. The hub shows
-  a reminder until complete or until story extraction has filled the gaps.
+  a reminder until complete or until story extraction has filled the gaps. Intake shares the **capture
+  interaction** with story-telling — record → transcribe → **Cleanup** → editable text, with a
+  narrator-driven **record-more/append** — but is **not a Story**: no interviewer follow-up questions,
+  no audience tier, no consent, no sharing. The extracted anchor value is the surfaced artifact; the
+  answer itself is never surfaced. "Ephemeral" refers to that non-surfacing — **the intake audio and
+  transcript are nonetheless retained** (audit trail + prompt/model improvement signal), under the
+  same universal rule below. Intake is also the **designated first surface for narrator memory** — the
+  richest self-description a Person gives — feeding the interviewer's memory beyond the six anchors.
+  The *seam* is ready now (the full transcript is retained, so a later extraction can read it); the
+  memory *model* itself (what a memory is, how stored, how the interviewer consults it) is the parked
+  "picture of the person" feature and gets its own design session — not built here.
 - **Deeplink session** — a session initiated from a notification that carries a specific `askId`.
   The interviewer routes to that Ask first, then continues into the normal session flow. Always
   priority over warm callbacks and intake.

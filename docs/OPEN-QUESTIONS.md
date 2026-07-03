@@ -96,13 +96,17 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   kinship edges belong in this product at all, or whether "tree" is better served lightly (e.g.
   grouping the feed by narrator) without a genealogy model.
 
-- **Story imagery: suggestion/search, external source, and photo-library integration (2026-07-01).**
-  The album + attachment model is designed (ADR-0009), but three sizable sub-features were
-  deliberately *not* grilled and should not ship as one increment: (1) the **suggestion/search**
-  mechanism (a content→image vendor seam, how story tags/prose feed it, family-album search vs.
-  external, ranking, the pipeline stage); (2) the **external open-license source** (which provider,
-  license/attribution capture, legal); (3) **Apple/Google Photos** integration (OAuth-heavy — likely
-  its own phase). Each needs its own design pass.
+- ~~**Story imagery: suggestion/search, external source, and photo-library integration (2026-07-01).**~~
+  **Grilled & mostly resolved 2026-07-03 (ADR-0015; `docs/PLAN.md` "STORY IMAGERY").** Of the three:
+  (1) **suggestion** is designed for v1 as EXIF-date + caption-text ranking over browse, plus the
+  editor nudge (Phase 4) — the **vision-model photo-understanding** ranker remains deferred (its own
+  `PhotoUnderstanding` seam, likely a premium-tier increment); (2) the **external open-license
+  illustration source** stays deferred — schema `provenance` seam ships, but no provider/license/legal
+  work and no external-image UI until its own pass; (3) **photo-library integration** collapsed on the
+  web reality (Google Library read scopes gone → **Picker import** only, Phase 5; Apple has no web API
+  → just the file picker; true PhotoKit needs a future native app). Still-open: **vision
+  photo-understanding**, **external illustrations**, and a **photos-only / combined photo+story feed**
+  (deliberately deferred — v1 feed is Stories only).
 
 ## Assumptions made (correct me if wrong)
 

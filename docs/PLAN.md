@@ -239,6 +239,54 @@ with an AI-generated-then-editable title — reusing the answer flow as one gene
 - Note: dev-server manual smoke (type-a-story → share; record-a-story → share) is unverified in this
       headless env (no browser/mic), consistent with Increment 2's capture-path note.
 
+## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009 + ADR-0015; not started)*
+Album, attach-to-story, story-from-a-photo, cheap suggestion, Google Picker import. Each phase is a
+tracer-bullet vertical slice sized to the subagent-build + fresh-cold-reviewer loop; schema rides the
+reseed workflow (no migrations); PGlite + core-allowlist + vendor-seam architecture tests each phase.
+
+### Phase 1 — Family album: upload, browse, caption, delete  *(no AI, no OAuth, no stories)*
+- [ ] Schema: `family_photos` (contributor, `source` enum, `storage_key`, `caption`, `exif_captured_at`,
+      `exif_gps`, timestamps, soft-delete) + `family_photo_families` (M2M join). — `@chronicle/db`
+- [ ] Storage: `family-photos/**` keyspace via `@chronicle/storage` (R2), **write-once** bytes; photos
+      are *not* `media`. — `@chronicle/storage`/`@chronicle/capture`
+- [ ] Core: audited **album-read seam** (new file on the core allowlist); album-tier byte visibility via
+      active-membership. — `@chronicle/core`
+- [ ] Web: file-input upload (also the Apple/device path), family-scoped album grid (recency), caption
+      edit (contributor/steward, last-write-wins), delete (contributor/steward). — `apps/web`
+- *Slice value:* put photos in the family album and manage them.
+
+### Phase 2 — Attach photos to a story + card/gallery display  *(accompaniment)*
+- [ ] Schema: `story_images` (nullable `family_photo_id`, `provenance` enum + reserved inline
+      illustration cols, `is_cover`, `position`, `attached_by`). — `@chronicle/db`
+- [ ] Core: extend image-read seam — an attached photo is visible to the **parent story's** audience
+      (realizes the M2M "extend on attach"); links visible only when the parent item is. — `@chronicle/core`
+- [ ] Web: attach/detach/cover/reorder in the draft editor (off consent ledger); card shows cover,
+      **no placeholder when empty**; opened story shows the gallery. Delete-photo cascades un-attach. — `apps/web`
+- *Slice value:* stories illustrated with family photos.
+
+### Phase 3 — Story from a photo + Ask-targets-photo  *(subject)*
+- [ ] Schema: `stories.subject_photo_id` (nullable FK) + `ask_subject_photos` join. — `@chronicle/db`
+- [ ] Flow: "tell the story of this photo" → capture with `subject_photo_id` preset + auto first
+      `story_images` row + interviewer opener seeded from the caption. Ask targets subject photo(s);
+      answering yields a Story from that photo. — `@chronicle/interviewer`/`apps/web`
+- *Slice value:* photos become story seeds, from self and relatives.
+
+### Phase 4 — Suggestion + the photo nudge  *(cheap engine, editor-time)*
+- [ ] Rank a draft's candidate photos by **caption-text match ∪ EXIF-date proximity to `eraYear`**;
+      silent picker ranking + the editor **nudge**. Deterministic/heuristic first; reserve a
+      `PhotoUnderstanding` vendor-seam *interface* (mock only) for the future vision ranker. — `@chronicle/pipeline`
+- *Slice value:* the right photo floats up without browsing.
+
+### Phase 5 — Google Photos Picker import
+- [ ] Google Picker API adapter (isolated adapter file, vendor-seam rule): ephemeral picker session,
+      **no stored refresh token**, copy selected bytes → `family_photos` with `source='google_picker'`.
+      Apple needs nothing (Phase 1 file input covers device photos). — new `@chronicle/photos-google` adapter
+- *Depends only on Phase 1 — can slot in right after it if the import surface is wanted early.*
+
+### Deferred to their own design passes (parked in OPEN-QUESTIONS)
+Vision photo-understanding (premium tier) · external open-license illustrations · photos-only /
+combined photo+story feed · depicted-third-party consent.
+
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /
 timeline-map-tree · steward console & succession · avatar consent gate & story-will ·
