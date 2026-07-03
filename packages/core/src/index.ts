@@ -99,9 +99,11 @@ export {
 export {
   addMembership,
   listActiveMembershipsForPerson,
+  listActiveFamiliesForPerson,
   isActiveMember,
   getStewardPersonId,
   listMembersOfFamily,
+  type ActiveFamilyView,
   type FamilyMemberView,
 } from "./memberships";
 export {

@@ -9,6 +9,7 @@ import {
   addMembership,
   getStewardPersonId,
   isActiveMember,
+  listActiveFamiliesForPerson,
   listActiveMembershipsForPerson,
   listMembersOfFamily,
 } from "../src/index";
@@ -104,5 +105,70 @@ describe("read helpers", () => {
     await endMembership(db, membershipId);
     const members = await listMembersOfFamily(db, fam.id);
     expect(members.map((m) => m.personId)).toEqual([a.id]);
+  });
+});
+
+describe("listActiveFamiliesForPerson", () => {
+  it("returns the person's active families with names, sorted by name then id", async () => {
+    const p = await makePerson(db, "P");
+    const s = await makePerson(db, "S");
+    // Insert in an order that is neither name- nor id-sorted, to prove the JS sort.
+    const zulu = await makeFamily(db, "Zulu", s.id);
+    const alpha = await makeFamily(db, "Alpha", s.id);
+    await addMembership(db, { personId: p.id, familyId: zulu.id });
+    await addMembership(db, { personId: p.id, familyId: alpha.id });
+
+    const active = await listActiveFamiliesForPerson(db, p.id);
+    expect(active).toEqual([
+      { familyId: alpha.id, familyName: "Alpha" },
+      { familyId: zulu.id, familyName: "Zulu" },
+    ]);
+  });
+
+  it("breaks a name tie by familyId", async () => {
+    const p = await makePerson(db, "P");
+    const s = await makePerson(db, "S");
+    const one = await makeFamily(db, "Same", s.id);
+    const two = await makeFamily(db, "Same", s.id);
+    await addMembership(db, { personId: p.id, familyId: one.id });
+    await addMembership(db, { personId: p.id, familyId: two.id });
+
+    const active = await listActiveFamiliesForPerson(db, p.id);
+    const sortedIds = [one.id, two.id].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(active.map((f) => f.familyId)).toEqual(sortedIds);
+  });
+
+  it("excludes ended memberships", async () => {
+    const p = await makePerson(db, "P");
+    const s = await makePerson(db, "S");
+    const kept = await makeFamily(db, "Kept", s.id);
+    const gone = await makeFamily(db, "Gone", s.id);
+    await addMembership(db, { personId: p.id, familyId: kept.id });
+    const { membershipId } = await addMembership(db, {
+      personId: p.id,
+      familyId: gone.id,
+    });
+    await endMembership(db, membershipId);
+
+    const active = await listActiveFamiliesForPerson(db, p.id);
+    expect(active.map((f) => f.familyId)).toEqual([kept.id]);
+  });
+
+  it("excludes other people's families", async () => {
+    const p = await makePerson(db, "P");
+    const other = await makePerson(db, "Other");
+    const s = await makePerson(db, "S");
+    const mine = await makeFamily(db, "Mine", s.id);
+    const theirs = await makeFamily(db, "Theirs", s.id);
+    await addMembership(db, { personId: p.id, familyId: mine.id });
+    await addMembership(db, { personId: other.id, familyId: theirs.id });
+
+    const active = await listActiveFamiliesForPerson(db, p.id);
+    expect(active.map((f) => f.familyId)).toEqual([mine.id]);
+  });
+
+  it("returns [] for a person with no active membership", async () => {
+    const p = await makePerson(db, "P");
+    expect(await listActiveFamiliesForPerson(db, p.id)).toEqual([]);
   });
 });

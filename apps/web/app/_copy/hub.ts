@@ -239,6 +239,7 @@ export const hub = {
     shareFailed: "Something went wrong sharing your story. Please try again.",
     removeFailed: "Could not remove the recording. Please try again.",
     noFamily: "Join or start a family before adding photos.",
+    noAlbumChosen: "Choose at least one album for this photo.",
     photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
   },
@@ -247,6 +248,8 @@ export const hub = {
     empty: "No photos yet. Add the first one below.",
     addLabel: "Add a photo",
     addButton: "Add to album",
+    chooseAlbums: "Which albums?",
+    switcherAria: "Choose which family album to view",
     photoAlt: (caption: string | null) => caption ?? "Family photo",
   },
   storyDetail: {

@@ -108,6 +108,34 @@ export async function getStewardPersonId(
   return row?.stewardPersonId ?? null;
 }
 
+export interface ActiveFamilyView {
+  familyId: string;
+  familyName: string;
+}
+
+/**
+ * The families in which `personId` holds an ACTIVE membership, with names, sorted by name then id.
+ * The album picker (#16) and the album page's family switcher default to the current family context
+ * and re-derive the allowed set from THIS list — a client-submitted family id is never trusted.
+ */
+export async function listActiveFamiliesForPerson(
+  db: Database,
+  personId: string,
+): Promise<ActiveFamilyView[]> {
+  const rows = await db
+    .select({ familyId: memberships.familyId, familyName: families.name })
+    .from(memberships)
+    .innerJoin(families, eq(families.id, memberships.familyId))
+    .where(
+      and(eq(memberships.personId, personId), eq(memberships.status, "active")),
+    );
+  return rows.sort(
+    (a, b) =>
+      a.familyName.localeCompare(b.familyName) ||
+      (a.familyId < b.familyId ? -1 : a.familyId > b.familyId ? 1 : 0),
+  );
+}
+
 export interface FamilyMemberView {
   personId: string;
   displayName: string;

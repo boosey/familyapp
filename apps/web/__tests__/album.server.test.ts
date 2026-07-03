@@ -37,6 +37,7 @@ import {
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { uploadAlbumPhotoAction } from "@/app/hub/album/actions";
 import { GET as albumPhotoGet } from "@/app/api/album-photo/[photoId]/route";
+import { hub } from "@/app/_copy";
 
 const account = (personId: string): AuthContext => ({ kind: "account", personId });
 
@@ -77,6 +78,16 @@ const JPEG_WITH_EXIF = new Uint8Array(
 function photoForm(bytes: Uint8Array, type = "image/png"): FormData {
   const fd = new FormData();
   fd.append("photo", new Blob([bytes as BlobPart], { type }), "photo.png");
+  return fd;
+}
+
+function photoFormWithFamilies(
+  bytes: Uint8Array,
+  familyIds: string[],
+  type = "image/png",
+): FormData {
+  const fd = photoForm(bytes, type);
+  for (const id of familyIds) fd.append("familyIds", id);
   return fd;
 }
 
@@ -168,6 +179,102 @@ describe("uploadAlbumPhotoAction", () => {
 
     const result = await uploadAlbumPhotoAction(photoForm(new Uint8Array([])));
     expect("error" in result).toBe(true);
+    expect(runtimeStorage.size).toBe(0);
+  });
+
+  // #16 — multi-family placement: the target set is the client's picker choice, re-validated on the
+  // server against the CONTRIBUTOR's own active memberships. A family they didn't pick can't see it;
+  // a family they don't belong to is dropped.
+  it("places a photo in BOTH families the contributor selects", async () => {
+    const contributor = await makePerson("Rosa");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    authCtx = account(contributor);
+
+    const result = await uploadAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famA, famB]),
+    );
+    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
+    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
+    expect(albumB.map((p) => p.id)).toEqual([result.photoId]);
+    // One upload → one storage object, regardless of how many albums it is placed in.
+    expect(runtimeStorage.size).toBe(1);
+  });
+
+  it("a family the contributor did NOT select cannot see the photo, even though the contributor belongs to it", async () => {
+    const contributor = await makePerson("Rosa");
+    const bMember = await makePerson("Sal");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    await addMember(bMember, famB);
+    authCtx = account(contributor);
+
+    // Contributor is in A and B but selects ONLY A.
+    const result = await uploadAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famA]),
+    );
+    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+
+    // Visible in A...
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
+    // ...but NOT in B, for the contributor or a co-member of B.
+    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
+    expect(albumB).toEqual([]);
+    const asBMember = await getAlbumPhotoForViewer(
+      runtimeDb,
+      account(bMember),
+      result.photoId,
+    );
+    expect(asBMember).toBeNull();
+  });
+
+  it("drops a spoofed family id the contributor is NOT a member of", async () => {
+    const contributor = await makePerson("Rosa");
+    const outsider = await makePerson("Vito");
+    const famA = await makeFamily("Esposito", contributor);
+    const famX = await makeFamily("Corleone", outsider);
+    await addMember(contributor, famA);
+    await addMember(outsider, famX);
+    authCtx = account(contributor);
+
+    // Contributor is only in A but tries to also place into X (not theirs).
+    const result = await uploadAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famA, famX]),
+    );
+    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
+    // X's own member does not see the spoofed placement — it was never written.
+    const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
+    expect(albumX).toEqual([]);
+    expect(runtimeStorage.size).toBe(1);
+  });
+
+  it("rejects a submission of ONLY foreign family ids (nothing valid to place into)", async () => {
+    const contributor = await makePerson("Rosa");
+    const outsider = await makePerson("Vito");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    const famX = await makeFamily("Corleone", outsider);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    await addMember(outsider, famX);
+    authCtx = account(contributor);
+
+    // Multi-family contributor submits only a family they don't belong to.
+    const result = await uploadAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famX]),
+    );
+    expect(result).toEqual({ error: hub.actions.noAlbumChosen });
     expect(runtimeStorage.size).toBe(0);
   });
 });
