@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveAndShareStory,
   createAsk,
+  createTextDraft,
   listOutstandingAnswerDrafts,
   persistRecordingAndCreateDraft,
   transitionStoryState,
@@ -161,5 +162,20 @@ describe("listOutstandingAnswerDrafts", () => {
     // Dedup by ask — only the latest take surfaces.
     expect(results).toHaveLength(1);
     expect(results[0]!.storyId).toBe(second.id);
+  });
+
+  it("does NOT return a self-initiated (askId=null) draft — the wrapper is ask-backed only", async () => {
+    const { narrator } = await makeNarratorAndAsk(db);
+
+    // A self-initiated telling: no Ask backs it. It reaches pending_approval but must not surface
+    // in the ask-only Questions-tab view.
+    const { story } = await createTextDraft(db, {
+      ownerPersonId: narrator.id,
+      text: "A story I chose to tell on my own.",
+    });
+    await transitionStoryState(db, story.id, "pending_approval");
+
+    const results = await listOutstandingAnswerDrafts(db, narrator.id);
+    expect(results).toHaveLength(0);
   });
 });

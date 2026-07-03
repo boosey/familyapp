@@ -18,7 +18,7 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { media, proseRevisions, stories, storyRecordings } from "@chronicle/db/content";
 import {
   asks,
@@ -715,30 +715,69 @@ export interface OutstandingAnswerDraft {
   recordedAt: Date;
 }
 
-export async function listOutstandingAnswerDrafts(
+/**
+ * A `pending_approval` draft awaiting the owner's review — ask-backed OR self-initiated. The
+ * Stories tab resumes self-initiated tellings (`askId === null`) from this general view;
+ * `listOutstandingAnswerDrafts` (below) is the ask-only projection the Questions tab consumes.
+ */
+export interface OutstandingDraft {
+  /** The durable draft Story (reachable to resume/approve). */
+  storyId: string;
+  /** The Ask this answers, or null for a self-initiated telling. */
+  askId: string | null;
+  /** Origin type — text-authored or voice-recorded (ADR-0007). */
+  kind: "voice" | "text";
+  /** When the draft was created (its Story's createdAt). */
+  recordedAt: Date;
+}
+
+/**
+ * All of a person's `pending_approval` drafts — ask-backed AND self-initiated — most recent first.
+ *
+ * This MUST live here (the audited read surface) because it reads the guarded `stories` table.
+ * AuthZ: a system-actor read scoped to the person's OWN stories (`ownerPersonId === personId`) —
+ * the owner branch of the authorization function. No content (transcript/prose/audio key) is
+ * selected; only the lifecycle pointer, origin kind, and timestamp.
+ */
+export async function listOutstandingDrafts(
   db: Database,
-  narratorPersonId: string,
-): Promise<OutstandingAnswerDraft[]> {
+  personId: string,
+): Promise<OutstandingDraft[]> {
   const rows = await db
     .select({
       askId: stories.askId,
       storyId: stories.id,
+      kind: stories.kind,
       recordedAt: stories.createdAt,
     })
     .from(stories)
-    .where(
-      and(
-        eq(stories.ownerPersonId, narratorPersonId),
-        eq(stories.state, "pending_approval"),
-        isNotNull(stories.askId),
-      ),
-    );
-  // Most recent first, then keep one draft per ask (the latest take).
+    .where(and(eq(stories.ownerPersonId, personId), eq(stories.state, "pending_approval")));
+  return rows
+    .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())
+    .map((r) => ({
+      storyId: r.storyId,
+      askId: r.askId,
+      kind: r.kind,
+      recordedAt: r.recordedAt,
+    }));
+}
+
+/**
+ * Ask-backed subset — one draft per Ask (the latest take), keyed by Ask id. Unchanged behavior for
+ * the Questions tab: it merges this with `listPendingAsksForNarrator` to render the per-ask
+ * two-state affordance. Self-initiated (askId=null) drafts are excluded here.
+ */
+export async function listOutstandingAnswerDrafts(
+  db: Database,
+  narratorPersonId: string,
+): Promise<OutstandingAnswerDraft[]> {
+  // `listOutstandingDrafts` returns most-recent-first, so the first row per ask is the latest take.
+  const all = await listOutstandingDrafts(db, narratorPersonId);
   const byAsk = new Map<string, OutstandingAnswerDraft>();
-  for (const r of rows.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())) {
-    const askId = r.askId!;
-    if (!byAsk.has(askId)) {
-      byAsk.set(askId, { askId, storyId: r.storyId, recordedAt: r.recordedAt });
+  for (const r of all) {
+    if (r.askId === null) continue;
+    if (!byAsk.has(r.askId)) {
+      byAsk.set(r.askId, { askId: r.askId, storyId: r.storyId, recordedAt: r.recordedAt });
     }
   }
   return [...byAsk.values()];
