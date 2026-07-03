@@ -14,5 +14,6 @@
  */
 export {
   getStoryAndRecordingForPipeline,
+  getStoryRecordingForPipeline,
   type PipelineStoryView,
 } from "./story-repository";

@@ -44,7 +44,15 @@ export {
   saveProseCorrection,
   setStoryFamilyTargets,
   computeDefaultFamilyTargets,
+  listStoryRecordings,
+  appendStoryRecording,
+  persistTakeRecording,
+  updateStoryRecordingTranscript,
+  dropStoryRecording,
 } from "./story-repository";
+// The multi-take set (ADR-0012) surfaced for callers of the take repo above.
+export type { StoryRecording } from "@chronicle/db";
+export * from "./follow-up-record";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is
 // the pipeline orchestrator. Import them via `@chronicle/core/pipeline`, which the architecture

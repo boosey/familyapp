@@ -18,8 +18,8 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { and, asc, eq, isNotNull } from "drizzle-orm";
-import { media, proseRevisions, stories } from "@chronicle/db/content";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { media, proseRevisions, stories, storyRecordings } from "@chronicle/db/content";
 import {
   asks,
   consentRecords,
@@ -36,6 +36,7 @@ import type {
   ProseRevision,
   ProseRevisionLevel,
   Story,
+  StoryRecording,
   StoryState,
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
@@ -103,6 +104,15 @@ export async function persistRecordingAndCreateDraft(
         originatingFamilyId: draft.originatingFamilyId ?? null,
       })
       .returning();
+
+    // Seed the ordered take set with take 0 (the initial answer). The multi-take model (ADR-0012)
+    // treats the canonical audio as this ordered set; recording_media_id stays the take-0 pointer.
+    // Written unconditionally (even flag-off) so the data model is consistent everywhere.
+    await tx.insert(storyRecordings).values({
+      storyId: story!.id,
+      position: 0,
+      mediaId: rec!.id,
+    });
 
     return { recording: rec!, story: story! };
   });
@@ -765,20 +775,34 @@ export async function discardDraftStory(
       );
     }
 
-    // 5. Capture the recording's storageKey BEFORE deleting anything, so we can return it
-    //    to the caller for best-effort blob cleanup. A draft has exactly one recording media
-    //    (created atomically in persistRecordingAndCreateDraft); if it's missing the DB is
-    //    already corrupt — surface it as an invariant failure.
-    const [rec] = await tx
-      .select({ storageKey: media.storageKey })
+    // 5. Gather EVERY take's media (the ordered take set, ADR-0012) plus the canonical recording
+    //    pointer, so this whole-thread discard removes all of the draft's audio and returns every
+    //    blob key for best-effort cleanup. `recording_media_id` is unioned in defensively (it is
+    //    take 0, so it is normally already among the take rows — but a fixture/legacy story may
+    //    lack a seeded story_recordings row). The recording media MUST resolve; if it's missing the
+    //    DB is already corrupt — surface it as an invariant failure.
+    const takeRows = await tx
+      .select({ mediaId: storyRecordings.mediaId })
+      .from(storyRecordings)
+      .where(eq(storyRecordings.storyId, input.storyId))
+      .orderBy(storyRecordings.position);
+    // recording media first, then any follow-up takes — a deterministic storageKeys order.
+    const mediaIds = [
+      ...new Set([story.recordingMediaId, ...takeRows.map((t) => t.mediaId)]),
+    ];
+    const mediaRows = await tx
+      .select({ id: media.id, storageKey: media.storageKey })
       .from(media)
-      .where(eq(media.id, story.recordingMediaId))
-      .limit(1);
-    if (!rec) {
+      .where(inArray(media.id, mediaIds));
+    const keyById = new Map(mediaRows.map((m) => [m.id, m.storageKey]));
+    if (!keyById.has(story.recordingMediaId)) {
       throw new InvariantViolation(
         `discardDraftStory: recording media ${story.recordingMediaId} for story ${input.storyId} not found`,
       );
     }
+    const storageKeys = mediaIds
+      .map((id) => keyById.get(id))
+      .filter((k): k is string => k !== undefined);
 
     // 6. Delete the story's `story_families` targeting rows FIRST. Those rows reference the story
     //    (child → parent) with an `ON DELETE no action` FK, so deleting the story while any target
@@ -786,13 +810,18 @@ export async function discardDraftStory(
     //    pre-approval targeting primitives (`setStoryFamilyTargets`) let a narrator pick families
     //    before approving. Clear them here (no consent implication — targeting is not content).
     await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
+    // Then the ordered take set: story_recordings.story_id → stories.id is a plain FK, so the take
+    // rows must go before the story. The story is consent-free (asserted above), so the
+    // story_recordings delete-guard trigger permits it.
+    await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
-    //    story references the media (story is the CHILD of media there), so the story goes first.
+    //    story references the media (story is the CHILD of media there), so the story goes first,
+    //    then every take's media row (all never-consented).
     await tx.delete(stories).where(eq(stories.id, input.storyId));
-    await tx.delete(media).where(eq(media.id, story.recordingMediaId));
+    await tx.delete(media).where(inArray(media.id, mediaIds));
 
-    return { storageKeys: [rec.storageKey] };
+    return { storageKeys };
   });
 }
 
@@ -1011,4 +1040,172 @@ export async function getStoryAndRecordingForPipeline(
       durationSeconds: row.durationSeconds,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Multi-take repository (ADR-0012). The canonical audio is an ORDERED SET of takes
+// (`story_recordings`): position 0 is the initial answer, 1,2,… are follow-up takes, each with its
+// own immutable Media (kind=story_audio) + derived transcript. These reads/writes touch the guarded
+// content tables, so they live in this audited file. Takes are freely droppable pre-approval; the
+// DB delete-guard freezes them once the story has a consent record.
+// ---------------------------------------------------------------------------
+
+/** Ordered takes for a story (position asc), including per-take transcript. Audited read. */
+export async function listStoryRecordings(
+  db: Database,
+  storyId: string,
+): Promise<StoryRecording[]> {
+  return db
+    .select()
+    .from(storyRecordings)
+    .where(eq(storyRecordings.storyId, storyId))
+    .orderBy(storyRecordings.position);
+}
+
+/** Append a follow-up take at the next position. Media must already be persisted (immutable). */
+export async function appendStoryRecording(
+  db: Database,
+  input: { storyId: string; mediaId: string },
+): Promise<StoryRecording> {
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ position: storyRecordings.position })
+      .from(storyRecordings)
+      .where(eq(storyRecordings.storyId, input.storyId))
+      .orderBy(desc(storyRecordings.position))
+      .limit(1);
+    const nextPosition = (existing[0]?.position ?? -1) + 1;
+    const [row] = await tx
+      .insert(storyRecordings)
+      .values({ storyId: input.storyId, position: nextPosition, mediaId: input.mediaId })
+      .returning();
+    return row!;
+  });
+}
+
+/**
+ * Persist a FOLLOW-UP take: insert its immutable story_audio Media + append it to the story's
+ * ordered take set, atomically. Mirrors persistRecordingAndCreateDraft (audio bytes must ALREADY
+ * be in object storage — the caller uploads first, storage-first, like ingestRecording). Does NOT
+ * create a Story; the Story already exists (take 0). The next position = max(existing)+1.
+ */
+export async function persistTakeRecording(
+  db: Database,
+  recording: RecordingInput,
+  storyId: string,
+): Promise<{ recording: Media; storyRecording: StoryRecording }> {
+  return db.transaction(async (tx) => {
+    const [rec] = await tx
+      .insert(media)
+      .values({
+        ownerPersonId: recording.ownerPersonId,
+        kind: "story_audio",
+        storageKey: recording.storageKey,
+        contentType: recording.contentType,
+        durationSeconds: recording.durationSeconds ?? null,
+        checksum: recording.checksum,
+      })
+      .returning();
+    const existing = await tx
+      .select({ position: storyRecordings.position })
+      .from(storyRecordings)
+      .where(eq(storyRecordings.storyId, storyId))
+      .orderBy(desc(storyRecordings.position))
+      .limit(1);
+    const nextPosition = (existing[0]?.position ?? -1) + 1;
+    const [row] = await tx
+      .insert(storyRecordings)
+      .values({ storyId, position: nextPosition, mediaId: rec!.id })
+      .returning();
+    return { recording: rec!, storyRecording: row! };
+  });
+}
+
+/** Pipeline read: the storage key + owner context for ONE take. System-actor (no viewer authz). */
+export async function getStoryRecordingForPipeline(
+  db: Database,
+  storyRecordingId: string,
+): Promise<{ storyId: string; storageKey: string; contentType: string } | null> {
+  const [row] = await db
+    .select({
+      storyId: storyRecordings.storyId,
+      storageKey: media.storageKey,
+      contentType: media.contentType,
+    })
+    .from(storyRecordings)
+    .innerJoin(media, eq(media.id, storyRecordings.mediaId))
+    .where(eq(storyRecordings.id, storyRecordingId))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Backfill a take's derived transcript (from the transcribe step). */
+export async function updateStoryRecordingTranscript(
+  db: Database,
+  input: {
+    storyRecordingId: string;
+    transcript: string;
+    transcriptWordTimings?: Array<{ word: string; startMs: number; endMs: number }>;
+  },
+): Promise<void> {
+  await db
+    .update(storyRecordings)
+    .set({
+      transcript: input.transcript,
+      ...(input.transcriptWordTimings
+        ? { transcriptWordTimings: input.transcriptWordTimings }
+        : {}),
+    })
+    .where(eq(storyRecordings.id, input.storyRecordingId));
+}
+
+/**
+ * Drop a FOLLOW-UP take (position > 0) pre-approval, and return its storage key for blob cleanup.
+ * Guards: owner-only, story not yet consented (state draft/pending_approval), position != 0
+ * (dropping the initial take is the whole-thread discard — use discardDraftStory instead). The
+ * DB delete-guard trigger is the backstop; this is the friendly application-level check.
+ */
+export async function dropStoryRecording(
+  db: Database,
+  input: { storyId: string; position: number; narratorPersonId: string },
+): Promise<{ storageKey: string }> {
+  if (input.position === 0) {
+    throw new InvariantViolation(
+      "Cannot drop take 0 — dropping the initial take discards the thread.",
+    );
+  }
+  return db.transaction(async (tx) => {
+    const [story] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!story) throw new InvariantViolation("Story not found.");
+    if (story.ownerPersonId !== input.narratorPersonId) {
+      throw new InvariantViolation("Not the owner.");
+    }
+    if (story.state !== "draft" && story.state !== "pending_approval") {
+      throw new InvariantViolation("Takes are immutable after approval.");
+    }
+    const [take] = await tx
+      .select({ id: storyRecordings.id, mediaId: storyRecordings.mediaId })
+      .from(storyRecordings)
+      .where(
+        and(
+          eq(storyRecordings.storyId, input.storyId),
+          eq(storyRecordings.position, input.position),
+        ),
+      )
+      .limit(1);
+    if (!take) throw new InvariantViolation("Take not found.");
+    const [m] = await tx
+      .select({ storageKey: media.storageKey })
+      .from(media)
+      .where(eq(media.id, take.mediaId))
+      .limit(1);
+    // story_recordings first (FK), then the never-consented media row.
+    await tx.delete(storyRecordings).where(eq(storyRecordings.id, take.id));
+    await tx.delete(media).where(eq(media.id, take.mediaId));
+    return { storageKey: m!.storageKey };
+  });
 }
