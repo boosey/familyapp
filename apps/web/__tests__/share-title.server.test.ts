@@ -85,7 +85,7 @@ async function makePerson(db: Database, name = "Eleanor"): Promise<string> {
  * Seed a pending_approval story with a derived title by driving the real text path: compose → render.
  * Returns the storyId, now at pending_approval with `title = "Auto Title"`.
  */
-async function seedPendingStory(personId: string): Promise<string> {
+async function seedPendingStory(_personId: string): Promise<string> {
   const result = await composeStoryAction(
     form({ text: "The summer we drove to the coast and the car broke down." }),
   );
