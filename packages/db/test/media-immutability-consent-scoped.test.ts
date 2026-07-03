@@ -310,6 +310,8 @@ describe("test 6 — consented story's follow-up-take media (ADR-0014 fork #2): 
       action: "approved_for_sharing",
       resultingState: "shared",
     });
+    // NB: the FK + story_recordings_post_consent_immutable also block these deletes; the regex
+    // asserts check (c)'s consent-semantic message fired first (defense-in-depth), not otherwise-lost data.
     // Take-1's media must now be un-deletable.
     await expect(
       db.delete(media).where(eq(media.id, rec1.id)),

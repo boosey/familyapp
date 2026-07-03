@@ -102,10 +102,12 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
 
-  -- DELETE: check (c) — ADR-0014 fork #2. Is this media referenced by ANY story_recordings take
-  -- whose owning story has a consent record? Protects position >= 1 follow-up takes AND typed-first
-  -- mixed-take audio (which check (b)'s recording_media_id pointer never covers). Closes the
-  -- silent-audio-loss gap for consented multi-take stories.
+  -- DELETE: check (c) — ADR-0014 fork #2. Defense-in-depth + a consent-semantic error message for
+  -- take-backing media. The FK (story_recordings.media_id NO ACTION) plus the
+  -- story_recordings_post_consent_immutable trigger already prevent losing this audio; this check
+  -- restates that invariant at the media layer and yields a consent-worded error instead of a raw
+  -- FK violation. Covers position >= 1 takes AND typed-first mixed-take audio that check (b)'s
+  -- recording_media_id pointer never sees.
   IF EXISTS (
     SELECT 1 FROM story_recordings sr
     INNER JOIN consent_records cr ON cr.story_id = sr.story_id
