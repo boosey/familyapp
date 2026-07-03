@@ -8,6 +8,7 @@ import {
   persistTakeRecording,
   createTextDraft,
   appendVoiceTakeContribution,
+  appendTypedTakeContribution,
   listProseRevisions,
   listStoryRecordings,
   transitionStoryState,
@@ -123,5 +124,47 @@ describe("appendVoiceTakeContribution (ADR-0014 §4)", () => {
       rawTranscript: "r", cleanedSegment: "c", transcribeModelId: "w", cleanupModelId: "c", cleanupPromptText: "p",
       priorProse: null,
     })).rejects.toThrow(/draft/i);
+  });
+});
+
+describe("appendTypedTakeContribution (ADR-0014 §4)", () => {
+  it("appends user_authored keyed to the narrator, concatenates prose, leaves kind unchanged", async () => {
+    const narrator = await makePerson();
+    const { story } = await createTextDraft(db, { ownerPersonId: narrator.id, text: "Opener." });
+    const res = await appendTypedTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, text: "Second typed part.", priorProse: "Opener.",
+    });
+    expect(res.prose).toBe("Opener.\n\nSecond typed part.");
+    expect(res.appendedSegment).toBe("Second typed part.");
+
+    const revs = await listProseRevisions(db, story.id);
+    const authored = revs.filter((r) => r.level === "user_authored");
+    expect(authored.length).toBe(2); // createTextDraft wrote one; this appended a second
+    const latest = authored[authored.length - 1]!;
+    expect(latest.text).toBe("Second typed part.");
+    expect(latest.actorPersonId).toBe(narrator.id);
+    expect(latest.storyRecordingId).toBeNull();
+
+    const [s] = await db.select().from(stories).where(eq(stories.id, story.id));
+    expect(s!.kind).toBe("text");
+    const takes = await listStoryRecordingsLocal(db, story.id);
+    expect(takes.length).toBe(0);
+  });
+
+  it("rejects empty/whitespace text", async () => {
+    const narrator = await makePerson();
+    const { story } = await createTextDraft(db, { ownerPersonId: narrator.id, text: "Opener." });
+    await expect(appendTypedTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, text: "   ", priorProse: "Opener.",
+    })).rejects.toThrow(/non-empty|empty/i);
+  });
+
+  it("rejects a non-owner and a non-draft story", async () => {
+    const narrator = await makePerson("Owner");
+    const intruder = await makePerson("Intruder");
+    const { story } = await createTextDraft(db, { ownerPersonId: narrator.id, text: "Opener." });
+    await expect(appendTypedTakeContribution(db, {
+      storyId: story.id, ownerPersonId: intruder.id, text: "x", priorProse: null,
+    })).rejects.toThrow(/owner/i);
   });
 });

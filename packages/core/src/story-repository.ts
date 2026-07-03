@@ -1069,6 +1069,62 @@ export async function appendVoiceTakeContribution(
 }
 
 /**
+ * Typed take contribution (ADR-0014 §4). Appends ONE `user_authored` provenance row keyed to the
+ * narrator (`actorPersonId`, `storyRecordingId=null` — a typed take has no audio) and concatenates
+ * the text onto the prior working prose (blank-line join). Creates NO `story_recordings` row and
+ * does NOT change `kind` — a typed contribution on a voice draft leaves it voice; on a text draft
+ * leaves it text. Owner + `draft`-gated; empty/whitespace text rejected.
+ */
+export async function appendTypedTakeContribution(
+  db: Database,
+  input: { storyId: string; ownerPersonId: string; text: string; priorProse: string | null },
+): Promise<{ prose: string; appendedSegment: string }> {
+  const text = input.text.trim();
+  if (text.length === 0) {
+    throw new InvariantViolation(
+      "appendTypedTakeContribution: a typed take must have non-empty text",
+    );
+  }
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+    if (!current) {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: story ${input.storyId} not found`,
+      );
+    }
+    if (current.ownerPersonId !== input.ownerPersonId) {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: actor ${input.ownerPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+    if (current.state !== "draft") {
+      throw new InvariantViolation(
+        `appendTypedTakeContribution: story must be draft (was ${current.state})`,
+      );
+    }
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "user_authored",
+      text,
+      modelId: null,
+      promptText: null,
+      actorPersonId: input.ownerPersonId,
+      storyRecordingId: null,
+    });
+    const prose = concatProse(input.priorProse, text);
+    await tx
+      .update(stories)
+      .set({ prose, updatedAt: new Date() })
+      .where(eq(stories.id, input.storyId));
+    return { prose, appendedSegment: text };
+  });
+}
+
+/**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
  * in this already-allowlisted file; the L2→L3 diff (ai_cleaned vs human_corrected) is the
