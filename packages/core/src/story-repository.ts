@@ -36,6 +36,7 @@ import type {
   ProseRevision,
   ProseRevisionLevel,
   Story,
+  StoryKind,
   StoryRecording,
   StoryState,
 } from "@chronicle/db";
@@ -272,17 +273,23 @@ export interface PipelineStoryView {
    * twice per stage. */
   ownerSpokenName: string;
   ownerBirthYear: number | null;
+  /** ADR-0007 origin type. `voice` ⇒ `recording` is populated; `text` ⇒ `recording` is null
+   * (the typed words in `transcript` are canonical). The orchestrator branches on this to skip
+   * `transcribe` for text stories. */
+  kind: StoryKind;
   state: StoryState;
   promptQuestion: string | null;
   transcript: string | null;
   prose: string | null;
+  /** The canonical recording. NULL for a text story (no audio) — the media join is a LEFT join
+   * so a text draft still returns a view row. Always populated for a voice story. */
   recording: {
     mediaId: string;
     storageKey: string;
     contentType: string;
     checksum: string;
     durationSeconds: number | null;
-  };
+  } | null;
 }
 
 /**
@@ -1129,6 +1136,7 @@ export async function getStoryAndRecordingForPipeline(
       ownerPersonId: stories.ownerPersonId,
       ownerSpokenName: persons.spokenName,
       ownerBirthYear: persons.birthYear,
+      kind: stories.kind,
       state: stories.state,
       promptQuestion: stories.promptQuestion,
       transcript: stories.transcript,
@@ -1140,7 +1148,11 @@ export async function getStoryAndRecordingForPipeline(
       durationSeconds: media.durationSeconds,
     })
     .from(stories)
-    .innerJoin(media, eq(media.id, stories.recordingMediaId))
+    // LEFT join: a text story has recording_media_id = NULL and thus no media row. An INNER join
+    // would drop the story entirely (zero rows → null view), making the pipeline treat a valid
+    // text draft as "gone". LEFT join keeps the story row with recording columns NULL. A voice
+    // story always has its media row, so its `recording` is populated exactly as before.
+    .leftJoin(media, eq(media.id, stories.recordingMediaId))
     .innerJoin(persons, eq(persons.id, stories.ownerPersonId))
     .where(eq(stories.id, storyId))
     .limit(1);
@@ -1150,17 +1162,23 @@ export async function getStoryAndRecordingForPipeline(
     ownerPersonId: row.ownerPersonId,
     ownerSpokenName: row.ownerSpokenName,
     ownerBirthYear: row.ownerBirthYear,
+    kind: row.kind,
     state: row.state,
     promptQuestion: row.promptQuestion,
     transcript: row.transcript,
     prose: row.prose,
-    recording: {
-      mediaId: row.mediaId,
-      storageKey: row.storageKey,
-      contentType: row.contentType,
-      checksum: row.checksum,
-      durationSeconds: row.durationSeconds,
-    },
+    // NULL for a text story (no media row from the LEFT join). `media.id` is NOT NULL in the
+    // schema, so a null `mediaId` here can only mean "no joined recording".
+    recording:
+      row.mediaId === null
+        ? null
+        : {
+            mediaId: row.mediaId,
+            storageKey: row.storageKey!,
+            contentType: row.contentType!,
+            checksum: row.checksum!,
+            durationSeconds: row.durationSeconds,
+          },
   };
 }
 

@@ -879,6 +879,7 @@ export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
 export type MembershipStatus = (typeof membershipStatusEnum.enumValues)[number];
 export type StoryState = (typeof storyStateEnum.enumValues)[number];
+export type StoryKind = (typeof storyKindEnum.enumValues)[number];
 export type AudienceTier = (typeof audienceTierEnum.enumValues)[number];
 export type MediaKind = (typeof mediaKindEnum.enumValues)[number];
 export type ConsentAction = (typeof consentActionEnum.enumValues)[number];

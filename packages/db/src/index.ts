@@ -44,6 +44,7 @@ export type {
   MembershipRole,
   MembershipStatus,
   StoryState,
+  StoryKind,
   AudienceTier,
   MediaKind,
   ConsentAction,

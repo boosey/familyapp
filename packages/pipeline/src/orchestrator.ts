@@ -83,6 +83,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       plog("pipeline", "transcribe: skip (story gone)", { story: payload.storyId, ms: done() });
       return; // story removed; nothing to do
     }
+    // Defense in depth (ADR-0007): a text story has no audio to transcribe — its typed words are
+    // already canonical in `transcript`. `start()` routes text stories straight to render_story, so
+    // this stage should never see one; if it does (a stray enqueue), skip to render rather than
+    // dereferencing a null recording below.
+    if (view.kind === "text") {
+      plog("pipeline", "transcribe: skip (text story) → enqueue render_story", {
+        story: view.storyId,
+        ms: done(),
+      });
+      await queue.enqueue("render_story", { storyId: view.storyId });
+      return;
+    }
     // Idempotency gate: if a transcript is already present, the stage has run. Skip the
     // expensive vendor call and just ensure render_story is enqueued (a retry of an already-
     // completed transcribe should still drive the pipeline forward).
@@ -96,6 +108,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return;
     }
 
+    // A voice story always has its canonical recording (schema CHECK: kind='voice' ⇒
+    // recording_media_id NOT NULL). A null here means data corruption — fail loudly rather than
+    // silently no-op. (Also narrows `recording` to non-null for the accesses below.)
+    if (view.recording === null) {
+      throw new Error(
+        `voice story ${view.storyId} has no canonical recording (recording_media_id is null)`,
+      );
+    }
     const canonicalBytes = await deps.storage.getBytes(view.recording.storageKey);
     if (!canonicalBytes) {
       throw new Error(
@@ -284,8 +304,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     runTranscribeStage,
     runRenderStoryStage,
     async start(storyId: string) {
-      plog("pipeline", "start → enqueue transcribe", { story: storyId });
-      await queue.enqueue("transcribe", { storyId });
+      // ADR-0007: a text story has no audio — route it straight to render_story, skipping
+      // transcribe. A voice story (or a story that vanished) starts at transcribe as before.
+      const view = await getStoryAndRecordingForPipeline(deps.db, storyId);
+      const firstStage: JobName = view?.kind === "text" ? "render_story" : "transcribe";
+      plog("pipeline", `start → enqueue ${firstStage}`, { story: storyId, kind: view?.kind });
+      await queue.enqueue(firstStage, { storyId });
     },
     async runToCompletion() {
       const done = startTimer();
