@@ -21,7 +21,7 @@ import {
   latestUnresolvedDecision,
   listFollowUpDecisionsForStory,
 } from "@chronicle/core";
-import { ingestRecording, ingestFollowUpTake } from "@chronicle/capture";
+import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
   augmentProfileFromStory,
   beginLogContext,
@@ -87,9 +87,46 @@ type FollowUpStepRuntime = Pick<
 export type AnswerStatusActionResult = AnswerStatusResult | { error: string };
 
 /**
- * Record an answer to an ask. Validates that the ask is targeted at the signed-in person,
- * then ingests the audio blob via the account capture path (actor.kind = "account") — the
- * personId is taken from the server session, never from the client.
+ * Ask-answerability guard, shared by the voice (`recordAnswerAction`) and generalized
+ * (`composeStoryAction`) paths. Confirms the ask exists, is targeted at THIS person, and is still
+ * answerable (queued/routed). On success returns the ask's question text (the follow-up evaluator's
+ * seed prompt); on failure returns the `{ error }` the caller surfaces verbatim.
+ *
+ * Recording into an already-answered ask would create a dead draft whose Share can never close
+ * (approveAndShareStory rejects a second answer for an already-answered ask) — SF-4 — so we reject
+ * before ingesting anything.
+ */
+async function assertAnswerableAsk(
+  db: Awaited<ReturnType<typeof getRuntime>>["db"],
+  askId: string,
+  personId: string,
+): Promise<{ questionText: string } | { error: string }> {
+  const [askRow] = await db
+    .select({
+      targetPersonId: asks.targetPersonId,
+      status: asks.status,
+      question: asks.questionText,
+    })
+    .from(asks)
+    .where(eq(asks.id, askId))
+    .limit(1);
+  if (!askRow || askRow.targetPersonId !== personId) {
+    return { error: hub.actions.notForYou };
+  }
+  if (askRow.status !== "queued" && askRow.status !== "routed") {
+    return { error: hub.actions.alreadyAnswered };
+  }
+  return { questionText: askRow.question };
+}
+
+/**
+ * Record a voice telling. When an `askId` is present, validates that the ask is targeted at the
+ * signed-in person and is still answerable, then (flag ON) runs the follow-up mini-loop seeded by
+ * the ask question. When `askId` is ABSENT it is a self-initiated voice telling (ADR-0007): there
+ * is no ask to validate and no ask question to seed the follow-up evaluator, so it takes the
+ * one-shot dispatch path unconditionally. Either way the audio blob is ingested via the account
+ * capture path (actor.kind = "account") — the personId is taken from the server session, never the
+ * client.
  */
 export async function recordAnswerAction(formData: FormData): Promise<ThreadStep> {
   // Correlate every log line for this answer run (ingest → queue → stages → AI seams).
@@ -101,29 +138,17 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
 
   const audio = formData.get("audio");
   const askIdField = formData.get("askId");
-  if (!(audio instanceof Blob) || typeof askIdField !== "string" || !askIdField) {
+  const askId = typeof askIdField === "string" && askIdField.length > 0 ? askIdField : null;
+  if (!(audio instanceof Blob)) {
     return { error: hub.actions.invalidInput };
   }
 
-  // Defense: confirm the ask is targeted at this exact person before recording anything.
-  const [askRow] = await db
-    .select({
-      targetPersonId: asks.targetPersonId,
-      status: asks.status,
-      question: asks.questionText,
-    })
-    .from(asks)
-    .where(eq(asks.id, askIdField))
-    .limit(1);
-  if (!askRow || askRow.targetPersonId !== ctx.personId) {
-    return { error: hub.actions.notForYou };
-  }
-  const askQuestionText = askRow.question;
-  // Only queued/routed asks are answerable. Recording into an already-answered ask would create
-  // a dead draft whose Share can never close (approveAndShareStory rejects a second answer for an
-  // already-answered ask) — SF-4. Reject before ingesting anything.
-  if (askRow.status !== "queued" && askRow.status !== "routed") {
-    return { error: hub.actions.alreadyAnswered };
+  // Ask validation runs ONLY when answering a specific ask. A self-initiated telling has none.
+  let askQuestionText = "";
+  if (askId) {
+    const ask = await assertAnswerableAsk(db, askId, ctx.personId);
+    if ("error" in ask) return ask;
+    askQuestionText = ask.questionText;
   }
 
   const bytes = new Uint8Array(await audio.arrayBuffer());
@@ -132,7 +157,7 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
   const totalTimer = startTimer();
   plog("answer", "recordAnswer: received", {
     person: ctx.personId,
-    ask: askIdField,
+    ask: askId ?? "(self-initiated)",
     bytes: bytes.byteLength,
     contentType: audio.type || "audio/webm",
   });
@@ -142,12 +167,12 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
     const result = await ingestRecording(db, storage, {
       actor: { kind: "account", personId: ctx.personId },
       audio: { bytes, contentType: audio.type || "audio/webm" },
-      askId: askIdField,
+      ...(askId ? { askId } : {}),
     });
     storyId = result.storyId;
   } catch (err) {
     plogError("answer", "recordAnswer: ingest failed", {
-      ask: askIdField,
+      ask: askId ?? "(self-initiated)",
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
     return { error: hub.actions.saveFailed };
@@ -155,7 +180,9 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
   plog("answer", "recordAnswer: ingested → draft story created", { story: storyId });
 
   const policy = resolveFollowUpPolicyForRequest();
-  if (!policy.enabled) {
+  // FLAG OFF, or a self-initiated telling with no ask question to seed the follow-up evaluator →
+  // the one-shot dispatch path. (The follow-up mini-loop below requires an ask question.)
+  if (!policy.enabled || !askId) {
     // FLAG OFF — byte-for-byte today's one-shot path. Render BEFORE review (prose-provenance
     // design): transcribe → polish so the review phase can show the polished prose for the narrator
     // to read and edit. dispatchPipeline hides the durable-vs-synchronous decision: dev/CI runs it
@@ -215,6 +242,74 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
       return { error: hub.actions.saveFailed };
     }
   }
+}
+
+/**
+ * Compose a story — the generalized front door for the in-hub telling surface (ADR-0007). Reads the
+ * account session server-side (personId is NEVER trusted from the client), then branches on the form
+ * payload:
+ *   - a `text` string (and no `audio` Blob) → the typed telling: `ingestTextStory` writes a
+ *     `kind='text'` draft, then `dispatchPipeline` renders it (text stories skip transcribe → go
+ *     straight to render_story) to `pending_approval`. There is no follow-up mini-loop on the typed
+ *     path — there is no spoken take to evaluate.
+ *   - otherwise → delegate to `recordAnswerAction` (the voice path, now itself ask-optional).
+ *
+ * `askId` is OPTIONAL on BOTH branches: when present the ask target/answerable check runs (as when
+ * answering a specific question); when absent it is a self-initiated telling.
+ */
+export async function composeStoryAction(formData: FormData): Promise<ThreadStep> {
+  beginLogContext();
+  const rt = await getRuntime();
+  const { db, auth } = rt;
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const askIdField = formData.get("askId");
+  const askId = typeof askIdField === "string" && askIdField.length > 0 ? askIdField : null;
+  const audio = formData.get("audio");
+  const text = formData.get("text");
+
+  // TEXT branch (ADR-0007): a typed telling, ask-optional. Only taken when there is no audio blob.
+  if (!(audio instanceof Blob) && typeof text === "string") {
+    if (text.trim().length === 0) return { error: hub.actions.invalidInput };
+    if (askId) {
+      const ask = await assertAnswerableAsk(db, askId, ctx.personId);
+      if ("error" in ask) return ask;
+    }
+
+    let storyId: string;
+    try {
+      const res = await ingestTextStory(db, {
+        actor: { kind: "account", personId: ctx.personId },
+        text,
+        ...(askId ? { askId } : {}),
+      });
+      storyId = res.storyId;
+    } catch (err) {
+      plogError("answer", "composeStory(text): ingest failed", {
+        ask: askId ?? "(self-initiated)",
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+      return { error: hub.actions.saveFailed };
+    }
+    plog("answer", "composeStory(text): ingested → text draft created", { story: storyId });
+
+    // Render BEFORE review (prose-provenance): a text story routes straight to render_story, so this
+    // one dispatch reaches pending_approval in dev/CI (enqueues in prod). No follow-up loop.
+    try {
+      await rt.dispatchPipeline(storyId);
+    } catch (err) {
+      plogError("answer", "composeStory(text): render failed", {
+        story: storyId,
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+      return { error: hub.actions.saveFailed };
+    }
+    return { kind: "ready", storyId };
+  }
+
+  // VOICE branch — delegate to the existing, well-tested path (now ask-optional too).
+  return recordAnswerAction(formData);
 }
 
 /**
