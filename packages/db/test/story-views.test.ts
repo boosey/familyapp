@@ -9,7 +9,7 @@
  */
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { media, persons, stories, storyViews } from "../src/schema";
+import { media, persons, stories, storyRecordings, storyViews } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
 let db: Database;
@@ -36,11 +36,18 @@ async function makeStory(ownerPersonId: string) {
       checksum: "abc123",
     })
     .returning();
-  const [story] = await db
-    .insert(stories)
-    .values({ ownerPersonId, recordingMediaId: rec!.id })
-    .returning();
-  return story!;
+  const story = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!;
+  });
+  return story;
 }
 
 function recordView(storyId: string, personId: string) {

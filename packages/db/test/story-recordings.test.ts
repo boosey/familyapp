@@ -34,11 +34,18 @@ async function makeStory(): Promise<{ personId: string; storyId: string }> {
       checksum: crypto.randomUUID(),
     })
     .returning();
-  const [s] = await db
-    .insert(stories)
-    .values({ ownerPersonId: p!.id, recordingMediaId: rec!.id })
-    .returning();
-  return { personId: p!.id, storyId: s!.id };
+  const storyId = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId: p!.id, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!.id;
+  });
+  return { personId: p!.id, storyId };
 }
 
 /** Insert a story_audio media row + a story_recordings take pointing at it. */
@@ -62,31 +69,33 @@ async function makeTake(storyId: string, ownerPersonId: string, position: number
 
 describe("story_recordings table", () => {
   it("orders takes by position and rejects a duplicate position for the same story", async () => {
+    // makeStory seeds take-0; these are the follow-up takes at positions 1 and 2.
     const { personId, storyId } = await makeStory();
-    await makeTake(storyId, personId, 0);
     await makeTake(storyId, personId, 1);
+    await makeTake(storyId, personId, 2);
 
     const rows = await db
       .select()
       .from(storyRecordings)
       .where(eq(storyRecordings.storyId, storyId))
       .orderBy(asc(storyRecordings.position));
-    expect(rows.map((r) => r.position)).toEqual([0, 1]);
+    expect(rows.map((r) => r.position)).toEqual([0, 1, 2]);
 
-    await expect(makeTake(storyId, personId, 0)).rejects.toThrow();
+    await expect(makeTake(storyId, personId, 1)).rejects.toThrow();
   });
 
   it("permits deleting a take pre-approval, forbids it once the story has a consent record", async () => {
+    // makeStory seeds take-0; add follow-up takes at positions 1 and 2.
     const { personId, storyId } = await makeStory();
-    await makeTake(storyId, personId, 0);
-    const followUp = await makeTake(storyId, personId, 1);
+    await makeTake(storyId, personId, 1);
+    const followUp = await makeTake(storyId, personId, 2);
 
     // Pre-approval: dropping a take is allowed.
     await expect(
       db.delete(storyRecordings).where(eq(storyRecordings.id, followUp.id)),
     ).resolves.not.toThrow();
 
-    const readded = await makeTake(storyId, personId, 1);
+    const readded = await makeTake(storyId, personId, 2);
 
     // Story is now approved/shared.
     await db.insert(consentRecords).values({

@@ -1,4 +1,4 @@
-import { media, stories } from "@chronicle/db/content";
+import { media, stories, storyRecordings } from "@chronicle/db/content";
 import {
   consentRecords,
   families,
@@ -92,32 +92,41 @@ export async function makeStory(
   },
 ) {
   const recording = await makeRecording(db, opts.ownerPersonId);
-  const [story] = await db
-    .insert(stories)
-    .values({
-      ownerPersonId: opts.ownerPersonId,
-      recordingMediaId: recording.id,
-      state: opts.state ?? "draft",
-      audienceTier: opts.audienceTier ?? "private",
-      originatingFamilyId: opts.originatingFamilyId ?? null,
-      askId: opts.askId ?? null,
-    })
-    .returning();
+  const story = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({
+        ownerPersonId: opts.ownerPersonId,
+        recordingMediaId: recording.id,
+        state: opts.state ?? "draft",
+        audienceTier: opts.audienceTier ?? "private",
+        originatingFamilyId: opts.originatingFamilyId ?? null,
+        askId: opts.askId ?? null,
+      })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional (Task 3).
+    await tx.insert(storyRecordings).values({
+      storyId: s!.id,
+      position: 0,
+      mediaId: recording.id,
+    });
+    return s!;
+  });
   if (opts.withApprovalConsent) {
     await db.insert(consentRecords).values({
       personId: opts.ownerPersonId,
       actorPersonId: opts.ownerPersonId,
-      storyId: story!.id,
+      storyId: story.id,
       action: "approved_for_sharing",
       resultingState: "shared",
     });
   }
   if (opts.targetFamilyIds && opts.targetFamilyIds.length > 0) {
     for (const familyId of opts.targetFamilyIds) {
-      await targetStoryToFamily(db, story!.id, familyId);
+      await targetStoryToFamily(db, story.id, familyId);
     }
   }
-  return { story: story!, recording };
+  return { story, recording };
 }
 
 /** Surface a story into a family (insert a story_families targeting row). */

@@ -16,25 +16,29 @@ beforeEach(async () => {
 });
 
 async function makeStory(): Promise<{ personId: string; storyId: string }> {
-  const [p] = await db
-    .insert(persons)
-    .values({ displayName: "Eleanor", spokenName: "Eleanor" })
-    .returning();
+  const p = await makePerson();
   const [rec] = await db
     .insert(media)
     .values({
-      ownerPersonId: p!.id,
+      ownerPersonId: p.id,
       kind: "story_audio",
       storageKey: "s3://bucket/o.wav",
       contentType: "audio/wav",
       checksum: "abc",
     })
     .returning();
-  const [s] = await db
-    .insert(stories)
-    .values({ ownerPersonId: p!.id, recordingMediaId: rec!.id })
-    .returning();
-  return { personId: p!.id, storyId: s!.id };
+  const storyId = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId: p.id, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!.id;
+  });
+  return { personId: p.id, storyId };
 }
 
 async function makePerson(displayName = "Eleanor") {
@@ -45,7 +49,7 @@ async function makePerson(displayName = "Eleanor") {
   return p!;
 }
 
-async function makeVoiceStoryWithTake(db: Database, ownerPersonId: string) {
+async function makeVoiceStoryWithTake(ownerPersonId: string) {
   return db.transaction(async (tx) => {
     const [rec] = await tx
       .insert(media)
@@ -179,7 +183,7 @@ describe("prose_revisions table", () => {
 describe("prose_revisions.story_recording_id FK (ADR-0014 §2)", () => {
   it("accepts a row keyed to a real story_recordings id", async () => {
     const narrator = await makePerson();
-    const { story, take } = await makeVoiceStoryWithTake(db, narrator.id);
+    const { story, take } = await makeVoiceStoryWithTake(narrator.id);
     const [row] = await db
       .insert(proseRevisions)
       .values({
@@ -194,7 +198,7 @@ describe("prose_revisions.story_recording_id FK (ADR-0014 §2)", () => {
 
   it("accepts a null story_recording_id (holistic / typed rows)", async () => {
     const narrator = await makePerson();
-    const { story } = await makeVoiceStoryWithTake(db, narrator.id);
+    const { story } = await makeVoiceStoryWithTake(narrator.id);
     const [row] = await db
       .insert(proseRevisions)
       .values({
@@ -209,7 +213,7 @@ describe("prose_revisions.story_recording_id FK (ADR-0014 §2)", () => {
 
   it("rejects a story_recording_id that references no take", async () => {
     const narrator = await makePerson();
-    const { story } = await makeVoiceStoryWithTake(db, narrator.id);
+    const { story } = await makeVoiceStoryWithTake(narrator.id);
     await expect(
       db.insert(proseRevisions).values({
         storyId: story.id,

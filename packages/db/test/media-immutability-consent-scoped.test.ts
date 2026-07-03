@@ -14,6 +14,7 @@ import {
   media,
   persons,
   stories,
+  storyRecordings,
 } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
@@ -47,11 +48,18 @@ async function makeStoryWithRecording(ownerPersonId: string) {
       checksum: crypto.randomUUID(),
     })
     .returning();
-  const [story] = await db
-    .insert(stories)
-    .values({ ownerPersonId, recordingMediaId: rec!.id })
-    .returning();
-  return { recording: rec!, story: story! };
+  const story = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(stories)
+      .values({ ownerPersonId, recordingMediaId: rec!.id })
+      .returning();
+    // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional.
+    await tx
+      .insert(storyRecordings)
+      .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+    return s!;
+  });
+  return { recording: rec!, story };
 }
 
 /** Insert an approval-audio media row (not attached to any story). */
@@ -86,9 +94,12 @@ describe("test 1 — never-consented draft: DELETE succeeds", () => {
       .where(eq(consentRecords.storyId, story.id));
     expect(rows).toHaveLength(0);
 
-    // The story FK (recording_media_id NOT NULL) must be cleared first — exactly what
-    // discardDraftStory does in a transaction before deleting the media row.
-    await db.delete(stories).where(eq(stories.id, story.id));
+    // Whole-draft discard (ADR-0014): the takes and the story go together in one transaction
+    // (the take-0 row pins the story FK), then the reclaimed media row can be deleted.
+    await db.transaction(async (tx) => {
+      await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, story.id));
+      await tx.delete(stories).where(eq(stories.id, story.id));
+    });
 
     // The trigger should now permit the delete (no consent linkage).
     await expect(
