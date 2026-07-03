@@ -666,33 +666,54 @@ export async function applyTranscriptCorrection(
   storyId: string,
   correctedTranscript: string,
 ): Promise<Story> {
-  const [current] = await db
-    .select({ state: stories.state })
-    .from(stories)
-    .where(eq(stories.id, storyId))
-    .limit(1);
-  if (!current) throw new Error(`story not found: ${storyId}`);
-  // A correction is the narrator editing in-session before sharing; refuse on a story already
-  // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
-  if (current.state !== "pending_approval") {
-    throw new InvariantViolation(
-      `applyTranscriptCorrection: story must be pending_approval (was ${current.state})`,
-    );
-  }
-  const [row] = await db
-    .update(stories)
-    .set({
-      transcript: correctedTranscript,
-      transcriptWordTimings: null,
-      prose: null,
-      title: null,
-      summary: null,
-      tags: [],
-      updatedAt: new Date(),
-    })
-    .where(eq(stories.id, storyId))
-    .returning();
-  return row!;
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ state: stories.state })
+      .from(stories)
+      .where(eq(stories.id, storyId))
+      .limit(1);
+    if (!current) throw new Error(`story not found: ${storyId}`);
+    // A correction is the narrator editing in-session before sharing; refuse on a story already
+    // shared (a post-share edit would require a NEW consent event, out of scope for Phase 1).
+    if (current.state !== "pending_approval") {
+      throw new InvariantViolation(
+        `applyTranscriptCorrection: story must be pending_approval (was ${current.state})`,
+      );
+    }
+    // ADR-0014 §7: authored prose is never blindly regenerated. Refuse to null prose when the story
+    // has any user_authored or human_corrected lineage row (typed takes / hand-edits), which
+    // clearing-to-re-render would silently destroy.
+    const authored = await tx
+      .select({ id: proseRevisions.id })
+      .from(proseRevisions)
+      .where(
+        and(
+          eq(proseRevisions.storyId, storyId),
+          inArray(proseRevisions.level, ["user_authored", "human_corrected"]),
+        ),
+      )
+      .limit(1);
+    if (authored.length > 0) {
+      throw new InvariantViolation(
+        `applyTranscriptCorrection: story ${storyId} has authored prose lineage ` +
+          `(user_authored/human_corrected); its prose is authored and must never be regenerated (ADR-0014 §7)`,
+      );
+    }
+    const [row] = await tx
+      .update(stories)
+      .set({
+        transcript: correctedTranscript,
+        transcriptWordTimings: null,
+        prose: null,
+        title: null,
+        summary: null,
+        tags: [],
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, storyId))
+      .returning();
+    return row!;
+  });
 }
 
 /**

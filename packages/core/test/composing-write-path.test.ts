@@ -14,6 +14,7 @@ import {
   listProseRevisions,
   listStoryRecordings,
   transitionStoryState,
+  applyTranscriptCorrection,
 } from "../src/story-repository";
 
 let db: Database;
@@ -336,5 +337,45 @@ describe("logPolish (ADR-0014 §4)", () => {
       storyId: story.id, ownerPersonId: narrator.id,
       polishedProse: "Polished too late.", modelId: "m", promptText: "p",
     })).rejects.toThrow(/draft or pending_approval/i);
+  });
+});
+
+describe("regeneration guard (ADR-0014 §7)", () => {
+  it("blocks applyTranscriptCorrection (which nulls prose) on a story with human_corrected lineage", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Body.", transcribeModelId: "w", cleanupModelId: "c",
+      cleanupPromptText: "p", priorProse: null,
+    });
+    // Finish with an edit → writes a human_corrected row, moves to pending_approval.
+    await finishDraft(db, {
+      storyId: story.id, ownerPersonId: narrator.id, finalText: "Hand-edited body.",
+      metadata: { title: "T", summary: "S", tags: [] },
+    });
+    await expect(applyTranscriptCorrection(db, story.id, "new transcript"))
+      .rejects.toThrow(/authored|regenerat|lineage/i);
+  });
+
+  it("still allows applyTranscriptCorrection on a pure-voice story with no authored lineage", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Body.", transcribeModelId: "w", cleanupModelId: "c",
+      cleanupPromptText: "p", priorProse: null,
+    });
+    // Move to pending_approval WITHOUT a hand-edit (no human_corrected, no user_authored rows).
+    await transitionStoryState(db, story.id, "pending_approval");
+    const after = await applyTranscriptCorrection(db, story.id, "corrected transcript");
+    expect(after.prose).toBeNull(); // legacy voice-correction behavior preserved
+    expect(after.transcript).toBe("corrected transcript");
   });
 });
