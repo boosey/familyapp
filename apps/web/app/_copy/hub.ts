@@ -213,6 +213,7 @@ export const hub = {
   compose: {
     titleLabel: "Title",
     typeIt: "Type it",
+    textareaLabel: "Your story",
     speak: "Speak",
     tellPrompt: "What do you want to remember?",
     textPlaceholder: "Write it however it comes to you.",

@@ -79,8 +79,17 @@ function pickMimeType(): string {
   return "audio/webm";
 }
 
-export function StoryComposer({ mode: _mode, ask = null, draft }: StoryComposerProps) {
+export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   const router = useRouter();
+
+  // Dev-time consistency guard. `mode` is part of the props contract (Task 10 renders
+  // mode="tell"), but real behavior is discriminated by ask-presence and input-origin — NOT by
+  // `mode`. This catches a caller whose `mode` disagrees with the actual `ask` prop (which would
+  // otherwise silently render the wrong surface).
+  if (process.env.NODE_ENV !== "production" && (mode === "answer") !== (ask != null)) {
+    // eslint-disable-next-line no-console
+    console.warn("StoryComposer: `mode` and `ask`-presence disagree");
+  }
 
   // ── Capture phase state ─────────────────────────────────────────────────────
   const [recordPhase, setRecordPhase] = useState<RecordPhase>("idle");
@@ -253,7 +262,7 @@ export function StoryComposer({ mode: _mode, ask = null, draft }: StoryComposerP
       setPendingError(null);
       setLocalTake({ url: "" }); // reuse the pending screen; no audio to play back for text
       const form = new FormData();
-      form.set("text", textDraft);
+      form.set("text", textDraft.trim());
       if (ask) form.set("askId", ask.id);
       const step = await composeStoryAction(form);
       await handleStep(step);
@@ -864,13 +873,12 @@ export function StoryComposer({ mode: _mode, ask = null, draft }: StoryComposerP
       ) : (
         <div style={{ width: "100%", maxWidth: 480 }}>
           <label className="kin-form-label">
-            {hub.compose.typeIt}
+            {hub.compose.textareaLabel}
             <textarea
               className="kin-field"
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
               rows={8}
-              style={{ minHeight: 160 }}
               placeholder={hub.compose.textPlaceholder}
             />
           </label>
