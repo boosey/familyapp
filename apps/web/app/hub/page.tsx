@@ -21,6 +21,7 @@ import { isClerkConfigured } from "@/lib/clerk-config";
 import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
 import { KindredAccountMenu } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
+import { latestDraftPerAsk } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { IntakeReminder } from "./IntakeReminder";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -108,10 +109,10 @@ export default async function HubPage({
     .filter((d) => d.askId === null)
     .map((d) => ({ storyId: d.storyId, kind: d.kind, recordedAt: d.recordedAt.toISOString() }));
 
-  // Build a lookup map so QuestionsTab can render two-state affordances per ask.
-  const draftsByAskId = Object.fromEntries(
-    answerDrafts.map((d) => [d.askId, { storyId: d.storyId, recordedAt: d.recordedAt }]),
-  );
+  // Build a lookup map so QuestionsTab can render two-state affordances per ask. `allDrafts` is
+  // most-recent-first, so keep the FIRST (latest) draft per ask — preserving the latest-wins dedup
+  // that `listOutstandingAnswerDrafts` guaranteed before this refactor (Questions tab unchanged).
+  const draftsByAskId = latestDraftPerAsk(answerDrafts);
 
   // True when Clerk is wired up; drives the sign-out path selection below.
   const clerkSignOut = isClerkConfigured();
