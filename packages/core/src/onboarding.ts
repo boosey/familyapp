@@ -12,8 +12,15 @@ import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
+import { defaultSpokenName } from "./names";
 
 export interface CompleteOnboardingInput {
+  /**
+   * The person's own name, as typed into /welcome. Required — this is the write that guarantees a
+   * real, user-entered name lands before the `onboarded_at` gate, instead of the email-prefix
+   * fallback that JIT provisioning leaves as a placeholder.
+   */
+  displayName: string;
   year: number;
   month: number; // 1-12
   day: number; // 1-31
@@ -49,16 +56,26 @@ function toIsoDate(year: number, month: number, day: number): string {
 }
 
 /**
- * Persist the one required onboarding fact (full date of birth) and stamp `onboarded_at = now()`,
- * which is the gate that routes the Person to the hub from here on. Rejects a date that is not a
- * real calendar date (e.g. Feb 31) or that lies in the future — both with `InvariantViolation`.
- * Idempotent in shape: re-running overwrites the same three fields.
+ * Persist the required onboarding facts — the person's own name and full date of birth — and stamp
+ * `onboarded_at = now()`, which is the gate that routes the Person to the hub from here on. One
+ * atomic UPDATE means the name and the gate stamp land together: there is no reachable state past
+ * the /welcome gate where the Person still carries the email-prefix placeholder. Rejects an
+ * empty/whitespace name, a date that is not a real calendar date (e.g. Feb 31), or a future date —
+ * all with `InvariantViolation`. Idempotent in shape: re-running overwrites the same fields,
+ * including re-deriving `spokenName` from the newly entered name.
  */
 export async function completeOnboarding(
   db: Database,
   personId: string,
   input: CompleteOnboardingInput,
 ): Promise<void> {
+  // Name first: the cheaper check and the more fundamental precondition (a real, user-entered name
+  // is the whole point of this write). Nothing is written if it fails.
+  const displayName = input.displayName.trim();
+  if (displayName.length === 0) {
+    throw new InvariantViolation("displayName is required");
+  }
+
   const { year, month, day } = input;
   if (!isRealCalendarDate(year, month, day)) {
     throw new InvariantViolation(
@@ -81,6 +98,12 @@ export async function completeOnboarding(
 
   await db
     .update(persons)
-    .set({ birthDate, birthYear: year, onboardedAt: now })
+    .set({
+      displayName,
+      spokenName: defaultSpokenName(displayName),
+      birthDate,
+      birthYear: year,
+      onboardedAt: now,
+    })
     .where(eq(persons.id, personId));
 }

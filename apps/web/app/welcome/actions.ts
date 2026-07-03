@@ -9,13 +9,16 @@
 import { completeOnboarding } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 
-export interface DobInput {
+export interface CompleteAccountOnboardingInput {
+  displayName: string;
   year: number;
   month: number; // 1-12
   day: number; // 1-31
 }
 
-export async function saveDob(input: DobInput): Promise<void> {
+export async function completeAccountOnboarding(
+  input: CompleteAccountOnboardingInput,
+): Promise<void> {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");

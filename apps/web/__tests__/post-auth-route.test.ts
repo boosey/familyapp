@@ -23,7 +23,7 @@ async function newOnboardedPerson(db: Awaited<ReturnType<typeof createTestDataba
     email: `post-auth-${tag}@example.test`,
     displayName: `Test ${tag}`,
   });
-  await completeOnboarding(db, personId, { year: 1970, month: 6, day: 15 });
+  await completeOnboarding(db, personId, { displayName: `Test ${tag}`, year: 1970, month: 6, day: 15 });
   return personId;
 }
 

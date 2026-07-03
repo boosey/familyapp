@@ -6,9 +6,10 @@
  */
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { persons } from "@chronicle/db/schema";
+import { accounts, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
+import { initialOnboardingName } from "./onboarding-name";
 import { WelcomeFlow } from "./WelcomeFlow";
 
 export const runtime = "nodejs";
@@ -25,28 +26,30 @@ export default async function WelcomePage({
 
   const { from } = await searchParams;
 
+  // Identity-graph read only (persons + accounts) — no content tables. The email lets the pre-fill
+  // helper tell a real Clerk name apart from the email-prefix placeholder JIT provisioning leaves.
   const [row] = await db
     .select({
       displayName: persons.displayName,
-      spokenName: persons.spokenName,
       onboardedAt: persons.onboardedAt,
+      email: accounts.email,
     })
     .from(persons)
+    .leftJoin(accounts, eq(persons.accountId, accounts.id))
     .where(eq(persons.id, ctx.personId))
     .limit(1);
 
-  // Already onboarded? Don't re-render the DOB step — re-submitting saveDob would silently
-  // overwrite the user's own birth_date/birth_year/onboarded_at. Send them where they belong.
+  // Already onboarded? Don't re-render the flow — re-submitting would silently overwrite the user's
+  // own name/birth_date/birth_year/onboarded_at. Send them where they belong.
   if (row?.onboardedAt != null) {
     redirect(await resolvePostAuthRoute(db, ctx.personId));
   }
 
-  const fullName = row?.displayName ?? "there";
-  const firstName = row?.spokenName ?? fullName.split(" ")[0] ?? "there";
+  const initialName = initialOnboardingName(row?.displayName ?? "", row?.email ?? "");
 
   return (
     <WelcomeFlow
-      firstName={firstName}
+      initialName={initialName}
       invited={from === "invite"}
     />
   );

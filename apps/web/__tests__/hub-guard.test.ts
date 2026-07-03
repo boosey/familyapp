@@ -103,7 +103,7 @@ describe("/hub family-first guard (wiring)", () => {
       displayName: "Real Member",
     });
     await createFamily(testDb, { name: "The Member Family", creatorPersonId: personId });
-    await completeOnboarding(testDb, personId, { year: 1970, month: 6, day: 15 });
+    await completeOnboarding(testDb, personId, { displayName: "Real Member", year: 1970, month: 6, day: 15 });
     ctxPersonId = personId;
 
     // resolvePostAuthRoute returns "/hub" → no redirect; HubPage proceeds into the data section

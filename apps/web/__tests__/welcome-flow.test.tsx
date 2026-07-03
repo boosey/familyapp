@@ -1,57 +1,99 @@
 // @vitest-environment jsdom
 /**
- * WelcomeFlow: after the DOB step is saved, the flow routes STRAIGHT into the intake surface
- * (/hub/about-you) — the old "doors" fork is gone, so family creation can no longer be skipped
- * from here. Mocks the saveDob server action and next/navigation's router.
+ * WelcomeFlow: the onboarding state machine is welcome → name → dob. The final Continue submits the
+ * user-entered name AND the DOB in one server call, then routes STRAIGHT into the intake surface
+ * (/hub/about-you) — the old "doors" fork is gone, so family creation can no longer be skipped from
+ * here. Mocks the completeAccountOnboarding server action and next/navigation's router.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { WelcomeFlow } from "@/app/welcome/WelcomeFlow";
 
 vi.mock("@/app/welcome/actions", () => ({
-  saveDob: vi.fn(async () => {}),
+  completeAccountOnboarding: vi.fn(async () => {}),
 }));
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
-import { saveDob } from "@/app/welcome/actions";
+import { completeAccountOnboarding } from "@/app/welcome/actions";
+
+/** Drive welcome → name → dob and fill in the three DOB selects. */
+function fillNameAndDob(name = "Alex Boudreaux") {
+  // welcome step → begin ("Let's begin")
+  fireEvent.click(screen.getByRole("button", { name: /begin/i }));
+
+  // name step: type a name, then Continue
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: name } });
+  fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+  // dob step: the three selects are month / day / year in order.
+  const [monthSel, daySel, yearSel] = screen.getAllByRole("combobox");
+  fireEvent.change(monthSel!, { target: { value: "6" } });
+  fireEvent.change(daySel!, { target: { value: "15" } });
+  fireEvent.change(yearSel!, { target: { value: "1970" } });
+}
 
 describe("WelcomeFlow", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it("after saving DOB, routes into intake (no doors fork)", async () => {
-    render(<WelcomeFlow firstName="Alex" invited={false} />);
-
-    // welcome step → begin ("Let's begin")
+  it("pre-fills the name field from initialName", () => {
+    render(<WelcomeFlow initialName="Alex Boudreaux" invited={false} />);
     fireEvent.click(screen.getByRole("button", { name: /begin/i }));
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("Alex Boudreaux");
+  });
 
-    // dob step: the three selects are month / day / year in order.
-    const [monthSel, daySel, yearSel] = screen.getAllByRole("combobox");
-    fireEvent.change(monthSel!, { target: { value: "6" } });
-    fireEvent.change(daySel!, { target: { value: "15" } });
-    fireEvent.change(yearSel!, { target: { value: "1970" } });
+  it("blank initialName: Continue on the name step is disabled until a name is typed", () => {
+    render(<WelcomeFlow initialName="" invited={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /begin/i }));
+    expect(
+      (screen.getByRole("button", { name: /continue/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Rosa" } });
+    expect(
+      (screen.getByRole("button", { name: /continue/i }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
 
+  it("submits the entered name + DOB in one call, then routes into intake (no doors fork)", async () => {
+    render(<WelcomeFlow initialName="" invited={false} />);
+
+    fillNameAndDob("Alex Boudreaux");
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() =>
-      expect(saveDob).toHaveBeenCalledWith({ year: 1970, month: 6, day: 15 }),
+      expect(completeAccountOnboarding).toHaveBeenCalledWith({
+        displayName: "Alex Boudreaux",
+        year: 1970,
+        month: 6,
+        day: 15,
+      }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/hub/about-you"));
   });
 
-  it("saveDob error: shows dobSaveError copy, does not navigate, re-enables Continue", async () => {
-    (saveDob as Mock).mockRejectedValueOnce(new Error("boom"));
+  it("trims the entered name before submitting", async () => {
+    render(<WelcomeFlow initialName="" invited={false} />);
 
-    render(<WelcomeFlow firstName="Alex" invited={false} />);
+    fillNameAndDob("  Alex Boudreaux  ");
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /begin/i }));
+    await waitFor(() =>
+      expect(completeAccountOnboarding).toHaveBeenCalledWith({
+        displayName: "Alex Boudreaux",
+        year: 1970,
+        month: 6,
+        day: 15,
+      }),
+    );
+  });
 
-    const [monthSel, daySel, yearSel] = screen.getAllByRole("combobox");
-    fireEvent.change(monthSel!, { target: { value: "6" } });
-    fireEvent.change(daySel!, { target: { value: "15" } });
-    fireEvent.change(yearSel!, { target: { value: "1970" } });
+  it("save error: shows dobSaveError copy, does not navigate, re-enables Continue", async () => {
+    (completeAccountOnboarding as Mock).mockRejectedValueOnce(new Error("boom"));
 
+    render(<WelcomeFlow initialName="" invited={false} />);
+
+    fillNameAndDob("Alex Boudreaux");
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
     // catch block surfaces welcome.dobSaveError.

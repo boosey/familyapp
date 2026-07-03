@@ -3,11 +3,19 @@
 export const welcome = {
   introEyebrowInvited: "You're invited in",
   introEyebrowDefault: "Welcome",
-  greetingNamed: (firstName: string) => `Welcome to the family, ${firstName}.`,
+  // Name-free greetings: the stored name at this point may still be the email-prefix placeholder,
+  // so the intro must never address the person by an unconfirmed name. We ask for their name next.
+  greetingInvited: "Welcome to the family.",
   greetingDefault: "Welcome to Family Chronicle.",
   introBody:
-    "A couple of quick things and you'll be in. The only thing we truly need is your birthday — it helps us tell your stories at your pace.",
+    "A couple of quick things and you'll be in — your name and your birthday. They help us tell your stories at your pace.",
   begin: "Let's begin",
+  // Name step (asked before DOB) — the one place a real, user-entered name is guaranteed.
+  nameTitle: "What should we call you?",
+  nameBody:
+    "This is the name your family will see and the name we'll use when we talk with you.",
+  nameLabel: "Your name",
+  namePlaceholder: "First and last name",
   birthdayTitle: "Before we go in — when were you born?",
   birthdayBody:
     "This is the one thing we ask for. It shapes the questions and the pace we'll use with you later. Nothing else on this screen is required.",

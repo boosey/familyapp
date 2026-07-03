@@ -1,23 +1,25 @@
 "use client";
 
 /**
- * Onboarding state machine (client): welcome → dob.
+ * Onboarding state machine (client): welcome → name → dob.
  *
  * Design rules from the handoff that this preserves:
- *  - Date of birth is the ONE required ask; the rest of onboarding is optional.
+ *  - Name and date of birth are the required asks; the rest of onboarding is optional. The name step
+ *    exists because manual Clerk sign-up never collects one, so without it a Person keeps the
+ *    email-prefix placeholder forever.
  *  - Voice-first but never voice-only: every voice control is a visible STUB here (no mic in this
  *    environment) paired with a real typed path that is the actual way data is captured.
- *  - Saving DOB routes straight into the single intake surface at /hub/about-you. The old "doors"
- *    fork (which let a user skip family creation) is gone; family creation now happens earlier via
- *    the /families/start path.
+ *  - The final Continue submits name + DOB in one server call; on success it routes straight into
+ *    the single intake surface at /hub/about-you. The old "doors" fork (which let a user skip family
+ *    creation) is gone; family creation now happens earlier via the /families/start path.
  */
 import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
-import { saveDob } from "./actions";
+import { completeAccountOnboarding } from "./actions";
 import { common, welcome } from "@/app/_copy";
 
-type Step = "welcome" | "dob";
+type Step = "welcome" | "name" | "dob";
 
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
@@ -36,14 +38,18 @@ function daysInMonth(monthStr: string, yearStr: string): number {
 }
 
 export function WelcomeFlow({
-  firstName,
+  initialName,
   invited,
 }: {
-  firstName: string;
+  initialName: string;
   invited: boolean;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("welcome");
+
+  // Name — pre-filled from a real Clerk name, or blank when the stored name was the email-prefix
+  // fallback (see initialOnboardingName). This is the required identity the whole fix hinges on.
+  const [name, setName] = useState(initialName);
 
   // DOB
   const [month, setMonth] = useState("");
@@ -54,18 +60,29 @@ export function WelcomeFlow({
   const [voiceNote, setVoiceNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const nameComplete = name.trim().length > 0;
   const dobComplete = month !== "" && day !== "" && year !== "";
+
+  function goToStep(next: Step) {
+    setVoiceNote(false);
+    setStep(next);
+  }
 
   function showVoiceStub() {
     setVoiceNote(true);
   }
 
-  async function submitDob() {
-    if (!dobComplete) return;
+  async function submit() {
+    if (!nameComplete || !dobComplete) return;
     setBusy(true);
     setError(null);
     try {
-      await saveDob({ year: Number(year), month: Number(month), day: Number(day) });
+      await completeAccountOnboarding({
+        displayName: name.trim(),
+        year: Number(year),
+        month: Number(month),
+        day: Number(day),
+      });
       router.push("/hub/about-you");
     } catch {
       setError(welcome.dobSaveError);
@@ -132,9 +149,7 @@ export function WelcomeFlow({
         <div style={card}>
           <div className="kin-eyebrow">{invited ? welcome.introEyebrowInvited : welcome.introEyebrowDefault}</div>
           <h1 style={{ ...serifHeadline, marginTop: 12 }}>
-            {invited
-              ? welcome.greetingNamed(firstName)
-              : welcome.greetingDefault}
+            {invited ? welcome.greetingInvited : welcome.greetingDefault}
           </h1>
           <p style={sub}>
             {welcome.introBody}
@@ -143,7 +158,51 @@ export function WelcomeFlow({
             <KindredButton
               label={welcome.begin}
               size="large"
-              onClick={() => setStep("dob")}
+              onClick={() => goToStep("name")}
+            />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  /* ── Name (asked before DOB — guarantees a real, user-entered name) ──────── */
+  if (step === "name") {
+    return (
+      <main style={page}>
+        <div style={card}>
+          <h1 style={serifHeadline}>{welcome.nameTitle}</h1>
+          <p style={sub}>{welcome.nameBody}</p>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "28px 0 20px" }}>
+            <KindredVoiceButton label={welcome.sayItOutLoud} onClick={showVoiceStub} />
+            {voiceNote ? (
+              <p style={voiceHint}>{welcome.voiceUnavailableFields}</p>
+            ) : null}
+          </div>
+
+          <label className="kin-form-label">
+            {welcome.nameLabel}
+            <input
+              type="text"
+              className="kin-field"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={welcome.namePlaceholder}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && nameComplete) goToStep("dob");
+              }}
+            />
+          </label>
+
+          <div style={{ marginTop: 28 }}>
+            <KindredButton
+              label={welcome.continue}
+              size="large"
+              fullWidth
+              disabled={!nameComplete}
+              onClick={() => goToStep("dob")}
             />
           </div>
         </div>
@@ -230,7 +289,7 @@ export function WelcomeFlow({
               size="large"
               fullWidth
               disabled={!dobComplete || busy}
-              onClick={submitDob}
+              onClick={submit}
             />
           </div>
         </div>
@@ -238,6 +297,6 @@ export function WelcomeFlow({
     );
   }
 
-  // `step` is exhaustively handled above (welcome | dob); unreachable.
+  // `step` is exhaustively handled above (welcome | name | dob); unreachable.
   return null;
 }

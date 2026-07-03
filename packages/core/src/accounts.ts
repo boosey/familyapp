@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { accounts, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
+import { defaultSpokenName } from "./names";
 
 export interface SignUpAccountInput {
   /** Opaque id from the auth provider (mock or Clerk). */
@@ -24,12 +25,6 @@ export interface SignUpAccountInput {
 export interface AccountWithPerson {
   accountId: string;
   personId: string;
-}
-
-/** First whitespace-delimited word of a display name (the spoken-name default). */
-function defaultSpokenName(displayName: string): string {
-  const first = displayName.trim().split(/\s+/)[0];
-  return first && first.length > 0 ? first : displayName.trim();
 }
 
 /**
