@@ -32,14 +32,19 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-// Test-controlled runtime: a real PGlite db + a stub auth returning an account context.
+// Test-controlled runtime: a real PGlite db + a stub auth returning a controllable context.
+// `ctxKind` defaults to "account" (the family-first tests below); the anonymous test flips it.
 let testDb: Database;
 let ctxPersonId: string;
+let ctxKind: "account" | "anonymous" = "account";
 vi.mock("@/lib/runtime", () => ({
   getRuntime: async () => ({
     db: testDb,
     auth: {
-      getCurrentAuthContext: async () => ({ kind: "account", personId: ctxPersonId }),
+      getCurrentAuthContext: async () =>
+        ctxKind === "anonymous"
+          ? { kind: "anonymous" as const }
+          : { kind: "account" as const, personId: ctxPersonId },
     },
   }),
   isClerkConfigured: () => false,
@@ -61,7 +66,22 @@ const noSearchParams = Promise.resolve({});
 
 beforeEach(() => {
   lastRedirect = undefined;
+  ctxKind = "account";
   feedLoaded.mockClear();
+});
+
+describe("/hub anonymous gate (wiring)", () => {
+  it("redirects a signed-out visitor to the homepage before loading the feed", async () => {
+    // A signed-out visitor who lands on /hub (stale bookmark, shared link, back button) must be
+    // bounced to the root landing — the real sign-in/sign-up front door — NOT shown an inline
+    // auth card. The homepage already IS that surface.
+    ctxKind = "anonymous";
+    testDb = await createTestDatabase();
+
+    await expect(HubPage({ searchParams: noSearchParams })).rejects.toThrow("NEXT_REDIRECT");
+    expect(lastRedirect).toBe("/");
+    expect(feedLoaded).not.toHaveBeenCalled();
+  });
 });
 
 describe("/hub family-first guard (wiring)", () => {

@@ -1,12 +1,20 @@
 /**
  * Kindred theming for Clerk's hosted <SignIn>/<SignUp>/<UserButton>. A plain, serializable style
  * object — it MUST NOT import from @clerk/* so it can be imported from any module (including the
- * mock build) without pulling Clerk into the graph. Values reference the live Kindred CSS custom
- * properties (from _kindred/tokens.css) so the theme tracks the design system, not a copy of it.
+ * mock build) without pulling Clerk into the graph.
  *
- * Property names follow Clerk's `appearance` API (variables + elements), verified against current
- * Clerk docs for @clerk/nextjs 6.39.5 — the current (non-deprecated) variable names are used
- * (colorForeground / colorMutedForeground / colorInput / colorInputForeground). Do not edit from memory.
+ * SPLIT OF RESPONSIBILITY (read before adding element styles here):
+ * `variables` are resolved by Clerk at the widget WRAPPER, where the Kindred tokens exist, so
+ * `var(--accent)` works and the computed value inherits into Clerk's internals — keep the palette
+ * here. But `elements` styles are applied ON Clerk's own form controls, and Clerk RESETS CSS custom
+ * properties on those controls — so a `var(--token)` placed on a control resolves to EMPTY and the
+ * control silently paints with Clerk's defaults (this is what left the primary button transparent).
+ * Therefore the token-based VISUAL styling of the controls (button/input/label/social/divider/card)
+ * lives in global CSS instead — see the "Clerk … Kindred theme" block in app/globals.css, which
+ * re-asserts the tokens with `inherit` before using them. Only put styles here that use LITERAL
+ * values (no `var(--…)`) or are pure structural hides. Do NOT reintroduce `var(--…)` element styles.
+ *
+ * Variable names follow Clerk's modern `appearance` API, verified against @clerk/nextjs 6.39.5.
  */
 export const kindredClerkAppearance = {
   variables: {
@@ -22,30 +30,9 @@ export const kindredClerkAppearance = {
   },
   elements: {
     rootBox: { width: "100%" },
-    // Flatten Clerk's own card so it sits inside the AuthScreen shell, not as a competing widget.
-    card: {
-      boxShadow: "none",
-      border: "none",
-      background: "transparent",
-      padding: 0,
-    },
-    // AuthScreen already renders the title/subtitle — hide Clerk's duplicate header.
+    // AuthScreen already renders the title/subtitle — hide Clerk's duplicate header. Structural
+    // hides use literal values, so (unlike var()-based styling) they apply fine on reset controls.
     headerTitle: { display: "none" },
     headerSubtitle: { display: "none" },
-    formButtonPrimary: {
-      backgroundColor: "var(--accent)",
-      color: "var(--accent-on)",
-      fontFamily: "var(--font-ui)",
-      borderRadius: "var(--radius-md)",
-      textTransform: "none",
-    },
-    formFieldLabel: { fontFamily: "var(--font-ui)", color: "var(--text-meta)" },
-    formFieldInput: {
-      background: "var(--surface-page)",
-      borderColor: "var(--border)",
-      borderRadius: "var(--radius-md)",
-      color: "var(--text-body)",
-    },
-    footerActionLink: { color: "var(--accent-strong)", fontWeight: 600 },
   },
 } as const;
