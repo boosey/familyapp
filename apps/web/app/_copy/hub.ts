@@ -11,6 +11,8 @@ export const hub = {
     // so the hub shell itself has no anonymous copy.
     chronicle: "Your Chronicle",
     tabStories: "Stories",
+    // Sits between Stories and "To answer" — the hub's home for the Family album (#19).
+    tabAlbum: "Album",
     // Tab label follows the "Story Browse (Hub)" design ("To answer"); the section heading inside
     // the tab stays "Questions for you" (hub.questions.title).
     tabQuestions: "To answer",
@@ -246,6 +248,9 @@ export const hub = {
     notAllowedToManagePhoto: "You can't change this photo.",
   },
   album: {
+    // Back-link on the standalone /hub/album deep-link route; returns to the album's tab home
+    // (/hub?tab=album). Names its destination tab, matching backToStories / backToQuestions.
+    backToAlbum: "← Back to album",
     title: "Family album",
     empty: "No photos yet. Add the first one below.",
     addLabel: "Add a photo",
