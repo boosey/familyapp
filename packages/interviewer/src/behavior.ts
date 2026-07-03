@@ -31,7 +31,14 @@
  *                                             before open-ended reminiscence.
  */
 import type { BiographicalProfile } from "@chronicle/db";
+import type {
+  CandidateDisposition,
+  FollowUpDispositionReason,
+  FollowUpPolicy,
+  FollowUpType,
+} from "@chronicle/db";
 import type { BiographicalAnchors, PendingAsk, PriorStoryMemory } from "./contracts";
+import type { FollowUpCandidate, FollowUpEvaluation } from "./contracts";
 import {
   QUESTION_BANK,
   REMINISCENCE_BUMP_PHASES,
@@ -344,4 +351,144 @@ export function primeCoveredCategoriesFromPrior(
       state.coveredCategories.add(tag.toLowerCase());
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// decideFollowUp — the DISPOSE half of propose-then-dispose (ADR-0013). The evaluator proposed
+// candidates + tags; this pure function applies the code-owned gates and picks at most one,
+// emitting a disposition for EVERY candidate (nothing dropped without a recorded reason). The
+// caller (recordAnswerAction's mini-loop) persists the returned dispositions into the ledger.
+// ---------------------------------------------------------------------------
+
+export interface FollowUpDecisionInput {
+  evaluation: FollowUpEvaluation;
+  policy: FollowUpPolicy;
+  /** Word count of the answer that was evaluated (thin-answer gate). */
+  answerWordCount: number;
+  followUpsAskedInThread: number;
+  followUpsAskedInSession: number;
+  distressed: boolean;
+  offRampRequested: boolean;
+  rapportEstablished: boolean;
+  /** Seeds already asked this sitting — the cheap lexical anti-repeat backstop. */
+  alreadyAskedSeeds: ReadonlyArray<string>;
+}
+
+/** A thread-level veto that applies before any per-candidate ranking. */
+export type FollowUpShortCircuit = Extract<
+  FollowUpDispositionReason,
+  "thin_answer" | "distress_shortcircuit" | "over_cap_thread" | "over_cap_session"
+>;
+
+export interface FollowUpDecision {
+  /** The chosen candidate to phrase, or null → the thread ends. */
+  selected: FollowUpCandidate | null;
+  /** Every candidate + its coded disposition — the audit payload. */
+  dispositions: CandidateDisposition[];
+  /** A thread-level short-circuit reason, or null if the veto (if any) was per-candidate. */
+  shortCircuit: FollowUpShortCircuit | null;
+}
+
+/** Tie-break preference among equal-confidence candidates. Emotional is least-preferred (caution). */
+const TYPE_PRIORITY: Record<FollowUpType, number> = {
+  factual: 0,
+  sensory: 1,
+  temporal: 2,
+  relational: 3,
+  emotional: 4,
+};
+
+export function decideFollowUp(input: FollowUpDecisionInput): FollowUpDecision {
+  const candidates = input.evaluation.candidates;
+
+  // (1) Thread-level short-circuits. Distress/off-ramp first (safety), then thin-answer, then the
+  // hard caps. Every candidate is marked with the short-circuit reason — nothing silent.
+  const sc = threadShortCircuit(input);
+  if (sc) {
+    return {
+      selected: null,
+      shortCircuit: sc,
+      dispositions: candidates.map((c) => ({ candidate: c, reason: sc, selected: false })),
+    };
+  }
+
+  // (2) Per-candidate eligibility. First failing gate wins (deterministic precedence below).
+  const dispositions: CandidateDisposition[] = [];
+  const eligible: FollowUpCandidate[] = [];
+  for (const c of candidates) {
+    const reason = ineligibilityReason(c, input);
+    if (reason) dispositions.push({ candidate: c, reason, selected: false });
+    else eligible.push(c);
+  }
+
+  if (eligible.length === 0) {
+    return { selected: null, shortCircuit: null, dispositions };
+  }
+
+  // (3) Authoritative rank: confidence desc, tie-break by type priority then seed. The model's
+  // ordering is advisory; code owns the final choice.
+  const winner = [...eligible].sort(compareCandidates)[0]!;
+  for (const c of eligible) {
+    dispositions.push({
+      candidate: c,
+      reason: c === winner ? "selected" : "not_selected",
+      selected: c === winner,
+    });
+  }
+  return { selected: winner, shortCircuit: null, dispositions };
+}
+
+function threadShortCircuit(input: FollowUpDecisionInput): FollowUpShortCircuit | null {
+  if (input.distressed || input.offRampRequested) return "distress_shortcircuit";
+  if (input.answerWordCount < input.policy.thinAnswerWordFloor) return "thin_answer";
+  if (input.followUpsAskedInThread >= input.policy.maxFollowUpsPerThread) return "over_cap_thread";
+  if (input.followUpsAskedInSession >= input.policy.maxFollowUpsPerSession) return "over_cap_session";
+  return null;
+}
+
+/**
+ * Per-candidate veto precedence (first match recorded): emotional-door (hard safety veto) →
+ * rapport gate (safety) → duplicate (already covered) → confidence floor (quality). Safety vetoes
+ * are checked FIRST and recorded under their own distinct reason even when a candidate is ALSO a
+ * duplicate — ADR-0013's payoff is auditability, and an auditor scanning for "did the model try to
+ * open a closed emotional door" must not have that undercounted by ordinary dedup noise. Selection
+ * outcome is unchanged either way (every branch here means "ineligible"); only the RECORDED reason
+ * depends on this ordering. Returns null when the candidate is eligible.
+ */
+function ineligibilityReason(
+  c: FollowUpCandidate,
+  input: FollowUpDecisionInput,
+): FollowUpDispositionReason | null {
+  if (c.type === "emotional" && !c.narratorOpened) return "emotional_door_closed";
+  if (c.sensitivity === "high" && !input.rapportEstablished) return "below_rapport";
+  if (isDuplicate(c.threadSeed, input.alreadyAskedSeeds)) return "duplicate";
+  if (c.confidence < input.policy.confidenceThreshold) return "below_confidence";
+  return null;
+}
+
+function compareCandidates(a: FollowUpCandidate, b: FollowUpCandidate): number {
+  if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+  if (TYPE_PRIORITY[a.type] !== TYPE_PRIORITY[b.type]) return TYPE_PRIORITY[a.type] - TYPE_PRIORITY[b.type];
+  return a.threadSeed.localeCompare(b.threadSeed);
+}
+
+function normSeed(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Cheap lexical anti-repeat BACKSTOP, not the primary novelty defense — the evaluator itself
+ * receives `alreadyAskedSeeds` and is instructed to propose only novel threads. The substring
+ * check here over-matches on word-prefix collisions (e.g. "the war" vs "the warmth of summer"
+ * would be flagged as duplicates) — accepted, since a false-positive dedup just costs one
+ * candidate, whereas a false negative would let the loop repeat itself.
+ */
+function isDuplicate(seed: string, priors: ReadonlyArray<string>): boolean {
+  const n = normSeed(seed);
+  if (!n) return false;
+  return priors.some((p) => {
+    const q = normSeed(p);
+    if (!q) return false;
+    return q === n || q.includes(n) || n.includes(q);
+  });
 }

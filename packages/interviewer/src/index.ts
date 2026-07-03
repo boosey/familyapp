@@ -42,9 +42,13 @@ export {
   pickNextIntent,
   primeCoveredCategoriesFromPrior,
   recordTurnCompleted,
+  decideFollowUp,
   type SessionState,
   type PromptIntent,
   type PickInput,
+  type FollowUpDecisionInput,
+  type FollowUpDecision,
+  type FollowUpShortCircuit,
 } from "./behavior";
 
 export {
