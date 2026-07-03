@@ -211,6 +211,7 @@ export const hub = {
   // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
   // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).
   compose: {
+    backToStories: "← Back to stories",
     titleLabel: "Title",
     typeIt: "Type it",
     textareaLabel: "Your story",
