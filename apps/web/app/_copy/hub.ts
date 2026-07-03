@@ -7,10 +7,8 @@ const recordedAt = (label: string) => `RECORDED ${label.toUpperCase()}`;
 
 export const hub = {
   shell: {
-    // Brand name lives in common.appName — referenced directly by hub/page.tsx.
-    signedOut: "Sign in to see your family's stories.",
-    signIn: "Sign in",
-    createFamily: "Create your family",
+    // Signed-out visitors are redirected to the root landing (the sign-in/sign-up front door),
+    // so the hub shell itself has no anonymous copy.
     chronicle: "Your Chronicle",
     tabStories: "Stories",
     // Tab label follows the "Story Browse (Hub)" design ("To answer"); the section heading inside

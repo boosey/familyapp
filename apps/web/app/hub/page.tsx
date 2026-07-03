@@ -5,7 +5,6 @@
  * Loads feed + pending questions in parallel, then delegates to tab sub-components.
  * Navigation between tabs is handled by HubTabsNav (client wrapper around HubTabs).
  */
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
@@ -20,8 +19,8 @@ import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { mockSignOut } from "@/lib/auth-mock";
 import { isClerkConfigured } from "@/lib/clerk-config";
 import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
-import { KindredButton, KindredAccountMenu } from "@/app/_kindred";
-import { hub, common } from "@/app/_copy";
+import { KindredAccountMenu } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
 import { HubTabsNav } from "./HubTabsNav";
 import { IntakeReminder } from "./IntakeReminder";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -49,60 +48,14 @@ export default async function HubPage({
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
-  /* ── Anonymous gate ─────────────────────────────────────────────────────── */
+  /* ── Anonymous gate ─────────────────────────────────────────────────────────
+   * A signed-out visitor who lands on /hub (stale bookmark, shared link, back
+   * button) is sent to the root landing — the real front door that offers both
+   * "sign up" and "sign in". We do NOT render an auth card inline here: the
+   * homepage already IS that surface, and an inline copy split the sign-in entry
+   * across two different screens. */
   if (ctx.kind === "anonymous") {
-    return (
-      <main
-        style={{
-          minHeight: "100dvh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--surface-page)",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 440,
-            width: "100%",
-            padding: "clamp(32px, 6vw, 64px)",
-            background: "var(--surface-card)",
-            border: "var(--border-width) solid var(--border)",
-            borderRadius: "var(--radius-xl)",
-            boxShadow: "var(--shadow-lift)",
-          }}
-        >
-          <h1
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "var(--text-display)",
-              color: "var(--text-body)",
-              margin: "0 0 12px",
-            }}
-          >
-            {common.appName}
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-muted)",
-              margin: "0 0 28px",
-            }}
-          >
-            {hub.shell.signedOut}
-          </p>
-          <div style={{ display: "grid", gap: 12, maxWidth: 260 }}>
-            <Link href="/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label={hub.shell.signIn} fullWidth />
-            </Link>
-            <Link href="/sign-up" style={{ textDecoration: "none" }}>
-              <KindredButton label={hub.shell.createFamily} variant="secondary" fullWidth />
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
+    redirect("/");
   }
 
   /* ── Family-first gate ──────────────────────────────────────────────────────
