@@ -69,6 +69,66 @@ export interface PersistedRecording {
   story: Story;
 }
 
+export interface TextDraftInput {
+  ownerPersonId: string;
+  /** The typed words — canonical for a text story. Must be non-empty (trimmed). */
+  text: string;
+  /** The question that prompted this telling, if any. */
+  promptQuestion?: string;
+  /** The Ask this answers, if it came from the family relay. */
+  askId?: string;
+  /** The originating family context (ADR-0010), if captured for a specific family. */
+  originatingFamilyId?: string;
+}
+
+export interface CreatedTextDraft {
+  story: Story;
+}
+
+/**
+ * Create a TEXT-origin draft Story (ADR-0007): the typed words are canonical, there is no
+ * recording. The words go into `transcript` (the render stage produces `prose`/`title` from them,
+ * exactly as for a voice transcript). A `user_authored` L1 prose-revision records the source text.
+ * No `media` row and no `story_recordings` row are created — the kind⇔recording CHECK
+ * (invariants.sql) requires `recording_media_id IS NULL` for a text story, which this satisfies.
+ */
+export async function createTextDraft(
+  db: Database,
+  input: TextDraftInput,
+): Promise<CreatedTextDraft> {
+  const text = input.text.trim();
+  if (text.length === 0) {
+    throw new InvariantViolation("a text story must have non-empty words");
+  }
+  return db.transaction(async (tx) => {
+    const [story] = await tx
+      .insert(stories)
+      .values({
+        ownerPersonId: input.ownerPersonId,
+        kind: "text",
+        recordingMediaId: null,
+        state: "draft",
+        audienceTier: "private",
+        transcript: text,
+        promptQuestion: input.promptQuestion ?? null,
+        askId: input.askId ?? null,
+        originatingFamilyId: input.originatingFamilyId ?? null,
+      })
+      .returning();
+
+    await tx.insert(proseRevisions).values({
+      storyId: story!.id,
+      level: "user_authored",
+      text,
+      modelId: null,
+      promptText: null,
+      actorPersonId: input.ownerPersonId,
+    });
+
+    return { story: story! };
+  });
+}
+
 /**
  * Persist the canonical recording, then create the draft Story that points at it. Call this only
  * AFTER the audio bytes are safely in object storage — so the recording is durable before any
@@ -96,6 +156,7 @@ export async function persistRecordingAndCreateDraft(
       .insert(stories)
       .values({
         ownerPersonId: recording.ownerPersonId,
+        kind: "voice",
         recordingMediaId: rec!.id,
         state: "draft",
         audienceTier: "private",
