@@ -86,3 +86,7 @@ export type {
   FollowUpEvaluator,
   FollowUpCandidate,
 } from "./contracts";
+export {
+  createLlmFollowUpEvaluator,
+  parseCandidates,
+} from "./follow-up-evaluator";

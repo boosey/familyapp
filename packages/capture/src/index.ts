@@ -9,6 +9,7 @@ export {
 } from "./sessions";
 export {
   ingestRecording,
+  ingestFollowUpTake,
   InvalidSessionError,
   type CaptureActor,
   type CaptureSource,

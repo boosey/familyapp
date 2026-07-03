@@ -11,7 +11,7 @@
  * and calls this exact function — no rebuild of capture.
  */
 import { randomUUID } from "node:crypto";
-import { persistRecordingAndCreateDraft } from "@chronicle/core";
+import { persistRecordingAndCreateDraft, persistTakeRecording } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
 import { resolveCaptureActor } from "./identity";
@@ -110,4 +110,49 @@ export async function ingestRecording(
   );
 
   return { storyId: story.id, recordingMediaId: recording.id, storageKey: key };
+}
+
+/**
+ * Persist a FOLLOW-UP take onto an EXISTING draft story (ADR-0012's multi-take model). A sibling of
+ * `ingestRecording` that appends a take rather than creating a story: same storage-FIRST discipline
+ * (the audio is durable before any DB row), but the core write is `persistTakeRecording` (append the
+ * immutable Media + the next `story_recordings` row) instead of `persistRecordingAndCreateDraft`.
+ *
+ * The caller (the in-hub answer action, Task 6b) does its own owner + draft-state authorization
+ * BEFORE calling this — so, like the `account` branch of `ingestRecording`, this trusts the passed
+ * `ownerPersonId` and never re-authenticates.
+ */
+export async function ingestFollowUpTake(
+  db: Database,
+  storage: MediaStorage,
+  input: { storyId: string; ownerPersonId: string; audio: CapturedAudio },
+): Promise<{ storyRecordingId: string; recordingMediaId: string; storageKey: string }> {
+  const key = `story-audio/${input.ownerPersonId}/${randomUUID()}.${extensionFor(
+    input.audio.contentType,
+  )}`;
+
+  // (1) Persist the audio FIRST — durable before any DB row is written, exactly as ingestRecording.
+  await storage.put({
+    key,
+    bytes: input.audio.bytes,
+    contentType: input.audio.contentType,
+  });
+
+  // (2) Append the immutable Media row + the next ordered take (audited core write).
+  const checksum = `sha256:${sha256Hex(input.audio.bytes)}`;
+  const { recording, storyRecording } = await persistTakeRecording(
+    db,
+    {
+      ownerPersonId: input.ownerPersonId,
+      storageKey: key,
+      contentType: input.audio.contentType,
+      ...(input.audio.durationSeconds !== undefined
+        ? { durationSeconds: input.audio.durationSeconds }
+        : {}),
+      checksum,
+    },
+    input.storyId,
+  );
+
+  return { storyRecordingId: storyRecording.id, recordingMediaId: recording.id, storageKey: key };
 }

@@ -32,6 +32,10 @@ import {
   type LanguageModel,
   type Transcriber,
 } from "@chronicle/pipeline";
+import {
+  createLlmFollowUpEvaluator,
+  type FollowUpEvaluator,
+} from "@chronicle/interviewer";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createGroqLanguageModel } from "@chronicle/llm-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
@@ -143,6 +147,13 @@ type Runtime = {
    * LanguageModel directly, not a full transcribe→render Pipeline.
    */
   languageModel: LanguageModel;
+  /**
+   * The narrator follow-up evaluator (ADR-0013 propose side), built on the SAME `languageModel` —
+   * so it automatically follows whichever LLM is live (scripted mock in dev/CI, real Anthropic/Groq
+   * when keyed). Gated behind the (off-by-default) follow-up policy flag, so it is inert until
+   * enabled. The evaluator only PROPOSES; `decideFollowUp` in @chronicle/interviewer disposes.
+   */
+  followUpEvaluator: FollowUpEvaluator;
   /**
    * The bare transcriber (real Groq Whisper adapter when GROQ_API_KEY is set, else the
    * deterministic mock). Exposed for the non-pipeline transcription call site — intake audio
@@ -290,6 +301,9 @@ async function build(): Promise<Runtime> {
         : new ScriptedLanguageModel(),
     llmName,
   );
+  // The follow-up evaluator rides the same languageModel — mock LLM → mock behavior, real key →
+  // real model, no separate wiring. Inert until the follow-up policy flag is enabled.
+  const followUpEvaluator = createLlmFollowUpEvaluator(languageModel);
   // Make the silent mock-fallback visible: a misplaced key (e.g. left in the monorepo-root .env,
   // which `next dev` does not load) means the pipeline quietly runs on scripted stubs. Log which
   // adapters are actually live so "am I on real AI?" is answerable from the dev console.
@@ -338,6 +352,7 @@ async function build(): Promise<Runtime> {
     storage,
     auth,
     languageModel,
+    followUpEvaluator,
     transcriber,
     newPipeline,
     dispatchPipeline,
