@@ -57,6 +57,10 @@ export type {
   IntakeAnswer,
   NewIntakeAnswer,
   IntakeOrigin,
+  StoryRecording,
+  NewStoryRecording,
+  FollowUpDecisionRow,
+  NewFollowUpDecisionRow,
 } from "./schema";
 export type {
   FollowUpType,

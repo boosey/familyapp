@@ -30,6 +30,12 @@ CREATE TRIGGER prose_revisions_append_only
   BEFORE UPDATE OR DELETE ON prose_revisions
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
 
+-- Follow-up decision ledger: append-only (ADR-0013). Reuses the shared guard. A follow-up
+-- OUTCOME is a NEW row referencing its decision, never an edit of the decision row.
+CREATE TRIGGER follow_up_decisions_append_only
+  BEFORE UPDATE OR DELETE ON follow_up_decisions
+  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+
 -- Media: consent-scoped immutability per ADR-0002.
 --   UPDATE  → always forbidden (we never mutate audio bytes or their metadata).
 --   DELETE  → allowed ONLY when neither the media row nor its owning Story is linked to any
@@ -104,6 +110,28 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER stories_recording_pointer_immutable
   BEFORE UPDATE ON stories
   FOR EACH ROW EXECUTE FUNCTION chronicle_story_recording_pointer_immutable();
+
+-- Story takes are immutable AFTER approval (ADR-0012): a take may be dropped/re-recorded only
+-- while the story has no consent records (pre-approval). Once the story is approved (a consent
+-- row exists), the ordered take set is frozen — removable only by deleting the whole Story.
+-- (UPDATE is left permitted so the transcribe step can backfill the derived transcript column;
+-- the canonical AUDIO is protected by the media_immutable guard, not this one.)
+CREATE OR REPLACE FUNCTION chronicle_story_recording_delete_guard()
+RETURNS trigger AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM consent_records WHERE story_id = OLD.story_id) THEN
+    RAISE EXCEPTION
+      'Cannot delete story_recording %: its story has consent records; takes are immutable after approval.',
+      OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER story_recordings_post_consent_immutable
+  BEFORE DELETE ON story_recordings
+  FOR EACH ROW EXECUTE FUNCTION chronicle_story_recording_delete_guard();
 
 -- ---------------------------------------------------------------------------
 -- (2) At most one ACTIVE membership per (person, family). Ended/paused rows may coexist, so a

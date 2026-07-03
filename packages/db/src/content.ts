@@ -8,4 +8,4 @@
  * repository. Identity/relationship tables (persons, memberships, ...) are NOT here — they live
  * in @chronicle/db/schema and are freely importable.
  */
-export { media, stories, proseRevisions } from "./schema";
+export { media, stories, proseRevisions, storyRecordings } from "./schema";

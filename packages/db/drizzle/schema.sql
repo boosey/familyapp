@@ -6,6 +6,8 @@
 CREATE TYPE "public"."ask_status" AS ENUM('queued', 'routed', 'answered');
 CREATE TYPE "public"."audience_tier" AS ENUM('private', 'branch', 'family', 'public');
 CREATE TYPE "public"."consent_action" AS ENUM('approved_for_sharing', 'set_audience_tier', 'revoked', 'paused_membership');
+CREATE TYPE "public"."follow_up_outcome" AS ENUM('answered', 'skipped', 'off_ramped');
+CREATE TYPE "public"."follow_up_record_kind" AS ENUM('decision', 'outcome');
 CREATE TYPE "public"."intake_origin" AS ENUM('voice', 'typed');
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');
 CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'declined');
@@ -59,6 +61,23 @@ CREATE TABLE "families" (
 	"discoverable" boolean DEFAULT false NOT NULL,
 	"creator_person_id" uuid NOT NULL,
 	"steward_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "follow_up_decisions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"story_id" uuid NOT NULL,
+	"thread_position" integer NOT NULL,
+	"record_kind" "follow_up_record_kind" NOT NULL,
+	"evaluator_model_id" text,
+	"candidates" jsonb,
+	"dispositions" jsonb,
+	"selected_seed" text,
+	"phrased_line" text,
+	"policy" jsonb,
+	"decision_id" uuid,
+	"outcome" "follow_up_outcome",
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -201,6 +220,16 @@ CREATE TABLE "story_families" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "story_recordings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"position" integer NOT NULL,
+	"media_id" uuid NOT NULL,
+	"transcript" text,
+	"transcript_word_timings" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "story_views" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"story_id" uuid NOT NULL,
@@ -218,6 +247,8 @@ ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_med
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_creator_person_id_persons_id_fk" FOREIGN KEY ("creator_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_steward_person_id_persons_id_fk" FOREIGN KEY ("steward_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_decision_id_follow_up_decisions_id_fk" FOREIGN KEY ("decision_id") REFERENCES "public"."follow_up_decisions"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
@@ -241,6 +272,8 @@ ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FO
 ALTER TABLE "stories" ADD CONSTRAINT "stories_originating_family_id_families_id_fk" FOREIGN KEY ("originating_family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
@@ -248,6 +281,7 @@ CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
 CREATE INDEX "consent_story_idx" ON "consent_records" USING btree ("story_id");
+CREATE INDEX "follow_up_decisions_story_idx" ON "follow_up_decisions" USING btree ("story_id");
 CREATE INDEX "intake_answers_person_idx" ON "intake_answers" USING btree ("person_id");
 CREATE UNIQUE INDEX "intake_answers_person_question_uq" ON "intake_answers" USING btree ("person_id","question_key");
 CREATE UNIQUE INDEX "invitations_token_hash_uq" ON "invitations" USING btree ("token_hash");
@@ -269,5 +303,7 @@ CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");
 CREATE UNIQUE INDEX "story_families_story_family_uq" ON "story_families" USING btree ("story_id","family_id");
 CREATE INDEX "story_families_story_idx" ON "story_families" USING btree ("story_id");
 CREATE INDEX "story_families_family_idx" ON "story_families" USING btree ("family_id");
+CREATE INDEX "story_recordings_story_idx" ON "story_recordings" USING btree ("story_id");
+CREATE UNIQUE INDEX "story_recordings_story_position_uq" ON "story_recordings" USING btree ("story_id","position");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
 CREATE INDEX "story_views_person_idx" ON "story_views" USING btree ("person_id");

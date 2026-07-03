@@ -28,6 +28,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type {
+  FollowUpCandidate,
+  CandidateDisposition,
+  FollowUpPolicy,
+} from "./follow-up-types";
 
 // ---------------------------------------------------------------------------
 // Enums — the shared vocabulary of states/tiers/roles (Part II)
@@ -58,6 +64,14 @@ export const storyStateEnum = pgEnum("story_state", [
   "shared",
   "archived",
 ]);
+
+/** Two-kind ledger: a `decision` row (candidates + dispositions + phrased line) and an
+ * `outcome` row (what the narrator did), the latter referencing the former. Mirrors the
+ * consent ledger's append + superseding-append shape. */
+export const followUpRecordKindEnum = pgEnum("follow_up_record_kind", ["decision", "outcome"]);
+
+/** What the narrator did with an asked follow-up. */
+export const followUpOutcomeEnum = pgEnum("follow_up_outcome", ["answered", "skipped", "off_ramped"]);
 
 /**
  * The single visibility dial. `branch` is stored faithfully (non-lossy) even though Phase 0
@@ -532,6 +546,74 @@ export const consentRecords = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// StoryRecording — an ordered take within a Story (ADR-0012). Position 0 is the initial
+// answer; 1,2,... are follow-up takes, each with its own immutable Media (kind=story_audio)
+// and derived transcript. Holds transcript CONTENT, so the table object lives behind
+// @chronicle/db/content. Takes are freely droppable pre-approval; once the owning Story has a
+// consent record they are frozen (invariants.sql delete-guard) — the ordered take set becomes
+// part of the audit trail, just like the canonical recording itself.
+// ---------------------------------------------------------------------------
+
+export const storyRecordings = pgTable(
+  "story_recordings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id").notNull().references(() => stories.id),
+    /** 0-based take order within the story. 0 = the initial answer; 1,2,… = follow-up takes. */
+    position: integer("position").notNull(),
+    /** The immutable Media (kind=story_audio) for THIS take. */
+    mediaId: uuid("media_id").notNull().references(() => media.id),
+    /** Raw ASR output for this take. Null until the transcribe step fills it. */
+    transcript: text("transcript"),
+    /** Word-level timing for this take (seam for sync playback), 1x time. */
+    transcriptWordTimings: jsonb("transcript_word_timings").$type<
+      Array<{ word: string; startMs: number; endMs: number }>
+    >(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("story_recordings_story_idx").on(t.storyId),
+    uniqueIndex("story_recordings_story_position_uq").on(t.storyId, t.position),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// FollowUpDecision — the append-only narrator-AI follow-up ledger (ADR-0013). Each turn writes
+// a `decision` row (candidates + dispositions + the phrased line the narrator heard), then a
+// later `outcome` row references it (what the narrator did). Mirrors the consent ledger's
+// append + superseding-append shape — an outcome is a NEW row, never an edit of the decision.
+// ---------------------------------------------------------------------------
+
+export const followUpDecisions = pgTable(
+  "follow_up_decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic total order — deterministic "latest decision" even under same-timestamp rows. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    storyId: uuid("story_id").notNull().references(() => stories.id),
+    /** 0-based follow-up turn index within the thread (0 = evaluation after the initial answer). */
+    threadPosition: integer("thread_position").notNull(),
+    recordKind: followUpRecordKindEnum("record_kind").notNull(),
+    // --- decision rows (null on outcome rows) ---
+    evaluatorModelId: text("evaluator_model_id"),
+    candidates: jsonb("candidates").$type<FollowUpCandidate[]>(),
+    dispositions: jsonb("dispositions").$type<CandidateDisposition[]>(),
+    /** The chosen threadSeed, or null when nothing was selected (thread ends). */
+    selectedSeed: text("selected_seed"),
+    /** The line the narrator actually heard, or null when nothing was selected. */
+    phrasedLine: text("phrased_line"),
+    /** Snapshot of the resolved policy that governed this turn (audit/replay). */
+    policy: jsonb("policy").$type<FollowUpPolicy>(),
+    // --- outcome rows (null on decision rows) ---
+    /** Self-FK: the decision row this outcome resolves. Null on decision rows. */
+    decisionId: uuid("decision_id").references((): AnyPgColumn => followUpDecisions.id),
+    outcome: followUpOutcomeEnum("outcome"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("follow_up_decisions_story_idx").on(t.storyId)],
+);
+
+// ---------------------------------------------------------------------------
 // Ask — the self-feeding relay. A family member's question for a narrator, which becomes
 // the narrator's next prompt and, once answered+approved, the family's notification.
 // An Ask is a prompt, not expressive content — it is not owned by a Family.
@@ -782,6 +864,10 @@ export type StoryFamily = typeof storyFamilies.$inferSelect;
 export type NewStoryFamily = typeof storyFamilies.$inferInsert;
 export type ProseRevision = typeof proseRevisions.$inferSelect;
 export type NewProseRevision = typeof proseRevisions.$inferInsert;
+export type StoryRecording = typeof storyRecordings.$inferSelect;
+export type NewStoryRecording = typeof storyRecordings.$inferInsert;
+export type FollowUpDecisionRow = typeof followUpDecisions.$inferSelect;
+export type NewFollowUpDecisionRow = typeof followUpDecisions.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
