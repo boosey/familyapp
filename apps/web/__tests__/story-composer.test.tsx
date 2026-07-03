@@ -11,8 +11,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { StoryComposer, type DraftInfo } from "@/app/hub/StoryComposer";
 
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh, push: () => {} }),
+  useRouter: () => ({ refresh, push }),
 }));
 
 const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
@@ -93,5 +94,36 @@ describe("StoryComposer review title field", () => {
   it("a text draft (no audio) renders no relisten audio in review", () => {
     render(<StoryComposer mode="tell" ask={null} draft={draft} />);
     expect(document.querySelector("audio")).toBeNull();
+  });
+});
+
+describe("StoryComposer discard destination is mode-aware", () => {
+  const draft: DraftInfo = {
+    storyId: STORY_ID,
+    recordedAt: new Date(0).toISOString(),
+    mediaUrl: "",
+    prose: "The body of the story.",
+    title: "Auto Title",
+    takes: [],
+  };
+
+  // discardAnswerAction (mocked above) resolves undefined → no `.error` → handleDiscard proceeds to
+  // router.push(backTab). backTab is derived from `mode`: tell → Stories tab, answer → Questions tab.
+  it("tell-mode discard returns to the Stories tab", async () => {
+    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
+    fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/hub?tab=stories"));
+  });
+
+  it("answer-mode discard returns to the Questions tab (no regression)", async () => {
+    render(
+      <StoryComposer
+        mode="answer"
+        ask={{ id: "ask1", questionText: "What was Sunday like?", askerName: "Mom" }}
+        draft={draft}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/hub?tab=questions"));
   });
 });
