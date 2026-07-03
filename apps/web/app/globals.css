@@ -121,6 +121,193 @@ select.kin-field { appearance: none; background-image: linear-gradient(45deg, tr
   padding: 4px 10px;
 }
 
+/* ---------------------------------------------------------------------------
+ * Clerk <SignIn>/<SignUp> — Kindred theme.
+ *
+ * WHY THIS LIVES IN GLOBAL CSS (and not entirely in `appearance.elements`):
+ * Clerk RESETS CSS custom properties on its own form-control elements
+ * (.cl-formButtonPrimary, .cl-formFieldInput, .cl-socialButtonsBlockButton, …).
+ * So `--accent` (and every Kindred token) is present on the widget's wrapper but
+ * EMPTY on the button/input itself. That means a `var(--accent)` value placed
+ * directly on a control — which is what `appearance.elements` generates — resolves
+ * to nothing and the control paints with Clerk defaults (an invisible transparent
+ * primary button was the visible symptom). We fix it here by (1) re-asserting the
+ * tokens with `inherit` so `var()` resolves again from the wrapper, and (2) styling
+ * the controls to match the Kindred forms (.kin-field / KindredButton).
+ *
+ * Selectors are prefixed with `.cl-rootBox` and marked `!important` so they win the
+ * cascade over Clerk's own single-class rules regardless of the order Clerk injects
+ * its runtime stylesheet (specificity 0,2,x beats Clerk's 0,1,x, `!important` beats
+ * `!important`). `appearance.variables` (clerk-appearance.ts) still themes Clerk's
+ * internals — those DO resolve, because Clerk substitutes them at the wrapper where
+ * the tokens exist, and the computed value inherits down into the reset controls.
+ * ------------------------------------------------------------------------- */
+/* Flatten Clerk's own card chrome so the widget blends into the AuthScreen panel
+ * instead of sitting inside a competing bordered/shadowed box. In Clerk 6.39 the
+ * outer bordered+shadowed container is `.cl-cardBox` (the inner `.cl-card` too), so
+ * both must be neutralised — flattening only `.cl-card` (as appearance.elements did)
+ * leaves the outer box border and shadow visible. */
+.cl-rootBox .cl-cardBox,
+.cl-rootBox .cl-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* Make the widget fill the AuthScreen panel and align with its header. Clerk's
+ * `.cl-cardBox` ships a fixed, narrower width with `overflow: hidden`, which left the
+ * controls left-aligned inside the panel (dead space on the right = "off-centre") and
+ * clipped the wider label row ("Use phone…"). Forcing the layout containers to full
+ * width with visible overflow fills the panel and stops the clipping. `.cl-card` also
+ * carries a -1px negative margin we zero out. */
+.cl-rootBox .cl-cardBox,
+.cl-rootBox .cl-card,
+.cl-rootBox .cl-main,
+.cl-rootBox .cl-form,
+.cl-rootBox .cl-header,
+.cl-rootBox .cl-footer,
+.cl-rootBox .cl-socialButtons {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+.cl-rootBox .cl-card { margin: 0 !important; }
+
+/* Blend the footer strip into the panel. `.cl-footer` also WRAPS Clerk's dev-instance
+ * "Development mode" ribbon (a repeating-linear-gradient on an internal element), so
+ * clearing backgrounds across the whole footer subtree removes that shaded/striped band
+ * without depending on Clerk's unstable internal class names. (The ribbon only renders on
+ * dev/test instances and is gone entirely under a production `pk_live` key.) */
+.cl-rootBox .cl-footer,
+.cl-rootBox .cl-footer * {
+  background-image: none !important;
+  background-color: transparent !important;
+}
+
+.cl-rootBox .cl-formButtonPrimary,
+.cl-rootBox .cl-formFieldInput,
+.cl-rootBox .cl-otpCodeFieldInput,
+.cl-rootBox .cl-phoneInputBox,
+.cl-rootBox .cl-socialButtonsBlockButton,
+.cl-rootBox .cl-socialButtonsIconButton,
+.cl-rootBox .cl-formFieldLabel,
+.cl-rootBox .cl-dividerLine,
+.cl-rootBox .cl-dividerText,
+.cl-rootBox .cl-footerActionText,
+.cl-rootBox .cl-footerActionLink,
+.cl-rootBox .cl-formFieldAction,
+.cl-rootBox .cl-formResendCodeLink,
+.cl-rootBox .cl-alternativeMethodsBlockButton {
+  --accent: inherit; --accent-strong: inherit; --accent-on: inherit; --accent-soft: inherit;
+  --surface-card: inherit; --surface-page: inherit; --border: inherit; --border-strong: inherit;
+  --text-body: inherit; --text-meta: inherit; --text-muted: inherit;
+  --radius-md: inherit; --radius-pill: inherit; --font-ui: inherit; --text-label: inherit;
+}
+
+/* Primary CTA → KindredButton (primary, pill). */
+.cl-rootBox .cl-formButtonPrimary {
+  background: var(--accent) !important;
+  color: var(--accent-on) !important;
+  border: none !important;
+  border-radius: var(--radius-pill) !important;
+  font: 600 1.0625rem var(--font-ui) !important;
+  min-height: 54px !important;
+  padding: 0 22px !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.cl-rootBox .cl-formButtonPrimary:hover { background: var(--accent-strong) !important; }
+.cl-rootBox .cl-formButtonPrimary:focus-visible {
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+  outline: none !important;
+}
+
+/* Text / OTP inputs → .kin-field. */
+.cl-rootBox .cl-formFieldInput,
+.cl-rootBox .cl-otpCodeFieldInput {
+  background: var(--surface-card) !important;
+  color: var(--text-body) !important;
+  border: 1.5px solid var(--border-strong) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 13px 15px !important;
+  min-height: 52px !important;
+  font: 1.0625rem var(--font-ui) !important;
+  box-shadow: none !important;
+}
+.cl-rootBox .cl-formFieldInput:focus,
+.cl-rootBox .cl-otpCodeFieldInput:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+  outline: none !important;
+}
+
+/* Phone field is a COMPOUND control: an outer `.cl-phoneInputBox` wraps a country-code
+ * `<button>` and the phone `<input>` side by side. The generic input rule above would give
+ * the inner phone input its own border/background box, overlapping the country selector.
+ * So the OUTER box carries the .kin-field border, and the inner country button + phone input
+ * are flattened to sit inside it as one unified field (focus ring moves to the box). */
+.cl-rootBox .cl-phoneInputBox {
+  background: var(--surface-card) !important;
+  border: 1.5px solid var(--border-strong) !important;
+  border-radius: var(--radius-md) !important;
+  min-height: 52px !important;
+  overflow: hidden !important;
+}
+.cl-rootBox .cl-phoneInputBox:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+}
+.cl-rootBox .cl-phoneInputBox .cl-selectButton,
+.cl-rootBox .cl-phoneInputBox .cl-formFieldInput,
+.cl-rootBox .cl-phoneInputBox .cl-formFieldInput:focus {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: auto !important;
+}
+
+/* Field labels → .kin-form-label. */
+.cl-rootBox .cl-formFieldLabel {
+  color: var(--text-meta) !important;
+  font: 600 var(--text-label) var(--font-ui) !important;
+}
+
+/* Social / alternate-method buttons → KindredButton (secondary, pill outline). */
+.cl-rootBox .cl-socialButtonsBlockButton,
+.cl-rootBox .cl-socialButtonsIconButton {
+  background: transparent !important;
+  border: 1.5px solid var(--border-strong) !important;
+  border-radius: var(--radius-pill) !important;
+  color: var(--text-body) !important;
+  font: 600 1.0625rem var(--font-ui) !important;
+  min-height: 52px !important;
+  box-shadow: none !important;
+}
+.cl-rootBox .cl-socialButtonsBlockButton:hover,
+.cl-rootBox .cl-socialButtonsIconButton:hover {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Divider, footer, inline links. */
+.cl-rootBox .cl-dividerLine { background: var(--border) !important; }
+.cl-rootBox .cl-dividerText {
+  color: var(--text-muted) !important;
+  font: var(--text-label) var(--font-ui) !important;
+}
+.cl-rootBox .cl-footerActionText { color: var(--text-meta) !important; font-family: var(--font-ui) !important; }
+.cl-rootBox .cl-footerActionLink,
+.cl-rootBox .cl-formFieldAction,
+.cl-rootBox .cl-formResendCodeLink,
+.cl-rootBox .cl-alternativeMethodsBlockButton {
+  color: var(--accent-strong) !important;
+  font-weight: 600 !important;
+  font-family: var(--font-ui) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
