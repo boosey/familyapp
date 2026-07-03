@@ -89,9 +89,17 @@ audio is the `story_recordings` set, not a single pointer. We do **not** re-aim 
    `invariants.sql`) on **both** `stories` (kind changes) and `story_recordings` (insert/delete),
    asserting at COMMIT: `(kind = 'voice') = (EXISTS a story_recordings row for the story)`. Deferred so
    the repo may, within one tx, insert the first voice take and flip `kind` in either order.
-3. The audited repo **flips `kind` `text → voice` in the same tx** when the first voice take is
-   appended to a typed-first draft. (kind never flips back voice → text; dropping the last take of an
-   already-voice draft is out of scope — a voice draft stays voice.)
+3. The audited repo **flips `kind` `text → voice` co-transactionally with the first
+   `story_recordings` insert** — i.e. inside `persistTakeRecording` (the take-persist tx), NOT
+   in the later `appendVoiceTakeContribution` call. This is **forced** by the deferred trigger:
+   it fires at *every* COMMIT, so the tx that inserts the first take onto a typed-first (`kind='text'`)
+   draft must ALSO flip `kind` before it commits, or the biconditional is violated at that commit —
+   long before `appendVoiceTakeContribution` (a separate, later tx) would run. `appendVoiceTakeContribution`
+   keeps an idempotent `kind='voice'` assertion as defense-in-depth, but `persistTakeRecording` is the
+   authoritative flipper. (kind never flips back voice → text; dropping the last take of an already-voice
+   draft is out of scope — a voice draft stays voice.) **[Amended 2026-07-03 during Inc 2 planning:
+   moved the flip from `appendVoiceTakeContribution` (§4, as originally written) to `persistTakeRecording`
+   for deferred-trigger correctness. No public signature changed.]**
 
 **Media-delete guard hardening (confirmed in-scope):** extend `chronicle_media_delete_guard` so DELETE
 is also forbidden when the media is referenced by **any `story_recordings` row whose story has a
@@ -109,9 +117,11 @@ already-derived metadata as inputs. New/changed exports:
 // Append the provenance + working-prose for a freshly recorded & cleaned VOICE take.
 // Persists: ai_transcribed(rawSegment, storyRecordingId) + ai_cleaned(cleanedSegment, storyRecordingId);
 // updates stories.prose = priorProse ? priorProse + "\n\n" + cleanedSegment : cleanedSegment;
-// flips kind text→voice iff needed (same tx). The media + story_recordings row already exist
-// (capture.ingestRecording / ingestFollowUpTake created them); storyRecordingId identifies the take.
-// Owner + state='draft' gated. Returns the new full prose + the appended segment.
+// The media + story_recordings row already exist (capture.ingestRecording / ingestFollowUpTake →
+// persistTakeRecording created them, AND persistTakeRecording already flipped kind text→voice
+// co-transactionally with that first-take insert — see §3.3, amended). storyRecordingId identifies
+// the take. This fn asserts kind='voice' idempotently (defense-in-depth) but does NOT rely on being
+// the flipper. Owner + state='draft' gated. Returns the new full prose + the appended segment.
 appendVoiceTakeContribution(db, input: {
   storyId: string; ownerPersonId: string; storyRecordingId: string;
   rawTranscript: string; cleanedSegment: string;
@@ -188,6 +198,8 @@ reserved for background work (memory extraction, any heavy/optional pass).
 
 Per voice take (synchronous, in the server action):
 1. `capture.ingestRecording` (take 0) / `ingestFollowUpTake` (take N) → media + `story_recordings` row.
+   For the FIRST voice take on a typed-first (`kind='text'`) draft, `persistTakeRecording` flips
+   `kind text→voice` in THIS same tx (§3.3, amended) so the deferred biconditional holds at commit.
 2. `multi-take.transcribeTakeToRecording(rt, storyRecordingId)` → raw transcript on the take.
 3. `pipeline.cleanupTake(llm, { transcript, promptQuestion?, narratorSpokenName? })` → cleaned segment.
 4. `core.appendVoiceTakeContribution({ …, rawTranscript, cleanedSegment, priorProse: clientEditorText })`.
