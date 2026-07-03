@@ -1,5 +1,15 @@
 # Recording → Story Pipeline
 
+> ⚠️ **A redesign is approved but not yet built (ADR-0014, 2026-07-03).** This document describes the
+> **current shipped** flow, where `transcribe` + `render` run automatically on stop and the editor is
+> a post-render `pending_approval` review. **ADR-0014 supersedes that**: the editor becomes a live
+> `DRAFT` composing surface (record *or type*, per-take **Cleanup**, append, hand-edit, opt-in
+> **Polish**), an explicit **Finish** derives metadata and moves to `pending_approval`, and consent
+> stays a separate tap. It also reframes prose as *authored* (not regenerable from audio) and renames
+> the `ai_polished` provenance level to `ai_cleaned`. For the target design see
+> **`docs/Capture-State-Machines.md`** and **`docs/adr/0014-*`**. Until that lands, the flow below is
+> what the code does.
+
 How a spoken answer becomes a shared story. Two coupled flows:
 
 - The **interviewer turn loop** (`@chronicle/interviewer`) drives *what the narrator is asked*. It never touches Story state — it only produces the question and consumes the answer's effect on biographical anchors.

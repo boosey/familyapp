@@ -1,0 +1,448 @@
+<title>Capture State Machines — Intake · Self-Induced Story · Asked Story</title>
+<style>
+  :root {
+    --paper:      #f5f2ec;
+    --surface:    #fffefb;
+    --ink:        #23201a;
+    --ink-soft:   #5c564c;
+    --hair:       #e2ddd2;
+    --hair-strong:#cfc8b8;
+
+    /* phase semantics (separate from any single accent) */
+    --compose:    #0f766e;  --compose-bg: #e6f2f0;  --compose-line:#7cc3ba;
+    --confirm:    #b45309;  --confirm-bg: #f7ecdb;  --confirm-line:#e0b878;
+    --shared:     #2f7d3a;  --shared-bg:  #e6f1e6;  --shared-line: #9ac79f;
+    --anchor:     #47546a;  --anchor-bg:  #eaedf2;  --anchor-line: #b4bccb;
+    --danger:     #a3352b;  --danger-bg:  #f6e7e4;
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --sp-1:6px; --sp-2:10px; --sp-3:16px; --sp-4:24px; --sp-5:36px; --sp-6:56px;
+    --radius:12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #fbf9f4 0%, rgba(251,249,244,0) 60%),
+      var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 96px; }
+
+  /* ── Masthead ─────────────────────────────────────────── */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--compose);
+    margin: 0 0 var(--sp-3);
+  }
+  h1 {
+    font-size: clamp(28px, 4.4vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 var(--sp-3);
+    font-weight: 680;
+  }
+  .lede {
+    max-width: 62ch;
+    font-size: 17px;
+    color: var(--ink-soft);
+    margin: 0 0 var(--sp-2);
+  }
+  .review-note {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: var(--sp-3);
+    font-family: var(--mono); font-size: 12.5px;
+    color: var(--confirm);
+    background: var(--confirm-bg);
+    border: 1px solid var(--confirm-line);
+    padding: 7px 12px; border-radius: 999px;
+  }
+
+  /* ── Legend ───────────────────────────────────────────── */
+  .legend {
+    margin: var(--sp-5) 0 var(--sp-6);
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    padding: var(--sp-4);
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: 1fr 1fr;
+  }
+  @media (max-width: 720px){ .legend { grid-template-columns: 1fr; } }
+  .legend h2 {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-soft);
+    margin: 0 0 var(--sp-2); font-weight: 600;
+  }
+  .swatches { display: flex; flex-direction: column; gap: var(--sp-1); }
+  .sw { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+  .dot { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 3px; transform: translateY(1px); border: 1px solid rgba(0,0,0,.14); }
+  .sw code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+  .sw span { color: var(--ink-soft); }
+  .ops { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--ink-soft); }
+  .ops b { color: var(--ink); font-weight: 640; }
+  .ops .k { font-family: var(--mono); font-size: 12px; color: var(--compose); }
+
+  /* ── Scenario block ───────────────────────────────────── */
+  .scenario { margin-top: var(--sp-6); }
+  .scenario-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: var(--sp-2); }
+  .scenario-head .tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 6px; font-weight: 600;
+  }
+  .scenario-head h3 { font-size: 23px; letter-spacing: -0.01em; margin: 0; font-weight: 660; }
+  .scenario-sub { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 var(--sp-4); max-width: 66ch; }
+
+  /* ── The machine: left rail + nodes ───────────────────── */
+  .machine {
+    position: relative;
+    padding-left: 30px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .machine::before {
+    content: ""; position: absolute; left: 8px; top: 14px; bottom: 14px; width: 2px;
+    background: linear-gradient(var(--compose-line), var(--confirm-line), var(--shared-line));
+    border-radius: 2px;
+  }
+  .machine.intake::before { background: linear-gradient(var(--compose-line), var(--anchor-line)); }
+
+  .node { position: relative; margin: 0 0 4px; }
+  /* rail marker */
+  .node::before {
+    content: ""; position: absolute; left: -30px; top: 20px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--surface); border: 3px solid var(--compose);
+    transform: translateX(1px);
+  }
+  .node.confirm::before { border-color: var(--confirm); }
+  .node.shared::before  { border-color: var(--shared); }
+  .node.anchor::before  { border-color: var(--anchor); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-left: 4px solid var(--compose);
+    border-radius: 10px;
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .node.confirm .card { border-left-color: var(--confirm); }
+  .node.shared  .card { border-left-color: var(--shared); }
+  .node.anchor  .card { border-left-color: var(--anchor); }
+
+  .state-name { font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+  .phase-pill {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 5px; font-weight: 600; margin-left: 10px; vertical-align: 1.5px;
+  }
+  .pp-compose { background: var(--compose-bg); color: var(--compose); }
+  .pp-confirm { background: var(--confirm-bg); color: var(--confirm); }
+  .pp-shared  { background: var(--shared-bg);  color: var(--shared); }
+  .pp-anchor  { background: var(--anchor-bg);  color: var(--anchor); }
+  .state-desc { color: var(--ink-soft); font-size: 14px; margin: 6px 0 0; }
+
+  /* loop panel docked in compose node */
+  .loops {
+    margin-top: var(--sp-3);
+    border-top: 1px dashed var(--hair-strong);
+    padding-top: var(--sp-3);
+  }
+  .loops .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 13px; padding: 6px 11px; border-radius: 999px;
+    background: var(--compose-bg); color: var(--compose);
+    border: 1px solid var(--compose-line);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip small { color: var(--ink-soft); font-size: 11.5px; }
+  .chip.danger { background: var(--danger-bg); color: var(--danger); border-color: #e0b3ab; }
+
+  /* per-take auto sub-note */
+  .autoflow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-top: 10px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+  }
+  .autoflow .step { background: var(--paper); border: 1px solid var(--hair); border-radius: 6px; padding: 3px 8px; }
+  .autoflow .arw { color: var(--hair-strong); }
+  .autoflow .l1 { color: var(--compose); }
+
+  /* transition edge between nodes */
+  .edge { position: relative; margin: 2px 0 6px; padding-left: 4px; min-height: 34px; display: flex; align-items: center; }
+  .edge .label {
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--hair-strong);
+    padding: 4px 11px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .edge .arrow { color: var(--ink-soft); font-weight: 700; }
+  .edge.gate .label { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; }
+  .edge.gate.consent .label { background: var(--shared); border-color: var(--shared); }
+  .edge .aside { color: var(--ink-soft); font-size: 12.5px; margin-left: 10px; font-family: var(--sans); }
+
+  /* what-gets-written note under gates */
+  .writes {
+    margin: 0 0 6px; padding: 10px 14px;
+    background: #fbfaf6; border: 1px dashed var(--hair-strong); border-radius: 8px;
+    font-size: 13px; color: var(--ink-soft);
+  }
+  .writes b { color: var(--ink); font-weight: 630; }
+  .writes code { font-family: var(--mono); font-size: 12px; background: var(--paper); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+  /* ask-specific highlight */
+  .ask-add { border-left-color: #7a5cc0 !important; }
+  .ask-badge { background: #ece6f6; color: #5b43a6; }
+  .ask-note { color: #5b43a6; }
+
+  .footer { margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--hair); color: var(--ink-soft); font-size: 13.5px; }
+  .footer code { font-family: var(--mono); font-size: 12px; }
+
+  a:focus-visible, .chip:focus-visible { outline: 3px solid var(--compose-line); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Family Chronicle · Capture design · for review</p>
+  <h1>Three capture flows, one composing surface</h1>
+  <p class="lede">Every place a person puts words into the system — filling in intake, telling a story unprompted, or answering a question someone asked — shares the same working surface: <b>record <em>or type</em> → (transcribe → cleanup, for voice) → edit</b>, with recording and typing that stay live so you can keep going, freely mixed. What differs is only the tail: intake extracts a fact; a story gets finished, consented, and shared.</p>
+  <p class="review-note">Mark up anything — states, transitions, or what gets written. Nothing here is built yet.</p>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <div>
+      <h2>Phases (state colour)</h2>
+      <div class="swatches">
+        <div class="sw"><span class="dot" style="background:var(--compose)"></span><code>DRAFT / composing</code><span>— the live working surface: record, append, edit, polish</span></div>
+        <div class="sw"><span class="dot" style="background:var(--confirm)"></span><code>PENDING_APPROVAL</code><span>— finished; confirm title + audience, then consent</span></div>
+        <div class="sw"><span class="dot" style="background:var(--shared)"></span><code>SHARED</code><span>— consented and visible to the family</span></div>
+        <div class="sw"><span class="dot" style="background:var(--anchor)"></span><code>EXTRACTED</code><span>— intake terminal: a fact saved, never shared</span></div>
+      </div>
+    </div>
+    <div>
+      <h2>Operations &amp; rules (shared)</h2>
+      <div class="ops">
+        <div><span class="k">two entry types</span> — a <b>voice take</b> (audio → Transcription → Cleanup) or a <b>typed take</b> (words are the content, <code style="font-family:var(--mono)">user_authored</code>; <b>skips</b> Transcription+Cleanup). Freely interleaved; any audio ⇒ <b>voice-kind</b>.</div>
+        <div><span class="k">automatic, per take</span> — <b>Cleanup</b> fixes filler, false starts, within-take self-corrections (keeps the hedge if unsure). Sees <b>one take only</b>.</div>
+        <div><span class="k">human-confirmed, holistic</span> — <b>✨ Polish</b> (de-rambles + resolves <b>cross-take</b> self-corrections) via the button <em>or</em> the <b>Finish check</b>; never silent, always reversible, logged. <b>hand-edit</b> is yours &amp; permanent.</div>
+        <div><span class="k">audio vs. truth</span> — <b>audio = permanent original record</b> (never discarded; playback/audit/improvement). <b>Source of truth = the approved prose</b> (composite; authored, not regenerable from audio).</div>
+        <div><span class="k">retention &amp; ledger</span> — all audio kept (intake too); only <b>Discard</b>/<b>Drop</b> delete; append never re-touches earlier text. Every stage appends to the prose lineage.</div>
+        <div><span class="k">memory extraction</span> — every mode mines what was said into system memory (anchors now, broader narrator memory deferred). <b>Retention is unconditional; memory is consent-gated</b> — a Story feeds memory <b>only post-approval</b>; intake extracts at Save (answering = consent).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCENARIO 1 · INTAKE ═══ -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="tag pp-anchor">Intake</span>
+      <h3>Filling in a biographical answer</h3>
+    </div>
+    <p class="scenario-sub">One structured question at a time (“Where did you grow up?”). Same composing surface — but it is <b>not a Story</b>: no interviewer follow-ups, no audience, no consent, never surfaced. Audio &amp; transcript are kept for audit and prompt improvement — and intake is the <b>designated first source of narrator memory</b> (seam ready via retention; the memory model itself is deferred).</p>
+
+    <div class="machine intake">
+
+      <div class="edge"><span class="label"><span class="arrow">→</span> question shown · tap record</span></div>
+
+      <div class="node">
+        <div class="card">
+          <div><span class="state-name">ANSWERING</span><span class="phase-pill pp-compose">draft / composing</span></div>
+          <p class="state-desc">The cleaned answer lands in an editable box; typing is always available as a fallback.</p>
+          <div class="autoflow">
+            <span class="step">🎙 voice take · stop</span><span class="arw">→</span>
+            <span class="step l1">Transcription · L1</span><span class="arw">→</span>
+            <span class="step l1">Cleanup · L2</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="autoflow">
+            <span class="step">⌨ typed take</span><span class="arw">→</span>
+            <span class="step">words are the content · user_authored</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="loops">
+            <div class="lbl">↻ stay here as long as you like</div>
+            <div class="chips">
+              <span class="chip">Add more <small>record or type · append · narrator only</small></span>
+              <span class="chip">Hand-edit</span>
+              <span class="chip">✨ Polish <small>cross-take fixes</small></span>
+              <span class="chip danger">Drop take</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="edge gate"><span class="label">NEXT / SAVE</span><span class="aside">ends this answer</span></div>
+
+      <div class="writes"><b>Finish check:</b> scan for unresolved self-corrections → <em>offer</em> to tidy (accept = a logged Polish; decline = keep as-is). Never silent.</div>
+
+      <div class="writes">
+        <b>Memory extraction (at Save — answering is the consent):</b> anchor value → set field <em>only if empty</em> (a direct answer never overwrites) · + narrator memory (deferred model). Retain <code>audio</code> + <code>transcript</code> + prose lineage + extracted value.
+      </div>
+
+      <div class="node anchor">
+        <div class="card">
+          <div><span class="state-name">EXTRACTED</span><span class="phase-pill pp-anchor">terminal · no consent</span></div>
+          <p class="state-desc">On to the next question — or <b>INTAKE COMPLETE</b> once all six anchors are filled. The answer itself is never shown to anyone.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ SCENARIO 2 · SELF-INDUCED STORY ═══ -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="tag pp-compose">Self-induced</span>
+      <h3>Telling a story on your own initiative</h3>
+    </div>
+    <p class="scenario-sub">No question — the person just wants to tell something. The full authoring flow: compose freely, finish, choose who hears it, and consent to share.</p>
+
+    <div class="machine">
+
+      <div class="edge"><span class="label"><span class="arrow">→</span> “Tell a story” · tap record</span></div>
+
+      <div class="node">
+        <div class="card">
+          <div><span class="state-name">DRAFT</span><span class="phase-pill pp-compose">composing</span></div>
+          <p class="state-desc">The live working surface. Recording stays available — keep going whenever you want; each new take is appended, never re-flowing what you already have.</p>
+          <div class="autoflow">
+            <span class="step">🎙 voice take · stop</span><span class="arw">→</span>
+            <span class="step l1">Transcription · L1</span><span class="arw">→</span>
+            <span class="step l1">Cleanup · L2</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="autoflow">
+            <span class="step">⌨ typed take</span><span class="arw">→</span>
+            <span class="step">words are the content · user_authored</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="loops">
+            <div class="lbl">↻ compose freely</div>
+            <div class="chips">
+              <span class="chip">Add more <small>record or type · append · you or an interviewer follow-up</small></span>
+              <span class="chip">Hand-edit</span>
+              <span class="chip">✨ Polish <small>de-ramble · cross-take fixes</small></span>
+              <span class="chip danger">Drop take</span>
+              <span class="chip danger">Discard draft</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="edge gate"><span class="label">FINISH</span><span class="aside">ends composition</span></div>
+
+      <div class="writes"><b>Finish check:</b> scan for unresolved self-corrections → <em>offer</em> to tidy (accept = a logged Polish; decline = keep as-is). Never silent.</div>
+
+      <div class="writes">
+        <b>Writes:</b> derive <code>title · summary · tags · era</code> from the final text · snapshot the final human text as <code>human_corrected</code> (if changed) · transition <code>DRAFT → PENDING_APPROVAL</code>.
+      </div>
+
+      <div class="node confirm">
+        <div class="card">
+          <div><span class="state-name">PENDING_APPROVAL</span><span class="phase-pill pp-confirm">confirm</span></div>
+          <p class="state-desc">A light screen: confirm or tweak the title, and pick the audience tier. Prose is already final. (Discard is still available.)</p>
+        </div>
+      </div>
+
+      <div class="edge gate consent"><span class="label">SHARE = consent</span><span class="aside">a deliberate tap (ADR-0004)</span></div>
+
+      <div class="writes">
+        <b>Writes:</b> <code>PENDING_APPROVAL → APPROVED → SHARED</code> · one <code>approved_for_sharing</code> row in the consent ledger · audio becomes immutable.
+      </div>
+
+      <div class="writes">
+        <b>Memory extraction (post-approval, best-effort):</b> anchor augmentation (empty fields only) + narrator memory (deferred model). A discarded or unshared draft <em>never</em> feeds memory — retention is unconditional, memory is consent-gated.
+      </div>
+
+      <div class="node shared">
+        <div class="card">
+          <div><span class="state-name">SHARED</span><span class="phase-pill pp-shared">terminal</span></div>
+          <p class="state-desc">Visible to the family per its tier &amp; targeting. Enriches the interviewer’s memory for next time.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ SCENARIO 3 · ASKED STORY ═══ -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="tag ask-badge">Asked</span>
+      <h3>Answering a question someone asked you</h3>
+    </div>
+    <p class="scenario-sub">Identical to a self-induced story <b>except</b> for the highlighted purple points: it opens with the question, carries the ask through, and closes the loop back to the asker on share.</p>
+
+    <div class="machine">
+
+      <div class="edge"><span class="label ask-note" style="border-color:#c9b8ec"><span class="arrow">→</span> from a notification / the Questions tab</span></div>
+
+      <div class="node">
+        <div class="card ask-add">
+          <div><span class="state-name">DRAFT</span><span class="phase-pill pp-compose">composing</span><span class="phase-pill ask-badge">+ question header</span></div>
+          <p class="state-desc"><b class="ask-note">Shows the asker’s question</b> above the recorder. The <code>askId</code> + exact <code>promptQuestion</code> are stamped on the story from the start, and the question already exists as its own row.</p>
+          <div class="autoflow">
+            <span class="step">🎙 voice take · stop</span><span class="arw">→</span>
+            <span class="step l1">Transcription · L1</span><span class="arw">→</span>
+            <span class="step l1">Cleanup · L2</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="autoflow">
+            <span class="step">⌨ typed take</span><span class="arw">→</span>
+            <span class="step">words are the content · user_authored</span><span class="arw">→</span>
+            <span class="step">editor</span>
+          </div>
+          <div class="loops">
+            <div class="lbl">↻ compose freely — same as self-induced</div>
+            <div class="chips">
+              <span class="chip">Add more <small>record or type · append · you or a follow-up seeded by the ask</small></span>
+              <span class="chip">Hand-edit</span>
+              <span class="chip">✨ Polish</span>
+              <span class="chip danger">Drop take</span>
+              <span class="chip danger">Discard</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="edge gate"><span class="label">FINISH</span><span class="aside">same as self-induced</span></div>
+      <div class="writes"><b>Finish check:</b> offer to tidy unresolved self-corrections (logged Polish if accepted) · <b>Writes:</b> derive <code>title · summary · tags · era</code> · snapshot <code>human_corrected</code> · <code>DRAFT → PENDING_APPROVAL</code>.</div>
+
+      <div class="node confirm">
+        <div class="card">
+          <div><span class="state-name">PENDING_APPROVAL</span><span class="phase-pill pp-confirm">confirm</span></div>
+          <p class="state-desc">Confirm title · pick tier. Same screen as a self-induced story.</p>
+        </div>
+      </div>
+
+      <div class="edge gate consent"><span class="label">SHARE = consent</span></div>
+
+      <div class="writes ask-add" style="border-style:solid; border-color:#c9b8ec; background:#f6f2fc;">
+        <b>Writes:</b> the story flow (<code>→ SHARED</code> + consent row + <b>post-approval memory extraction</b>: anchors + narrator memory) <b>plus</b> <b class="ask-note">the ask-specific tail</b>: link the story to the ask · set <code>asks.status → answered</code> · notify the asker (the payoff notification).
+      </div>
+
+      <div class="node shared">
+        <div class="card">
+          <div><span class="state-name">SHARED</span><span class="phase-pill pp-shared">terminal</span></div>
+          <p class="state-desc">The asker is told their question was answered; everyone else sees it via family activity.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <p class="footer">
+    Derived from the grilling session on <code>2026-07-03</code>. Decisions folded in: editor lives in <code>DRAFT</code>; Finish ≠ Share; append never re-renders; automatic passes see one take, every holistic pass is human-confirmed (✨ Polish or the Finish check) — never silent; every AI pass logged; voice + text interleave in one draft (typed takes skip transcribe/cleanup; any audio ⇒ voice-kind); <b>audio = permanent original record, prose = source of truth</b> (authored, not regenerable); all audio retained (intake included); intake shares the interaction, not the authoring tail, and is the first narrator-memory source (model deferred); memory extraction runs in every mode but is consent-gated (Story: post-approval only; intake: at Save) while audit retention is unconditional. Supersedes parts of the <code>2026-06-29 prose-provenance</code> design (render-before-review, “AI runs once,” polish-not-logged) and the direct-story-creation kind/CHECK model.
+  </p>
+
+</div>
