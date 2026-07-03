@@ -102,6 +102,21 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
 
+  -- DELETE: check (c) — ADR-0014 fork #2. Is this media referenced by ANY story_recordings take
+  -- whose owning story has a consent record? Protects position >= 1 follow-up takes AND typed-first
+  -- mixed-take audio (which check (b)'s recording_media_id pointer never covers). Closes the
+  -- silent-audio-loss gap for consented multi-take stories.
+  IF EXISTS (
+    SELECT 1 FROM story_recordings sr
+    INNER JOIN consent_records cr ON cr.story_id = sr.story_id
+    WHERE sr.media_id = OLD.id
+  ) THEN
+    RAISE EXCEPTION
+      'Cannot delete media %: it backs a take of a story with consent records. Consented take audio is immutable forever.',
+      OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
   RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;

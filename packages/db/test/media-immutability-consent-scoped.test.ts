@@ -277,3 +277,46 @@ describe("test 5 — consent_records append-only guard not regressed", () => {
     ).rejects.toThrow(/append-only/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 6: consented story's follow-up-take media (ADR-0014 fork #2): DELETE raises
+// ---------------------------------------------------------------------------
+
+describe("test 6 — consented story's follow-up-take media (ADR-0014 fork #2): DELETE raises", () => {
+  it("rejects DELETE of a position≥1 take's media when the story has consent", async () => {
+    const narrator = await makePerson();
+    const { recording: rec0, story } = await makeStoryWithRecording(narrator.id); // now seeds take-0
+    // Add a follow-up take (position 1) with its own media (kind already voice).
+    const rec1 = (
+      await db
+        .insert(media)
+        .values({
+          ownerPersonId: narrator.id,
+          kind: "story_audio",
+          storageKey: `s3://b/${crypto.randomUUID()}.wav`,
+          contentType: "audio/wav",
+          checksum: crypto.randomUUID(),
+        })
+        .returning()
+    )[0]!;
+    await db
+      .insert(storyRecordings)
+      .values({ storyId: story.id, position: 1, mediaId: rec1.id });
+    // Consent the story.
+    await db.insert(consentRecords).values({
+      personId: narrator.id,
+      actorPersonId: narrator.id,
+      storyId: story.id,
+      action: "approved_for_sharing",
+      resultingState: "shared",
+    });
+    // Take-1's media must now be un-deletable.
+    await expect(
+      db.delete(media).where(eq(media.id, rec1.id)),
+    ).rejects.toThrow(/immutable|restrict|consent/i);
+    // (Regression companion: take-0 media still protected via check (b).)
+    await expect(
+      db.delete(media).where(eq(media.id, rec0.id)),
+    ).rejects.toThrow(/immutable|restrict|consent/i);
+  });
+});
