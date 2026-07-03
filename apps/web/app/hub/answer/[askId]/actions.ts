@@ -14,6 +14,7 @@ import {
   approveAndShareStory,
   discardDraftStory,
   saveProseCorrection,
+  updateDerivedFields,
   listStoryRecordings,
   dropStoryRecording,
   appendFollowUpDecision,
@@ -507,6 +508,16 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
         story: storyId,
         proseChars: correctedProse.length,
       });
+    }
+
+    // Persist an optional edited title. In review the narrator can change the AI-derived title;
+    // when they do, the form carries a non-empty `correctedTitle`. Written via the same audited
+    // core surface the render stage uses (updateDerivedFields → stories.title), BEFORE the
+    // approve/share transition. Absent or whitespace-only → the title is left unchanged.
+    const correctedTitle = formData.get("correctedTitle");
+    if (typeof correctedTitle === "string" && correctedTitle.trim().length > 0) {
+      await updateDerivedFields(db, storyId, { title: correctedTitle.trim() });
+      plog("answer", "shareAnswer: saved edited title", { story: storyId });
     }
 
     // Tap approval (ADR-0004): no approvalAudio clip. Consent record is written with
