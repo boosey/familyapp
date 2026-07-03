@@ -667,6 +667,10 @@ export async function applyTranscriptCorrection(
   correctedTranscript: string,
 ): Promise<Story> {
   return db.transaction(async (tx) => {
+    // The tx is for this file's write-path convention + future-proofing, NOT TOCTOU closure: under
+    // READ COMMITTED the authored-lineage SELECT and the UPDATE take separate snapshots, so a
+    // concurrent authored-row insert between them isn't fenced (acceptable on the single-narrator
+    // composing surface; truly closing it would need SELECT ... FOR UPDATE).
     const [current] = await tx
       .select({ state: stories.state })
       .from(stories)
@@ -682,7 +686,10 @@ export async function applyTranscriptCorrection(
     }
     // ADR-0014 §7: authored prose is never blindly regenerated. Refuse to null prose when the story
     // has any user_authored or human_corrected lineage row (typed takes / hand-edits), which
-    // clearing-to-re-render would silently destroy.
+    // clearing-to-re-render would silently destroy. The block set is intentionally
+    // user_authored/human_corrected ONLY — ai_polished (and ai_transcribed/ai_cleaned) are
+    // regenerable AI output and are deliberately NOT protected, so a Polished-then-corrected
+    // pure-voice story re-renders as expected.
     const authored = await tx
       .select({ id: proseRevisions.id })
       .from(proseRevisions)

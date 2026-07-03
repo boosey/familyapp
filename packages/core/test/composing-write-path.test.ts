@@ -359,6 +359,9 @@ describe("regeneration guard (ADR-0014 §7)", () => {
     });
     await expect(applyTranscriptCorrection(db, story.id, "new transcript"))
       .rejects.toThrow(/authored|regenerat|lineage/i);
+    const [s] = await db.select().from(stories).where(eq(stories.id, story.id));
+    expect(s!.prose).toBe("Hand-edited body."); // survived; transcript untouched
+    expect(s!.transcript).not.toBe("new transcript");
   });
 
   it("still allows applyTranscriptCorrection on a pure-voice story with no authored lineage", async () => {
