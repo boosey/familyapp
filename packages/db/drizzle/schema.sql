@@ -15,7 +15,7 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
-CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
+CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified');
 CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
 CREATE TABLE "accounts" (

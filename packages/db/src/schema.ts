@@ -137,12 +137,16 @@ export const storyKindEnum = pgEnum("story_kind", ["voice", "text"]);
 
 /**
  * The provenance levels of a story's prose, oldest to newest. `user_authored` is the origin level
- * for a typed (text-origin) story — the person's own words, predating any AI step. `ai_verified`
- * is a reserved future seam (an AI verify/judge step) — not produced by Phase 1.
+ * for a typed (text-origin) story — the person's own words, predating any AI step. `ai_cleaned` is
+ * the AUTOMATIC per-take Cleanup pass (filler / false-starts / within-take self-corrections;
+ * ADR-0014 §2). `ai_polished` is the MANUAL, human-confirmed holistic Polish button — a distinct,
+ * opt-in operation (nothing writes it automatically). `ai_verified` is a reserved future seam (an
+ * AI verify/judge step) — not produced by Phase 1.
  */
 export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
   "user_authored",
   "ai_transcribed",
+  "ai_cleaned",
   "ai_polished",
   "human_corrected",
   "ai_verified",

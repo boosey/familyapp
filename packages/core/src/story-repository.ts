@@ -989,7 +989,7 @@ export async function appendProseRevision(
 /**
  * Read a story's full prose lineage in append order. ANALYTICS / OFFLINE-TOOLING ONLY — this
  * surfaces raw prose content with no AuthContext, so NO user-facing surface may call it. It lives
- * in this already-allowlisted file; the L2→L3 diff (ai_polished vs human_corrected) is the
+ * in this already-allowlisted file; the L2→L3 diff (ai_cleaned vs human_corrected) is the
  * prompt/model improvement signal.
  */
 export async function listProseRevisions(

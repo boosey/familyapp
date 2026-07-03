@@ -115,4 +115,24 @@ describe("prose_revisions table", () => {
       db.delete(proseRevisions).where(eq(proseRevisions.id, frozen!.id)),
     ).rejects.toThrow(/immutable after sharing/);
   });
+
+  it("accepts ai_cleaned and ai_polished as distinct, insertable levels (ADR-0014)", async () => {
+    // ai_cleaned = the automatic per-take Cleanup pass; ai_polished = the manual holistic Polish
+    // button. Both must be valid, distinct enum values in the prose lineage.
+    const { storyId } = await makeStory();
+    await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_cleaned", text: "cleaned prose", modelId: "mock-claude" });
+    await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "ai_polished", text: "polished prose", modelId: "mock-claude" });
+
+    const rows = await db
+      .select()
+      .from(proseRevisions)
+      .where(eq(proseRevisions.storyId, storyId));
+    const levels = rows.map((r) => r.level);
+    expect(levels).toContain("ai_cleaned");
+    expect(levels).toContain("ai_polished");
+  });
 });

@@ -149,7 +149,7 @@ export async function stitchAndRenderStory(
   // L2 provenance LAST — after prose + state are committed — with the LM model id + exact prompt.
   await appendProseRevision(deps.db, {
     storyId,
-    level: "ai_polished",
+    level: "ai_cleaned",
     text: render.prose,
     modelId: render.modelId,
     promptText: render.systemPrompt,

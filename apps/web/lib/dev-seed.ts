@@ -468,7 +468,7 @@ export async function seedInto(
   });
   await appendProseRevision(db, {
     storyId: draftStory.id,
-    level: "ai_polished",
+    level: "ai_cleaned",
     text: askAnswerProse,
     modelId: "mock-claude",
     promptText: "[dev-seed] representative render system prompt",
