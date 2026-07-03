@@ -82,6 +82,10 @@ function pickMimeType(): string {
 export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   const router = useRouter();
 
+  // Where a discard returns the narrator. A tell-mode draft came from the Stories tab, so send them
+  // back there; an answer came from the Questions tab. (A legitimate mode-dependent branch.)
+  const backTab = mode === "tell" ? "/hub?tab=stories" : "/hub?tab=questions";
+
   // Dev-time consistency guard. `mode` is part of the props contract (Task 10 renders
   // mode="tell"), but real behavior is discriminated by ask-presence and input-origin — NOT by
   // `mode`. This catches a caller whose `mode` disagrees with the actual `ask` prop (which would
@@ -163,7 +167,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
         return;
       }
       if (step.kind === "discarded") {
-        router.push("/hub?tab=questions");
+        router.push(backTab);
         return;
       }
       // step.kind === "ready" — thread complete + stitched. The story may still be rendering
@@ -189,7 +193,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       }
       // "aborted" → the component unmounted; do nothing.
     },
-    [router],
+    [router, backTab],
   );
 
   // ── Capture phase handlers ──────────────────────────────────────────────────
@@ -354,7 +358,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
         setOp(null);
         return;
       }
-      router.push("/hub?tab=questions");
+      router.push(backTab);
     } catch {
       setActionError(hub.actions.removeFailed);
       setOp(null);
