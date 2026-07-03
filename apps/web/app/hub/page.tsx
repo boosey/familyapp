@@ -12,7 +12,7 @@ import {
   listPendingAsksForNarrator,
   listPendingJoinRequestsForSteward,
   listDecidedJoinRequestsForSteward,
-  listOutstandingAnswerDrafts,
+  listOutstandingDrafts,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -71,7 +71,7 @@ export default async function HubPage({
   const validTabs = new Set(["stories", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
-  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, answerDrafts] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
@@ -85,7 +85,7 @@ export default async function HubPage({
       .from(persons)
       .where(eq(persons.id, ctx.personId))
       .then((rows) => rows[0] ?? null),
-    listOutstandingAnswerDrafts(db, ctx.personId),
+    listOutstandingDrafts(db, ctx.personId),
   ]);
 
   // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
@@ -100,6 +100,13 @@ export default async function HubPage({
     feedStoryIds,
     viewerFamilies.map((f) => f.id),
   );
+
+  // Split the outstanding drafts: ask-backed feed the Questions tab (Date recordedAt, unchanged
+  // shape), self-initiated (askId === null) feed the Stories tab's resume list (ISO-serialized).
+  const answerDrafts = allDrafts.filter((d) => d.askId !== null);
+  const selfDrafts = allDrafts
+    .filter((d) => d.askId === null)
+    .map((d) => ({ storyId: d.storyId, kind: d.kind, recordedAt: d.recordedAt.toISOString() }));
 
   // Build a lookup map so QuestionsTab can render two-state affordances per ask.
   const draftsByAskId = Object.fromEntries(
@@ -252,6 +259,7 @@ export default async function HubPage({
               familyTargets={familyTargets}
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
+              selfDrafts={selfDrafts}
             />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}

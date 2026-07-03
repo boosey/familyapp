@@ -1,8 +1,18 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { StoryBrowse } from "./StoryBrowse";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
+import { relativeShortDate } from "@/lib/relative-time";
+
+/** A self-initiated (ask-less) draft still in review — resumable from the Stories tab. recordedAt is
+ *  an ISO string (serialized by the server component, matching the answer-drafts serialization). */
+interface SelfDraft {
+  storyId: string;
+  kind: "voice" | "text";
+  recordedAt: string;
+}
 
 interface StoriesTabProps {
   feed: MemberWithStories[];
@@ -16,6 +26,8 @@ interface StoriesTabProps {
   viewerFamilies: ViewerFamily[];
   /** The viewer's display name — labels the Timeline "Just {viewer}" toggle. */
   viewerName: string;
+  /** The viewer's own ask-less drafts still awaiting approval — the "Finish what you started" list. */
+  selfDrafts: SelfDraft[];
 }
 
 /** The era a story is ABOUT, when known: "1962 · MARCH" with a place note, else "1962". Null when
@@ -38,6 +50,7 @@ export function StoriesTab({
   familyTargets,
   viewerFamilies,
   viewerName,
+  selfDrafts,
 }: StoriesTabProps) {
   const dated = feed.flatMap((slot) =>
     slot.stories.map((story) => {
@@ -66,29 +79,147 @@ export function StoriesTab({
   dated.sort((a, b) => b.sort - a.sort);
   const items: StoryItem[] = dated.map((d) => d.item);
 
-  if (items.length === 0) {
-    return (
-      <p
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {/* Self-initiated telling entry — the front door to /hub/tell. Styled as a primary Kindred CTA
+          card (mirrors the accent affordance the Questions tab uses). Always shown, above the feed. */}
+      <Link
+        href="/hub/tell"
         style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-muted)",
-          margin: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 20,
+          background: "var(--accent)",
+          color: "var(--accent-on)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-card)",
+          padding: "20px 24px",
+          textDecoration: "none",
         }}
       >
-        {hub.stories.empty}
-      </p>
-    );
-  }
+        <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <span
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-story)",
+              fontWeight: 500,
+            }}
+          >
+            {hub.stories.tellTitle}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              opacity: 0.85,
+            }}
+          >
+            {hub.stories.tellBlurb}
+          </span>
+        </span>
+        <span aria-hidden="true" style={{ fontSize: "1.25rem", flex: "0 0 auto" }}>
+          →
+        </span>
+      </Link>
 
-  return (
-    <Suspense>
-      <StoryBrowse
-        items={items}
-        viewerFamilies={viewerFamilies}
-        viewerPersonId={viewerPersonId}
-        viewerName={viewerName}
-      />
-    </Suspense>
+      {/* Resume: the viewer's own ask-less drafts still in review. Each links to /hub/tell/[storyId]. */}
+      {selfDrafts.length > 0 && (
+        <section>
+          <h2
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
+              letterSpacing: "var(--tracking-mono)",
+              textTransform: "uppercase",
+              color: "var(--text-meta)",
+              margin: "0 0 14px",
+            }}
+          >
+            {hub.stories.resumeHeading}
+          </h2>
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            {selfDrafts.map((d) => (
+              <li
+                key={d.storyId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 20,
+                  background: "var(--surface-card)",
+                  border: "var(--border-width) solid var(--accent)",
+                  borderRadius: "var(--radius-lg)",
+                  boxShadow: "var(--shadow-card)",
+                  padding: "20px 24px",
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-label)",
+                    color: "var(--support)",
+                    letterSpacing: "var(--tracking-mono)",
+                  }}
+                >
+                  {hub.questions.recordedAt(relativeShortDate(d.recordedAt))}
+                </span>
+                <Link
+                  href={`/hub/tell/${d.storyId}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "12px 22px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1.5px solid var(--accent)",
+                    background: "var(--accent-soft)",
+                    color: "var(--accent)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "var(--text-ui-sm)",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    textDecoration: "none",
+                  }}
+                >
+                  {hub.stories.resume}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {items.length === 0 ? (
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui)",
+            color: "var(--text-muted)",
+            margin: 0,
+          }}
+        >
+          {hub.stories.empty}
+        </p>
+      ) : (
+        <Suspense>
+          <StoryBrowse
+            items={items}
+            viewerFamilies={viewerFamilies}
+            viewerPersonId={viewerPersonId}
+            viewerName={viewerName}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 }

@@ -30,6 +30,12 @@ export const hub = {
     untitled: "Untitled",
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
+    // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
+    // for ask-less drafts still in review.
+    tellTitle: "Tell a story",
+    tellBlurb: "Something you want to remember — start it whenever it comes to you.",
+    resumeHeading: "Finish what you started",
+    resume: "Finish",
   },
   intake: {
     // Banner shown at the top of the hub until the narrator's biographical profile is complete.
