@@ -23,12 +23,37 @@ CREATE TRIGGER consent_records_append_only
   BEFORE UPDATE OR DELETE ON consent_records
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
 
--- Prose revisions: the prose provenance ledger (L1 transcribed → L2 polished → L3 corrected).
--- Append-only like the consent ledger — a correction is a NEW row, never an edit. Reuses the
--- shared chronicle_forbid_mutation() guard defined above.
+-- Prose revisions: the prose provenance ledger (L1 user_authored/transcribed → L2 polished →
+-- L3 corrected). Consent-scoped immutability, exactly like Media and the ordered take set
+-- (ADR-0002/0007):
+--   UPDATE → always forbidden (a correction is a NEW row, never an edit — the ledger is append-only).
+--   DELETE → allowed ONLY when the owning Story has no consent_records row. Once a story is
+--            approved/shared its prose lineage is frozen forever (it is the L2→L3 audit/diff
+--            signal); but a never-consented draft that is being DISCARDED wholesale (ADR-0002) must
+--            take its prose revisions with it. A text draft (ADR-0007) always carries a
+--            `user_authored` L1, so without this carve-out a text draft could never be discarded.
+CREATE OR REPLACE FUNCTION chronicle_prose_revision_delete_guard()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION
+      'Table % is append-only/immutable: % is not permitted (revisions must be new rows).',
+      TG_TABLE_NAME, TG_OP
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM consent_records WHERE story_id = OLD.story_id) THEN
+    RAISE EXCEPTION
+      'Cannot delete prose_revision %: its story has consent records; prose lineage is immutable after sharing.',
+      OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER prose_revisions_append_only
   BEFORE UPDATE OR DELETE ON prose_revisions
-  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+  FOR EACH ROW EXECUTE FUNCTION chronicle_prose_revision_delete_guard();
 
 -- Follow-up decision ledger: append-only (ADR-0013). Reuses the shared guard. A follow-up
 -- OUTCOME is a NEW row referencing its decision, never an edit of the decision row.

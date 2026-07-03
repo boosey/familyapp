@@ -14,6 +14,7 @@ import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveAndShareStory,
+  createTextDraft,
   discardDraftStory,
   InvariantViolation,
   persistRecordingAndCreateDraft,
@@ -72,6 +73,38 @@ describe("discardDraftStory — happy path", () => {
       .select({ id: media.id })
       .from(media)
       .where(eq(media.id, recording.id));
+    expect(mediaRows).toHaveLength(0);
+  });
+});
+
+describe("discardDraftStory — text story (ADR-0007, null recording)", () => {
+  it("discards a text draft: no media rows, returns empty storageKeys, story row gone", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const { story } = await createTextDraft(db, {
+      ownerPersonId: narrator.id,
+      text: "The summer we moved to Naples.",
+    });
+
+    const result = await discardDraftStory(db, {
+      storyId: story.id,
+      narratorPersonId: narrator.id,
+    });
+
+    // A text story owns no audio, so there is nothing for the caller to delete from storage.
+    expect(result.storageKeys).toEqual([]);
+
+    // Story row is gone.
+    const storyRows = await db
+      .select({ id: stories.id })
+      .from(stories)
+      .where(eq(stories.id, story.id));
+    expect(storyRows).toHaveLength(0);
+
+    // No media row was ever created for the narrator, so none leaked.
+    const mediaRows = await db
+      .select({ id: media.id })
+      .from(media)
+      .where(eq(media.ownerPersonId, narrator.id));
     expect(mediaRows).toHaveLength(0);
   });
 });

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { media, persons, proseRevisions, stories } from "../src/schema";
+import { consentRecords, media, persons, proseRevisions, stories } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
 
 let db: Database;
@@ -84,14 +84,35 @@ describe("prose_revisions table", () => {
     ).rejects.toThrow(/append-only/i);
   });
 
-  it("rejects DELETE of a prose revision", async () => {
-    const { storyId } = await makeStory();
-    const [row] = await db
+  it("permits deleting a prose revision pre-consent (draft discard), forbids it once the story has a consent record", async () => {
+    // Consent-scoped delete guard (ADR-0002/0007), mirroring media + the take ledger: a
+    // never-consented draft that is being discarded wholesale must take its prose lineage with it
+    // (a text draft always carries a user_authored L1), but a shared story's lineage is frozen.
+    const { personId, storyId } = await makeStory();
+    const [preConsent] = await db
+      .insert(proseRevisions)
+      .values({ storyId, level: "user_authored", text: "typed words" })
+      .returning();
+
+    // Pre-consent: deleting a prose revision is allowed (discard path).
+    await expect(
+      db.delete(proseRevisions).where(eq(proseRevisions.id, preConsent!.id)),
+    ).resolves.not.toThrow();
+
+    // Story is now approved/shared: its prose lineage is frozen forever.
+    const [frozen] = await db
       .insert(proseRevisions)
       .values({ storyId, level: "ai_polished", text: "v1", modelId: "mock-claude" })
       .returning();
+    await db.insert(consentRecords).values({
+      personId,
+      actorPersonId: personId,
+      storyId,
+      action: "approved_for_sharing",
+      resultingState: "shared",
+    });
     await expect(
-      db.delete(proseRevisions).where(eq(proseRevisions.id, row!.id)),
-    ).rejects.toThrow(/append-only/i);
+      db.delete(proseRevisions).where(eq(proseRevisions.id, frozen!.id)),
+    ).rejects.toThrow(/immutable after sharing/);
   });
 });

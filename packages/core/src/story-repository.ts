@@ -847,16 +847,30 @@ export async function discardDraftStory(
       .from(storyRecordings)
       .where(eq(storyRecordings.storyId, input.storyId))
       .orderBy(storyRecordings.position);
-    // recording media first, then any follow-up takes — a deterministic storageKeys order.
+    // recording media first, then any follow-up takes — a deterministic storageKeys order. A
+    // TEXT story (ADR-0007) has `recordingMediaId = null` and no take rows, so it contributes NO
+    // media; filter nulls out so a text discard removes zero media rows (and `inArray` never sees
+    // a null id).
     const mediaIds = [
-      ...new Set([story.recordingMediaId, ...takeRows.map((t) => t.mediaId)]),
+      ...new Set(
+        [story.recordingMediaId, ...takeRows.map((t) => t.mediaId)].filter(
+          (id): id is string => id !== null,
+        ),
+      ),
     ];
-    const mediaRows = await tx
-      .select({ id: media.id, storageKey: media.storageKey })
-      .from(media)
-      .where(inArray(media.id, mediaIds));
+    // `inArray(col, [])` compiles to `IN ()`, which errors in Postgres/PGlite — only query when
+    // there is at least one media row to fetch (a text story has none).
+    const mediaRows =
+      mediaIds.length > 0
+        ? await tx
+            .select({ id: media.id, storageKey: media.storageKey })
+            .from(media)
+            .where(inArray(media.id, mediaIds))
+        : [];
     const keyById = new Map(mediaRows.map((m) => [m.id, m.storageKey]));
-    if (!keyById.has(story.recordingMediaId)) {
+    // Only a VOICE story must resolve its canonical recording (missing ⇒ DB corruption). A text
+    // story legitimately has no recording, so skip the guard when the pointer is null.
+    if (story.recordingMediaId !== null && !keyById.has(story.recordingMediaId)) {
       throw new InvariantViolation(
         `discardDraftStory: recording media ${story.recordingMediaId} for story ${input.storyId} not found`,
       );
@@ -875,12 +889,20 @@ export async function discardDraftStory(
     // rows must go before the story. The story is consent-free (asserted above), so the
     // story_recordings delete-guard trigger permits it.
     await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
+    // Then the prose provenance rows. prose_revisions.story_id → stories.id is a plain FK, so any
+    // revision rows must go before the story. A text draft (ADR-0007) ALWAYS carries a
+    // `user_authored` L1; a rendered draft may carry AI levels too. The story is consent-free
+    // (asserted above), so the prose_revisions delete-guard trigger permits it.
+    await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
     //    story references the media (story is the CHILD of media there), so the story goes first,
     //    then every take's media row (all never-consented).
     await tx.delete(stories).where(eq(stories.id, input.storyId));
-    await tx.delete(media).where(inArray(media.id, mediaIds));
+    // A text story has no media rows to delete; guard against `inArray(col, [])` (IN ()).
+    if (mediaIds.length > 0) {
+      await tx.delete(media).where(inArray(media.id, mediaIds));
+    }
 
     return { storageKeys };
   });
