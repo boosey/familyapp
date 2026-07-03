@@ -28,6 +28,7 @@ const ALLOWLIST = new Set<string>([
   "packages/core/src/authorization.ts", // the single read front door
   "packages/core/src/story-repository.ts", // the single write path
   "packages/core/src/intake-answer-repository.ts", // audited intake media + answer writes
+  "packages/core/src/album-repository.ts", // audited album (family_photos) read + write (ADR-0009)
 ]);
 
 /**
@@ -60,7 +61,7 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
   },
   { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
   {
-    re: /\.query\.(stories|media|proseRevisions|storyRecordings)\b/,
+    re: /\.query\.(stories|media|proseRevisions|storyRecordings|familyPhotos|familyPhotoFamilies)\b/,
     label: "uses the Drizzle relational API on a content table (db.query.*)",
   },
 ];
@@ -178,6 +179,7 @@ describe("single front door (architecture guard)", () => {
         "packages/core/src/authorization.ts",
         "packages/core/src/story-repository.ts",
         "packages/core/src/intake-answer-repository.ts",
+        "packages/core/src/album-repository.ts",
       ].sort(),
     );
   });

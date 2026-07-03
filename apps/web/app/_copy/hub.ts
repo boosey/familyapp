@@ -238,6 +238,16 @@ export const hub = {
     storyNotFound: "Story not found.",
     shareFailed: "Something went wrong sharing your story. Please try again.",
     removeFailed: "Could not remove the recording. Please try again.",
+    noFamily: "Join or start a family before adding photos.",
+    photoEmpty: "No photo was selected. Please choose an image.",
+    photoUploadFailed: "Could not add your photo. Please try again.",
+  },
+  album: {
+    title: "Family album",
+    empty: "No photos yet. Add the first one below.",
+    addLabel: "Add a photo",
+    addButton: "Add to album",
+    photoAlt: (caption: string | null) => caption ?? "Family photo",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.

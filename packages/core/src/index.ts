@@ -140,3 +140,11 @@ export {
   listAnsweredQuestionKeys,
   type CreateIntakeRecordingInput,
 } from "./intake-answer-repository";
+export {
+  createAlbumPhoto,
+  listAlbumPhotos,
+  authorizeAlbumPhotoRead,
+  getAlbumPhotoForViewer,
+  type CreateAlbumPhotoInput,
+  type AlbumPhotoView,
+} from "./album-repository";

@@ -15,6 +15,7 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
 CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
 CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
@@ -63,6 +64,26 @@ CREATE TABLE "families" (
 	"creator_person_id" uuid NOT NULL,
 	"steward_person_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "family_photo_families" (
+	"photo_id" uuid NOT NULL,
+	"family_id" uuid NOT NULL,
+	"added_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "family_photo_families_photo_id_family_id_pk" PRIMARY KEY("photo_id","family_id")
+);
+
+CREATE TABLE "family_photos" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"contributor_person_id" uuid NOT NULL,
+	"source" "photo_source" NOT NULL,
+	"storage_key" text NOT NULL,
+	"caption" text,
+	"exif_captured_at" timestamp with time zone,
+	"exif_gps" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"deleted_at" timestamp with time zone,
+	CONSTRAINT "family_photos_storage_key_unique" UNIQUE("storage_key")
 );
 
 CREATE TABLE "follow_up_decisions" (
@@ -249,6 +270,9 @@ ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_med
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_creator_person_id_persons_id_fk" FOREIGN KEY ("creator_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_steward_person_id_persons_id_fk" FOREIGN KEY ("steward_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "family_photo_families" ADD CONSTRAINT "family_photo_families_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "family_photo_families" ADD CONSTRAINT "family_photo_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "family_photos" ADD CONSTRAINT "family_photos_contributor_person_id_persons_id_fk" FOREIGN KEY ("contributor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_decision_id_follow_up_decisions_id_fk" FOREIGN KEY ("decision_id") REFERENCES "public"."follow_up_decisions"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -283,6 +307,8 @@ CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
 CREATE INDEX "consent_story_idx" ON "consent_records" USING btree ("story_id");
+CREATE INDEX "family_photo_families_family_idx" ON "family_photo_families" USING btree ("family_id");
+CREATE INDEX "family_photos_contributor_idx" ON "family_photos" USING btree ("contributor_person_id");
 CREATE INDEX "follow_up_decisions_story_idx" ON "follow_up_decisions" USING btree ("story_id");
 CREATE INDEX "intake_answers_person_idx" ON "intake_answers" USING btree ("person_id");
 CREATE UNIQUE INDEX "intake_answers_person_question_uq" ON "intake_answers" USING btree ("person_id","question_key");

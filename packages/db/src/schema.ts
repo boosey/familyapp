@@ -23,6 +23,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -837,6 +838,73 @@ export const storyViews = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// FamilyPhoto (the album) — ADR-0009. A photo is a CONTRIBUTED-not-owned artifact that lands in
+// one or more Family albums. Kept SEPARATE from `media` on lifecycle grounds: a photo lives
+// independently, attaches to many items (many-to-many), and is deletable on its own (soft-delete
+// via `deletedAt`); audio is a single-owner, immutable child of one item. Photo BYTES are
+// write-once in object storage (`storageKey` UNIQUE — no silent pixel-swap); the ROW is deletable
+// by the contributor or steward (ADR-0008). NOT under the media immutability trigger. Holds
+// contributed CONTENT, so the table object lives behind @chronicle/db/content and only the audited
+// `album-repository.ts` touches it (mirrors stories/media).
+// ---------------------------------------------------------------------------
+
+/** How a photo entered the album — provenance only ("import, not sync", ADR-0009). */
+export const photoSourceEnum = pgEnum("photo_source", ["upload", "google_picker"]);
+
+export const familyPhotos = pgTable(
+  "family_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The contributor (a photo has a CONTRIBUTOR, not an owner — ADR-0009). */
+    contributorPersonId: uuid("contributor_person_id")
+      .notNull()
+      .references(() => persons.id),
+    source: photoSourceEnum("source").notNull(),
+    /** Object-storage key (`family-photos/<uuid>`). Write-once; UNIQUE so bytes never silently swap. */
+    storageKey: text("storage_key").notNull().unique(),
+    /** Contributor-authored free-text label; mutable, last-write-wins, off every ledger; alt text. */
+    caption: text("caption"),
+    /** EXIF capture time. Populated by #17; NULL in #15 (schema column is the shared contract). */
+    exifCapturedAt: timestamp("exif_captured_at", { withTimezone: true }),
+    /** EXIF GPS `{lat,lng}`. Populated by #17; NULL in #15. */
+    exifGps: jsonb("exif_gps").$type<{ lat: number; lng: number }>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Soft-delete: a non-null value ⇒ the photo is treated as ABSENT everywhere. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("family_photos_contributor_idx").on(t.contributorPersonId)],
+);
+
+// ---------------------------------------------------------------------------
+// FamilyPhotoFamily — album membership (M2M). "Being in a family's album IS the contributor's
+// consent for that family to see it" (ADR-0009), mirroring story_families' multi-family targeting.
+// Composite PK (photo_id, family_id); ON DELETE CASCADE so deleting the photo row un-attaches it
+// from every album at once. Also guarded (behind @chronicle/db/content) — only album-repository.ts
+// reads/writes it, since it IS the album's authorization input.
+// ---------------------------------------------------------------------------
+
+export const familyPhotoFamilies = pgTable(
+  "family_photo_families",
+  {
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.photoId, t.familyId] }),
+    index("family_photo_families_family_idx").on(t.familyId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -892,3 +960,8 @@ export type ProseRevisionLevel =
 export type IntakeAnswer = typeof intakeAnswers.$inferSelect;
 export type NewIntakeAnswer = typeof intakeAnswers.$inferInsert;
 export type IntakeOrigin = (typeof intakeOriginEnum.enumValues)[number];
+export type FamilyPhoto = typeof familyPhotos.$inferSelect;
+export type NewFamilyPhoto = typeof familyPhotos.$inferInsert;
+export type FamilyPhotoFamily = typeof familyPhotoFamilies.$inferSelect;
+export type NewFamilyPhotoFamily = typeof familyPhotoFamilies.$inferInsert;
+export type PhotoSource = (typeof photoSourceEnum.enumValues)[number];

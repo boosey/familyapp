@@ -62,6 +62,11 @@ export type {
   NewStoryRecording,
   FollowUpDecisionRow,
   NewFollowUpDecisionRow,
+  FamilyPhoto,
+  NewFamilyPhoto,
+  FamilyPhotoFamily,
+  NewFamilyPhotoFamily,
+  PhotoSource,
 } from "./schema";
 export type {
   FollowUpType,
