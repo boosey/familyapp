@@ -20,7 +20,9 @@ export const welcome = {
   birthdayBody:
     "This is the one thing we ask for. It shapes the questions and the pace we'll use with you later. Nothing else on this screen is required.",
   sayItOutLoud: "Say it out loud",
-  voiceUnavailableFields: "Voice isn't available here yet — use the fields below.",
+  voiceStop: "Tap when you're done",
+  voiceOneMoment: "One moment…",
+  voiceError: "Voice didn't catch that — you can type it below instead.",
   monthLabel: "Month",
   dayLabel: "Day",
   yearLabel: "Year",

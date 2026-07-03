@@ -31,3 +31,18 @@ export const BIOGRAPHY_EXTRACT_LLM_TEMPERATURE = 0;
 
 /** Hard cap on output tokens for biographical extraction (the JSON record is tiny). */
 export const BIOGRAPHY_EXTRACT_MAX_OUTPUT_TOKENS = 300;
+
+/**
+ * LLM temperature for the OPT-IN prose polish (slightly above story-render's 0.2 so it can smooth
+ * rambling and resolve self-corrections, but still low enough that it never drifts into invention).
+ */
+export const PROSE_POLISH_LLM_TEMPERATURE = 0.3;
+
+/** Hard cap on output tokens for a prose polish — a polish never lengthens; it tidies. */
+export const PROSE_POLISH_MAX_OUTPUT_TOKENS = 4000;
+
+/** LLM temperature for parsing a spoken date (0 = deterministic — a date is a fact, not a choice). */
+export const SPOKEN_DATE_PARSE_LLM_TEMPERATURE = 0;
+
+/** Hard cap on output tokens for the spoken-date parse (the JSON record is three integers). */
+export const SPOKEN_DATE_PARSE_MAX_OUTPUT_TOKENS = 120;

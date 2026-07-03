@@ -30,6 +30,7 @@ import {
   startTimer,
   transcribeTakeToRecording,
   stitchAndRenderStory,
+  polishProse,
 } from "@chronicle/pipeline";
 import {
   createCoreAnchorSource,
@@ -464,6 +465,40 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
   plog("answer", "shareAnswer: complete → redirect /hub", { story: storyId, ms: totalTimer() });
   // Called outside try/catch: redirect() throws NEXT_REDIRECT which Next.js intercepts.
   redirect("/hub");
+}
+
+/**
+ * OPT-IN "Polish with AI" for the review-phase prose editor. Stateless text transform: takes the
+ * narrator's CURRENT prose (typed or edited) and returns a tidied version — more coherent, spoken
+ * self-corrections resolved. It persists NOTHING; the narrator sees the result in the editor, can
+ * undo it, and only a subsequent Share writes the L3 correction. Auth-gated (an account session)
+ * purely so this isn't an open LLM endpoint; there is no story to own yet on the typed path, so no
+ * ownership check. An empty prose is echoed back unchanged (the pipeline no-ops before any LLM call).
+ */
+export async function polishAnswerProseAction(
+  formData: FormData,
+): Promise<{ prose: string } | { error: string }> {
+  const { auth, languageModel } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const prose = formData.get("prose");
+  if (typeof prose !== "string") return { error: hub.actions.invalidInput };
+  const promptQuestion = formData.get("promptQuestion");
+
+  try {
+    const result = await polishProse(languageModel, {
+      prose,
+      promptQuestion: typeof promptQuestion === "string" ? promptQuestion : null,
+    });
+    return { prose: result.prose };
+  } catch (err) {
+    plogError("answer", "polishAnswerProse: failed", {
+      person: ctx.personId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.answer.genericError };
+  }
 }
 
 /**

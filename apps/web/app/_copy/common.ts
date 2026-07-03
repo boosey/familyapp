@@ -30,6 +30,16 @@ export const common = {
     tapToSpeak: "Tap to speak",
   },
 
+  // Prose editor toolbar (AnswerFlow review + ApprovalRecorder) — AI polish + undo/redo.
+  proseEditor: {
+    polish: "Polish with AI",
+    polishing: "Polishing…",
+    polishHint: "Tidy rambling and self-corrections. You can undo it.",
+    polishError: "Couldn't polish that just now — your words are unchanged.",
+    undo: "Undo",
+    redo: "Redo",
+  },
+
   storyCard: {
     photo: "photo",
     pinned: "Pinned",

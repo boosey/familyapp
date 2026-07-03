@@ -194,7 +194,22 @@ export function ApprovalRecorder({
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       {/* Read + edit the polished prose before approving */}
       <div style={{ marginBottom: 28 }}>
-        <KindredProseEditor value={proseDraft} onChange={setProseDraft} />
+        <KindredProseEditor
+          value={proseDraft}
+          onChange={setProseDraft}
+          historyKey={storyId}
+          labels={common.proseEditor}
+          onPolish={async (text) => {
+            const form = new FormData();
+            form.append("token", token);
+            form.append("storyId", storyId);
+            form.append("prose", text);
+            const res = await fetch("/api/capture/polish", { method: "POST", body: form });
+            if (!res.ok) throw new Error("polish failed");
+            const data = (await res.json()) as { prose?: string };
+            return typeof data.prose === "string" ? data.prose : text;
+          }}
+        />
       </div>
 
       {/* Tier picker */}

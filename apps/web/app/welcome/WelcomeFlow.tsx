@@ -7,8 +7,10 @@
  *  - Name and date of birth are the required asks; the rest of onboarding is optional. The name step
  *    exists because manual Clerk sign-up never collects one, so without it a Person keeps the
  *    email-prefix placeholder forever.
- *  - Voice-first but never voice-only: every voice control is a visible STUB here (no mic in this
- *    environment) paired with a real typed path that is the actual way data is captured.
+ *  - Voice-first but never voice-only: each voice control captures a clip via `useMicRecorder`,
+ *    transcribes it server-side, and PRE-FILLS the typed field (the name input, or the DOB
+ *    dropdowns via an LLM date-parse). The typed path is always available; voice is a shortcut, and
+ *    a mic/transcription failure quietly falls back to typing.
  *  - The final Continue submits name + DOB in one server call; on success it routes straight into
  *    the single intake surface at /hub/about-you. The old "doors" fork (which let a user skip family
  *    creation) is gone; family creation now happens earlier via the /families/start path.
@@ -16,7 +18,12 @@
 import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
-import { completeAccountOnboarding } from "./actions";
+import {
+  completeAccountOnboarding,
+  transcribeOnboardingName,
+  transcribeOnboardingDob,
+} from "./actions";
+import { useMicRecorder } from "@/lib/use-mic-recorder";
 import { common, welcome } from "@/app/_copy";
 
 type Step = "welcome" | "name" | "dob";
@@ -57,20 +64,81 @@ export function WelcomeFlow({
   const [year, setYear] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [voiceNote, setVoiceNote] = useState(false);
+  const [micError, setMicError] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const nameComplete = name.trim().length > 0;
   const dobComplete = month !== "" && day !== "" && year !== "";
 
+  // Fill the DOB dropdowns from a parsed spoken date — only the fields the speaker clearly stated,
+  // and only a day that fits the (possibly just-spoken) month/year. Reads month/year from the parse
+  // result directly (not the not-yet-committed state) so a same-utterance "March 3rd 1952" lands.
+  function applySpokenDate(d: { year: number | null; month: number | null; day: number | null }) {
+    const m = d.month != null ? String(d.month) : month;
+    const y = d.year != null ? String(d.year) : year;
+    if (d.month != null) setMonth(m);
+    if (d.year != null) setYear(y);
+    if (d.day != null) {
+      // A spoken day that doesn't fit the (possibly just-spoken) month clears rather than persists a
+      // wrong value ("the 31st of February").
+      setDay(d.day <= daysInMonth(m, y) ? String(d.day) : "");
+    } else if (day !== "" && Number(day) > daysInMonth(m, y)) {
+      // A partial spoken correction (month/year only) can strand a previously-picked day out of range
+      // — clear it, exactly as the typed-path <select> handlers do below.
+      setDay("");
+    }
+  }
+
+  // One recorder for both steps: onRecorded branches on the CURRENT step (the hook reads the latest
+  // callback via its optsRef, so this closure's `step` is always current at stop time).
+  const { phase: micPhase, start, finish } = useMicRecorder({
+    onRecorded: async (blob) => {
+      setTranscribing(true);
+      try {
+        const form = new FormData();
+        form.append("audio", blob, "onboarding.webm");
+        if (step === "name") {
+          const { name: spoken } = await transcribeOnboardingName(form);
+          if (spoken) setName(spoken);
+          else setMicError(true);
+        } else {
+          const d = await transcribeOnboardingDob(form);
+          if (d.year != null || d.month != null || d.day != null) applySpokenDate(d);
+          else setMicError(true);
+        }
+      } catch {
+        setMicError(true);
+      } finally {
+        setTranscribing(false);
+      }
+    },
+    onError: () => setMicError(true),
+  });
+
   function goToStep(next: Step) {
-    setVoiceNote(false);
+    setMicError(false);
     setStep(next);
   }
 
-  function showVoiceStub() {
-    setVoiceNote(true);
+  // Start a fresh recording, clearing any prior mic error first.
+  function startVoice() {
+    setMicError(false);
+    void start();
   }
+
+  const voiceBusy = micPhase === "saving" || transcribing;
+  // A recording/transcription in flight must block forward navigation: leaving the step mid-capture
+  // orphans the MediaRecorder (its onstop would route through the NEXT step's action) — mirrors
+  // AboutYouFlow, which disables its "next" control on `micPhase !== "idle" || transcribing`.
+  const voiceActive = micPhase !== "idle" || transcribing;
+  const voiceLabel = transcribing
+    ? welcome.voiceOneMoment
+    : micPhase === "listening"
+      ? welcome.voiceStop
+      : welcome.sayItOutLoud;
+  const onVoiceClick =
+    micPhase === "listening" ? finish : micPhase === "idle" && !transcribing ? startVoice : undefined;
 
   async function submit() {
     if (!nameComplete || !dobComplete) return;
@@ -175,9 +243,14 @@ export function WelcomeFlow({
           <p style={sub}>{welcome.nameBody}</p>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "28px 0 20px" }}>
-            <KindredVoiceButton label={welcome.sayItOutLoud} onClick={showVoiceStub} />
-            {voiceNote ? (
-              <p style={voiceHint}>{welcome.voiceUnavailableFields}</p>
+            <KindredVoiceButton
+              listening={micPhase === "listening"}
+              saving={voiceBusy}
+              label={voiceLabel}
+              onClick={onVoiceClick}
+            />
+            {micError ? (
+              <p style={voiceHint}>{welcome.voiceError}</p>
             ) : null}
           </div>
 
@@ -191,7 +264,7 @@ export function WelcomeFlow({
               placeholder={welcome.namePlaceholder}
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === "Enter" && nameComplete) goToStep("dob");
+                if (e.key === "Enter" && nameComplete && !voiceActive) goToStep("dob");
               }}
             />
           </label>
@@ -201,7 +274,7 @@ export function WelcomeFlow({
               label={welcome.continue}
               size="large"
               fullWidth
-              disabled={!nameComplete}
+              disabled={!nameComplete || voiceActive}
               onClick={() => goToStep("dob")}
             />
           </div>
@@ -221,9 +294,14 @@ export function WelcomeFlow({
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "28px 0 20px" }}>
-            <KindredVoiceButton label={welcome.sayItOutLoud} onClick={showVoiceStub} />
-            {voiceNote ? (
-              <p style={voiceHint}>{welcome.voiceUnavailableFields}</p>
+            <KindredVoiceButton
+              listening={micPhase === "listening"}
+              saving={voiceBusy}
+              label={voiceLabel}
+              onClick={onVoiceClick}
+            />
+            {micError ? (
+              <p style={voiceHint}>{welcome.voiceError}</p>
             ) : null}
           </div>
 
@@ -288,7 +366,7 @@ export function WelcomeFlow({
               label={busy ? welcome.oneMoment : welcome.continue}
               size="large"
               fullWidth
-              disabled={!dobComplete || busy}
+              disabled={!dobComplete || busy || voiceActive}
               onClick={submit}
             />
           </div>

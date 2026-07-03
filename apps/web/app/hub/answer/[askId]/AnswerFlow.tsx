@@ -24,6 +24,7 @@ import {
   shareAnswerAction,
   discardAnswerAction,
   getAnswerStatusAction,
+  polishAnswerProseAction,
   type ThreadStep,
 } from "./actions";
 import { pollUntilReady } from "@/lib/poll-status";
@@ -510,6 +511,16 @@ export function AnswerFlow({ askId, questionText, askerName, draft }: AnswerFlow
             value={proseDraft}
             onChange={setProseDraft}
             disabled={isRemoving}
+            historyKey={draft.storyId}
+            labels={common.proseEditor}
+            onPolish={async (text) => {
+              const form = new FormData();
+              form.append("prose", text);
+              form.append("promptQuestion", questionText);
+              const res = await polishAnswerProseAction(form);
+              if ("error" in res) throw new Error(res.error);
+              return res.prose;
+            }}
           />
         </div>
 
