@@ -168,6 +168,12 @@ describe("appendTypedTakeContribution (ADR-0014 §4)", () => {
     await expect(appendTypedTakeContribution(db, {
       storyId: story.id, ownerPersonId: intruder.id, text: "x", priorProse: null,
     })).rejects.toThrow(/owner/i);
+
+    // Non-draft: the OWNER cannot append once the story has left `draft`.
+    await transitionStoryState(db, story.id, "pending_approval");
+    await expect(appendTypedTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, text: "x", priorProse: "Opener.",
+    })).rejects.toThrow(/draft/i);
   });
 });
 
@@ -243,6 +249,24 @@ describe("finishDraft (ADR-0014 §4)", () => {
       metadata: { title: "T", summary: "S", tags: [] },
     })).rejects.toThrow(/owner/i);
   });
+
+  it("rejects when the story is not in draft state", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    const take0 = (await listStoryRecordingsLocal(db, story.id))[0]!;
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id, ownerPersonId: narrator.id, storyRecordingId: take0.id,
+      rawTranscript: "raw", cleanedSegment: "Body.", transcribeModelId: "w", cleanupModelId: "c",
+      cleanupPromptText: "p", priorProse: null,
+    });
+    await transitionStoryState(db, story.id, "pending_approval");
+    await expect(finishDraft(db, {
+      storyId: story.id, ownerPersonId: narrator.id, finalText: "Body, edited.",
+      metadata: { title: "T", summary: "S", tags: [] },
+    })).rejects.toThrow(/draft/i);
+  });
 });
 
 describe("logPolish (ADR-0014 §4)", () => {
@@ -298,5 +322,19 @@ describe("logPolish (ADR-0014 §4)", () => {
     await expect(logPolish(db, {
       storyId: story.id, ownerPersonId: intruder.id, polishedProse: "x", modelId: "m", promptText: "p",
     })).rejects.toThrow(/owner/i);
+  });
+
+  it("rejects a forbidden state (allowed only in draft or pending_approval)", async () => {
+    const narrator = await makePerson();
+    const { story } = await persistRecordingAndCreateDraft(db, {
+      ownerPersonId: narrator.id, storageKey: "s3://b/0.wav", contentType: "audio/wav", checksum: "c0",
+    });
+    // Walk to `approved` via legal transitions — outside logPolish's {draft, pending_approval} set.
+    await transitionStoryState(db, story.id, "pending_approval");
+    await transitionStoryState(db, story.id, "approved");
+    await expect(logPolish(db, {
+      storyId: story.id, ownerPersonId: narrator.id,
+      polishedProse: "Polished too late.", modelId: "m", promptText: "p",
+    })).rejects.toThrow(/draft or pending_approval/i);
   });
 });

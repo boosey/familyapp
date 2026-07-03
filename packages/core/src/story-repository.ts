@@ -1005,6 +1005,10 @@ function concatProse(priorProse: string | null, segment: string): string {
  * cleaned segment (blank-line join). Asserts `kind='voice'` idempotently; the authoritative kind
  * flipper is `persistTakeRecording` (which flips a typed-first draft co-transactionally on take 0),
  * so this UPDATE is a defensive no-op re-assert for the already-voice draft. Owner + `draft`-gated.
+ *
+ * The new prose is authored from the caller-supplied `priorProse` (the client editor's current text),
+ * NOT re-read from `stories.prose` — so the last writer wins and a concurrent polish/append in the
+ * same draft is clobbered. Acceptable on the single-narrator composing surface.
  */
 export async function appendVoiceTakeContribution(
   db: Database,
@@ -1074,6 +1078,10 @@ export async function appendVoiceTakeContribution(
  * the text onto the prior working prose (blank-line join). Creates NO `story_recordings` row and
  * does NOT change `kind` — a typed contribution on a voice draft leaves it voice; on a text draft
  * leaves it text. Owner + `draft`-gated; empty/whitespace text rejected.
+ *
+ * The new prose is authored from the caller-supplied `priorProse` (the client editor's current text),
+ * NOT re-read from `stories.prose` — so the last writer wins and a concurrent polish/append in the
+ * same draft is clobbered. Acceptable on the single-narrator composing surface.
  */
 export async function appendTypedTakeContribution(
   db: Database,
@@ -1234,10 +1242,14 @@ export async function logPolish(
         `logPolish: story must be draft or pending_approval (was ${current.state})`,
       );
     }
+    // Trim so the stored prose is whitespace-normalized like `concatProse`/`finishDraft` — otherwise
+    // a later no-op Finish would spuriously snapshot a `human_corrected` row differing only by
+    // trailing whitespace.
+    const polishedProse = input.polishedProse.trim();
     await tx.insert(proseRevisions).values({
       storyId: input.storyId,
       level: "ai_polished",
-      text: input.polishedProse,
+      text: polishedProse,
       modelId: input.modelId,
       promptText: input.promptText,
       actorPersonId: null,
@@ -1245,7 +1257,7 @@ export async function logPolish(
     });
     const [row] = await tx
       .update(stories)
-      .set({ prose: input.polishedProse, updatedAt: new Date() })
+      .set({ prose: polishedProse, updatedAt: new Date() })
       .where(eq(stories.id, input.storyId))
       .returning();
     return row!;
