@@ -1260,6 +1260,22 @@ export async function persistTakeRecording(
       .insert(storyRecordings)
       .values({ storyId, position: nextPosition, mediaId: rec!.id })
       .returning();
+    // ADR-0014 §3.3 (amended): the FIRST take on a typed-first (kind='text') draft flips
+    // kind→voice CO-TRANSACTIONALLY, so the deferred biconditional holds at THIS commit. The
+    // recording_media_id pointer is NOT re-aimed (it stays NULL — the take set is the audio).
+    if (nextPosition === 0) {
+      const [current] = await tx
+        .select({ kind: stories.kind })
+        .from(stories)
+        .where(eq(stories.id, storyId))
+        .limit(1);
+      if (current && current.kind === "text") {
+        await tx
+          .update(stories)
+          .set({ kind: "voice", updatedAt: new Date() })
+          .where(eq(stories.id, storyId));
+      }
+    }
     return { recording: rec!, storyRecording: row! };
   });
 }
