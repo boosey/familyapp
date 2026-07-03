@@ -15,7 +15,8 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
-CREATE TYPE "public"."prose_revision_level" AS ENUM('ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
+CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_polished', 'human_corrected', 'ai_verified');
+CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
 CREATE TABLE "accounts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -195,8 +196,9 @@ CREATE TABLE "stories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_person_id" uuid NOT NULL,
 	"state" "story_state" DEFAULT 'draft' NOT NULL,
+	"kind" "story_kind" DEFAULT 'voice' NOT NULL,
 	"audience_tier" "audience_tier" DEFAULT 'private' NOT NULL,
-	"recording_media_id" uuid NOT NULL,
+	"recording_media_id" uuid,
 	"transcript" text,
 	"transcript_word_timings" jsonb,
 	"prose" text,

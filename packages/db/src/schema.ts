@@ -131,11 +131,17 @@ export const joinRequestStatusEnum = pgEnum("join_request_status", [
   "declined",
 ]);
 
+/** ADR-0007: a Story is origin-typed. `voice` has a canonical audio recording; `text` is typed
+ * (the words are canonical, no recording). Audio is the source of truth ONLY when present. */
+export const storyKindEnum = pgEnum("story_kind", ["voice", "text"]);
+
 /**
- * The provenance levels of a story's prose, oldest to newest. `ai_verified` is a reserved
- * future seam (an AI verify/judge step) — not produced by Phase 1.
+ * The provenance levels of a story's prose, oldest to newest. `user_authored` is the origin level
+ * for a typed (text-origin) story — the person's own words, predating any AI step. `ai_verified`
+ * is a reserved future seam (an AI verify/judge step) — not produced by Phase 1.
  */
 export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
+  "user_authored",
   "ai_transcribed",
   "ai_polished",
   "human_corrected",
@@ -386,15 +392,15 @@ export const stories = pgTable(
       .notNull()
       .references(() => persons.id),
     state: storyStateEnum("state").notNull().default("draft"),
+    /** ADR-0007: origin type. voice ⇒ has a canonical recording; text ⇒ typed, no recording. */
+    kind: storyKindEnum("kind").notNull().default("voice"),
     /** The visibility dial. Defaults to private — where every story stays until approval. */
     audienceTier: audienceTierEnum("audience_tier").notNull().default("private"),
     /**
-     * The canonical Recording (original audio). REQUIRED — the model encodes that audio is
-     * the source of truth. Media is created first, then the Story points at it.
+     * The canonical Recording (original audio). Present iff kind = 'voice' (ADR-0007; enforced by a
+     * DB CHECK in invariants.sql). Media is created first, then the Story points at it.
      */
-    recordingMediaId: uuid("recording_media_id")
-      .notNull()
-      .references(() => media.id),
+    recordingMediaId: uuid("recording_media_id").references(() => media.id),
     // --- derived, regenerable fields (subordinate to the audio) ---
     transcript: text("transcript"),
     /** Word-level timing from the transcriber, mapped back to 1x time (seam for sync playback). */
