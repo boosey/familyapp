@@ -1,13 +1,15 @@
 /**
- * The PIPELINE-ONLY subpath of @chronicle/core. Exports the narrow system-actor read used by
- * the orchestrator to load a story + its canonical recording for backend processing.
+ * The PIPELINE-ONLY subpath of @chronicle/core. Exports the narrow system-actor reads the
+ * pipeline uses to load a story (or a single take) + its canonical recording for backend
+ * processing.
  *
- * This is a CONTENT-SURFACING read with no `AuthContext` check — it returns the storage key,
- * transcript, prose, and prompt question. The function is safe ONLY because the pipeline acts
- * on its own derived data (not on behalf of a viewer). To prevent accidental misuse from a
- * user-facing surface (e.g. `apps/web`), this helper is NOT exported from the package root —
- * importers must reach it via the `@chronicle/core/pipeline` subpath, and the architecture
- * guard fails CI if any file other than `packages/pipeline/src/orchestrator.ts` imports it.
+ * These are CONTENT-SURFACING reads with no `AuthContext` check — they return the storage key,
+ * transcript, prose, and prompt question. They are safe ONLY because the pipeline acts on its
+ * own derived data (not on behalf of a viewer). To prevent accidental misuse from a user-facing
+ * surface (e.g. `apps/web`), these helpers are NOT exported from the package root — importers
+ * must reach them via the `@chronicle/core/pipeline` subpath, and the architecture guard fails
+ * CI if any file outside the audited allowlist (the pipeline orchestrator and its multi-take
+ * module) imports this path.
  *
  * If you find yourself wanting to import from this path: stop and route through
  * `@chronicle/core`'s authorization function instead.

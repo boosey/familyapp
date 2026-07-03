@@ -40,6 +40,7 @@ const ALLOWLIST = new Set<string>([
  */
 const PIPELINE_HELPER_ALLOWLIST = new Set<string>([
   "packages/pipeline/src/orchestrator.ts",
+  "packages/pipeline/src/multi-take.ts",
 ]);
 
 /**
@@ -131,6 +132,7 @@ describe("single front door (architecture guard)", () => {
 
   it("the pipeline-helper allowlist is exactly the audited surface (canary)", () => {
     expect([...PIPELINE_HELPER_ALLOWLIST].sort()).toEqual([
+      "packages/pipeline/src/multi-take.ts",
       "packages/pipeline/src/orchestrator.ts",
     ]);
   });
