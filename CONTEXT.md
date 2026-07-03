@@ -200,7 +200,7 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   "anywhere in the system". **Every** uploaded photo lands in at least one album regardless of path
   (direct add, during story creation, during Ask creation); there is no photo stored outside an album.
   Being in a family's album *is* the contributor's consent for that family to see it — so there is no
-  "private photo". (Amends ADR-0009's "Family-scoped (singular)".)
+  "private photo". (See ADR-0009.)
 - **Photo import** — the single way a photo enters the album, from one of several **sources**
   (`upload` | `google_picker` | ... ). Import always **copies the bytes** into the family album
   (write-once object storage); it never stores a live reference to an external library. There is no
@@ -244,8 +244,8 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   off every ledger (mutable presentation, like the attachment links). Addable at import, during album
   browse, or at attachment time. It doubles as **alt text** and is the primary human-authored signal
   the suggestion engine matches story text against. **Adding a caption does NOT place the photo in the
-  stories feed** — only turning the photo into a Story does. (This REVERSES the earlier "a caption is a
-  short Story" definition — see ADR-0009, now amended.)
+  stories feed** — only turning the photo into a Story does. (A caption is a label, not a Story — see
+  ADR-0009.)
 - **Story from a photo** — an ordinary **Story** whose **subject** is a photo
   (`stories.subject_photo_id`), created by a deliberate "tell the story of this photo" act (distinct
   from merely *captioning* it). Full Story — same author/approval/consent path — and it is what lands

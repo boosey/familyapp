@@ -97,7 +97,7 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   grouping the feed by narrator) without a genealogy model.
 
 - ~~**Story imagery: suggestion/search, external source, and photo-library integration (2026-07-01).**~~
-  **Grilled & mostly resolved 2026-07-03 (ADR-0015; `docs/PLAN.md` "STORY IMAGERY").** Of the three:
+  **Grilled & mostly resolved 2026-07-03 (ADR-0009 rev.; `docs/PLAN.md` "STORY IMAGERY").** Of the three:
   (1) **suggestion** is designed for v1 as EXIF-date + caption-text ranking over browse, plus the
   editor nudge (Phase 4) — the **vision-model photo-understanding** ranker remains deferred (its own
   `PhotoUnderstanding` seam, likely a premium-tier increment); (2) the **external open-license

@@ -239,21 +239,27 @@ with an AI-generated-then-editable title — reusing the answer flow as one gene
 - Note: dev-server manual smoke (type-a-story → share; record-a-story → share) is unverified in this
       headless env (no browser/mic), consistent with Increment 2's capture-path note.
 
-## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009 + ADR-0015; not started)*
+## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009; not started)*
 Album, attach-to-story, story-from-a-photo, cheap suggestion, Google Picker import. Each phase is a
 tracer-bullet vertical slice sized to the subagent-build + fresh-cold-reviewer loop; schema rides the
 reseed workflow (no migrations); PGlite + core-allowlist + vendor-seam architecture tests each phase.
 
-### Phase 1 — Family album: upload, browse, caption, delete  *(no AI, no OAuth, no stories)*
+### Phase 1a — Family album: schema, upload, browse  *(no AI, no OAuth, no stories)*
 - [ ] Schema: `family_photos` (contributor, `source` enum, `storage_key`, `caption`, `exif_captured_at`,
       `exif_gps`, timestamps, soft-delete) + `family_photo_families` (M2M join). — `@chronicle/db`
 - [ ] Storage: `family-photos/**` keyspace via `@chronicle/storage` (R2), **write-once** bytes; photos
       are *not* `media`. — `@chronicle/storage`/`@chronicle/capture`
 - [ ] Core: audited **album-read seam** (new file on the core allowlist); album-tier byte visibility via
       active-membership. — `@chronicle/core`
-- [ ] Web: file-input upload (also the Apple/device path), family-scoped album grid (recency), caption
-      edit (contributor/steward, last-write-wins), delete (contributor/steward). — `apps/web`
-- *Slice value:* put photos in the family album and manage them.
+- [ ] Web: file-input upload (also the Apple/device path; EXIF captured at import), family-scoped album
+      grid (recency). — `apps/web`
+- *Slice value:* upload a photo → it lands in the family album → see the grid.
+
+### Phase 1b — Album management: caption + delete
+- [ ] Core/web: caption edit (contributor/steward, last-write-wins, off-ledger); delete
+      (contributor/steward) — soft-delete + byte lifecycle. Cascade un-attach is a no-op until Phase 2
+      exists (nothing attached yet). — `@chronicle/core`/`apps/web`
+- *Slice value:* caption and delete photos already in the album.
 
 ### Phase 2 — Attach photos to a story + card/gallery display  *(accompaniment)*
 - [ ] Schema: `story_images` (nullable `family_photo_id`, `provenance` enum + reserved inline
