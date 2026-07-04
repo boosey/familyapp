@@ -69,6 +69,63 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 10)
+**Slice 10 LANDED — the phase collapse (the LAST big one), full-faithful build, cold-reviewed clean over
+4 rounds. Full suite green: core 277, pipeline 74, capture 38, db 67, apps/web 407, typecheck 0.** HEAD
+`74fba8c`. Commits: `2618eba` (base: 3-phase collapse + `<ComposingEditor>` extraction) → `2dcdcd2`,
+`2149670`, `01d0761`, `74fba8c` (four rounds of cold-review fixes/hardening).
+
+**What landed.** `StoryComposer` is now a thin answer/tell chrome wrapper mounting the new
+`apps/web/app/hub/ComposingEditor.tsx` (RESOLVED DECISION (b); Inc 4's intake reuses it). Three phases
+keyed on story STATE, not draft presence:
+- `no-draft` — voice⇄text capture entry (take 0). The take-0 in-flight window keeps the full-screen
+  `AnswerReviewPending` ("Polishing…") screen.
+- `draft` (composing) — the NEW live surface: the prose editor is ALWAYS mounted (undo/redo + ✨Polish)
+  with a persistent capture footer (mic + type box, both live → append takes), a per-take relisten strip
+  (drop on follow-up takes), an inline follow-up banner, and the RELOCATED Finish button + Finish-check card.
+- `pending_approval` — shrunk review: title + relisten + edit(+Polish) + tier + Share/Discard.
+
+**Forward-risks / gaps resolved (all documented pre-build):** (1) Finish relocated onto the composing
+surface (slice-8 gap). (2) forward-risk (i): `declineFollowUpAction` (renamed from `finishThreadAction`)
+echoes the client prose + empty segment; the client skips `history.replace` on an empty segment AND does
+not refresh → decline never clobbers hand-edits. (3) forward-risk (ii): the `appended` handler clears the
+follow-up banner. (4) forward-risk (iii): `useProseHistory` returns a MEMOIZED handle (stable identity).
+
+**New server action (spec gap the handoff missed):** `appendTypedTakeAction` — a typed take onto an
+EXISTING draft (the footer's "type box, live" for take ≥ 1; `composeStoryAction` only ever creates take 0).
+Reuses `appendTypedTakeContribution`; no schema/contract change. The `follow_up` `ThreadStep` variant now
+carries `prose`/`appendedSegment` so a take-0 follow_up seeds the mounted editor optimistically.
+
+**AFK state-model micro-decisions (recorded):** the composing surface is server-draft-prop driven; the ONLY
+remount is no-draft→draft at take 0 (re-seeding from `draft.prose` is correct there); within a session the
+storyId is stable so appends + the draft→pending_approval boundary do NOT remount (unsaved edits never
+remounted away). take-0→`follow_up` stays client-optimistic (no refresh). `/hub/tell` (fresh, no ask/story
+id in its URL) hands off to the resume URL `/hub/tell/[storyId]` on the first take via a `resumeHref`;
+`/hub/answer/[askId]` re-queries by askId so it just refreshes (preserving the follow-up banner).
+`FollowUpPrompt.tsx` deleted (replaced by the inline banner). "Re-record" retired from review.
+`hub.answer.finishing`/`takingLonger` now unused (kept for Inc 5's copy retire).
+
+**Cold review (4 rounds, fresh agent each, scoped to the immutable commit) — all findings fixed + regression
+-tested:** R1 — accepting "Use polished version" was reverted by Share (the finished branch never synced
+`proseDraft` to the polished text → Share sent stale pre-polish as `correctedProse`); fixed in `runFinish`.
+R2/R3 — the in-flight mutation lock was one-directional; unified into `busy` (disables editor/toggle/decline/
+Finish/offer/Continue/drop) + `otherMutationInFlight` (gates the mic START; mic stays live only to STOP),
+covering recording, typed append, decline, Finish, AND ✨Polish — the enumeration is now exhaustive
+(drop-take is prose-safe). R4 — clean, ship.
+
+**DEFERRED hardening (recorded, NOT done — out of this web slice's scope):** core `logPolish` writes
+`stories.prose` with NO priorProse/staleness guard (unlike the append/finish paths). Adding one is a
+`@chronicle/core` write-path SIGNATURE change (frozen-contract §4, Inc-2 territory) → an AFK stop-condition.
+The client mutation lock closes the single-client UI-reachable clobber; the server guard only matters for
+concurrent multi-session writes. Track as an Inc-2/hardening follow-up.
+
+**Slice 11 (NEXT) — scoped (read-only investigation done):** KEEP (live `/s/[token]` consumers) `poll-status.ts`
+(`pollUntilReady` → `ApprovePending`/`NarratorRecorder`), `answer-status.ts` (`mapStoryStateToStatus` →
+`/api/capture/status/route.ts`), and `AnswerReviewPending.tsx` (still the composing take-0 screen). DELETE
+(zero remaining consumers): the `{kind:"ready"}` `ThreadStep` variant, `getAnswerStatusAction` +
+`AnswerStatusActionResult` + the now-orphaned `mapStoryStateToStatus` import in `actions.ts`, and the dead
+`getAnswerStatusAction` mocks/assertions in `story-composer.test.tsx` + `answer-flow-optimistic-transition.test.tsx`.
+
 ## Build status (updated 2026-07-04, through Slice 9)
 **Slice 9 `a5a2f28` (LANDED, cold-reviewed clean; full suite green: core 277, pipeline 74, capture 38,
 db 67, apps/web 398, typecheck 0).** Routing relax. A live `draft`-state story is now resumable on both
