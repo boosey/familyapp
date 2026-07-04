@@ -47,6 +47,7 @@ export {
   appendProseRevision,
   listProseRevisions,
   saveProseCorrection,
+  logPolish,
   setStoryFamilyTargets,
   computeDefaultFamilyTargets,
   listStoryRecordings,

@@ -14,6 +14,7 @@ import {
   approveAndShareStory,
   discardDraftStory,
   saveProseCorrection,
+  logPolish,
   updateDerivedFields,
   listStoryRecordings,
   dropStoryRecording,
@@ -574,22 +575,26 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
 }
 
 /**
- * OPT-IN "Polish with AI" for the review-phase prose editor. Stateless text transform: takes the
+ * OPT-IN "Polish with AI" for the review-phase prose editor (ADR-0014 Inc 3, slice 2). Takes the
  * narrator's CURRENT prose (typed or edited) and returns a tidied version — more coherent, spoken
- * self-corrections resolved. It persists NOTHING; the narrator sees the result in the editor, can
- * undo it, and only a subsequent Share writes the L3 correction. Auth-gated (an account session)
- * purely so this isn't an open LLM endpoint; there is no story to own yet on the typed path, so no
- * ownership check. An empty prose is echoed back unchanged (the pipeline no-ops before any LLM call).
+ * self-corrections resolved. Every REAL polish is now PERSISTED: `logPolish` appends an
+ * `ai_polished` prose_revisions row (with modelId + promptText) AND updates `stories.prose`, so the
+ * prose lineage stays complete. Auth-gated and owner-gated — the actor is resolved from the server
+ * session (never the client) and `logPolish` rejects a non-owner. Allowed while the story is `draft`
+ * OR `pending_approval` (a narrator may polish while composing or while reviewing before approval).
  */
 export async function polishAnswerProseAction(
   formData: FormData,
 ): Promise<{ prose: string } | { error: string }> {
-  const { auth, languageModel } = await getRuntime();
+  const { db, auth, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   const prose = formData.get("prose");
-  if (typeof prose !== "string") return { error: hub.actions.invalidInput };
+  const storyId = formData.get("storyId");
+  if (typeof prose !== "string" || typeof storyId !== "string" || !storyId) {
+    return { error: hub.actions.invalidInput };
+  }
   const promptQuestion = formData.get("promptQuestion");
 
   try {
@@ -597,7 +602,23 @@ export async function polishAnswerProseAction(
       prose,
       promptQuestion: typeof promptQuestion === "string" ? promptQuestion : null,
     });
-    return { prose: result.prose };
+    // Guard: an empty-prose tap is a no-op (`polishProse` returns modelId === "" — no model ran), so
+    // it must NOT write an `ai_polished` row. Persisting an empty/no-model revision would poison the
+    // prose lineage. Only a real polish (non-empty modelId) is logged.
+    if (result.modelId === "") {
+      return { prose: result.prose };
+    }
+    const story = await logPolish(db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      polishedProse: result.prose,
+      modelId: result.modelId,
+      promptText: result.systemPrompt,
+    });
+    // Return the story's persisted prose (logPolish whitespace-trims it) so the editor reflects
+    // exactly what was written. `prose` is nullable on the Story type but logPolish just set it to a
+    // non-null string, so the ?? branch is unreachable in practice.
+    return { prose: story.prose ?? result.prose };
   } catch (err) {
     plogError("answer", "polishAnswerProse: failed", {
       person: ctx.personId,

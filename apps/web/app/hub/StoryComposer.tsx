@@ -584,6 +584,9 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
               const form = new FormData();
               form.append("prose", text);
               form.append("promptQuestion", ask?.questionText ?? "");
+              // Slice 2: the story exists in the review phase, so bind the polish to it — the action
+              // persists every real polish via logPolish (an ai_polished revision + stories.prose).
+              form.append("storyId", draft.storyId);
               const res = await polishAnswerProseAction(form);
               if ("error" in res) throw new Error(res.error);
               return res.prose;
