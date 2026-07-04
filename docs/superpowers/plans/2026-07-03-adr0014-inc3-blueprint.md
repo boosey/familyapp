@@ -69,6 +69,21 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 7)
+**Slice 7 `5eb4a8d` (LANDED, full suite green: core 277, pipeline 74, capture 38, apps/web 378, typecheck 0).**
+`dropTakeAction` is now audio-only (RESOLVED DECISION d): dropping a follow-up take (position>0) deletes ONLY its
+audio + returns a new `{kind:"take_dropped"}` step — no re-stitch, `stories.prose` untouched (narrator edits the
+words out manually); dropping take-0 still discards the whole thread (`discarded`). **Newly-exposed FK bug fixed:**
+Slice 6 made follow-up takes write `prose_revisions` rows FK'd to the recording, so `dropStoryRecording(position>0)`
+would throw an `ON DELETE NO ACTION` violation (prose_revisions is append-only → the link can't be nulled). Fix:
+`dropStoryRecording` now DELETEs the dropped take's `prose_revisions` rows FIRST inside the guarded txn (permitted
+pre-consent; consistent with ADR-0002's "a discarded draft takes its prose_revisions with it"; take-0's + holistic
+NULL-recording rows survive). Client `handleDropTake` handles `take_dropped` directly (refresh + `hub.answer.takeDropped`
+notice + keep proseDraft), NOT via the poll/`ready` branch. `stitchAndRenderStory` REMOVED from `actions.ts` imports
+(now only in `packages/pipeline`). Cold review found NO material defect. **Post-Slice-7: no answer action produces
+`ready` anymore** — the `ready` variant + `getAnswerStatusAction` + poll infra STAY (link-session `/s/[token]` still
+uses `pollUntilReady`); their removal is Slice 11 (re-verify consumers). Slice 8 (Finish, riskiest) is next.
+
 ## Build status (updated 2026-07-04, through Slice 6)
 **Slice 6 `bbaf50b` + review follow-ups `583ba35` (LANDED, full suite green: core 276, pipeline 74, capture 38,
 apps/web 377, typecheck 0).** Follow-up loop restaged onto per-take appends: `runFollowUpStep` is now
