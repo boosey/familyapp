@@ -69,6 +69,26 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 4)
+LANDED, each full-suite green: Slice 2 `eb01b87` (Polish persist) · Slice 1 `e10b61a` (listOutstandingDrafts
+widen + `state` field + Questions-tab contract preserved at wrapper AND hub) · Slice 3 `74c9a8e` (voice
+per-take append, flag-off/self-initiated one-shot branch only; adds `appended` ThreadStep; extends
+`transcribeTakeToRecording` to return `modelId`) · Slice 4 `d12e4e1` (typed per-take append + `createTextDraft`
+dedup + retired old text-render pipeline path). Baselines now: core 274, pipeline 74, capture 38, apps/web 368,
+typecheck exit 0. Core barrel now exports `appendVoiceTakeContribution` + `appendTypedTakeContribution`
+(**`finishDraft` still NOT exported — Slice 8 must add it**).
+
+⚠️ **DEPLOY SAFETY:** the client is not yet wired for the `appended` step, so `StoryComposer.handleStep`
+falls through to the `ready` poll and shows a false "taking longer than expected" after every successful
+voice/text capture (server side is correct; append persists). **Do NOT deploy/merge this branch between
+Slice 3 and Slice 5.** Slice 5 MUST make `handleStep` handle `kind==="appended"` (`history.replace(prose)`,
+no poll) and remove the ready-poll path. (Surfaced by the Slice 3 adversarial review.)
+
+📌 **Deferred (RESOLVED DECISION c, not yet done):** `shareAnswerAction`'s `augmentProfileFromStory` still
+reads `approved.transcript`, which is NULL for new-model stories → augmentation silently no-ops (best-effort,
+swallowed). Switch the source to `approved.prose` (ships with a regression test). Latent until a story first
+reaches `pending_approval` via the new Finish path (Slice 8); fold into Slice 5 or a small dedicated slice.
+
 ## RESOLVED DECISIONS (product owner, 2026-07-03)
 - **(a) Finish-check = REUSE `polishProse`.** At Finish, run `polishProse` speculatively on finalText; if the
   result materially differs from the input (normalized diff), present it as the offer with its output as the
