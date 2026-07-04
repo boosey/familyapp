@@ -69,25 +69,41 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
-## Build status (updated 2026-07-04, through Slice 4)
+## Build status (updated 2026-07-04, through Slice 5)
 LANDED, each full-suite green: Slice 2 `eb01b87` (Polish persist) · Slice 1 `e10b61a` (listOutstandingDrafts
 widen + `state` field + Questions-tab contract preserved at wrapper AND hub) · Slice 3 `74c9a8e` (voice
 per-take append, flag-off/self-initiated one-shot branch only; adds `appended` ThreadStep; extends
 `transcribeTakeToRecording` to return `modelId`) · Slice 4 `d12e4e1` (typed per-take append + `createTextDraft`
-dedup + retired old text-render pipeline path). Baselines now: core 274, pipeline 74, capture 38, apps/web 368,
-typecheck exit 0. Core barrel now exports `appendVoiceTakeContribution` + `appendTypedTakeContribution`
-(**`finishDraft` still NOT exported — Slice 8 must add it**).
+dedup + retired old text-render pipeline path) · Slice 5 `a9f2699` (client editor lift: `useProseHistory` lifted
+from `KindredProseEditor` into `StoryComposer`, editor gains optional injected `history?` prop; `handleStep`
+handles `kind==="appended"` with `history.replace(prose)` + refresh + NO poll; follow-up append posts client
+`prose` as priorProse — forward-plumb, inert until Slice 6; lifted-history resetKey is `draft?.storyId` NOT
+`activeStoryId ?? …` per cold-review Medium fix + hook regression test). Baselines now: core 274, pipeline 74,
+capture 38, apps/web **371**, typecheck exit 0. Core barrel exports `appendVoiceTakeContribution` +
+`appendTypedTakeContribution` (**`finishDraft` still NOT exported — Slice 8 must add it**).
 
-⚠️ **DEPLOY SAFETY:** the client is not yet wired for the `appended` step, so `StoryComposer.handleStep`
-falls through to the `ready` poll and shows a false "taking longer than expected" after every successful
-voice/text capture (server side is correct; append persists). **Do NOT deploy/merge this branch between
-Slice 3 and Slice 5.** Slice 5 MUST make `handleStep` handle `kind==="appended"` (`history.replace(prose)`,
-no poll) and remove the ready-poll path. (Surfaced by the Slice 3 adversarial review.)
+✅ **DEPLOY SAFETY (was ⚠️; resolved by Slice 5):** `StoryComposer.handleStep` now handles `kind==="appended"`
+(no poll) — the false "taking longer" after every capture is gone. The `ready`/poll branch is KEPT (still
+produced by the flag-on follow-up paths + `dropTakeAction`, restaged in Slices 6/7). The branch is STILL not
+user-reachable end-to-end: after `appended` the story stays `draft`, and `listOutstandingAnswerDrafts` skips
+non-`pending_approval`, so `router.refresh()` yields `draft=null` → capture phase. Reachability lands with
+Slice 9 (routing relax) + Slice 10 (phase collapse). Per-commit bar stays `pnpm -r test`+`typecheck` green,
+NOT integrated UI.
+
+**Slice 5 handoff corrections (supersede earlier deletion assumptions):** `poll-status.ts` + `answer-status.ts`
+are NOT deletable — the link-session surface `/s/[token]` (`NarratorRecorder.tsx`, `ApprovePending.tsx`) and
+`/api/capture/status/route.ts` still consume `pollUntilReady` / `mapStoryStateToStatus`; Slice 11's "if unused
+elsewhere (verify NarratorRecorder)" gate = KEEP them. `getAnswerStatusAction` + `AnswerReviewPending` stay too
+(flag-on `ready` path + in-flight screen). **Slice 10 forward risk:** once the composing editor is always-mounted
+across appends (no page remount at the capture→review boundary), `resetKey=draft?.storyId` will STILL collapse
+the undo stack at that boundary, and the fresh `history` object identity each render makes
+`handleStep`/`uploadRecording` a live stale-closure risk — the resetKey/handoff model needs rework in Slice 10.
 
 📌 **Deferred (RESOLVED DECISION c, not yet done):** `shareAnswerAction`'s `augmentProfileFromStory` still
 reads `approved.transcript`, which is NULL for new-model stories → augmentation silently no-ops (best-effort,
 swallowed). Switch the source to `approved.prose` (ships with a regression test). Latent until a story first
-reaches `pending_approval` via the new Finish path (Slice 8); fold into Slice 5 or a small dedicated slice.
+reaches `pending_approval` via the new Finish path (Slice 8). **Owner-decided 2026-07-04: FOLD INTO SLICE 8**
+(not Slice 5) — it only becomes live once Finish creates a new-model `pending_approval` story.
 
 ## RESOLVED DECISIONS (product owner, 2026-07-03)
 - **(a) Finish-check = REUSE `polishProse`.** At Finish, run `polishProse` speculatively on finalText; if the
