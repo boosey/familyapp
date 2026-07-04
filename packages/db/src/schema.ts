@@ -90,6 +90,7 @@ export const mediaKindEnum = pgEnum("media_kind", [
   "story_audio",
   "approval_audio",
   "intake_audio",
+  "caption_audio", // ADR-0008: audio of a voice caption on a photo
   "photo",
   "document",
 ]);
@@ -663,6 +664,9 @@ export const asks = pgTable(
     /** The family context the ask was raised in (for routing/notification). Nullable. */
     familyId: uuid("family_id").references(() => families.id),
     questionText: text("question_text").notNull(),
+    /** ADR-0008: present iff the question was asked by voice; the referenced media is a
+     *  protected content artifact (un-detachable while this ask lives, cascades on ask delete). */
+    recordingMediaId: uuid("recording_media_id").references(() => media.id),
     status: askStatusEnum("status").notNull().default("queued"),
     /** The resulting Story once answered. */
     storyId: uuid("story_id").references(() => stories.id),
@@ -909,6 +913,33 @@ export const familyPhotos = pgTable(
   (t) => [index("family_photos_contributor_idx").on(t.contributorPersonId)],
 );
 
+/**
+ * ADR-0008: a VOICE caption on a photo — distinct from the mutable, off-ledger `family_photos.caption`
+ * text. The audio (`mediaId`, kind `caption_audio`) is a protected content artifact: un-detachable
+ * while this row lives, cascaded away when the photo is deleted. `transcript` is the words the audio
+ * was transcribed to; the audio is always the source of truth.
+ */
+export const voiceCaptions = pgTable(
+  "voice_captions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => media.id),
+    transcript: text("transcript"),
+    ownerPersonId: uuid("owner_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("voice_captions_photo_idx").on(t.photoId)],
+);
+
 // ---------------------------------------------------------------------------
 // FamilyPhotoFamily — album membership (M2M). "Being in a family's album IS the contributor's
 // consent for that family to see it" (ADR-0009), mirroring story_families' multi-family targeting.
@@ -1039,6 +1070,31 @@ export const askSubjectPhotos = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// ErasureAudit — ADR-0008. The append-only record that a deletion happened, outliving the erased
+// content (story/ask/voice_caption + its audio + its consent ledger are hard-deleted).
+// ---------------------------------------------------------------------------
+
+/**
+ * ADR-0008 erasure audit: the append-only record that a deletion happened. Outlives the erased
+ * content (story/ask/voice_caption + its audio + its consent ledger are hard-deleted). `itemId` is
+ * intentionally NOT an FK — the row it named no longer exists. `reason` distinguishes owner erasure
+ * (right-to-erasure) from steward moderation.
+ */
+export const erasureAudit = pgTable("erasure_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  itemType: text("item_type").notNull(), // 'story' | 'ask' | 'voice_caption'
+  itemId: uuid("item_id").notNull(),
+  ownerPersonId: uuid("owner_person_id")
+    .notNull()
+    .references(() => persons.id),
+  actorPersonId: uuid("actor_person_id")
+    .notNull()
+    .references(() => persons.id),
+  reason: text("reason").notNull(), // 'owner_erasure' | 'steward_moderation'
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -1105,3 +1161,7 @@ export type StoryImageProvenance =
   (typeof storyImageProvenanceEnum.enumValues)[number];
 export type AskSubjectPhoto = typeof askSubjectPhotos.$inferSelect;
 export type NewAskSubjectPhoto = typeof askSubjectPhotos.$inferInsert;
+export type VoiceCaption = typeof voiceCaptions.$inferSelect;
+export type NewVoiceCaption = typeof voiceCaptions.$inferInsert;
+export type ErasureAudit = typeof erasureAudit.$inferSelect;
+export type NewErasureAudit = typeof erasureAudit.$inferInsert;
