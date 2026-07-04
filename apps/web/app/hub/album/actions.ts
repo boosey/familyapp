@@ -25,13 +25,30 @@ import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 
-export type AlbumUploadResult = { ok: true; photoId: string } | { error: string };
+/**
+ * Batch upload summary. A single submit can carry MANY files (the multi-select picker, #16): each
+ * selected file becomes its own album photo placed into the SAME chosen album(s). `added`/`failed`
+ * count the per-file outcomes so the client can distinguish a full success from a partial one.
+ *   - 0 valid files          → `{ error: photoEmpty }`
+ *   - every file threw       → `{ error: photoUploadFailed }` (added === 0, failed > 0)
+ *   - otherwise              → `{ ok: true, added, failed }` (failed may be 0)
+ */
+export type AlbumUploadResult =
+  | { ok: true; added: number; failed: number }
+  | { error: string };
 
 /** Result of a caption edit / delete: success, or a user-facing error string. */
 export type AlbumManageResult = { ok: true } | { error: string };
 
 /** The longest caption we accept (it doubles as alt text — a label, not prose). */
 const MAX_CAPTION_LENGTH = 500;
+
+/**
+ * The most photos one batch may carry. A server-authoritative cap (the client guards too, but the
+ * client is never trusted): it bounds per-request work/memory and rejects an abusive "thousands of
+ * tiny files" submission before we touch storage. Kept in sync with the client's limit.
+ */
+const MAX_BATCH_FILES = 30;
 
 export async function uploadAlbumPhotoAction(
   formData: FormData,
@@ -58,40 +75,65 @@ export async function uploadAlbumPhotoAction(
     return { error: hub.actions.noAlbumChosen }; // multi-family with no valid selection
   }
 
-  const photo = formData.get("photo");
-  if (!(photo instanceof Blob) || photo.size === 0) {
+  // Multi-select (#16): a `multiple` file input yields repeated `photo` entries, so read ALL of
+  // them. Keep only real, non-empty Blobs — a browser may append an empty phantom entry, and a
+  // stray non-file field must never be treated as an image.
+  const files = formData
+    .getAll("photo")
+    .filter((v): v is File => v instanceof Blob && v.size > 0);
+  if (files.length === 0) {
     return { error: hub.actions.photoEmpty };
   }
-  const bytes = new Uint8Array(await photo.arrayBuffer());
-  const contentType = photo.type || "application/octet-stream";
-  const storageKey = `family-photos/${randomUUID()}`;
-
-  // #17: read capture-date + GPS from the SAME bytes (no second round-trip). The helper never
-  // throws, but keep the extraction OUTSIDE the storage/db try and belt-and-suspenders it anyway, so
-  // even a hypothetical future throw yields null EXIF + a successful upload — never a failed upload.
-  let exif: PhotoExif = { capturedAt: null, gps: null };
-  try {
-    exif = await extractPhotoExif(bytes);
-  } catch {
-    /* never fail the upload on EXIF */
+  // Server-authoritative batch cap (the client guards too, but is never trusted).
+  if (files.length > MAX_BATCH_FILES) {
+    return { error: hub.actions.tooManyPhotos };
   }
 
-  try {
-    await storage.put({ key: storageKey, bytes, contentType });
-    const created = await createAlbumPhoto(db, {
-      contributorPersonId: ctx.personId,
-      familyIds,
-      source: "upload",
-      storageKey,
-      caption: null,
-      exifCapturedAt: exif.capturedAt,
-      exifGps: exif.gps,
-    });
-    revalidatePath("/hub/album");
-    return { ok: true, photoId: created.id };
-  } catch {
-    return { error: hub.actions.photoUploadFailed };
+  // Each file is uploaded INDEPENDENTLY into the same chosen album(s). A per-file storage/db throw
+  // increments `failed` and moves on — one bad file never aborts the batch (so a 10-photo upload
+  // with one corrupt file still lands the other nine).
+  let added = 0;
+  let failed = 0;
+  for (const photo of files) {
+    const bytes = new Uint8Array(await photo.arrayBuffer());
+    const contentType = photo.type || "application/octet-stream";
+    const storageKey = `family-photos/${randomUUID()}`;
+
+    // #17: read capture-date + GPS from the SAME bytes (no second round-trip). The helper never
+    // throws, but keep the extraction OUTSIDE the storage/db try and belt-and-suspenders it anyway,
+    // so even a hypothetical future throw yields null EXIF + a successful upload for this file —
+    // never a failed upload on EXIF alone.
+    let exif: PhotoExif = { capturedAt: null, gps: null };
+    try {
+      exif = await extractPhotoExif(bytes);
+    } catch {
+      /* never fail the upload on EXIF */
+    }
+
+    try {
+      await storage.put({ key: storageKey, bytes, contentType });
+      await createAlbumPhoto(db, {
+        contributorPersonId: ctx.personId,
+        familyIds,
+        source: "upload",
+        storageKey,
+        caption: null,
+        exifCapturedAt: exif.capturedAt,
+        exifGps: exif.gps,
+      });
+      added += 1;
+    } catch {
+      failed += 1;
+    }
   }
+
+  // Revalidate once for the whole batch, only if at least one photo actually landed.
+  if (added > 0) revalidatePath("/hub/album");
+  // The whole batch failed (nothing valid landed) → a single upload error, mirroring the single-file
+  // behavior. Otherwise it's a success, with `failed` telling the client whether to nudge about the
+  // ones that didn't make it.
+  if (added === 0) return { error: hub.actions.photoUploadFailed };
+  return { ok: true, added, failed };
 }
 
 /**

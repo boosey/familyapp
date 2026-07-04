@@ -109,11 +109,12 @@ describe("uploadAlbumPhotoAction", () => {
     authCtx = account(contributor);
 
     const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    // One file in → one photo added, none failed (batch summary shape).
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     // The photo is visible in the contributor's family album...
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album.map((p) => p.id)).toEqual([result.photoId]);
+    expect(album).toHaveLength(1);
     const key = album[0]!.storageKey;
     expect(key.startsWith("family-photos/")).toBe(true);
     expect(album[0]!.source).toBe("upload");
@@ -144,7 +145,7 @@ describe("uploadAlbumPhotoAction", () => {
     authCtx = account(contributor);
 
     const result = await uploadAlbumPhotoAction(photoForm(JPEG_WITH_EXIF, "image/jpeg"));
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     // exifCapturedAt is surfaced on the grid view; the tz-naive EXIF stamp is stored as a
     // deterministic UTC instant (host-TZ-independent), so pin the absolute ISO value.
@@ -154,7 +155,7 @@ describe("uploadAlbumPhotoAction", () => {
     expect(captured!.toISOString()).toBe("2015-06-15T14:30:00.000Z");
 
     // exifGps is NOT on the grid view — read it through the audited full-row seam.
-    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), result.photoId);
+    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), album[0]!.id);
     expect(full!.exifGps).not.toBeNull();
     expect(full!.exifGps!.lat).toBeCloseTo(37.808333, 5);
     expect(full!.exifGps!.lng).toBeCloseTo(-122.419167, 5);
@@ -167,11 +168,11 @@ describe("uploadAlbumPhotoAction", () => {
     authCtx = account(contributor);
 
     const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album[0]!.exifCapturedAt).toBeNull();
-    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), result.photoId);
+    const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), album[0]!.id);
     expect(full!.exifGps).toBeNull();
   });
 
@@ -200,12 +201,13 @@ describe("uploadAlbumPhotoAction", () => {
     const result = await uploadAlbumPhotoAction(
       photoFormWithFamilies(PNG_BYTES, [famA, famB]),
     );
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
     const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
-    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
-    expect(albumB.map((p) => p.id)).toEqual([result.photoId]);
+    // The SAME single photo lands in both chosen albums.
+    expect(albumA).toHaveLength(1);
+    expect(albumB.map((p) => p.id)).toEqual([albumA[0]!.id]);
     // One upload → one storage object, regardless of how many albums it is placed in.
     expect(runtimeStorage.size).toBe(1);
   });
@@ -224,18 +226,19 @@ describe("uploadAlbumPhotoAction", () => {
     const result = await uploadAlbumPhotoAction(
       photoFormWithFamilies(PNG_BYTES, [famA]),
     );
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     // Visible in A...
     const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
+    expect(albumA).toHaveLength(1);
+    const photoId = albumA[0]!.id;
     // ...but NOT in B, for the contributor or a co-member of B.
     const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
     expect(albumB).toEqual([]);
     const asBMember = await getAlbumPhotoForViewer(
       runtimeDb,
       account(bMember),
-      result.photoId,
+      photoId,
     );
     expect(asBMember).toBeNull();
   });
@@ -253,10 +256,10 @@ describe("uploadAlbumPhotoAction", () => {
     const result = await uploadAlbumPhotoAction(
       photoFormWithFamilies(PNG_BYTES, [famA, famX]),
     );
-    if (!("ok" in result)) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
 
     const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    expect(albumA.map((p) => p.id)).toEqual([result.photoId]);
+    expect(albumA).toHaveLength(1);
     // X's own member does not see the spoofed placement — it was never written.
     const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
     expect(albumX).toEqual([]);
@@ -280,6 +283,124 @@ describe("uploadAlbumPhotoAction", () => {
     );
     expect(result).toEqual({ error: hub.actions.noAlbumChosen });
     expect(runtimeStorage.size).toBe(0);
+  });
+
+  // #16 multi-select: one submit can carry MANY files (repeated `photo` FormData entries). Each
+  // becomes its own album photo placed into the SAME chosen album(s).
+  it("creates a separate photo for EVERY file, all into the chosen families", async () => {
+    const contributor = await makePerson("Rosa");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    authCtx = account(contributor);
+
+    // Three distinct files → three photos, each landing in both chosen albums.
+    const fd = new FormData();
+    fd.append("photo", new Blob([new Uint8Array([1, 1, 1]) as BlobPart], { type: "image/png" }), "a.png");
+    fd.append("photo", new Blob([new Uint8Array([2, 2, 2]) as BlobPart], { type: "image/png" }), "b.png");
+    fd.append("photo", new Blob([new Uint8Array([3, 3, 3]) as BlobPart], { type: "image/png" }), "c.png");
+    fd.append("familyIds", famA);
+    fd.append("familyIds", famB);
+
+    const result = await uploadAlbumPhotoAction(fd);
+    expect(result).toEqual({ ok: true, added: 3, failed: 0 });
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
+    expect(albumA).toHaveLength(3);
+    // Same three photos in both albums (order-independent).
+    expect(new Set(albumB.map((p) => p.id))).toEqual(new Set(albumA.map((p) => p.id)));
+    // Three files → three distinct storage objects.
+    expect(runtimeStorage.size).toBe(3);
+  });
+
+  // A per-file storage/db throw increments `failed` and does NOT abort the batch: the other files
+  // still land, and the action returns a batch summary (not an error).
+  it("returns a partial summary when one file fails but others succeed", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    // Make the SECOND storage write throw, leaving the first and third to succeed.
+    const realPut = runtimeStorage.put.bind(runtimeStorage);
+    let call = 0;
+    vi.spyOn(runtimeStorage, "put").mockImplementation(async (obj) => {
+      call += 1;
+      if (call === 2) throw new Error("storage boom");
+      return realPut(obj);
+    });
+
+    const fd = new FormData();
+    fd.append("photo", new Blob([new Uint8Array([1]) as BlobPart], { type: "image/png" }), "a.png");
+    fd.append("photo", new Blob([new Uint8Array([2]) as BlobPart], { type: "image/png" }), "b.png");
+    fd.append("photo", new Blob([new Uint8Array([3]) as BlobPart], { type: "image/png" }), "c.png");
+
+    const result = await uploadAlbumPhotoAction(fd);
+    expect(result).toEqual({ ok: true, added: 2, failed: 1 });
+
+    // Two photos landed (the failed one wrote nothing); each successful file has its own object.
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toHaveLength(2);
+    expect(runtimeStorage.size).toBe(2);
+  });
+
+  // Whole batch fails (every file throws) → a single upload error, mirroring the single-file case.
+  it("returns the upload-failed error when EVERY file fails", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    vi.spyOn(runtimeStorage, "put").mockRejectedValue(new Error("storage boom"));
+
+    const fd = new FormData();
+    fd.append("photo", new Blob([new Uint8Array([1]) as BlobPart], { type: "image/png" }), "a.png");
+    fd.append("photo", new Blob([new Uint8Array([2]) as BlobPart], { type: "image/png" }), "b.png");
+
+    const result = await uploadAlbumPhotoAction(fd);
+    expect(result).toEqual({ error: hub.actions.photoUploadFailed });
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
+  });
+
+  // Zero VALID files (only empty-size blobs) → the photoEmpty guard, nothing written.
+  it("returns photoEmpty when no file has any bytes", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const fd = new FormData();
+    fd.append("photo", new Blob([new Uint8Array([]) as BlobPart], { type: "image/png" }), "empty1.png");
+    fd.append("photo", new Blob([new Uint8Array([]) as BlobPart], { type: "image/png" }), "empty2.png");
+
+    const result = await uploadAlbumPhotoAction(fd);
+    expect(result).toEqual({ error: hub.actions.photoEmpty });
+    expect(runtimeStorage.size).toBe(0);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
+  });
+
+  // Regression (review finding): the server enforces the per-batch cap authoritatively (the client
+  // guards too, but is never trusted). An over-cap batch is rejected before anything touches storage.
+  it("rejects a batch over the per-batch cap and writes nothing", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const fd = new FormData();
+    for (let i = 0; i < 31; i += 1) {
+      fd.append("photo", new Blob([new Uint8Array([i + 1]) as BlobPart], { type: "image/png" }), `p${i}.png`);
+    }
+
+    const result = await uploadAlbumPhotoAction(fd);
+    expect(result).toEqual({ error: hub.actions.tooManyPhotos });
+    expect(runtimeStorage.size).toBe(0);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
   });
 });
 

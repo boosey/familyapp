@@ -86,15 +86,11 @@ export async function AlbumSurface({
                   fontFamily: "var(--font-ui)",
                   fontSize: "var(--text-ui-sm)",
                   padding: "8px 14px",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   textDecoration: "none",
-                  border: "1px solid var(--border-subtle, #ddd)",
-                  background: isCurrent
-                    ? "var(--accent, #333)"
-                    : "var(--surface-raised, transparent)",
-                  color: isCurrent
-                    ? "var(--on-accent, #fff)"
-                    : "var(--text-meta)",
+                  border: "var(--border-width) solid var(--border)",
+                  background: isCurrent ? "var(--accent)" : "transparent",
+                  color: isCurrent ? "var(--accent-on)" : "var(--text-meta)",
                   fontWeight: isCurrent ? 600 : 400,
                 }}
               >
@@ -109,7 +105,7 @@ export async function AlbumSurface({
         <p
           style={{
             fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-md)",
+            fontSize: "var(--text-ui)",
             color: "var(--text-meta)",
             margin: "0 0 24px",
           }}
