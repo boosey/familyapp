@@ -24,7 +24,7 @@ describe("migration drift guard", () => {
     const chainFp = await fullSchemaFingerprint(pgliteRunner(chainDb));
 
     expect(chainFp).toEqual(snapshotFp);
-  });
+  }, 30000); // heavy: 2 PGlite DBs + full migration-chain replay; 5s default flakes under parallel load
 
   it("the fingerprint comparator actually detects a difference", async () => {
     const a = new PGlite();
@@ -36,7 +36,7 @@ describe("migration drift guard", () => {
     const fpA = await fullSchemaFingerprint(pgliteRunner(a));
     const fpB = await fullSchemaFingerprint(pgliteRunner(b));
     expect(fpB).not.toEqual(fpA);
-  });
+  }, 30000);
 
   it("the fingerprint detects a column-level change (default / nullability / enum type)", async () => {
     const a = new PGlite();
@@ -50,5 +50,5 @@ describe("migration drift guard", () => {
     const fpA = await fullSchemaFingerprint(pgliteRunner(a));
     const fpB = await fullSchemaFingerprint(pgliteRunner(b));
     expect(fpB).not.toEqual(fpA);
-  });
+  }, 30000);
 });
