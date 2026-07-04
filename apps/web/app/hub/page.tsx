@@ -18,7 +18,13 @@ import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { mockSignOut } from "@/lib/auth-mock";
 import { isClerkConfigured } from "@/lib/clerk-config";
-import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
+import {
+  loadHubFeed,
+  loadSeenStoryIds,
+  loadViewerFamilies,
+  loadStoryFamilyTargets,
+  loadStoryCoverPhotoIds,
+} from "@/lib/hub-data";
 import { KindredAccountMenu } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk } from "./draft-dedup";
@@ -102,6 +108,10 @@ export default async function HubPage({
     feedStoryIds,
     viewerFamilies.map((f) => f.id),
   );
+
+  // Each feed story's cover accompaniment photo (ADR-0009), via the audited batched core seam. Drives
+  // the card cover image; a story with no attached image has no entry → a text-only card.
+  const storyCovers = await loadStoryCoverPhotoIds(db, feedStoryIds);
 
   // Split the outstanding drafts: ask-backed feed the Questions tab (Date recordedAt, unchanged
   // shape), self-initiated (askId === null) feed the Stories tab's resume list (ISO-serialized).
@@ -260,6 +270,7 @@ export default async function HubPage({
               viewerPersonId={ctx.personId}
               seenStoryIds={seenStoryIds}
               familyTargets={familyTargets}
+              storyCovers={storyCovers}
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}

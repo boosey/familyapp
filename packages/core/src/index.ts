@@ -152,3 +152,13 @@ export {
   type CreateAlbumPhotoInput,
   type AlbumPhotoView,
 } from "./album-repository";
+export {
+  attachPhotoToStory,
+  detachStoryImage,
+  setStoryCover,
+  reorderStoryImages,
+  listStoryImages,
+  getStoryCoverPhotoId,
+  loadStoryCovers,
+  type StoryImageView,
+} from "./story-image-repository";

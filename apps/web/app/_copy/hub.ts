@@ -247,6 +247,9 @@ export const hub = {
     tooManyPhotos: "That's too many photos at once. Please add up to 30 at a time.",
     captionTooLong: "That caption is too long. Please shorten it.",
     notAllowedToManagePhoto: "You can't change this photo.",
+    // ADR-0009 Phase 2 — story accompaniment photo attach/detach/cover/reorder errors.
+    photoAttachFailed: "Couldn't add that photo. Please try again.",
+    photoUpdateFailed: "Couldn't update the photos. Please try again.",
   },
   album: {
     // Back-link on the standalone /hub/album deep-link route; returns to the album's tab home
@@ -298,6 +301,32 @@ export const hub = {
     byline: (narrator: string, recordedAt: string) =>
       `Told by ${narrator} · Recorded ${recordedAt}`,
     noProse: "No prose yet — the original recording above is the whole story for now.",
+  },
+
+  // ADR-0009 Phase 2 — story accompaniment photos: the read-only gallery on the opened story and the
+  // draft-editor attach/cover/remove/reorder controls in the composer's review phase.
+  storyImages: {
+    // Read-only gallery on the opened story (only rendered when the story has images).
+    galleryHeading: "Photos",
+    galleryAlt: (caption: string | null) => caption ?? "Story photo",
+    // Editor (composer review phase).
+    editorHeading: "Photos",
+    editorHelp: "Add photos from your album to illustrate this story.",
+    attachedHeading: "On this story",
+    pickerHeading: "Add from your album",
+    noAlbumPhotos: "No album photos yet. Add some in the Album tab first.",
+    allAttached: "Every album photo is already on this story.",
+    loadError: "Couldn't load your photos. Please try again.",
+    // Per-image controls.
+    setCover: "Make cover",
+    coverBadge: "Cover",
+    remove: "Remove",
+    moveUp: "Move earlier",
+    moveDown: "Move later",
+    // Accessible labels naming the specific photo.
+    attachAria: (caption: string | null) =>
+      caption ? `Add “${caption}” to this story` : "Add this photo to the story",
+    imageAlt: (caption: string | null) => caption ?? "Attached photo",
   },
 } as const;
 

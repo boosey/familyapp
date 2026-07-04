@@ -37,6 +37,16 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   discardAnswerAction: vi.fn(),
 }));
 
+// The review phase mounts StoryPhotosEditor (a "use server" module that pulls getRuntime()/db).
+// Mock it to an empty editor so this test doesn't boot the real dev runtime.
+vi.mock("@/app/hub/answer/[askId]/photo-actions", () => ({
+  loadStoryPhotoEditorAction: vi.fn(async () => ({ ok: true, attached: [], album: [] })),
+  attachStoryPhotoAction: vi.fn(),
+  detachStoryPhotoAction: vi.fn(),
+  setStoryCoverAction: vi.fn(),
+  reorderStoryPhotosAction: vi.fn(),
+}));
+
 afterEach(cleanup);
 
 const PROSE = "I wish I'd known how great grandchildren were going to be. I can't wait for our next.";

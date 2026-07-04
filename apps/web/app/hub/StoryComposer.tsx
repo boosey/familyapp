@@ -37,6 +37,7 @@ import {
 import { pollUntilReady } from "@/lib/poll-status";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { FollowUpPrompt } from "./answer/[askId]/FollowUpPrompt";
+import { StoryPhotosEditor } from "./StoryPhotosEditor";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -590,6 +591,11 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             }}
           />
         </div>
+
+        {/* Photos (ADR-0009 Phase 2) — attach from the owner's album, set a cover, remove, reorder.
+            Self-contained: fetches + mutates via its own auth-re-resolving server actions. Off the
+            consent ledger, so it lives here in the pre-share review, independent of Share. */}
+        <StoryPhotosEditor storyId={draft.storyId} />
 
         {/* Tier picker (mirrors ApprovalRecorder) */}
         <fieldset style={{ border: "none", padding: 0, margin: "0 0 32px" }}>

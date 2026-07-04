@@ -917,6 +917,63 @@ export const familyPhotoFamilies = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// StoryImage (accompaniment) — ADR-0009. Pictures shown ALONGSIDE a Story to illustrate it: many
+// per story, exactly one COVER, ordered by `position`. This is the ONLY rendering path for a
+// story's imagery ("all rendering flows through story_images"). A row is EITHER an album photo
+// (`familyPhotoId` set, `provenance = 'family_photo'`) OR an inline illustration (`familyPhotoId`
+// NULL, the reserved `sourceUrl`/`license`/... fields carry it — Phase 2 writes only family_photo).
+// Holds attachment CONTENT (a `private` story must not leak its imagery — ADR-0009 authz), so the
+// table object lives behind @chronicle/db/content and only the audited `story-image-repository.ts`
+// (and, for the broadened photo-byte read seam, `album-repository.ts`) touches it.
+// ---------------------------------------------------------------------------
+
+/** How a story image was sourced (ADR-0009 accompaniment). */
+export const storyImageProvenanceEnum = pgEnum("story_image_provenance", [
+  "family_photo",
+  "illustration",
+]);
+
+export const storyImages = pgTable(
+  "story_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // FK to stories with NO cascade — mirrors story_families; discardDraftStory deletes children first.
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    // The album photo shown. NULL for an inline illustration. Cascade so a HARD photo-row delete
+    // un-attaches everywhere (album delete is SOFT → cascade won't fire → the READ seam treats a
+    // soft-deleted photo as absent; see the album-repository read rule).
+    familyPhotoId: uuid("family_photo_id").references(() => familyPhotos.id, {
+      onDelete: "cascade",
+    }),
+    provenance: storyImageProvenanceEnum("provenance")
+      .notNull()
+      .default("family_photo"),
+    // Reserved inline-illustration fields (ADR-0009) — all NULL for family_photo provenance in Phase 2.
+    sourceUrl: text("source_url"),
+    license: text("license"),
+    attribution: text("attribution"),
+    thumbnailUrl: text("thumbnail_url"),
+    isCover: boolean("is_cover").notNull().default(false),
+    position: integer("position").notNull(), // 0-based order within the story
+    attachedByPersonId: uuid("attached_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("story_images_story_idx").on(t.storyId),
+    uniqueIndex("story_images_story_position_uq").on(t.storyId, t.position),
+    // A given album photo attaches to a story at most once. NULL familyPhotoId (illustrations) are
+    // distinct in Postgres, so multiple illustrations per story are allowed.
+    uniqueIndex("story_images_story_photo_uq").on(t.storyId, t.familyPhotoId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -977,3 +1034,7 @@ export type NewFamilyPhoto = typeof familyPhotos.$inferInsert;
 export type FamilyPhotoFamily = typeof familyPhotoFamilies.$inferSelect;
 export type NewFamilyPhotoFamily = typeof familyPhotoFamilies.$inferInsert;
 export type PhotoSource = (typeof photoSourceEnum.enumValues)[number];
+export type StoryImage = typeof storyImages.$inferSelect;
+export type NewStoryImage = typeof storyImages.$inferInsert;
+export type StoryImageProvenance =
+  (typeof storyImageProvenanceEnum.enumValues)[number];

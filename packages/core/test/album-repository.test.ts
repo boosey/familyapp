@@ -11,6 +11,7 @@ import { consentRecords } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  attachPhotoToStory,
   authorizeAlbumPhotoRead,
   createAlbumPhoto,
   getAlbumPhotoForViewer,
@@ -19,7 +20,13 @@ import {
   softDeleteAlbumPhoto,
   type AuthContext,
 } from "../src/index";
-import { addMembership, endMembership, makeFamily, makePerson } from "./helpers";
+import {
+  addMembership,
+  endMembership,
+  makeFamily,
+  makePerson,
+  makeStory,
+} from "./helpers";
 
 let db: Database;
 beforeEach(async () => {
@@ -562,6 +569,139 @@ describe("softDeleteAlbumPhoto", () => {
         )
       ).allowed,
     ).toBe(false);
+  });
+});
+
+/**
+ * ADR-0009 §Authorization — the BROADENED photo-byte read. Photo visibility is the UNION of
+ * (album memberships) ∪ (audience of any VISIBLE story the photo is attached to). A photo the viewer
+ * is NOT an album-member of becomes readable once it is attached to a story that viewer can read;
+ * a `private` story leaks nothing; a soft-deleted photo stays absent regardless of attachment.
+ */
+describe("decideAlbumPhotoRead — accompaniment arm (ADR-0009 story audience)", () => {
+  it("a family-story attachment makes the photo readable to that story's audience (not just album members)", async () => {
+    const owner = await makePerson(db, "Nonna");
+    const viewer = await makePerson(db, "Grandchild");
+    // The photo's album family — the viewer is NOT a member, so album membership alone denies them.
+    const famAlbum = await makeFamilyWithMember("Private album", owner.id);
+    // A family both owner and viewer share — the story is targeted here.
+    const famShared = await makeFamily(db, "Shared", owner.id);
+    await addMembership(db, owner.id, famShared.id, "active");
+    await addMembership(db, viewer.id, famShared.id, "active");
+
+    const photo = await createAlbumPhoto(db, {
+      contributorPersonId: owner.id,
+      familyIds: [famAlbum.id],
+      source: "upload",
+      storageKey: "family-photos/accompaniment-family",
+    });
+
+    // Before attaching: the viewer shares no album family with the photo → DENY.
+    expect((await authorizeAlbumPhotoRead(db, account(viewer.id), photo.id)).allowed).toBe(false);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [famShared.id],
+    });
+    await attachPhotoToStory(db, {
+      storyId: story.id,
+      familyPhotoId: photo.id,
+      attachedByPersonId: owner.id,
+    });
+
+    // After attaching to a family story the viewer may read → the photo bytes serve to them.
+    expect((await authorizeAlbumPhotoRead(db, account(viewer.id), photo.id)).allowed).toBe(true);
+    expect((await getAlbumPhotoForViewer(db, account(viewer.id), photo.id))?.id).toBe(photo.id);
+  });
+
+  it("a public-story attachment makes the photo readable to ANYONE, including anon", async () => {
+    const owner = await makePerson(db, "Nonna");
+    const stranger = await makePerson(db, "Stranger");
+    const famAlbum = await makeFamilyWithMember("Private album", owner.id);
+    const photo = await createAlbumPhoto(db, {
+      contributorPersonId: owner.id,
+      familyIds: [famAlbum.id],
+      source: "upload",
+      storageKey: "family-photos/accompaniment-public",
+    });
+
+    // Anon and a stranger cannot read it via the album.
+    expect((await authorizeAlbumPhotoRead(db, anon, photo.id)).allowed).toBe(false);
+    expect((await authorizeAlbumPhotoRead(db, account(stranger.id), photo.id)).allowed).toBe(false);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "public",
+      withApprovalConsent: true,
+    });
+    await attachPhotoToStory(db, {
+      storyId: story.id,
+      familyPhotoId: photo.id,
+      attachedByPersonId: owner.id,
+    });
+
+    // A public story serves its imagery to everyone.
+    expect((await authorizeAlbumPhotoRead(db, anon, photo.id)).allowed).toBe(true);
+    expect((await authorizeAlbumPhotoRead(db, account(stranger.id), photo.id)).allowed).toBe(true);
+  });
+
+  it("a photo attached ONLY to a private story is NOT readable by a non-owner", async () => {
+    const owner = await makePerson(db, "Nonna");
+    const viewer = await makePerson(db, "Outsider");
+    const famAlbum = await makeFamilyWithMember("Private album", owner.id);
+    const photo = await createAlbumPhoto(db, {
+      contributorPersonId: owner.id,
+      familyIds: [famAlbum.id],
+      source: "upload",
+      storageKey: "family-photos/accompaniment-private",
+    });
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "draft",
+      audienceTier: "private",
+    });
+    await attachPhotoToStory(db, {
+      storyId: story.id,
+      familyPhotoId: photo.id,
+      attachedByPersonId: owner.id,
+    });
+
+    // The owner still reads it (album membership); the private story leaks nothing to the outsider.
+    expect((await authorizeAlbumPhotoRead(db, account(owner.id), photo.id)).allowed).toBe(true);
+    expect((await authorizeAlbumPhotoRead(db, account(viewer.id), photo.id)).allowed).toBe(false);
+    expect((await authorizeAlbumPhotoRead(db, anon, photo.id)).allowed).toBe(false);
+  });
+
+  it("a soft-deleted photo stays unreadable even when attached to a public story", async () => {
+    const owner = await makePerson(db, "Nonna");
+    const famAlbum = await makeFamilyWithMember("Private album", owner.id);
+    const photo = await createAlbumPhoto(db, {
+      contributorPersonId: owner.id,
+      familyIds: [famAlbum.id],
+      source: "upload",
+      storageKey: "family-photos/accompaniment-deleted",
+    });
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "public",
+      withApprovalConsent: true,
+    });
+    await attachPhotoToStory(db, {
+      storyId: story.id,
+      familyPhotoId: photo.id,
+      attachedByPersonId: owner.id,
+    });
+    await softDelete(photo.id);
+
+    // Absent (soft-deleted) ⇒ DENY to everyone, story audience included — even the owner.
+    expect((await authorizeAlbumPhotoRead(db, anon, photo.id)).allowed).toBe(false);
+    expect((await authorizeAlbumPhotoRead(db, account(owner.id), photo.id)).allowed).toBe(false);
   });
 });
 

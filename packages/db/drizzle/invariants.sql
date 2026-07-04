@@ -263,3 +263,14 @@ CREATE UNIQUE INDEX memberships_one_active_per_family_uq
 CREATE UNIQUE INDEX join_requests_one_pending_uq
   ON join_requests (family_id, requester_person_id)
   WHERE status = 'pending';
+
+-- ---------------------------------------------------------------------------
+-- (4) At most one COVER image per story (ADR-0009 accompaniment). A story has exactly one cover;
+--     the write path (story-image-repository.ts) keeps this true by clearing every other image's
+--     `is_cover` before setting the target (and by making the FIRST attached image the cover). This
+--     partial unique index is the structural backstop the application logic can't express in
+--     drizzle-kit — two rows with is_cover = true for the same story_id is impossible in the DB.
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX story_images_one_cover_uq
+  ON story_images (story_id)
+  WHERE is_cover;

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { StoryBrowse } from "./StoryBrowse";
+import { resolveCoverPhotoId } from "./story-browse-helpers";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
@@ -22,6 +23,8 @@ interface StoriesTabProps {
   seenStoryIds: Set<string>;
   /** For each story id, the families it targets, ALREADY intersected with the viewer's families. */
   familyTargets: Map<string, ViewerFamily[]>;
+  /** For each story id with a cover accompaniment image (ADR-0009), its `family_photo_id`. */
+  storyCovers: Map<string, string>;
   /** The viewer's active families — the options for the family-scope filter. */
   viewerFamilies: ViewerFamily[];
   /** The viewer's display name — labels the Timeline "Just {viewer}" toggle. */
@@ -48,6 +51,7 @@ export function StoriesTab({
   viewerPersonId,
   seenStoryIds,
   familyTargets,
+  storyCovers,
   viewerFamilies,
   viewerName,
   selfDrafts,
@@ -69,6 +73,7 @@ export function StoriesTab({
         eraLabel: story.eraLabel ?? null,
         eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),
         families: familyTargets.get(story.id) ?? [],
+        coverPhotoId: resolveCoverPhotoId(storyCovers, story.id),
         // New to this viewer until opened — but a narrator's own stories are never "new" to them.
         isNew: slot.person.id !== viewerPersonId && !seenStoryIds.has(story.id),
         href: `/hub/stories/${story.id}`,

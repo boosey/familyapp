@@ -5,7 +5,7 @@
  */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStoryForViewer, getNarratorProfile } from "@chronicle/core";
+import { getStoryForViewer, getNarratorProfile, listStoryImages } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { markStorySeen, loadStoryFamilyTargets, loadViewerFamilies } from "@/lib/hub-data";
 import { KindredListenBar } from "@/app/_kindred";
@@ -61,6 +61,14 @@ export default async function StoryDetailPage({
 
   const narrator = await getNarratorProfile(db, story.ownerPersonId);
   const narratorName = narrator?.spokenName ?? "the family";
+
+  // Accompaniment gallery (ADR-0009 Phase 2). The parent story was gated by getStoryForViewer above,
+  // so its images are visible to this viewer; the seam excludes soft-deleted photos. Family-photo
+  // provenance only in Phase 2 (illustrations, with a null familyPhotoId, are a later slice). Bytes
+  // flow through the audited /api/album-photo/[photoId] route.
+  const storyImages = (await listStoryImages(db, story.id)).filter(
+    (img): img is typeof img & { familyPhotoId: string } => img.familyPhotoId !== null,
+  );
 
   // Family pills: only families the story is targeted to AND the viewer belongs to (intersection in
   // SQL). Never names a family the viewer isn't in; mirrors the browse-surface scope filter.
@@ -221,6 +229,53 @@ export default async function StoryDetailPage({
             }}
           />
         </div>
+
+        {/* Accompaniment gallery — only when the story has attached (non-deleted) photos. */}
+        {storyImages.length > 0 ? (
+          <section style={{ marginTop: 40 }}>
+            <h2
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-label)",
+                letterSpacing: "var(--tracking-mono)",
+                textTransform: "uppercase",
+                color: "var(--text-meta)",
+                margin: "0 0 16px",
+              }}
+            >
+              {hub.storyImages.galleryHeading}
+            </h2>
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {storyImages.map((img) => (
+                <li key={img.id} style={{ margin: 0 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our
+                      audited auth route, not a static asset; next/image would proxy/optimize it. */}
+                  <img
+                    src={`/api/album-photo/${img.familyPhotoId}`}
+                    alt={hub.storyImages.galleryAlt(img.caption)}
+                    style={{
+                      width: "100%",
+                      aspectRatio: "1 / 1",
+                      objectFit: "cover",
+                      borderRadius: "var(--radius-sm)",
+                      display: "block",
+                      background: "var(--surface-sunken)",
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -67,6 +67,9 @@ export type {
   FamilyPhotoFamily,
   NewFamilyPhotoFamily,
   PhotoSource,
+  StoryImage,
+  NewStoryImage,
+  StoryImageProvenance,
 } from "./schema";
 export type {
   FollowUpType,

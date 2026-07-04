@@ -19,7 +19,13 @@
  * authorization function. This stays inside the audited allowlist on purpose.
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { media, proseRevisions, stories, storyRecordings } from "@chronicle/db/content";
+import {
+  media,
+  proseRevisions,
+  stories,
+  storyImages,
+  storyRecordings,
+} from "@chronicle/db/content";
 import {
   asks,
   consentRecords,
@@ -968,6 +974,10 @@ export async function discardDraftStory(
     // `user_authored` L1; a rendered draft may carry AI levels too. The story is consent-free
     // (asserted above), so the prose_revisions delete-guard trigger permits it.
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
+    // Then the accompaniment rows (ADR-0009). story_images.story_id → stories.id is a plain FK
+    // (ON DELETE no action, mirroring story_families), so any attached-image rows must go before the
+    // story. Detaching an image writes no consent — images are mutable presentation, off the ledger.
+    await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
     //    story references the media (story is the CHILD of media there), so the story goes first,
