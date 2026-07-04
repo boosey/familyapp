@@ -35,7 +35,12 @@ vi.mock("@/lib/runtime", () => ({
 
 import { createTestDatabase, type Database, type FollowUpCandidate } from "@chronicle/db";
 import { persons, asks } from "@chronicle/db/schema";
-import { getStoryForViewer, type AuthContext } from "@chronicle/core";
+import {
+  getStoryForViewer,
+  listProseRevisions,
+  listStoryRecordings,
+  type AuthContext,
+} from "@chronicle/core";
 import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/interviewer";
 import {
   ScriptedLanguageModel,
@@ -179,6 +184,81 @@ describe("composeStoryAction — text path (Task 7)", () => {
     authCtx = { kind: "none" };
     const result = await composeStoryAction(form({ text: "A memory." }));
     expect(result).toEqual({ error: hub.actions.notSignedIn });
+  });
+});
+
+/**
+ * ADR-0014 Inc 3 slice 3: the flag-off / self-initiated one-shot VOICE path now transcribes →
+ * cleanupTake → appendVoiceTakeContribution SYNCHRONOUSLY instead of dispatching the monolithic
+ * render pipeline. The draft STAYS `draft` (Finish transitions it, a later slice), and
+ * `dispatchPipeline` is NOT called. This locks the new per-take append contract end-to-end.
+ */
+describe("recordAnswerAction — flag-off one-shot voice → per-take append (Inc 3 slice 3)", () => {
+  // The take's raw speech-to-text, and the cleanup pass's tidied output.
+  const RAW = "um so we drove to the coast you know and the car broke down";
+  const CLEANED = "We drove to the coast and the car broke down.";
+  let dispatchCalled = false;
+
+  beforeEach(async () => {
+    // Self-initiated (no askId) is the flag-off branch regardless of policy; clear the flag anyway
+    // so this describe never depends on the flag-ON describe's env leaking in.
+    delete process.env.FOLLOW_UPS_ENABLED;
+    runtimeDb = await createTestDatabase();
+    runtimeStorage = new InMemoryMediaStorage();
+    // JSON requests (render/stitch) return the render JSON; text requests (cleanupTake) return the
+    // cleaned segment. If the one-shot path wrongly stitched/rendered, prose would be the render JSON
+    // prose, not CLEANED — so this doubles as a guard that cleanup (not render) ran.
+    runtimeLlm = new ScriptedLanguageModel({
+      respond: (req) => (req.responseFormat === "json" ? RENDER_JSON : CLEANED),
+    });
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: RAW });
+    dispatchCalled = false;
+    runtimeDispatch = async () => {
+      dispatchCalled = true;
+    };
+    authCtx = { kind: "none" };
+  });
+  afterAll(() => {});
+
+  it("transcribes → cleans → appends take 0; draft stays draft and dispatch is never called", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }) }),
+    );
+
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prose).toBe(CLEANED);
+    expect(result.appendedSegment).toBe(CLEANED);
+
+    // The one-shot render pipeline was NOT dispatched — the append is synchronous now.
+    expect(dispatchCalled).toBe(false);
+
+    // The story is still a live draft (Finish transitions it, a later slice) and carries the cleaned
+    // segment as its working prose.
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), result.storyId);
+    expect(story).not.toBeNull();
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(CLEANED);
+
+    // Exactly one ai_transcribed + one ai_cleaned provenance row, both keyed to take 0's recording.
+    const takes = await listStoryRecordings(runtimeDb, result.storyId);
+    const take0 = takes[0]!;
+    const revs = await listProseRevisions(runtimeDb, result.storyId);
+    const transcribed = revs.filter((r) => r.level === "ai_transcribed");
+    const cleaned = revs.filter((r) => r.level === "ai_cleaned");
+    expect(transcribed).toHaveLength(1);
+    expect(cleaned).toHaveLength(1);
+    expect(transcribed[0]!.text).toBe(RAW);
+    expect(transcribed[0]!.storyRecordingId).toBe(take0.id);
+    expect(transcribed[0]!.modelId).toBe("mock-whisper-turbo");
+    expect(cleaned[0]!.text).toBe(CLEANED);
+    expect(cleaned[0]!.storyRecordingId).toBe(take0.id);
+    expect(cleaned[0]!.modelId).toBe("mock-claude");
   });
 });
 

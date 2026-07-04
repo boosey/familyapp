@@ -108,6 +108,10 @@ describe("multi-take pipeline — per-take transcribe + stitch-then-polish-once 
     );
     expect(r0.transcript).toBe("take zero words");
     expect(r1.transcript).toBe("take one words");
+    // The STT modelId is surfaced so a caller can key an `ai_transcribed` provenance row to it
+    // (ADR-0014 Inc 3 per-take append) without re-reading the take.
+    expect(r0.modelId).toBe("mock-whisper");
+    expect(r1.modelId).toBe("mock-whisper");
 
     // Both per-take transcripts are persisted in position order.
     const takes = await listStoryRecordings(db, storyId);

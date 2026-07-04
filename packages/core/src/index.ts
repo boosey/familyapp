@@ -52,6 +52,7 @@ export {
   computeDefaultFamilyTargets,
   listStoryRecordings,
   appendStoryRecording,
+  appendVoiceTakeContribution,
   persistTakeRecording,
   updateStoryRecordingTranscript,
   dropStoryRecording,

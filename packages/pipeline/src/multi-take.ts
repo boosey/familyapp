@@ -43,7 +43,7 @@ import {
 export async function transcribeTakeToRecording(
   deps: Pick<PipelineDeps, "db" | "storage" | "transcriber" | "workingCopyTransformer">,
   storyRecordingId: string,
-): Promise<{ transcript: string }> {
+): Promise<{ transcript: string; modelId: string }> {
   const transformer = deps.workingCopyTransformer ?? createDefaultWorkingCopyTransformer();
 
   const take = await getStoryRecordingForPipeline(deps.db, storyRecordingId);
@@ -100,7 +100,7 @@ export async function transcribeTakeToRecording(
     transcriptWordTimings: wordTimings1x,
   });
 
-  return { transcript: transcription.text };
+  return { transcript: transcription.text, modelId: transcription.modelId };
 }
 
 /**

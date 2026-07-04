@@ -17,6 +17,7 @@ import {
   logPolish,
   updateDerivedFields,
   listStoryRecordings,
+  appendVoiceTakeContribution,
   dropStoryRecording,
   appendFollowUpDecision,
   appendFollowUpOutcome,
@@ -31,6 +32,7 @@ import {
   plogError,
   startTimer,
   transcribeTakeToRecording,
+  cleanupTake,
   stitchAndRenderStory,
   polishProse,
 } from "@chronicle/pipeline";
@@ -60,6 +62,7 @@ export type ActionResult = { error: string } | undefined;
 export type ThreadStep =
   | { kind: "follow_up"; storyId: string; prompt: string }
   | { kind: "ready"; storyId: string }
+  | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
   | { kind: "discarded" }
   | { error: string };
 
@@ -183,31 +186,54 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
 
   const policy = resolveFollowUpPolicyForRequest();
   // FLAG OFF, or a self-initiated telling with no ask question to seed the follow-up evaluator →
-  // the one-shot dispatch path. (The follow-up mini-loop below requires an ask question.)
+  // the per-take APPEND path. (The follow-up mini-loop below requires an ask question.)
   if (!policy.enabled || !askId) {
-    // FLAG OFF — byte-for-byte today's one-shot path. Render BEFORE review (prose-provenance
-    // design): transcribe → polish so the review phase can show the polished prose for the narrator
-    // to read and edit. dispatchPipeline hides the durable-vs-synchronous decision: dev/CI runs it
-    // in-process to completion (story reaches pending_approval before this returns); prod enqueues
-    // onto the durable Inngest queue. Idempotent if re-run.
+    // Per-take append (ADR-0014 Inc 3): transcribe take 0 → light Cleanup pass → append the cleaned
+    // segment onto the draft's working prose, writing the two automatic provenance rows keyed to the
+    // take. The draft STAYS `draft` — Finish (a later slice) is what transitions it. This replaces
+    // the old monolithic dispatchPipeline render; the draft is now built up take-by-take.
     try {
-      await rt.dispatchPipeline(storyId);
+      const takes = await listStoryRecordings(db, storyId); // take 0 seeded at ingest
+      const take0 = takes[0];
+      if (!take0) {
+        // Defensive — persistRecordingAndCreateDraft seeds take 0. Its absence is a save failure.
+        plogError("answer", "recordAnswer: take 0 missing after ingest", { story: storyId });
+        return { error: hub.actions.saveFailed };
+      }
+      const { transcript, modelId: transcribeModelId } = await transcribeTakeToRecording(
+        rt,
+        take0.id,
+      );
+      const cleaned = await cleanupTake(rt.languageModel, {
+        transcript,
+        ...(askQuestionText ? { promptQuestion: askQuestionText } : {}),
+      });
+      const { prose, appendedSegment } = await appendVoiceTakeContribution(db, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        storyRecordingId: take0.id,
+        rawTranscript: transcript,
+        cleanedSegment: cleaned.prose,
+        transcribeModelId,
+        cleanupModelId: cleaned.modelId,
+        cleanupPromptText: cleaned.systemPrompt,
+        // The INITIAL take on a fresh draft — there is no prior client editor text yet (client-
+        // supplied priorProse arrives with follow-up/typed appends in later slices).
+        priorProse: null,
+      });
+      plog("answer", "recordAnswer: per-take append complete (draft stays draft)", {
+        story: storyId,
+        ms: totalTimer(),
+      });
+      return { kind: "appended", storyId, prose, appendedSegment };
     } catch (err) {
-      plogError("answer", "recordAnswer: render pipeline failed", {
+      plogError("answer", "recordAnswer: per-take append failed", {
         story: storyId,
         ms: totalTimer(),
         error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
       });
       return { error: hub.actions.saveFailed };
     }
-    plog("answer", "recordAnswer: dispatched (synchronous in dev → pending_approval; enqueued in prod)", {
-      story: storyId,
-      ms: totalTimer(),
-    });
-    // Return `ready` so the client polls processing status. In dev/CI dispatch ran to completion
-    // above (the first poll returns `ready`); in prod the durable pipeline is still running and the
-    // client polls until it reaches `pending_approval`.
-    return { kind: "ready", storyId };
   }
 
   // FLAG ON — mini-loop: transcribe take 0 (the evaluator's input), then evaluate → decide →
