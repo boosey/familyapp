@@ -14,6 +14,7 @@ vi.mock("@/app/hub/about-you/actions", () => ({
   saveIntakeAnswer: vi.fn(async () => ({
     nextQuestion: { key: "occupationSummary", text: "Tell me about your work." },
   })),
+  polishIntakeAnswerAction: vi.fn(async () => ({ prose: "I grew up in Metairie, Louisiana." })),
 }));
 // Module-level push spy so tests can assert router.push calls (e.g. exit-during-transcription).
 // clearAllMocks() in beforeEach resets the call log between tests.
@@ -30,7 +31,11 @@ vi.mock("@/lib/use-mic-recorder", () => ({
   }),
 }));
 
-import { submitIntakeRecording, saveIntakeAnswer } from "@/app/hub/about-you/actions";
+import {
+  submitIntakeRecording,
+  saveIntakeAnswer,
+  polishIntakeAnswerAction,
+} from "@/app/hub/about-you/actions";
 
 describe("AboutYouFlow", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -160,6 +165,28 @@ describe("AboutYouFlow", () => {
 
     // Clean up the dangling promise so Vitest doesn't warn about unhandled rejections.
     resolveTranscribe({ transcript: "" });
+  });
+
+  it("polish: tapping ✨Polish posts to polishIntakeAnswerAction and replaces the box text", async () => {
+    render(
+      <AboutYouFlow
+        initialQuestion={{ key: "hometown", text: "Where did you grow up?" }}
+        hubHref="/hub"
+      />,
+    );
+    // Type a raw answer so the Polish button is enabled (it disables on empty text).
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "i grew up in metairie" } });
+    fireEvent.click(screen.getByRole("button", { name: /polish with ai/i }));
+
+    await waitFor(() =>
+      expect(polishIntakeAnswerAction).toHaveBeenCalledWith(expect.any(FormData)),
+    );
+    // The polished text replaces the editable box (via history.replace → onChange).
+    await waitFor(() =>
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+        "I grew up in Metairie, Louisiana.",
+      ),
+    );
   });
 
   it("submitIntakeRecording error: shows saveError copy and does not crash", async () => {

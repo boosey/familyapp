@@ -23,8 +23,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { submitIntakeRecording, saveIntakeAnswer, type NextQuestion } from "./actions";
+import {
+  submitIntakeRecording,
+  saveIntakeAnswer,
+  polishIntakeAnswerAction,
+  type NextQuestion,
+} from "./actions";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
+import { useProseHistory } from "@/lib/use-prose-history";
+import { ProseBlock } from "@/app/hub/_composing/ProseBlock";
 
 export function AboutYouFlow({
   initialQuestion,
@@ -42,6 +49,12 @@ export function AboutYouFlow({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // Lifted prose history so the voice path can seed the transcript as ONE undoable step
+  // (`history.replace`, an event the editor doesn't emit) and ✨Polish stays reversible. resetKey is
+  // the current question key: advancing to a new question re-baselines undo history (and `next()` also
+  // clears the draft), so undo never walks back into a previous question's words.
+  const history = useProseHistory(draft, setDraft, current?.key);
+
   const { phase: micPhase, start, finish } = useMicRecorder({
     onRecorded: async (blob) => {
       setTranscribing(true);
@@ -49,7 +62,9 @@ export function AboutYouFlow({
         const form = new FormData();
         form.append("audio", blob, "intake.webm");
         const { transcript } = await submitIntakeRecording(current!.key, form);
-        if (transcript) setDraft(transcript);
+        // Seed the cleaned transcript as one undoable step (never `setDraft` — that wouldn't record a
+        // history entry). Empty transcript is a no-op: leave the box empty, surface no error.
+        if (transcript) history.replace(transcript);
       } catch {
         setError(hub.aboutYou.saveError);
       } finally {
@@ -58,6 +73,20 @@ export function AboutYouFlow({
     },
     onError: () => setError(hub.aboutYou.micError),
   });
+
+  // Opt-in ✨Polish for the intake editor: text→text via the server action, returning the tidied prose.
+  // Throw on `{error}` so KindredProseEditor surfaces its inline, non-destructive polish error (mirrors
+  // ComposingEditor's polishHandler). The eventual Next/save records the accepted text's provenance.
+  async function polishHandler(text: string): Promise<string> {
+    if (!current) return text;
+    const form = new FormData();
+    form.append("questionKey", current.key);
+    form.append("prose", text);
+    form.append("promptQuestion", current.text);
+    const res = await polishIntakeAnswerAction(form);
+    if ("error" in res) throw new Error(res.error);
+    return res.prose;
+  }
 
   async function next() {
     if (!current || busy) return;
@@ -232,15 +261,14 @@ export function AboutYouFlow({
           />
         </div>
 
-        <label className="kin-form-label">
-          {hub.aboutYou.typeInstead}
-          <textarea
-            className="kin-field"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            style={{ minHeight: 96 }}
-          />
-        </label>
+        <ProseBlock
+          proseDraft={draft}
+          setProseDraft={setDraft}
+          disabled={busy || transcribing}
+          history={history}
+          onPolish={polishHandler}
+          label={hub.aboutYou.typeInstead}
+        />
 
         {error ? <p style={errorBox}>{error}</p> : null}
 

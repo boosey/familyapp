@@ -30,7 +30,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
+import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import {
@@ -47,6 +47,7 @@ import {
 } from "./answer/[askId]/actions";
 import { useProseHistory } from "@/lib/use-prose-history";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
+import { ProseBlock } from "./_composing/ProseBlock";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -1053,46 +1054,6 @@ function RelistenStrip({
     );
   }
   return null;
-}
-
-/** The prose editor block (label + KindredProseEditor with lifted history + ✨Polish). */
-function ProseBlock({
-  proseDraft,
-  setProseDraft,
-  disabled,
-  history,
-  onPolish,
-}: {
-  proseDraft: string;
-  setProseDraft: (v: string) => void;
-  disabled: boolean;
-  history: ReturnType<typeof useProseHistory>;
-  onPolish: (text: string) => Promise<string>;
-}) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <p
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--support)",
-          margin: "0 0 14px",
-        }}
-      >
-        {hub.answer.reviewYourWords}
-      </p>
-      <KindredProseEditor
-        value={proseDraft}
-        onChange={setProseDraft}
-        disabled={disabled}
-        history={history}
-        labels={common.proseEditor}
-        onPolish={onPolish}
-      />
-    </div>
-  );
 }
 
 /** The audience-tier radio picker (mirrors ApprovalRecorder). */

@@ -176,6 +176,84 @@ export async function listIntakeRevisions(
     .orderBy(asc(intakeRevisions.seq));
 }
 
+/**
+ * Persist an opt-in ✨Polish of an intake answer ATOMICALLY (ADR-0014 §8) — the intake counterpart of
+ * the story `logPolish`. In ONE transaction: ensure the answer row exists (lazily creating it for a
+ * not-yet-saved typed answer), capture the pre-polish editor text as a revision UNLESS it is already
+ * the ledger's last entry (no prior revisions → `user_authored` §6 L1; a drift from the last logged
+ * pass → `human_corrected`), then set `text` to the polished output and append the `ai_polished` row.
+ *
+ * The transaction closes two hazards a sequential action-layer orchestration had: (a) a partial-failure
+ * window where `text` is left as the un-polished input with no `ai_polished` row, and (b) a concurrent
+ * read observing the intermediate un-polished state. Best-effort at the call site: the caller wraps
+ * this so a DB failure surfaces as a polish error and never loses the user's input.
+ */
+export async function logIntakePolish(
+  db: Database,
+  input: {
+    personId: string;
+    questionKey: string;
+    promptQuestion: string;
+    /** The editor text at the moment ✨Polish was tapped (the polish INPUT). */
+    priorText: string;
+    /** The polished output to persist as the answer's new `text`. */
+    polishedText: string;
+    modelId: string;
+    promptText: string;
+    actorPersonId: string;
+  },
+): Promise<IntakeAnswer> {
+  return db.transaction(async (tx) => {
+    // Ensure the row exists (upsert on the unique (person, question) index → never a duplicate). On a
+    // fresh insert `text` is seeded with the pre-polish input; the final polished text is written below.
+    const [ensured] = await tx
+      .insert(intakeAnswers)
+      .values({
+        personId: input.personId,
+        questionKey: input.questionKey,
+        promptQuestion: input.promptQuestion,
+        origin: "typed",
+        mediaId: null,
+        transcript: null,
+        text: input.priorText,
+      })
+      .onConflictDoUpdate({
+        target: [intakeAnswers.personId, intakeAnswers.questionKey],
+        set: { updatedAt: new Date() },
+      })
+      .returning();
+
+    const priorRevs = await tx
+      .select()
+      .from(intakeRevisions)
+      .where(eq(intakeRevisions.intakeAnswerId, ensured!.id))
+      .orderBy(asc(intakeRevisions.seq));
+    const last = priorRevs[priorRevs.length - 1];
+    if (input.priorText.trim().length > 0 && (!last || last.text !== input.priorText)) {
+      await tx.insert(intakeRevisions).values({
+        intakeAnswerId: ensured!.id,
+        level: priorRevs.length === 0 ? "user_authored" : "human_corrected",
+        text: input.priorText,
+        actorPersonId: input.actorPersonId,
+      });
+    }
+
+    const [updated] = await tx
+      .update(intakeAnswers)
+      .set({ text: input.polishedText, updatedAt: new Date() })
+      .where(eq(intakeAnswers.id, ensured!.id))
+      .returning();
+    await tx.insert(intakeRevisions).values({
+      intakeAnswerId: ensured!.id,
+      level: "ai_polished",
+      text: input.polishedText,
+      modelId: input.modelId,
+      promptText: input.promptText,
+    });
+    return updated!;
+  });
+}
+
 /** Owner-scoped list — returns only the caller's own answered keys; no tier-auth check needed. */
 export async function listAnsweredQuestionKeys(db: Database, personId: string): Promise<string[]> {
   const rows = await db

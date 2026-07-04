@@ -19,8 +19,9 @@ import {
   saveIntakeText,
   saveIntakeTranscript,
   listAnsweredQuestionKeys,
-  getIntakeAnswer,
   appendIntakeRevision,
+  listIntakeRevisions,
+  logIntakePolish,
 } from "@chronicle/core";
 import {
   transcribeIntakeAudio,
@@ -157,26 +158,21 @@ export async function polishIntakeAnswerAction(
     if (result.modelId === "") {
       return { prose: result.prose };
     }
-    const row = await getIntakeAnswer(db, ctx.personId, questionKey);
-    if (row) {
-      // A saved answer exists: persist the polished text and record the ai_polished provenance.
-      await saveIntakeText(db, {
-        personId: ctx.personId,
-        questionKey,
-        promptQuestion: promptQuestion ?? questionKey,
-        text: result.prose,
-      });
-      await appendIntakeRevision(db, {
-        intakeAnswerId: row.id,
-        level: "ai_polished",
-        text: result.prose,
-        modelId: result.modelId,
-        promptText: result.systemPrompt,
-      });
-    }
-    // No saved row yet (a typed answer the user hasn't "Next"-ed): the one real edge. Do NOT crash and
-    // do NOT log — there is no answer row to attach a revision to. Return the polished text; the
-    // eventual saveIntakeAnswer captures provenance at save time.
+    // Persist the polish ATOMICALLY (mirrors the story logPolish): logIntakePolish ensures the row,
+    // captures the pre-polish editor text as a revision unless it's already the ledger's last entry
+    // (user_authored / human_corrected), sets `text` to the polished output, and appends ai_polished —
+    // all in one transaction, so there is no partial-state window and no pure-LLM output is ever
+    // mislabeled as authored/corrected. Every Polish tap is logged.
+    await logIntakePolish(db, {
+      personId: ctx.personId,
+      questionKey,
+      promptQuestion: promptQuestion ?? questionKey,
+      priorText: prose,
+      polishedText: result.prose,
+      modelId: result.modelId,
+      promptText: result.systemPrompt,
+      actorPersonId: ctx.personId,
+    });
     return { prose: result.prose };
   } catch (err) {
     plogError("about-you", "polishIntakeAnswer: failed", {
@@ -202,7 +198,32 @@ export async function saveIntakeAnswer(
 
   // Persist the durable answer. Empty/whitespace text is a no-op skip (exit-without-typing).
   if (text.trim().length > 0) {
-    await saveIntakeText(db, { personId: ctx.personId, questionKey: key, promptQuestion, text });
+    const row = await saveIntakeText(db, { personId: ctx.personId, questionKey: key, promptQuestion, text });
+
+    // Save-time provenance (ADR-0014 §8) — best-effort; a ledger failure must NEVER fail the save. The
+    // saved text is the narrator's own final word, so log it UNLESS it's byte-identical to the last
+    // logged pass (then they accepted an AI pass verbatim — no duplicate row). No prior revisions → a
+    // pure typed answer (`user_authored`, §6 L1); prior revisions → an edit after an AI pass
+    // (`human_corrected`). Independent of the field-extraction try/catch below.
+    try {
+      const revs = await listIntakeRevisions(db, row.id);
+      const last = revs[revs.length - 1];
+      if (!last || last.text !== text) {
+        await appendIntakeRevision(db, {
+          intakeAnswerId: row.id,
+          level: revs.length === 0 ? "user_authored" : "human_corrected",
+          text,
+          actorPersonId: ctx.personId,
+        });
+      }
+    } catch (e) {
+      plogError("about-you", "saveIntakeAnswer: revision logging failed (non-fatal)", {
+        person: ctx.personId,
+        question: key,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
+    }
+
     if (question) {
       try {
         const value = await extractIntakeAnswer(languageModel, question, text);

@@ -26,6 +26,7 @@ vi.mock("@/lib/runtime", () => ({
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
 import {
+  appendIntakeRevision,
   getIntakeAnswer,
   listIntakeRevisions,
   saveIntakeText,
@@ -35,7 +36,11 @@ import {
   ScriptedTranscriber,
 } from "@chronicle/pipeline";
 import { InMemoryMediaStorage } from "@chronicle/storage";
-import { submitIntakeRecording, polishIntakeAnswerAction } from "@/app/hub/about-you/actions";
+import {
+  submitIntakeRecording,
+  polishIntakeAnswerAction,
+  saveIntakeAnswer,
+} from "@/app/hub/about-you/actions";
 
 const HOMETOWN = "hometown";
 
@@ -189,20 +194,191 @@ describe("intake actions — Cleanup + Polish provenance (ADR-0014 Inc 4, slice 
     expect(revs).toHaveLength(0);
   });
 
-  it("polishIntakeAnswerAction: no saved row yet returns the polished text without crashing or logging", async () => {
+  it("polishIntakeAnswerAction: polishing a not-yet-saved typed answer creates the row and logs user_authored + ai_polished", async () => {
     const personId = await makePerson(runtimeDb);
     authCtx = { kind: "account", personId };
 
+    const RAW = "i grew up in metairie";
     const POLISHED = "I grew up in Metairie.";
     runtimeLlm.setScript({ respond: POLISHED, modelId: "mock-polish" });
 
-    const result = await polishIntakeAnswerAction(
-      polishForm({ questionKey: HOMETOWN, prose: "i grew up in metairie" }),
-    );
+    const result = await polishIntakeAnswerAction(polishForm({ questionKey: HOMETOWN, prose: RAW }));
     expect(result).toEqual({ prose: POLISHED });
 
-    // No answer row was created by the polish, so nothing was persisted or logged.
+    // The row is created lazily by the polish, and the ledger records the TYPED input (user_authored)
+    // BEFORE the polish (ai_polished) — so pure LLM output is never later mislabeled as hand-authored.
     const row = await getIntakeAnswer(runtimeDb, personId, HOMETOWN);
-    expect(row).toBeNull();
+    expect(row).not.toBeNull();
+    expect(row!.text).toBe(POLISHED);
+    const revs = await listIntakeRevisions(runtimeDb, row!.id);
+    expect(revs.map((r) => r.level)).toEqual(["user_authored", "ai_polished"]);
+    expect(revs[0]!.text).toBe(RAW);
+    expect(revs[1]!.text).toBe(POLISHED);
+  });
+
+  it("polishIntakeAnswerAction: editing a voice-cleaned answer THEN polishing logs the edit as human_corrected before ai_polished", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    // A voice answer that was transcribed + cleaned (row exists, ledger has two AI passes).
+    const saved = await saveIntakeText(runtimeDb, {
+      personId,
+      questionKey: HOMETOWN,
+      promptQuestion: "Where did you grow up?",
+      text: "I grew up in Metairie.",
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_transcribed",
+      text: "um so I grew up in Metairie",
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_cleaned",
+      text: "I grew up in Metairie.",
+    });
+
+    // The narrator EDITS the cleaned text in the editor, then taps ✨Polish (prose = the edited text).
+    const EDITED = "I grew up in Metairie, Louisiana.";
+    const POLISHED = "I grew up in Metairie, Louisiana — a suburb of New Orleans.";
+    runtimeLlm.setScript({ respond: POLISHED, modelId: "mock-polish" });
+
+    await polishIntakeAnswerAction(polishForm({ questionKey: HOMETOWN, prose: EDITED }));
+
+    // The edit must NOT be dropped: it is logged as human_corrected BEFORE the ai_polished output.
+    const revs = await listIntakeRevisions(runtimeDb, saved.id);
+    expect(revs.map((r) => r.level)).toEqual([
+      "ai_transcribed",
+      "ai_cleaned",
+      "human_corrected",
+      "ai_polished",
+    ]);
+    expect(revs[2]!.text).toBe(EDITED);
+    expect(revs[2]!.actorPersonId).toBe(personId);
+    expect(revs[3]!.text).toBe(POLISHED);
+  });
+
+  it("polishIntakeAnswerAction: polishing an UNEDITED voice-cleaned answer adds only ai_polished (no spurious correction)", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    const CLEANED = "I grew up in Metairie.";
+    const saved = await saveIntakeText(runtimeDb, {
+      personId,
+      questionKey: HOMETOWN,
+      promptQuestion: "Where did you grow up?",
+      text: CLEANED,
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_transcribed",
+      text: "um so I grew up in Metairie",
+    });
+    await appendIntakeRevision(runtimeDb, { intakeAnswerId: saved.id, level: "ai_cleaned", text: CLEANED });
+
+    // Tap ✨Polish WITHOUT editing — prose is byte-identical to the last (ai_cleaned) revision.
+    const POLISHED = "I grew up in Metairie, a New Orleans suburb.";
+    runtimeLlm.setScript({ respond: POLISHED, modelId: "mock-polish" });
+    await polishIntakeAnswerAction(polishForm({ questionKey: HOMETOWN, prose: CLEANED }));
+
+    // No spurious user_authored/human_corrected row for the unedited input — only ai_polished is added.
+    const revs = await listIntakeRevisions(runtimeDb, saved.id);
+    expect(revs.map((r) => r.level)).toEqual(["ai_transcribed", "ai_cleaned", "ai_polished"]);
+    expect(revs[2]!.text).toBe(POLISHED);
+  });
+
+  it("provenance regression: type → Polish → accept verbatim → Next never mislabels LLM output as user_authored", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    const RAW = "i grew up in metairie it was hot";
+    const POLISHED = "I grew up in Metairie. It was hot.";
+    runtimeLlm.setScript({ respond: POLISHED, modelId: "mock-polish" });
+
+    // Type raw text, tap ✨Polish before ever saving (no row yet), then accept the polish verbatim.
+    await polishIntakeAnswerAction(polishForm({ questionKey: HOMETOWN, prose: RAW }));
+    // Tap Next with the accepted-verbatim polished text.
+    await saveIntakeAnswer([], HOMETOWN, POLISHED);
+
+    const row = await getIntakeAnswer(runtimeDb, personId, HOMETOWN);
+    const revs = await listIntakeRevisions(runtimeDb, row!.id);
+    // The ledger is [user_authored(raw), ai_polished(polished)]; the verbatim Save adds NOTHING (text
+    // equals the last revision). Crucially, the polished text is labeled ai_polished, never user_authored.
+    expect(revs.map((r) => r.level)).toEqual(["user_authored", "ai_polished"]);
+    const polishedRev = revs.find((r) => r.text === POLISHED);
+    expect(polishedRev!.level).toBe("ai_polished");
+    expect(revs.some((r) => r.level === "user_authored" && r.text === POLISHED)).toBe(false);
+  });
+
+  it("saveIntakeAnswer: a pure typed answer (no prior revisions) logs exactly one user_authored", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    await saveIntakeAnswer([], HOMETOWN, "New Orleans");
+
+    const row = await getIntakeAnswer(runtimeDb, personId, HOMETOWN);
+    expect(row).not.toBeNull();
+    const revs = await listIntakeRevisions(runtimeDb, row!.id);
+    expect(revs.map((r) => r.level)).toEqual(["user_authored"]);
+    expect(revs[0]!.text).toBe("New Orleans");
+    expect(revs[0]!.actorPersonId).toBe(personId);
+  });
+
+  it("saveIntakeAnswer: an edit after a voice answer (prior AI passes) logs one human_corrected", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    // Stand in a voice answer that was already transcribed + cleaned.
+    const saved = await saveIntakeText(runtimeDb, {
+      personId,
+      questionKey: HOMETOWN,
+      promptQuestion: "Where did you grow up?",
+      text: "I grew up in Metairie.",
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_transcribed",
+      text: "um so I grew up in Metairie",
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_cleaned",
+      text: "I grew up in Metairie.",
+    });
+
+    // The narrator edits the cleaned text, then Saves.
+    await saveIntakeAnswer([], HOMETOWN, "I grew up in Metairie, Louisiana.");
+
+    const revs = await listIntakeRevisions(runtimeDb, saved.id);
+    const corrections = revs.filter((r) => r.level === "human_corrected");
+    expect(corrections).toHaveLength(1);
+    expect(corrections[0]!.text).toBe("I grew up in Metairie, Louisiana.");
+    expect(corrections[0]!.actorPersonId).toBe(personId);
+    // It is the newest revision.
+    expect(revs[revs.length - 1]!.level).toBe("human_corrected");
+  });
+
+  it("saveIntakeAnswer: text identical to the last revision logs nothing (accepted the AI pass verbatim)", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+
+    const saved = await saveIntakeText(runtimeDb, {
+      personId,
+      questionKey: HOMETOWN,
+      promptQuestion: "Where did you grow up?",
+      text: "I grew up in Metairie.",
+    });
+    await appendIntakeRevision(runtimeDb, {
+      intakeAnswerId: saved.id,
+      level: "ai_cleaned",
+      text: "I grew up in Metairie.",
+    });
+
+    // Save the same text the last revision already holds → no new revision.
+    await saveIntakeAnswer([], HOMETOWN, "I grew up in Metairie.");
+
+    const revs = await listIntakeRevisions(runtimeDb, saved.id);
+    expect(revs).toHaveLength(1);
+    expect(revs[0]!.level).toBe("ai_cleaned");
   });
 });

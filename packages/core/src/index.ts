@@ -146,6 +146,7 @@ export {
   listAnsweredQuestionKeys,
   appendIntakeRevision,
   listIntakeRevisions,
+  logIntakePolish,
   type CreateIntakeRecordingInput,
 } from "./intake-answer-repository";
 export {
