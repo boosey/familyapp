@@ -69,6 +69,28 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 8)
+**Slice 8 `e21e97b` (LANDED, riskiest slice, cold-reviewed; full suite green: core 277, pipeline 74, capture 38,
+apps/web 393, typecheck 0).** Finish + Finish-check. `finishDraft` ADDED to the core barrel. New
+`finishDraftAction(intent: probe|accept|decline)` in `answer/[askId]/actions.ts`: **probe** runs `polishProse`
+speculatively on the CLIENT's posted `prose`; a real polish (`modelId!==""`) that MATERIALLY differs
+(`normalizeWhitespace` collapse-runs+trim `!==`) → `{kind:"finish_offer", storyId, polished, polishModelId,
+polishPromptText}` persisting NOTHING; else finishes as-is. **accept** re-uses the client-echoed polished text +
+provenance → `logPolish` (1 `ai_polished` row) → `deriveMetadata` (1 LLM) → `finishDraft` — NO second `polishProse`
+(**0 extra LLM calls**, asserted by mock call count). **decline** → `deriveMetadata`+`finishDraft` as-is. Owner +
+`draft`-state guarded up front via `getStoryForViewer` (closes the accept-path IDOR/partial-write window). Two new
+ThreadStep variants `finish_offer`/`finished`. **RESOLVED DECISION (c) folded in:** `shareAnswerAction`
+`augmentProfileFromStory` source `approved.transcript`→`approved.prose` (+regression: new-model story, transcript
+NULL/prose set → augments). Minimal client wiring in `StoryComposer.tsx`: Finish button (probe) + inline dismissible
+offer card ([Use polished version]=accept; X "Keep mine as is"=finish-as-is/decline); on `finished`→`router.refresh()`.
+**Cold review found 1 real bug → FIXED + regression test:** the offer card left the editor enabled and did not
+invalidate a stale offer on edit, so accept could post STALE polished text and drop edits made between probe and
+accept. Fix = `useEffect([proseDraft])` clearing `finishOffer` via functional updater `setFinishOffer(cur=>cur?null:cur)`
+(no-op when null → never fires spuriously on mount or the append path's `history.replace` seeding). **KNOWN GAP for
+Slice 10:** the Finish button lives in the review-phase markup (renders on a `pending_approval` story), so it is NOT
+wired to a live `draft` end-to-end yet — expected per this slice's "server + minimal client, not integrated UI" scope;
+Slice 10's phase collapse relocates Finish onto the always-mounted composing surface. Slice 9 (routing relax) is next.
+
 ## Build status (updated 2026-07-04, through Slice 7)
 **Slice 7 `5eb4a8d` (LANDED, full suite green: core 277, pipeline 74, capture 38, apps/web 378, typecheck 0).**
 `dropTakeAction` is now audio-only (RESOLVED DECISION d): dropping a follow-up take (position>0) deletes ONLY its
