@@ -46,6 +46,7 @@ $$ LANGUAGE plpgsql;--> statement-breakpoint
 --            thus every reference) is gone, the orphan media row is reclaimable — that is how the
 --            deletion cascade removes it. No token is needed here: reaching this delete requires the
 --            referencing rows to be gone first, and those rows are themselves protected.
+-- NOTE: the UPDATE-forbidden RAISE below is intentionally duplicated from chronicle_forbid_mutation; keep the wording in sync.
 CREATE OR REPLACE FUNCTION chronicle_media_delete_guard()
 RETURNS trigger AS $$
 BEGIN
@@ -75,6 +76,7 @@ $$ LANGUAGE plpgsql;--> statement-breakpoint
 -- is being erased must take its consent rows with it (nothing is retained against the owner's will);
 -- the fact of the deletion is preserved separately in `erasure_audit`. UPDATE remains forbidden
 -- always (a revocation is still a new superseding row, never an edit).
+-- NOTE: the UPDATE-forbidden RAISE below is intentionally duplicated from chronicle_forbid_mutation; keep the wording in sync.
 CREATE OR REPLACE FUNCTION chronicle_consent_records_guard()
 RETURNS trigger AS $$
 BEGIN

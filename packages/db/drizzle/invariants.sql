@@ -22,6 +22,7 @@ $$ LANGUAGE plpgsql;
 -- is being erased must take its consent rows with it (nothing is retained against the owner's will);
 -- the fact of the deletion is preserved separately in `erasure_audit`. UPDATE remains forbidden
 -- always (a revocation is still a new superseding row, never an edit).
+-- NOTE: the UPDATE-forbidden RAISE below is intentionally duplicated from chronicle_forbid_mutation; keep the wording in sync.
 CREATE OR REPLACE FUNCTION chronicle_consent_records_guard()
 RETURNS trigger AS $$
 BEGIN
@@ -47,8 +48,8 @@ CREATE TRIGGER consent_records_append_only
   FOR EACH ROW EXECUTE FUNCTION chronicle_consent_records_guard();
 
 -- Prose revisions: the prose provenance ledger (L1 user_authored/transcribed → L2 polished →
--- L3 corrected). Consent-scoped immutability, exactly like Media and the ordered take set
--- (ADR-0002/0007):
+-- L3 corrected). Consent-scoped immutability (unlike Media, which ADR-0008 moved to
+-- existence-scoping), like the ordered take set (ADR-0002/0007/0012):
 --   UPDATE → always forbidden (a correction is a NEW row, never an edit — the ledger is append-only).
 --   DELETE → allowed ONLY when the owning Story has no consent_records row. Once a story is
 --            approved/shared its prose lineage is frozen forever (it is the L2→L3 audit/diff
@@ -103,6 +104,7 @@ $$ LANGUAGE plpgsql;
 --            thus every reference) is gone, the orphan media row is reclaimable — that is how the
 --            deletion cascade removes it. No token is needed here: reaching this delete requires the
 --            referencing rows to be gone first, and those rows are themselves protected.
+-- NOTE: the UPDATE-forbidden RAISE below is intentionally duplicated from chronicle_forbid_mutation; keep the wording in sync.
 CREATE OR REPLACE FUNCTION chronicle_media_delete_guard()
 RETURNS trigger AS $$
 BEGIN

@@ -101,3 +101,61 @@ describe("draft story recording is un-detachable while the (unconsented) story l
     ).rejects.toThrow(/immutable|restrict|artifact/i);
   });
 });
+
+describe("approval-audio audio is un-detachable while a consent record references it", () => {
+  it("rejects DELETE of media referenced by consent_records.approval_audio_media_id", async () => {
+    const narrator = await makePerson();
+    const recording = await makeAudio(narrator.id);
+    // The approval-audio clip: a distinct media row (kind approval_audio) the consent row points at.
+    const [approvalClip] = await db
+      .insert(media)
+      .values({
+        ownerPersonId: narrator.id,
+        kind: "approval_audio",
+        storageKey: `s3://b/approval-${crypto.randomUUID()}.wav`,
+        contentType: "audio/wav",
+        checksum: crypto.randomUUID(),
+      })
+      .returning();
+    const story = await db.transaction(async (tx) => {
+      const [s] = await tx
+        .insert(stories)
+        .values({ ownerPersonId: narrator.id, recordingMediaId: recording.id })
+        .returning();
+      await tx.insert(storyRecordings).values({ storyId: s!.id, position: 0, mediaId: recording.id });
+      return s!;
+    });
+    await db.insert(consentRecords).values({
+      personId: narrator.id,
+      actorPersonId: narrator.id,
+      storyId: story.id,
+      action: "approved_for_sharing",
+      resultingState: "shared",
+      approvalAudioMediaId: approvalClip!.id,
+    });
+    await expect(
+      db.delete(media).where(eq(media.id, approvalClip!.id)),
+    ).rejects.toThrow(/immutable|restrict|artifact/i);
+  });
+});
+
+describe("a position>=1 take's audio is un-detachable while the take lives", () => {
+  it("rejects DELETE of a non-canonical take's media via the story_recordings branch (no consent needed)", async () => {
+    const narrator = await makePerson();
+    const rec0 = await makeAudio(narrator.id);
+    const story = await db.transaction(async (tx) => {
+      const [s] = await tx
+        .insert(stories)
+        .values({ ownerPersonId: narrator.id, recordingMediaId: rec0.id })
+        .returning();
+      await tx.insert(storyRecordings).values({ storyId: s!.id, position: 0, mediaId: rec0.id });
+      return s!;
+    });
+    // A follow-up take (position 1) with its own media — not the canonical recording pointer.
+    const rec1 = await makeAudio(narrator.id);
+    await db.insert(storyRecordings).values({ storyId: story.id, position: 1, mediaId: rec1.id });
+    await expect(
+      db.delete(media).where(eq(media.id, rec1.id)),
+    ).rejects.toThrow(/immutable|restrict|artifact/i);
+  });
+});
