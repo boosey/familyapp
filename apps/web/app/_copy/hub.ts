@@ -212,17 +212,10 @@ export const hub = {
     polishing: "Polishing your words…",
     polishingSub: "Your recording is saved — this just takes a moment.",
     recordAgain: "Record again",
-    // Soft cap: the processing poll ran past its window without the story becoming ready. The
-    // recording is safe (it's slow or stuck out-of-band); never spin forever — say so warmly.
-    takingLonger:
-      "This is taking longer than usual. Your recording is safe — check back in a little while.",
     // Follow-up thread (Task 7): the interviewer proposes a deepening question; declining is a
     // first-class, peer-level path — never a dead end.
     followUpIntro: "One more, if you'd like:",
     thatsAllForNow: "That's all for now",
-    // Unused since ADR-0014 Inc 3 slice 10 (the full-screen FollowUpPrompt was replaced by an inline
-    // banner on the composing surface; declining no longer stitches). Kept for Inc 5's copy retire.
-    finishing: "One moment…",
     followUpTakeLabel: "Follow-up",
     dropTake: "Remove this part",
     initialAnswerLabel: "Your answer",
