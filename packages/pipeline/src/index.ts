@@ -94,6 +94,13 @@ export {
 } from "./cleanup-take";
 
 export {
+  deriveMetadata,
+  METADATA_SYSTEM_PROMPT,
+  type DeriveMetadataInput,
+  type DeriveMetadataOutput,
+} from "./derive-metadata";
+
+export {
   parseSpokenDate,
   parseSpokenDateResponse,
   type SpokenDate,
