@@ -25,7 +25,8 @@ media" to "any media tied to an approval".
 
 - A media row may be `DELETE`d **only if** it is not referenced by any `consent_records` row **and**
   its owning Story has no `consent_records` row (the Story was never approved/shared). The recording
-  clip *and* the spoken-approval clip of any approved/shared Story remain immutable **forever** —
+  clip *and* the spoken-approval clip of any approved/shared Story remain immutable and undetachable
+  while the item lives; they are removed only when the item itself is deleted (ADR-0008) —
   they are the audit trail and improvement data.
 - `UPDATE` on media stays forbidden in all cases. We never *mutate* audio; we only *delete*
   never-consented drafts.
