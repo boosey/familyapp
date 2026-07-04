@@ -9,12 +9,13 @@
  */
 import { describe, expect, it } from "vitest";
 import type { OutstandingDraft } from "@chronicle/core";
-import { latestDraftPerAsk } from "@/app/hub/draft-dedup";
+import { latestDraftPerAsk, questionsTabAnswerDrafts } from "@/app/hub/draft-dedup";
 
 const draft = (over: Partial<OutstandingDraft>): OutstandingDraft => ({
   storyId: "s?",
   askId: "a?",
   kind: "voice",
+  state: "pending_approval",
   recordedAt: new Date(0),
   ...over,
 });
@@ -40,5 +41,34 @@ describe("latestDraftPerAsk", () => {
     const map = latestDraftPerAsk(drafts);
     expect(Object.keys(map)).toEqual(["a2"]);
     expect(map.a2!.storyId).toBe("answer");
+  });
+});
+
+/**
+ * Guards the Questions-tab state gate. ADR-0014 widened the base read (`listOutstandingDrafts`) to
+ * include the live `draft` state; without this filter an ask answer STILL being composed would leak
+ * into the Questions tab (which must show only review-ready `pending_approval` answers). The hub
+ * reads the raw base list and splits inline, so this pins the split's contract — the exact leak the
+ * green suite did not otherwise catch.
+ */
+describe("questionsTabAnswerDrafts", () => {
+  it("EXCLUDES an ask-backed draft still in the live 'draft' state", () => {
+    const drafts: OutstandingDraft[] = [
+      draft({ askId: "a1", storyId: "composing", state: "draft" }),
+    ];
+    expect(questionsTabAnswerDrafts(drafts)).toEqual([]);
+  });
+
+  it("INCLUDES an ask-backed draft in 'pending_approval'", () => {
+    const answer = draft({ askId: "a1", storyId: "review-ready", state: "pending_approval" });
+    expect(questionsTabAnswerDrafts([answer])).toEqual([answer]);
+  });
+
+  it("excludes self-initiated (askId === null) drafts regardless of state", () => {
+    const drafts: OutstandingDraft[] = [
+      draft({ askId: null, storyId: "self-draft", state: "draft" }),
+      draft({ askId: null, storyId: "self-pending", state: "pending_approval" }),
+    ];
+    expect(questionsTabAnswerDrafts(drafts)).toEqual([]);
   });
 });

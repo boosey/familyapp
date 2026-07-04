@@ -751,9 +751,9 @@ export interface OutstandingAnswerDraft {
 }
 
 /**
- * A `pending_approval` draft awaiting the owner's review — ask-backed OR self-initiated. The
- * Stories tab resumes self-initiated tellings (`askId === null`) from this general view;
- * `listOutstandingAnswerDrafts` (below) is the ask-only projection the Questions tab consumes.
+ * A live or `pending_approval` draft — ask-backed OR self-initiated. The Stories tab resumes
+ * self-initiated tellings (`askId === null`) from this general view; `listOutstandingAnswerDrafts`
+ * (below) is the ask-only, `pending_approval`-only projection the Questions tab consumes.
  */
 export interface OutstandingDraft {
   /** The durable draft Story (reachable to resume/approve). */
@@ -762,12 +762,19 @@ export interface OutstandingDraft {
   askId: string | null;
   /** Origin type — text-authored or voice-recorded (ADR-0007). */
   kind: "voice" | "text";
+  /**
+   * Lifecycle state — `draft` is a live composing surface (ADR-0014); `pending_approval` is ready
+   * for the owner's review. Consumers that only want review-ready drafts filter on this.
+   */
+  state: "draft" | "pending_approval";
   /** When the draft was created (its Story's createdAt). */
   recordedAt: Date;
 }
 
 /**
- * All of a person's `pending_approval` drafts — ask-backed AND self-initiated — most recent first.
+ * All of a person's in-progress AND `pending_approval` drafts — ask-backed AND self-initiated —
+ * most recent first. Since ADR-0014 a `draft` is a live composing surface that lingers (it no
+ * longer auto-advances to `pending_approval`), so the resume lists must surface both states.
  *
  * This MUST live here (the audited read surface) because it reads the guarded `stories` table.
  * AuthZ: a system-actor read scoped to the person's OWN stories (`ownerPersonId === personId`) —
@@ -783,16 +790,24 @@ export async function listOutstandingDrafts(
       askId: stories.askId,
       storyId: stories.id,
       kind: stories.kind,
+      state: stories.state,
       recordedAt: stories.createdAt,
     })
     .from(stories)
-    .where(and(eq(stories.ownerPersonId, personId), eq(stories.state, "pending_approval")));
+    .where(
+      and(
+        eq(stories.ownerPersonId, personId),
+        inArray(stories.state, ["draft", "pending_approval"]),
+      ),
+    );
   return rows
     .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())
     .map((r) => ({
       storyId: r.storyId,
       askId: r.askId,
       kind: r.kind,
+      // The query restricts state to exactly these two values, so this narrow is accurate.
+      state: r.state as "draft" | "pending_approval",
       recordedAt: r.recordedAt,
     }));
 }
@@ -800,7 +815,9 @@ export async function listOutstandingDrafts(
 /**
  * Ask-backed subset — one draft per Ask (the latest take), keyed by Ask id. Unchanged behavior for
  * the Questions tab: it merges this with `listPendingAsksForNarrator` to render the per-ask
- * two-state affordance. Self-initiated (askId=null) drafts are excluded here.
+ * two-state affordance. Self-initiated (askId=null) drafts are excluded here, and — since the base
+ * read widened to include live `draft` state (ADR-0014) — so are drafts not yet `pending_approval`:
+ * the Questions tab surfaces only review-ready answers.
  */
 export async function listOutstandingAnswerDrafts(
   db: Database,
@@ -810,6 +827,7 @@ export async function listOutstandingAnswerDrafts(
   const all = await listOutstandingDrafts(db, narratorPersonId);
   const byAsk = new Map<string, OutstandingAnswerDraft>();
   for (const r of all) {
+    if (r.state !== "pending_approval") continue;
     if (r.askId === null) continue;
     if (!byAsk.has(r.askId)) {
       byAsk.set(r.askId, { askId: r.askId, storyId: r.storyId, recordedAt: r.recordedAt });

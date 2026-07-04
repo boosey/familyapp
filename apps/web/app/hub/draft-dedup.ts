@@ -14,6 +14,19 @@ export interface AskDraftInfo {
 }
 
 /**
+ * The ask-backed drafts the Questions tab may surface. Two gates, both required:
+ *   - `askId !== null` — self-initiated tellings belong to the Stories tab, never here.
+ *   - `state === "pending_approval"` — only review-ready answers. Since ADR-0014 widened the base
+ *     read (`listOutstandingDrafts`) to include the live `draft` state, an ask answer still being
+ *     composed would otherwise leak into the Questions tab. This mirrors `listOutstandingAnswerDrafts`'
+ *     pending_approval-only contract for the hub, which reads the raw base list and splits inline.
+ * Order-preserving (keeps the caller's most-recent-first ordering for `latestDraftPerAsk`).
+ */
+export function questionsTabAnswerDrafts(drafts: OutstandingDraft[]): OutstandingDraft[] {
+  return drafts.filter((d) => d.askId !== null && d.state === "pending_approval");
+}
+
+/**
  * Keyed by Ask id, the latest draft per ask. `drafts` MUST be most-recent-first (as
  * `listOutstandingDrafts` returns), so keeping the FIRST occurrence per ask = the latest take.
  * Self-initiated drafts (`askId === null`) are excluded.

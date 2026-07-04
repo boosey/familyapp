@@ -21,7 +21,7 @@ import { isClerkConfigured } from "@/lib/clerk-config";
 import { loadHubFeed, loadSeenStoryIds, loadViewerFamilies, loadStoryFamilyTargets } from "@/lib/hub-data";
 import { KindredAccountMenu } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { latestDraftPerAsk } from "./draft-dedup";
+import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { IntakeReminder } from "./IntakeReminder";
 import { AlbumSurface } from "./album/AlbumSurface";
@@ -105,7 +105,11 @@ export default async function HubPage({
 
   // Split the outstanding drafts: ask-backed feed the Questions tab (Date recordedAt, unchanged
   // shape), self-initiated (askId === null) feed the Stories tab's resume list (ISO-serialized).
-  const answerDrafts = allDrafts.filter((d) => d.askId !== null);
+  // `questionsTabAnswerDrafts` gates ask-backed drafts to review-ready (`pending_approval`) only —
+  // ADR-0014's widened base read now includes the live `draft` state, which must NOT leak into the
+  // Questions tab. The Stories resume list intentionally keeps both states so in-progress
+  // self-initiated tellings can be resumed.
+  const answerDrafts = questionsTabAnswerDrafts(allDrafts);
   const selfDrafts = allDrafts
     .filter((d) => d.askId === null)
     .map((d) => ({ storyId: d.storyId, kind: d.kind, recordedAt: d.recordedAt.toISOString() }));

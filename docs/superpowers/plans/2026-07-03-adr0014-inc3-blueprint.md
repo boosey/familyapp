@@ -44,11 +44,23 @@ On stop-record / Continue: post `FormData{ audio|text, prose: proseDraft, storyI
 history wipes on every append.
 
 ## Build sequence (vertical slices, each independently testable)
-1. Contract-fixing core edits (blocking, tiny): widen `listOutstandingDrafts` filter to `['draft','pending_approval']`;
-   strip `createTextDraft`'s redundant `user_authored` row + `transcript` write. Update the text-story assertion.
+> **RESEQUENCED 2026-07-03 (product owner approved):** Slice 1's `createTextDraft` dedup was found to be
+> coupled to Slice 4 — dropping the `transcript` write breaks the still-wired old text-render path
+> (`composeStoryAction → dispatchPipeline`, which renders prose from `stories.transcript`) and
+> `text-story-pipeline.test.ts`, leaving the suite red across commits 1→3. So Slice 1 is now the
+> `listOutstandingDrafts` widen ONLY; the `createTextDraft` `user_authored`+`transcript` removal moved
+> into Slice 4, where the compensating `appendTypedTakeContribution` wiring, `dispatchPipeline` removal,
+> and `text-story-pipeline.test.ts` retirement land atomically (suite stays green). Bar per commit is
+> `pnpm -r test` + `pnpm -r typecheck` green — NOT an integrated-working UI (the new surface is not
+> user-reachable until the routing/phase-collapse slices 9–10).
+1. Contract-fixing core edit (blocking, tiny): widen `listOutstandingDrafts` filter to `['draft','pending_approval']`.
+   (The `createTextDraft` dedup originally bundled here moved to Slice 4 — see resequence note above.)
 2. `polishAnswerProseAction` → persisting Polish (`storyId` + `logPolish`) + regression test. Cheapest win; do first.
 3. Voice per-take append in `recordAnswerAction` (drop `dispatchPipeline`; add `cleanupTake`+`appendVoiceTakeContribution`), server-only.
-4. Typed per-take append in `composeStoryAction` text branch (depends on #1).
+4. Typed per-take append in `composeStoryAction` text branch. NOW ALSO carries the Slice 1 `createTextDraft`
+   dedup (drop `user_authored` row + `transcript` write) + removes `dispatchPipeline` from the text branch +
+   retires/rewrites `text-story-pipeline.test.ts` and fixes `composing-write-path.test.ts`/`text-draft.test.ts`
+   assertions atomically. Each out-of-contract edit ships a regression test.
 5. Client editor lift + append wiring; delete poll/`AnswerReviewPending`; rename `ready`→`appended`.
 6. Follow-up loop restaging: drop `stitchAndRenderStory`; degrade = "stop proposing, return to draft".
 7. `dropTakeAction` = audio-only, no re-stitch (behavior change + test + sign-off).
