@@ -50,6 +50,9 @@ const finishDraftAction = vi.fn(async (fd: FormData): Promise<FinishStep> => {
   }
   return { kind: "finished", storyId: STORY_ID };
 });
+const polishAnswerProseAction = vi.fn(
+  async (_fd: FormData): Promise<{ prose: string }> => ({ prose: POLISHED }),
+);
 
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: vi.fn(),
@@ -60,7 +63,7 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   dropTakeAction: vi.fn(),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
-  polishAnswerProseAction: vi.fn(),
+  polishAnswerProseAction: (fd: FormData) => polishAnswerProseAction(fd),
   finishDraftAction: (fd: FormData) => finishDraftAction(fd),
 }));
 
@@ -149,6 +152,30 @@ describe("StoryComposer Finish-check", () => {
     // Resolve so the test doesn't leave a dangling promise.
     resolveFinish({ kind: "finished", storyId: STORY_ID });
     await waitFor(() => expect(editor().disabled).toBe(false));
+  });
+
+  it("locks the mic + Finish while a ✨Polish round-trip is in flight (cold-review finding 5)", async () => {
+    // Regression: the Polish tap lives inside KindredProseEditor but mutates proseDraft (history.replace)
+    // on resolve. If the surface stayed live, a concurrent append/Finish could race a slow Polish and lose
+    // the newly-appended text. The parent must lock while a Polish round-trips.
+    let resolvePolish: (v: { prose: string }) => void = () => {};
+    polishAnswerProseAction.mockImplementationOnce(
+      () => new Promise<{ prose: string }>((r) => (resolvePolish = r)),
+    );
+    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
+
+    const finishBtn = () => screen.getByRole("button", { name: hub.answer.finish }) as HTMLButtonElement;
+    expect(finishBtn().disabled).toBe(false);
+
+    // Kick off a Polish (the ✨ button inside the editor toolbar).
+    fireEvent.click(screen.getByRole("button", { name: /polish/i }));
+
+    // While the Polish is in flight, Finish and the mic can't start a competing mutation.
+    await waitFor(() => expect(finishBtn().disabled).toBe(true));
+    expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
+
+    resolvePolish({ prose: POLISHED });
+    await waitFor(() => expect(finishBtn().disabled).toBe(false));
   });
 
   it("editing the prose while an offer is up drops the stale offer (no way to accept it)", async () => {

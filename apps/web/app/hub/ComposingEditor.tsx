@@ -138,6 +138,12 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
     polishPromptText: string;
   } | null>(null);
   const [finishingDraft, setFinishingDraft] = useState(false);
+  // A ✨Polish tap is round-tripping. The tap lives inside KindredProseEditor (which tracks its own
+  // in-flight flag for the button label), but the PARENT must also know: a slow Polish resolving after a
+  // concurrent append/Finish would history.replace() stale text over the newer prose (a clobber, and a
+  // DB one too since logPolish has no staleness guard). So `polishHandler` raises this and it joins the
+  // unified mutation lock — during a Polish nothing else may start, and Polish can't start during them.
+  const [polishing, setPolishing] = useState(false);
 
   // ── Optimistic initial-capture (take 0) state ───────────────────────────────
   // Set the instant the FIRST recording stops (or a typed telling is submitted): a local object URL
@@ -157,12 +163,13 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   // The id every append/Finish posts against: the server draft once it lands, else the optimistic id.
   const composingStoryId = draft?.storyId ?? activeStoryId;
 
-  // A NON-recording mutation is round-tripping (typed append, decline, or Finish). No new recording may
-  // START while one is in flight (cold-review findings 3+4): the mic is otherwise ungated by these flags,
-  // so a decline/finish racing a mic-start could reset recordPhase under a live MediaRecorder or let a
-  // fresh take/edit clobber the in-flight write. (Recording states — listening/saving — are handled via
-  // recordPhase; this covers only the non-recording mutations so the mic can still STOP while listening.)
-  const otherMutationInFlight = appending || declining || finishingDraft;
+  // A NON-recording mutation is round-tripping (typed append, decline, Finish, or ✨Polish). No new
+  // recording may START while one is in flight (cold-review findings 3+4+5): the mic is otherwise ungated
+  // by these flags, so a decline/finish/polish racing a mic-start could reset recordPhase under a live
+  // MediaRecorder or let a fresh take/edit clobber the in-flight write. (Recording states —
+  // listening/saving — are handled via recordPhase; this covers only the non-recording mutations so the
+  // mic can still STOP while listening.) This enumeration is now exhaustive over the mutation entry points.
+  const otherMutationInFlight = appending || declining || finishingDraft || polishing;
 
   // ── Lifted prose history ────────────────────────────────────────────────────
   // Owned HERE (not inside KindredProseEditor) so an append can seed the prose as one undoable step via
@@ -428,15 +435,23 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   };
 
   // ── Polish tap (shared by composing + review) ────────────────────────────────
+  // Raises the parent `polishing` flag for the whole round-trip so it joins the mutation lock (finding
+  // 5): otherwise a slow Polish resolving after a concurrent append/Finish would history.replace() stale
+  // text over the newer prose. KindredProseEditor's own polishing flag only drives the button label.
   const polishHandler = useCallback(
     async (text: string) => {
-      const form = new FormData();
-      form.append("prose", text);
-      form.append("promptQuestion", ask?.questionText ?? "");
-      if (composingStoryId) form.append("storyId", composingStoryId);
-      const res = await polishAnswerProseAction(form);
-      if ("error" in res) throw new Error(res.error);
-      return res.prose;
+      setPolishing(true);
+      try {
+        const form = new FormData();
+        form.append("prose", text);
+        form.append("promptQuestion", ask?.questionText ?? "");
+        if (composingStoryId) form.append("storyId", composingStoryId);
+        const res = await polishAnswerProseAction(form);
+        if ("error" in res) throw new Error(res.error);
+        return res.prose;
+      } finally {
+        setPolishing(false);
+      }
     },
     [ask, composingStoryId],
   );
@@ -575,7 +590,10 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       );
     }
 
-    const isRemoving = op === "discard";
+    // Lock the review mutations while a ✨Polish round-trips too (finding 5): otherwise a Share fired
+    // during a Polish would post the pre-polish proseDraft as correctedProse and then redirect, losing
+    // the polish. (op === "discard" covers the Discard round-trip.)
+    const isRemoving = op === "discard" || polishing;
     return (
       <div>
         {questionHeader}
@@ -648,12 +666,12 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   // ── DRAFT COMPOSING SURFACE (editor always mounted + footer + relisten + Finish) ──
   if (composing) {
     const savingTake = recordPhase === "saving" || appending;
-    // While ANY mutation is in flight — a recording (listening OR saving), a typed append, a decline, or
-    // a Finish round-trip — no other mutation may start and the editor must be read-only: the mutating
-    // request captured the prose AT ISSUE TIME, so an edit or a competing action now would be silently
-    // clobbered when it lands (the ADR-0014 hazard; cold-review findings 2+3+4). The mic stays live only
-    // to STOP an in-flight recording — starting a new one is gated by `otherMutationInFlight`.
-    const busy = recordPhase === "listening" || savingTake || declining || finishingDraft;
+    // While ANY mutation is in flight — a recording (listening OR saving), a typed append, a decline, a
+    // Finish, or a ✨Polish round-trip — no other mutation may start and the editor must be read-only: the
+    // mutating request captured the prose AT ISSUE TIME, so an edit or a competing action now would be
+    // silently clobbered when it lands (the ADR-0014 hazard; cold-review findings 2+3+4+5). The mic stays
+    // live only to STOP an in-flight recording — starting a new one is gated by `otherMutationInFlight`.
+    const busy = recordPhase === "listening" || savingTake || otherMutationInFlight;
     return (
       <div>
         {questionHeader}
