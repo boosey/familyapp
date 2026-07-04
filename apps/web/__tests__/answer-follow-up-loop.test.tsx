@@ -231,6 +231,36 @@ describe("StoryComposer per-take relisten (draft composing)", () => {
     expect(drops).toHaveLength(1);
   });
 
+  it("locks the editor + toggle + Finish while a recording is in flight (cold-review finding 2)", async () => {
+    // Regression: while the mic is listening, the take's onstop closure has already captured the prose;
+    // an edit/typed-append/Finish now would be silently clobbered when the take lands. So the editor is
+    // read-only and the competing controls are disabled while capturing — only the mic (to tap stop)
+    // stays live.
+    const single: DraftInfo = {
+      storyId: STORY_ID,
+      recordedAt: new Date().toISOString(),
+      mediaUrl: "/api/media/m0",
+      prose: "Words so far.",
+      title: "",
+      state: "draft",
+      takes: [{ position: 0, mediaUrl: "/api/media/m0", isInitial: true }],
+    };
+    render(<StoryComposer mode="answer" ask={ASK} draft={single} />);
+
+    // Idle: everything is live.
+    expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(false);
+
+    // Start listening (mic open).
+    fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ }));
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+
+    // Now everything except the mic is locked.
+    expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /type it/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("dropping a follow-up take (audio-only) shows the decision-(d) notice, refreshes, keeps the prose", async () => {
     const KEPT_PROSE = "The prose of both takes.";
     render(<StoryComposer mode="answer" ask={ASK} draft={draft} />);

@@ -389,12 +389,21 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       // priorProse discipline: post the CLIENT'S current editor text (non-clobbering).
       form.set("prose", proseDraft);
       if (ask) form.set("promptQuestion", ask.questionText);
-      if (intent === "accept" && finishOffer) {
-        form.set("polished", finishOffer.polished);
-        form.set("polishModelId", finishOffer.polishModelId);
-        form.set("polishPromptText", finishOffer.polishPromptText);
+      // Accept: the server persists the POLISHED text as finalText (not the posted `prose`). Remember it
+      // so we can sync the editor once the finish lands — otherwise `proseDraft` stays the pre-polish
+      // text, the shrunk review reseeds nothing (storyId stable → no remount), and Share would send the
+      // stale pre-polish `proseDraft` as `correctedProse`, silently overwriting the accepted polish.
+      const acceptedPolish = intent === "accept" && finishOffer ? finishOffer.polished : null;
+      if (acceptedPolish) {
+        form.set("polished", acceptedPolish);
+        form.set("polishModelId", finishOffer!.polishModelId);
+        form.set("polishPromptText", finishOffer!.polishPromptText);
       }
       const step = await finishDraftAction(form);
+      // Sync the editor to the persisted polished text BEFORE handleStep clears the offer + settles.
+      if (acceptedPolish && "kind" in step && step.kind === "finished") {
+        history.replace(acceptedPolish);
+      }
       await handleStep(step);
     } catch {
       setActionError(hub.answer.genericError);
@@ -631,18 +640,23 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   // ── DRAFT COMPOSING SURFACE (editor always mounted + footer + relisten + Finish) ──
   if (composing) {
     const savingTake = recordPhase === "saving" || appending;
+    // While a recording is in flight (listening OR saving) or a typed append is round-tripping, NO
+    // other mutation may start and the editor must be read-only: the take's `onstop` closure captured
+    // the prose AT RECORD START, so an edit or a competing append made now would be silently clobbered
+    // when the take lands (the exact ADR-0014 hazard). The mic stays live (to tap stop).
+    const capturing = recordPhase === "listening" || savingTake;
     return (
       <div>
         {questionHeader}
 
         {/* Compact per-take relisten strip (audio only; drop on follow-up takes). Absent in the
             optimistic window before the first refresh (no server takes yet). */}
-        {draft && <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} onDrop={handleDropTake} dropDisabled={op === "drop"} />}
+        {draft && <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} onDrop={handleDropTake} dropDisabled={op === "drop" || capturing} />}
 
         <ProseBlock
           proseDraft={proseDraft}
           setProseDraft={setProseDraft}
-          disabled={savingTake}
+          disabled={capturing}
           history={history}
           onPolish={polishHandler}
         />
@@ -687,7 +701,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               label={hub.answer.thatsAllForNow}
               variant="ghost"
               size="small"
-              disabled={declining || savingTake}
+              disabled={declining || capturing}
               onClick={onDeclineFollowUp}
             />
           </div>
@@ -718,8 +732,8 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               border: "var(--border-width) solid var(--border)",
             }}
           >
-            <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} onClick={() => setInputMode("voice")} />
-            <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} onClick={() => setInputMode("text")} />
+            <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={capturing} onClick={() => setInputMode("voice")} />
+            <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={capturing} onClick={() => setInputMode("text")} />
           </div>
 
           {inputMode === "voice" ? (
@@ -746,7 +760,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                   onChange={(e) => setTextDraft(e.target.value)}
                   rows={5}
                   placeholder={hub.compose.textPlaceholder}
-                  disabled={savingTake}
+                  disabled={capturing}
                 />
               </label>
               <div style={{ marginTop: 12 }}>
@@ -755,7 +769,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                   variant="secondary"
                   size="default"
                   fullWidth
-                  disabled={savingTake || textDraft.trim().length === 0}
+                  disabled={capturing || textDraft.trim().length === 0}
                   onClick={submitText}
                 />
               </div>
@@ -793,7 +807,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                 label={hub.answer.dismissFinishCheck}
                 variant="ghost"
                 size="small"
-                disabled={finishingDraft}
+                disabled={finishingDraft || capturing}
                 onClick={onDismissFinishCheck}
               />
             </div>
@@ -814,7 +828,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               variant="secondary"
               size="small"
               fullWidth
-              disabled={finishingDraft}
+              disabled={finishingDraft || capturing}
               onClick={onUsePolished}
             />
           </div>
@@ -826,7 +840,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
           variant="primary"
           size="large"
           fullWidth
-          disabled={savingTake || finishingDraft || declining}
+          disabled={capturing || finishingDraft || declining}
           onClick={onFinishDraft}
         />
       </div>
@@ -1162,11 +1176,22 @@ function NoticeLine({ message }: { message: string }) {
 }
 
 /* ── Capture-mode toggle option ────────────────────────────────────────────── */
-function ToggleOption({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function ToggleOption({
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
       style={{
         minHeight: 36,
@@ -1178,7 +1203,8 @@ function ToggleOption({ label, active, onClick }: { label: string; active: boole
         fontFamily: "var(--font-ui)",
         fontSize: "var(--text-ui-sm)",
         fontWeight: 600,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled && !active ? 0.5 : 1,
         transition: "background var(--dur-fade), color var(--dur-fade)",
       }}
     >

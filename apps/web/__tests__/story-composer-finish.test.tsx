@@ -115,6 +115,15 @@ describe("StoryComposer Finish-check", () => {
     expect(acceptForm.get("polishPromptText")).toBe("the polish system prompt");
     // The finished step refreshes the surface.
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+
+    // REGRESSION (cold-review finding 1): the server persists the POLISHED text as finalText, so the
+    // client editor MUST sync to it. Otherwise proseDraft stays the pre-polish text and, since the
+    // draft→pending_approval transition does not remount, Share would send the stale pre-polish prose
+    // as `correctedProse` and silently overwrite the just-accepted polish.
+    const editor = screen.getByRole("textbox", {
+      name: /your story, in your words/i,
+    }) as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe(POLISHED));
   });
 
   it("editing the prose while an offer is up drops the stale offer (no way to accept it)", async () => {
