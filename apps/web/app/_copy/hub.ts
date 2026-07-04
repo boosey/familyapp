@@ -215,6 +215,10 @@ export const hub = {
     followUpTakeLabel: "Follow-up",
     dropTake: "Remove this part",
     initialAnswerLabel: "Your answer",
+    // Shown after a follow-up take's audio is removed (ADR-0014 Inc 3 slice 7, decision d). The take's
+    // words stay in the working prose on purpose — the recording is gone but the text is kept, so the
+    // narrator edits it out themselves rather than losing it silently.
+    takeDropped: "Recording removed — edit the text above to remove those words too.",
   },
   // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
   // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).

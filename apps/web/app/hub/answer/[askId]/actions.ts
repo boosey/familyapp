@@ -34,7 +34,6 @@ import {
   startTimer,
   transcribeTakeToRecording,
   cleanupTake,
-  stitchAndRenderStory,
   polishProse,
 } from "@chronicle/pipeline";
 import {
@@ -52,18 +51,27 @@ import { mapStoryStateToStatus, type AnswerStatusResult } from "@/lib/answer-sta
 export type ActionResult = { error: string } | undefined;
 
 /**
- * The single client-facing result the answer surface drives on (Task 7's `AnswerFlow.handleStep`
- * interprets it). A record action resolves to one of:
+ * The single client-facing result the answer surface drives on (`handleStep` interprets it). A record
+ * action resolves to one of:
  *   - `follow_up`: the interviewer proposed a deepening question — show the follow-up screen.
- *   - `ready`: the thread is complete and stitched → poll processing status, then review + Share.
+ *   - `appended`: a take (voice/typed) was appended onto the draft's working prose, or a decline
+ *     recorded — the draft stays `draft`; the client seeds the returned prose and stays composing.
+ *   - `take_dropped`: a follow-up take's audio was removed (ADR-0014 Inc 3 slice 7). The draft state
+ *     is UNCHANGED and the take's text stays in the working prose — the narrator edits it out
+ *     manually (RESOLVED DECISION d). The client just refreshes the takes list + shows a message.
+ *   - `ready`: legacy stitch-to-review signal — the client polls processing status, then review.
  *   - `discarded`: the whole draft was dropped (e.g. dropping take 0) → back to the hub.
  *   - `{ error }`: a validation/auth failure surfaced to the narrator.
- * When the follow-up policy flag is OFF, a record always resolves to `ready` (today's one-shot path).
+ * NOTE (post-slice-7): NO answer action returns `ready` anymore — dropTakeAction was the last one, and
+ * it now returns `take_dropped`. The `ready` variant + getAnswerStatusAction + the poll infra are kept
+ * because the link-session capture surface (`/s/[token]`) still uses them (Slice 11 re-verifies before
+ * any removal).
  */
 export type ThreadStep =
   | { kind: "follow_up"; storyId: string; prompt: string }
   | { kind: "ready"; storyId: string }
   | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
+  | { kind: "take_dropped"; storyId: string }
   | { kind: "discarded" }
   | { error: string };
 
@@ -835,19 +843,19 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
 }
 
 /**
- * Review-phase drop of one take. Dropping take 0 discards the WHOLE thread (its follow-ups are
- * orphaned without the initial answer) → `discarded`. Dropping a follow-up take (position > 0)
- * removes just that take and re-stitches the survivors so the review prose reflects the drop.
+ * Review/compose-phase drop of one take (ADR-0014 Inc 3 slice 7 — audio-only). Dropping take 0
+ * discards the WHOLE thread (its follow-ups are orphaned without the initial answer) → `discarded`.
+ * Dropping a follow-up take (position > 0) removes ONLY that take's audio + its per-take
+ * prose_revisions rows (via `dropStoryRecording`) — it does NOT re-stitch and does NOT change
+ * `stories.prose`: the narrator's words stay in the working prose and they edit them out manually
+ * (RESOLVED DECISION d). Returns `take_dropped` so the client refreshes the takes list + shows the
+ * decision-(d) message, keeping the composing surface (and the unsaved prose editor) intact.
  *
  * State-machine safety: dropping is only valid PRE-APPROVAL. `dropStoryRecording` guards
- * owner + state (draft/pending_approval), and `stitchAndRenderStory`'s re-transition to
- * pending_approval is a safe no-op from those states — but there is NO approved→pending_approval
- * edge, so a drop after approval would throw. We rely on `dropStoryRecording`'s state guard and
- * never attempt drops on approved stories.
+ * owner + state (draft/pending_approval); we never attempt drops on approved stories.
  */
 export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
-  const rt = await getRuntime();
-  const { db, storage, auth } = rt;
+  const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -877,9 +885,9 @@ export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
       narratorPersonId: ctx.personId,
     });
     await storage.delete(storageKey).catch(() => {});
-    // Re-stitch + re-polish the surviving takes so the review prose reflects the drop.
-    await stitchAndRenderStory(rt, storyId);
-    return { kind: "ready", storyId };
+    // Audio-only (slice 7): no re-stitch, no state transition, no prose edit. The take's text stays
+    // in the working prose; the client shows the decision-(d) message and refreshes the takes list.
+    return { kind: "take_dropped", storyId };
   } catch {
     return { error: hub.actions.removeFailed };
   }

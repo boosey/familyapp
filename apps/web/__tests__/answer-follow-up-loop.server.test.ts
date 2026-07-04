@@ -52,7 +52,6 @@ import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/in
 import {
   ScriptedLanguageModel,
   ScriptedTranscriber,
-  stitchAndRenderStory,
   type LanguageModel,
   type Transcriber,
 } from "@chronicle/pipeline";
@@ -294,19 +293,29 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(story!.state).toBe("draft");
   });
 
-  it("drop → re-stitch: dropping a follow-up take pre-approval re-stitches to the survivors", async () => {
-    // Covers the core operations dropTakeAction composes (dropStoryRecording + stitchAndRenderStory).
+  it("drop = audio-only: dropping a follow-up take removes it + its prose_revisions, NO re-stitch, prose + state unchanged", async () => {
+    // ADR-0014 Inc 3 slice 7: dropTakeAction no longer re-stitches. dropStoryRecording removes the
+    // take's audio AND its per-take prose_revisions (FK regression), but the working prose and the
+    // story state are UNCHANGED — the narrator edits the text out manually (decision d).
     const db = await createTestDatabase();
     const { ownerPersonId, storyId } = await seedDraft(db);
 
     const [take0] = await listStoryRecordings(db, storyId);
-    await updateStoryRecordingTranscript(db, {
+    // Take 0's working prose (via a real append — writes take-0 prose_revisions that must SURVIVE).
+    await appendVoiceTakeContribution(db, {
+      storyId,
+      ownerPersonId,
       storyRecordingId: take0!.id,
-      transcript: "Take zero survivor text.",
+      rawTranscript: "take zero raw",
+      cleanedSegment: "Take zero cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
     });
 
-    // Append a follow-up take (position 1) + its transcript.
-    await persistTakeRecording(
+    // Append a REAL follow-up take (position 1) + its prose_revisions (as recordFollowUpTake does).
+    const take1 = await persistTakeRecording(
       db,
       {
         ownerPersonId,
@@ -317,23 +326,28 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       },
       storyId,
     );
-    const takes = await listStoryRecordings(db, storyId);
-    expect(takes.map((t) => t.position)).toEqual([0, 1]);
-    await updateStoryRecordingTranscript(db, {
-      storyRecordingId: takes[1]!.id,
-      transcript: "Take one dropped text.",
+    await appendVoiceTakeContribution(db, {
+      storyId,
+      ownerPersonId,
+      storyRecordingId: take1.storyRecording.id,
+      rawTranscript: "take one raw",
+      cleanedSegment: "Take one cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: "Take zero cleaned.",
     });
+    expect((await listStoryRecordings(db, storyId)).map((t) => t.position)).toEqual([0, 1]);
+    const proseBefore = (await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId))!.prose;
 
-    // Drop the follow-up take (pre-approval, so the delete guard permits it).
+    // Drop the follow-up take (pre-approval) — no throw despite its prose_revisions FK.
     await dropStoryRecording(db, { storyId, position: 1, narratorPersonId: ownerPersonId });
 
-    // Re-stitch: the surviving take-0 transcript is all that remains.
-    const rt = { db, languageModel: new ScriptedLanguageModel() };
-    await stitchAndRenderStory(rt, storyId);
-
+    // Only take 0 remains; NO re-stitch, so the state stays draft and the prose is UNTOUCHED.
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.transcript).toBe("Take zero survivor text.");
+    expect((await listStoryRecordings(db, storyId)).map((t) => t.position)).toEqual([0]);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(proseBefore);
   });
 
   it("degrades when the evaluator throws: stops proposing (null), draft stays open, no decision row (never blocks the draft)", async () => {
@@ -450,37 +464,88 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId)).toBeNull();
   });
 
-  it("dropTakeAction (position > 0) removes the follow-up take, deletes its blob, and re-stitches the survivors", async () => {
+  it("dropTakeAction (position > 0) removes the follow-up take audio ONLY: take_dropped, no re-stitch, prose + state unchanged", async () => {
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };
 
     const [take0] = await listStoryRecordings(runtimeDb, storyId);
-    await updateStoryRecordingTranscript(runtimeDb, {
+    // Take 0 working prose (real append → take-0 prose_revisions that must survive the drop).
+    await appendVoiceTakeContribution(runtimeDb, {
+      storyId,
+      ownerPersonId,
       storyRecordingId: take0!.id,
-      transcript: "Surviving take.",
+      rawTranscript: "take zero raw",
+      cleanedSegment: "Take zero cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
     });
     const key1 = `story-audio/${ownerPersonId}/t1.webm`;
-    await persistTakeRecording(
+    const take1 = await persistTakeRecording(
       runtimeDb,
       { ownerPersonId, storageKey: key1, contentType: "audio/webm", durationSeconds: 30, checksum: "sha256:t1" },
       storyId,
     );
-    const takes = await listStoryRecordings(runtimeDb, storyId);
-    await updateStoryRecordingTranscript(runtimeDb, {
-      storyRecordingId: takes[1]!.id,
-      transcript: "Dropped take.",
+    // Real follow-up append → take-1 prose_revisions (the FK rows the drop must clear).
+    await appendVoiceTakeContribution(runtimeDb, {
+      storyId,
+      ownerPersonId,
+      storyRecordingId: take1.storyRecording.id,
+      rawTranscript: "take one raw",
+      cleanedSegment: "Take one cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: "Take zero cleaned.",
     });
     await runtimeStorage.put({ key: key1, bytes: new Uint8Array([9]), contentType: "audio/webm" });
+    const proseBefore = (await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId))!.prose;
 
     const result = await dropTakeAction(form({ storyId, position: "1" }));
 
-    expect(result).toEqual({ kind: "ready", storyId });
+    // Audio-only: new take_dropped variant, blob deleted, state UNCHANGED (still draft), prose kept.
+    expect(result).toEqual({ kind: "take_dropped", storyId });
     expect(await runtimeStorage.exists(key1)).toBe(false);
     const remaining = await listStoryRecordings(runtimeDb, storyId);
     expect(remaining.map((t) => t.position)).toEqual([0]);
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.transcript).toBe("Surviving take.");
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(proseBefore);
+  });
+
+  it("recordFollowUpTakeAction → dropTakeAction(position 1) end-to-end: real follow-up take drops with no FK throw, audio gone, prose kept", async () => {
+    // End-to-end regression for the slice-7 FK bug: a REAL follow-up take (its prose_revisions
+    // reference the recording) must drop cleanly. Drive recordFollowUpTakeAction to append the take.
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await updateStoryRecordingTranscript(runtimeDb, {
+      storyRecordingId: take0!.id,
+      transcript: "Take zero words.",
+    });
+    runtimeLlm = scriptedLlm("Cleaned follow-up segment.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[]]); // no further follow-up proposed
+    runtimeTranscriber = new ScriptedTranscriber({ text: "raw follow-up" });
+
+    const appendResult = await recordFollowUpTakeAction(
+      form({ audio: new Blob([new Uint8Array([7, 7, 7])], { type: "audio/webm" }), storyId, prose: "EDITED BASE." }),
+    );
+    if (!("kind" in appendResult) || appendResult.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(appendResult)}`);
+    }
+    expect((await listStoryRecordings(runtimeDb, storyId)).map((t) => t.position)).toEqual([0, 1]);
+    const proseBefore = appendResult.prose;
+
+    // Drop the just-recorded follow-up take — must NOT throw an FK violation.
+    const dropResult = await dropTakeAction(form({ storyId, position: "1" }));
+
+    expect(dropResult).toEqual({ kind: "take_dropped", storyId });
+    expect((await listStoryRecordings(runtimeDb, storyId)).map((t) => t.position)).toEqual([0]);
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.state).toBe("draft");
+    // The dropped take's TEXT is intentionally kept in the working prose (decision d).
+    expect(story!.prose).toBe(proseBefore);
   });
 
   it("recordFollowUpTakeAction rejects a story the caller does not own (IDOR → storyNotFound)", async () => {

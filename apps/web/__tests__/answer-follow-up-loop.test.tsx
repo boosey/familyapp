@@ -30,6 +30,7 @@ const STORY_ID = "s1";
 type Step =
   | { kind: "follow_up"; storyId: string; prompt: string }
   | { kind: "ready"; storyId: string }
+  | { kind: "take_dropped"; storyId: string }
   | { kind: "discarded" }
   | { error: string };
 
@@ -47,7 +48,7 @@ const finishThreadAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
   storyId: STORY_ID,
 }));
 const dropTakeAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
-  kind: "ready",
+  kind: "take_dropped",
   storyId: STORY_ID,
 }));
 const getAnswerStatusAction = vi.fn(
@@ -172,12 +173,13 @@ describe("StoryComposer follow-up loop", () => {
     expect(drops).toHaveLength(1);
   });
 
-  it("re-enables the review controls after dropping a follow-up take (op reset)", async () => {
+  it("dropping a follow-up take (audio-only) shows the decision-(d) notice, refreshes, keeps the prose, and re-enables controls", async () => {
+    const KEPT_PROSE = "The stitched prose of both takes.";
     const draft: DraftInfo = {
       storyId: STORY_ID,
       recordedAt: new Date().toISOString(),
       mediaUrl: "/api/media/m0",
-      prose: "The stitched prose of both takes.",
+      prose: KEPT_PROSE,
       title: "The chapel window",
       takes: [
         { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
@@ -197,8 +199,22 @@ describe("StoryComposer follow-up loop", () => {
     expect(form.get("position")).toBe("1");
     expect(form.get("storyId")).toBe(STORY_ID);
 
-    // After the mocked `{kind:"ready"}` resolves, the controls must be RE-ENABLED (op reset). Without
-    // the fix, `op` stays "drop" forever (storyId is unchanged so no keyed remount) → Share disabled.
+    // Slice 7: `take_dropped` is handled directly — the decision-(d) notice appears and refresh fires
+    // (the takes list re-reads). It is NOT routed through the poll/ready path.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Recording removed — edit the text above/),
+      ).toBeTruthy(),
+    );
+    expect(refresh).toHaveBeenCalledOnce();
+
+    // The prose editor text is UNTOUCHED (the words are kept on purpose).
+    const editor = screen.getByRole("textbox", {
+      name: /your story, in your words/i,
+    }) as HTMLTextAreaElement;
+    expect(editor.value).toBe(KEPT_PROSE);
+
+    // Controls are RE-ENABLED (op reset). Without the reset, `op` stays "drop" → Share disabled.
     const share = screen.getByRole("button", { name: /Share with family/ }) as HTMLButtonElement;
     await waitFor(() => expect(share.disabled).toBe(false));
   });

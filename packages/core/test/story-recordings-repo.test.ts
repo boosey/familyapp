@@ -2,6 +2,7 @@ import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   appendStoryRecording,
+  appendVoiceTakeContribution,
   createTextDraft,
   discardDraftStory,
   dropStoryRecording,
@@ -11,7 +12,7 @@ import {
 } from "../src/story-repository";
 import { InvariantViolation } from "../src/errors";
 import { makePerson } from "./helpers";
-import { media, stories } from "@chronicle/db/content";
+import { media, proseRevisions, stories } from "@chronicle/db/content";
 import { eq } from "drizzle-orm";
 
 let db: Database;
@@ -126,6 +127,90 @@ describe("story_recordings repo (ordered take set, ADR-0012)", () => {
     // Only take 0 remains.
     const takes = await listStoryRecordings(db, story.id);
     expect(takes.map((t) => t.position)).toEqual([0]);
+  });
+
+  it("dropStoryRecording removes a follow-up take AND its prose_revisions rows (FK regression); stories.prose is untouched", async () => {
+    // Regression (ADR-0014 Inc 3 slice 7): under the append model a follow-up take's
+    // appendVoiceTakeContribution writes prose_revisions rows keyed to that take's recording. The FK
+    // prose_revisions.story_recording_id → story_recordings.id is ON DELETE NO ACTION and
+    // prose_revisions is append-only (no UPDATE → cannot null the link), so before the fix
+    // dropStoryRecording(position>0) threw an FK violation on a REAL follow-up take. The fix deletes
+    // the referencing prose_revisions rows inside the same transaction, first.
+    const { narrator, story } = await makeDraft();
+    const [take0] = await listStoryRecordings(db, story.id);
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id,
+      ownerPersonId: narrator.id,
+      storyRecordingId: take0!.id,
+      rawTranscript: "take zero raw",
+      cleanedSegment: "Take zero cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
+    });
+    const { storyRecording: take1 } = await persistTakeRecording(
+      db,
+      {
+        ownerPersonId: narrator.id,
+        storageKey: "r2://chronicle/eleanor/take-1.webm",
+        contentType: "audio/webm",
+        checksum: "sha256:take1",
+      },
+      story.id,
+    );
+    await appendVoiceTakeContribution(db, {
+      storyId: story.id,
+      ownerPersonId: narrator.id,
+      storyRecordingId: take1.id,
+      rawTranscript: "take one raw",
+      cleanedSegment: "Take one cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: "Take zero cleaned.",
+    });
+
+    const proseBefore = (
+      await db.select({ prose: stories.prose }).from(stories).where(eq(stories.id, story.id))
+    )[0]!.prose;
+
+    // Before the fix this REJECTS with an FK violation; after, it drops cleanly.
+    const { storageKey } = await dropStoryRecording(db, {
+      storyId: story.id,
+      position: 1,
+      narratorPersonId: narrator.id,
+    });
+    expect(storageKey).toBe("r2://chronicle/eleanor/take-1.webm");
+
+    // Take row + its media row gone; only take 0 remains.
+    const takes = await listStoryRecordings(db, story.id);
+    expect(takes.map((t) => t.position)).toEqual([0]);
+    expect(
+      await db.select({ id: media.id }).from(media).where(eq(media.id, take1.mediaId)),
+    ).toHaveLength(0);
+    // The dropped take's prose_revisions rows are gone (no orphans).
+    expect(
+      await db
+        .select({ id: proseRevisions.id })
+        .from(proseRevisions)
+        .where(eq(proseRevisions.storyRecordingId, take1.id)),
+    ).toHaveLength(0);
+    // Take 0's prose_revisions survive (only the dropped take's were removed).
+    expect(
+      (
+        await db
+          .select({ id: proseRevisions.id })
+          .from(proseRevisions)
+          .where(eq(proseRevisions.storyRecordingId, take0!.id))
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // stories.prose is UNCHANGED — the narrator's text stays; they edit it out manually (decision d).
+    const proseAfter = (
+      await db.select({ prose: stories.prose }).from(stories).where(eq(stories.id, story.id))
+    )[0]!.prose;
+    expect(proseAfter).toBe(proseBefore);
   });
 
   it("discardDraftStory removes the WHOLE take set and returns every blob key (regression: story_recordings FK)", async () => {

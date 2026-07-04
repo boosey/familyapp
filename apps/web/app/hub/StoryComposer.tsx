@@ -108,6 +108,10 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   const [tier, setTier] = useState<Tier>("family");
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Non-error transient notice (ADR-0014 Inc 3 slice 7): shown after a follow-up take's audio is
+  // removed — the take's words stay in the working prose on purpose (decision d), so this tells the
+  // narrator to edit them out. Distinct from `actionError` (a failure); this is an informational nudge.
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
   const [titleDraft, setTitleDraft] = useState(draft?.title ?? "");
 
@@ -407,12 +411,16 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
     }
   };
 
-  // Drop one take from a multi-take thread. Dropping the initial take (position 0) discards the
-  // whole thread server-side (→ `discarded` → hub); dropping a follow-up take re-stitches the
-  // survivors (→ `ready` → re-poll + refresh into the updated review). A hard failure surfaces the
-  // error inline (never a silent dead end); non-error steps are delegated to handleStep.
+  // Drop one take from a multi-take thread. Dropping the initial take (position 0) discards the whole
+  // thread server-side (→ `discarded` → hub, via handleStep). Dropping a follow-up take (position > 0)
+  // is AUDIO-ONLY (ADR-0014 Inc 3 slice 7): the server removes the recording + its per-take provenance
+  // and returns `take_dropped` WITHOUT touching the working prose — the take's words stay so the
+  // narrator can edit them out. We handle `take_dropped` HERE (not via handleStep's poll/ready branch):
+  // refresh the takes list, show the decision-(d) notice, and keep `proseDraft` untouched. A hard
+  // failure surfaces the error inline (never a silent dead end).
   const handleDropTake = async (position: number) => {
     setActionError(null);
+    setDropNotice(null);
     setOp("drop");
     try {
       const form = new FormData();
@@ -424,11 +432,18 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
         setOp(null);
         return;
       }
+      if (result.kind === "take_dropped") {
+        // Audio-only drop: the recording is gone but the text is intentionally KEPT in proseDraft.
+        // Refresh so the takes list reflects the removed audio; show the "edit the text too" notice.
+        setDropNotice(hub.answer.takeDropped);
+        router.refresh();
+        setOp(null);
+        return;
+      }
+      // position 0 → `discarded`: handleStep navigates back to the hub.
       await handleStep(result);
-      // Reset op like the sibling handlers. A drop does NOT change storyId, so the review is NOT
-      // remounted by the `key={draft.storyId}` on the ready path — without this, isRemoving stays
-      // true and Share/re-record/discard/drop are all disabled forever. Harmless on the discarded
-      // (position 0) path since handleStep has already navigated away.
+      // Reset op like the sibling handlers (harmless on the discarded path — handleStep already
+      // navigated away).
       setOp(null);
     } catch {
       setActionError(hub.actions.removeFailed);
@@ -746,6 +761,22 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             }}
           >
             {actionError}
+          </p>
+        )}
+
+        {/* Transient notice: audio-only take drop (decision d) — the text was kept on purpose. */}
+        {dropNotice && (
+          <p
+            aria-live="polite"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              color: "var(--text-meta)",
+              margin: "0 0 16px",
+              textAlign: "center",
+            }}
+          >
+            {dropNotice}
           </p>
         )}
 

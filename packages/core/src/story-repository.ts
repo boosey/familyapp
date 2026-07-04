@@ -1676,7 +1676,17 @@ export async function dropStoryRecording(
       .from(media)
       .where(eq(media.id, take.mediaId))
       .limit(1);
-    // story_recordings first (FK), then the never-consented media row.
+    // Delete this take's prose_revisions FIRST (ADR-0014 Inc 3 slice 7). A follow-up take's
+    // appendVoiceTakeContribution writes prose_revisions keyed to its recording; the FK
+    // prose_revisions.story_recording_id → story_recordings.id is ON DELETE NO ACTION and
+    // prose_revisions is append-only (the BEFORE-UPDATE trigger forbids UPDATE, so the link can't be
+    // nulled). We DELETE (not SET NULL) the rows — permitted here because drop is only allowed for
+    // draft/pending_approval (no consent_records yet), consistent with ADR-0002's "a discarded draft
+    // takes its prose_revisions with it" (a take-drop is a partial discard). We deliberately do NOT
+    // touch stories.prose: the narrator's text stays in the working prose and they edit it out
+    // manually (RESOLVED DECISION d). FK delete order: prose_revisions (children) → story_recordings
+    // → media (the never-consented take blob).
+    await tx.delete(proseRevisions).where(eq(proseRevisions.storyRecordingId, take.id));
     await tx.delete(storyRecordings).where(eq(storyRecordings.id, take.id));
     await tx.delete(media).where(eq(media.id, take.mediaId));
     return { storageKey: m!.storageKey };
