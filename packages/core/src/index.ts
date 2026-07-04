@@ -48,6 +48,7 @@ export {
   listProseRevisions,
   saveProseCorrection,
   logPolish,
+  finishDraft,
   setStoryFamilyTargets,
   computeDefaultFamilyTargets,
   listStoryRecordings,

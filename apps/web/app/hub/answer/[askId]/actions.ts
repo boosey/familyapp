@@ -15,6 +15,7 @@ import {
   discardDraftStory,
   saveProseCorrection,
   logPolish,
+  finishDraft,
   updateDerivedFields,
   listStoryRecordings,
   appendVoiceTakeContribution,
@@ -35,6 +36,7 @@ import {
   transcribeTakeToRecording,
   cleanupTake,
   polishProse,
+  deriveMetadata,
 } from "@chronicle/pipeline";
 import {
   createCoreAnchorSource,
@@ -61,6 +63,12 @@ export type ActionResult = { error: string } | undefined;
  *     manually (RESOLVED DECISION d). The client just refreshes the takes list + shows a message.
  *   - `ready`: legacy stitch-to-review signal — the client polls processing status, then review.
  *   - `discarded`: the whole draft was dropped (e.g. dropping take 0) → back to the hub.
+ *   - `finish_offer`: the Finish-check ran a speculative polish that MATERIALLY differs (ADR-0014 Inc 3
+ *     slice 8). Nothing is persisted yet — the client shows an inline dismissible card carrying the
+ *     polished text plus its `polishModelId`/`polishPromptText` so an accept can `logPolish` it WITHOUT
+ *     re-running the model (0 extra LLM calls).
+ *   - `finished`: the draft was sealed `draft → pending_approval` (Finish). Either the polish was
+ *     declined/immaterial (finished as-is) or accepted (finished on the polished text).
  *   - `{ error }`: a validation/auth failure surfaced to the narrator.
  * NOTE (post-slice-7): NO answer action returns `ready` anymore — dropTakeAction was the last one, and
  * it now returns `take_dropped`. The `ready` variant + getAnswerStatusAction + the poll infra are kept
@@ -72,6 +80,14 @@ export type ThreadStep =
   | { kind: "ready"; storyId: string }
   | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
   | { kind: "take_dropped"; storyId: string }
+  | {
+      kind: "finish_offer";
+      storyId: string;
+      polished: string;
+      polishModelId: string;
+      polishPromptText: string;
+    }
+  | { kind: "finished"; storyId: string }
   | { kind: "discarded" }
   | { error: string };
 
@@ -563,8 +579,10 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
 
     // Best-effort post-approval biographical augmentation: re-read the story after approval —
     // the pre-approval getStoryForViewer above was used only for the ownership check; a fresh
-    // read fetches the now-approved (and possibly corrected) story, including its transcript.
-    // Mine the transcript for biographical-profile fields the narrator hasn't filled in directly.
+    // read fetches the now-approved (and possibly corrected) story, including its prose.
+    // Mine the PROSE (not the transcript) for biographical-profile fields the narrator hasn't filled
+    // in directly (ADR-0014 Inc 3 slice 8, decision c): new-model append-built stories leave
+    // `transcript` NULL — only `prose` is populated — so reading `transcript` here silently no-oped.
     // augmentProfileFromStory only writes currently-null fields, so it never overwrites a
     // direct intake answer. Wrapped in its own try/catch so a failed inference can never FAIL the
     // Share. It IS awaited inline — one extra LLM round-trip before the redirect; a durable job
@@ -572,13 +590,13 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
     // fire-and-forget after redirect).
     try {
       const approved = await getStoryForViewer(db, ctx, storyId);
-      if (approved?.transcript) {
-        plog("answer", "shareAnswer: augmenting profile from transcript", {
+      if (approved?.prose) {
+        plog("answer", "shareAnswer: augmenting profile from prose", {
           story: storyId,
-          transcriptChars: approved.transcript.length,
+          proseChars: approved.prose.length,
         });
         await augmentProfileFromStory(
-          approved.transcript,
+          approved.prose,
           ctx.personId,
           languageModel,
           createCoreAnchorSource(db),
@@ -839,6 +857,135 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
     return { error: hub.actions.saveFailed };
+  }
+}
+
+/**
+ * Whitespace-normalize for the Finish-check "materially differs" test: collapse every run of
+ * whitespace to a single space and trim. Two strings that differ only in spacing/newlines normalize
+ * equal — so a polish that only reflows whitespace is NOT offered (it would be a no-op change).
+ */
+function normalizeWhitespace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Finish + Finish-check (ADR-0014 Inc 3 slice 8). Seals a `draft` to `pending_approval`, optionally
+ * offering a speculative polish first. `intent`:
+ *   - `probe`: run `polishProse` on the CLIENT'S current editor `prose`. If a REAL polish
+ *     (`modelId !== ""`) MATERIALLY differs (whitespace-normalized `!==`), return a `finish_offer`
+ *     carrying the polished text + its modelId/promptText — persisting NOTHING. Otherwise finish the
+ *     posted prose as-is (`finished`).
+ *   - `accept`: the narrator took the offered polish. Re-uses the already-computed polished text +
+ *     modelId/promptText posted back by the client — `logPolish` (one `ai_polished` row + prose) then
+ *     `deriveMetadata` then `finishDraft` — with NO second `polishProse` call (0 extra LLM calls).
+ *   - `decline`: finish the posted prose as-is (`deriveMetadata` + `finishDraft`, no polish).
+ *
+ * priorProse discipline (load-bearing): Finish operates on the POSTED `prose` (the client's editor
+ * text), NEVER a fresh `stories.prose` read — the same non-clobbering rule the append actions follow.
+ * Auth + owner + `draft`-state are pre-checked via the front door; `finishDraft`/`logPolish` re-enforce
+ * owner+draft internally.
+ */
+export async function finishDraftAction(formData: FormData): Promise<ThreadStep> {
+  beginLogContext();
+  const { db, auth, languageModel } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const intent = formData.get("intent");
+  const storyId = formData.get("storyId");
+  const proseField = formData.get("prose");
+  const promptField = formData.get("promptQuestion");
+  if (
+    typeof storyId !== "string" ||
+    !storyId ||
+    typeof proseField !== "string" ||
+    (intent !== "probe" && intent !== "accept" && intent !== "decline")
+  ) {
+    return { error: hub.actions.invalidInput };
+  }
+  const promptQuestion =
+    typeof promptField === "string" && promptField.length > 0 ? promptField : null;
+
+  // Ownership + draft-state via the front door. Finish is only valid on an un-approved draft the
+  // caller owns; a foreign/non-draft story is refused before any work (finishDraft/logPolish re-check).
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story || story.ownerPersonId !== ctx.personId || story.state !== "draft") {
+    return { error: hub.actions.storyNotFound };
+  }
+
+  try {
+    if (intent === "accept") {
+      // The client posts back the ALREADY-computed polished text + its provenance from the offer, so
+      // acceptance records the polish WITHOUT re-running polishProse (0 extra LLM calls).
+      const polishedField = formData.get("polished");
+      if (typeof polishedField !== "string" || polishedField.length === 0) {
+        return { error: hub.actions.invalidInput };
+      }
+      const polishModelIdField = formData.get("polishModelId");
+      const polishPromptTextField = formData.get("polishPromptText");
+      const polishModelId = typeof polishModelIdField === "string" ? polishModelIdField : "";
+      const polishPromptText =
+        typeof polishPromptTextField === "string" ? polishPromptTextField : "";
+
+      await logPolish(db, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        polishedProse: polishedField,
+        modelId: polishModelId,
+        promptText: polishPromptText,
+      });
+      const meta = await deriveMetadata(languageModel, { fullText: polishedField, promptQuestion });
+      await finishDraft(db, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        finalText: polishedField,
+        metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
+      });
+      plog("answer", "finishDraft: accepted polish → finished (pending_approval)", {
+        story: storyId,
+      });
+      return { kind: "finished", storyId };
+    }
+
+    if (intent === "probe") {
+      // Speculative Finish-check: does a polish MATERIALLY change the narrator's words? If so, offer it
+      // (persist nothing); if not (or no model ran), fall through and finish as-is.
+      const polish = await polishProse(languageModel, { prose: proseField, promptQuestion });
+      if (
+        polish.modelId !== "" &&
+        normalizeWhitespace(polish.prose) !== normalizeWhitespace(proseField)
+      ) {
+        plog("answer", "finishDraft: probe → polish differs, offering", { story: storyId });
+        return {
+          kind: "finish_offer",
+          storyId,
+          polished: polish.prose,
+          polishModelId: polish.modelId,
+          polishPromptText: polish.systemPrompt,
+        };
+      }
+      plog("answer", "finishDraft: probe → polish immaterial, finishing as-is", { story: storyId });
+      // fall through to the finish-as-is path below
+    }
+
+    // decline (or probe with an immaterial/absent polish): seal the POSTED prose unchanged.
+    const meta = await deriveMetadata(languageModel, { fullText: proseField, promptQuestion });
+    await finishDraft(db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      finalText: proseField,
+      metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
+    });
+    plog("answer", "finishDraft: finished as-is (pending_approval)", { story: storyId });
+    return { kind: "finished", storyId };
+  } catch (err) {
+    plogError("answer", "finishDraft: failed", {
+      story: storyId,
+      intent,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.answer.genericError };
   }
 }
 

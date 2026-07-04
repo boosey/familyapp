@@ -219,6 +219,13 @@ export const hub = {
     // words stay in the working prose on purpose — the recording is gone but the text is kept, so the
     // narrator edits it out themselves rather than losing it silently.
     takeDropped: "Recording removed — edit the text above to remove those words too.",
+    // Finish + Finish-check (ADR-0014 Inc 3 slice 8). Finish seals the draft; the Finish-check offers a
+    // gently polished version as an inline, dismissible card — taking it or dismissing both finish.
+    finish: "Finish",
+    finishCheckTitle: "A gentler version of your words",
+    finishCheckBody: "We tidied it a little. Use this, or keep yours exactly as it is.",
+    usePolishedVersion: "Use polished version",
+    dismissFinishCheck: "Keep mine as is",
   },
   // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
   // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).

@@ -27,6 +27,7 @@ import {
   composeStoryAction,
   recordFollowUpTakeAction,
   finishThreadAction,
+  finishDraftAction,
   dropTakeAction,
   shareAnswerAction,
   discardAnswerAction,
@@ -114,6 +115,16 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
   const [titleDraft, setTitleDraft] = useState(draft?.title ?? "");
+  // Finish-check offer (ADR-0014 Inc 3 slice 8): the speculative polish returned by a `probe`, held
+  // while the inline card is shown. `null` = no offer up. Carries the polished text + its
+  // modelId/promptText so an accept can re-record the polish with 0 extra LLM calls.
+  const [finishOffer, setFinishOffer] = useState<{
+    storyId: string;
+    polished: string;
+    polishModelId: string;
+    polishPromptText: string;
+  } | null>(null);
+  const [finishingDraft, setFinishingDraft] = useState(false);
 
   // ── Optimistic review-pending state ─────────────────────────────────────────
   // Set the instant recording stops (or a typed telling is submitted): a local object URL of the
@@ -160,6 +171,17 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
     };
   }, [localTake]);
 
+  // Invalidate a live Finish-check offer on ANY prose edit (ADR-0014 Inc 3 slice 8, data-loss fix).
+  // The offer's polished text is a polish of the prose AT PROBE TIME; if the narrator keeps typing,
+  // accepting it would post that stale text as finalText and silently drop the new words (the exact
+  // clobbering priorProse discipline prevents). Dropping the offer reverts to the plain Finish button
+  // so the narrator re-probes on the current text. Keyed on `proseDraft` only; the functional setter
+  // makes it a no-op when no offer is up — so it never fires spuriously on mount or on the append
+  // path's `history.replace(...)` proseDraft seeding (finishOffer is null then).
+  useEffect(() => {
+    setFinishOffer((cur) => (cur ? null : cur));
+  }, [proseDraft]);
+
   const recordAgain = useCallback(() => {
     setPendingError(null);
     pollAbortRef.current?.abort();
@@ -191,6 +213,23 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       }
       if (step.kind === "discarded") {
         router.push(backTab);
+        return;
+      }
+      if (step.kind === "finish_offer") {
+        // The Finish-check found a materially-different polish → hold it and show the inline card
+        // (rendered above the Finish button). Nothing is persisted yet.
+        setFinishOffer({
+          storyId: step.storyId,
+          polished: step.polished,
+          polishModelId: step.polishModelId,
+          polishPromptText: step.polishPromptText,
+        });
+        return;
+      }
+      if (step.kind === "finished") {
+        // Draft sealed → pending_approval. Clear any offer and refresh to surface the review phase.
+        setFinishOffer(null);
+        router.refresh();
         return;
       }
       if (step.kind === "appended") {
@@ -340,6 +379,47 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       setFinishing(false);
     }
   }, [activeStoryId, handleStep]);
+
+  // ── Finish + Finish-check handlers (ADR-0014 Inc 3 slice 8) ──────────────────
+  // Finish seals the draft. First runs a speculative polish (probe): a material difference returns a
+  // `finish_offer` (→ inline card); otherwise the draft finishes as-is. The active storyId is the
+  // review draft's id (Slice 10 relocates this onto the always-mounted composing surface).
+  const finishStoryId = activeStoryId ?? draft?.storyId ?? null;
+
+  const runFinish = async (intent: "probe" | "accept" | "decline") => {
+    if (!finishStoryId) return;
+    setActionError(null);
+    setFinishingDraft(true);
+    try {
+      const form = new FormData();
+      form.set("intent", intent);
+      form.set("storyId", finishStoryId);
+      // priorProse discipline: post the CLIENT'S current editor text (non-clobbering) — never a DB read.
+      form.set("prose", proseDraft);
+      if (ask) form.set("promptQuestion", ask.questionText);
+      if (intent === "accept" && finishOffer) {
+        // Echo the already-computed polish back so the server records it WITHOUT re-running the model.
+        form.set("polished", finishOffer.polished);
+        form.set("polishModelId", finishOffer.polishModelId);
+        form.set("polishPromptText", finishOffer.polishPromptText);
+      }
+      const step = await finishDraftAction(form);
+      await handleStep(step);
+    } catch {
+      setActionError(hub.answer.genericError);
+    } finally {
+      setFinishingDraft(false);
+    }
+  };
+
+  const onFinishDraft = () => runFinish("probe");
+  const onUsePolished = () => runFinish("accept");
+  const onDismissFinishCheck = () => {
+    // Dismiss = finish as-is (decline). Clear the card immediately for responsiveness; the decline
+    // finishes the posted prose unchanged.
+    setFinishOffer(null);
+    void runFinish("decline");
+  };
 
   // ── Review phase handlers ───────────────────────────────────────────────────
   const handleShare = async () => {
@@ -779,6 +859,74 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             {dropNotice}
           </p>
         )}
+
+        {/* Finish-check offer (ADR-0014 Inc 3 slice 8): an inline, dismissible card (NOT a modal)
+            previewing the gently-polished version. Taking it or dismissing both finish the draft. */}
+        {finishOffer && (
+          <div
+            style={{
+              border: "1.5px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              background: "var(--surface-card)",
+              padding: "18px 20px",
+              margin: "0 0 16px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-label)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--support)",
+                  margin: 0,
+                }}
+              >
+                {hub.answer.finishCheckTitle}
+              </p>
+              <KindredButton
+                label={hub.answer.dismissFinishCheck}
+                variant="ghost"
+                size="small"
+                disabled={finishingDraft}
+                onClick={onDismissFinishCheck}
+              />
+            </div>
+            <p
+              style={{
+                fontFamily: "var(--font-story)",
+                fontSize: "var(--text-story)",
+                lineHeight: "var(--leading-relaxed)",
+                color: "var(--text-body)",
+                margin: "12px 0 16px",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {finishOffer.polished}
+            </p>
+            <KindredButton
+              label={hub.answer.usePolishedVersion}
+              variant="secondary"
+              size="small"
+              fullWidth
+              disabled={finishingDraft}
+              onClick={onUsePolished}
+            />
+          </div>
+        )}
+
+        {/* Finish — seals the draft (runs the speculative Finish-check first). */}
+        <div style={{ marginBottom: 14 }}>
+          <KindredButton
+            label={hub.answer.finish}
+            variant="secondary"
+            size="large"
+            fullWidth
+            disabled={isRemoving || finishingDraft}
+            onClick={onFinishDraft}
+          />
+        </div>
 
         {/* Share */}
         <div style={{ marginBottom: 14 }}>
