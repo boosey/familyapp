@@ -9,8 +9,8 @@
  * /auth/callback caught and turned into `/sign-in?error=callback` for every sign-in / create-family
  * / hub load. That guard has since moved to a Vercel-build deploy gate (scripts/check-parity.ts), so
  * the parity path no longer reads the file at runtime — but `schemaSql()` is STILL read at runtime by
- * the `CHRONICLE_RUN_MIGRATIONS=1` fresh-DB bootstrap (applySchemaToPostgres) and by dev PGlite boot
- * (applySchema). Those are latent ENOENT traps on any serverless target, so the trace include stays.
+ * dev PGlite boot (applySchema). (Prod schema now advances via `db:migrate` in the Vercel build, not
+ * at runtime.) That is a latent ENOENT trap on any serverless target, so the trace include stays.
  *
  * FIX: `outputFileTracingIncludes` in next.config.mjs force-bundles the `.sql` files, with
  * `outputFileTracingRoot` set to the monorepo root so the sibling-package files are traceable.
