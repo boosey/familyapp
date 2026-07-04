@@ -383,6 +383,39 @@ export const intakeAnswers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// IntakeRevision — append-only edit-history of an intake answer's text at each stage, mirroring the
+// SHAPE and trigger of prose_revisions but a SEPARATE table (ADR-0014 §8: the intake/story wall is
+// preserved — intake is NOT a Story, so its lineage is not a polymorphic widening of prose_revisions,
+// which lives behind the content wall). Owner-only, never shared; lives in the MAIN schema like
+// intake_answers. Reuses proseRevisionLevelEnum verbatim. Immutable: a trigger (invariants.sql)
+// forbids UPDATE. DELETE stays permitted so the FK cascade reclaims revisions on owner erasure
+// (intake is never consented — there is no consent-scoped delete guard).
+// ---------------------------------------------------------------------------
+
+export const intakeRevisions = pgTable(
+  "intake_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic global sequence — deterministic per-answer ordering even under equal timestamps. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    intakeAnswerId: uuid("intake_answer_id")
+      .notNull()
+      .references(() => intakeAnswers.id, { onDelete: "cascade" }),
+    level: proseRevisionLevelEnum("level").notNull(), // reuse the story enum verbatim
+    /** The answer text at this stage. */
+    text: text("text").notNull(),
+    /** AI model that produced this level; null for human_corrected. */
+    modelId: text("model_id"),
+    /** Exact prompt that produced this level; null for ai_transcribed (STT) and human_corrected. */
+    promptText: text("prompt_text"),
+    /** The person who produced a human_corrected revision; null for AI levels. */
+    actorPersonId: uuid("actor_person_id").references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("intake_revisions_answer_idx").on(t.intakeAnswerId)],
+);
+
+// ---------------------------------------------------------------------------
 // Story — the unit of narrative. Owned by exactly one Person. Points to its canonical
 // Recording (required). A Story is a SINGLE row, never copied per family; which of the owner's
 // families a `family`/`branch`-tier Story is surfaced into is a many-to-many recorded in
@@ -971,6 +1004,8 @@ export type ProseRevisionLevel =
   (typeof proseRevisionLevelEnum.enumValues)[number];
 export type IntakeAnswer = typeof intakeAnswers.$inferSelect;
 export type NewIntakeAnswer = typeof intakeAnswers.$inferInsert;
+export type IntakeRevision = typeof intakeRevisions.$inferSelect;
+export type NewIntakeRevision = typeof intakeRevisions.$inferInsert;
 export type IntakeOrigin = (typeof intakeOriginEnum.enumValues)[number];
 export type FamilyPhoto = typeof familyPhotos.$inferSelect;
 export type NewFamilyPhoto = typeof familyPhotos.$inferInsert;

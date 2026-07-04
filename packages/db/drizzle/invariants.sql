@@ -55,6 +55,15 @@ CREATE TRIGGER prose_revisions_append_only
   BEFORE UPDATE OR DELETE ON prose_revisions
   FOR EACH ROW EXECUTE FUNCTION chronicle_prose_revision_delete_guard();
 
+-- Intake revisions: the intake-answer edit-history ledger (ADR-0014 §8). Same append-only shape as
+-- prose_revisions, but UPDATE-only guard: DELETE stays permitted so the FK cascade from
+-- intake_answers reclaims revisions on owner erasure. Intake is NEVER consented (owner-only, never
+-- shared), so there is no consent-scoped delete guard like prose_revisions has. Reuses the shared
+-- chronicle_forbid_mutation() guard, bound BEFORE UPDATE only (so DELETE passes for the cascade).
+CREATE TRIGGER intake_revisions_append_only
+  BEFORE UPDATE ON intake_revisions
+  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+
 -- Follow-up decision ledger: append-only (ADR-0013). Reuses the shared guard. A follow-up
 -- OUTCOME is a NEW row referencing its decision, never an edit of the decision row.
 CREATE TRIGGER follow_up_decisions_append_only

@@ -57,6 +57,8 @@ export type {
   ProseRevisionLevel,
   IntakeAnswer,
   NewIntakeAnswer,
+  IntakeRevision,
+  NewIntakeRevision,
   IntakeOrigin,
   StoryRecording,
   NewStoryRecording,

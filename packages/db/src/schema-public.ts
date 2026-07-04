@@ -9,6 +9,7 @@ export {
   consentRecords,
   followUpDecisions,
   intakeAnswers,
+  intakeRevisions,
   linkSessions,
   families,
   invitations,

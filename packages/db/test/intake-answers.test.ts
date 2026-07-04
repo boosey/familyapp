@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
-import { intakeAnswers, persons } from "@chronicle/db/schema";
+import { intakeAnswers, intakeRevisions, persons } from "@chronicle/db/schema";
 
 // `media` is a guarded content table — NOT exported from @chronicle/db/schema. Import it from the
 // content subpath for test seeding of the FK target. (Test files are exempt from the architecture
@@ -90,6 +90,41 @@ describe("intake_answers table", () => {
     await db.delete(intakeAnswers).where(eq(intakeAnswers.id, row!.id));
     await expect(
       db.delete(contentMedia).where(eq(contentMedia.id, m!.id)),
+    ).resolves.not.toThrow();
+  });
+});
+
+describe("intake_revisions append-only trigger", () => {
+  async function seedAnswer(db: Awaited<ReturnType<typeof createTestDatabase>>) {
+    const personId = await seedPerson(db);
+    const [answer] = await db
+      .insert(intakeAnswers)
+      .values({ personId, questionKey: "hometown", promptQuestion: "Q", origin: "typed", text: "x" })
+      .returning();
+    return answer!;
+  }
+
+  it("rejects UPDATE of an intake revision (append-only)", async () => {
+    const db = await createTestDatabase();
+    const answer = await seedAnswer(db);
+    const [rev] = await db
+      .insert(intakeRevisions)
+      .values({ intakeAnswerId: answer.id, level: "ai_transcribed", text: "v1" })
+      .returning();
+    await expect(
+      db.update(intakeRevisions).set({ text: "v2" }).where(eq(intakeRevisions.id, rev!.id)),
+    ).rejects.toThrow(/append-only/i);
+  });
+
+  it("permits DELETE of an intake revision (no consent-scoped guard; FK cascade reclaims on erasure)", async () => {
+    const db = await createTestDatabase();
+    const answer = await seedAnswer(db);
+    const [rev] = await db
+      .insert(intakeRevisions)
+      .values({ intakeAnswerId: answer.id, level: "ai_transcribed", text: "v1" })
+      .returning();
+    await expect(
+      db.delete(intakeRevisions).where(eq(intakeRevisions.id, rev!.id)),
     ).resolves.not.toThrow();
   });
 });

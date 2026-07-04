@@ -116,6 +116,18 @@ CREATE TABLE "intake_answers" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "intake_revisions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"intake_answer_id" uuid NOT NULL,
+	"level" "prose_revision_level" NOT NULL,
+	"text" text NOT NULL,
+	"model_id" text,
+	"prompt_text" text,
+	"actor_person_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "invitations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"token_hash" text NOT NULL,
@@ -278,6 +290,8 @@ ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_story_id_s
 ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_decision_id_follow_up_decisions_id_fk" FOREIGN KEY ("decision_id") REFERENCES "public"."follow_up_decisions"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "intake_revisions" ADD CONSTRAINT "intake_revisions_intake_answer_id_intake_answers_id_fk" FOREIGN KEY ("intake_answer_id") REFERENCES "public"."intake_answers"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "intake_revisions" ADD CONSTRAINT "intake_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_inviter_person_id_persons_id_fk" FOREIGN KEY ("inviter_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_accepted_person_id_persons_id_fk" FOREIGN KEY ("accepted_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -314,6 +328,7 @@ CREATE INDEX "family_photos_contributor_idx" ON "family_photos" USING btree ("co
 CREATE INDEX "follow_up_decisions_story_idx" ON "follow_up_decisions" USING btree ("story_id");
 CREATE INDEX "intake_answers_person_idx" ON "intake_answers" USING btree ("person_id");
 CREATE UNIQUE INDEX "intake_answers_person_question_uq" ON "intake_answers" USING btree ("person_id","question_key");
+CREATE INDEX "intake_revisions_answer_idx" ON "intake_revisions" USING btree ("intake_answer_id");
 CREATE UNIQUE INDEX "invitations_token_hash_uq" ON "invitations" USING btree ("token_hash");
 CREATE INDEX "invitations_family_idx" ON "invitations" USING btree ("family_id");
 CREATE INDEX "join_requests_family_idx" ON "join_requests" USING btree ("family_id");

@@ -144,6 +144,8 @@ export {
   saveIntakeText,
   getIntakeAnswer,
   listAnsweredQuestionKeys,
+  appendIntakeRevision,
+  listIntakeRevisions,
   type CreateIntakeRecordingInput,
 } from "./intake-answer-repository";
 export {

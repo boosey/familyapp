@@ -8,10 +8,10 @@
  * createIntakeRecording is called (the caller — @chronicle/capture's ingestIntakeRecording —
  * guarantees this), exactly as persistRecordingAndCreateDraft assumes for stories.
  */
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { media } from "@chronicle/db/content";
-import { intakeAnswers } from "@chronicle/db/schema";
-import type { Database, IntakeAnswer } from "@chronicle/db";
+import { intakeAnswers, intakeRevisions } from "@chronicle/db/schema";
+import type { Database, IntakeAnswer, IntakeRevision, ProseRevisionLevel } from "@chronicle/db";
 
 export interface CreateIntakeRecordingInput {
   personId: string;
@@ -128,6 +128,48 @@ export async function getIntakeAnswer(
     .where(and(eq(intakeAnswers.personId, personId), eq(intakeAnswers.questionKey, questionKey)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Append one immutable revision to an intake answer's edit-history ledger (ADR-0014 §8). The ledger
+ * mirrors the story's prose lineage in shape but is a separate, owner-only table — intake is not a
+ * Story. A correction is always a NEW row, never an edit (a trigger forbids UPDATE).
+ */
+export async function appendIntakeRevision(
+  db: Database,
+  input: {
+    intakeAnswerId: string;
+    level: ProseRevisionLevel;
+    text: string;
+    modelId?: string | null;
+    promptText?: string | null;
+    actorPersonId?: string | null;
+  },
+): Promise<IntakeRevision> {
+  const [row] = await db
+    .insert(intakeRevisions)
+    .values({
+      intakeAnswerId: input.intakeAnswerId,
+      level: input.level,
+      text: input.text,
+      modelId: input.modelId ?? null,
+      promptText: input.promptText ?? null,
+      actorPersonId: input.actorPersonId ?? null,
+    })
+    .returning();
+  return row!;
+}
+
+/** The intake answer's edit-history in provenance order (oldest first, by monotonic seq). */
+export async function listIntakeRevisions(
+  db: Database,
+  intakeAnswerId: string,
+): Promise<IntakeRevision[]> {
+  return db
+    .select()
+    .from(intakeRevisions)
+    .where(eq(intakeRevisions.intakeAnswerId, intakeAnswerId))
+    .orderBy(asc(intakeRevisions.seq));
 }
 
 /** Owner-scoped list — returns only the caller's own answered keys; no tier-auth check needed. */

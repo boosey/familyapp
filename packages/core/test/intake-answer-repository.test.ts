@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
-import { persons, intakeAnswers } from "@chronicle/db/schema";
+import { persons, intakeAnswers, intakeRevisions } from "@chronicle/db/schema";
 import {
   createIntakeRecording,
   saveIntakeTranscript,
   saveIntakeText,
   getIntakeAnswer,
   listAnsweredQuestionKeys,
+  appendIntakeRevision,
+  listIntakeRevisions,
 } from "../src/intake-answer-repository";
 
 async function seedPerson(db: Awaited<ReturnType<typeof createTestDatabase>>) {
@@ -95,5 +97,61 @@ describe("intake-answer-repository", () => {
     await expect(
       saveIntakeTranscript(db, { personId, questionKey: "nope", transcript: "x" }),
     ).rejects.toThrow(/not found/);
+  });
+});
+
+describe("intake_revisions ledger", () => {
+  it("appendIntakeRevision inserts and returns a row", async () => {
+    const db = await createTestDatabase();
+    const personId = await seedPerson(db);
+    const answer = await saveIntakeText(db, {
+      personId, questionKey: "hometown", promptQuestion: "Q", text: "New Orleans",
+    });
+    const rev = await appendIntakeRevision(db, {
+      intakeAnswerId: answer.id,
+      level: "ai_transcribed",
+      text: "new orleans",
+      modelId: "mock-whisper-turbo",
+    });
+    expect(rev.intakeAnswerId).toBe(answer.id);
+    expect(rev.level).toBe("ai_transcribed");
+    expect(rev.text).toBe("new orleans");
+    expect(rev.modelId).toBe("mock-whisper-turbo");
+    expect(rev.promptText).toBeNull();
+    expect(rev.actorPersonId).toBeNull();
+  });
+
+  it("a second append for the same answer gets a larger seq; listIntakeRevisions returns them in seq order", async () => {
+    const db = await createTestDatabase();
+    const personId = await seedPerson(db);
+    const answer = await saveIntakeText(db, {
+      personId, questionKey: "hometown", promptQuestion: "Q", text: "x",
+    });
+    const first = await appendIntakeRevision(db, {
+      intakeAnswerId: answer.id, level: "ai_transcribed", text: "raw",
+    });
+    const second = await appendIntakeRevision(db, {
+      intakeAnswerId: answer.id, level: "human_corrected", text: "edited", actorPersonId: personId,
+    });
+    expect(second.seq).toBeGreaterThan(first.seq);
+    const rows = await listIntakeRevisions(db, answer.id);
+    expect(rows.map((r) => r.id)).toEqual([first.id, second.id]);
+    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "human_corrected"]);
+  });
+
+  it("deleting the parent intake_answers row cascades its revisions", async () => {
+    const db = await createTestDatabase();
+    const personId = await seedPerson(db);
+    const answer = await saveIntakeText(db, {
+      personId, questionKey: "hometown", promptQuestion: "Q", text: "x",
+    });
+    await appendIntakeRevision(db, { intakeAnswerId: answer.id, level: "ai_transcribed", text: "raw" });
+    expect(await listIntakeRevisions(db, answer.id)).toHaveLength(1);
+    await db.delete(intakeAnswers).where(eq(intakeAnswers.id, answer.id));
+    const remaining = await db
+      .select()
+      .from(intakeRevisions)
+      .where(eq(intakeRevisions.intakeAnswerId, answer.id));
+    expect(remaining).toHaveLength(0);
   });
 });
