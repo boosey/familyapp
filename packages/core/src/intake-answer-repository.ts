@@ -73,14 +73,18 @@ export async function createIntakeRecording(
   });
 }
 
-/** After transcription: write the raw transcript and seed the editable `text` with it. */
+/**
+ * After transcription: write the RAW `transcript` and seed the editable `text`. `text` defaults to
+ * the raw transcript (verbatim seed) but the caller may pass an already-cleaned `text` while keeping
+ * the raw words in `transcript` (ADR-0014 §2: raw stays canonical, the cleaned pass seeds the editor).
+ */
 export async function saveIntakeTranscript(
   db: Database,
-  input: { personId: string; questionKey: string; transcript: string },
+  input: { personId: string; questionKey: string; transcript: string; text?: string },
 ): Promise<IntakeAnswer> {
   const [row] = await db
     .update(intakeAnswers)
-    .set({ transcript: input.transcript, text: input.transcript, updatedAt: new Date() })
+    .set({ transcript: input.transcript, text: input.text ?? input.transcript, updatedAt: new Date() })
     .where(
       and(eq(intakeAnswers.personId, input.personId), eq(intakeAnswers.questionKey, input.questionKey)),
     )
