@@ -32,3 +32,14 @@ const ddl = execSync("drizzle-kit export --config drizzle.config.ts", {
 
 writeFileSync(OUT, HEADER + ddl);
 console.log(`wrote ${OUT} (${ddl.split("\n").length} lines of DDL)`);
+
+// Also emit an incremental migration for the drizzle-modeled diff. drizzle-kit generate diffs
+// schema.ts against meta/*_snapshot.json and writes a new NNNN_*.sql only when something changed
+// (it prints "No schema changes" and writes nothing otherwise). Invariant changes are NOT captured
+// here — hand-carry them into the emitted migration (see docs/DECISIONS.md § Migrations).
+execSync("drizzle-kit generate", {
+  cwd: PKG_DIR,
+  encoding: "utf8",
+  stdio: ["ignore", "inherit", "inherit"],
+});
+console.log("db:generate done — if a new migration was written, hand-carry any invariant changes into it.");
