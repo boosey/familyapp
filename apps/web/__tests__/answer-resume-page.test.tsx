@@ -18,7 +18,7 @@ const listOutstandingDrafts = vi.fn();
 const listStoryRecordings = vi.fn();
 // ADR-0009 Phase 3 (arrived via the master merge): the page now fetches the ask's subject photos.
 // Default to none so the resume-routing assertions below are unaffected.
-const listAskSubjectPhotos = vi.fn(async () => [] as string[]);
+const listAskSubjectPhotos = vi.fn(async (..._a: unknown[]) => [] as string[]);
 
 class RedirectError extends Error {
   constructor(public to: string) {
