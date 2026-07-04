@@ -18,10 +18,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- The consent ledger: no UPDATE, no DELETE. Ever.
+-- ADR-0008: the consent ledger is permanent EXCEPT within an authorized item erasure. A story that
+-- is being erased must take its consent rows with it (nothing is retained against the owner's will);
+-- the fact of the deletion is preserved separately in `erasure_audit`. UPDATE remains forbidden
+-- always (a revocation is still a new superseding row, never an edit).
+CREATE OR REPLACE FUNCTION chronicle_consent_records_guard()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION
+      'Table % is append-only/immutable: % is not permitted (revisions must be new rows).',
+      TG_TABLE_NAME, TG_OP
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF chronicle_erasure_token_matches(OLD.story_id) THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION
+    'Table % is append-only/immutable: % is not permitted (the consent ledger is permanent outside an authorized item erasure).',
+    TG_TABLE_NAME, TG_OP
+    USING ERRCODE = 'restrict_violation';
+END;
+$$ LANGUAGE plpgsql;
+
+-- The consent ledger: no UPDATE ever; DELETE only inside an authorized story-erasure cascade.
 CREATE TRIGGER consent_records_append_only
   BEFORE UPDATE OR DELETE ON consent_records
-  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+  FOR EACH ROW EXECUTE FUNCTION chronicle_consent_records_guard();
 
 -- Prose revisions: the prose provenance ledger (L1 user_authored/transcribed → L2 polished →
 -- L3 corrected). Consent-scoped immutability, exactly like Media and the ordered take set
@@ -61,17 +84,28 @@ CREATE TRIGGER follow_up_decisions_append_only
   BEFORE UPDATE OR DELETE ON follow_up_decisions
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
 
--- Media: consent-scoped immutability per ADR-0002.
---   UPDATE  → always forbidden (we never mutate audio bytes or their metadata).
---   DELETE  → allowed ONLY when neither the media row nor its owning Story is linked to any
---             consent_records row.  The recording clip AND the approval-audio clip of any
---             approved/shared story stay immutable forever; never-consented draft takes may
---             be reclaimed.
--- A single function handles both ops via TG_OP so one trigger covers both.
+-- ADR-0008: the transaction-local cascade token. The audited erasure repository sets
+-- `chronicle.cascade_delete_story` (LOCAL) to the id of the story it is erasing; the consent-ledger
+-- guard consults this to permit DELETE only inside that authorized cascade. Unset → NULL → no match,
+-- so raw/accidental SQL can never delete a consent row.
+CREATE OR REPLACE FUNCTION chronicle_erasure_token_matches(p_story_id uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN current_setting('chronicle.cascade_delete_story', true) = p_story_id::text;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Media: existence-scoped content-artifact immutability per ADR-0008 (generalizes ADR-0002).
+--   UPDATE → always forbidden (we never mutate audio bytes or their metadata).
+--   DELETE → forbidden while ANY live parent references the audio: a story's canonical recording
+--            pointer, a story take, a voice ask, a voice caption, or a consent approval-audio
+--            reference. The audio is a permanent artifact WHILE ITS ITEM LIVES. Once the item (and
+--            thus every reference) is gone, the orphan media row is reclaimable — that is how the
+--            deletion cascade removes it. No token is needed here: reaching this delete requires the
+--            referencing rows to be gone first, and those rows are themselves protected.
 CREATE OR REPLACE FUNCTION chronicle_media_delete_guard()
 RETURNS trigger AS $$
 BEGIN
-  -- UPDATE is unconditionally forbidden.
   IF TG_OP = 'UPDATE' THEN
     RAISE EXCEPTION
       'Table % is append-only/immutable: % is not permitted (revisions must be new rows).',
@@ -79,42 +113,14 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
 
-  -- DELETE: check (a) — is this media row referenced directly by any consent record?
-  IF EXISTS (
-    SELECT 1 FROM consent_records WHERE approval_audio_media_id = OLD.id
-  ) THEN
+  IF EXISTS (SELECT 1 FROM stories WHERE recording_media_id = OLD.id)
+     OR EXISTS (SELECT 1 FROM story_recordings WHERE media_id = OLD.id)
+     OR EXISTS (SELECT 1 FROM asks WHERE recording_media_id = OLD.id)
+     OR EXISTS (SELECT 1 FROM voice_captions WHERE media_id = OLD.id)
+     OR EXISTS (SELECT 1 FROM consent_records WHERE approval_audio_media_id = OLD.id)
+  THEN
     RAISE EXCEPTION
-      'Cannot delete media %: it is referenced by a consent record (approval_audio_media_id). Consented media is immutable forever.',
-      OLD.id
-      USING ERRCODE = 'restrict_violation';
-  END IF;
-
-  -- DELETE: check (b) — does this media's owning Story (recording_media_id = OLD.id) have
-  -- any consent_records row?  If so, the recording is part of the audit trail and must stay.
-  IF EXISTS (
-    SELECT 1 FROM stories s
-    INNER JOIN consent_records cr ON cr.story_id = s.id
-    WHERE s.recording_media_id = OLD.id
-  ) THEN
-    RAISE EXCEPTION
-      'Cannot delete media %: its owning story has consent records. Story recording media is immutable forever.',
-      OLD.id
-      USING ERRCODE = 'restrict_violation';
-  END IF;
-
-  -- DELETE: check (c) — ADR-0014 fork #2. Defense-in-depth + a consent-semantic error message for
-  -- take-backing media. The FK (story_recordings.media_id NO ACTION) plus the
-  -- story_recordings_post_consent_immutable trigger already prevent losing this audio; this check
-  -- restates that invariant at the media layer and yields a consent-worded error instead of a raw
-  -- FK violation. Covers position >= 1 takes AND typed-first mixed-take audio that check (b)'s
-  -- recording_media_id pointer never sees.
-  IF EXISTS (
-    SELECT 1 FROM story_recordings sr
-    INNER JOIN consent_records cr ON cr.story_id = sr.story_id
-    WHERE sr.media_id = OLD.id
-  ) THEN
-    RAISE EXCEPTION
-      'Cannot delete media %: it backs a take of a story with consent records. Consented take audio is immutable forever.',
+      'Cannot delete media %: a live item references it. Content audio is an immutable artifact while its item exists (ADR-0008); it is removed only when the item itself is deleted.',
       OLD.id
       USING ERRCODE = 'restrict_violation';
   END IF;
