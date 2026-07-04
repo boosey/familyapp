@@ -739,6 +739,15 @@ export const invitations = pgTable(
     inviterPersonId: uuid("inviter_person_id")
       .notNull()
       .references(() => persons.id),
+    /**
+     * The provisional (Account-less) Person this invite anchors to (ADR-0006). Created up front by
+     * `createInvitation` so an Ask can target a pending invitee before they join. On acceptance the
+     * provisional Person is MERGED into the accepting Person and this column is re-pointed to it
+     * (queued Asks are moved over, the provisional row deleted) — so it always names a real anchor.
+     */
+    inviteePersonId: uuid("invitee_person_id")
+      .notNull()
+      .references(() => persons.id),
     /** Pre-filled invitee display name from the inviter ("Salvatore Esposito"). */
     inviteeName: text("invitee_name"),
     /** Optional email the invite was addressed to (the person may be unknown to the system). */

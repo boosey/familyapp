@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createAsk } from "@chronicle/core";
-import { memberships, persons } from "@chronicle/db/schema";
+import { invitations, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
@@ -69,10 +69,34 @@ export async function AskTab() {
           ),
         )
     : [];
-  const seen = new Set<string>();
-  const candidates = rawCandidates.filter((p) =>
-    seen.has(p.id) ? false : (seen.add(p.id), true),
-  );
+  // ADR-0006: also offer PENDING invitees of the viewer's families as targets — you may ask someone
+  // your family has invited before they join. Their provisional Person is the anchor; on acceptance
+  // the queued questions merge onto their real Person.
+  const rawInvitees = familyIds.length
+    ? await db
+        .select({ id: persons.id, displayName: persons.displayName })
+        .from(invitations)
+        .innerJoin(persons, eq(persons.id, invitations.inviteePersonId))
+        .where(
+          and(
+            inArray(invitations.familyId, familyIds),
+            eq(invitations.status, "pending"),
+          ),
+        )
+    : [];
+
+  const seen = new Set<string>([ctx.personId]);
+  const candidates: { id: string; displayName: string; pending?: boolean }[] = [];
+  for (const p of rawCandidates) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    candidates.push(p);
+  }
+  for (const p of rawInvitees) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    candidates.push({ ...p, pending: true });
+  }
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -112,7 +136,7 @@ export async function AskTab() {
           <select name="targetPersonId" className="kin-field" required>
             {candidates.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.displayName}
+                {p.pending ? `${p.displayName} (invited)` : p.displayName}
               </option>
             ))}
           </select>

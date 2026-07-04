@@ -15,6 +15,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   askSubjectPhotos,
   asks,
+  invitations,
   memberships,
   persons,
 } from "@chronicle/db/schema";
@@ -57,9 +58,42 @@ async function activeFamilyIds(
 }
 
 /**
- * Submit an Ask from the viewer to the target narrator. Authorization rule: the asker and the target
- * must share an ACTIVE membership in some family — the same co-membership relation the
- * authorization function uses for family-tier reads. Anonymous viewers cannot create asks.
+ * True if `targetPersonId` is a PENDING invitee of any family in `familyIds`. This is the ADR-0006
+ * "invitation floor": you may ask someone your family has invited before they join — the invitation
+ * anchors to a provisional Person that later merges into their real one.
+ *
+ * Deliberately `pending`-only. Once an invite is ACCEPTED the invitee is either an active co-member
+ * (already covered by the co-membership branch) or a former member whose membership has ended — and
+ * in the latter case the divorce/leave semantics must revoke ask rights, so an accepted invitation
+ * must NOT keep granting them. Matching `accepted` here would both duplicate the co-membership check
+ * and silently re-grant access to people who have left the family.
+ */
+async function isPendingInviteeOfAnyFamily(
+  db: Database,
+  targetPersonId: string,
+  familyIds: Set<string>,
+): Promise<boolean> {
+  if (familyIds.size === 0) return false;
+  const [row] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        inArray(invitations.familyId, [...familyIds]),
+        eq(invitations.status, "pending"),
+        eq(invitations.inviteePersonId, targetPersonId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Submit an Ask from the viewer to the target narrator. Authorization rule (ADR-0006): the asker may
+ * ask someone they share an ACTIVE membership with, OR someone their family has invited (pending or
+ * accepted) — the "invitation floor". The co-membership branch mirrors the family-tier read rule; the
+ * invitation branch lets curiosity accumulate against a pending invitee before they join, becoming
+ * the warm hook that pulls them in. Anonymous viewers cannot create asks.
  *
  * On success the Ask is born `queued`; the interviewer (Increment 7) pulls it on the narrator's next
  * gentle session, frames it warmly with the asker named, and flips it to `routed` then
@@ -96,9 +130,14 @@ export async function createAsk(
       break;
     }
   }
+  // Fall back to the ADR-0006 invitation floor: the target may be a pending invitee of one of the
+  // asker's active families even without a shared active membership yet.
+  if (!shared) {
+    shared = await isPendingInviteeOfAnyFamily(db, input.targetPersonId, askerFamilies);
+  }
   if (!shared) {
     throw new AuthorizationError(
-      "asker shares no active family membership with the target — cannot route a question",
+      "asker shares no active family membership or invitation with the target — cannot route a question",
     );
   }
 

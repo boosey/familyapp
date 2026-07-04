@@ -130,6 +130,7 @@ CREATE TABLE "invitations" (
 	"token_hash" text NOT NULL,
 	"family_id" uuid NOT NULL,
 	"inviter_person_id" uuid NOT NULL,
+	"invitee_person_id" uuid NOT NULL,
 	"invitee_name" text,
 	"invitee_email" text,
 	"relationship_label" text,
@@ -307,6 +308,7 @@ ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_inviter_person_id_persons_id_fk" FOREIGN KEY ("inviter_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_invitee_person_id_persons_id_fk" FOREIGN KEY ("invitee_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_accepted_person_id_persons_id_fk" FOREIGN KEY ("accepted_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_requester_person_id_persons_id_fk" FOREIGN KEY ("requester_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;

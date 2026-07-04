@@ -4,7 +4,7 @@
  * and expired).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { invitations } from "@chronicle/db/schema";
+import { asks, invitations, persons } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -60,6 +60,45 @@ describe("createInvitation", () => {
     await expect(
       createInvitation(db, { familyId: fam.id, inviterPersonId: stranger.id }),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("mints a provisional Account-less Person anchored on the invitation (ADR-0006)", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId, inviteePersonId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore Esposito",
+    });
+    expect(inviteePersonId).toBeTruthy();
+
+    const [person] = await db
+      .select({ displayName: persons.displayName, accountId: persons.accountId })
+      .from(persons)
+      .where(eq(persons.id, inviteePersonId))
+      .limit(1);
+    expect(person?.accountId).toBeNull(); // provisional — no Account
+    expect(person?.displayName).toBe("Salvatore Esposito");
+
+    const [invite] = await db
+      .select({ inviteePersonId: invitations.inviteePersonId })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(invite?.inviteePersonId).toBe(inviteePersonId);
+  });
+
+  it("falls back to a placeholder name when no invitee name is supplied", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { inviteePersonId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+    });
+    const [person] = await db
+      .select({ displayName: persons.displayName })
+      .from(persons)
+      .where(eq(persons.id, inviteePersonId))
+      .limit(1);
+    expect(person?.displayName).toBe("Invited member");
   });
 });
 
@@ -185,5 +224,54 @@ describe("acceptInvitation", () => {
     await expect(
       acceptInvitation(db, { token: "nope", acceptedPersonId: invitee.id }),
     ).rejects.toBeInstanceOf(InvariantViolation);
+  });
+
+  // ADR-0006 merge: acceptance folds the provisional invitee Person into the accepting Person.
+  it("merges the provisional invitee: re-points queued asks, deletes the provisional row", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { token, inviteePersonId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Nonna",
+    });
+
+    // A question queued against the pending invitee BEFORE they joined.
+    const [queued] = await db
+      .insert(asks)
+      .values({
+        askerPersonId: steward.id,
+        targetPersonId: inviteePersonId,
+        familyId: fam.id,
+        questionText: "What was your village like?",
+        status: "queued",
+      })
+      .returning({ id: asks.id });
+
+    // The invitee signs up as a brand-new Person (ADR-0005 mints it) and accepts.
+    const joined = await makePerson(db, "Nonna Esposito");
+    await acceptInvitation(db, { token, acceptedPersonId: joined.id });
+
+    // The queued ask now targets the real Person, not the provisional one.
+    const [ask] = await db
+      .select({ targetPersonId: asks.targetPersonId })
+      .from(asks)
+      .where(eq(asks.id, queued!.id))
+      .limit(1);
+    expect(ask?.targetPersonId).toBe(joined.id);
+
+    // The provisional Person is gone, and the invitation anchor re-points to the real Person.
+    const provRows = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.id, inviteePersonId));
+    expect(provRows).toHaveLength(0);
+    const [invite] = await db
+      .select({
+        inviteePersonId: invitations.inviteePersonId,
+        acceptedPersonId: invitations.acceptedPersonId,
+      })
+      .from(invitations);
+    expect(invite?.inviteePersonId).toBe(joined.id);
+    expect(invite?.acceptedPersonId).toBe(joined.id);
   });
 });

@@ -56,3 +56,37 @@ already has questions waiting for you").
   `targetInvitationId` + re-point on acceptance) — preserves "every Person has an Account" literally
   but leaks a dual-anchor into every future feature that references a person, fighting the model where
   Person is the single anchor.
+
+## Implementation notes (2026-07-04)
+
+Two deviations from the literal wording above, made during the build. Both preserve the decision's
+intent; they change the mechanism, not the outcome.
+
+1. **Acceptance is a merge, not an in-place account link.** The Decision says "provisioning targets
+   the existing provisional row instead of creating one." Taken literally that means rewiring the
+   ADR-0005 JIT path so the Clerk account lands on the provisional Person — surgery on the
+   auth-critical login path, and it doesn't naturally handle a *returning* user who already has a
+   Person accepting an invite to a second family. Instead, ADR-0005 provisioning is left **untouched**
+   (a fresh sign-up still mints its own Person) and `acceptInvitation` **merges** the provisional
+   Person into the accepting Person: queued Asks that targeted the provisional Person are re-pointed,
+   the invitation's `inviteePersonId` anchor is re-pointed, and the (always Account-less, never
+   expressive) provisional row is deleted. Observable outcome is identical — queued questions reach
+   the joiner, no orphan survives, Person stays the single anchor — and the *same* merge code covers
+   both the fresh-signup and returning-user cases. The only cost is create-then-merge instead of
+   link-in-place, which is invisible in the resulting data model. `invitations.inviteePersonId` is the
+   new anchor column (`NOT NULL`); it is re-pointed to the accepting Person on merge so it never
+   dangles.
+
+2. **The ask floor is a union, not a replacement.** The Decision says the check "moves from active
+   co-membership to invitee-of-my-family." Implemented as a strict replacement that would *regress*
+   the ability to ask a co-member who was never invited (a family creator, or someone who joined via
+   a join-request). `createAsk` therefore allows **co-membership OR a PENDING invitation of one of
+   the asker's active families**. The invitation branch is deliberately `pending`-only: once an
+   invite is accepted the invitee is either an active co-member (already covered by the co-membership
+   branch) or a former member whose membership ended — and in the latter case the divorce/leave
+   semantics must revoke ask rights, so an accepted invitation must not keep granting them. This is
+   the correct reading of the ADR's "pending or active": *active* is the co-membership branch, not a
+   permanent property of the invitation row.
+
+Reaping of never-accepted provisional Persons (the "ghost rows" consequence) remains a follow-up: the
+housekeeping GC pass is not built here.

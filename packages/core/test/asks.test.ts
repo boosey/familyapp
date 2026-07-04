@@ -6,13 +6,15 @@
  * system-actor read (`listPendingAsksForNarrator`) is separately covered for ordering and inclusion.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { askSubjectPhotos, asks } from "@chronicle/db/schema";
-import { eq } from "drizzle-orm";
+import { askSubjectPhotos, asks, memberships } from "@chronicle/db/schema";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   AuthorizationError,
+  acceptInvitation,
   createAlbumPhoto,
   createAsk,
+  createInvitation,
   listAskSubjectPhotos,
   listPendingAsksForNarrator,
 } from "../src/index";
@@ -296,6 +298,88 @@ describe("createAsk with subject photos (ADR-0009 Phase 3)", () => {
           questionText: "Q",
           subjectPhotoIds: [p.id],
         },
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
+describe("createAsk — ADR-0006 invitation floor", () => {
+  it("lets an active member ask a PENDING invitee of their family (before the invitee joins)", async () => {
+    const inviter = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", inviter.id);
+    await addMembership(db, inviter.id, fam.id);
+    // Sofia invites her grandmother; the provisional Person is the ask target.
+    const { inviteePersonId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: inviter.id,
+      inviteeName: "Eleanor",
+    });
+
+    const ask = await createAsk(
+      db,
+      { kind: "account", personId: inviter.id },
+      {
+        targetPersonId: inviteePersonId,
+        familyId: fam.id,
+        questionText: "What was your wedding day like?",
+      },
+    );
+    expect(ask.status).toBe("queued");
+    expect(ask.targetPersonId).toBe(inviteePersonId);
+  });
+
+  it("stops granting ask rights once an accepted invitee's membership has ENDED (no perpetual floor)", async () => {
+    // Sofia invites Eleanor, Eleanor accepts (becomes a member), then leaves the family. The accepted
+    // invitation must NOT keep Eleanor askable — divorce/leave semantics revoke it, same as a plain
+    // co-member. Only PENDING invitations extend the floor.
+    const inviter = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", inviter.id);
+    await addMembership(db, inviter.id, fam.id);
+    const { token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: inviter.id,
+      inviteeName: "Eleanor",
+    });
+    const eleanor = await makePerson(db, "Eleanor Boudreaux");
+    await acceptInvitation(db, { token, acceptedPersonId: eleanor.id });
+    // Eleanor is now an active member — askable via co-membership. End her membership.
+    const [m] = await db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.personId, eleanor.id),
+          eq(memberships.familyId, fam.id),
+        ),
+      );
+    await endMembership(db, m!.id);
+
+    await expect(
+      createAsk(
+        db,
+        { kind: "account", personId: inviter.id },
+        { targetPersonId: eleanor.id, questionText: "Q" },
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("rejects asking an invitee of a family the asker is NOT a member of", async () => {
+    // Inviter runs their own family and invites someone into it.
+    const inviter = await makePerson(db, "Inviter");
+    const fam = await makeFamily(db, "TheirFamily", inviter.id);
+    await addMembership(db, inviter.id, fam.id);
+    const { inviteePersonId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: inviter.id,
+      inviteeName: "Their Invitee",
+    });
+    // An outsider with no membership in that family cannot ask the invitee.
+    const outsider = await makePerson(db, "Outsider");
+    await expect(
+      createAsk(
+        db,
+        { kind: "account", personId: outsider.id },
+        { targetPersonId: inviteePersonId, questionText: "Q" },
       ),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
