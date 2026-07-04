@@ -185,6 +185,31 @@ describe("StoryComposer follow-up loop (inline banner)", () => {
     expect(composeStoryAction).toHaveBeenCalledOnce(); // still only the initial answer
   });
 
+  it("locks the mic while a decline is in flight (cold-review finding 3)", async () => {
+    // Regression: if the mic stayed live during a decline round-trip, starting a recording could race
+    // the decline — whose `appended` response resets recordPhase to idle under a live MediaRecorder,
+    // corrupting/duplicating capture. The mic must be disabled until the decline resolves.
+    let resolveDecline: (v: Step) => void = () => {};
+    declineFollowUpAction.mockImplementationOnce(() => new Promise<Step>((r) => (resolveDecline = r)));
+
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
+    await recordOnce();
+    await waitFor(() =>
+      expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /That's all for now/ }));
+    await waitFor(() => expect(declineFollowUpAction).toHaveBeenCalledOnce());
+
+    // Decline in flight → the mic cannot start a new recording.
+    expect((screen.getByRole("button", { name: /Tap to speak/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    resolveDecline({ kind: "appended", storyId: STORY_ID, prose: "My grandmother's house.", appendedSegment: "" });
+    await waitFor(() =>
+      expect(screen.queryByText("Tell me about the stained glass.")).toBeNull(),
+    );
+  });
+
   it("surfaces a decline error on the composing surface (never a silent dead end)", async () => {
     declineFollowUpAction.mockResolvedValueOnce({ error: "Could not finish. Please try again." });
 

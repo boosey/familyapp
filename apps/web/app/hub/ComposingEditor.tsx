@@ -157,6 +157,13 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   // The id every append/Finish posts against: the server draft once it lands, else the optimistic id.
   const composingStoryId = draft?.storyId ?? activeStoryId;
 
+  // A NON-recording mutation is round-tripping (typed append, decline, or Finish). No new recording may
+  // START while one is in flight (cold-review findings 3+4): the mic is otherwise ungated by these flags,
+  // so a decline/finish racing a mic-start could reset recordPhase under a live MediaRecorder or let a
+  // fresh take/edit clobber the in-flight write. (Recording states — listening/saving — are handled via
+  // recordPhase; this covers only the non-recording mutations so the mic can still STOP while listening.)
+  const otherMutationInFlight = appending || declining || finishingDraft;
+
   // ── Lifted prose history ────────────────────────────────────────────────────
   // Owned HERE (not inside KindredProseEditor) so an append can seed the prose as one undoable step via
   // `history.replace` — an event the editor doesn't emit. resetKey is the STABLE `draft?.storyId`: within
@@ -324,8 +331,9 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
 
   const voiceClick = useCallback(() => {
     if (recordPhase === "listening") stopRecording();
-    else if (recordPhase === "idle") void startRecording();
-  }, [recordPhase, startRecording, stopRecording]);
+    // Only START a recording when idle AND no other mutation is round-tripping (findings 3+4).
+    else if (recordPhase === "idle" && !otherMutationInFlight) void startRecording();
+  }, [recordPhase, otherMutationInFlight, startRecording, stopRecording]);
 
   // Submit typed text. Take 0 (no draft yet) → composeStoryAction (creates the story, full-screen
   // pending). Take ≥ 1 (composing) → appendTypedTakeAction onto the existing draft (inline).
@@ -640,23 +648,24 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   // ── DRAFT COMPOSING SURFACE (editor always mounted + footer + relisten + Finish) ──
   if (composing) {
     const savingTake = recordPhase === "saving" || appending;
-    // While a recording is in flight (listening OR saving) or a typed append is round-tripping, NO
-    // other mutation may start and the editor must be read-only: the take's `onstop` closure captured
-    // the prose AT RECORD START, so an edit or a competing append made now would be silently clobbered
-    // when the take lands (the exact ADR-0014 hazard). The mic stays live (to tap stop).
-    const capturing = recordPhase === "listening" || savingTake;
+    // While ANY mutation is in flight — a recording (listening OR saving), a typed append, a decline, or
+    // a Finish round-trip — no other mutation may start and the editor must be read-only: the mutating
+    // request captured the prose AT ISSUE TIME, so an edit or a competing action now would be silently
+    // clobbered when it lands (the ADR-0014 hazard; cold-review findings 2+3+4). The mic stays live only
+    // to STOP an in-flight recording — starting a new one is gated by `otherMutationInFlight`.
+    const busy = recordPhase === "listening" || savingTake || declining || finishingDraft;
     return (
       <div>
         {questionHeader}
 
         {/* Compact per-take relisten strip (audio only; drop on follow-up takes). Absent in the
             optimistic window before the first refresh (no server takes yet). */}
-        {draft && <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} onDrop={handleDropTake} dropDisabled={op === "drop" || capturing} />}
+        {draft && <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} onDrop={handleDropTake} dropDisabled={op === "drop" || busy} />}
 
         <ProseBlock
           proseDraft={proseDraft}
           setProseDraft={setProseDraft}
-          disabled={capturing}
+          disabled={busy}
           history={history}
           onPolish={polishHandler}
         />
@@ -701,7 +710,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               label={hub.answer.thatsAllForNow}
               variant="ghost"
               size="small"
-              disabled={declining || capturing}
+              disabled={busy}
               onClick={onDeclineFollowUp}
             />
           </div>
@@ -732,14 +741,15 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               border: "var(--border-width) solid var(--border)",
             }}
           >
-            <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={capturing} onClick={() => setInputMode("voice")} />
-            <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={capturing} onClick={() => setInputMode("text")} />
+            <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={busy} onClick={() => setInputMode("voice")} />
+            <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={busy} onClick={() => setInputMode("text")} />
           </div>
 
           {inputMode === "voice" ? (
             <KindredVoiceButton
               listening={recordPhase === "listening"}
               saving={savingTake}
+              disabled={otherMutationInFlight}
               size={160}
               label={
                 recordPhase === "listening"
@@ -760,7 +770,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                   onChange={(e) => setTextDraft(e.target.value)}
                   rows={5}
                   placeholder={hub.compose.textPlaceholder}
-                  disabled={capturing}
+                  disabled={busy}
                 />
               </label>
               <div style={{ marginTop: 12 }}>
@@ -769,7 +779,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                   variant="secondary"
                   size="default"
                   fullWidth
-                  disabled={capturing || textDraft.trim().length === 0}
+                  disabled={busy || textDraft.trim().length === 0}
                   onClick={submitText}
                 />
               </div>
@@ -807,7 +817,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
                 label={hub.answer.dismissFinishCheck}
                 variant="ghost"
                 size="small"
-                disabled={finishingDraft || capturing}
+                disabled={busy}
                 onClick={onDismissFinishCheck}
               />
             </div>
@@ -828,7 +838,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
               variant="secondary"
               size="small"
               fullWidth
-              disabled={finishingDraft || capturing}
+              disabled={busy}
               onClick={onUsePolished}
             />
           </div>
@@ -840,7 +850,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
           variant="primary"
           size="large"
           fullWidth
-          disabled={capturing || finishingDraft || declining}
+          disabled={busy}
           onClick={onFinishDraft}
         />
       </div>

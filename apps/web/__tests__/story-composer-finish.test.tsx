@@ -126,6 +126,31 @@ describe("StoryComposer Finish-check", () => {
     await waitFor(() => expect(editor.value).toBe(POLISHED));
   });
 
+  it("locks the editor + mic while a Finish round-trip is in flight (cold-review finding 4)", async () => {
+    // Regression: during a Finish(probe/accept) round-trip the server holds the posted prose; if the
+    // editor/mic stayed live, a concurrent edit or append would be clobbered (UI: history.replace on
+    // accept; DB: a stale finishDraft write landing after an append). Everything but stop must lock.
+    let resolveFinish: (v: FinishStep) => void = () => {};
+    finishDraftAction.mockImplementationOnce(
+      () => new Promise<FinishStep>((r) => (resolveFinish = r)),
+    );
+    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
+
+    const editor = () =>
+      screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement;
+    expect(editor().disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
+
+    // While the finish is in flight: editor is read-only and the mic can't start a new recording.
+    await waitFor(() => expect(editor().disabled).toBe(true));
+    expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
+
+    // Resolve so the test doesn't leave a dangling promise.
+    resolveFinish({ kind: "finished", storyId: STORY_ID });
+    await waitFor(() => expect(editor().disabled).toBe(false));
+  });
+
   it("editing the prose while an offer is up drops the stale offer (no way to accept it)", async () => {
     // Data-loss guard: the polished preview reflects the prose AT PROBE TIME. If the narrator keeps
     // typing, accepting the stale offer would silently drop the new words. Editing must invalidate the
