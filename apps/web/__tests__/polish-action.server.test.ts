@@ -9,8 +9,9 @@
  *
  * The harness mirrors `compose-story-action.server.test.ts`: `@/lib/runtime` is mocked so importing
  * the actions module doesn't boot the real DEV runtime; getRuntime() reads settable module-level
- * bindings. A real in-process pipeline seeds a `pending_approval` story (the text path renders
- * straight through) so there is a real story to polish against.
+ * bindings. The text compose path (ADR-0014 Inc 3) appends the typed take synchronously and leaves a
+ * `draft` carrying the typed words as its prose — a real story to polish against (polish is allowed
+ * on `draft` as well as `pending_approval`).
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -78,15 +79,17 @@ async function makePerson(db: Database, name = "Eleanor"): Promise<string> {
   return p!.id;
 }
 
-// Seed a story at `pending_approval` with real rendered prose by driving the text compose path
-// (the text story renders straight through to pending_approval via the real in-process pipeline).
-async function seedPendingApprovalStory(personId: string): Promise<string> {
+// Seed a `draft` story carrying real working prose by driving the text compose path (ADR-0014 Inc 3:
+// the typed take is appended synchronously and the draft stays `draft` with the typed words as its
+// prose). `polishAnswerProseAction` is allowed on a `draft` (as well as `pending_approval`), so this
+// is a real story to polish against.
+async function seedStoryWithProse(personId: string): Promise<string> {
   authCtx = { kind: "account", personId };
   const result = await composeStoryAction(
     form({ text: "The summer we drove to the coast and the car broke down." }),
   );
-  if (!("kind" in result) || result.kind !== "ready") {
-    throw new Error(`expected a ready step seeding the story, got ${JSON.stringify(result)}`);
+  if (!("kind" in result) || result.kind !== "appended") {
+    throw new Error(`expected an appended step seeding the story, got ${JSON.stringify(result)}`);
   }
   return result.storyId;
 }
@@ -130,7 +133,7 @@ describe("polishAnswerProseAction — persists the ✨ Polish tap (ADR-0014 Inc 
 
   it("(a) a real polish persists exactly one ai_polished row and updates stories.prose", async () => {
     const personId = await makePerson(runtimeDb);
-    const storyId = await seedPendingApprovalStory(personId);
+    const storyId = await seedStoryWithProse(personId);
     authCtx = { kind: "account", personId };
 
     const result = await polishAnswerProseAction(
@@ -157,7 +160,7 @@ describe("polishAnswerProseAction — persists the ✨ Polish tap (ADR-0014 Inc 
 
   it("(b) a tap on empty/whitespace prose writes NO ai_polished row and leaves stories.prose unchanged", async () => {
     const personId = await makePerson(runtimeDb);
-    const storyId = await seedPendingApprovalStory(personId);
+    const storyId = await seedStoryWithProse(personId);
     authCtx = { kind: "account", personId };
 
     const before = await storyProse(runtimeDb, storyId);

@@ -3,13 +3,14 @@
  *
  * `composeStoryAction` generalizes `recordAnswerAction`: it accepts EITHER an `audio` Blob (voice
  * path — delegates to the existing, well-tested `recordAnswerAction`) OR a `text` string (typed
- * telling → `ingestTextStory` + `dispatchPipeline`). `askId` is OPTIONAL — a self-initiated telling
- * has no ask to validate.
+ * telling → `ingestTextStory` + `appendTypedTakeContribution`, ADR-0014 Inc 3). `askId` is OPTIONAL
+ * — a self-initiated telling has no ask to validate.
  *
  * The harness mirrors `answer-follow-up-loop.server.test.ts`: `@/lib/runtime` is mocked so importing
  * the actions module doesn't boot the real DEV runtime; getRuntime() reads settable module-level
- * bindings. Unlike the follow-up test, `dispatchPipeline` here is a REAL in-process pipeline so a
- * text draft actually renders to `pending_approval` (the text path skips transcribe → render_story).
+ * bindings. The text path no longer dispatches the monolithic render pipeline — it appends the typed
+ * take synchronously and the draft STAYS `draft` — so `dispatchPipeline` is a stub here (the voice
+ * follow-up describes still exercise it).
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -45,7 +46,6 @@ import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/in
 import {
   ScriptedLanguageModel,
   ScriptedTranscriber,
-  createPipeline,
   type LanguageModel,
   type Transcriber,
 } from "@chronicle/pipeline";
@@ -130,44 +130,49 @@ describe("composeStoryAction — text path (Task 7)", () => {
     runtimeLlm = scriptedLlm();
     runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
     runtimeTranscriber = new ScriptedTranscriber({ text: "unused" });
-    runtimeDispatch = async (storyId: string) => {
-      // A REAL in-process pipeline: the text story routes straight to render_story (skips
-      // transcribe) and reaches pending_approval — exactly what dev/CI dispatch does.
-      const pipeline = createPipeline({
-        db: runtimeDb,
-        storage: runtimeStorage,
-        transcriber: runtimeTranscriber,
-        languageModel: runtimeLlm,
-      });
-      await pipeline.start(storyId);
-      await pipeline.runToCompletion();
+    // The text path appends the typed take synchronously and never dispatches — this is a stub that
+    // FAILS the test if it is ever called (a regression back to the monolithic render path).
+    runtimeDispatch = async () => {
+      throw new Error("dispatchPipeline must NOT be called on the typed-append text path");
     };
     authCtx = { kind: "none" };
   });
   afterAll(() => {});
 
-  it("(a) a text telling with NO askId creates a kind='text' story at pending_approval", async () => {
+  it("(a) a text telling with NO askId appends the typed take and stays at draft with the typed prose", async () => {
     const personId = await makePerson(runtimeDb);
     authCtx = { kind: "account", personId };
 
-    const result = await composeStoryAction(
-      form({ text: "The summer we drove to the coast and the car broke down." }),
-    );
+    const TEXT = "The summer we drove to the coast and the car broke down.";
+    const result = await composeStoryAction(form({ text: TEXT }));
 
-    if (!("kind" in result) || result.kind !== "ready") {
-      throw new Error(`expected a ready step, got ${JSON.stringify(result)}`);
+    // ADR-0014 Inc 3: the text path now appends the typed take synchronously → { kind:"appended" }.
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
     }
+    expect(result.prose).toBe(TEXT);
+    expect(result.appendedSegment).toBe(TEXT);
     const storyId = result.storyId;
 
     const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
     expect(story).not.toBeNull();
     expect(story!.kind).toBe("text");
     expect(story!.ownerPersonId).toBe(personId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.transcript).toBe("The summer we drove to the coast and the car broke down.");
+    // The draft STAYS `draft` (Finish, a later slice, transitions it) and carries the typed words as
+    // its working prose — NOT a render-from-transcript, and `transcript` is never written.
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(TEXT);
+    expect(story!.transcript).toBeNull();
     expect(story!.recordingMediaId).toBeNull();
     // No audio bytes on the text path → no media row.
     expect(await rowCount(runtimeDb, "media")).toBe(0);
+    // Exactly one user_authored provenance row (the typed take); nothing double-logged by create.
+    const revs = await listProseRevisions(runtimeDb, storyId);
+    const authored = revs.filter((r) => r.level === "user_authored");
+    expect(authored).toHaveLength(1);
+    expect(authored[0]!.text).toBe(TEXT);
+    expect(authored[0]!.actorPersonId).toBe(personId);
+    expect(authored[0]!.storyRecordingId).toBeNull();
   });
 
   it("(b) an empty/whitespace text returns { error } and writes nothing", async () => {

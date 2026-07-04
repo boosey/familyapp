@@ -7,10 +7,10 @@
  * the title is left unchanged.
  *
  * The harness mirrors `compose-story-action.server.test.ts`: `@/lib/runtime` is mocked so importing
- * the actions module doesn't boot the real DEV runtime; `dispatchPipeline` is a REAL in-process
- * pipeline so a text draft actually renders to `pending_approval` with a derived title. The story is
- * read back through the front door (`getStoryForViewer`), which returns the full row (incl. title) to
- * the owner in any state.
+ * the actions module doesn't boot the real DEV runtime. The reviewable `pending_approval` story is
+ * seeded directly via the core write surface (ADR-0014 Inc 3 retired the straight-through text render),
+ * with prose + a derived title. The story is read back through the front door (`getStoryForViewer`),
+ * which returns the full row (incl. title) to the owner in any state.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,17 +36,22 @@ vi.mock("@/lib/runtime", () => ({
 
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
-import { getStoryForViewer, type AuthContext } from "@chronicle/core";
+import {
+  getStoryForViewer,
+  createTextDraft,
+  updateDerivedFields,
+  transitionStoryState,
+  type AuthContext,
+} from "@chronicle/core";
 import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/interviewer";
 import {
   ScriptedLanguageModel,
   ScriptedTranscriber,
-  createPipeline,
   type LanguageModel,
   type Transcriber,
 } from "@chronicle/pipeline";
 import { InMemoryMediaStorage } from "@chronicle/storage";
-import { composeStoryAction, shareAnswerAction } from "@/app/hub/answer/[askId]/actions";
+import { shareAnswerAction } from "@/app/hub/answer/[askId]/actions";
 
 // Render output for the render_story stage (responseFormat: "json"). The derived title is the value
 // the narrator sees pre-filled in the review editor.
@@ -82,17 +87,25 @@ async function makePerson(db: Database, name = "Eleanor"): Promise<string> {
 }
 
 /**
- * Seed a pending_approval story with a derived title by driving the real text path: compose → render.
- * Returns the storyId, now at pending_approval with `title = "Auto Title"`.
+ * Seed a `pending_approval` story with a derived title, directly via the core write surface. The
+ * text compose path no longer renders straight through (ADR-0014 Inc 3: it appends the typed take and
+ * leaves the draft `draft`), so this seeds the reviewable state `shareAnswerAction` operates on the
+ * same way the render stage would: prose + title written, then `draft → pending_approval`.
  */
-async function seedPendingStory(_personId: string): Promise<string> {
-  const result = await composeStoryAction(
-    form({ text: "The summer we drove to the coast and the car broke down." }),
-  );
-  if (!("kind" in result) || result.kind !== "ready") {
-    throw new Error(`expected a ready step from compose, got ${JSON.stringify(result)}`);
-  }
-  return result.storyId;
+async function seedPendingStory(personId: string): Promise<string> {
+  const { story } = await createTextDraft(runtimeDb, {
+    ownerPersonId: personId,
+    text: "The summer we drove to the coast and the car broke down.",
+  });
+  await updateDerivedFields(runtimeDb, story.id, {
+    transcript: "The summer we drove to the coast and the car broke down.",
+    prose: "A polished memory, typed by the narrator.",
+    title: "Auto Title",
+    summary: "A memory the narrator wrote down.",
+    tags: ["childhood"],
+  });
+  await transitionStoryState(runtimeDb, story.id, "pending_approval");
+  return story.id;
 }
 
 /**
@@ -118,15 +131,10 @@ describe("shareAnswerAction — edited title persist (Task 8)", () => {
     runtimeLlm = scriptedLlm();
     runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
     runtimeTranscriber = new ScriptedTranscriber({ text: "unused" });
-    runtimeDispatch = async (storyId: string) => {
-      const pipeline = createPipeline({
-        db: runtimeDb,
-        storage: runtimeStorage,
-        transcriber: runtimeTranscriber,
-        languageModel: runtimeLlm,
-      });
-      await pipeline.start(storyId);
-      await pipeline.runToCompletion();
+    // The seed path writes the reviewable story directly via core (no dispatch), and shareAnswerAction
+    // never dispatches — this stub fails loudly if some path unexpectedly reaches for the pipeline.
+    runtimeDispatch = async () => {
+      throw new Error("dispatchPipeline must NOT be called in the share-title path");
     };
     authCtx = { kind: "none" };
   });

@@ -11,7 +11,7 @@ describe("createTextDraft (ADR-0007 text origin)", () => {
     db = await createTestDatabase();
   });
 
-  it("creates a kind='text' draft with typed words in transcript, no recording, and a user_authored L1", async () => {
+  it("creates a BARE kind='text' draft — no words persisted (the caller appends them)", async () => {
     const owner = await makePerson(db, "Eleanor");
 
     const { story } = await createTextDraft(db, {
@@ -23,24 +23,13 @@ describe("createTextDraft (ADR-0007 text origin)", () => {
     expect(story.recordingMediaId).toBeNull();
     expect(story.state).toBe("draft");
     expect(story.audienceTier).toBe("private");
-    expect(story.transcript).toBe("The summer we moved to Naples.");
-    expect(story.prose).toBeNull(); // render fills prose, not create
+    // ADR-0014 Inc 3: createTextDraft no longer persists the typed words. The words are written
+    // later by appendTypedTakeContribution (the single writer of the typed take), not here.
+    expect(story.transcript).toBeNull();
+    expect(story.prose).toBeNull();
 
     const revs = await listProseRevisions(db, story.id);
-    expect(revs.map((r) => r.level)).toEqual(["user_authored"]);
-    expect(revs[0]!.text).toBe("The summer we moved to Naples.");
-    expect(revs[0]!.actorPersonId).toBe(owner.id);
-  });
-
-  it("trims surrounding whitespace before persisting", async () => {
-    const owner = await makePerson(db, "Eleanor");
-    const { story } = await createTextDraft(db, {
-      ownerPersonId: owner.id,
-      text: "  a quiet morning  ",
-    });
-    expect(story.transcript).toBe("a quiet morning");
-    const revs = await listProseRevisions(db, story.id);
-    expect(revs[0]!.text).toBe("a quiet morning");
+    expect(revs).toHaveLength(0);
   });
 
   it("rejects empty/whitespace text", async () => {

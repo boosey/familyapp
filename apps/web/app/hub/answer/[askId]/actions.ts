@@ -18,6 +18,7 @@ import {
   updateDerivedFields,
   listStoryRecordings,
   appendVoiceTakeContribution,
+  appendTypedTakeContribution,
   dropStoryRecording,
   appendFollowUpDecision,
   appendFollowUpOutcome,
@@ -276,10 +277,11 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
  * Compose a story — the generalized front door for the in-hub telling surface (ADR-0007). Reads the
  * account session server-side (personId is NEVER trusted from the client), then branches on the form
  * payload:
- *   - a `text` string (and no `audio` Blob) → the typed telling: `ingestTextStory` writes a
- *     `kind='text'` draft, then `dispatchPipeline` renders it (text stories skip transcribe → go
- *     straight to render_story) to `pending_approval`. There is no follow-up mini-loop on the typed
- *     path — there is no spoken take to evaluate.
+ *   - a `text` string (and no `audio` Blob) → the typed telling: `ingestTextStory` writes a bare
+ *     `kind='text'` draft, then `appendTypedTakeContribution` writes the typed words as the initial
+ *     typed take (the `user_authored` provenance row + the draft's working prose). The draft STAYS
+ *     `draft` (Finish, a later slice, transitions it) — there is no follow-up mini-loop on the typed
+ *     path (no spoken take to evaluate) and no monolithic render.
  *   - otherwise → delegate to `recordAnswerAction` (the voice path, now itself ask-optional).
  *
  * `askId` is OPTIONAL on BOTH branches: when present the ask target/answerable check runs (as when
@@ -322,18 +324,27 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
     }
     plog("answer", "composeStory(text): ingested → text draft created", { story: storyId });
 
-    // Render BEFORE review (prose-provenance): a text story routes straight to render_story, so this
-    // one dispatch reaches pending_approval in dev/CI (enqueues in prod). No follow-up loop.
+    // Per-take append (ADR-0014 Inc 3): write the typed words as the INITIAL typed take on the fresh
+    // draft — appendTypedTakeContribution appends the `user_authored` provenance row keyed to the
+    // narrator and sets the draft's working prose. priorProse=null (nothing was composed yet). The
+    // draft STAYS `draft` (Finish, a later slice, transitions it); this replaces the old monolithic
+    // dispatchPipeline render. appendTypedTakeContribution trims internally, so the raw `text` is
+    // passed straight through — surrounding whitespace never survives into stored prose.
     try {
-      await rt.dispatchPipeline(storyId);
+      const { prose, appendedSegment } = await appendTypedTakeContribution(db, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        text,
+        priorProse: null,
+      });
+      return { kind: "appended", storyId, prose, appendedSegment };
     } catch (err) {
-      plogError("answer", "composeStory(text): render failed", {
+      plogError("answer", "composeStory(text): append failed", {
         story: storyId,
         error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
       });
       return { error: hub.actions.saveFailed };
     }
-    return { kind: "ready", storyId };
   }
 
   // VOICE branch — delegate to the existing, well-tested path (now ask-optional too).

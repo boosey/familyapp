@@ -142,7 +142,7 @@ describe("appendTypedTakeContribution (ADR-0014 §4)", () => {
 
     const revs = await listProseRevisions(db, story.id);
     const authored = revs.filter((r) => r.level === "user_authored");
-    expect(authored.length).toBe(2); // createTextDraft wrote one; this appended a second
+    expect(authored.length).toBe(1); // createTextDraft persists nothing now; this append is the ONLY user_authored row
     const latest = authored[authored.length - 1]!;
     expect(latest.text).toBe("Second typed part.");
     expect(latest.actorPersonId).toBe(narrator.id);

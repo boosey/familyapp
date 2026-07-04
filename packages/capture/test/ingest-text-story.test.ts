@@ -45,7 +45,9 @@ describe("ingestTextStory (account actor)", () => {
     expect(story?.recordingMediaId).toBeNull();
     // Text origin: there are no audio bytes, so no media row is ever created.
     expect(await rowCount("media")).toBe(0);
-    expect(story?.transcript).toBe("A story I want to tell.");
+    // ADR-0014 Inc 3: ingestTextStory now yields a BARE text draft — createTextDraft no longer writes
+    // the typed words into `transcript` (the caller appends them via appendTypedTakeContribution).
+    expect(story?.transcript).toBeNull();
   });
 
   it("threads promptQuestion and askId onto the draft when provided", async () => {

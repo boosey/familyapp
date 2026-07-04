@@ -87,11 +87,14 @@ export interface CreatedTextDraft {
 }
 
 /**
- * Create a TEXT-origin draft Story (ADR-0007): the typed words are canonical, there is no
- * recording. The words go into `transcript` (the render stage produces `prose`/`title` from them,
- * exactly as for a voice transcript). A `user_authored` L1 prose-revision records the source text.
- * No `media` row and no `story_recordings` row are created — the kind⇔recording CHECK
- * (invariants.sql) requires `recording_media_id IS NULL` for a text story, which this satisfies.
+ * Create a BARE TEXT-origin draft Story (ADR-0007 / ADR-0014 Inc 3): the typed words are canonical,
+ * there is no recording. This creates ONLY the draft row — it does NOT persist the words. The typed
+ * words are written by the caller via `appendTypedTakeContribution` (the single writer of the typed
+ * take: it appends the `user_authored` provenance row AND sets the working prose). `text` is still
+ * required here so the empty-after-trim guard rejects a blank telling before a row is created; the
+ * trimmed value is not stored. No `media` row and no `story_recordings` row are created — the
+ * kind⇔recording CHECK (invariants.sql) requires `recording_media_id IS NULL` for a text story,
+ * which this satisfies.
  */
 export async function createTextDraft(
   db: Database,
@@ -110,21 +113,11 @@ export async function createTextDraft(
         recordingMediaId: null,
         state: "draft",
         audienceTier: "private",
-        transcript: text,
         promptQuestion: input.promptQuestion ?? null,
         askId: input.askId ?? null,
         originatingFamilyId: input.originatingFamilyId ?? null,
       })
       .returning();
-
-    await tx.insert(proseRevisions).values({
-      storyId: story!.id,
-      level: "user_authored",
-      text,
-      modelId: null,
-      promptText: null,
-      actorPersonId: input.ownerPersonId,
-    });
 
     return { story: story! };
   });

@@ -53,6 +53,7 @@ export {
   listStoryRecordings,
   appendStoryRecording,
   appendVoiceTakeContribution,
+  appendTypedTakeContribution,
   persistTakeRecording,
   updateStoryRecordingTranscript,
   dropStoryRecording,
