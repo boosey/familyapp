@@ -69,6 +69,24 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 9)
+**Slice 9 `a5a2f28` (LANDED, cold-reviewed clean; full suite green: core 277, pipeline 74, capture 38,
+db 67, apps/web 398, typecheck 0).** Routing relax. A live `draft`-state story is now resumable on both
+resume pages, and the story `state` is threaded onto the client `DraftInfo` (`"draft" | "pending_approval"`)
+for Slice 10 to key phases off. PLUMBING ONLY — a resumed `draft` still renders the existing review markup
+(no phase collapse yet); no rendered-behavior change. Changes: `DraftInfo` gains `state`;
+`tell/[storyId]/page.tsx` guard widened pending-only → `draft|pending_approval` (+ set `state`);
+`answer/[askId]/page.tsx` resolves the ask's draft via `listOutstandingDrafts` (both states) instead of the
+pending-only `listOutstandingAnswerDrafts` (+ set `state`, + guard text-answer null media → `mediaUrl:""`).
+New `answer-resume-page.test.tsx`; extended `tell-resume-page.test.tsx`; existing review-phase fixtures gained
+`state:"pending_approval"`. **AFK micro-decisions:** (1) `listOutstandingAnswerDrafts` is now unconsumed by app
+code but RETAINED as a tested core-barrel API — removing an exported core fn is a contract change, out of scope;
+the Questions-tab pending-only split stays via the web helper `questionsTabAnswerDrafts`. (2) Added the
+text-answer-draft media guard because the relax newly exposes text-origin drafts (would otherwise render
+`/api/media/null`). Cold review (fresh agent, scoped to the SHA) found NO material defect. **Slice 10 (phase
+collapse — the LAST big one) is next; StoryComposer does NOT yet branch on `state`.** Run paused by the user
+after Slice 9.
+
 ## Build status (updated 2026-07-04, through Slice 8)
 **Slice 8 `e21e97b` (LANDED, riskiest slice, cold-reviewed; full suite green: core 277, pipeline 74, capture 38,
 apps/web 393, typecheck 0).** Finish + Finish-check. `finishDraft` ADDED to the core barrel. New
