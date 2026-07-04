@@ -274,8 +274,6 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
         }
         return;
       }
-      // step.kind === "ready" is a legacy stitch signal; no answer action produces it anymore (the
-      // composing surface never polls). Nothing to do.
     },
     [router, backTab, history, settle],
   );

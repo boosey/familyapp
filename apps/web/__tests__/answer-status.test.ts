@@ -1,12 +1,13 @@
 /**
- * Status-read tests for slice 2b — both surfaces, exercised against the REAL @chronicle/core front
- * door (no mocking of getStoryForViewer), so the auth-gating is genuinely tested:
+ * Status-read tests for slice 2b — exercised against the REAL @chronicle/core front door (no mocking
+ * of getStoryForViewer), so the auth-gating is genuinely tested:
  *
  *   - the pure state→status mapper;
- *   - the hub account-auth server action (getAnswerStatusAction): processing for draft, ready for
- *     pending_approval, and a non-owner account cannot read another narrator's draft;
  *   - the link-session token route (GET /api/capture/status): processing/ready for the token's own
  *     stories, 401 for an unknown token, 404 for a story the token does not own.
+ *
+ * (The in-hub account-auth `getAnswerStatusAction` was removed in ADR-0014 Inc 3 slice 11 — the
+ * composing surface no longer polls; only the link-session route remains.)
  *
  * The seeded graph (seedInto) provides a real Person (Eleanor), her link-session token, and a
  * pending_approval story; we add fresh `draft` stories via the audited core write path. `@/lib/runtime`
@@ -20,19 +21,15 @@ import { persons } from "@chronicle/db/schema";
 import { seedInto } from "../lib/dev-seed";
 import { mapStoryStateToStatus } from "../lib/answer-status";
 
-// Settable runtime: getRuntime() reads these at call time.
+// Settable runtime: getRuntime() reads this at call time. The link-session route authenticates via the
+// token (resolveLinkSession), not an account AuthContext, so no getCurrentAuthContext stub is needed.
 let runtimeDb: Database;
-let authCtx: { kind: string; personId?: string };
 
 vi.mock("@/lib/runtime", () => ({
-  getRuntime: async () => ({
-    db: runtimeDb,
-    auth: { getCurrentAuthContext: async () => authCtx },
-  }),
+  getRuntime: async () => ({ db: runtimeDb }),
 }));
 
-// Imported AFTER the mock is registered (these modules import getRuntime from @/lib/runtime).
-import { getAnswerStatusAction } from "@/app/hub/answer/[askId]/actions";
+// Imported AFTER the mock is registered (this module imports getRuntime from @/lib/runtime).
 import { GET as statusGET } from "@/app/api/capture/status/route";
 
 const CHECKSUM = "a".repeat(64);
@@ -76,34 +73,6 @@ describe("mapStoryStateToStatus", () => {
     expect(mapStoryStateToStatus("pending_approval")).toBe("ready");
     expect(mapStoryStateToStatus("approved")).toBe("ready");
     expect(mapStoryStateToStatus("shared")).toBe("ready");
-  });
-});
-
-describe("getAnswerStatusAction (hub account auth)", () => {
-  it("returns processing for the owner's still-draft story", async () => {
-    authCtx = { kind: "account", personId: eleanor };
-    const r = await getAnswerStatusAction(eleanorDraftId);
-    expect(r).toEqual({ status: "processing", storyId: eleanorDraftId });
-  });
-
-  it("returns ready once the story is pending_approval", async () => {
-    authCtx = { kind: "account", personId: eleanor };
-    const r = await getAnswerStatusAction(pendingStoryId);
-    expect(r).toEqual({ status: "ready", storyId: pendingStoryId });
-  });
-
-  it("refuses a non-account context", async () => {
-    authCtx = { kind: "anonymous" };
-    const r = await getAnswerStatusAction(eleanorDraftId);
-    expect(r).toHaveProperty("error");
-    expect((r as { status?: string }).status).toBeUndefined();
-  });
-
-  it("a non-owner account cannot read another narrator's draft (auth-gated, not found)", async () => {
-    authCtx = { kind: "account", personId: eleanor };
-    const r = await getAnswerStatusAction(strangerDraftId);
-    expect(r).toHaveProperty("error");
-    expect((r as { status?: string }).status).toBeUndefined();
   });
 });
 

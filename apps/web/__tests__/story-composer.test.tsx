@@ -31,16 +31,8 @@ const composeStoryAction = vi.fn(
     appendedSegment: "The summer we drove to the coast.",
   }),
 );
-const getAnswerStatusAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ status: "ready"; storyId: string }> => ({
-    status: "ready",
-    storyId: STORY_ID,
-  }),
-);
-
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
-  getAnswerStatusAction: (...args: unknown[]) => getAnswerStatusAction(...args),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
   polishAnswerProseAction: vi.fn(),
@@ -88,8 +80,7 @@ describe("StoryComposer capture (tell mode)", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/hub/tell/${STORY_ID}`));
-    // It must NOT poll getAnswerStatusAction (an appended draft stays `draft`) or show "taking longer".
-    expect(getAnswerStatusAction).not.toHaveBeenCalled();
+    // An appended draft stays `draft` — the composing surface never polls or shows "taking longer".
     expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
 });

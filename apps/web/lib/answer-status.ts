@@ -21,11 +21,6 @@ import type { StoryState } from "@chronicle/db";
 
 export type AnswerStatus = "processing" | "ready";
 
-export interface AnswerStatusResult {
-  status: AnswerStatus;
-  storyId: string;
-}
-
 export function mapStoryStateToStatus(state: StoryState): AnswerStatus {
   return state === "draft" ? "processing" : "ready";
 }

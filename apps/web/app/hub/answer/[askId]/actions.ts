@@ -48,7 +48,6 @@ import {
 import { resolveFollowUpPolicyForRequest } from "@/lib/follow-up-config";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
-import { mapStoryStateToStatus, type AnswerStatusResult } from "@/lib/answer-status";
 
 export type ActionResult = { error: string } | undefined;
 
@@ -61,7 +60,6 @@ export type ActionResult = { error: string } | undefined;
  *   - `take_dropped`: a follow-up take's audio was removed (ADR-0014 Inc 3 slice 7). The draft state
  *     is UNCHANGED and the take's text stays in the working prose — the narrator edits it out
  *     manually (RESOLVED DECISION d). The client just refreshes the takes list + shows a message.
- *   - `ready`: legacy stitch-to-review signal — the client polls processing status, then review.
  *   - `discarded`: the whole draft was dropped (e.g. dropping take 0) → back to the hub.
  *   - `finish_offer`: the Finish-check ran a speculative polish that MATERIALLY differs (ADR-0014 Inc 3
  *     slice 8). Nothing is persisted yet — the client shows an inline dismissible card carrying the
@@ -70,10 +68,11 @@ export type ActionResult = { error: string } | undefined;
  *   - `finished`: the draft was sealed `draft → pending_approval` (Finish). Either the polish was
  *     declined/immaterial (finished as-is) or accepted (finished on the polished text).
  *   - `{ error }`: a validation/auth failure surfaced to the narrator.
- * NOTE (post-slice-7): NO answer action returns `ready` anymore — dropTakeAction was the last one, and
- * it now returns `take_dropped`. The `ready` variant + getAnswerStatusAction + the poll infra are kept
- * because the link-session capture surface (`/s/[token]`) still uses them (Slice 11 re-verifies before
- * any removal).
+ * NOTE (ADR-0014 Inc 3 slice 11): the legacy `ready` stitch-to-review variant was REMOVED — no answer
+ * action has produced it since slice 7, and the composing surface (`ComposingEditor`) never polls. The
+ * link-session capture surface (`/s/[token]`) keeps its OWN status polling via `/api/capture/status`
+ * (which maps story state to a `"ready"` STRING through `mapStoryStateToStatus`) — that is a distinct
+ * type, unaffected by this removal.
  */
 export type ThreadStep =
   | {
@@ -87,7 +86,6 @@ export type ThreadStep =
       prose: string;
       appendedSegment: string;
     }
-  | { kind: "ready"; storyId: string }
   | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
   | { kind: "take_dropped"; storyId: string }
   | {
@@ -123,8 +121,6 @@ type FollowUpStepRuntime = Pick<
   Awaited<ReturnType<typeof getRuntime>>,
   "db" | "languageModel" | "followUpEvaluator"
 >;
-
-export type AnswerStatusActionResult = AnswerStatusResult | { error: string };
 
 /**
  * Ask-answerability guard, shared by the voice (`recordAnswerAction`) and generalized
@@ -541,26 +537,6 @@ function withTimeout<T>(ms: number, fn: () => Promise<T>): Promise<T> {
       setTimeout(() => reject(new Error("follow-up budget exceeded")), ms),
     ),
   ]);
-}
-
-/**
- * Viewer-scoped processing-status read for the in-hub answer flow (slice 2b). Account-auth: the
- * personId comes from the server session, never the client. The story is read through the SINGLE
- * FRONT DOOR (`getStoryForViewer`), which already enforces owner-only visibility of a not-yet-shared
- * draft — a non-owner gets `null` here (→ storyNotFound), so this cannot be used to probe foreign
- * stories. Maps the story state to the small `{ status, storyId }` contract; no content is returned.
- */
-export async function getAnswerStatusAction(storyId: string): Promise<AnswerStatusActionResult> {
-  const { db, auth } = await getRuntime();
-  const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
-  if (typeof storyId !== "string" || !storyId) return { error: hub.actions.invalidInput };
-
-  const story = await getStoryForViewer(db, ctx, storyId);
-  if (!story || story.ownerPersonId !== ctx.personId) {
-    return { error: hub.actions.storyNotFound };
-  }
-  return { status: mapStoryStateToStatus(story.state), storyId: story.id };
 }
 
 /**

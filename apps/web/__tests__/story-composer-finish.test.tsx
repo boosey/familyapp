@@ -56,7 +56,6 @@ const polishAnswerProseAction = vi.fn(
 
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: vi.fn(),
-  getAnswerStatusAction: vi.fn(),
   recordFollowUpTakeAction: vi.fn(),
   appendTypedTakeAction: vi.fn(),
   declineFollowUpAction: vi.fn(),

@@ -6,8 +6,9 @@
  *
  * ADR-0014 Inc 3 (Slice 5): the flag-off voice capture now resolves to the per-take `appended` step
  * (the take was transcribed/cleaned and concatenated onto the draft's working prose synchronously).
- * An `appended` step must NOT poll `getAnswerStatusAction` — an appended story stays `draft`, so a
- * poll would map to `processing` forever and falsely surface "taking longer". It refreshes once.
+ * An `appended` story stays `draft`, so the composing surface must NOT poll — a poll would map to
+ * `processing` forever and falsely surface "taking longer". It refreshes once. (The poll path was
+ * removed in ADR-0014 Inc 3 slice 11.)
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -39,19 +40,8 @@ const composeStoryAction = vi.fn(
   (..._args: unknown[]) =>
     new Promise<AppendedStep | { error: string }>((res) => (resolveRecord = res)),
 );
-// The status poll must NEVER be called on the append path. It stays mocked (StoryComposer imports it
-// for the still-live flag-on `ready` path) so any accidental call is observable, not a crash.
-const getAnswerStatusAction = vi.fn(
-  async (
-    ..._args: unknown[]
-  ): Promise<{ status: "processing" | "ready"; storyId: string }> => ({
-    status: "ready",
-    storyId: STORY_ID,
-  }),
-);
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
-  getAnswerStatusAction: (...args: unknown[]) => getAnswerStatusAction(...args),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
 }));
@@ -126,14 +116,13 @@ describe("StoryComposer optimistic transition", () => {
       appendedSegment: "The polished words so far.",
     });
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-    expect(getAnswerStatusAction).not.toHaveBeenCalled();
     expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
 
-  it("never polls the status after an appended step (deploy-safety regression guard)", async () => {
-    // The bug this guards: before Slice 5, an `appended` step fell through to the `ready` poll, which
+  it("never shows 'taking longer' after an appended step (deploy-safety regression guard)", async () => {
+    // The bug this guards: before Slice 5, an `appended` step fell through to a `ready` poll, which
     // maps a still-`draft` story to `processing` until the soft cap → a false "taking longer" after
-    // EVERY successful capture. This asserts the poll is never even entered.
+    // EVERY successful capture. The poll path (and getAnswerStatusAction) were removed in slice 11.
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     clickVoiceIdle();
@@ -149,9 +138,8 @@ describe("StoryComposer optimistic transition", () => {
     });
 
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-    // Give any (buggy) poll a chance to fire before asserting it never did.
+    // Give any (buggy) poll a chance to fire before asserting the warm message never appeared.
     await Promise.resolve();
-    expect(getAnswerStatusAction).not.toHaveBeenCalled();
     expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
 
