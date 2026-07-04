@@ -95,6 +95,14 @@ audience, no consent, never surfaced. It terminates at anchor extraction. Its au
 first source of narrator memory** (seam ready via retention; the memory *model* is the deferred
 "picture of the person" feature).
 
+> **Implementation note (Inc 4, 2026-07-04):** "the same … prose lineage" is honored in *shape* but as
+> a **separate `intake_revisions` table**, not a polymorphic widening of the story `prose_revisions`
+> ledger — this preserves the intake/story wall (intake is owner-only and never behind the content
+> authorization front door) with zero blast radius on that load-bearing surface. Same enum, same
+> append-only trigger discipline (UPDATE forbidden; DELETE permitted for the owner-erasure cascade,
+> since intake is never consented). The shared editor is the extracted `<ProseBlock>`; the atomic
+> polish write is core `logIntakePolish` (the intake counterpart of the story `logPolish`).
+
 ### 9. Memory extraction in every mode, consent-gated
 
 Every mode mines what was said into system memory (anchor augmentation now; broader narrator memory

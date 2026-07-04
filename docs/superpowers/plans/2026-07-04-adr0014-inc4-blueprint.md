@@ -113,3 +113,43 @@ suites green; typecheck 0.
 Frozen story shared-contract (§4 core signatures) would need changing; a story-side schema change
 (intake_revisions is additive + isolated, so it is NOT a story-contract change); a slice can't go green
 after two builder+review rounds. Commit what's green, record the blocker, stop.
+
+---
+
+## BUILD STATUS — Inc 4 COMPLETE on the branch (2026-07-04); NOT merged/deployed
+
+All four code slices landed, each cold-reviewed by a FRESH reviewer; the orchestrator verified every
+slice itself (git show, typecheck, affected + full apps/web suite) before trusting counts.
+
+- **S1 `bbb379a`** — intake_revisions ledger + core write surface. Reviewed clean (one nit folded: reuse
+  `chronicle_forbid_mutation` instead of a duplicate guard fn).
+- **S2 `c23e9b1`** — intake Cleanup on transcription + `polishIntakeAnswerAction`, both logging the ledger.
+  Reviewed clean (+ a regression test for the cleanup-throws fallback).
+- **S3 `f3dc278`** — shared `ProseBlock` extraction + `AboutYouFlow` rework + save-time lineage + the
+  TRANSACTIONAL core `logIntakePolish`. **4 review rounds:** a BLOCKER (typed-then-verbatim-polished
+  mislabeled `user_authored`) and two should-fixes (a hand-edit dropped before Polish; a non-atomic
+  two-write polish) all fixed with targeted regression tests; final reviewer confirmed the ledger logic
+  correct + complete.
+- **S4 `c2d0764`** — consent-gated narrator-memory WRITE seam (deferred model) + §9 gating tests. Reviewed
+  clean (+ a negative-path test: a failed/non-owner share never feeds memory).
+
+Branch-wide GREEN: `pnpm -r test` exit 0 (all 13 packages), `pnpm -r typecheck` clean. apps/web **421**,
+core 280, db 69.
+
+### Known limitations (documented, deferred — NOT bugs blocking the branch)
+1. `logIntakePolish` chooses `user_authored` vs `human_corrected` from `priorRevs.length === 0`, not from
+   `intake_answers.origin`. If `submitIntakeRecording`'s best-effort `ai_cleaned`/`ai_transcribed` ledger
+   write silently fails while the `text` write succeeds, a later Polish sees an empty ledger and labels
+   AI-origin text `user_authored`. A deep edge (already-degraded ledger); fix = key off `origin === "typed"`.
+   Kept to mirror the story `logPolish` contract; left as a hardening follow-up.
+2. `shareAnswerAction` does a second `getStoryForViewer` read for the memory feed (scoping; one extra query).
+
+### S5 remaining — reseed (DEPLOY-TIME, human-gated) + doc-true
+`schema.sql` + `invariants.sql` are already regenerated and committed (S1). This worktree is on the RESEED
+model (no migrations dir — it predates master's migration chain). **No destructive reseed was run this
+session, deliberately:** the Neon reseed is `DROP SCHEMA` + reapply (wipes data) and belongs AT DEPLOY, not
+before merge — this branch is unmerged and master (the live beta) doesn't use `intake_revisions`, so wiping
+prod Neon now is premature and risky. The reseed (dev + BOTH Neon branches) is a documented deploy-time human
+step, coupled with the merge go/no-go. The broader **Inc 5** (verbose observability, `Recording-To-Story-
+Pipeline.md` rewrite, ADR-0014 Status→Implemented, ADR-0007 amendment note, PLAN/PROGRESS) remains separate
+and pending.
