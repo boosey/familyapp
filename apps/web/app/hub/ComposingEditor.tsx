@@ -367,6 +367,10 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       }
     } catch {
       setPendingError(hub.answer.genericError);
+    } finally {
+      // Robust liveness: always clear the typed-append flag (handleStep also clears it on its terminal
+      // branches, but a `finally` doesn't depend on the server fn's return-type discipline). No-op for
+      // the no-draft branch, which never sets it.
       setAppending(false);
     }
   }, [textDraft, ask, composingStoryId, proseDraft, handleStep]);
