@@ -69,6 +69,23 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 6)
+**Slice 6 `bbaf50b` + review follow-ups `583ba35` (LANDED, full suite green: core 276, pipeline 74, capture 38,
+apps/web 377, typecheck 0).** Follow-up loop restaged onto per-take appends: `runFollowUpStep` is now
+propose-only (`follow_up | null`, no stitch, no `ready`); BOTH take-0 paths in `recordAnswerAction` append
+take-0 exactly once (flag-on then proposes) — `dispatchPipeline`/`ready` gone from that action;
+`recordFollowUpTakeAction` appends with client-posted `prose` as `priorProse` (non-clobbering; missing→invalidInput),
+append/transcribe failure → `saveFailed` (draft stays); `finishThreadAction` (decline, name KEPT — rename deferred
+to Slice 10) records `skipped`, no stitch/transition, returns `appended` with current DB prose. Cold review found
+NO live defect; the one core bug it surfaced is FIXED: `latestUnresolvedDecision` now excludes null-seed "none"
+decisions (`selectedSeed IS NOT NULL`) so a lingering none-row can't collect a wrong answered/skipped outcome.
+**Two Slice-10 forward risks recorded** (handle in Slice 10, do NOT ship live before): (i) `finishThreadAction`
+returns server DB prose and the client `history.replace`s unconditionally — once the editor is mounted during the
+follow-up screen, decline must echo the client `prose` OR the `appended` branch must skip replace when
+`appendedSegment===""`; (ii) the client `appended` branch does not clear `followUp` state (stale follow-up prompt
+after an append) — folds into the phase collapse. `stitchAndRenderStory` import + `ready`/poll infra STAY (used by
+`dropTakeAction`, Slice 7 next).
+
 ## Build status (updated 2026-07-04, through Slice 5)
 LANDED, each full-suite green: Slice 2 `eb01b87` (Polish persist) · Slice 1 `e10b61a` (listOutstandingDrafts
 widen + `state` field + Questions-tab contract preserved at wrapper AND hub) · Slice 3 `74c9a8e` (voice
