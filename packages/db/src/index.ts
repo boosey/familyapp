@@ -89,6 +89,7 @@ export {
 } from "./postgres-client";
 export { createTestDatabase } from "./testing";
 export { applySchema, resetSchema, applySchemaToPostgres } from "./migrate";
+export { runMigrations } from "./run-migrations";
 export {
   parseExpectedSchema,
   introspectSchema,
