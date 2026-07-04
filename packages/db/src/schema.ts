@@ -10,7 +10,8 @@
  *   - The Person owns ALL expressive content (stories, media, consent). A Family owns nothing.
  *   - A Story is owned by exactly one Person and is NEVER duplicated per family. "Sharing" is a
  *     visibility computation against memberships, so there is no story<->family copy table.
- *   - The canonical Recording (audio Media) is required on every Story and is immutable.
+ *   - The canonical Recording (audio Media), when present, is immutable and undetachable while its
+ *     Story lives (removed only when the Story itself is deleted; ADR-0008).
  *   - The consent ledger is append-only (revocation = a new superseding row).
  */
 import { sql } from "drizzle-orm";
@@ -321,8 +322,9 @@ export const memberships = pgTable(
 
 // ---------------------------------------------------------------------------
 // Media — any binary asset. Owned by the Person, lives in object storage (keys, not blobs),
-// and is IMMUTABLE (never updated or deleted — new versions are new rows). The media
-// immutability trigger structurally protects the canonical recording.
+// and is immutable and undetachable while its item lives: never updated, and never deleted or
+// detached on its own — new versions are new rows, and content audio is removed only when the
+// item it belongs to is itself deleted (ADR-0008). The media guard trigger enforces this.
 // ---------------------------------------------------------------------------
 
 export const media = pgTable(

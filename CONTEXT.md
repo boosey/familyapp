@@ -164,7 +164,8 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
 - **Asker-avatar** — the asker's actual recording (voice now; face/video later) delivered to the
   teller in-session, so the narrator hears the real relative ask rather than a synthetic voice. The
   asker opts in per Ask (`deliveredToTeller`); if they don't, the teller gets the text. The
-  recording is a permanent Media linked to the Ask (consent scope deferred; until designed it
+  recording is a Media linked to the Ask — immutable and undetachable while the Ask lives, removed
+  only when the Ask is deleted (ADR-0008; consent scope deferred; until designed it
   travels asker→teller only, not family-wide).
 
 ## Engagement & notification
