@@ -185,92 +185,70 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
   }
   plog("answer", "recordAnswer: ingested → draft story created", { story: storyId });
 
-  const policy = resolveFollowUpPolicyForRequest();
-  // FLAG OFF, or a self-initiated telling with no ask question to seed the follow-up evaluator →
-  // the per-take APPEND path. (The follow-up mini-loop below requires an ask question.)
-  if (!policy.enabled || !askId) {
-    // Per-take append (ADR-0014 Inc 3): transcribe take 0 → light Cleanup pass → append the cleaned
-    // segment onto the draft's working prose, writing the two automatic provenance rows keyed to the
-    // take. The draft STAYS `draft` — Finish (a later slice) is what transitions it. This replaces
-    // the old monolithic dispatchPipeline render; the draft is now built up take-by-take.
-    try {
-      const takes = await listStoryRecordings(db, storyId); // take 0 seeded at ingest
-      const take0 = takes[0];
-      if (!take0) {
-        // Defensive — persistRecordingAndCreateDraft seeds take 0. Its absence is a save failure.
-        plogError("answer", "recordAnswer: take 0 missing after ingest", { story: storyId });
-        return { error: hub.actions.saveFailed };
-      }
-      const { transcript, modelId: transcribeModelId } = await transcribeTakeToRecording(
-        rt,
-        take0.id,
-      );
-      const cleaned = await cleanupTake(rt.languageModel, {
-        transcript,
-        ...(askQuestionText ? { promptQuestion: askQuestionText } : {}),
-      });
-      const { prose, appendedSegment } = await appendVoiceTakeContribution(db, {
-        storyId,
-        ownerPersonId: ctx.personId,
-        storyRecordingId: take0.id,
-        rawTranscript: transcript,
-        cleanedSegment: cleaned.prose,
-        transcribeModelId,
-        cleanupModelId: cleaned.modelId,
-        cleanupPromptText: cleaned.systemPrompt,
-        // The INITIAL take on a fresh draft — there is no prior client editor text yet (client-
-        // supplied priorProse arrives with follow-up/typed appends in later slices).
-        priorProse: null,
-      });
-      plog("answer", "recordAnswer: per-take append complete (draft stays draft)", {
-        story: storyId,
-        ms: totalTimer(),
-      });
-      return { kind: "appended", storyId, prose, appendedSegment };
-    } catch (err) {
-      plogError("answer", "recordAnswer: per-take append failed", {
-        story: storyId,
-        ms: totalTimer(),
-        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-      });
-      return { error: hub.actions.saveFailed };
-    }
-  }
-
-  // FLAG ON — mini-loop: transcribe take 0 (the evaluator's input), then evaluate → decide →
-  // (phrase a follow-up | stitch + render). The whole follow-up attempt degrades to the one-shot
-  // render on ANY failure so a broken/slow evaluator can never block sharing (handoff watch #2).
+  // Per-take append (ADR-0014 Inc 3 slice 6): take 0 is ALWAYS appended onto the draft's working
+  // prose as it arrives — transcribe → light Cleanup pass → appendVoiceTakeContribution (the two
+  // automatic provenance rows keyed to the take + the working prose). The draft STAYS `draft` (Finish,
+  // a later slice, transitions it). This replaces the old monolithic dispatchPipeline render AND the
+  // old flag-ON branch that skipped the append entirely — the flag now only decides whether a
+  // follow-up is PROPOSED afterwards.
+  let transcript: string;
+  let prose: string;
+  let appendedSegment: string;
   try {
     const takes = await listStoryRecordings(db, storyId); // take 0 seeded at ingest
     const take0 = takes[0];
     if (!take0) {
-      // Defensive — persistRecordingAndCreateDraft seeds take 0. If it is somehow absent, fall
-      // back to the one-shot render so the narrator can still finish.
-      await rt.dispatchPipeline(storyId);
-      return { kind: "ready", storyId };
+      // Defensive — persistRecordingAndCreateDraft seeds take 0. Its absence is a save failure.
+      plogError("answer", "recordAnswer: take 0 missing after ingest", { story: storyId });
+      return { error: hub.actions.saveFailed };
     }
-    const { transcript } = await transcribeTakeToRecording(rt, take0.id);
-    return await runFollowUpStep(rt, {
+    const t = await transcribeTakeToRecording(rt, take0.id);
+    transcript = t.transcript;
+    const cleaned = await cleanupTake(rt.languageModel, {
+      transcript,
+      ...(askQuestionText ? { promptQuestion: askQuestionText } : {}),
+    });
+    ({ prose, appendedSegment } = await appendVoiceTakeContribution(db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      storyRecordingId: take0.id,
+      rawTranscript: transcript,
+      cleanedSegment: cleaned.prose,
+      transcribeModelId: t.modelId,
+      cleanupModelId: cleaned.modelId,
+      cleanupPromptText: cleaned.systemPrompt,
+      // The INITIAL take on a fresh draft — there is no prior client editor text yet.
+      priorProse: null,
+    }));
+    plog("answer", "recordAnswer: per-take append complete (draft stays draft)", {
+      story: storyId,
+      ms: totalTimer(),
+    });
+  } catch (err) {
+    plogError("answer", "recordAnswer: per-take append failed", {
+      story: storyId,
+      ms: totalTimer(),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.actions.saveFailed };
+  }
+
+  // FLAG ON + answering a specific ask → additionally PROPOSE a follow-up seeded by the ask question.
+  // (A self-initiated telling has no ask question to seed the evaluator.) The take is already durable
+  // and appended above; runFollowUpStep degrades to `null` (stop proposing) on ANY evaluator/phraser
+  // failure or timeout, so a broken/slow evaluator can never block the draft — it just means "no
+  // follow-up proposed". There is no stitch-to-finish here anymore.
+  const policy = resolveFollowUpPolicyForRequest();
+  if (policy.enabled && askId) {
+    const step = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId: ctx.personId,
       promptText: askQuestionText,
       answerTranscript: transcript,
     });
-  } catch (err) {
-    // A failure BEFORE runFollowUpStep's own guard (e.g. transcribe/take lookup) — degrade to the
-    // one-shot render, which re-transcribes the canonical recording independently.
-    plogError("answer", "recordAnswer: follow-up entry failed (degraded to one-shot)", {
-      story: storyId,
-      ms: totalTimer(),
-      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-    });
-    try {
-      await rt.dispatchPipeline(storyId);
-      return { kind: "ready", storyId };
-    } catch {
-      return { error: hub.actions.saveFailed };
-    }
+    if (step) return step;
   }
+  return { kind: "appended", storyId, prose, appendedSegment };
 }
 
 /**
@@ -352,17 +330,19 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
 }
 
 /**
- * The core evaluate → decide → (phrase + persist follow-up | persist "none" + stitch/render) helper.
- * The ONLY place the ledger's `decision` rows are written; callers write the `outcome` rows. On
- * timeout (FOLLOW_UP_BUDGET_MS) or ANY evaluator/phraser failure it degrades to one-shot: stitch +
- * render the takes recorded so far and send the narrator to review. Never throws for a follow-up
- * failure — sharing is never blocked (handoff watch #2). Exported so the server test can drive it
- * directly against a hand-built runtime.
+ * PROPOSE-ONLY (ADR-0014 Inc 3 slice 6): the core evaluate → decide → (phrase + persist follow-up |
+ * persist "none") helper. The ONLY place the ledger's `decision` rows are written; callers write the
+ * `outcome` rows. Selected → phrase + append the decision row → return the `follow_up` step. Nothing
+ * selected → append the null-seed decision row → return `null`. On timeout (FOLLOW_UP_BUDGET_MS) or
+ * ANY evaluator/phraser/ledger failure → log + return `null`. There is NO stitch-to-finish: `null`
+ * means "stop proposing; the draft stays open" (the narrator's take was already appended by the
+ * caller). Never throws — a broken/slow evaluator can never block the draft (handoff watch #2).
+ * Exported so the server test can drive it directly against a hand-built runtime.
  */
 export async function runFollowUpStep(
   rt: FollowUpStepRuntime,
   args: { storyId: string; ownerPersonId: string; promptText: string; answerTranscript: string },
-): Promise<ThreadStep> {
+): Promise<{ kind: "follow_up"; storyId: string; prompt: string } | null> {
   const { db, languageModel, followUpEvaluator } = rt;
   const policy = resolveFollowUpPolicyForRequest();
 
@@ -379,7 +359,9 @@ export async function runFollowUpStep(
   const offRampRequested = detectOffRamp(args.answerTranscript);
 
   try {
-    const step = await withTimeout(FOLLOW_UP_BUDGET_MS, async () => {
+    const step = await withTimeout<{ kind: "follow_up"; storyId: string; prompt: string } | null>(
+      FOLLOW_UP_BUDGET_MS,
+      async () => {
       const evaluation = await followUpEvaluator.evaluate({
         answerTranscript: args.answerTranscript,
         promptText: args.promptText,
@@ -424,10 +406,10 @@ export async function runFollowUpStep(
           phrasedLine: phrased.spokenText,
           policy,
         });
-        return { kind: "follow_up", storyId: args.storyId, prompt: phrased.spokenText } as ThreadStep;
+        return { kind: "follow_up", storyId: args.storyId, prompt: phrased.spokenText };
       }
 
-      // Nothing selected → record the (fully-audited) "none" decision, then fall through to finish.
+      // Nothing selected → record the (fully-audited) "none" decision, then return null (stop).
       await appendFollowUpDecision(db, {
         storyId: args.storyId,
         threadPosition,
@@ -439,21 +421,22 @@ export async function runFollowUpStep(
         policy,
       });
       return null;
-    });
+    },
+    );
 
     if (step) return step;
   } catch (err) {
-    // Timeout or any evaluator/phraser/ledger failure → degrade to one-shot. Never block sharing.
-    plogError("answer", "follow-up step failed (degraded to one-shot)", {
+    // Timeout or any evaluator/phraser/ledger failure → stop proposing. The take is already appended
+    // by the caller and the draft stays open; a broken/slow evaluator never blocks it.
+    plogError("answer", "follow-up step failed (stopped proposing; draft stays open)", {
       story: args.storyId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
   }
 
-  // Fall-through (nothing selected OR a caught failure): stitch the takes so far + polish once →
-  // pending_approval, and send the narrator to review.
-  await stitchAndRenderStory(rt, args.storyId);
-  return { kind: "ready", storyId: args.storyId };
+  // Nothing selected OR a caught failure → stop proposing. No stitch, no transition: the draft stays
+  // open with the take already appended by the caller. The caller returns the `appended` step.
+  return null;
 }
 
 /**
@@ -709,7 +692,13 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
 
   const audio = formData.get("audio");
   const storyId = formData.get("storyId");
+  const proseField = formData.get("prose");
   if (!(audio instanceof Blob) || typeof storyId !== "string" || !storyId) {
+    return { error: hub.actions.invalidInput };
+  }
+  // The client posts its CURRENT editor text as `prose` — the base the new take is appended onto
+  // (non-clobbering: appendVoiceTakeContribution authors from THIS text, not a DB re-read). Required.
+  if (typeof proseField !== "string") {
     return { error: hub.actions.invalidInput };
   }
 
@@ -723,11 +712,11 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
 
-  // Degrade guard (handoff watch #2): an ASR/LLM/render hiccup mid-thread must never 500 the
-  // narrator. The take's audio is durable after ingestFollowUpTake and "answered" is semantically
-  // correct even if the follow-on transcribe/evaluate fails; on failure we stitch the takes-so-far
-  // and finish gracefully. Auth/ownership/state guards stay OUTSIDE this try (a real authz failure
-  // should surface its specific error, not be masked as saveFailed).
+  // Degrade guard (handoff watch #2): an ASR/LLM hiccup mid-thread must never 500 the narrator. The
+  // take's audio is durable after ingestFollowUpTake and "answered" is semantically correct even if
+  // the follow-on transcribe/cleanup/evaluate fails. On ANY failure the story stays `draft` (no
+  // stitch, no transition) and the narrator retries with a retryable error. Auth/ownership/state
+  // guards stay OUTSIDE this try (a real authz failure surfaces its specific error, not saveFailed).
   try {
     const take = await ingestFollowUpTake(db, storage, {
       storyId,
@@ -746,33 +735,55 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
       });
     }
 
-    const { transcript } = await transcribeTakeToRecording(rt, take.storyRecordingId);
-    return await runFollowUpStep(rt, {
+    // Append the follow-up take's words onto the CLIENT'S current prose (priorProse = proseField),
+    // then optionally propose the next follow-up. No stitch — the draft is built up take-by-take.
+    const { transcript, modelId: transcribeModelId } = await transcribeTakeToRecording(
+      rt,
+      take.storyRecordingId,
+    );
+    const cleaned = await cleanupTake(rt.languageModel, {
+      transcript,
+      ...(unresolved?.phrasedLine ? { promptQuestion: unresolved.phrasedLine } : {}),
+    });
+    const { prose, appendedSegment } = await appendVoiceTakeContribution(db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      storyRecordingId: take.storyRecordingId,
+      rawTranscript: transcript,
+      cleanedSegment: cleaned.prose,
+      transcribeModelId,
+      cleanupModelId: cleaned.modelId,
+      cleanupPromptText: cleaned.systemPrompt,
+      // Load-bearing: the CLIENT'S editor text, NOT a DB read — non-clobbering append.
+      priorProse: proseField,
+    });
+
+    const step = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId: ctx.personId,
       promptText: unresolved?.phrasedLine ?? "",
       answerTranscript: transcript,
     });
+    return step ?? { kind: "appended", storyId, prose, appendedSegment };
   } catch (err) {
-    plogError("answer", "recordFollowUpTake: failed (degraded to finish)", {
+    plogError("answer", "recordFollowUpTake: failed (draft stays open; retryable)", {
       story: storyId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
-    // Graceful finish: stitch the takes recorded so far → pending_approval. If stitch ALSO fails,
-    // surface a retryable error rather than an unhandled throw.
-    try {
-      await stitchAndRenderStory(rt, storyId);
-      return { kind: "ready", storyId };
-    } catch {
-      return { error: hub.actions.saveFailed };
-    }
+    // The story stays `draft` — the narrator can retry. No stitch-to-finish.
+    return { error: hub.actions.saveFailed };
   }
 }
 
 /**
- * "That's all for now" — the narrator declines the current follow-up and finishes the thread. Marks
- * the outstanding follow-up `skipped` (a first-class path, not a dead end), stitches + polishes the
- * takes recorded so far → pending_approval, and sends the narrator to review.
+ * "That's all for now" — the narrator declines the current follow-up (ADR-0014 Inc 3 slice 6). Marks
+ * the outstanding follow-up `skipped` (a first-class path, not a dead end). There is NO transition and
+ * NO stitch: the draft's working prose is already whatever the appends built up, and Finish (a later
+ * slice) is what transitions the draft. Declining appends no new prose segment — it just records the
+ * skip and returns the narrator to the draft surface.
+ *
+ * NOTE: the name is kept as `finishThreadAction` (rename to `declineFollowUpAction` is deferred to a
+ * later slice; StoryComposer's import must not change yet).
  */
 export async function finishThreadAction(formData: FormData): Promise<ThreadStep> {
   beginLogContext();
@@ -789,10 +800,10 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
     return { error: hub.actions.storyNotFound };
   }
 
-  // Degrade guard (handoff watch #2): a render hiccup must never 500 the narrator. The `skipped`
-  // outcome is appended BEFORE stitch (the skip is a real, recorded event); a stitch failure returns
-  // a retryable error so the narrator can tap "That's all for now" again. Auth/ownership/state
-  // guards stay OUTSIDE this try (a real authz failure surfaces its specific error).
+  // Degrade guard (handoff watch #2): a ledger hiccup must never 500 the narrator. The `skipped`
+  // outcome is a real, recorded event; a failure returns a retryable error so the narrator can tap
+  // "That's all for now" again. Auth/ownership/state guards stay OUTSIDE this try (a real authz
+  // failure surfaces its specific error, not saveFailed).
   try {
     const unresolved = await latestUnresolvedDecision(db, storyId);
     if (unresolved) {
@@ -803,10 +814,12 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
         outcome: "skipped",
       });
     }
-    await stitchAndRenderStory(rt, storyId);
-    return { kind: "ready", storyId };
+    // Empty `appendedSegment`: a decline appends NO prose segment (unlike a take). `prose` is the
+    // draft's current working text unchanged; the client's `appended` handler uses the empty segment
+    // to just return to the draft surface without inserting anything.
+    return { kind: "appended", storyId, prose: story.prose ?? "", appendedSegment: "" };
   } catch (err) {
-    plogError("answer", "finishThread: stitch failed", {
+    plogError("answer", "finishThread: recording skip failed", {
       story: storyId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });

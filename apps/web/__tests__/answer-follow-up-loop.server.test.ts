@@ -34,10 +34,11 @@ vi.mock("@/lib/runtime", () => ({
 }));
 
 import { createTestDatabase, type Database, type FollowUpCandidate } from "@chronicle/db";
-import { persons } from "@chronicle/db/schema";
+import { persons, asks } from "@chronicle/db/schema";
 import {
   persistRecordingAndCreateDraft,
   persistTakeRecording,
+  appendVoiceTakeContribution,
   listStoryRecordings,
   updateStoryRecordingTranscript,
   listFollowUpDecisionsForStory,
@@ -59,10 +60,28 @@ import { InMemoryMediaStorage } from "@chronicle/storage";
 import { hub } from "@/app/_copy";
 import {
   runFollowUpStep,
+  recordAnswerAction,
   recordFollowUpTakeAction,
   finishThreadAction,
   dropTakeAction,
 } from "@/app/hub/answer/[askId]/actions";
+
+/** Seed a queued ask targeted at `targetPersonId` and return its id (for the flag-ON voice path). */
+async function seedAnswerableAsk(
+  db: Database,
+  targetPersonId: string,
+  questionText: string,
+): Promise<string> {
+  const [asker] = await db
+    .insert(persons)
+    .values({ displayName: "Asker", spokenName: "Asker" })
+    .returning();
+  const [ask] = await db
+    .insert(asks)
+    .values({ askerPersonId: asker!.id, targetPersonId, questionText, status: "queued" })
+    .returning();
+  return ask!.id;
+}
 
 // A neutral, above-the-word-floor answer (16 words) — not thin, not distressed, no off-ramp.
 const ANSWER =
@@ -174,11 +193,11 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(story!.state).toBe("draft");
   });
 
-  it("finishes the thread when nothing is selected: records a null-seed decision + stitches to pending_approval", async () => {
+  it("stops proposing when nothing is selected: records a null-seed decision, returns null, draft stays open (no stitch)", async () => {
     const db = await createTestDatabase();
     const { ownerPersonId, storyId } = await seedDraft(db);
 
-    // Take 0 already transcribed (its transcript is the stitched output).
+    // Take 0 already transcribed (unchanged by this step — propose-only never touches transcript/prose).
     const [take0] = await listStoryRecordings(db, storyId);
     await updateStoryRecordingTranscript(db, {
       storyRecordingId: take0!.id,
@@ -188,7 +207,7 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     const rt = {
       db,
       languageModel: scriptedLlm("(unused — nothing selected)"),
-      followUpEvaluator: new ScriptedFollowUpEvaluator([[]]), // no candidates → thread ends
+      followUpEvaluator: new ScriptedFollowUpEvaluator([[]]), // no candidates → stop proposing
     };
 
     const step = await runFollowUpStep(rt, {
@@ -198,19 +217,20 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       answerTranscript: ANSWER,
     });
 
-    expect(step).toEqual({ kind: "ready", storyId });
+    // Propose-only (slice 6): nothing selected → null (stop proposing), no stitch, no transition.
+    expect(step).toBeNull();
 
+    // The null-seed decision row is STILL written (fully audited).
     const rows = await listFollowUpDecisionsForStory(db, storyId);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.recordKind).toBe("decision");
     expect(rows[0]!.selectedSeed).toBeNull();
     expect(rows[0]!.phrasedLine).toBeNull();
 
-    // The story was stitched + polished ONCE → pending_approval with the stitched transcript + prose.
+    // The story STAYS draft; runFollowUpStep never stitches (no render, no prose written by it).
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.transcript).toBe("It had a beautiful stained glass window.");
-    expect(story!.prose).toBeTruthy();
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBeNull();
   });
 
   it("append-outcome path: decision → answered outcome → second (empty) decision finalizes the thread", async () => {
@@ -237,7 +257,7 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       promptText: "What was your childhood home like?",
       answerTranscript: ANSWER,
     });
-    if (!("kind" in step1) || step1.kind !== "follow_up") {
+    if (step1 === null || step1.kind !== "follow_up") {
       throw new Error(`expected a follow_up step, got ${JSON.stringify(step1)}`);
     }
     expect(step1.storyId).toBe(storyId);
@@ -252,14 +272,14 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       outcome: "answered",
     });
 
-    // Turn 1: evaluator proposes nothing → the thread finishes.
+    // Turn 1: evaluator proposes nothing → stop proposing (null), draft stays open.
     const step2 = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId,
       promptText: unresolved!.phrasedLine ?? "",
       answerTranscript: ANSWER_2,
     });
-    expect(step2).toEqual({ kind: "ready", storyId });
+    expect(step2).toBeNull();
 
     // The ledger reads decision → outcome → decision (append-only, in order).
     const rows = await listFollowUpDecisionsForStory(db, storyId);
@@ -269,8 +289,9 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(rows[2]!.selectedSeed).toBeNull();
     expect(rows[2]!.threadPosition).toBe(1);
 
+    // The story STAYS draft — propose-only never transitions it.
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
+    expect(story!.state).toBe("draft");
   });
 
   it("drop → re-stitch: dropping a follow-up take pre-approval re-stitches to the survivors", async () => {
@@ -315,8 +336,9 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(story!.transcript).toBe("Take zero survivor text.");
   });
 
-  it("degrades when the evaluator throws: story still finalizes with stitched prose (sharing never blocked)", async () => {
-    // Headline safety (handoff watch #2): a broken evaluator must not block sharing.
+  it("degrades when the evaluator throws: stops proposing (null), draft stays open, no decision row (never blocks the draft)", async () => {
+    // Headline safety (handoff watch #2): a broken evaluator must not block the narrator. Propose-only
+    // now means it simply stops proposing — the take is already appended by the caller.
     const db = await createTestDatabase();
     const { ownerPersonId, storyId } = await seedDraft(db);
     const [take0] = await listStoryRecordings(db, storyId);
@@ -342,19 +364,18 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       answerTranscript: ANSWER,
     });
 
-    expect(step).toEqual({ kind: "ready", storyId });
+    expect(step).toBeNull();
 
+    // No stitch, no transition — the story stays a draft.
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.transcript).toBe("It had a beautiful stained glass window.");
-    expect(story!.prose).toBeTruthy();
+    expect(story!.state).toBe("draft");
 
     // The failed turn wrote NO decision row (evaluate/phrase run before appendFollowUpDecision).
     const rows = await listFollowUpDecisionsForStory(db, storyId);
     expect(rows).toHaveLength(0);
   });
 
-  it("degrades on a budget timeout: a never-resolving evaluator still finalizes the story", async () => {
+  it("degrades on a budget timeout: a never-resolving evaluator stops proposing (null), draft stays open", async () => {
     const db = await createTestDatabase();
     const { ownerPersonId, storyId } = await seedDraft(db);
     const [take0] = await listStoryRecordings(db, storyId);
@@ -379,10 +400,9 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
       answerTranscript: ANSWER,
     });
 
-    expect(step).toEqual({ kind: "ready", storyId });
+    expect(step).toBeNull();
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    expect(story!.prose).toBeTruthy();
+    expect(story!.state).toBe("draft");
   }, 15000);
 });
 
@@ -472,13 +492,13 @@ describe("follow-up actions (getRuntime-driven)", () => {
     authCtx = { kind: "account", personId: mallory!.id };
 
     const result = await recordFollowUpTakeAction(
-      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), storyId }),
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), storyId, prose: "base" }),
     );
 
     expect(result).toEqual({ error: hub.actions.storyNotFound });
   });
 
-  it("recordFollowUpTakeAction degrades to a graceful finish when transcription fails (no 500)", async () => {
+  it("recordFollowUpTakeAction returns a retryable error when transcription fails; take audio stays durable, draft stays open", async () => {
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };
     const [take0] = await listStoryRecordings(runtimeDb, storyId);
@@ -489,14 +509,16 @@ describe("follow-up actions (getRuntime-driven)", () => {
     runtimeTranscriber = throwingTranscriber; // the follow-up take's transcribe will throw
 
     const result = await recordFollowUpTakeAction(
-      form({ audio: new Blob([new Uint8Array([7, 7, 7])], { type: "audio/webm" }), storyId }),
+      form({ audio: new Blob([new Uint8Array([7, 7, 7])], { type: "audio/webm" }), storyId, prose: "base" }),
     );
 
-    // Graceful finish: the take's audio is durable, the takes-so-far are stitched → review.
-    expect(result).toEqual({ kind: "ready", storyId });
+    // Slice 6: no stitch-to-finish. The transcribe failure returns a retryable error; the story
+    // stays `draft` so the narrator can retry.
+    expect(result).toEqual({ error: hub.actions.saveFailed });
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
-    expect(story!.state).toBe("pending_approval");
-    // The dropped-in follow-up take was still appended (its audio is durable), just un-transcribed.
+    expect(story!.state).toBe("draft");
+    // The dropped-in follow-up take was still appended before the transcribe threw (its audio is
+    // durable via ingestFollowUpTake), just un-transcribed.
     const takes = await listStoryRecordings(runtimeDb, storyId);
     expect(takes.map((t) => t.position)).toEqual([0, 1]);
   });
@@ -513,7 +535,9 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(result).toEqual({ error: hub.actions.storyNotFound });
   });
 
-  it("finishThreadAction returns a retryable error when the render fails (no 500)", async () => {
+  it("finishThreadAction (decline) makes NO LLM call, returns appended with the current prose, draft stays open", async () => {
+    // Slice 6: decline records the skip and returns to the draft surface — no stitch, no render, no
+    // transition. Wiring a throwing LLM proves finishThreadAction never calls the model.
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };
     const [take0] = await listStoryRecordings(runtimeDb, storyId);
@@ -521,13 +545,192 @@ describe("follow-up actions (getRuntime-driven)", () => {
       storyRecordingId: take0!.id,
       transcript: "Take zero words.",
     });
-    runtimeLlm = throwingLlm; // the single stitch/polish render throws
+    // Seed some working prose so the returned `prose` is meaningful.
+    await appendVoiceTakeContribution(runtimeDb, {
+      storyId,
+      ownerPersonId,
+      storyRecordingId: take0!.id,
+      rawTranscript: "Take zero words.",
+      cleanedSegment: "Take zero, cleaned.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
+    });
+    runtimeLlm = throwingLlm; // if finishThreadAction called the LLM at all, this would throw
 
     const result = await finishThreadAction(form({ storyId }));
 
-    expect(result).toEqual({ error: hub.actions.saveFailed });
-    // The story was NOT finalized — it stays a draft so the narrator can retry.
+    expect(result).toEqual({
+      kind: "appended",
+      storyId,
+      prose: "Take zero, cleaned.",
+      appendedSegment: "",
+    });
+    // No transition — the draft stays open for the narrator to keep composing / Finish later.
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
     expect(story!.state).toBe("draft");
+  });
+
+  it("finishThreadAction appends a `skipped` outcome for an unresolved follow-up (append-only), draft stays open", async () => {
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await updateStoryRecordingTranscript(runtimeDb, {
+      storyRecordingId: take0!.id,
+      transcript: "It had a beautiful stained glass window.",
+    });
+
+    // Create an unresolved (asked-but-unanswered) follow-up decision via the propose-only step.
+    const proposeRt = {
+      db: runtimeDb,
+      languageModel: scriptedLlm("Tell me more about that window."),
+      followUpEvaluator: new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]),
+    };
+    const proposed = await runFollowUpStep(proposeRt, {
+      storyId,
+      ownerPersonId,
+      promptText: "What was your childhood home like?",
+      answerTranscript: ANSWER,
+    });
+    expect(proposed?.kind).toBe("follow_up");
+    const unresolvedBefore = await latestUnresolvedDecision(runtimeDb, storyId);
+    expect(unresolvedBefore).not.toBeNull();
+
+    const result = await finishThreadAction(form({ storyId }));
+    expect("kind" in result && result.kind).toBe("appended");
+
+    // A `skipped` outcome row was appended (decision → skipped outcome), append-only.
+    const rows = await listFollowUpDecisionsForStory(runtimeDb, storyId);
+    expect(rows.map((r) => r.recordKind)).toEqual(["decision", "outcome"]);
+    expect(rows[1]!.outcome).toBe("skipped");
+    // The unresolved decision is now resolved.
+    expect(await latestUnresolvedDecision(runtimeDb, storyId)).toBeNull();
+
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.state).toBe("draft");
+  });
+
+  it("recordFollowUpTakeAction (evaluator proposes nothing) APPENDS the take onto the posted prose (non-clobbering) and returns appended", async () => {
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await updateStoryRecordingTranscript(runtimeDb, {
+      storyRecordingId: take0!.id,
+      transcript: "Take zero words.",
+    });
+    // cleanupTake uses the LLM's TEXT response as the cleaned segment; evaluator proposes nothing.
+    runtimeLlm = scriptedLlm("The cleaned follow-up segment.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[]]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: "raw follow-up transcript" });
+
+    // The client's CURRENT editor text — the append MUST build on THIS, not a DB re-read.
+    const PRIOR = "EDITED BASE TEXT.";
+    const result = await recordFollowUpTakeAction(
+      form({ audio: new Blob([new Uint8Array([7, 7, 7])], { type: "audio/webm" }), storyId, prose: PRIOR }),
+    );
+
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+    }
+    // Non-clobbering: the new prose STARTS WITH the posted priorProse text.
+    expect(result.prose.startsWith(PRIOR)).toBe(true);
+    expect(result.prose).toContain("The cleaned follow-up segment.");
+    expect(result.appendedSegment).toBe("The cleaned follow-up segment.");
+
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(result.prose);
+    // The follow-up take was appended as a real take.
+    const takes = await listStoryRecordings(runtimeDb, storyId);
+    expect(takes.map((t) => t.position)).toEqual([0, 1]);
+  });
+
+  it("recordFollowUpTakeAction (evaluator proposes) still APPENDS the take first, then returns follow_up", async () => {
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await updateStoryRecordingTranscript(runtimeDb, {
+      storyRecordingId: take0!.id,
+      transcript: "Take zero words.",
+    });
+    runtimeLlm = scriptedLlm("Tell me more about that window.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: ANSWER });
+
+    const PRIOR = "EDITED BASE TEXT.";
+    const result = await recordFollowUpTakeAction(
+      form({ audio: new Blob([new Uint8Array([7, 7, 7])], { type: "audio/webm" }), storyId, prose: PRIOR }),
+    );
+
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that window.");
+
+    // The follow-up take's words were STILL appended before the next follow-up was proposed — the
+    // story prose grew and starts with the posted priorProse (non-clobbering).
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose!.startsWith(PRIOR)).toBe(true);
+    const takes = await listStoryRecordings(runtimeDb, storyId);
+    expect(takes.map((t) => t.position)).toEqual([0, 1]);
+  });
+
+  it("recordAnswerAction (flag ON + askId, evaluator proposes nothing) APPENDS take 0 and returns appended (not ready)", async () => {
+    const ownerPersonId = (
+      await runtimeDb
+        .insert(persons)
+        .values({ displayName: "Nora", spokenName: "Nora", birthYear: 1950 })
+        .returning()
+    )[0]!.id;
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const askId = await seedAnswerableAsk(runtimeDb, ownerPersonId, "What was your childhood home like?");
+    // cleanupTake returns the LLM TEXT response as the cleaned take-0 prose.
+    runtimeLlm = scriptedLlm("Cleaned take zero prose.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[]]); // nothing proposed
+    runtimeTranscriber = new ScriptedTranscriber({ text: "raw take zero" });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
+    );
+
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+    }
+    // Previously this flag-ON path skipped the append entirely (returned `ready`). Now take 0 is
+    // appended and the cleaned segment IS the working prose.
+    expect(result.prose).toBe("Cleaned take zero prose.");
+    expect(result.appendedSegment).toBe("Cleaned take zero prose.");
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe("Cleaned take zero prose.");
+  });
+
+  it("recordAnswerAction (flag ON + askId, evaluator proposes) APPENDS take 0 first, then returns follow_up", async () => {
+    const ownerPersonId = (
+      await runtimeDb
+        .insert(persons)
+        .values({ displayName: "Nora", spokenName: "Nora", birthYear: 1950 })
+        .returning()
+    )[0]!.id;
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const askId = await seedAnswerableAsk(runtimeDb, ownerPersonId, "What was your childhood home like?");
+    runtimeLlm = scriptedLlm("Tell me more about that window.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: ANSWER });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
+    );
+
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that window.");
+    // Take 0's prose was ALREADY appended before the follow-up was proposed.
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBeTruthy();
   });
 });
