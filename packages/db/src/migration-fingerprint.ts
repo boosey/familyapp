@@ -28,7 +28,7 @@ async function rows(pg: PGlite, sql: string): Promise<Record<string, unknown>[]>
 export async function fullSchemaFingerprint(run: Runner): Promise<SchemaFingerprint> {
   const columns = (
     await run(
-      `SELECT table_name||'.'||column_name||' '||data_type AS v
+      `SELECT table_name||'.'||column_name||' '||udt_name||' null='||is_nullable||' default='||coalesce(column_default,'') AS v
          FROM information_schema.columns WHERE table_schema='public'`,
     )
   ).map((r) => String(r.v)).sort();
@@ -78,8 +78,19 @@ export async function replayMigrationsFromEmpty(pg: PGlite): Promise<void> {
   const journal = JSON.parse(
     readFileSync(new URL("../drizzle/migrations/meta/_journal.json", import.meta.url), "utf8"),
   ) as { entries: { idx: number; tag: string }[] };
-  const ordered = [...journal.entries].sort((a, b) => a.idx - b.idx);
-  for (const entry of ordered) {
+  // Mirror drizzle-orm's real migrator (`readMigrationFiles`): iterate `journal.entries` in ARRAY
+  // ORDER with no re-sort, so we validate exactly the order Neon's migrate() would apply. Guard
+  // against a desync (e.g. a hand-resolved journal merge conflict) rather than silently reordering:
+  // if array position and idx disagree, the journal is malformed — fail loudly.
+  journal.entries.forEach((entry, i) => {
+    if (entry.idx !== i) {
+      throw new Error(
+        `Migration journal is out of order: entry "${entry.tag}" has idx=${entry.idx} at array position ${i}. ` +
+          `drizzle's migrator applies entries in array order — fix _journal.json so array order matches idx.`,
+      );
+    }
+  });
+  for (const entry of journal.entries) {
     const sql = readFileSync(`${dir}${entry.tag}.sql`, "utf8").replaceAll(
       "--> statement-breakpoint",
       "",

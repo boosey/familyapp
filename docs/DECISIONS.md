@@ -472,6 +472,12 @@ schema-parity section — dev and tests are unchanged.
   `DROP SCHEMA` reset of both Neon branches to re-stamp them at `0000`. Safe only because no critical
   data exists yet — the whole point of doing this now, while blow-away is still a viable fallback, so
   the workflow is battle-tested before the first real user makes it load-bearing.
+- **Residual risk: `runMigrations` itself is untested.** `runMigrations` (`src/run-migrations.ts`) is
+  the real Neon apply path (drizzle's postgres-js `migrate()`), but has no automated test coverage —
+  the suite has no external Postgres and PGlite can't back the postgres-js migrator. The drift guard
+  exercises a parallel hand-rolled replay (`replayMigrationsFromEmpty`), not `migrate()` itself, so a
+  defect in `runMigrations` / its migrations-folder resolution / the `as never` cast would first
+  surface in a Vercel build rather than in `pnpm test`.
 - **Deferred (recorded so they're choices):** per-PR isolated Neon branches (previews share the dev
   branch); a separate release-step GitHub Action (migrate stays in `buildCommand`); Atlas / any
   non-drizzle engine; down/rollback migrations (forward-only — roll back by writing a new forward

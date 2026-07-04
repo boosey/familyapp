@@ -37,4 +37,18 @@ describe("migration drift guard", () => {
     const fpB = await fullSchemaFingerprint(pgliteRunner(b));
     expect(fpB).not.toEqual(fpA);
   });
+
+  it("the fingerprint detects a column-level change (default / nullability / enum type)", async () => {
+    const a = new PGlite();
+    await applySchema(a);
+    const b = new PGlite();
+    await applySchema(b);
+    // Same tables/columns/data_type — only the DEFAULT changes. A data_type-only fingerprint
+    // would miss this; the enriched fingerprint (udt_name + null + default) catches it.
+    await b.exec(`ALTER TABLE "accounts" ALTER COLUMN "active" SET DEFAULT false;`);
+
+    const fpA = await fullSchemaFingerprint(pgliteRunner(a));
+    const fpB = await fullSchemaFingerprint(pgliteRunner(b));
+    expect(fpB).not.toEqual(fpA);
+  });
 });

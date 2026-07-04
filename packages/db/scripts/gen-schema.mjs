@@ -1,9 +1,10 @@
 /**
- * Regenerate drizzle/schema.sql — the single full-schema DDL — from src/schema.ts.
- *
- * Single-schema dev model: there is NO incremental migration chain. Edit src/schema.ts, run
+ * Regenerate BOTH schema artifacts from src/schema.ts: the snapshot (drizzle/schema.sql — the full
+ * full-schema DDL, applied wholesale for dev/tests) AND an incremental migration in the chain
+ * (drizzle/migrations/NNNN_*.sql, applied non-destructively to Neon). Edit src/schema.ts, run
  * `pnpm --filter @chronicle/db db:generate`, then reseed (which blows the dev DB away and applies
- * this file + invariants.sql). See src/migrate.ts.
+ * schema.sql + invariants.sql). Invariants (triggers / partial unique indexes) are NOT captured by
+ * drizzle-kit generate — hand-carry any invariant change into the emitted migration. See src/migrate.ts.
  */
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
