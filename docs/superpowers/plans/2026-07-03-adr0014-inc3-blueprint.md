@@ -57,21 +57,22 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
-## OPEN DECISIONS (need product owner)
-- **(a) Finish-check detect mechanism** — the contract names it but does NOT freeze a "detect" seam (§5 only
-  froze `cleanupTake`/`deriveMetadata`). Options: **(reuse, recommended)** run `polishProse` speculatively on
-  finalText; material diff = the offer, its output = the preview; Accept ⇒ `logPolish` (0 extra LLM calls);
-  Decline ⇒ `finishDraft` as-is. Over-triggers on mere ramble (arguably correct per ADR §2). **(new seam)**
-  a narrower `detectUnresolvedCorrections` — precise but new prompt/eval/contract-amendment. **UX:** inline
-  dismissible card above Finish (recommended) vs modal.
-- **(b) Extract `<ComposingEditor>` now** (recommended — Inc 4 intake reuses it) vs defer to Inc 4.
-- **(c) Scope beyond frozen §4 (needs sign-off):** `createTextDraft` edit (changes ADR-0007 text path);
-  `listOutstandingDrafts` widen; retire `stitchAndRenderStory` from answer actions;
-  `shareAnswerAction` switch `augmentProfileFromStory(approved.transcript)` → `approved.prose`
-  (transcript stops being populated once monolithic render retires — else memory augmentation silently no-ops).
-- **(d) Drop-take UX narrowing:** dropping a follow-up take removes AUDIO only; its text stays in the editor
-  (authored prose is never auto-regenerated). Needs copy/UX sign-off (e.g. toast "Recording removed — edit
-  the text above to remove those words too").
+## RESOLVED DECISIONS (product owner, 2026-07-03)
+- **(a) Finish-check = REUSE `polishProse`.** At Finish, run `polishProse` speculatively on finalText; if the
+  result materially differs from the input (normalized diff), present it as the offer with its output as the
+  preview. Accept ⇒ `logPolish` with the already-computed result (0 extra LLM calls). Decline ⇒ `finishDraft`
+  as-is. No new pipeline seam, no contract amendment. **UX: inline dismissible card** above the Finish button
+  (not a modal). Over-triggering on merely-rambly prose is accepted as correct per ADR §2.
+- **(b) Extract `<ComposingEditor>` NOW** during the phase-collapse (slice 10). `StoryComposer` becomes a thin
+  wrapper (answer/tell chrome) mounting `<ComposingEditor mode="story" …>`; Inc 4's `AboutYouFlow` will mount
+  `<ComposingEditor mode="intake" …>` directly.
+- **(c) Out-of-contract edits APPROVED** (each ships with a regression test): `createTextDraft` dedup (stop
+  double-logging typed take-0 + drop the `transcript` write); `listOutstandingDrafts` widen to
+  `['draft','pending_approval']`; retire `stitchAndRenderStory` from `answer/[askId]/actions.ts`;
+  `shareAnswerAction` switch `augmentProfileFromStory` source `approved.transcript` → `approved.prose`.
+- **(d) Drop-take = remove AUDIO + keep text + toast.** Dropping a follow-up take deletes the recording, leaves
+  its words in the editor, and shows a toast: "Recording removed — edit the text above to remove those words
+  too." (Dropping take-0 still discards the whole draft, unchanged.)
 
 ## Risks / gotchas
 - `priorProse` must travel with every append (else concurrent hand-edit clobbered — the exact bug ADR-0014 fixes).
