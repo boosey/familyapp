@@ -433,6 +433,51 @@ recap of every fix.
   `CHRONICLE_RUN_MIGRATIONS=1` fresh-DB bootstrap — a latent ENOENT trap on any serverless target
   without the trace include.
 
+## Migrations: forward migration chain for durable DBs, snapshot kept for dev/tests (2026-07-04)
+
+Full design: `docs/superpowers/specs/2026-07-04-db-migrations-design.md`. This supersedes the
+"single-schema, no incremental migrations while the schema is molten (2026-06-28)" decision above
+for **durable** environments, and retires the parity-gate-only / boot-bootstrap model from the
+schema-parity section — dev and tests are unchanged.
+
+- **Two artifacts, one source of truth.** `schema.ts` stays the single source of truth (too embedded
+  — the single front door, re-exported domain types — to dethrone; we never introspect the schema
+  back from a DB). It derives (a) the **snapshot** (`drizzle/schema.sql` + `drizzle/invariants.sql`,
+  applied wholesale by `applySchema`/`resetSchema` — the fast path for PGlite tests and the dev seed,
+  freely rebuilt) and (b) the **migration chain** (`drizzle/migrations/NNNN_*.sql` + `meta/`, applied
+  incrementally and tracked in `__drizzle_migrations` — the durable, never-destructive path for Neon).
+- **Engine = drizzle-kit (already installed); not rolled our own.** Postgres has no native migration
+  tool and Neon is just managed Postgres; `drizzle-kit generate` + `drizzle-orm`'s `migrate()` is a
+  real journal-tracked, checksummed system. Atlas (the one tool that models triggers as first-class)
+  was considered and rejected as overkill / a competing toolchain for this stage.
+- **Drift guard bonds snapshot ≡ chain (`packages/db/test/migration-drift.test.ts`).** Builds one
+  PGlite from the snapshot and one by replaying the chain from empty, introspects both via `pg_catalog`
+  (columns, enums, indexes, constraints, triggers, functions) and asserts identity. Because it compares
+  actual DB state, not drizzle's partial model, it covers the invariants drizzle can't model — so the
+  canonical error "added an index to `invariants.sql` but forgot the migration" turns CI red before
+  anything reaches Neon.
+- **Invariants are hand-carried into migration files.** Drizzle-kit (like every schema-diff tool)
+  cannot model triggers / functions / partial unique indexes. The baseline `0000_baseline.sql` inlines
+  the full current `invariants.sql`; future invariant changes are hand-appended to the migration that
+  needs them. `db:generate` now emits BOTH artifacts in one command (regenerates `schema.sql`, then
+  `drizzle-kit generate` for the incremental migration); a CI drift step
+  (`db:generate && git diff --exit-code -- packages/db/drizzle`) fails on an uncommitted snapshot/migration.
+- **Migrate at build, not at boot.** `runMigrations` (`src/run-migrations.ts`) + the `db:migrate` CLI
+  run in the Vercel `buildCommand` (`db:migrate && db:check-parity && next build`) against the
+  deployment's Neon branch — advancing the branch non-destructively before the app build. This replaces
+  the old parity-gate-that-only-failed-the-deploy and removes the bootstrap-only `applySchemaToPostgres`
+  and the `CHRONICLE_RUN_MIGRATIONS` boot path; `runtime.ts` no longer applies schema on boot. The
+  parity check is retained as a post-migrate assertion (belt-and-suspenders).
+- **One-time destructive Neon baseline reset (safe now).** Standing up the chain required a single
+  `DROP SCHEMA` reset of both Neon branches to re-stamp them at `0000`. Safe only because no critical
+  data exists yet — the whole point of doing this now, while blow-away is still a viable fallback, so
+  the workflow is battle-tested before the first real user makes it load-bearing.
+- **Deferred (recorded so they're choices):** per-PR isolated Neon branches (previews share the dev
+  branch); a separate release-step GitHub Action (migrate stays in `buildCommand`); Atlas / any
+  non-drizzle engine; down/rollback migrations (forward-only — roll back by writing a new forward
+  migration); data-transformation/backfill migrations (none needed; the hand-authored SQL format
+  already supports them).
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
