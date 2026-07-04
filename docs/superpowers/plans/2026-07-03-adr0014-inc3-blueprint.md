@@ -69,6 +69,24 @@ history wipes on every append.
 10. `StoryComposer` phase collapse (JSX rework) — LAST, once actions speak the new contract. Optionally extract `<ComposingEditor>` (decision b).
 11. Cleanup: delete dead poll infra (`answer-status.ts`, `poll-status.ts`, `AnswerReviewPending.tsx`) if unused elsewhere (verify `NarratorRecorder`).
 
+## Build status (updated 2026-07-04, through Slice 11 — Inc 3 COMPLETE)
+**Slice 11 LANDED — dead in-hub poll infra removed, cold-reviewed clean (safe deletion, no findings).
+Full suite green: core 277, pipeline 74, capture 38, db 67, apps/web 403, typecheck 0.** HEAD `a61d804`.
+Removed (zero remaining consumers after the slice-10 phase collapse): the `{kind:"ready"}` `ThreadStep`
+variant, `getAnswerStatusAction` + `AnswerStatusActionResult` + the orphaned `mapStoryStateToStatus`/
+`AnswerStatusResult` imports in `answer/[askId]/actions.ts`, the unused `AnswerStatusResult` interface in
+`lib/answer-status.ts`, and the dead `getAnswerStatusAction` test blocks/mocks/assertions. KEPT (verified
+live link-session `/s/[token]` consumers): `lib/poll-status.ts` (`pollUntilReady` → ApprovePending/
+NarratorRecorder), `lib/answer-status.ts` (`mapStoryStateToStatus`/`AnswerStatus` → `/api/capture/status`
+route + poll-status), and `AnswerReviewPending.tsx` (composing take-0 in-flight screen). The route maps
+state to a `"ready"` STRING (distinct type) — unaffected.
+
+**Inc 3 is now COMPLETE (slices 1–11 all landed green).** Remaining ADR-0014 work: Increment 4 (intake
+unification — mount `<ComposingEditor>` in `AboutYouFlow`) and Increment 5 (observability, doc-truing, ADR
+close). Both are OUT of this run's scope (user scoped this session to slices 10–11). Also DEFERRED from
+slice 10: the core `logPolish` priorProse/staleness guard (frozen-contract/Inc-2 territory — a hardening
+follow-up, not a blocker; the client mutation lock closes the single-client UI-reachable clobber).
+
 ## Build status (updated 2026-07-04, through Slice 10)
 **Slice 10 LANDED — the phase collapse (the LAST big one), full-faithful build, cold-reviewed clean over
 4 rounds. Full suite green: core 277, pipeline 74, capture 38, db 67, apps/web 407, typecheck 0.** HEAD
