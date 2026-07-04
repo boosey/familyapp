@@ -17,7 +17,7 @@
  *     `pending_approval` before the caller returns. This keeps every existing web test and the
  *     hermetic e2e suite green and ensures no lingering `draft` arises in dev.
  */
-import type { Pipeline } from "@chronicle/pipeline";
+import { plog, startTimer, type Pipeline } from "@chronicle/pipeline";
 
 export interface DispatchPipelineDeps {
   /** When true, enqueue onto the shared durable Inngest pipeline; else run the in-process path. */
@@ -36,14 +36,20 @@ export type DispatchPipeline = (storyId: string) => Promise<void>;
 
 export function makeDispatchPipeline(deps: DispatchPipelineDeps): DispatchPipeline {
   return async (storyId: string): Promise<void> => {
+    // Correlates under the caller's log context (e.g. /api/capture's `beginLogContext`) so this line
+    // shares that run's cid. Names which of the two honest branches this dispatch took.
     if (deps.inngestConfigured && deps.inngestPipeline) {
       // Durable path: enqueue the first stage and return. Inngest drives the rest.
+      plog("pipeline", "dispatch: durable enqueue (Inngest drives stages)", { story: storyId });
       await deps.inngestPipeline.start(storyId);
       return;
     }
     // Synchronous dev/CI path: fresh pipeline, start, and drain in-request.
+    plog("pipeline", "dispatch: synchronous drain (in-request)", { story: storyId });
+    const drainTimer = startTimer();
     const pipeline = deps.newPipeline();
     await pipeline.start(storyId);
     await pipeline.runToCompletion();
+    plog("pipeline", "dispatch: synchronous drain complete", { story: storyId, ms: drainTimer() });
   };
 }

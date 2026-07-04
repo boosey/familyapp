@@ -46,6 +46,7 @@ import {
   type ThreadStep,
 } from "./answer/[askId]/actions";
 import { useProseHistory } from "@/lib/use-prose-history";
+import { clog } from "@/lib/clog";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
 import { StoryPhotosEditor } from "./StoryPhotosEditor";
@@ -244,6 +245,10 @@ export function ComposingEditor({
         // The interviewer proposed a deepening question. Seed the just-appended prose into the mounted
         // editor OPTIMISTICALLY and show the inline banner — do NOT refresh (a remount would wipe the
         // client `followUp` banner; the take-0 follow_up arrives before any server draft prop).
+        clog("follow_up_proposed", {
+          story: step.storyId,
+          appended: step.appendedSegment !== "",
+        });
         setActiveStoryId(step.storyId);
         history.replace(step.prose);
         setLocalTake(null);
@@ -280,6 +285,11 @@ export function ComposingEditor({
         // `history.replace` (fix (i): it would clobber unsaved hand-edits) and skip the refresh (a
         // remount would re-seed from stale server prose). A real take refreshes so its audio shows in
         // the relisten strip; the storyId is stable so that refresh does NOT remount the editor.
+        clog("take_appended", {
+          story: step.storyId,
+          // Empty segment = a decline echo, not a real appended take.
+          appended: step.appendedSegment !== "",
+        });
         setActiveStoryId(step.storyId);
         setFollowUp(null);
         setLocalTake(null);
@@ -344,16 +354,18 @@ export function ComposingEditor({
       mediaRecorderRef.current = mr;
       mr.start();
       setRecordPhase("listening");
+      clog("record_start", { story: composingStoryId ?? "(take-0)", take: composingStoryId ? "append" : "initial" });
     } catch {
       setRecordPhase("softfail");
     }
-  }, [uploadRecording]);
+  }, [uploadRecording, composingStoryId]);
 
   const stopRecording = useCallback(() => {
     setRecordPhase("saving");
     mediaRecorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, []);
+    clog("record_stop", { story: composingStoryId ?? "(take-0)" });
+  }, [composingStoryId]);
 
   const voiceClick = useCallback(() => {
     if (recordPhase === "listening") stopRecording();
@@ -423,6 +435,7 @@ export function ComposingEditor({
     if (!composingStoryId) return;
     setActionError(null);
     setFinishingDraft(true);
+    clog("finish", { story: composingStoryId, intent });
     try {
       const form = new FormData();
       form.set("intent", intent);
@@ -467,6 +480,7 @@ export function ComposingEditor({
   const polishHandler = useCallback(
     async (text: string) => {
       setPolishing(true);
+      clog("polish_tap", { story: composingStoryId ?? "(none)", chars: text.length });
       try {
         const form = new FormData();
         form.append("prose", text);
@@ -486,6 +500,7 @@ export function ComposingEditor({
   const handleShare = async () => {
     setActionError(null);
     setOp("share");
+    clog("review_share", { story: draft!.storyId, tier });
     try {
       const form = new FormData();
       form.append("storyId", draft!.storyId);

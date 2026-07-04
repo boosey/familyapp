@@ -482,6 +482,13 @@ export async function appendTypedTakeAction(formData: FormData): Promise<ThreadS
   }
   if (text.trim().length === 0) return { error: hub.actions.invalidInput };
 
+  const totalTimer = startTimer();
+  plog("answer", "appendTypedTake: received", {
+    person: ctx.personId,
+    story: storyId,
+    chars: text.length,
+  });
+
   // Ownership + draft-state via the front door. Appending a take is only valid on an un-approved
   // draft the caller owns.
   const story = await getStoryForViewer(db, ctx, storyId);
@@ -497,6 +504,7 @@ export async function appendTypedTakeAction(formData: FormData): Promise<ThreadS
       // Load-bearing: the CLIENT'S editor text, NOT a DB read — non-clobbering append.
       priorProse: proseField,
     });
+    plog("answer", "appendTypedTake: appended", { story: storyId, ms: totalTimer() });
     return { kind: "appended", storyId, prose, appendedSegment };
   } catch (err) {
     plogError("answer", "appendTypedTake: failed", {
@@ -787,6 +795,7 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
 export async function polishAnswerProseAction(
   formData: FormData,
 ): Promise<{ prose: string } | { error: string }> {
+  beginLogContext();
   const { db, auth, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
@@ -797,6 +806,11 @@ export async function polishAnswerProseAction(
     return { error: hub.actions.invalidInput };
   }
   const promptQuestion = formData.get("promptQuestion");
+  plog("answer", "polishAnswerProse: received", {
+    person: ctx.personId,
+    story: storyId,
+    chars: prose.length,
+  });
 
   try {
     const result = await polishProse(languageModel, {
@@ -807,6 +821,7 @@ export async function polishAnswerProseAction(
     // it must NOT write an `ai_polished` row. Persisting an empty/no-model revision would poison the
     // prose lineage. Only a real polish (non-empty modelId) is logged.
     if (result.modelId === "") {
+      plog("answer", "polishAnswerProse: empty tap (no model, no-op)", { story: storyId });
       return { prose: result.prose };
     }
     const story = await logPolish(db, {
@@ -815,6 +830,10 @@ export async function polishAnswerProseAction(
       polishedProse: result.prose,
       modelId: result.modelId,
       promptText: result.systemPrompt,
+    });
+    plog("answer", "polishAnswerProse: ai_polished (logged + persisted)", {
+      story: storyId,
+      chars: (story.prose ?? result.prose).length,
     });
     // Return the story's persisted prose (logPolish whitespace-trims it) so the editor reflects
     // exactly what was written. `prose` is nullable on the Story type but logPolish just set it to a
@@ -835,12 +854,14 @@ export async function polishAnswerProseAction(
  * ownership — only the narrator who owns the draft may discard it.
  */
 export async function discardAnswerAction(formData: FormData): Promise<ActionResult> {
+  beginLogContext();
   const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   const storyId = formData.get("storyId");
   if (typeof storyId !== "string" || !storyId) return { error: hub.actions.invalidInput };
+  plog("answer", "discardAnswer: received", { person: ctx.personId, story: storyId });
 
   try {
     const { storageKeys } = await discardDraftStory(db, {
@@ -852,7 +873,12 @@ export async function discardAnswerAction(formData: FormData): Promise<ActionRes
     for (const key of storageKeys) {
       await storage.delete(key).catch(() => {});
     }
-  } catch {
+    plog("answer", "discardAnswer: draft discarded", { story: storyId });
+  } catch (err) {
+    plogError("answer", "discardAnswer: failed", {
+      story: storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { error: hub.actions.removeFailed };
   }
 }
@@ -892,6 +918,14 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
 
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
+
+  const totalTimer = startTimer();
+  plog("answer", "recordFollowUpTake: received", {
+    person: ctx.personId,
+    story: storyId,
+    bytes: bytes.byteLength,
+    contentType: audio.type || "audio/webm",
+  });
 
   // Degrade guard (handoff watch #2): an ASR/LLM hiccup mid-thread must never 500 the narrator. The
   // take's audio is durable after ingestFollowUpTake and "answered" is semantically correct even if
@@ -945,6 +979,11 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
       promptText: unresolved?.phrasedLine ?? "",
       answerTranscript: transcript,
     });
+    plog("answer", "recordFollowUpTake: appended", {
+      story: storyId,
+      followUp: step ? "proposed" : "none",
+      ms: totalTimer(),
+    });
     // Same as take 0: carry the appended prose onto a follow_up so the client seeds the mounted editor.
     return step
       ? { ...step, prose, appendedSegment }
@@ -987,6 +1026,8 @@ export async function declineFollowUpAction(formData: FormData): Promise<ThreadS
   const proseField = formData.get("prose");
   const clientProse = typeof proseField === "string" ? proseField : null;
 
+  plog("answer", "declineFollowUp: received", { person: ctx.personId, story: storyId });
+
   const story = await getStoryForViewer(db, ctx, storyId);
   if (!story || story.ownerPersonId !== ctx.personId || story.state !== "draft") {
     return { error: hub.actions.storyNotFound };
@@ -1006,6 +1047,7 @@ export async function declineFollowUpAction(formData: FormData): Promise<ThreadS
         outcome: "skipped",
       });
     }
+    plog("answer", "declineFollowUp: skip recorded", { story: storyId });
     // Empty `appendedSegment` + echoed client prose: a decline appends NO new prose segment. The client
     // skips `history.replace` on the empty segment, so its unsaved edits survive (forward-risk (i) fix).
     return { kind: "appended", storyId, prose: clientProse ?? story.prose ?? "", appendedSegment: "" };
@@ -1160,6 +1202,7 @@ export async function finishDraftAction(formData: FormData): Promise<ThreadStep>
  * owner + state (draft/pending_approval); we never attempt drops on approved stories.
  */
 export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
+  beginLogContext();
   const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
@@ -1173,6 +1216,7 @@ export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
   if (!Number.isInteger(position) || position < 0) {
     return { error: hub.actions.invalidInput };
   }
+  plog("answer", "dropTake: received", { person: ctx.personId, story: storyId, position });
 
   try {
     if (position === 0) {
@@ -1182,6 +1226,7 @@ export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
         narratorPersonId: ctx.personId,
       });
       for (const key of storageKeys) await storage.delete(key).catch(() => {});
+      plog("answer", "dropTake: position 0 → whole draft discarded", { story: storyId });
       return { kind: "discarded" };
     }
     const { storageKey } = await dropStoryRecording(db, {
@@ -1192,8 +1237,14 @@ export async function dropTakeAction(formData: FormData): Promise<ThreadStep> {
     await storage.delete(storageKey).catch(() => {});
     // Audio-only (slice 7): no re-stitch, no state transition, no prose edit. The take's text stays
     // in the working prose; the client shows the decision-(d) message and refreshes the takes list.
+    plog("answer", "dropTake: take_dropped (audio-only)", { story: storyId, position });
     return { kind: "take_dropped", storyId };
-  } catch {
+  } catch (err) {
+    plogError("answer", "dropTake: failed", {
+      story: storyId,
+      position,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { error: hub.actions.removeFailed };
   }
 }

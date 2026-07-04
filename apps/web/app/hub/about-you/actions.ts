@@ -27,7 +27,10 @@ import {
   transcribeIntakeAudio,
   cleanupTake,
   polishProse,
+  plog,
   plogError,
+  beginLogContext,
+  startTimer,
 } from "@chronicle/pipeline";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
@@ -47,6 +50,9 @@ export async function submitIntakeRecording(
   key: string,
   formData: FormData,
 ): Promise<{ transcript: string }> {
+  // Correlate every log line for this intake-capture run (ingest → transcribe → cleanup → seed).
+  beginLogContext();
+  const totalTimer = startTimer();
   const { db, storage, auth, transcriber, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
@@ -59,18 +65,31 @@ export async function submitIntakeRecording(
   const bytes = new Uint8Array(await audio.arrayBuffer());
   const contentType = audio.type || "audio/webm";
 
+  plog("about-you", "submitIntakeRecording: received", {
+    person: ctx.personId,
+    question: key,
+    bytes: bytes.byteLength,
+    contentType,
+  });
+
   await ingestIntakeRecording(db, storage, {
     actor: { kind: "account", personId: ctx.personId },
     questionKey: key,
     promptQuestion,
     audio: { bytes, contentType },
   });
+  plog("about-you", "submitIntakeRecording: audio ingested", { person: ctx.personId, question: key });
 
   // Transcribe (best-effort): a failure leaves transcript empty and the user types into an empty box.
   try {
     const { text: raw, modelId: transcribeModelId } = await transcribeIntakeAudio(transcriber, {
       bytes,
       contentType,
+    });
+    plog("about-you", "submitIntakeRecording: transcribed", {
+      person: ctx.personId,
+      question: key,
+      chars: raw.length,
     });
     // Empty/whitespace transcript is a no-op: nothing to seed and nothing to log (no empty revisions).
     if (raw.trim().length === 0) return { transcript: "" };
@@ -89,6 +108,12 @@ export async function submitIntakeRecording(
     } catch {
       // Cleanup failed → keep the raw transcript as the seed; provenance still records ai_transcribed.
     }
+    plog("about-you", "submitIntakeRecording: cleanup", {
+      person: ctx.personId,
+      question: key,
+      applied: cleanupModelId !== "",
+      chars: cleaned.length,
+    });
 
     const row = await saveIntakeTranscript(db, {
       personId: ctx.personId,
@@ -122,8 +147,22 @@ export async function submitIntakeRecording(
       });
     }
 
+    plog("about-you", "submitIntakeRecording: seeded editor", {
+      person: ctx.personId,
+      question: key,
+      chars: cleaned.length,
+      ms: totalTimer(),
+    });
     return { transcript: cleaned };
-  } catch {
+  } catch (err) {
+    // The outer transcribe failed — the user drops into an empty box and types. Was SILENT before:
+    // log the fallback so a never-transcribing intake path leaves a breadcrumb (non-fatal).
+    plogError("about-you", "submitIntakeRecording: transcribe failed (typed fallback)", {
+      person: ctx.personId,
+      question: key,
+      ms: totalTimer(),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { transcript: "" };
   }
 }
@@ -137,6 +176,7 @@ export async function submitIntakeRecording(
 export async function polishIntakeAnswerAction(
   formData: FormData,
 ): Promise<{ prose: string } | { error: string }> {
+  beginLogContext();
   const { db, auth, languageModel } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
@@ -146,6 +186,11 @@ export async function polishIntakeAnswerAction(
   if (typeof questionKey !== "string" || !questionKey || typeof prose !== "string") {
     return { error: hub.actions.invalidInput };
   }
+  plog("about-you", "polishIntakeAnswer: received", {
+    person: ctx.personId,
+    question: questionKey,
+    chars: prose.length,
+  });
   const promptQuestionRaw = formData.get("promptQuestion");
   const question = INTAKE_QUESTIONS.find((q) => q.key === questionKey);
   const promptQuestion =
@@ -156,6 +201,10 @@ export async function polishIntakeAnswerAction(
     // Empty/whitespace tap: polishProse returns modelId === "" (no model ran). No-op — persisting an
     // empty/no-model revision would poison the intake edit-history lineage. Mirrors the story action.
     if (result.modelId === "") {
+      plog("about-you", "polishIntakeAnswer: empty tap (no model, no-op)", {
+        person: ctx.personId,
+        question: questionKey,
+      });
       return { prose: result.prose };
     }
     // Persist the polish ATOMICALLY (mirrors the story logPolish): logIntakePolish ensures the row,
@@ -173,6 +222,11 @@ export async function polishIntakeAnswerAction(
       promptText: result.systemPrompt,
       actorPersonId: ctx.personId,
     });
+    plog("about-you", "polishIntakeAnswer: ai_polished", {
+      person: ctx.personId,
+      question: questionKey,
+      chars: result.prose.length,
+    });
     return { prose: result.prose };
   } catch (err) {
     plogError("about-you", "polishIntakeAnswer: failed", {
@@ -189,6 +243,8 @@ export async function saveIntakeAnswer(
   key: string,
   text: string,
 ): Promise<{ nextQuestion: NextQuestion | null }> {
+  beginLogContext();
+  const totalTimer = startTimer();
   const { db, auth, languageModel, narratorMemory } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
@@ -196,9 +252,16 @@ export async function saveIntakeAnswer(
   const question = INTAKE_QUESTIONS.find((q) => q.key === key);
   const promptQuestion = question?.text ?? key;
 
+  plog("about-you", "saveIntakeAnswer: received", {
+    person: ctx.personId,
+    question: key,
+    chars: text.length,
+  });
+
   // Persist the durable answer. Empty/whitespace text is a no-op skip (exit-without-typing).
   if (text.trim().length > 0) {
     const row = await saveIntakeText(db, { personId: ctx.personId, questionKey: key, promptQuestion, text });
+    plog("about-you", "saveIntakeAnswer: saved", { person: ctx.personId, question: key });
 
     // Consent-gated narrator-memory feed (ADR-0014 §9): intake Save IS the consent moment, so a saved
     // answer feeds the (deferred) memory model here. Currently a no-op sink; the SEAM is placed so
@@ -247,8 +310,14 @@ export async function saveIntakeAnswer(
           // TS can't satisfy from the string|boolean union — the runtime value is correct by hint.
           await createCoreAnchorSource(db).writeProfileField(ctx.personId, question.key, value as never);
         }
-      } catch {
-        // Best-effort: field stays null, re-askable; the saved text is unaffected.
+      } catch (e) {
+        // Best-effort: field stays null, re-askable; the saved text is unaffected. Was SILENT before:
+        // log so a never-extracting field leaves a breadcrumb (non-fatal).
+        plogError("about-you", "saveIntakeAnswer: field extraction failed (non-fatal)", {
+          person: ctx.personId,
+          question: key,
+          error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+        });
       }
     }
   }
@@ -262,5 +331,11 @@ export async function saveIntakeAnswer(
     if (q.key === key || askedKeys.includes(q.key) || answeredKeys.has(q.key)) askedSet.add(q.key);
   }
   const next = fresh ? nextIntakeQuestion(fresh.profile, askedSet) : null;
+  plog("about-you", "saveIntakeAnswer: next question computed", {
+    person: ctx.personId,
+    question: key,
+    next: next ? next.key : "(none — walk complete)",
+    ms: totalTimer(),
+  });
   return { nextQuestion: next ? { key: next.key, text: next.text } : null };
 }
