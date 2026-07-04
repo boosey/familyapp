@@ -89,7 +89,10 @@ export async function cleanupTake(
   });
   const cleaned = res.text.trim();
   return {
-    // Never delete the take: an empty model response falls back to the raw transcript.
+    // Never delete the take: an empty model response falls back to the raw transcript. This is a
+    // deliberate precedence — "never delete a take" (ADR-0014's never-silently-drop ethos) beats
+    // "remove filler". A genuinely filler-only take therefore surfaces its raw filler rather than
+    // vanishing; the safe failure mode, since we cannot distinguish "all filler" from "model failed".
     prose: cleaned.length > 0 ? cleaned : raw,
     modelId: res.modelId,
     systemPrompt: CLEANUP_SYSTEM_PROMPT,

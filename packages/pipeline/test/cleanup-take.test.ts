@@ -56,4 +56,20 @@ describe("cleanupTake", () => {
     expect(CLEANUP_SYSTEM_PROMPT).not.toBe(POLISH_SYSTEM_PROMPT);
     expect(CLEANUP_SYSTEM_PROMPT.toLowerCase()).toContain("reorder");
   });
+
+  it("a filler-only take that yields no model output keeps its raw words (never-delete beats remove-filler)", async () => {
+    // Documents the deliberate precedence: we cannot distinguish "all filler" from "model failed",
+    // so a take is never silently dropped — its raw text survives rather than vanishing.
+    const llm = new ScriptedLanguageModel({ respond: "" });
+    const out = await cleanupTake(llm, { transcript: "um, uh, you know" });
+    expect(out.prose).toBe("um, uh, you know");
+  });
+
+  it("omits the context block entirely when no name/question is supplied", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "ok" });
+    await cleanupTake(llm, { transcript: "just the words" });
+    const userMsg = llm.calls[0]!.messages.find((m) => m.role === "user")!.content;
+    expect(userMsg).not.toContain("Speaker's spoken name");
+    expect(userMsg).not.toContain("Question that prompted");
+  });
 });

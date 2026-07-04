@@ -65,4 +65,32 @@ describe("deriveMetadata", () => {
     await deriveMetadata(llm, { fullText: "text" });
     expect(llm.calls[0]!.responseFormat).toBe("json");
   });
+
+  // The following pin behaviors §5 relies on that currently rest entirely on the reused
+  // `parseRenderResponse`. Asserting them at the deriveMetadata seam guards against a future
+  // refactor of that reuse silently regressing the contract.
+
+  it("filters non-string / empty tags out of the tag list", async () => {
+    const llm = new ScriptedLanguageModel({
+      respond: JSON.stringify({ title: "T", summary: "S", tags: ["ok", 123, null, "", "  ", "good"] }),
+    });
+    const out = await deriveMetadata(llm, { fullText: "a story" });
+    expect(out.tags).toEqual(["ok", "good"]);
+  });
+
+  it("caps the tag list at 8", async () => {
+    const many = Array.from({ length: 15 }, (_, i) => `tag${i}`);
+    const llm = new ScriptedLanguageModel({
+      respond: JSON.stringify({ title: "T", summary: "S", tags: many }),
+    });
+    const out = await deriveMetadata(llm, { fullText: "a story" });
+    expect(out.tags).toHaveLength(8);
+  });
+
+  it("whitespace-only model output falls back to Untitled with no tags (never throws)", async () => {
+    const llm = new ScriptedLanguageModel({ respond: "   \n  " });
+    const out = await deriveMetadata(llm, { fullText: "The barn burned down in 1961." });
+    expect(out.title).toBe("Untitled");
+    expect(out.tags).toEqual([]);
+  });
 });

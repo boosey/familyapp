@@ -66,6 +66,8 @@ export async function deriveMetadata(
   llm: LanguageModel,
   input: DeriveMetadataInput,
 ): Promise<DeriveMetadataOutput> {
+  // No empty-input guard (unlike cleanupTake): Finish always runs on non-empty prose — finishDraft
+  // rejects empty finalText — so deriveMetadata is never called with empty fullText in practice.
   const messages = buildMessages(input);
   const res = await llm.complete({
     messages,
