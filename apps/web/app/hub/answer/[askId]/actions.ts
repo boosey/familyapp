@@ -814,9 +814,16 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
         outcome: "skipped",
       });
     }
-    // Empty `appendedSegment`: a decline appends NO prose segment (unlike a take). `prose` is the
-    // draft's current working text unchanged; the client's `appended` handler uses the empty segment
-    // to just return to the draft surface without inserting anything.
+    // Empty `appendedSegment`: a decline appends NO new prose segment (unlike a take). `prose` is the
+    // draft's current SERVER DB working text, returned unchanged; the client's `appended` handler
+    // seeds it via `history.replace(step.prose)`. NOTE: that handler does NOT branch on
+    // `appendedSegment === ""` — it replaces unconditionally. There is NO clobber TODAY only because
+    // the prose editor is not mounted during the follow-up screen (decline is tapped from
+    // FollowUpPrompt, so there is no unsaved client edit to lose).
+    // Slice 10 forward risk: once the composing editor is ALWAYS mounted during the follow-up screen,
+    // returning the server DB prose here would overwrite any newer unsaved client edit. Fix then by
+    // EITHER echoing the client's posted `prose` (non-clobbering, like the take-append path) OR making
+    // the client's `appended` branch skip `history.replace` when `appendedSegment === ""`.
     return { kind: "appended", storyId, prose: story.prose ?? "", appendedSegment: "" };
   } catch (err) {
     plogError("answer", "finishThread: recording skip failed", {

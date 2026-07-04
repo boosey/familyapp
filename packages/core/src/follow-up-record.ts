@@ -59,9 +59,15 @@ export async function appendFollowUpOutcome(
 }
 
 /**
- * The latest `decision` row for a story that has NO `outcome` row referencing it — i.e. the
+ * The latest ASKED `decision` row for a story that has NO `outcome` row referencing it — i.e. the
  * follow-up the narrator is currently responding to. The next action attaches its outcome here.
- * Returns null when every decision already has an outcome (or none exist).
+ * Returns null when every asked decision already has an outcome (or none exist).
+ *
+ * ONLY selected (`selectedSeed IS NOT NULL`) decisions are eligible: a null-seed "none" decision
+ * (written by runFollowUpStep when it proposes nothing) is NOT an asked follow-up. Under the append
+ * model (ADR-0014 Inc 3) the story stays `draft` after a none-decision, so that row would otherwise
+ * linger forever as "unresolved" and a later answered/skipped outcome would be attached to a
+ * follow-up that was never asked — polluting the append-only ledger.
  */
 export async function latestUnresolvedDecision(
   db: Database,
@@ -74,6 +80,7 @@ export async function latestUnresolvedDecision(
       and(
         eq(followUpDecisions.storyId, storyId),
         eq(followUpDecisions.recordKind, "decision"),
+        sql`${followUpDecisions.selectedSeed} is not null`,
         sql`not exists (
           select 1 from ${followUpDecisions} o
           where o.record_kind = 'outcome' and o.decision_id = ${followUpDecisions.id}

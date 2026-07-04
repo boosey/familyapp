@@ -498,6 +498,23 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(result).toEqual({ error: hub.actions.storyNotFound });
   });
 
+  it("recordFollowUpTakeAction rejects a missing `prose` FormData field (required-prose guard) and ingests no take", async () => {
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const before = await listStoryRecordings(runtimeDb, storyId);
+    expect(before.map((t) => t.position)).toEqual([0]);
+
+    // No `prose` field → the required-prose input guard fires BEFORE any ingest.
+    const result = await recordFollowUpTakeAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), storyId }),
+    );
+
+    expect(result).toEqual({ error: hub.actions.invalidInput });
+    // No follow-up take was ingested — the story still has only take 0.
+    const after = await listStoryRecordings(runtimeDb, storyId);
+    expect(after.map((t) => t.position)).toEqual([0]);
+  });
+
   it("recordFollowUpTakeAction returns a retryable error when transcription fails; take audio stays durable, draft stays open", async () => {
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };

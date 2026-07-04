@@ -101,4 +101,51 @@ describe("follow-up ledger (append-only, ADR-0013)", () => {
     const kinds = (await listFollowUpDecisionsForStory(db, storyId)).map((r) => r.recordKind);
     expect(kinds).toEqual(["decision", "outcome", "decision"]);
   });
+
+  it("ignores a null-seed 'none' decision — it was never an asked follow-up, so it is never unresolved", async () => {
+    // Under the append model (ADR-0014 Inc 3) runFollowUpStep writes a null-seed decision when it
+    // proposes NOTHING and the story STAYS draft. That row must NOT count as an "unresolved"
+    // follow-up: attaching an answered/skipped outcome to it would pollute the ledger with an
+    // outcome for a follow-up that was never asked.
+    await appendFollowUpDecision(db, {
+      storyId,
+      threadPosition: 0,
+      evaluatorModelId: "eval-model-v1",
+      candidates: [],
+      dispositions: [],
+      selectedSeed: null,
+      phrasedLine: null,
+      policy: POLICY,
+    });
+
+    expect(await latestUnresolvedDecision(db, storyId)).toBeNull();
+  });
+
+  it("returns the latest asked (selected) decision, skipping over a later null-seed 'none' decision", async () => {
+    // A real asked follow-up (position 0) followed by a none-decision (position 1). The asked one is
+    // still unresolved (no outcome yet); the newer null-seed row must be skipped, not returned.
+    const asked = await appendFollowUpDecision(db, {
+      storyId,
+      threadPosition: 0,
+      evaluatorModelId: "eval-model-v1",
+      candidates: [],
+      dispositions: [],
+      selectedSeed: "the summer at the lake",
+      phrasedLine: "What do you remember about that summer?",
+      policy: POLICY,
+    });
+    await appendFollowUpDecision(db, {
+      storyId,
+      threadPosition: 1,
+      evaluatorModelId: "eval-model-v1",
+      candidates: [],
+      dispositions: [],
+      selectedSeed: null,
+      phrasedLine: null,
+      policy: POLICY,
+    });
+
+    // The asked (selected) decision is the unresolved one — the later null-seed row is not eligible.
+    expect((await latestUnresolvedDecision(db, storyId))?.id).toBe(asked.decisionId);
+  });
 });
