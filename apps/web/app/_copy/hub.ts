@@ -209,8 +209,8 @@ export const hub = {
     // first-class, peer-level path — never a dead end.
     followUpIntro: "One more, if you'd like:",
     thatsAllForNow: "That's all for now",
-    // Shown on the follow-up screen while finishThreadAction stitches + polishes (a multi-second
-    // inline render) so the decline tap visibly registers — declining is never a dead end.
+    // Unused since ADR-0014 Inc 3 slice 10 (the full-screen FollowUpPrompt was replaced by an inline
+    // banner on the composing surface; declining no longer stitches). Kept for Inc 5's copy retire.
     finishing: "One moment…",
     followUpTakeLabel: "Follow-up",
     dropTake: "Remove this part",

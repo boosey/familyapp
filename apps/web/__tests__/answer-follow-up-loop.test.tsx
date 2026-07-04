@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Integration test: the follow-up thread loop in AnswerFlow (Task 7).
- *  1. An initial answer that resolves to a `follow_up` step shows the follow-up prompt + the
- *     peer-level "That's all for now" finish button.
- *  2. Tapping "That's all for now" runs finishThreadAction → `ready` → polls status → refreshes.
- *  3. A draft with multiple takes renders a per-take relisten list, with a "Remove this part" drop
+ * Integration test: the follow-up thread loop on the collapsed composing surface (ADR-0014 Inc 3
+ * slice 10). The follow-up is now an INLINE banner on the always-mounted composing surface (not a
+ * full-screen takeover):
+ *  1. An initial answer that resolves to a `follow_up` step lands on the composing surface (prose
+ *     editor mounted, seeded with the take's words) with the follow-up prompt banner + a peer-level
+ *     "That's all for now".
+ *  2. Tapping "That's all for now" runs declineFollowUpAction → clears the banner WITHOUT a refresh
+ *     (non-clobbering) and stays composing.
+ *  3. Recording again on the composing surface posts a follow-up take via recordFollowUpTakeAction.
+ *  4. A draft with multiple takes renders a per-take relisten list, with a "Remove this part" drop
  *     only on the follow-up take (never on the initial answer).
  * Mocks the browser media stack (getUserMedia, MediaRecorder, object URLs) and the server actions.
  */
@@ -28,44 +33,48 @@ vi.mock("next/navigation", () => ({
 const STORY_ID = "s1";
 
 type Step =
-  | { kind: "follow_up"; storyId: string; prompt: string }
-  | { kind: "ready"; storyId: string }
+  | { kind: "follow_up"; storyId: string; prompt: string; prose: string; appendedSegment: string }
+  | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
   | { kind: "take_dropped"; storyId: string }
   | { kind: "discarded" }
   | { error: string };
 
+// Take 0 proposes a follow-up (now carrying the appended prose so the mounted editor can seed it).
 const composeStoryAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
   kind: "follow_up",
   storyId: STORY_ID,
   prompt: "Tell me about the stained glass.",
+  prose: "My grandmother's house.",
+  appendedSegment: "My grandmother's house.",
 }));
 const recordFollowUpTakeAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
-  kind: "ready",
+  kind: "appended",
   storyId: STORY_ID,
+  prose: "My grandmother's house. And its stained glass.",
+  appendedSegment: "And its stained glass.",
 }));
-const finishThreadAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
-  kind: "ready",
+// Decline: an appended step with an EMPTY segment (records the skip, echoes the client prose).
+const declineFollowUpAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
+  kind: "appended",
   storyId: STORY_ID,
+  prose: "My grandmother's house.",
+  appendedSegment: "",
 }));
 const dropTakeAction = vi.fn(async (..._a: unknown[]): Promise<Step> => ({
   kind: "take_dropped",
   storyId: STORY_ID,
 }));
-const getAnswerStatusAction = vi.fn(
-  async (..._a: unknown[]): Promise<{ status: "processing" | "ready"; storyId: string }> => ({
-    status: "ready",
-    storyId: STORY_ID,
-  }),
-);
 
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
   recordFollowUpTakeAction: (...args: unknown[]) => recordFollowUpTakeAction(...args),
-  finishThreadAction: (...args: unknown[]) => finishThreadAction(...args),
+  appendTypedTakeAction: vi.fn(),
+  declineFollowUpAction: (...args: unknown[]) => declineFollowUpAction(...args),
+  finishDraftAction: vi.fn(),
   dropTakeAction: (...args: unknown[]) => dropTakeAction(...args),
-  getAnswerStatusAction: (...args: unknown[]) => getAnswerStatusAction(...args),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
+  polishAnswerProseAction: vi.fn(),
 }));
 
 class FakeMediaRecorder {
@@ -105,19 +114,16 @@ afterEach(() => {
 });
 
 /** Drive the voice button through idle → listening → stop (fires onstop → uploadRecording). Targets
- * the voice button by its aria-label so it works on the follow-up screen too (which also has the
- * "That's all for now" button). */
+ * the voice button by its aria-label so it works on the composing footer too. */
 async function recordOnce() {
   fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ })); // idle → listening
   await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
   fireEvent.click(screen.getByRole("button", { name: /Listening/ })); // listening → stop
 }
 
-describe("StoryComposer follow-up loop", () => {
-  it("shows the follow-up prompt and 'That's all for now' after a follow_up step", async () => {
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={null} />,
-    );
+describe("StoryComposer follow-up loop (inline banner)", () => {
+  it("shows the follow-up banner + 'That's all for now' on the composing surface after a follow_up step", async () => {
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     await recordOnce();
 
@@ -126,12 +132,16 @@ describe("StoryComposer follow-up loop", () => {
     );
     expect(composeStoryAction).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: /That's all for now/ })).toBeTruthy();
+    // The composing editor is mounted, seeded with the appended prose (client-optimistic, no refresh).
+    const editor = screen.getByRole("textbox", {
+      name: /your story, in your words/i,
+    }) as HTMLTextAreaElement;
+    expect(editor.value).toBe("My grandmother's house.");
+    expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("finishes the thread when 'That's all for now' is tapped → polls + refreshes", async () => {
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={null} />,
-    );
+  it("'That's all for now' declines via declineFollowUpAction, drops the banner, and does NOT refresh", async () => {
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     await recordOnce();
     await waitFor(() =>
@@ -140,73 +150,100 @@ describe("StoryComposer follow-up loop", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /That's all for now/ }));
 
-    await waitFor(() => expect(finishThreadAction).toHaveBeenCalledOnce());
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-    expect(getAnswerStatusAction).toHaveBeenCalledWith(STORY_ID);
+    await waitFor(() => expect(declineFollowUpAction).toHaveBeenCalledOnce());
+    // The client posts its current editor text (non-clobbering echo).
+    const form = declineFollowUpAction.mock.calls[0]![0] as FormData;
+    expect(form.get("storyId")).toBe(STORY_ID);
+    expect(form.get("prose")).toBe("My grandmother's house.");
+    // The banner is gone; we stay on the composing surface (the editor is still mounted).
+    await waitFor(() =>
+      expect(screen.queryByText("Tell me about the stained glass.")).toBeNull(),
+    );
+    expect(
+      screen.getByRole("textbox", { name: /your story, in your words/i }),
+    ).toBeTruthy();
+    // Decline (empty segment) never refreshes — that would remount and clobber unsaved edits.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("renders a per-take relisten list with a drop only on the follow-up take", () => {
-    const draft: DraftInfo = {
-      storyId: STORY_ID,
-      recordedAt: new Date().toISOString(),
-      mediaUrl: "/api/media/m0",
-      prose: "The stitched prose of both takes.",
-      title: "The chapel window",
-      state: "pending_approval",
-      takes: [
-        { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
-        { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
-      ],
-    };
+  it("records a follow-up take via recordFollowUpTakeAction from the composing footer", async () => {
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={draft} />,
+    // Initial answer → composing surface with the follow-up banner.
+    await recordOnce();
+    await waitFor(() =>
+      expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
+    );
+    expect(composeStoryAction).toHaveBeenCalledOnce();
+
+    // Record again on the composing footer → the FOLLOW-UP action fires against the active story.
+    await recordOnce();
+    await waitFor(() => expect(recordFollowUpTakeAction).toHaveBeenCalledOnce());
+    const form = recordFollowUpTakeAction.mock.calls[0]![0] as FormData;
+    expect(form.get("storyId")).toBe(STORY_ID);
+    expect(form.get("prose")).toBe("My grandmother's house.");
+    expect(composeStoryAction).toHaveBeenCalledOnce(); // still only the initial answer
+  });
+
+  it("surfaces a decline error on the composing surface (never a silent dead end)", async () => {
+    declineFollowUpAction.mockResolvedValueOnce({ error: "Could not finish. Please try again." });
+
+    render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
+
+    await recordOnce();
+    await waitFor(() =>
+      expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
     );
 
-    // Two labelled relisten controls, one per take.
+    fireEvent.click(screen.getByRole("button", { name: /That's all for now/ }));
+
+    await waitFor(() => expect(declineFollowUpAction).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.getByText(/Could not finish\. Please try again\./)).toBeTruthy(),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("StoryComposer per-take relisten (draft composing)", () => {
+  const draft: DraftInfo = {
+    storyId: STORY_ID,
+    recordedAt: new Date().toISOString(),
+    mediaUrl: "/api/media/m0",
+    prose: "The prose of both takes.",
+    title: "The chapel window",
+    state: "draft",
+    takes: [
+      { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
+      { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
+    ],
+  };
+
+  it("renders a per-take relisten list with a drop only on the follow-up take", () => {
+    render(<StoryComposer mode="answer" ask={ASK} draft={draft} />);
+
     const audios = document.querySelectorAll("audio");
     expect(audios).toHaveLength(2);
     expect(screen.getByText("Your answer")).toBeTruthy();
     expect(screen.getByText("Follow-up")).toBeTruthy();
 
-    // The drop appears ONLY on the follow-up take, never on the initial answer.
     const drops = screen.getAllByRole("button", { name: /Remove this part/ });
     expect(drops).toHaveLength(1);
   });
 
-  it("dropping a follow-up take (audio-only) shows the decision-(d) notice, refreshes, keeps the prose, and re-enables controls", async () => {
-    const KEPT_PROSE = "The stitched prose of both takes.";
-    const draft: DraftInfo = {
-      storyId: STORY_ID,
-      recordedAt: new Date().toISOString(),
-      mediaUrl: "/api/media/m0",
-      prose: KEPT_PROSE,
-      title: "The chapel window",
-      state: "pending_approval",
-      takes: [
-        { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
-        { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
-      ],
-    };
-
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={draft} />,
-    );
+  it("dropping a follow-up take (audio-only) shows the decision-(d) notice, refreshes, keeps the prose", async () => {
+    const KEPT_PROSE = "The prose of both takes.";
+    render(<StoryComposer mode="answer" ask={ASK} draft={draft} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Remove this part/ }));
 
-    // The drop targets the follow-up take (position 1).
     await waitFor(() => expect(dropTakeAction).toHaveBeenCalledOnce());
     const form = dropTakeAction.mock.calls[0]![0] as FormData;
     expect(form.get("position")).toBe("1");
     expect(form.get("storyId")).toBe(STORY_ID);
 
-    // Slice 7: `take_dropped` is handled directly — the decision-(d) notice appears and refresh fires
-    // (the takes list re-reads). It is NOT routed through the poll/ready path.
     await waitFor(() =>
-      expect(
-        screen.getByText(/Recording removed — edit the text above/),
-      ).toBeTruthy(),
+      expect(screen.getByText(/Recording removed — edit the text above/)).toBeTruthy(),
     );
     expect(refresh).toHaveBeenCalledOnce();
 
@@ -215,52 +252,5 @@ describe("StoryComposer follow-up loop", () => {
       name: /your story, in your words/i,
     }) as HTMLTextAreaElement;
     expect(editor.value).toBe(KEPT_PROSE);
-
-    // Controls are RE-ENABLED (op reset). Without the reset, `op` stays "drop" → Share disabled.
-    const share = screen.getByRole("button", { name: /Share with family/ }) as HTMLButtonElement;
-    await waitFor(() => expect(share.disabled).toBe(false));
-  });
-
-  it("surfaces a finish-thread error on the follow-up screen (never a silent dead end)", async () => {
-    finishThreadAction.mockResolvedValueOnce({ error: "Could not finish. Please try again." });
-
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={null} />,
-    );
-
-    await recordOnce();
-    await waitFor(() =>
-      expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /That's all for now/ }));
-
-    await waitFor(() => expect(finishThreadAction).toHaveBeenCalledOnce());
-    // The error is visibly rendered on the follow-up screen; refresh never fired.
-    await waitFor(() =>
-      expect(screen.getByText(/Could not finish\. Please try again\./)).toBeTruthy(),
-    );
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it("records a follow-up take via recordFollowUpTakeAction (not composeStoryAction)", async () => {
-    render(
-      <StoryComposer mode="answer" ask={ASK} draft={null} />,
-    );
-
-    // Initial answer → follow_up screen.
-    await recordOnce();
-    await waitFor(() =>
-      expect(screen.getByText("Tell me about the stained glass.")).toBeTruthy(),
-    );
-    expect(composeStoryAction).toHaveBeenCalledOnce();
-
-    // Record the follow-up take → the FOLLOW-UP action fires against the active story, not the
-    // initial compose action.
-    await recordOnce();
-    await waitFor(() => expect(recordFollowUpTakeAction).toHaveBeenCalledOnce());
-    const form = recordFollowUpTakeAction.mock.calls[0]![0] as FormData;
-    expect(form.get("storyId")).toBe(STORY_ID);
-    expect(composeStoryAction).toHaveBeenCalledOnce(); // still only the initial answer
   });
 });

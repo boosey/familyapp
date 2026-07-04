@@ -135,4 +135,35 @@ describe("useProseHistory", () => {
     click("undo");
     expect(val()).toBe("a"); // the seeded step is still walkable back to the original
   });
+
+  // ADR-0014 Inc 3 slice 10, forward-risk (iii): the returned handle must be a STABLE object across
+  // renders that don't change any member, so a parent can safely put it in long-lived callback deps
+  // and a MediaRecorder onstop closure without churn/stale-closure risk. Its identity DOES change when
+  // an affordance (canUndo/canRedo) flips — that's the signal downstream deps want.
+  it("returns a memoized handle: stable identity across an inert re-render, new identity when canUndo flips", () => {
+    const handles: unknown[] = [];
+    function IdentityHarness({ bump }: { bump: number }) {
+      const [value, setValue] = useState("");
+      const h = useProseHistory(value, setValue);
+      handles.push(h);
+      return (
+        <div>
+          <span data-testid="bump">{bump}</span>
+          <textarea data-testid="ta" value={value} onChange={(e) => setValue(e.target.value)} />
+          <button data-testid="replace" onClick={() => h.replace("X")}>p</button>
+        </div>
+      );
+    }
+
+    const { rerender } = render(<IdentityHarness bump={0} />);
+    const first = handles.at(-1);
+
+    // Inert re-render (a new unrelated prop) → no member changed → SAME handle identity.
+    rerender(<IdentityHarness bump={1} />);
+    expect(handles.at(-1)).toBe(first);
+
+    // A replace flips canUndo false→true → the handle identity MUST change so deps re-fire.
+    click("replace");
+    expect(handles.at(-1)).not.toBe(first);
+  });
 });

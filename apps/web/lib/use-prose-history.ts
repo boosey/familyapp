@@ -17,7 +17,7 @@
  *
  * `resetKey` re-baselines the stack (e.g. a different draft/story mounts into the same editor).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface HistState {
   stack: string[];
@@ -109,5 +109,15 @@ export function useProseHistory(
     [hist, value, onChange],
   );
 
-  return { canUndo, canRedo, undo, redo, replace };
+  // Return a MEMOIZED handle so its object identity is stable across renders that don't change any
+  // member (ADR-0014 Inc 3 slice 10, forward-risk (iii)). Once the composing editor is always mounted,
+  // a parent (`ComposingEditor`) puts this handle in the deps of long-lived callbacks
+  // (`handleStep`/`uploadRecording`) and in a MediaRecorder `onstop` closure. A fresh object literal
+  // every render would churn those callbacks and risk a stale-closure `replace`. `undo`/`redo`/`replace`
+  // are already `useCallback`-stable; `canUndo`/`canRedo` are the only value-churn, so the handle's
+  // identity only changes when the affordances actually change.
+  return useMemo(
+    () => ({ canUndo, canRedo, undo, redo, replace }),
+    [canUndo, canRedo, undo, redo, replace],
+  );
 }

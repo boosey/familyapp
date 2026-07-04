@@ -55,7 +55,8 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: vi.fn(),
   getAnswerStatusAction: vi.fn(),
   recordFollowUpTakeAction: vi.fn(),
-  finishThreadAction: vi.fn(),
+  appendTypedTakeAction: vi.fn(),
+  declineFollowUpAction: vi.fn(),
   dropTakeAction: vi.fn(),
   shareAnswerAction: vi.fn(),
   discardAnswerAction: vi.fn(),
@@ -68,13 +69,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// ADR-0014 Inc 3 slice 10: Finish now lives on the DRAFT composing surface (relocated off the shrunk
+// pending_approval review), so the draft under test is `draft`-state.
 const draft: DraftInfo = {
   storyId: STORY_ID,
   recordedAt: new Date(0).toISOString(),
   mediaUrl: "",
   prose: "The body of the story.",
   title: "Auto Title",
-  state: "pending_approval",
+  state: "draft",
   takes: [],
 };
 

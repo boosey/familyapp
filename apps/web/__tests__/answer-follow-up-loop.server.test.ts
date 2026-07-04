@@ -61,7 +61,8 @@ import {
   runFollowUpStep,
   recordAnswerAction,
   recordFollowUpTakeAction,
-  finishThreadAction,
+  declineFollowUpAction,
+  appendTypedTakeAction,
   dropTakeAction,
 } from "@/app/hub/answer/[askId]/actions";
 
@@ -605,7 +606,7 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(takes.map((t) => t.position)).toEqual([0, 1]);
   });
 
-  it("finishThreadAction rejects a non-draft/foreign story (IDOR → storyNotFound)", async () => {
+  it("declineFollowUpAction rejects a non-draft/foreign story (IDOR → storyNotFound)", async () => {
     const { storyId } = await seedDraft(runtimeDb);
     const [mallory] = await runtimeDb
       .insert(persons)
@@ -613,13 +614,13 @@ describe("follow-up actions (getRuntime-driven)", () => {
       .returning();
     authCtx = { kind: "account", personId: mallory!.id };
 
-    const result = await finishThreadAction(form({ storyId }));
+    const result = await declineFollowUpAction(form({ storyId }));
     expect(result).toEqual({ error: hub.actions.storyNotFound });
   });
 
-  it("finishThreadAction (decline) makes NO LLM call, returns appended with the current prose, draft stays open", async () => {
+  it("declineFollowUpAction (decline) makes NO LLM call, returns appended with the current prose, draft stays open", async () => {
     // Slice 6: decline records the skip and returns to the draft surface — no stitch, no render, no
-    // transition. Wiring a throwing LLM proves finishThreadAction never calls the model.
+    // transition. Wiring a throwing LLM proves declineFollowUpAction never calls the model.
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };
     const [take0] = await listStoryRecordings(runtimeDb, storyId);
@@ -639,9 +640,10 @@ describe("follow-up actions (getRuntime-driven)", () => {
       cleanupPromptText: "p",
       priorProse: null,
     });
-    runtimeLlm = throwingLlm; // if finishThreadAction called the LLM at all, this would throw
+    runtimeLlm = throwingLlm; // if declineFollowUpAction called the LLM at all, this would throw
 
-    const result = await finishThreadAction(form({ storyId }));
+    // No `prose` posted → the server echoes its own working text unchanged.
+    const result = await declineFollowUpAction(form({ storyId }));
 
     expect(result).toEqual({
       kind: "appended",
@@ -654,7 +656,42 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(story!.state).toBe("draft");
   });
 
-  it("finishThreadAction appends a `skipped` outcome for an unresolved follow-up (append-only), draft stays open", async () => {
+  it("declineFollowUpAction ECHOES the client's posted prose (forward-risk (i): non-clobbering)", async () => {
+    // ADR-0014 Inc 3 slice 10: the composing editor is now always mounted while the follow-up banner
+    // shows, so the narrator may have unsaved hand-edits. Decline must echo the CLIENT'S prose back
+    // (never a fresh DB read) so seeding it never overwrites those edits. Here the DB prose and the
+    // posted prose deliberately differ; the action must return the POSTED one, with an empty segment.
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await appendVoiceTakeContribution(runtimeDb, {
+      storyId,
+      ownerPersonId,
+      storyRecordingId: take0!.id,
+      rawTranscript: "Take zero words.",
+      cleanedSegment: "Server-side working prose.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
+    });
+    runtimeLlm = throwingLlm;
+
+    const CLIENT_EDIT = "Server-side working prose. Plus an unsaved hand-edit.";
+    const result = await declineFollowUpAction(form({ storyId, prose: CLIENT_EDIT }));
+
+    expect(result).toEqual({
+      kind: "appended",
+      storyId,
+      prose: CLIENT_EDIT, // the posted client text, NOT the DB "Server-side working prose."
+      appendedSegment: "",
+    });
+    // Echo only — the decline never PERSISTS the client edit (that rides the next append/Finish).
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.prose).toBe("Server-side working prose.");
+  });
+
+  it("declineFollowUpAction appends a `skipped` outcome for an unresolved follow-up (append-only), draft stays open", async () => {
     const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
     authCtx = { kind: "account", personId: ownerPersonId };
     const [take0] = await listStoryRecordings(runtimeDb, storyId);
@@ -679,7 +716,7 @@ describe("follow-up actions (getRuntime-driven)", () => {
     const unresolvedBefore = await latestUnresolvedDecision(runtimeDb, storyId);
     expect(unresolvedBefore).not.toBeNull();
 
-    const result = await finishThreadAction(form({ storyId }));
+    const result = await declineFollowUpAction(form({ storyId }));
     expect("kind" in result && result.kind).toBe("appended");
 
     // A `skipped` outcome row was appended (decision → skipped outcome), append-only.
@@ -691,6 +728,61 @@ describe("follow-up actions (getRuntime-driven)", () => {
 
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
     expect(story!.state).toBe("draft");
+  });
+
+  it("appendTypedTakeAction appends a typed take onto an EXISTING draft's posted prose (non-clobbering)", async () => {
+    // ADR-0014 Inc 3 slice 10: the composing footer's type-box is live for take ≥ 1 via this new
+    // front door (composeStoryAction only ever creates take-0). It concatenates onto the CLIENT'S
+    // posted prose, never a DB re-read, and keeps the draft in `draft` state (no transition).
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const [take0] = await listStoryRecordings(runtimeDb, storyId);
+    await appendVoiceTakeContribution(runtimeDb, {
+      storyId,
+      ownerPersonId,
+      storyRecordingId: take0!.id,
+      rawTranscript: "Spoken take zero.",
+      cleanedSegment: "Spoken take zero.",
+      transcribeModelId: "m",
+      cleanupModelId: "m",
+      cleanupPromptText: "p",
+      priorProse: null,
+    });
+
+    const PRIOR = "Spoken take zero. With a hand-edit.";
+    const result = await appendTypedTakeAction(
+      form({ storyId, text: "  A typed addition.  ", prose: PRIOR }),
+    );
+
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+    }
+    // Builds on the posted prose (non-clobbering), trims the typed text, and stays `draft`.
+    expect(result.prose.startsWith(PRIOR)).toBe(true);
+    expect(result.prose).toContain("A typed addition.");
+    expect(result.appendedSegment).toBe("A typed addition.");
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), storyId);
+    expect(story!.state).toBe("draft");
+    // NO story_recordings row is created for a typed take.
+    expect(await listStoryRecordings(runtimeDb, storyId)).toHaveLength(1);
+  });
+
+  it("appendTypedTakeAction rejects a foreign/non-draft story (IDOR → storyNotFound)", async () => {
+    const { storyId } = await seedDraft(runtimeDb);
+    const [mallory] = await runtimeDb
+      .insert(persons)
+      .values({ displayName: "Mallory", spokenName: "Mallory" })
+      .returning();
+    authCtx = { kind: "account", personId: mallory!.id };
+    const result = await appendTypedTakeAction(form({ storyId, text: "hi", prose: "" }));
+    expect(result).toEqual({ error: hub.actions.storyNotFound });
+  });
+
+  it("appendTypedTakeAction rejects empty text (invalidInput)", async () => {
+    const { ownerPersonId, storyId } = await seedDraft(runtimeDb);
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const result = await appendTypedTakeAction(form({ storyId, text: "   ", prose: "x" }));
+    expect(result).toEqual({ error: hub.actions.invalidInput });
   });
 
   it("recordFollowUpTakeAction (evaluator proposes nothing) APPENDS the take onto the posted prose (non-clobbering) and returns appended", async () => {

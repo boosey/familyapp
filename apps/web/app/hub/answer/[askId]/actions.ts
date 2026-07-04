@@ -76,7 +76,17 @@ export type ActionResult = { error: string } | undefined;
  * any removal).
  */
 export type ThreadStep =
-  | { kind: "follow_up"; storyId: string; prompt: string }
+  | {
+      kind: "follow_up";
+      storyId: string;
+      prompt: string;
+      // ADR-0014 Inc 3 slice 10: a follow_up now also carries the working prose after the take that
+      // triggered it was appended, so the client can seed the always-mounted composing editor
+      // OPTIMISTICALLY (no refresh/remount) and show the follow-up as an inline banner. Without this,
+      // a take-0 follow_up (which arrives before any refresh) would have no prose to seed the editor.
+      prose: string;
+      appendedSegment: string;
+    }
   | { kind: "ready"; storyId: string }
   | { kind: "appended"; storyId: string; prose: string; appendedSegment: string }
   | { kind: "take_dropped"; storyId: string }
@@ -270,7 +280,9 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
       promptText: askQuestionText,
       answerTranscript: transcript,
     });
-    if (step) return step;
+    // Carry the just-appended working prose onto the follow_up step so the client seeds the composing
+    // editor optimistically (ADR-0014 Inc 3 slice 10 — take-0 follow_up arrives before any refresh).
+    if (step) return { ...step, prose, appendedSegment };
   }
   return { kind: "appended", storyId, prose, appendedSegment };
 }
@@ -351,6 +363,58 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
 
   // VOICE branch — delegate to the existing, well-tested path (now ask-optional too).
   return recordAnswerAction(formData);
+}
+
+/**
+ * Append a TYPED take onto an EXISTING draft (ADR-0014 Inc 3 slice 10). This is what makes the
+ * composing surface's capture footer type-box "live" for take ≥ 1: `composeStoryAction`'s text branch
+ * only ever creates a NEW story (take 0, `priorProse=null`), so a second typed contribution needs its
+ * own front door. Reuses the audited `appendTypedTakeContribution` core fn — the narrator's `prose`
+ * (their current editor text) is the base concatenated onto (non-clobbering, the same priorProse
+ * discipline the voice-append path follows). Owner + `draft`-state gated via the front door.
+ */
+export async function appendTypedTakeAction(formData: FormData): Promise<ThreadStep> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const storyId = formData.get("storyId");
+  const text = formData.get("text");
+  const proseField = formData.get("prose");
+  if (
+    typeof storyId !== "string" ||
+    !storyId ||
+    typeof text !== "string" ||
+    typeof proseField !== "string"
+  ) {
+    return { error: hub.actions.invalidInput };
+  }
+  if (text.trim().length === 0) return { error: hub.actions.invalidInput };
+
+  // Ownership + draft-state via the front door. Appending a take is only valid on an un-approved
+  // draft the caller owns.
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story || story.ownerPersonId !== ctx.personId || story.state !== "draft") {
+    return { error: hub.actions.storyNotFound };
+  }
+
+  try {
+    const { prose, appendedSegment } = await appendTypedTakeContribution(db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      text,
+      // Load-bearing: the CLIENT'S editor text, NOT a DB read — non-clobbering append.
+      priorProse: proseField,
+    });
+    return { kind: "appended", storyId, prose, appendedSegment };
+  } catch (err) {
+    plogError("answer", "appendTypedTake: failed", {
+      story: storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.actions.saveFailed };
+  }
 }
 
 /**
@@ -790,7 +854,10 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
       promptText: unresolved?.phrasedLine ?? "",
       answerTranscript: transcript,
     });
-    return step ?? { kind: "appended", storyId, prose, appendedSegment };
+    // Same as take 0: carry the appended prose onto a follow_up so the client seeds the mounted editor.
+    return step
+      ? { ...step, prose, appendedSegment }
+      : { kind: "appended", storyId, prose, appendedSegment };
   } catch (err) {
     plogError("answer", "recordFollowUpTake: failed (draft stays open; retryable)", {
       story: storyId,
@@ -802,16 +869,21 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
 }
 
 /**
- * "That's all for now" — the narrator declines the current follow-up (ADR-0014 Inc 3 slice 6). Marks
- * the outstanding follow-up `skipped` (a first-class path, not a dead end). There is NO transition and
- * NO stitch: the draft's working prose is already whatever the appends built up, and Finish (a later
- * slice) is what transitions the draft. Declining appends no new prose segment — it just records the
- * skip and returns the narrator to the draft surface.
+ * "That's all for now" — the narrator declines the current follow-up (ADR-0014 Inc 3 slice 6, renamed
+ * from `finishThreadAction` in slice 10). Marks the outstanding follow-up `skipped` (a first-class
+ * path, not a dead end). There is NO transition and NO stitch: the draft's working prose is already
+ * whatever the appends built up, and Finish (`finishDraftAction`) is what transitions the draft.
+ * Declining appends no new prose segment — it just records the skip and returns the narrator to the
+ * composing surface.
  *
- * NOTE: the name is kept as `finishThreadAction` (rename to `declineFollowUpAction` is deferred to a
- * later slice; StoryComposer's import must not change yet).
+ * Non-clobbering (ADR-0014 Inc 3 slice 10, forward-risk (i) fix): the composing editor is now ALWAYS
+ * mounted while the follow-up banner shows, so the narrator may have unsaved hand-edits. This action
+ * therefore ECHOES the client's posted `prose` back (never a fresh `stories.prose` read) and returns
+ * `appendedSegment: ""`; the client's `appended` handler SKIPS `history.replace` on an empty segment,
+ * so a decline never overwrites in-flight edits. (`prose` is optional for backward-safety; absent →
+ * the server working text, unchanged.)
  */
-export async function finishThreadAction(formData: FormData): Promise<ThreadStep> {
+export async function declineFollowUpAction(formData: FormData): Promise<ThreadStep> {
   beginLogContext();
   const rt = await getRuntime();
   const { db, auth } = rt;
@@ -820,6 +892,9 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
 
   const storyId = formData.get("storyId");
   if (typeof storyId !== "string" || !storyId) return { error: hub.actions.invalidInput };
+  // The client's current editor text (non-clobbering echo). Optional: absent → fall back to DB prose.
+  const proseField = formData.get("prose");
+  const clientProse = typeof proseField === "string" ? proseField : null;
 
   const story = await getStoryForViewer(db, ctx, storyId);
   if (!story || story.ownerPersonId !== ctx.personId || story.state !== "draft") {
@@ -840,19 +915,11 @@ export async function finishThreadAction(formData: FormData): Promise<ThreadStep
         outcome: "skipped",
       });
     }
-    // Empty `appendedSegment`: a decline appends NO new prose segment (unlike a take). `prose` is the
-    // draft's current SERVER DB working text, returned unchanged; the client's `appended` handler
-    // seeds it via `history.replace(step.prose)`. NOTE: that handler does NOT branch on
-    // `appendedSegment === ""` — it replaces unconditionally. There is NO clobber TODAY only because
-    // the prose editor is not mounted during the follow-up screen (decline is tapped from
-    // FollowUpPrompt, so there is no unsaved client edit to lose).
-    // Slice 10 forward risk: once the composing editor is ALWAYS mounted during the follow-up screen,
-    // returning the server DB prose here would overwrite any newer unsaved client edit. Fix then by
-    // EITHER echoing the client's posted `prose` (non-clobbering, like the take-append path) OR making
-    // the client's `appended` branch skip `history.replace` when `appendedSegment === ""`.
-    return { kind: "appended", storyId, prose: story.prose ?? "", appendedSegment: "" };
+    // Empty `appendedSegment` + echoed client prose: a decline appends NO new prose segment. The client
+    // skips `history.replace` on the empty segment, so its unsaved edits survive (forward-risk (i) fix).
+    return { kind: "appended", storyId, prose: clientProse ?? story.prose ?? "", appendedSegment: "" };
   } catch (err) {
-    plogError("answer", "finishThread: recording skip failed", {
+    plogError("answer", "declineFollowUp: recording skip failed", {
       story: storyId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });

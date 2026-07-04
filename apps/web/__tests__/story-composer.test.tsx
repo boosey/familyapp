@@ -12,8 +12,9 @@ import { StoryComposer, type DraftInfo } from "@/app/hub/StoryComposer";
 
 const refresh = vi.fn();
 const push = vi.fn();
+const replace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh, push }),
+  useRouter: () => ({ refresh, push, replace }),
 }));
 
 const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
@@ -76,7 +77,9 @@ describe("StoryComposer capture (tell mode)", () => {
     expect(form.get("askId")).toBeNull();
   });
 
-  it("an appended text submit refreshes once and never polls the status", async () => {
+  it("an appended text submit hands off to the story's resume URL and never polls the status", async () => {
+    // ADR-0014 Inc 3 slice 10: `/hub/tell` (fresh telling) can't re-query a just-created draft by URL,
+    // so the first take navigates to `/hub/tell/[storyId]` (which server-drives the composing surface).
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: /type it/i }));
@@ -84,9 +87,8 @@ describe("StoryComposer capture (tell mode)", () => {
     fireEvent.change(textarea, { target: { value: "The summer we drove to the coast." } });
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
-    // The action resolves to `appended` → the client seeds the prose and refreshes once. It must NOT
-    // poll getAnswerStatusAction (an appended draft stays `draft`) and must never show "taking longer".
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/hub/tell/${STORY_ID}`));
+    // It must NOT poll getAnswerStatusAction (an appended draft stays `draft`) or show "taking longer".
     expect(getAnswerStatusAction).not.toHaveBeenCalled();
     expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
