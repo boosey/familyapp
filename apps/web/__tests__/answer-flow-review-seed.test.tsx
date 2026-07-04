@@ -47,6 +47,7 @@ const draft: DraftInfo = {
   mediaUrl: "/api/media/m1",
   prose: PROSE,
   title: "A grandparent's wish",
+  state: "pending_approval",
   // Thread-of-one: exactly the initial take → the single-take review path.
   takes: [{ position: 0, mediaUrl: "/api/media/m1", isInitial: true }],
 };

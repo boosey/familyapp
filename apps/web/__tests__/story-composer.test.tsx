@@ -99,6 +99,7 @@ describe("StoryComposer review title field", () => {
     mediaUrl: "", // a text story has no audio
     prose: "The body of the story.",
     title: "Auto Title",
+    state: "pending_approval",
     takes: [],
   };
 
@@ -125,6 +126,7 @@ describe("StoryComposer discard destination is mode-aware", () => {
     mediaUrl: "",
     prose: "The body of the story.",
     title: "Auto Title",
+    state: "pending_approval",
     takes: [],
   };
 

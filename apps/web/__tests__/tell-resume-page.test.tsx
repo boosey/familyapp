@@ -9,6 +9,7 @@
  *   - not found               → redirect("/hub?tab=stories")   (getStoryForViewer → null)
  *   - not owned               → redirect("/hub?tab=stories")   (another person's readable story)
  *   - wrong state             → redirect("/hub?tab=stories")   (own story past review)
+ *   - own draft               → renders StoryComposer seeded with the draft (ADR-0014 Inc 3 slice 9)
  *   - own pending_approval    → renders StoryComposer seeded with the draft (review phase)
  *
  * The page is an async server component: we invoke it and render the element it returns. `redirect`
@@ -143,10 +144,24 @@ describe("TellResumePage gate", () => {
       mediaUrl: "",
       prose: "Some prose.",
       title: "A Title",
+      state: "pending_approval",
       takes: [],
     });
     expect(draft.recordedAt).toBe("2026-07-01T12:00:00.000Z");
     expect(listStoryRecordings).not.toHaveBeenCalled();
+  });
+
+  it("renders the composer for the owner's own live DRAFT (ADR-0014 Inc 3 slice 9)", async () => {
+    getCurrentAuthContext.mockResolvedValue({ kind: "account", personId: PERSON });
+    resolvePostAuthRoute.mockResolvedValue("/hub");
+    getStoryForViewer.mockResolvedValue(story({ state: "draft" }));
+    expect(await run()).toBe("RENDERED");
+
+    const draft = JSON.parse(screen.getByTestId("composer").getAttribute("data-draft") ?? "null");
+    // The live-composing `draft` state is now reachable AND threaded onto DraftInfo so Slice 10's
+    // phase collapse can key off it. Until then it renders via the existing review markup.
+    expect(draft.state).toBe("draft");
+    expect(draft.storyId).toBe(STORY_ID);
   });
 
   it("populates audio + takes for a voice draft resuming", async () => {

@@ -61,6 +61,13 @@ export interface DraftInfo {
   mediaUrl: string;
   prose: string;
   title: string;
+  /**
+   * Lifecycle state of the resumed story (ADR-0014 Inc 3 slice 9). `draft` = a live composing
+   * surface still being built up; `pending_approval` = ready for the owner's review. Slice 9 only
+   * THREADS this (the resume pages now surface `draft`-state stories too); Slice 10's phase collapse
+   * is what keys the rendered phase off it. Until then both states render the existing review markup.
+   */
+  state: "draft" | "pending_approval";
   takes: TakeInfo[];
 }
 

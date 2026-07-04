@@ -12,7 +12,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   getStoryForViewer,
-  listOutstandingAnswerDrafts,
+  listOutstandingDrafts,
   listStoryRecordings,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
@@ -55,8 +55,12 @@ export default async function AnswerPage({
     redirect("/hub?tab=questions");
   }
 
-  // Check for an outstanding draft for this ask.
-  const drafts = await listOutstandingAnswerDrafts(db, ctx.personId);
+  // Check for an outstanding draft for this ask. `listOutstandingDrafts` returns most-recent-first
+  // and includes BOTH the live `draft` state and `pending_approval` (ADR-0014 Inc 3 slice 9 — a
+  // routing relax from the pending-only `listOutstandingAnswerDrafts`), so `.find` yields the latest
+  // resumable draft for this ask regardless of state. (The Questions tab keeps its pending-only split
+  // via `questionsTabAnswerDrafts`; this page is a distinct consumer that resumes a live draft too.)
+  const drafts = await listOutstandingDrafts(db, ctx.personId);
   const draftEntry = drafts.find((d) => d.askId === askId) ?? null;
 
   // If a draft exists, get the story (owner always sees their own draft) for the recording URL.
@@ -75,9 +79,14 @@ export default async function AnswerPage({
       draft = {
         storyId: story.id,
         recordedAt: draftEntry.recordedAt.toISOString(),
-        mediaUrl: `/api/media/${story.recordingMediaId}`,
+        // A voice draft has a recording pointer; a text answer draft leaves it null → the client
+        // omits the audio block when mediaUrl is empty (mirrors the tell resume page).
+        mediaUrl: story.recordingMediaId ? `/api/media/${story.recordingMediaId}` : "",
         prose: story.prose ?? "",
         title: story.title ?? "",
+        // Threaded for Slice 10's phase collapse. draftEntry.state matches (same story row), but the
+        // freshly-read `story.state` is authoritative here.
+        state: story.state === "draft" ? "draft" : "pending_approval",
         takes,
       };
     }

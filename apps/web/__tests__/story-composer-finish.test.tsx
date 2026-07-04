@@ -74,6 +74,7 @@ const draft: DraftInfo = {
   mediaUrl: "",
   prose: "The body of the story.",
   title: "Auto Title",
+  state: "pending_approval",
   takes: [],
 };
 

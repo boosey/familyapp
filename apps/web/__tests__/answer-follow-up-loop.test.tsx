@@ -152,6 +152,7 @@ describe("StoryComposer follow-up loop", () => {
       mediaUrl: "/api/media/m0",
       prose: "The stitched prose of both takes.",
       title: "The chapel window",
+      state: "pending_approval",
       takes: [
         { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
         { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
@@ -181,6 +182,7 @@ describe("StoryComposer follow-up loop", () => {
       mediaUrl: "/api/media/m0",
       prose: KEPT_PROSE,
       title: "The chapel window",
+      state: "pending_approval",
       takes: [
         { position: 0, mediaUrl: "/api/media/m0", isInitial: true },
         { position: 1, mediaUrl: "/api/media/m1", isInitial: false },
