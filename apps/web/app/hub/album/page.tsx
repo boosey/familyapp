@@ -66,9 +66,9 @@ export default async function AlbumPage({
 
         <h1
           style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "var(--text-display-sm)",
-            color: "var(--text-strong)",
+            fontFamily: "var(--font-story)",
+            fontSize: "var(--text-display)",
+            color: "var(--text-body)",
             margin: "16px 0 24px",
           }}
         >

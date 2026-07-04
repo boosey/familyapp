@@ -13,11 +13,14 @@
  *   - `resetSchema(db)`  — BLOW AWAY everything and re-apply (drop schema → recreate). This is how
  *     the dev seed picks up schema changes: edit schema.ts → regenerate → reseed. DESTRUCTIVE and
  *     dev-only.
+ *
+ * Prod schema evolution does NOT use these primitives: managed Postgres (Neon) is advanced by the
+ * drizzle-kit migration chain via `runMigrations` (see run-migrations.ts), run in the Vercel build
+ * (`db:migrate`). These primitives serve PGlite dev/test and the dev reseed only.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { PGlite } from "@electric-sql/pglite";
-import type postgres from "postgres";
 import type { Database } from "./client";
 
 const SCHEMA_FILES = ["../drizzle/schema.sql", "../drizzle/invariants.sql"];
@@ -72,17 +75,4 @@ export async function resetSchema(db: Database): Promise<void> {
     return;
   }
   throw new Error("resetSchema: database has neither a PGlite nor a Postgres handle");
-}
-
-/**
- * First-boot bootstrap for a real Postgres server (Supabase, Neon, ...). Applies the schema only
- * if absent — NEVER drops. For ongoing prod schema changes use a proper migration tool; this is
- * the fresh-database bootstrap path only.
- */
-export async function applySchemaToPostgres(sql: postgres.Sql): Promise<void> {
-  const rows = await sql<{ reg: string | null }[]>`
-    SELECT to_regclass('public.persons') AS reg
-  `;
-  if (rows[0]?.reg) return; // already bootstrapped
-  await sql.unsafe(schemaSql());
 }

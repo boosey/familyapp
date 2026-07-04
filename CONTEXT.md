@@ -77,12 +77,14 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   preserved. One approval covers the whole (possibly multi-take, possibly mixed) draft.
 - **Source of truth vs. audio of record** — the story's **source of truth is its approved prose**: a
   *composite* of every input (spoken takes + typed takes + hand-corrections + Polish), sealed at
-  approval. The **audio is the permanent *original record*** — kept forever for playback, audit, and
-  improvement, and immutable once consented — but it is **not** the source of truth and the prose is
+  approval. The **audio is the *original record*** — retained while its item lives for playback,
+  audit, and improvement, and immutable and undetachable while attached (removed only when the item
+  itself is deleted; ADR-0008) — but it is **not** the source of truth and the prose is
   **not** regenerable from it. Only a voice take's raw **transcript** is regenerable (re-run STT on
   that take's audio); the **prose is authored** (it carries typed words and human corrections that do
   not exist in any audio), so it must be persisted and **never blindly regenerated**. ("Canonical
-  audio" in older ADRs means exactly this: un-discardable original record, *not* regenerable-source.)
+  audio" in older ADRs means exactly this: the un-detachable-while-attached original record, *not*
+  regenerable-source.)
 - **Take** — one recording within a Story. A single-answer Story has one take; a Story deepened by
   **Follow-ups** has several, kept in the order they were spoken. NOTE the shift from the earlier
   glossary sense: a take used to be *the* (single) current recording that **Re-record** replaced;
@@ -162,7 +164,8 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
 - **Asker-avatar** — the asker's actual recording (voice now; face/video later) delivered to the
   teller in-session, so the narrator hears the real relative ask rather than a synthetic voice. The
   asker opts in per Ask (`deliveredToTeller`); if they don't, the teller gets the text. The
-  recording is a permanent Media linked to the Ask (consent scope deferred; until designed it
+  recording is a Media linked to the Ask — immutable and undetachable while the Ask lives, removed
+  only when the Ask is deleted (ADR-0008; consent scope deferred; until designed it
   travels asker→teller only, not family-wide).
 
 ## Engagement & notification

@@ -18,9 +18,23 @@ interface StoryComposerProps {
   /** The ask being answered (answer mode) or `null`/absent for a self-initiated telling (tell mode). */
   ask?: { id: string; questionText: string; askerName: string } | null;
   draft: DraftInfo | null;
+  /**
+   * ADR-0009 Phase 3 "tell the story of this photo": the album photo this telling is ABOUT. Carried
+   * as a client hint into `composeStoryAction` — the server re-resolves auth and the core write gate
+   * enforces the owner can actually see it. Tell mode only; null/absent for a plain telling or answer.
+   */
+  subjectPhotoId?: string | null;
+  /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
+  promptQuestion?: string | null;
 }
 
-export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
+export function StoryComposer({
+  mode,
+  ask = null,
+  draft,
+  subjectPhotoId = null,
+  promptQuestion = null,
+}: StoryComposerProps) {
   // Where a discard returns the narrator. A tell-mode draft came from the Stories tab; an answer came
   // from the Questions tab. (A legitimate mode-dependent branch.)
   const backTab = mode === "tell" ? "/hub?tab=stories" : "/hub?tab=questions";
@@ -37,5 +51,14 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   // `/hub/answer/[askId]` re-queries its draft by `askId` on refresh, so it needs no resumeHref.
   const resumeHref = mode === "tell" ? (storyId: string) => `/hub/tell/${storyId}` : undefined;
 
-  return <ComposingEditor ask={ask} draft={draft} backTab={backTab} resumeHref={resumeHref} />;
+  return (
+    <ComposingEditor
+      ask={ask}
+      draft={draft}
+      backTab={backTab}
+      resumeHref={resumeHref}
+      subjectPhotoId={subjectPhotoId}
+      promptQuestion={promptQuestion}
+    />
+  );
 }

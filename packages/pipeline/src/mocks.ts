@@ -11,6 +11,9 @@ import type {
   LanguageModel,
   LanguageModelRequest,
   LanguageModelResponse,
+  PhotoUnderstanding,
+  PhotoUnderstandingInput,
+  PhotoUnderstandingResult,
   TranscribeInput,
   Transcriber,
   TranscriptionResult,
@@ -73,6 +76,43 @@ export class ScriptedLanguageModel implements LanguageModel {
     const r = this.script.respond;
     const text = typeof r === "function" ? r(req) : (r ?? defaultRender(req));
     return { text, modelId: this.script.modelId ?? "mock-claude" };
+  }
+}
+
+export interface ScriptedPhotoUnderstandingCall {
+  photoId: string;
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+export interface ScriptedPhotoUnderstandingScript {
+  labels?: string[];
+  modelId?: string;
+}
+
+/**
+ * A `PhotoUnderstanding` that returns whatever labels the test programs in. Records every call
+ * (with a COPY of the bytes) so tests can assert what was handed to the vision seam. RESERVED —
+ * exists only to exercise the reserved interface; the v1 ranker never calls it.
+ */
+export class ScriptedPhotoUnderstanding implements PhotoUnderstanding {
+  readonly calls: ScriptedPhotoUnderstandingCall[] = [];
+  constructor(private script: ScriptedPhotoUnderstandingScript = {}) {}
+
+  setScript(script: ScriptedPhotoUnderstandingScript): void {
+    this.script = script;
+  }
+
+  async describe(input: PhotoUnderstandingInput): Promise<PhotoUnderstandingResult> {
+    this.calls.push({
+      photoId: input.photoId,
+      bytes: input.bytes.slice(),
+      contentType: input.contentType,
+    });
+    return {
+      labels: this.script.labels ?? [],
+      modelId: this.script.modelId ?? "mock-photo-understanding",
+    };
   }
 }
 

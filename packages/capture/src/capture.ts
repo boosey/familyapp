@@ -52,6 +52,9 @@ export interface IngestRecordingInput {
   source?: CaptureSource;
   promptQuestion?: string;
   askId?: string;
+  /** The album photo this story is ABOUT (ADR-0009 Phase 3 "subject"). Threaded to core, which
+   *  atomically makes it the story's first cover image (gated: the owner must be able to see it). */
+  subjectPhotoId?: string;
   now?: Date;
 }
 
@@ -106,6 +109,8 @@ export async function ingestRecording(
       // Carry the link-session's family onto the draft as its originating context (ADR-0010), so
       // approval can default-target the story into the family it was told for. Null for account.
       originatingFamilyId: resolved.originatingFamilyId ?? undefined,
+      // ADR-0009 Phase 3: the album photo this story is about (atomic cover insert in core).
+      subjectPhotoId: input.subjectPhotoId,
     },
   );
 
@@ -119,6 +124,8 @@ export interface IngestTextStoryInput {
   text: string;
   promptQuestion?: string;
   askId?: string;
+  /** The album photo this story is ABOUT (ADR-0009 Phase 3 "subject"). See `IngestRecordingInput`. */
+  subjectPhotoId?: string;
   now?: Date;
 }
 
@@ -145,6 +152,8 @@ export async function ingestTextStory(
     // Carry the link-session's family onto the draft as its originating context (ADR-0010) so
     // approval can default-target the story into the family it was told for. Null for account.
     ...(resolved.originatingFamilyId ? { originatingFamilyId: resolved.originatingFamilyId } : {}),
+    // ADR-0009 Phase 3: the album photo this story is about (atomic cover insert in core).
+    ...(input.subjectPhotoId !== undefined ? { subjectPhotoId: input.subjectPhotoId } : {}),
   });
   return { storyId: story.id };
 }

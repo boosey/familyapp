@@ -20,14 +20,15 @@ Run from repo root:
 - Single test file: `pnpm --filter @chronicle/core exec vitest run path/to/file.test.ts`
 - Single test name: `pnpm --filter @chronicle/core exec vitest run -t "name pattern"`
 - Web dev server: `pnpm --filter @chronicle/web dev` (Next.js 15, React 19)
-- DB schema codegen: `pnpm --filter @chronicle/db db:generate` (drizzle-kit)
+- DB schema codegen: `pnpm --filter @chronicle/db db:generate` (drizzle-kit) — emits BOTH the snapshot (`drizzle/schema.sql` + `drizzle/invariants.sql`) and a new incremental migration (`drizzle/migrations/NNNN_*.sql`) for any modeled diff. Invariant changes must be hand-carried into the emitted migration.
+- Apply pending migrations to a durable Postgres (Neon): `pnpm --filter @chronicle/db db:migrate` (runs in the Vercel build against `DATABASE_URL`; never on the request path).
 
 Tests use Vitest. The DB layer uses **PGlite** (real Postgres in-process) — there is no external Postgres to provision for `pnpm test`.
 
 ## Architecture
 
 ### Packages (`packages/*`, `apps/*`)
-- `@chronicle/db` — Drizzle schema (the spec made executable), client, migrations, PGlite test helper.
+- `@chronicle/db` — Drizzle schema (the spec made executable), client, PGlite test helper, and the DB evolution path. `schema.ts` is the single source of truth deriving TWO artifacts: the **snapshot** (`drizzle/schema.sql` + `drizzle/invariants.sql`, applied wholesale by `applySchema`/`resetSchema` — the fast path for PGlite tests and the dev seed) and the **migration chain** (`drizzle/migrations/NNNN_*.sql`, applied incrementally to durable environments like Neon by `runMigrations`/`db:migrate` in the Vercel build, tracked in `__drizzle_migrations`). A drift-guard test (`test/migration-drift.test.ts`) bonds the two so they can never silently diverge. See `docs/DECISIONS.md` § Migrations.
 - `@chronicle/core` — the IP: single authorization function, append-only consent ledger, story state machine, story write repository.
 - `@chronicle/storage` — `MediaStorage` interface + in-memory/filesystem/R2 adapters. Media bytes only; no DB.
 - `@chronicle/capture` — session tokens (token IS identity for the link-session capture surface), `ingestRecording` orchestrator (storage upload → core write path).

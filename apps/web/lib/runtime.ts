@@ -12,7 +12,6 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applySchema,
-  applySchemaToPostgres,
   createPgliteDatabase,
   createPostgresDatabase,
   type Database,
@@ -234,12 +233,8 @@ async function build(): Promise<Runtime> {
   let db: Database;
   if (process.env.DATABASE_URL) {
     db = createPostgresDatabase(process.env.DATABASE_URL);
-    // First-boot bootstrap only, and opt-in: every Next.js cold start AND every HMR cycle would
-    // otherwise hammer `applySchemaToPostgres`. It applies the schema only if absent (never drops);
-    // for bootstrapping a fresh Supabase/Neon project. Set `CHRONICLE_RUN_MIGRATIONS=1` to run it.
-    if (db.$postgres && process.env.CHRONICLE_RUN_MIGRATIONS === "1") {
-      await applySchemaToPostgres(db.$postgres);
-    }
+    // Schema is advanced by `db:migrate` in the Vercel buildCommand (see apps/web/vercel.json),
+    // never on the request path. No boot-time schema application here.
     // Schema-drift detection lives at the DEPLOY GATE, not here. It used to run on every cold start
     // (assertPostgresSchemaParity), but a request-path guard is the wrong venue: (1) ANY failure —
     // including a transient introspection error or a missing build asset — takes down the WHOLE app,

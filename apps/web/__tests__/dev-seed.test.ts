@@ -22,7 +22,13 @@ import { describe, expect, it, vi } from "vitest";
 import { count, eq, isNull } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
 import { stories } from "@chronicle/db/content";
-import { accounts, asks, mockAuthUsers, persons } from "@chronicle/db/schema";
+import {
+  accounts,
+  asks,
+  invitations,
+  mockAuthUsers,
+  persons,
+} from "@chronicle/db/schema";
 import { listOutstandingAnswerDrafts } from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { seedInto } from "../lib/dev-seed";
@@ -64,14 +70,27 @@ async function seededDbClerkMode(
 // Mock-mode (default) — existing regression suite
 // ---------------------------------------------------------------------------
 
-describe("dev seed — every Person has an Account", () => {
-  it("seeds no account-less Persons", async () => {
+describe("dev seed — every Person has an Account (except provisional invitees)", () => {
+  it("seeds no UNEXPLAINED account-less Persons (ADR-0006 allows pending invitees)", async () => {
     const { db } = await seededDb();
+    // ADR-0006 loosened "every Person has an Account": a pending invitation anchors to a
+    // provisional Account-less Person. Those are legitimate; any OTHER account-less Person is the
+    // regressed-narrator bug this suite guards against. So: every account-less Person must be the
+    // invitee of a pending invitation.
     const orphans = await db
-      .select({ displayName: persons.displayName })
+      .select({ id: persons.id, displayName: persons.displayName })
       .from(persons)
       .where(isNull(persons.accountId));
-    expect(orphans).toEqual([]);
+    const unexplained = [];
+    for (const o of orphans) {
+      const [pendingInvite] = await db
+        .select({ id: invitations.id })
+        .from(invitations)
+        .where(eq(invitations.inviteePersonId, o.id))
+        .limit(1);
+      if (!pendingInvite) unexplained.push(o.displayName);
+    }
+    expect(unexplained).toEqual([]);
   });
 
   it("gives Eleanor (the narrator) an Account, so the dev sign-in list includes her", async () => {

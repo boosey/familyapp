@@ -14,6 +14,7 @@ import {
   getStoryForViewer,
   listOutstandingDrafts,
   listStoryRecordings,
+  listAskSubjectPhotos,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
@@ -54,6 +55,11 @@ export default async function AnswerPage({
   if (askDetail.status === "answered") {
     redirect("/hub?tab=questions");
   }
+
+  // ADR-0009 Phase 3: the photo(s) this ask is ABOUT, shown to the narrator as context while they
+  // answer. The bytes are served by the audited `/api/album-photo/[id]` route, which re-checks read
+  // authorization per request — a photo the narrator can't see simply 404s (no ungated endpoint).
+  const subjectPhotoIds = await listAskSubjectPhotos(db, askId);
 
   // Check for an outstanding draft for this ask. `listOutstandingDrafts` returns most-recent-first
   // and includes BOTH the live `draft` state and `pending_approval` (ADR-0014 Inc 3 slice 9 — a
@@ -141,6 +147,61 @@ export default async function AnswerPage({
           boxSizing: "border-box",
         }}
       >
+        {/* ADR-0009 Phase 3 — the ask's subject photo(s), shown as answer-time context. Rendered
+            above the composer so the narrator sees what the question is about before they speak. */}
+        {subjectPhotoIds.length > 0 ? (
+          <section
+            aria-label={hub.answer.aboutThisPhoto}
+            style={{ marginBottom: 24 }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-label)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--support)",
+                margin: "0 0 10px",
+                textAlign: "center",
+              }}
+            >
+              {hub.answer.aboutThisPhoto}
+            </p>
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "grid",
+                gridTemplateColumns:
+                  subjectPhotoIds.length === 1
+                    ? "1fr"
+                    : "repeat(auto-fill, minmax(140px, 1fr))",
+                gap: 12,
+                justifyItems: "center",
+              }}
+            >
+              {subjectPhotoIds.map((photoId) => (
+                <li key={photoId} style={{ margin: 0, width: "100%" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
+                  <img
+                    src={`/api/album-photo/${photoId}`}
+                    alt={hub.album.photoAlt(null)}
+                    style={{
+                      width: "100%",
+                      maxHeight: "40dvh",
+                      objectFit: "contain",
+                      borderRadius: "var(--radius-md)",
+                      display: "block",
+                      background: "var(--surface-sunken)",
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {/*
          * `key` flips on the record→review transition (and back on re-record). router.refresh()
          * updates the server props but does NOT remount a client component, so without this key

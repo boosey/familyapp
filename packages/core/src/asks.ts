@@ -12,11 +12,18 @@
  * shape is an additive change.
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { asks, memberships, persons } from "@chronicle/db/schema";
+import {
+  askSubjectPhotos,
+  asks,
+  invitations,
+  memberships,
+  persons,
+} from "@chronicle/db/schema";
 import type { Ask, AskStatus, Database } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import type { AuthContext } from "./authorization";
 import { viewerPersonId } from "./authorization";
+import { assertPersonCanAccessAlbumPhoto } from "./album-repository";
 import { PENDING_ASKS_DEFAULT_LIMIT } from "./constants";
 
 export interface CreateAskInput {
@@ -25,6 +32,15 @@ export interface CreateAskInput {
   /** The family context the ask is raised in (optional — informs routing/notification). */
   familyId?: string;
   questionText: string;
+  /**
+   * Album photos the Ask is ABOUT (ADR-0009 Phase 3 "subject") — "tell the story of THIS photo",
+   * one or more. Each MUST be visible to BOTH the asker AND the target (gate enforced against both in
+   * the same tx); rows go into the OPEN `ask_subject_photos` set, deduped. An ask about a photo the
+   * recipient cannot see is meaningless — the answer flow (Slice B) carries the subject photo forward
+   * onto the resulting Story gated against the ANSWERER (target), so a target-invisible photo would
+   * make the ask unanswerable. Absent/empty ⇒ a plain question with no subject.
+   */
+  subjectPhotoIds?: string[];
 }
 
 /** Set of family ids the person currently holds an ACTIVE membership in. */
@@ -42,13 +58,50 @@ async function activeFamilyIds(
 }
 
 /**
- * Submit an Ask from the viewer to the target narrator. Authorization rule: the asker and the target
- * must share an ACTIVE membership in some family — the same co-membership relation the
- * authorization function uses for family-tier reads. Anonymous viewers cannot create asks.
+ * True if `targetPersonId` is a PENDING invitee of any family in `familyIds`. This is the ADR-0006
+ * "invitation floor": you may ask someone your family has invited before they join — the invitation
+ * anchors to a provisional Person that later merges into their real one.
+ *
+ * Deliberately `pending`-only. Once an invite is ACCEPTED the invitee is either an active co-member
+ * (already covered by the co-membership branch) or a former member whose membership has ended — and
+ * in the latter case the divorce/leave semantics must revoke ask rights, so an accepted invitation
+ * must NOT keep granting them. Matching `accepted` here would both duplicate the co-membership check
+ * and silently re-grant access to people who have left the family.
+ */
+async function isPendingInviteeOfAnyFamily(
+  db: Database,
+  targetPersonId: string,
+  familyIds: Set<string>,
+): Promise<boolean> {
+  if (familyIds.size === 0) return false;
+  const [row] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        inArray(invitations.familyId, [...familyIds]),
+        eq(invitations.status, "pending"),
+        eq(invitations.inviteePersonId, targetPersonId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Submit an Ask from the viewer to the target narrator. Authorization rule (ADR-0006): the asker may
+ * ask someone they share an ACTIVE membership with, OR someone their family has invited (pending or
+ * accepted) — the "invitation floor". The co-membership branch mirrors the family-tier read rule; the
+ * invitation branch lets curiosity accumulate against a pending invitee before they join, becoming
+ * the warm hook that pulls them in. Anonymous viewers cannot create asks.
  *
  * On success the Ask is born `queued`; the interviewer (Increment 7) pulls it on the narrator's next
  * gentle session, frames it warmly with the asker named, and flips it to `routed` then
  * `answered` on approval.
+ *
+ * When subject photos (ADR-0009 Phase 3) are supplied, each must be visible to BOTH the asker AND
+ * the target — an ask about a photo the recipient cannot see is meaningless and is rejected. Both
+ * gates run in the same tx, so a rejected photo leaves NO ask behind.
  */
 export async function createAsk(
   db: Database,
@@ -77,9 +130,14 @@ export async function createAsk(
       break;
     }
   }
+  // Fall back to the ADR-0006 invitation floor: the target may be a pending invitee of one of the
+  // asker's active families even without a shared active membership yet.
+  if (!shared) {
+    shared = await isPendingInviteeOfAnyFamily(db, input.targetPersonId, askerFamilies);
+  }
   if (!shared) {
     throw new AuthorizationError(
-      "asker shares no active family membership with the target — cannot route a question",
+      "asker shares no active family membership or invitation with the target — cannot route a question",
     );
   }
 
@@ -91,17 +149,59 @@ export async function createAsk(
     );
   }
 
-  const [row] = await db
-    .insert(asks)
-    .values({
-      askerPersonId: asker,
-      targetPersonId: input.targetPersonId,
-      familyId: input.familyId ?? null,
-      questionText: question,
-      status: "queued",
-    })
-    .returning();
-  return row!;
+  // Subject photos (ADR-0009 Phase 3), deduped. Each must be visible to BOTH the asker AND the
+  // target — the consolidated album-access gate is the choke point that (a) prevents an asker from
+  // targeting a photo they cannot see, and (b) guarantees the target can actually answer: the answer
+  // flow carries the subject photo forward gated against the ANSWERER (target), so a target-invisible
+  // photo would make the ask unanswerable. Gating both here makes the carry-forward safe by
+  // construction. The ask + its subject rows are written in ONE tx, so a rejected photo leaves NO
+  // ask behind. (Accepted residual: a membership could END between ask creation and answer; we do
+  // not defend against that window this slice.)
+  const subjectPhotoIds = [...new Set(input.subjectPhotoIds ?? [])];
+
+  return db.transaction(async (tx) => {
+    for (const photoId of subjectPhotoIds) {
+      await assertPersonCanAccessAlbumPhoto(tx, asker, photoId);
+      await assertPersonCanAccessAlbumPhoto(tx, input.targetPersonId, photoId);
+    }
+    const [row] = await tx
+      .insert(asks)
+      .values({
+        askerPersonId: asker,
+        targetPersonId: input.targetPersonId,
+        familyId: input.familyId ?? null,
+        questionText: question,
+        status: "queued",
+      })
+      .returning();
+    if (subjectPhotoIds.length > 0) {
+      await tx
+        .insert(askSubjectPhotos)
+        .values(subjectPhotoIds.map((photoId) => ({ askId: row!.id, photoId })));
+    }
+    return row!;
+  });
+}
+
+/**
+ * The photo ids an Ask is ABOUT (ADR-0009 Phase 3 "subject"), in deterministic `seq` order. The answer flow
+ * (Slice B) reads this to carry the photos forward onto the resulting Story (first ⇒ subject/cover,
+ * the rest ⇒ accompaniment). A system-actor read on the OPEN `ask_subject_photos` set — it returns
+ * only photo ids, not bytes; visibility of those bytes rides on album membership (see the table's
+ * ADR-comment), which the answerer (target co-member) holds.
+ */
+export async function listAskSubjectPhotos(
+  db: Database,
+  askId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ photoId: askSubjectPhotos.photoId })
+    .from(askSubjectPhotos)
+    .where(eq(askSubjectPhotos.askId, askId))
+    // Order by the monotonic `seq`, NOT `added_at`: all rows of a single bulk insert share the same
+    // transaction-start `added_at`, so only `seq` gives a deterministic, insertion-consistent order.
+    .orderBy(asc(askSubjectPhotos.seq));
+  return rows.map((r) => r.photoId);
 }
 
 /**

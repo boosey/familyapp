@@ -83,6 +83,17 @@ export const hub = {
     questionLabel: "Your question",
     questionPlaceholder: "e.g. What was your mother singing on Sunday mornings?",
     submit: "Send to the queue",
+    // ADR-0009 Phase 3 — an optional photo picker so an ask can be ABOUT one or more album photos
+    // ("tell the story of THIS photo"). Only photos the asker can already see are offered.
+    photosLabel: "Add a photo (optional)",
+    photosHelp: "Ask about a specific photo — they'll see it when they answer.",
+    photoPickerLoadError: "Couldn't load your album photos. You can still send the question.",
+    noAlbumPhotos: "No album photos yet.",
+    selectedHeading: "About these photos",
+    attachPhotoAria: (caption: string | null) =>
+      caption ? `Ask about “${caption}”` : "Ask about this photo",
+    removePhotoAria: (caption: string | null) =>
+      caption ? `Remove “${caption}” from this question` : "Remove this photo from the question",
   },
   asks: {
     signedOut: "Sign in to see your asks.",
@@ -226,6 +237,8 @@ export const hub = {
     finishCheckBody: "We tidied it a little. Use this, or keep yours exactly as it is.",
     usePolishedVersion: "Use polished version",
     dismissFinishCheck: "Keep mine as is",
+    // ADR-0009 Phase 3 — the photo(s) this ask is ABOUT, shown to the narrator on the answer surface.
+    aboutThisPhoto: "About this photo",
   },
   // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
   // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).
@@ -239,6 +252,18 @@ export const hub = {
     textPlaceholder: "Write it however it comes to you.",
     continueLabel: "Continue",
     inputModeAria: "How would you like to tell this?",
+    // ADR-0009 Phase 3 — "tell the story of this photo" starts a telling ABOUT an album photo. The
+    // caption seeds a warm prompt; the photo rides through as the story's subject/cover.
+    photoStoryPrompt: (caption: string | null) =>
+      caption ? `Tell the story of this photo — ${caption}` : "Tell the story of this photo",
+    // ADR-0009 Phase 4 · Slice B — the caption-driven "add this photo?" nudge above the album picker.
+    // Only ever shown on a REAL caption match, so the mentioned wording can be quoted honestly.
+    photoNudge: (caption: string | null) =>
+      caption ? `You mentioned "${caption}" — add this photo?` : "Add a related photo?",
+    photoNudgeAria: "Suggested photo",
+    photoNudgeAdd: "Add this photo",
+    photoNudgeDismiss: "Not now",
+    photoNudgeDismissAria: "Dismiss this photo suggestion",
   },
   actions: {
     notSignedIn: "Not signed in.",
@@ -255,8 +280,12 @@ export const hub = {
     noAlbumChosen: "Choose at least one album for this photo.",
     photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
+    tooManyPhotos: "That's too many photos at once. Please add up to 30 at a time.",
     captionTooLong: "That caption is too long. Please shorten it.",
     notAllowedToManagePhoto: "You can't change this photo.",
+    // ADR-0009 Phase 2 — story accompaniment photo attach/detach/cover/reorder errors.
+    photoAttachFailed: "Couldn't add that photo. Please try again.",
+    photoUpdateFailed: "Couldn't update the photos. Please try again.",
   },
   album: {
     // Back-link on the standalone /hub/album deep-link route; returns to the album's tab home
@@ -264,8 +293,20 @@ export const hub = {
     backToAlbum: "← Back to album",
     title: "Family album",
     empty: "No photos yet. Add the first one below.",
+    // "Add a photo" reads singular but the input accepts many at once (#16 multi-select) — the OS
+    // picker copy already signals multi-select, so the label stays warm and simple.
     addLabel: "Add a photo",
     addButton: "Add to album",
+    // Multi-upload batch summary: some files landed, some didn't. Shown as a gentle inline note (not
+    // an error) after a partial-success batch, so the contributor knows exactly what got through.
+    photosPartial: (added: number, failed: number) =>
+      `Added ${added} ${added === 1 ? "photo" : "photos"}. ${failed} ${
+        failed === 1 ? "photo" : "photos"
+      } couldn't be added — you can try those again.`,
+    // Shown when the upload never completes (the request threw — most often the photos were too large
+    // for one request, or the connection dropped). Distinct from a per-file failure inside a batch.
+    uploadError:
+      "Couldn't add those photos. They may be too large — try adding fewer, or smaller, photos.",
     chooseAlbums: "Which albums?",
     switcherAria: "Choose which family album to view",
     photoAlt: (caption: string | null) => caption ?? "Family photo",
@@ -281,6 +322,16 @@ export const hub = {
       caption ? `Manage “${caption}”` : "Manage photo",
     captionSaveError: "Couldn't save that caption. Please try again.",
     photoDeleteError: "Couldn't remove that photo. Please try again.",
+    // Photo viewer (#18): tapping a tile opens a larger view that HOSTS the per-photo options
+    // (edit caption, delete). The tile itself is the trigger; its label names what opens.
+    viewPhoto: (caption: string | null) =>
+      caption ? `View “${caption}”` : "View photo",
+    // Dialog accessible name + its close control.
+    viewerAria: (caption: string | null) =>
+      caption ? `Photo: ${caption}` : "Photo",
+    closeViewer: "Close",
+    // ADR-0009 Phase 3 — start a telling ABOUT this photo (carries it forward as the story's subject).
+    tellStoryOfPhoto: "Tell the story of this photo",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.
@@ -288,6 +339,32 @@ export const hub = {
     byline: (narrator: string, recordedAt: string) =>
       `Told by ${narrator} · Recorded ${recordedAt}`,
     noProse: "No prose yet — the original recording above is the whole story for now.",
+  },
+
+  // ADR-0009 Phase 2 — story accompaniment photos: the read-only gallery on the opened story and the
+  // draft-editor attach/cover/remove/reorder controls in the composer's review phase.
+  storyImages: {
+    // Read-only gallery on the opened story (only rendered when the story has images).
+    galleryHeading: "Photos",
+    galleryAlt: (caption: string | null) => caption ?? "Story photo",
+    // Editor (composer review phase).
+    editorHeading: "Photos",
+    editorHelp: "Add photos from your album to illustrate this story.",
+    attachedHeading: "On this story",
+    pickerHeading: "Add from your album",
+    noAlbumPhotos: "No album photos yet. Add some in the Album tab first.",
+    allAttached: "Every album photo is already on this story.",
+    loadError: "Couldn't load your photos. Please try again.",
+    // Per-image controls.
+    setCover: "Make cover",
+    coverBadge: "Cover",
+    remove: "Remove",
+    moveUp: "Move earlier",
+    moveDown: "Move later",
+    // Accessible labels naming the specific photo.
+    attachAria: (caption: string | null) =>
+      caption ? `Add “${caption}” to this story` : "Add this photo to the story",
+    imageAlt: (caption: string | null) => caption ?? "Attached photo",
   },
 } as const;
 

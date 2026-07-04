@@ -77,11 +77,14 @@ export {
   type NarratorMemorySink,
   noopNarratorMemorySink,
 } from "./narrator-memory";
+export { eraseStory, eraseAsk, eraseVoiceCaption } from "./erasure-repository";
+export type { EraseResult } from "./erasure-repository";
 export { AuthorizationError, InvariantViolation } from "./errors";
 export {
   createAsk,
   listPendingAsksForNarrator,
   listAsksByAsker,
+  listAskSubjectPhotos,
   markAskRouted,
   markAskAnswered,
   type CreateAskInput,
@@ -161,6 +164,18 @@ export {
   getAlbumPhotoForViewer,
   setAlbumPhotoCaption,
   softDeleteAlbumPhoto,
+  assertPersonCanAccessAlbumPhoto,
   type CreateAlbumPhotoInput,
   type AlbumPhotoView,
 } from "./album-repository";
+export {
+  attachPhotoToStory,
+  attachPhotoToStoryTx,
+  detachStoryImage,
+  setStoryCover,
+  reorderStoryImages,
+  listStoryImages,
+  getStoryCoverPhotoId,
+  loadStoryCovers,
+  type StoryImageView,
+} from "./story-image-repository";

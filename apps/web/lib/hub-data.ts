@@ -7,7 +7,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { families, memberships, persons, storyFamilies, storyViews } from "@chronicle/db/schema";
-import { listStoriesForViewer } from "@chronicle/core";
+import { listStoriesForViewer, loadStoryCovers } from "@chronicle/core";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, Family, Person, Story } from "@chronicle/db";
 
@@ -162,6 +162,21 @@ export async function loadStoryFamilyTargets(
     else map.set(r.storyId, [{ id: r.familyId, name: r.familyName }]);
   }
   return map;
+}
+
+/**
+ * For each of `storyIds`, its cover accompaniment photo id (ADR-0009 Phase 2), if any. `story_images`
+ * is a GUARDED content table, so this goes through the audited `loadStoryCovers` core seam (batched,
+ * mirroring `loadStoryFamilyTargets`) — never a direct table read. The ids were already authorized by
+ * the feed load; the seam excludes soft-deleted photos, so a deleted cover simply drops out of the
+ * map. A story with no renderable image has no entry (→ a text-only card, no placeholder).
+ */
+export async function loadStoryCoverPhotoIds(
+  db: Database,
+  storyIds: string[],
+): Promise<Map<string, string>> {
+  if (storyIds.length === 0) return new Map();
+  return loadStoryCovers(db, storyIds);
 }
 
 /**

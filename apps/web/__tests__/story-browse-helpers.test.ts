@@ -8,6 +8,7 @@ import {
   highlightMatch,
   initials,
   matchesQuery,
+  resolveCoverPhotoId,
   timelineBase,
 } from "../app/hub/tabs/story-browse-helpers";
 import type { StoryItem } from "../app/hub/tabs/story-browse-types";
@@ -26,6 +27,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     eventLabel: over.eventLabel ?? null,
     families: over.families ?? [],
     isNew: over.isNew ?? false,
+    coverPhotoId: over.coverPhotoId ?? null,
     href: over.href ?? `/hub/stories/${over.id}`,
   };
 }
@@ -140,6 +142,31 @@ describe("timelineBase", () => {
     ];
     const own = timelineBase(items, false, "viewer");
     expect(own.map((i) => i.id)).toEqual(["mine"]);
+  });
+});
+
+describe("resolveCoverPhotoId", () => {
+  it("returns the family_photo_id for a story that has a cover in the map", () => {
+    const covers = new Map<string, string>([
+      ["s1", "photo-1"],
+      ["s2", "photo-2"],
+    ]);
+    expect(resolveCoverPhotoId(covers, "s1")).toBe("photo-1");
+    expect(resolveCoverPhotoId(covers, "s2")).toBe("photo-2");
+  });
+
+  it("returns null for a story with no cover entry (text-only card, no placeholder)", () => {
+    const covers = new Map<string, string>([["s1", "photo-1"]]);
+    expect(resolveCoverPhotoId(covers, "s-none")).toBeNull();
+    expect(resolveCoverPhotoId(new Map(), "s1")).toBeNull();
+  });
+
+  it("maps a covers map onto StoryItem.coverPhotoId the way StoriesTab does", () => {
+    const covers = new Map<string, string>([["with", "cover-x"]]);
+    const withCover = makeItem({ id: "with", coverPhotoId: resolveCoverPhotoId(covers, "with") });
+    const without = makeItem({ id: "without", coverPhotoId: resolveCoverPhotoId(covers, "without") });
+    expect(withCover.coverPhotoId).toBe("cover-x");
+    expect(without.coverPhotoId).toBeNull();
   });
 });
 

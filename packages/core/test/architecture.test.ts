@@ -20,15 +20,18 @@ import { describe, expect, it } from "vitest";
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 /**
- * Files permitted to import the GUARDED content tables (`stories`/`media` via @chronicle/db/content).
- * This is the entire audited surface — every line that can read OR write Story/Media content.
- * Keep it small; add a new entry only for a deliberate, reviewed content read/write path.
+ * Files permitted to import the GUARDED content tables (`stories`/`media`/`family_photos`/
+ * `story_images` via @chronicle/db/content). This is the entire audited surface — every line that
+ * can read OR write Story/Media/album/accompaniment content. Keep it small; add a new entry only
+ * for a deliberate, reviewed content read/write path.
  */
 const ALLOWLIST = new Set<string>([
   "packages/core/src/authorization.ts", // the single read front door
   "packages/core/src/story-repository.ts", // the single write path
   "packages/core/src/intake-answer-repository.ts", // audited intake media + answer writes
   "packages/core/src/album-repository.ts", // audited album (family_photos) read + write (ADR-0009)
+  "packages/core/src/story-image-repository.ts", // audited story_images attach/read (ADR-0009 Ph2)
+  "packages/core/src/erasure-repository.ts", // audited hard-delete/erasure path (ADR-0008)
 ]);
 
 /**
@@ -61,7 +64,7 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
   },
   { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
   {
-    re: /\.query\.(stories|media|proseRevisions|storyRecordings|familyPhotos|familyPhotoFamilies)\b/,
+    re: /\.query\.(stories|media|proseRevisions|storyRecordings|familyPhotos|familyPhotoFamilies|storyImages)\b/,
     label: "uses the Drizzle relational API on a content table (db.query.*)",
   },
 ];
@@ -180,6 +183,8 @@ describe("single front door (architecture guard)", () => {
         "packages/core/src/story-repository.ts",
         "packages/core/src/intake-answer-repository.ts",
         "packages/core/src/album-repository.ts",
+        "packages/core/src/story-image-repository.ts",
+        "packages/core/src/erasure-repository.ts",
       ].sort(),
     );
   });

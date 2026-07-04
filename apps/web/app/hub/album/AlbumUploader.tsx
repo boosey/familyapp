@@ -3,23 +3,33 @@
 /**
  * Album upload control (ADR-0009 · #15 · #16). A file input + submit that calls the
  * `uploadAlbumPhotoAction` server action (which re-resolves auth and re-validates the target albums
- * server-side — the client passes only the file + its picker choice). On success it refreshes the
- * server component so the new tile appears; on failure it surfaces the action's error string.
+ * server-side — the client passes only the files + its picker choice). On success it refreshes the
+ * server component so the new tiles appear; on failure it surfaces the action's error string.
+ *
+ * Multi-select (#16): the file input carries `multiple`, so the OS picker lets the contributor
+ * choose MANY photos at once. A `multiple` input serializes as repeated `photo` entries on the
+ * FormData, which the action reads via `getAll("photo")` — each selected file becomes its own album
+ * photo placed into the SAME chosen album(s). The action returns a batch summary (`added`/`failed`);
+ * a partial success (some files failed) surfaces a gentle inline note rather than an error.
  *
  * #16 — multi-family placement: a contributor in >=2 families sees a checkbox per family and chooses
- * which albums receive the photo. The default pre-selection is the album currently on screen
+ * which albums receive the batch. The default pre-selection is the album currently on screen
  * (`currentFamilyId`), pre-checked but deselectable; at least one must stay selected. A solo-family
  * contributor sees NO checkboxes — the server defaults to the sole family (behavior unchanged).
  */
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAlbumPhotoAction } from "./actions";
+import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 
 export interface AlbumFamilyOption {
   familyId: string;
   familyName: string;
 }
+
+/** Most photos per batch — kept in sync with the server's MAX_BATCH_FILES (the server is authoritative). */
+const MAX_BATCH_FILES = 30;
 
 export function AlbumUploader({
   families,
@@ -30,8 +40,11 @@ export function AlbumUploader({
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
+  const [note, setNote] = useState<string | null>(null);
   const [hasFile, setHasFile] = useState(false);
   // Multi-family picker state: default to ONLY the current family context (never all).
   const showPicker = families.length > 1;
@@ -60,13 +73,48 @@ export function AlbumUploader({
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    // A `multiple` file input serializes as repeated `photo` entries in the browser, but some
+    // environments (jsdom under test) only keep the first. Re-append every selected file explicitly
+    // so each becomes its own `photo` entry the action reads via getAll("photo") — deterministic
+    // everywhere, and a no-op net effect in a real browser (delete then re-append the same files).
+    const input = fileInputRef.current;
+    if (input?.files && input.files.length > 0) {
+      formData.delete("photo");
+      for (const file of Array.from(input.files)) formData.append("photo", file);
+    }
+    // Guard the obvious mistake client-side (fast, friendly) before spending an upload; the server
+    // re-checks the same cap and is authoritative.
+    if ((input?.files?.length ?? 0) > MAX_BATCH_FILES) {
+      setError(hub.actions.tooManyPhotos);
+      setNote(null);
+      return;
+    }
     startTransition(async () => {
-      const result = await uploadAlbumPhotoAction(formData);
+      // The action can REJECT (throw) rather than return an error shape — most notably when the
+      // request body exceeds the Server Action / platform size limit. Without this catch that
+      // rejection is swallowed by the transition and the upload silently does nothing; surface a
+      // clear, actionable message instead.
+      let result;
+      try {
+        result = await uploadAlbumPhotoAction(formData);
+      } catch {
+        setError(hub.album.uploadError);
+        setNote(null);
+        return;
+      }
       if ("error" in result) {
         setError(result.error);
+        setNote(null);
         return;
       }
       setError(null);
+      // A partial success (batch had ≥1 failure) is not an error — surface a soft note so the
+      // contributor knows exactly what landed and can retry the rest.
+      setNote(
+        result.failed > 0
+          ? hub.album.photosPartial(result.added, result.failed)
+          : null,
+      );
       formRef.current?.reset();
       setHasFile(false);
       setSelected(new Set([currentFamilyId]));
@@ -93,9 +141,11 @@ export function AlbumUploader({
       >
         {hub.album.addLabel}
         <input
+          ref={fileInputRef}
           type="file"
           name="photo"
           accept="image/*"
+          multiple
           required
           disabled={pending}
           onChange={(e) => setHasFile((e.currentTarget.files?.length ?? 0) > 0)}
@@ -106,7 +156,7 @@ export function AlbumUploader({
       {showPicker ? (
         <fieldset
           style={{
-            border: "1px solid var(--border-subtle, #ddd)",
+            border: "var(--border-width) solid var(--border)",
             borderRadius: 8,
             padding: "12px 14px",
             margin: 0,
@@ -133,8 +183,8 @@ export function AlbumUploader({
                 alignItems: "center",
                 gap: 10,
                 fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-md)",
-                color: "var(--text-strong)",
+                fontSize: "var(--text-ui)",
+                color: "var(--text-body)",
                 padding: "8px 6px",
                 cursor: pending ? "default" : "pointer",
               }}
@@ -154,24 +204,15 @@ export function AlbumUploader({
         </fieldset>
       ) : null}
 
-      <button
+      <KindredButton
         type="submit"
+        variant="primary"
+        size="small"
         disabled={submitDisabled}
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-md)",
-          padding: "10px 16px",
-          borderRadius: 8,
-          border: "none",
-          background: "var(--accent, #333)",
-          color: "var(--on-accent, #fff)",
-          cursor: submitDisabled ? "default" : "pointer",
-          opacity: submitDisabled ? 0.6 : 1,
-          alignSelf: "flex-start",
-        }}
+        style={{ alignSelf: "flex-start" }}
       >
         {hub.album.addButton}
-      </button>
+      </KindredButton>
 
       {error ? (
         <p
@@ -179,11 +220,29 @@ export function AlbumUploader({
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui-sm)",
-            color: "var(--text-danger, #b00)",
+            color: "var(--accent-strong)",
+            background: "var(--accent-soft)",
+            border: "var(--border-width) solid var(--accent)",
+            borderRadius: "var(--radius-md)",
+            padding: "12px 16px",
             margin: 0,
           }}
         >
           {error}
+        </p>
+      ) : null}
+
+      {note ? (
+        <p
+          role="status"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-meta)",
+            margin: 0,
+          }}
+        >
+          {note}
         </p>
       ) : null}
     </form>

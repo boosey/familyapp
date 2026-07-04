@@ -38,6 +38,23 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   polishAnswerProseAction: vi.fn(),
 }));
 
+// The review phase mounts StoryPhotosEditor, which loads via this "use server" module (pulls
+// getRuntime()/db at import). Mock it so the review-phase tests don't boot the real dev runtime; the
+// empty-editor result is enough (these tests assert title/discard behavior, not photos).
+vi.mock("@/app/hub/answer/[askId]/photo-actions", () => ({
+  loadStoryPhotoEditorAction: vi.fn(
+    async (): Promise<{ ok: true; attached: never[]; album: never[] }> => ({
+      ok: true,
+      attached: [],
+      album: [],
+    }),
+  ),
+  attachStoryPhotoAction: vi.fn(),
+  detachStoryPhotoAction: vi.fn(),
+  setStoryCoverAction: vi.fn(),
+  reorderStoryPhotosAction: vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

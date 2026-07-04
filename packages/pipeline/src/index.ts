@@ -16,6 +16,9 @@ export type {
   EnqueuedJob,
   JobHandler,
   JobQueue,
+  PhotoUnderstandingInput,
+  PhotoUnderstandingResult,
+  PhotoUnderstanding,
 } from "./contracts";
 
 export {
@@ -29,10 +32,25 @@ export { InProcessJobQueue } from "./job-queue";
 export {
   ScriptedTranscriber,
   ScriptedLanguageModel,
+  ScriptedPhotoUnderstanding,
   type ScriptedTranscriberScript,
   type ScriptedTranscriberCall,
   type ScriptedLanguageModelScript,
+  type ScriptedPhotoUnderstandingScript,
+  type ScriptedPhotoUnderstandingCall,
 } from "./mocks";
+
+export {
+  rankPhotosForStory,
+  pickPhotoNudge,
+  PHOTO_RANK_CAPTION_WEIGHT,
+  PHOTO_RANK_YEAR_WEIGHT,
+  PHOTO_RANK_YEAR_WINDOW,
+  PHOTO_NUDGE_MIN_OVERLAP,
+  type PhotoCandidate,
+  type StorySignals,
+  type RankedPhoto,
+} from "./photo-ranker";
 
 export {
   renderStoryFromTranscript,

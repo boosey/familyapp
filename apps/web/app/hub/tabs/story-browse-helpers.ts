@@ -40,6 +40,19 @@ export function initials(name: string): string {
   return letters || "?";
 }
 
+/**
+ * The cover accompaniment photo id for a story (ADR-0009 Phase 2), from the batched `loadStoryCovers`
+ * map keyed by story id. Returns the `family_photo_id` when the story has a (non-deleted) cover, else
+ * `null` — a text-only card is first-class and renders no placeholder. Kept pure + named so the
+ * mapping into `StoryItem.coverPhotoId` is unit-testable.
+ */
+export function resolveCoverPhotoId(
+  storyCovers: Map<string, string>,
+  storyId: string,
+): string | null {
+  return storyCovers.get(storyId) ?? null;
+}
+
 /** The decade label a story's era falls in, e.g. 1958 → "1950s". */
 function decadeLabelOf(eraYear: number): string {
   return `${Math.floor(eraYear / 10) * 10}s`;

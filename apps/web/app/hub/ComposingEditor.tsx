@@ -48,6 +48,7 @@ import {
 import { useProseHistory } from "@/lib/use-prose-history";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
+import { StoryPhotosEditor } from "./StoryPhotosEditor";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -96,6 +97,15 @@ export interface ComposingEditorProps {
    * like the follow-up banner across the transition.
    */
   resumeHref?: (storyId: string) => string;
+  /**
+   * ADR-0009 Phase 3 "tell the story of this photo" (story mode only). The album photo this telling
+   * is ABOUT — carried as a client hint into `composeStoryAction` at take 0 (the server re-resolves
+   * auth; the core write gate re-checks the owner can see it) and shown above the capture prompt.
+   * Null/absent for an answer, a plain telling, or intake.
+   */
+  subjectPhotoId?: string | null;
+  /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
+  promptQuestion?: string | null;
 }
 
 function pickMimeType(): string {
@@ -108,7 +118,14 @@ function pickMimeType(): string {
   return "audio/webm";
 }
 
-export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: ComposingEditorProps) {
+export function ComposingEditor({
+  ask = null,
+  draft,
+  backTab,
+  resumeHref,
+  subjectPhotoId = null,
+  promptQuestion = null,
+}: ComposingEditorProps) {
   const router = useRouter();
 
   // ── Capture / footer state ──────────────────────────────────────────────────
@@ -300,6 +317,9 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
         // Initial capture (take 0): show the full-screen "Polishing…" screen while the action runs.
         setLocalTake({ url: URL.createObjectURL(blob) });
         if (ask) form.append("askId", ask.id);
+        // ADR-0009 Phase 3 tell-a-photo hints (story mode); the server re-checks auth + visibility.
+        if (subjectPhotoId) form.append("subjectPhotoId", subjectPhotoId);
+        if (promptQuestion) form.append("promptQuestion", promptQuestion);
         const result = await composeStoryAction(form);
         await handleStep(result);
       }
@@ -307,7 +327,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       setPendingError(hub.answer.genericError);
       setRecordPhase("idle");
     }
-  }, [ask, composingStoryId, proseDraft, handleStep]);
+  }, [ask, composingStoryId, proseDraft, subjectPhotoId, promptQuestion, handleStep]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -361,6 +381,9 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
         const form = new FormData();
         form.set("text", textDraft.trim());
         if (ask) form.set("askId", ask.id);
+        // ADR-0009 Phase 3 tell-a-photo hints (story mode); the server re-checks auth + visibility.
+        if (subjectPhotoId) form.set("subjectPhotoId", subjectPhotoId);
+        if (promptQuestion) form.set("promptQuestion", promptQuestion);
         const step = await composeStoryAction(form);
         await handleStep(step);
       }
@@ -372,7 +395,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       // the no-draft branch, which never sets it.
       setAppending(false);
     }
-  }, [textDraft, ask, composingStoryId, proseDraft, handleStep]);
+  }, [textDraft, ask, composingStoryId, proseDraft, subjectPhotoId, promptQuestion, handleStep]);
 
   // ── Decline the current follow-up ("That's all for now") ─────────────────────
   // A first-class path, never a dead end. Records the `skipped` outcome and drops the banner WITHOUT
@@ -447,7 +470,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
       try {
         const form = new FormData();
         form.append("prose", text);
-        form.append("promptQuestion", ask?.questionText ?? "");
+        form.append("promptQuestion", ask?.questionText ?? promptQuestion ?? "");
         if (composingStoryId) form.append("storyId", composingStoryId);
         const res = await polishAnswerProseAction(form);
         if ("error" in res) throw new Error(res.error);
@@ -456,7 +479,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
         setPolishing(false);
       }
     },
-    [ask, composingStoryId],
+    [ask, composingStoryId, promptQuestion],
   );
 
   // ── Review-phase handlers (pending_approval) ─────────────────────────────────
@@ -639,6 +662,11 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
           history={history}
           onPolish={polishHandler}
         />
+
+        {/* Photos (ADR-0009 Phase 2) — attach from the owner's album, set a cover, remove, reorder.
+            Self-contained: fetches + mutates via its own auth-re-resolving server actions. Off the
+            consent ledger, so it lives here in the pre-share review, independent of Share. */}
+        <StoryPhotosEditor storyId={draft.storyId} />
 
         <TierPicker tier={tier} setTier={setTier} disabled={isRemoving} />
 
@@ -909,6 +937,25 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
       {questionHeader}
+      {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator sees
+          exactly which photo they're telling the story of. Bytes come from the audited byte route (the
+          owner can see their own album photo). */}
+      {!ask && subjectPhotoId && (
+        // eslint-disable-next-line @next/next/no-img-element -- audited byte route, not a static asset.
+        <img
+          src={`/api/album-photo/${subjectPhotoId}`}
+          alt={promptQuestion ?? hub.compose.tellPrompt}
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            maxHeight: "40dvh",
+            objectFit: "contain",
+            borderRadius: "var(--radius-md)",
+            display: "block",
+            background: "var(--surface-sunken)",
+          }}
+        />
+      )}
       {!ask && (
         <p
           style={{
@@ -921,7 +968,7 @@ export function ComposingEditor({ ask = null, draft, backTab, resumeHref }: Comp
             textAlign: "center",
           }}
         >
-          {hub.compose.tellPrompt}
+          {promptQuestion ?? hub.compose.tellPrompt}
         </p>
       )}
 

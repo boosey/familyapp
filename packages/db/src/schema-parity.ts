@@ -181,11 +181,13 @@ export async function assertSchemaParity(
       `Database schema is behind drizzle/schema.sql — ${problems.length} missing object(s):`,
       ...problems.map((p) => `  - ${p}`),
       "",
-      "The live Postgres/Neon DB does not declare everything the code schema does. applySchemaToPostgres",
-      "only bootstraps a FRESH database (it no-ops once 'persons' exists), so post-bootstrap schema",
-      "additions are never applied — leaving queries to 500 with Postgres 42703 at runtime. Migrate the",
-      "DB up to drizzle/schema.sql (or, in dev, reset it: resetSchema).",
-      "On a fresh database: set CHRONICLE_RUN_MIGRATIONS=1 on the first deploy to apply the full schema.",
+      "The live Postgres/Neon DB does not declare everything the code schema does — leaving queries to",
+      "500 with Postgres 42703 at runtime. Migrations are applied by `db:migrate` (runMigrations, the",
+      "drizzle postgres-js migrator), which runs BEFORE this check in the Vercel buildCommand",
+      "(db:migrate && db:check-parity && next build). Parity failing AFTER migrate means a migration is",
+      "missing/incomplete for the object(s) listed above: regenerate with",
+      "`pnpm --filter @chronicle/db db:generate` (emits both the snapshot and a new migration) and",
+      "hand-carry any invariant changes into the emitted migration. In dev, reset instead: resetSchema.",
     ].join("\n"),
   );
 }

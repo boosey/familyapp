@@ -8,14 +8,18 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { families, invitations, persons } from "@chronicle/db/schema";
+import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import { insertActiveMembership, isActiveMember } from "./memberships";
+import { defaultSpokenName } from "./names";
 import {
   MEMBER_INVITATION_DEFAULT_TTL_MS,
   MEMBER_INVITATION_TOKEN_ENTROPY_BYTES,
 } from "./constants";
+
+/** Placeholder display name for a provisional invitee whose inviter did not supply a name. */
+const PROVISIONAL_PERSON_FALLBACK_NAME = "Invited member";
 
 /** SHA-256 of the raw token. Lookups hash the incoming token and match on this. */
 function hashToken(rawToken: string): string {
@@ -37,11 +41,21 @@ export interface CreateInvitationResult {
   invitationId: string;
   /** The raw token — returned ONCE, to be embedded in the invite link. Never persisted. */
   token: string;
+  /**
+   * The provisional (Account-less) Person minted for this invitee (ADR-0006). An Ask may target
+   * this id immediately, before the invitee has joined; on acceptance it is merged into the
+   * accepting Person.
+   */
+  inviteePersonId: string;
 }
 
 /**
  * Create a pending invitation. The inviter must be an ACTIVE member of the family (else
  * `AuthorizationError`) — you cannot invite into a family you are not in.
+ *
+ * ADR-0006: a provisional Account-less Person is inserted up front and the invitation anchors to it,
+ * so questions can accumulate against a pending invitee before they join. Acceptance later merges
+ * this provisional Person into the accepting Person.
  */
 export async function createInvitation(
   db: Database,
@@ -65,12 +79,27 @@ export async function createInvitation(
       );
     }
 
+    // ADR-0006: mint the provisional (Account-less) Person the invitation anchors to. It carries the
+    // inviter-supplied name as a placeholder; the real display/spoken name arrive when the invitee
+    // signs up (their Person's names win on merge — see acceptInvitation).
+    const provisionalDisplayName =
+      input.inviteeName?.trim() || PROVISIONAL_PERSON_FALLBACK_NAME;
+    const [provisional] = await tx
+      .insert(persons)
+      .values({
+        displayName: provisionalDisplayName,
+        spokenName: defaultSpokenName(provisionalDisplayName),
+        accountId: null,
+      })
+      .returning({ id: persons.id });
+
     const [row] = await tx
       .insert(invitations)
       .values({
         tokenHash: hashToken(token),
         familyId: input.familyId,
         inviterPersonId: input.inviterPersonId,
+        inviteePersonId: provisional!.id,
         inviteeName: input.inviteeName ?? null,
         inviteeEmail: input.inviteeEmail ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
@@ -80,7 +109,7 @@ export async function createInvitation(
       })
       .returning({ id: invitations.id });
 
-    return { invitationId: row!.id, token };
+    return { invitationId: row!.id, token, inviteePersonId: provisional!.id };
   });
 }
 
@@ -144,6 +173,13 @@ export async function getInvitationByToken(
  * to `accepted` (recording the accepted person + time). A non-pending or expired invitation is
  * rejected with `InvariantViolation`. An edited `relationshipLabel` overrides the stored one (the
  * welcome screen lets the user correct it) before the row is persisted.
+ *
+ * ADR-0006 merge: the invitation anchored a provisional Account-less Person. Acceptance folds that
+ * provisional Person into `acceptedPersonId` — queued Asks that targeted the provisional Person are
+ * re-pointed to the accepting Person (so questions raised before the invitee joined actually reach
+ * them), the invitation's anchor is re-pointed, and the now-empty provisional row is deleted. This
+ * is the "acceptance is a link, not a create" outcome (ADR-0006) achieved by merge rather than an
+ * in-place account link, so the ADR-0005 JIT provisioning path is left untouched.
  */
 export async function acceptInvitation(
   db: Database,
@@ -159,9 +195,15 @@ export async function acceptInvitation(
         role: invitations.role,
         status: invitations.status,
         expiresAt: invitations.expiresAt,
+        inviteePersonId: invitations.inviteePersonId,
       })
       .from(invitations)
       .where(eq(invitations.tokenHash, tokenHash))
+      // Lock the invitation row for the life of this transaction. Without it, two concurrent accepts
+      // of the same (bearer) token under READ COMMITTED both pass the pending check below and each
+      // create a membership — redeeming a single-use invite twice. FOR UPDATE serializes them: the
+      // loser blocks here until the winner commits, then re-reads status='accepted' and is rejected.
+      .for("update")
       .limit(1);
     if (!invite) {
       throw new InvariantViolation("invitation not found for token");
@@ -181,17 +223,52 @@ export async function acceptInvitation(
       role: invite.role,
     });
 
+    // Merge the provisional invitee Person into the accepting Person, unless the invite already
+    // anchors to them (a no-op re-point). Guard: never destroy a Person that carries an Account —
+    // the provisional row is Account-less by construction, and anything else signals a corrupted
+    // anchor we must not silently delete.
+    const provisionalId = invite.inviteePersonId;
+    if (provisionalId !== input.acceptedPersonId) {
+      const [provisional] = await tx
+        .select({ accountId: persons.accountId })
+        .from(persons)
+        .where(eq(persons.id, provisionalId))
+        .limit(1);
+      if (!provisional) {
+        throw new InvariantViolation(
+          "invitation's provisional invitee Person is missing — cannot merge",
+        );
+      }
+      if (provisional.accountId !== null) {
+        throw new InvariantViolation(
+          "invitation's invitee anchor is an Account-bearing Person — refusing to merge/delete",
+        );
+      }
+      // Move any Asks queued against the provisional invitee onto the real Person.
+      await tx
+        .update(asks)
+        .set({ targetPersonId: input.acceptedPersonId })
+        .where(eq(asks.targetPersonId, provisionalId));
+    }
+
     await tx
       .update(invitations)
       .set({
         status: "accepted",
         acceptedPersonId: input.acceptedPersonId,
+        // Re-point the anchor to the real Person before the provisional row is deleted (the FK
+        // would otherwise dangle). If it already pointed there this is a harmless self-set.
+        inviteePersonId: input.acceptedPersonId,
         acceptedAt: new Date(),
         ...(input.relationshipLabel !== undefined
           ? { relationshipLabel: input.relationshipLabel.trim() || null }
           : {}),
       })
       .where(eq(invitations.id, invite.id));
+
+    if (provisionalId !== input.acceptedPersonId) {
+      await tx.delete(persons).where(eq(persons.id, provisionalId));
+    }
 
     return { membershipId, familyId: invite.familyId };
   });

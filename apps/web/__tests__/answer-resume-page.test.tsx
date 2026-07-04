@@ -16,6 +16,9 @@ const getAskForNarrator = vi.fn();
 const getStoryForViewer = vi.fn();
 const listOutstandingDrafts = vi.fn();
 const listStoryRecordings = vi.fn();
+// ADR-0009 Phase 3 (arrived via the master merge): the page now fetches the ask's subject photos.
+// Default to none so the resume-routing assertions below are unaffected.
+const listAskSubjectPhotos = vi.fn(async () => [] as string[]);
 
 class RedirectError extends Error {
   constructor(public to: string) {
@@ -38,6 +41,7 @@ vi.mock("@chronicle/core", () => ({
   getStoryForViewer: (...a: unknown[]) => getStoryForViewer(...a),
   listOutstandingDrafts: (...a: unknown[]) => listOutstandingDrafts(...a),
   listStoryRecordings: (...a: unknown[]) => listStoryRecordings(...a),
+  listAskSubjectPhotos: (...a: unknown[]) => listAskSubjectPhotos(...a),
 }));
 vi.mock("../app/hub/StoryComposer", () => ({
   StoryComposer: ({ mode, ask, draft }: { mode: string; ask: unknown; draft: unknown }) => (

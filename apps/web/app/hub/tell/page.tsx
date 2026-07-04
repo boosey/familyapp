@@ -18,7 +18,11 @@ import { StoryComposer } from "../StoryComposer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default async function TellPage() {
+export default async function TellPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [k: string]: string | string[] | undefined }>;
+}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -31,6 +35,16 @@ export default async function TellPage() {
   // resolvePostAuthRoute returns "/hub" only for an onboarded member.
   const dest = await resolvePostAuthRoute(db, ctx.personId);
   if (dest !== "/hub") redirect(dest);
+
+  // ADR-0009 Phase 3 "tell the story of this photo": the album viewer deep-links here with the photo
+  // as `subjectPhotoId` + a caption-derived `promptQuestion`. Both are CLIENT hints threaded to
+  // composeStoryAction, which re-resolves auth server-side; the core write gate is what enforces the
+  // owner can actually see the photo (a crafted id simply fails the ingest, never leaks bytes).
+  const params = await searchParams;
+  const subjectPhotoId =
+    typeof params.subjectPhotoId === "string" ? params.subjectPhotoId : null;
+  const promptQuestion =
+    typeof params.promptQuestion === "string" ? params.promptQuestion : null;
 
   return (
     <main
@@ -81,7 +95,13 @@ export default async function TellPage() {
           boxSizing: "border-box",
         }}
       >
-        <StoryComposer mode="tell" ask={null} draft={null} />
+        <StoryComposer
+          mode="tell"
+          ask={null}
+          draft={null}
+          subjectPhotoId={subjectPhotoId}
+          promptQuestion={promptQuestion}
+        />
       </div>
     </main>
   );

@@ -22,11 +22,11 @@
  *
  * SCHEMA
  * ------
- * Single-schema model (no incremental migrations while the schema is molten): the full DDL lives
- * in `packages/db/drizzle/schema.sql` (+ `invariants.sql`), generated from `src/schema.ts`, and is
- * the same source of truth for PGlite (dev/test) and prod. Bootstrap a fresh prod database with
- * `applySchemaToPostgres(sql)` (see migrate.ts) — it applies the schema only if absent and NEVER
- * drops. When the schema stabilizes, introduce a real migration tool for prod evolution.
+ * PGlite dev/test takes the fast path: the full DDL snapshot in `packages/db/drizzle/schema.sql`
+ * (+ `invariants.sql`), generated from `src/schema.ts` (see migrate.ts → `applySchema`). Prod
+ * Neon is advanced instead by the drizzle-kit migration chain via `runMigrations` (see
+ * run-migrations.ts), run as `db:migrate` in the Vercel build — never at runtime on the request
+ * path.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";

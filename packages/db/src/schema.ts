@@ -10,7 +10,8 @@
  *   - The Person owns ALL expressive content (stories, media, consent). A Family owns nothing.
  *   - A Story is owned by exactly one Person and is NEVER duplicated per family. "Sharing" is a
  *     visibility computation against memberships, so there is no story<->family copy table.
- *   - The canonical Recording (audio Media) is required on every Story and is immutable.
+ *   - The canonical Recording (audio Media), when present, is immutable and undetachable while its
+ *     Story lives (removed only when the Story itself is deleted; ADR-0008).
  *   - The consent ledger is append-only (revocation = a new superseding row).
  */
 import { sql } from "drizzle-orm";
@@ -90,6 +91,7 @@ export const mediaKindEnum = pgEnum("media_kind", [
   "story_audio",
   "approval_audio",
   "intake_audio",
+  "caption_audio", // ADR-0008: audio of a voice caption on a photo
   "photo",
   "document",
 ]);
@@ -320,8 +322,9 @@ export const memberships = pgTable(
 
 // ---------------------------------------------------------------------------
 // Media — any binary asset. Owned by the Person, lives in object storage (keys, not blobs),
-// and is IMMUTABLE (never updated or deleted — new versions are new rows). The media
-// immutability trigger structurally protects the canonical recording.
+// and is immutable and undetachable while its item lives: never updated, and never deleted or
+// detached on its own — new versions are new rows, and content audio is removed only when the
+// item it belongs to is itself deleted (ADR-0008). The media guard trigger enforces this.
 // ---------------------------------------------------------------------------
 
 export const media = pgTable(
@@ -466,6 +469,17 @@ export const stories = pgTable(
      * for without the narrator having to pick. NOT the visibility set itself — that is `story_families`.
      */
     originatingFamilyId: uuid("originating_family_id").references(() => families.id),
+    /**
+     * The album photo this story is ABOUT (ADR-0009 Phase 3 "subject"). Nullable, ≤1 — the thin
+     * "what this is about" pointer. NO cascade: a story stays semantically about a soft-deleted
+     * photo (its bytes 404 via the existing soft-delete filter). Forward FK to `family_photos`
+     * (defined later in this file) via the AnyPgColumn arrow, mirroring proseRevisions.storyRecordingId.
+     * At creation this photo is ALSO inserted as the story's FIRST `story_images` cover row (atomic),
+     * so the subject rides on `getStoryForViewer`'s row and needs no new read arm.
+     */
+    subjectPhotoId: uuid("subject_photo_id").references(
+      (): AnyPgColumn => familyPhotos.id,
+    ),
     // --- lifecycle ---
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -685,6 +699,9 @@ export const asks = pgTable(
     /** The family context the ask was raised in (for routing/notification). Nullable. */
     familyId: uuid("family_id").references(() => families.id),
     questionText: text("question_text").notNull(),
+    /** ADR-0008: present iff the question was asked by voice; the referenced media is a
+     *  protected content artifact (un-detachable while this ask lives, cascades on ask delete). */
+    recordingMediaId: uuid("recording_media_id").references(() => media.id),
     status: askStatusEnum("status").notNull().default("queued"),
     /** The resulting Story once answered. */
     storyId: uuid("story_id").references(() => stories.id),
@@ -759,6 +776,15 @@ export const invitations = pgTable(
       .references(() => families.id),
     /** Who sent the invite. */
     inviterPersonId: uuid("inviter_person_id")
+      .notNull()
+      .references(() => persons.id),
+    /**
+     * The provisional (Account-less) Person this invite anchors to (ADR-0006). Created up front by
+     * `createInvitation` so an Ask can target a pending invitee before they join. On acceptance the
+     * provisional Person is MERGED into the accepting Person and this column is re-pointed to it
+     * (queued Asks are moved over, the provisional row deleted) — so it always names a real anchor.
+     */
+    inviteePersonId: uuid("invitee_person_id")
       .notNull()
       .references(() => persons.id),
     /** Pre-filled invitee display name from the inviter ("Salvatore Esposito"). */
@@ -922,6 +948,33 @@ export const familyPhotos = pgTable(
   (t) => [index("family_photos_contributor_idx").on(t.contributorPersonId)],
 );
 
+/**
+ * ADR-0008: a VOICE caption on a photo — distinct from the mutable, off-ledger `family_photos.caption`
+ * text. The audio (`mediaId`, kind `caption_audio`) is a protected content artifact: un-detachable
+ * while this row lives, cascaded away when the photo is deleted. `transcript` is the words the audio
+ * was transcribed to; the audio is always the source of truth.
+ */
+export const voiceCaptions = pgTable(
+  "voice_captions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => media.id),
+    transcript: text("transcript"),
+    ownerPersonId: uuid("owner_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("voice_captions_photo_idx").on(t.photoId)],
+);
+
 // ---------------------------------------------------------------------------
 // FamilyPhotoFamily — album membership (M2M). "Being in a family's album IS the contributor's
 // consent for that family to see it" (ADR-0009), mirroring story_families' multi-family targeting.
@@ -948,6 +1001,133 @@ export const familyPhotoFamilies = pgTable(
     index("family_photo_families_family_idx").on(t.familyId),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// StoryImage (accompaniment) — ADR-0009. Pictures shown ALONGSIDE a Story to illustrate it: many
+// per story, exactly one COVER, ordered by `position`. This is the ONLY rendering path for a
+// story's imagery ("all rendering flows through story_images"). A row is EITHER an album photo
+// (`familyPhotoId` set, `provenance = 'family_photo'`) OR an inline illustration (`familyPhotoId`
+// NULL, the reserved `sourceUrl`/`license`/... fields carry it — Phase 2 writes only family_photo).
+// Holds attachment CONTENT (a `private` story must not leak its imagery — ADR-0009 authz), so the
+// table object lives behind @chronicle/db/content and only the audited `story-image-repository.ts`
+// (and, for the broadened photo-byte read seam, `album-repository.ts`) touches it.
+// ---------------------------------------------------------------------------
+
+/** How a story image was sourced (ADR-0009 accompaniment). */
+export const storyImageProvenanceEnum = pgEnum("story_image_provenance", [
+  "family_photo",
+  "illustration",
+]);
+
+export const storyImages = pgTable(
+  "story_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // FK to stories with NO cascade — mirrors story_families; discardDraftStory deletes children first.
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    // The album photo shown. NULL for an inline illustration. Cascade so a HARD photo-row delete
+    // un-attaches everywhere (album delete is SOFT → cascade won't fire → the READ seam treats a
+    // soft-deleted photo as absent; see the album-repository read rule).
+    familyPhotoId: uuid("family_photo_id").references(() => familyPhotos.id, {
+      onDelete: "cascade",
+    }),
+    provenance: storyImageProvenanceEnum("provenance")
+      .notNull()
+      .default("family_photo"),
+    // Reserved inline-illustration fields (ADR-0009) — all NULL for family_photo provenance in Phase 2.
+    sourceUrl: text("source_url"),
+    license: text("license"),
+    attribution: text("attribution"),
+    thumbnailUrl: text("thumbnail_url"),
+    isCover: boolean("is_cover").notNull().default(false),
+    position: integer("position").notNull(), // 0-based order within the story
+    attachedByPersonId: uuid("attached_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("story_images_story_idx").on(t.storyId),
+    uniqueIndex("story_images_story_position_uq").on(t.storyId, t.position),
+    // A given album photo attaches to a story at most once. NULL familyPhotoId (illustrations) are
+    // distinct in Postgres, so multiple illustrations per story are allowed.
+    uniqueIndex("story_images_story_photo_uq").on(t.storyId, t.familyPhotoId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// AskSubjectPhoto — the Ask→subject-photo targeting set (ADR-0009 Phase 3). The photos an Ask is
+// "about": a relative asks "tell the story of THIS photo" (one or more). Mirrors `story_families`'s
+// role — a targeting/relationship set, NOT expressive content — so it lives on the OPEN schema
+// (freely importable, NOT behind the /content guard). Composite PK (ask_id, photo_id) makes the same
+// photo attach to an Ask at most once; both FKs CASCADE so deleting the Ask (or a HARD photo-row
+// delete) clears the rows. Placed after `asks`/`familyPhotos` so both FKs resolve without a forward
+// reference.
+//
+// ADR-COMMENT (Phase 3 authz, deliberate): there is NO dedicated read-seam arm for ask photos this
+// slice. Their bytes rely on album-membership visibility (Arm 1 of `decideAlbumPhotoRead`): an Ask is
+// created within a shared ACTIVE family and every subject photo is one the asker can already see
+// (enforced by `assertPersonCanAccessAlbumPhoto` at createAsk), so a target co-member — who shares
+// that active family — can also see it via the album read model. If a future flow lets an asker
+// target a photo a co-member cannot otherwise see, add an accompaniment-style arm then.
+// ---------------------------------------------------------------------------
+
+export const askSubjectPhotos = pgTable(
+  "ask_subject_photos",
+  {
+    /**
+     * Monotonic global sequence — the DETERMINISTIC order key (mirrors proseRevisions.seq /
+     * consentRecords.seq). `added_at` is `defaultNow()`, which in Postgres is the TRANSACTION-START
+     * timestamp, so every row of a single bulk INSERT ties on it; ordering by `added_at` would then
+     * be unspecified. Slice B treats position 0 of `listAskSubjectPhotos` as the story's cover/subject
+     * photo, so a stable insertion-consistent order is load-bearing — hence this column, ordered asc.
+     */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    askId: uuid("ask_id")
+      .notNull()
+      .references(() => asks.id, { onDelete: "cascade" }),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    /** Audit timestamp (transaction-start; NOT a tiebreaker — see `seq`). */
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.askId, t.photoId] }),
+    index("ask_subject_photos_photo_idx").on(t.photoId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// ErasureAudit — ADR-0008. The append-only record that a deletion happened, outliving the erased
+// content (story/ask/voice_caption + its audio + its consent ledger are hard-deleted).
+// ---------------------------------------------------------------------------
+
+/**
+ * ADR-0008 erasure audit: the append-only record that a deletion happened. Outlives the erased
+ * content (story/ask/voice_caption + its audio + its consent ledger are hard-deleted). `itemId` is
+ * intentionally NOT an FK — the row it named no longer exists. `reason` distinguishes owner erasure
+ * (right-to-erasure) from steward moderation.
+ */
+export const erasureAudit = pgTable("erasure_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  itemType: text("item_type").notNull(), // 'story' | 'ask' | 'voice_caption'
+  itemId: uuid("item_id").notNull(),
+  ownerPersonId: uuid("owner_person_id")
+    .notNull()
+    .references(() => persons.id),
+  actorPersonId: uuid("actor_person_id")
+    .notNull()
+    .references(() => persons.id),
+  reason: text("reason").notNull(), // 'owner_erasure' | 'steward_moderation'
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
@@ -1012,3 +1192,13 @@ export type NewFamilyPhoto = typeof familyPhotos.$inferInsert;
 export type FamilyPhotoFamily = typeof familyPhotoFamilies.$inferSelect;
 export type NewFamilyPhotoFamily = typeof familyPhotoFamilies.$inferInsert;
 export type PhotoSource = (typeof photoSourceEnum.enumValues)[number];
+export type StoryImage = typeof storyImages.$inferSelect;
+export type NewStoryImage = typeof storyImages.$inferInsert;
+export type StoryImageProvenance =
+  (typeof storyImageProvenanceEnum.enumValues)[number];
+export type AskSubjectPhoto = typeof askSubjectPhotos.$inferSelect;
+export type NewAskSubjectPhoto = typeof askSubjectPhotos.$inferInsert;
+export type VoiceCaption = typeof voiceCaptions.$inferSelect;
+export type NewVoiceCaption = typeof voiceCaptions.$inferInsert;
+export type ErasureAudit = typeof erasureAudit.$inferSelect;
+export type NewErasureAudit = typeof erasureAudit.$inferInsert;

@@ -40,6 +40,13 @@ export interface StoryItem {
   families: ViewerFamily[];
   /** New to this viewer: not the viewer's own story and not yet opened. Drives the "New" badge. */
   isNew: boolean;
+  /**
+   * The `family_photo_id` of the story's cover accompaniment image (ADR-0009), sourced batched via
+   * the `loadStoryCovers` core seam. Null when the story has no attached image — a text-only card is
+   * first-class and shows NO placeholder. Rendered through the audited `/api/album-photo/[photoId]`
+   * byte route, which re-checks read authorization for the story's audience.
+   */
+  coverPhotoId: string | null;
   /** Base detail href, e.g. "/hub/stories/{id}". Mode/scope query is appended at click time. */
   href: string;
 }

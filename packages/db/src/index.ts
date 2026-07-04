@@ -69,6 +69,11 @@ export type {
   FamilyPhotoFamily,
   NewFamilyPhotoFamily,
   PhotoSource,
+  StoryImage,
+  NewStoryImage,
+  StoryImageProvenance,
+  AskSubjectPhoto,
+  NewAskSubjectPhoto,
 } from "./schema";
 export type {
   FollowUpType,
@@ -85,7 +90,13 @@ export {
   type PostgresClientOptions,
 } from "./postgres-client";
 export { createTestDatabase } from "./testing";
-export { applySchema, resetSchema, applySchemaToPostgres } from "./migrate";
+export { applySchema, resetSchema } from "./migrate";
+// NOTE: `runMigrations` is intentionally NOT re-exported here. It is a BUILD-TIME-ONLY utility
+// (invoked solely by scripts/migrate.ts via a direct relative import, run by `db:migrate` in the
+// Vercel buildCommand). Re-exporting it from the package entry pulled run-migrations.ts into the
+// Next.js APP bundle (index.ts → runtime.ts → server actions), where webpack tried to statically
+// resolve its `new URL("../drizzle/migrations", import.meta.url)` as a module and failed the build.
+// Keeping it off the public surface keeps the migrator out of the app bundle entirely.
 export {
   parseExpectedSchema,
   introspectSchema,

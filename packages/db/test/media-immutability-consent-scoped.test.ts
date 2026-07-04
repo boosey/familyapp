@@ -1,11 +1,18 @@
 /**
- * Regression tests for ADR-0002 — Media immutability is consent-scoped.
+ * Regression guard for the media-immutability trigger, retained across the ADR-0002 → ADR-0008
+ * transition. ADR-0008 moved media from CONSENT-scoped to EXISTENCE-scoped immutability, so the
+ * primary spec now lives in `media-artifact-existence-scoped.test.ts`. This file is KEPT because
+ * every case here still passes under the existence-scoped model — the referencing parent (a story
+ * recording pointer, a story take, or an approval-audio consent reference) exists precisely when the
+ * consent row it originally keyed on exists, so the DELETE is blocked either way. The file name and
+ * "consent" wording are historical; read them as "a parent still references the audio".
  *
- * The trigger `media_immutable` (backed by `chronicle_media_delete_guard`) enforces:
+ * The trigger `media_immutable` (backed by `chronicle_media_delete_guard`) enforces, per ADR-0008:
  *   - UPDATE on any media row: always forbidden.
- *   - DELETE on a media row: allowed only when the row is NOT referenced by any consent_records
- *     row AND its owning Story has NO consent_records row.
- *   - consent_records UPDATE/DELETE: still fully append-only (regression guard).
+ *   - DELETE on a media row: forbidden while ANY live parent references it (story recording pointer,
+ *     story take, voice ask, voice caption, or consent approval-audio reference); reclaimable once
+ *     no parent remains. The cases below happen to establish that parent via a consented story.
+ *   - consent_records UPDATE/DELETE: still append-only outside an authorized erasure (regression guard).
  */
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";

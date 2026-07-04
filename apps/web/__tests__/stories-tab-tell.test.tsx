@@ -14,6 +14,7 @@ const baseProps = {
   viewerPersonId: "v1",
   seenStoryIds: new Set<string>(),
   familyTargets: new Map(),
+  storyCovers: new Map<string, string>(),
   viewerFamilies: [],
   viewerName: "You",
 };

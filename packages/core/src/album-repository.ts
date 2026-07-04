@@ -1,8 +1,11 @@
 /**
- * The album write + read front door (ADR-0009 · #15). This is the ONLY production file permitted to
- * touch the guarded `family_photos` / `family_photo_families` tables — keeping every album content
- * read AND write in a tiny, auditable surface, exactly as authorization.ts / story-repository.ts do
- * for stories/media. It is on the architecture-test allowlist for precisely that reason.
+ * The album write + read front door (ADR-0009 · #15). Together with `story-image-repository.ts` this
+ * is the audited surface for the guarded `family_photos` / `family_photo_families` tables — keeping
+ * every album content read AND write in a tiny, auditable surface, exactly as authorization.ts /
+ * story-repository.ts do for stories/media. It is on the architecture-test allowlist for precisely
+ * that reason. The photo-byte read decision also reads `stories` + `story_images` (both guarded) to
+ * realize the ADR-0009 accompaniment rule: a photo attached to a story the viewer may read is
+ * itself readable (see `decideAlbumPhotoRead`).
  *
  * The album's authorization model is deliberately SIMPLER than a Story's. A photo has a
  * CONTRIBUTOR, not an owner, and "being in a family's album IS the contributor's consent for that
@@ -15,12 +18,18 @@
  * picker) and #17 (EXIF at import) build on — this file writes whatever it is handed.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { familyPhotoFamilies, familyPhotos } from "@chronicle/db/content";
+import {
+  familyPhotoFamilies,
+  familyPhotos,
+  stories,
+  storyImages,
+} from "@chronicle/db/content";
 import { families, memberships } from "@chronicle/db/schema";
 import type { Database, FamilyPhoto, PhotoSource } from "@chronicle/db";
 import {
   type AuthContext,
   type AuthDecision,
+  decideStoryRead,
   viewerPersonId,
 } from "./authorization";
 import { InvariantViolation } from "./errors";
@@ -44,6 +53,65 @@ async function activeFamilyIds(
       and(eq(memberships.personId, personId), eq(memberships.status, "active")),
     );
   return new Set(rows.map((r) => r.familyId));
+}
+
+/**
+ * Assert `personId` may SEE album photo `photoId` under the album read model — the SINGLE choke point
+ * reused by every write that references a photo by id (attach-to-story, the subject-cover insert at
+ * story creation, and Ask subject-photo targeting). Throws `InvariantViolation` if the photo does not
+ * exist / is soft-deleted, OR if the person is NEITHER its contributor NOR an active member of any
+ * family the photo is placed in. This is Arm 1 of `decideAlbumPhotoRead`, person-scoped (there is no
+ * AuthContext — the caller has re-resolved auth and passes the actor's `personId`).
+ *
+ * WHY IT MUST BE A GATE (adversarial): without it, a caller could self-grant read access to an
+ * arbitrary photo by referencing it (e.g. attaching it to their OWN private draft, whose owner-ALLOW
+ * would then satisfy the accompaniment read arm of `decideAlbumPhotoRead`). The contributor is
+ * authorized regardless of current membership (they may always reference their own artifact — matching
+ * `decideAlbumPhotoManage`). Accepts a `Pick<Database, "select">` so it runs inside a caller's
+ * transaction handle as well as on a plain db.
+ */
+export async function assertPersonCanAccessAlbumPhoto(
+  db: Pick<Database, "select">,
+  personId: string,
+  photoId: string,
+): Promise<void> {
+  const [photo] = await db
+    .select({
+      id: familyPhotos.id,
+      contributorPersonId: familyPhotos.contributorPersonId,
+      deletedAt: familyPhotos.deletedAt,
+    })
+    .from(familyPhotos)
+    .where(eq(familyPhotos.id, photoId))
+    .limit(1);
+  if (!photo || photo.deletedAt !== null) {
+    throw new InvariantViolation(
+      `album photo ${photoId} does not exist or has been deleted`,
+    );
+  }
+  // The contributor may always reference their own photo.
+  if (photo.contributorPersonId === personId) return;
+  // Otherwise the person must hold an ACTIVE membership in a family the photo is placed in. One query
+  // intersects the photo's placements with the person's active memberships — non-empty ⇒ they can see it.
+  const [shared] = await db
+    .select({ familyId: familyPhotoFamilies.familyId })
+    .from(familyPhotoFamilies)
+    .innerJoin(
+      memberships,
+      and(
+        eq(memberships.familyId, familyPhotoFamilies.familyId),
+        eq(memberships.personId, personId),
+        eq(memberships.status, "active"),
+      ),
+    )
+    .where(eq(familyPhotoFamilies.photoId, photoId))
+    .limit(1);
+  if (!shared) {
+    throw new InvariantViolation(
+      `person ${personId} cannot access album photo ${photoId} — they are neither its ` +
+        `contributor nor an active member of any family it is placed in`,
+    );
+  }
 }
 
 export interface CreateAlbumPhotoInput {
@@ -148,39 +216,68 @@ export async function listAlbumPhotos(
 }
 
 /**
- * The single album-read decision, given an already-fetched photo (or its absence). ALLOW iff the
- * viewer shares an ACTIVE membership in ANY family the (non-deleted) photo is placed in. A
- * soft-deleted or non-existent photo is DENIED (treated as absent), as is any anonymous request.
- * No owner/contributor bypass — the contributor is authorized only by virtue of still being an
- * active member of a family the photo is in (the album model has no private-to-the-contributor
- * state; placing a photo IS sharing it with those families). Both public entry points funnel
- * through this, so there is exactly ONE decision implementation.
+ * The single album-read decision, given an already-fetched photo (or its absence). Photo-byte
+ * visibility (ADR-0009 §Authorization) is the UNION of two arms — mirroring `decideMediaRead`
+ * (authorization.ts): a media asset is readable by its owner OR as the recording of any story the
+ * viewer may read; a photo is readable via its album memberships OR as the accompaniment of any
+ * story the viewer may read.
+ *
+ *   - Arm 1 (album): ALLOW iff the viewer shares an ACTIVE membership in ANY family the photo is
+ *     placed in. No owner/contributor bypass — the contributor is authorized only by virtue of
+ *     still being an active member of a family the photo is in.
+ *   - Arm 2 (accompaniment, ADR-0009): ALLOW iff the photo is attached (`story_images`) to a story
+ *     the viewer may read via `decideStoryRead`. A `private` story leaks nothing (decideStoryRead
+ *     denies it); a `public` story serves its imagery to anyone — INCLUDING anonymous viewers.
+ *
+ * There is deliberately NO early anonymous-deny: an anon simply holds no album memberships (Arm 1
+ * finds nothing) and is judged purely on the story audience (Arm 2) — a photo on a public story is
+ * public. A soft-deleted or non-existent photo is treated as ABSENT and DENIED to EVERYONE up front
+ * (this realizes "delete-a-photo cascades an un-attach everywhere" at read time — the album delete
+ * is SOFT, so the FK cascade never fires; this DENY is what makes the photo vanish from every story
+ * it was on). Both public entry points funnel through this, so there is exactly ONE decision.
  */
 async function decideAlbumPhotoRead(
   db: Database,
   ctx: AuthContext,
   photo: Pick<FamilyPhoto, "id" | "deletedAt"> | undefined,
 ): Promise<AuthDecision> {
-  const viewer = viewerPersonId(ctx);
-  if (viewer === null) {
-    return DENY("anonymous request cannot read an album photo");
-  }
+  // Absent / soft-deleted ⇒ denied to everyone (story audience included). Stays FIRST.
   if (!photo || photo.deletedAt !== null) {
     return DENY("photo does not exist or has been deleted");
   }
-  const placements = await db
-    .select({ familyId: familyPhotoFamilies.familyId })
-    .from(familyPhotoFamilies)
-    .where(eq(familyPhotoFamilies.photoId, photo.id));
-  if (placements.length === 0) {
-    return DENY("photo is in no family album");
+  const viewer = viewerPersonId(ctx);
+
+  // Arm 1 — album membership. (Anonymous viewers hold none; they fall through to Arm 2.)
+  if (viewer !== null) {
+    const placements = await db
+      .select({ familyId: familyPhotoFamilies.familyId })
+      .from(familyPhotoFamilies)
+      .where(eq(familyPhotoFamilies.photoId, photo.id));
+    const viewerFamilies = await activeFamilyIds(db, viewer);
+    for (const { familyId } of placements) {
+      if (viewerFamilies.has(familyId)) return ALLOW;
+    }
   }
-  const viewerFamilies = await activeFamilyIds(db, viewer);
-  for (const { familyId } of placements) {
-    if (viewerFamilies.has(familyId)) return ALLOW;
+
+  // Arm 2 — accompaniment audience. Load the stories this photo is attached to and defer each to
+  // the single Story front door; if the viewer may read ANY of them, the photo is readable.
+  const attachedStories = await db
+    .select({
+      id: stories.id,
+      ownerPersonId: stories.ownerPersonId,
+      state: stories.state,
+      audienceTier: stories.audienceTier,
+    })
+    .from(storyImages)
+    .innerJoin(stories, eq(stories.id, storyImages.storyId))
+    .where(eq(storyImages.familyPhotoId, photo.id));
+  for (const s of attachedStories) {
+    if ((await decideStoryRead(db, ctx, s)).allowed) return ALLOW;
   }
+
   return DENY(
-    "viewer holds no active membership in any family the photo is placed in",
+    "viewer holds no active membership in any family the photo is placed in, " +
+      "and the photo backs no story the viewer may read",
   );
 }
 

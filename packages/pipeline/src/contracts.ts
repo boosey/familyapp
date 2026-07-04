@@ -156,3 +156,29 @@ export interface JobQueue {
   /** Inspect pending jobs — for tests, retry inspection, and observability. */
   pending(): EnqueuedJob[];
 }
+
+// ---------------------------------------------------------------------------
+// PhotoUnderstanding — RESERVED vision seam (ADR-0009 Story Imagery).
+// A future subscription-gated ranker will turn photo bytes into labels/caption/embedding to rank
+// album photos against a story. It is deliberately NOT wired into the v1 deterministic
+// `rankPhotosForStory` (photo-ranker.ts) — this interface + its mock only reserve the home so the
+// eventual vision adapter has a vendor-neutral seam to implement. No vendor SDK lives here.
+// ---------------------------------------------------------------------------
+
+export interface PhotoUnderstandingInput {
+  photoId: string;
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+export interface PhotoUnderstandingResult {
+  labels: string[];
+  /** Vendor model identifier — recorded so a re-derivation can compare or A/B. */
+  modelId: string;
+}
+
+export interface PhotoUnderstanding {
+  /** Vision → labels/caption/embedding for a photo. RESERVED (ADR-0009): NOT wired into the v1
+   *  deterministic ranker; a future subscription-gated ranker will consume it. */
+  describe(input: PhotoUnderstandingInput): Promise<PhotoUnderstandingResult>;
+}

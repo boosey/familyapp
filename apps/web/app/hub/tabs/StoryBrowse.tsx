@@ -185,8 +185,18 @@ function FeedCard({ item, href }: { item: StoryItem; href: string }) {
         </span>
       ) : null}
 
-      {/* Striped photo placeholder — the one design-sanctioned literal-hex decoration. */}
-      <div aria-hidden="true" style={photoPlaceholder} />
+      {/* Cover accompaniment (ADR-0009): the story's cover photo, served by the audited byte route.
+          A story with no attached image renders NOTHING here — a text-only card is first-class, so
+          there is no placeholder. */}
+      {item.coverPhotoId ? (
+        // eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth
+        // route (/api/album-photo/[photoId]), not a static asset; next/image would proxy/optimize it.
+        <img
+          src={`/api/album-photo/${item.coverPhotoId}`}
+          alt=""
+          style={coverImage}
+        />
+      ) : null}
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -502,13 +512,14 @@ const newDot: CSSProperties = {
   background: "var(--accent)",
 };
 
-const photoPlaceholder: CSSProperties = {
+const coverImage: CSSProperties = {
   flex: "0 0 auto",
   width: 120,
   height: 120,
+  objectFit: "cover",
   borderRadius: "var(--radius-md)",
-  backgroundColor: "#E4D8C2",
-  backgroundImage: "repeating-linear-gradient(135deg, #DCCFB6 0 12px, #E4D8C2 12px 24px)",
+  background: "var(--surface-sunken)",
+  display: "block",
 };
 
 const initialsCircle: CSSProperties = {

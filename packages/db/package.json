@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "node scripts/gen-schema.mjs",
-    "db:check-parity": "tsx scripts/check-parity.ts"
+    "db:check-parity": "tsx scripts/check-parity.ts",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

@@ -23,6 +23,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # A dirty tree here means someone edited schema.ts without committing the regenerated
+      # snapshot + migration (or forgot to hand-carry an invariant into the migration — the
+      # drift-guard unit test also covers that case). db:generate is DB-less: drizzle-kit
+      # export/generate operate purely on schema.ts + local meta snapshots, no DATABASE_URL.
+      - name: Schema/migration drift check
+        run: pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle
+
       - name: Lint
         run: pnpm lint
 
