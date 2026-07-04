@@ -74,6 +74,31 @@ describe("eraseStory — owner erasure of a consented, shared story", () => {
   });
 });
 
+describe("eraseStory — owner erasure of a never-approved draft (cascade token set but unused)", () => {
+  it("hard-deletes the draft and its recording media with no consent ledger to unlock", async () => {
+    const owner = await makePerson();
+    const [rec] = await db
+      .insert(media)
+      .values({ ownerPersonId: owner.id, kind: "story_audio", storageKey: `s3://b/${crypto.randomUUID()}.wav`, contentType: "audio/wav", checksum: crypto.randomUUID() })
+      .returning();
+    const story = await db.transaction(async (tx) => {
+      const [s] = await tx.insert(stories).values({ ownerPersonId: owner.id, recordingMediaId: rec!.id }).returning();
+      await tx.insert(storyRecordings).values({ storyId: s!.id, position: 0, mediaId: rec!.id });
+      return s!;
+    });
+
+    const result = await eraseStory(db, { kind: "account", personId: owner.id }, { storyId: story.id });
+    expect(result.allowed).toBe(true);
+
+    expect(await db.select().from(stories).where(eq(stories.id, story.id))).toHaveLength(0);
+    expect(await db.select().from(media).where(eq(media.id, rec!.id))).toHaveLength(0);
+
+    const audit = await db.select().from(erasureAudit).where(eq(erasureAudit.itemId, story.id));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.reason).toBe("owner_erasure");
+  });
+});
+
 describe("eraseStory — steward moderation of another member's shared story", () => {
   it("allows the steward to erase and records steward_moderation", async () => {
     const steward = await makePerson("Steward");

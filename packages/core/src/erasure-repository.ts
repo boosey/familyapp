@@ -30,36 +30,73 @@ import {
   storyFamilies,
 } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
-import { viewerPersonId, type AuthContext, type AuthDecision } from "./authorization";
+import { viewerPersonId, type AuthContext } from "./authorization";
 
 export type EraseResult =
   | { readonly allowed: false; readonly reason: string }
   | { readonly allowed: true; readonly storageKeys: string[] };
 
+/** The audit provenance for an allowed erasure. */
+type EraseReason = "owner_erasure" | "steward_moderation";
+
 /**
  * The manage decision for a delete: the OWNER may always erase their own content (right-to-erasure);
  * a STEWARD of any family the item is shared to may erase it (moderation). Anyone else is denied.
- * Returns the audit `reason` alongside so the caller stamps the correct provenance.
+ * A single discriminated union: on allow it carries the audit `reason`; on deny it carries the
+ * denial message — so the caller never needs a non-null assertion to read either.
  */
+type ManageDecision =
+  | { readonly allowed: true; readonly reason: EraseReason }
+  | { readonly allowed: false; readonly reason: string };
+
 function decideManage(
   viewer: string | null,
   ownerPersonId: string,
   stewardPersonIds: readonly (string | null)[],
-): { decision: AuthDecision; reason: "owner_erasure" | "steward_moderation" | null } {
-  if (viewer === null) {
-    return { decision: { allowed: false, reason: "anonymous cannot erase content" }, reason: null };
-  }
-  if (viewer === ownerPersonId) return { decision: { allowed: true }, reason: "owner_erasure" };
+): ManageDecision {
+  if (viewer === null) return { allowed: false, reason: "anonymous cannot erase content" };
+  if (viewer === ownerPersonId) return { allowed: true, reason: "owner_erasure" };
   if (stewardPersonIds.some((s) => s === viewer)) {
-    return { decision: { allowed: true }, reason: "steward_moderation" };
+    return { allowed: true, reason: "steward_moderation" };
   }
   return {
-    decision: {
-      allowed: false,
-      reason: "viewer is neither the owner nor a steward of a family the item is shared to",
-    },
-    reason: null,
+    allowed: false,
+    reason: "viewer is neither the owner nor a steward of a family the item is shared to",
   };
+}
+
+/**
+ * Resolve the object-storage keys for a set of media ids, returned so the caller can best-effort
+ * delete the blobs after the tx commits. Guards the `inArray(col, [])` → `IN ()` Postgres error by
+ * short-circuiting on an empty id set. Shared by every erase path (story/ask/voice_caption).
+ */
+async function resolveStorageKeys(
+  tx: Pick<Database, "select">,
+  mediaIds: string[],
+): Promise<string[]> {
+  if (mediaIds.length === 0) return [];
+  const rows = await tx
+    .select({ storageKey: media.storageKey })
+    .from(media)
+    .where(inArray(media.id, mediaIds));
+  return rows.map((m) => m.storageKey);
+}
+
+/**
+ * Append the ADR-0008 erasure-audit row — the append-only record that a deletion happened, which
+ * outlives the erased content. Shared by every erase path (story/ask/voice_caption).
+ */
+async function insertErasureAudit(
+  tx: Pick<Database, "insert">,
+  row: {
+    itemType: "story" | "ask" | "voice_caption";
+    itemId: string;
+    ownerPersonId: string;
+    actorPersonId: string;
+    reason: EraseReason;
+  },
+): Promise<void> {
+  await tx.insert(erasureAudit).values(row);
 }
 
 export async function eraseStory(
@@ -68,6 +105,9 @@ export async function eraseStory(
   input: { storyId: string },
 ): Promise<EraseResult> {
   const viewer = viewerPersonId(ctx);
+  // Erasure requires an identified actor (owner or steward); an anonymous request can be neither.
+  // Guarding here also narrows `viewer` to a string for the audit `actorPersonId` below (no `!`).
+  if (viewer === null) return { allowed: false, reason: "anonymous cannot erase content" };
 
   const [story] = await db
     .select({ id: stories.id, ownerPersonId: stories.ownerPersonId })
@@ -82,7 +122,7 @@ export async function eraseStory(
     .from(storyFamilies)
     .innerJoin(families, eq(families.id, storyFamilies.familyId))
     .where(eq(storyFamilies.storyId, input.storyId));
-  const { decision, reason } = decideManage(
+  const decision = decideManage(
     viewer,
     story.ownerPersonId,
     stewardRows.map((r) => r.stewardPersonId),
@@ -121,15 +161,7 @@ export async function eraseStory(
         ].filter((id): id is string => id !== null),
       ),
     ];
-    // `inArray(col, [])` compiles to `IN ()`, which errors in Postgres/PGlite — only query when there
-    // is at least one media row to resolve.
-    const mediaRows =
-      mediaIds.length > 0
-        ? await tx
-            .select({ storageKey: media.storageKey })
-            .from(media)
-            .where(inArray(media.id, mediaIds))
-        : [];
+    const keys = await resolveStorageKeys(tx, mediaIds);
 
     // Delete children in FK order, CONSENT LEDGER FIRST (its token gate is the only lock on the
     // audio; once the consent rows are gone, the prose/recording delete-guards see "no consent" and
@@ -146,15 +178,15 @@ export async function eraseStory(
     }
 
     // The append-only record that the deletion happened — outlives the erased content.
-    await tx.insert(erasureAudit).values({
+    await insertErasureAudit(tx, {
       itemType: "story",
       itemId: input.storyId,
       ownerPersonId: story.ownerPersonId,
-      actorPersonId: viewer!,
-      reason: reason!,
+      actorPersonId: viewer,
+      reason: decision.reason,
     });
 
-    return mediaRows.map((m) => m.storageKey);
+    return keys;
   });
 
   return { allowed: true, storageKeys };
