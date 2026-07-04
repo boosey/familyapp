@@ -55,6 +55,65 @@ async function activeFamilyIds(
   return new Set(rows.map((r) => r.familyId));
 }
 
+/**
+ * Assert `personId` may SEE album photo `photoId` under the album read model — the SINGLE choke point
+ * reused by every write that references a photo by id (attach-to-story, the subject-cover insert at
+ * story creation, and Ask subject-photo targeting). Throws `InvariantViolation` if the photo does not
+ * exist / is soft-deleted, OR if the person is NEITHER its contributor NOR an active member of any
+ * family the photo is placed in. This is Arm 1 of `decideAlbumPhotoRead`, person-scoped (there is no
+ * AuthContext — the caller has re-resolved auth and passes the actor's `personId`).
+ *
+ * WHY IT MUST BE A GATE (adversarial): without it, a caller could self-grant read access to an
+ * arbitrary photo by referencing it (e.g. attaching it to their OWN private draft, whose owner-ALLOW
+ * would then satisfy the accompaniment read arm of `decideAlbumPhotoRead`). The contributor is
+ * authorized regardless of current membership (they may always reference their own artifact — matching
+ * `decideAlbumPhotoManage`). Accepts a `Pick<Database, "select">` so it runs inside a caller's
+ * transaction handle as well as on a plain db.
+ */
+export async function assertPersonCanAccessAlbumPhoto(
+  db: Pick<Database, "select">,
+  personId: string,
+  photoId: string,
+): Promise<void> {
+  const [photo] = await db
+    .select({
+      id: familyPhotos.id,
+      contributorPersonId: familyPhotos.contributorPersonId,
+      deletedAt: familyPhotos.deletedAt,
+    })
+    .from(familyPhotos)
+    .where(eq(familyPhotos.id, photoId))
+    .limit(1);
+  if (!photo || photo.deletedAt !== null) {
+    throw new InvariantViolation(
+      `album photo ${photoId} does not exist or has been deleted`,
+    );
+  }
+  // The contributor may always reference their own photo.
+  if (photo.contributorPersonId === personId) return;
+  // Otherwise the person must hold an ACTIVE membership in a family the photo is placed in. One query
+  // intersects the photo's placements with the person's active memberships — non-empty ⇒ they can see it.
+  const [shared] = await db
+    .select({ familyId: familyPhotoFamilies.familyId })
+    .from(familyPhotoFamilies)
+    .innerJoin(
+      memberships,
+      and(
+        eq(memberships.familyId, familyPhotoFamilies.familyId),
+        eq(memberships.personId, personId),
+        eq(memberships.status, "active"),
+      ),
+    )
+    .where(eq(familyPhotoFamilies.photoId, photoId))
+    .limit(1);
+  if (!shared) {
+    throw new InvariantViolation(
+      `person ${personId} cannot access album photo ${photoId} — they are neither its ` +
+        `contributor nor an active member of any family it is placed in`,
+    );
+  }
+}
+
 export interface CreateAlbumPhotoInput {
   /** The contributor (a photo has a contributor, not an owner). */
   contributorPersonId: string;

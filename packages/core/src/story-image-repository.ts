@@ -25,14 +25,10 @@
  * SOFT, so the `family_photo_id` FK cascade never fires; the read filter makes the photo vanish).
  */
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
-import {
-  familyPhotoFamilies,
-  familyPhotos,
-  storyImages,
-} from "@chronicle/db/content";
-import { memberships } from "@chronicle/db/schema";
+import { familyPhotos, storyImages } from "@chronicle/db/content";
 import type { Database, StoryImage } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
+import { assertPersonCanAccessAlbumPhoto } from "./album-repository";
 
 // ---------------------------------------------------------------------------
 // Write primitives (ACTOR AUTHZ IS THE CALLER'S JOB). All multi-row writes are transactional.
@@ -63,73 +59,48 @@ export async function attachPhotoToStory(
   db: Database,
   input: { storyId: string; familyPhotoId: string; attachedByPersonId: string },
 ): Promise<StoryImage> {
-  return db.transaction(async (tx) => {
-    const [photo] = await tx
-      .select({
-        id: familyPhotos.id,
-        contributorPersonId: familyPhotos.contributorPersonId,
-        deletedAt: familyPhotos.deletedAt,
-      })
-      .from(familyPhotos)
-      .where(eq(familyPhotos.id, input.familyPhotoId))
-      .limit(1);
-    if (!photo || photo.deletedAt !== null) {
-      throw new InvariantViolation(
-        `attachPhotoToStory: family photo ${input.familyPhotoId} does not exist or has been deleted`,
-      );
-    }
+  return db.transaction((tx) => attachPhotoToStoryTx(tx, input));
+}
 
-    // Album-access gate. The contributor can always attach their own photo; otherwise the attacher
-    // must hold an ACTIVE membership in a family the photo is placed in. One query intersects the
-    // photo's placements with the attacher's active memberships (join family_photo_families ⋈
-    // memberships) — non-empty ⇒ the attacher can see the photo in the album.
-    if (photo.contributorPersonId !== input.attachedByPersonId) {
-      const [shared] = await tx
-        .select({ familyId: familyPhotoFamilies.familyId })
-        .from(familyPhotoFamilies)
-        .innerJoin(
-          memberships,
-          and(
-            eq(memberships.familyId, familyPhotoFamilies.familyId),
-            eq(memberships.personId, input.attachedByPersonId),
-            eq(memberships.status, "active"),
-          ),
-        )
-        .where(eq(familyPhotoFamilies.photoId, input.familyPhotoId))
-        .limit(1);
-      if (!shared) {
-        throw new InvariantViolation(
-          `attachPhotoToStory: person ${input.attachedByPersonId} cannot attach family photo ` +
-            `${input.familyPhotoId} — they are neither its contributor nor an active member of any ` +
-            `family it is placed in`,
-        );
-      }
-    }
+/**
+ * The transactional body of `attachPhotoToStory`, operating on a caller-supplied tx handle. Exported
+ * so the story-creation write path (`createTextDraft` / `persistRecordingAndCreateDraft`) can insert
+ * the subject photo's FIRST cover row IN THE SAME TRANSACTION as the story insert (ADR-0009 Phase 3
+ * atomicity) — no second, non-atomic attach path. The album-access gate
+ * (`assertPersonCanAccessAlbumPhoto`, which also enforces existence + not-soft-deleted) is the single
+ * choke point, run BEFORE any insert; the actor is the caller's already-resolved `attachedByPersonId`.
+ */
+export async function attachPhotoToStoryTx(
+  tx: Pick<Database, "select" | "insert">,
+  input: { storyId: string; familyPhotoId: string; attachedByPersonId: string },
+): Promise<StoryImage> {
+  // Album-access gate (existence + soft-delete + contributor-or-member). See its JSDoc for the
+  // self-grant attack it closes.
+  await assertPersonCanAccessAlbumPhoto(tx, input.attachedByPersonId, input.familyPhotoId);
 
-    // Highest existing position (rows may have gaps left by detaches; we append past the max).
-    const [top] = await tx
-      .select({ position: storyImages.position })
-      .from(storyImages)
-      .where(eq(storyImages.storyId, input.storyId))
-      .orderBy(desc(storyImages.position))
-      .limit(1);
-    const isFirst = top === undefined;
-    const nextPosition = isFirst ? 0 : top.position + 1;
+  // Highest existing position (rows may have gaps left by detaches; we append past the max).
+  const [top] = await tx
+    .select({ position: storyImages.position })
+    .from(storyImages)
+    .where(eq(storyImages.storyId, input.storyId))
+    .orderBy(desc(storyImages.position))
+    .limit(1);
+  const isFirst = top === undefined;
+  const nextPosition = isFirst ? 0 : top.position + 1;
 
-    const [row] = await tx
-      .insert(storyImages)
-      .values({
-        storyId: input.storyId,
-        familyPhotoId: input.familyPhotoId,
-        provenance: "family_photo",
-        // First image on the story is the cover (there can be exactly one).
-        isCover: isFirst,
-        position: nextPosition,
-        attachedByPersonId: input.attachedByPersonId,
-      })
-      .returning();
-    return row!;
-  });
+  const [row] = await tx
+    .insert(storyImages)
+    .values({
+      storyId: input.storyId,
+      familyPhotoId: input.familyPhotoId,
+      provenance: "family_photo",
+      // First image on the story is the cover (there can be exactly one).
+      isCover: isFirst,
+      position: nextPosition,
+      attachedByPersonId: input.attachedByPersonId,
+    })
+    .returning();
+  return row!;
 }
 
 /**

@@ -83,6 +83,17 @@ export const hub = {
     questionLabel: "Your question",
     questionPlaceholder: "e.g. What was your mother singing on Sunday mornings?",
     submit: "Send to the queue",
+    // ADR-0009 Phase 3 — an optional photo picker so an ask can be ABOUT one or more album photos
+    // ("tell the story of THIS photo"). Only photos the asker can already see are offered.
+    photosLabel: "Add a photo (optional)",
+    photosHelp: "Ask about a specific photo — they'll see it when they answer.",
+    photoPickerLoadError: "Couldn't load your album photos. You can still send the question.",
+    noAlbumPhotos: "No album photos yet.",
+    selectedHeading: "About these photos",
+    attachPhotoAria: (caption: string | null) =>
+      caption ? `Ask about “${caption}”` : "Ask about this photo",
+    removePhotoAria: (caption: string | null) =>
+      caption ? `Remove “${caption}” from this question` : "Remove this photo from the question",
   },
   asks: {
     signedOut: "Sign in to see your asks.",
@@ -215,6 +226,8 @@ export const hub = {
     followUpTakeLabel: "Follow-up",
     dropTake: "Remove this part",
     initialAnswerLabel: "Your answer",
+    // ADR-0009 Phase 3 — the photo(s) this ask is ABOUT, shown to the narrator on the answer surface.
+    aboutThisPhoto: "About this photo",
   },
   // Generalized story composer (ADR-0007): the capture voice⇄text toggle + the review title field.
   // Shared by the answer flow (an ask) and the self-initiated telling (/hub/tell, no ask).
@@ -228,6 +241,10 @@ export const hub = {
     textPlaceholder: "Write it however it comes to you.",
     continueLabel: "Continue",
     inputModeAria: "How would you like to tell this?",
+    // ADR-0009 Phase 3 — "tell the story of this photo" starts a telling ABOUT an album photo. The
+    // caption seeds a warm prompt; the photo rides through as the story's subject/cover.
+    photoStoryPrompt: (caption: string | null) =>
+      caption ? `Tell the story of this photo — ${caption}` : "Tell the story of this photo",
   },
   actions: {
     notSignedIn: "Not signed in.",
@@ -294,6 +311,8 @@ export const hub = {
     viewerAria: (caption: string | null) =>
       caption ? `Photo: ${caption}` : "Photo",
     closeViewer: "Close",
+    // ADR-0009 Phase 3 — start a telling ABOUT this photo (carries it forward as the story's subject).
+    tellStoryOfPhoto: "Tell the story of this photo",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.

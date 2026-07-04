@@ -73,6 +73,7 @@ export {
   createAsk,
   listPendingAsksForNarrator,
   listAsksByAsker,
+  listAskSubjectPhotos,
   markAskRouted,
   markAskAnswered,
   type CreateAskInput,
@@ -149,11 +150,13 @@ export {
   getAlbumPhotoForViewer,
   setAlbumPhotoCaption,
   softDeleteAlbumPhoto,
+  assertPersonCanAccessAlbumPhoto,
   type CreateAlbumPhotoInput,
   type AlbumPhotoView,
 } from "./album-repository";
 export {
   attachPhotoToStory,
+  attachPhotoToStoryTx,
   detachStoryImage,
   setStoryCover,
   reorderStoryImages,

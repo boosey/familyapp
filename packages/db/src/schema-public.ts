@@ -6,6 +6,7 @@
 export {
   accounts,
   asks,
+  askSubjectPhotos,
   consentRecords,
   followUpDecisions,
   intakeAnswers,

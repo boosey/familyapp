@@ -9,6 +9,7 @@ import { memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
+import { AskPhotoPicker } from "./AskPhotoPicker";
 
 async function submitAsk(formData: FormData): Promise<void> {
   "use server";
@@ -17,7 +18,18 @@ async function submitAsk(formData: FormData): Promise<void> {
   if (ctx.kind !== "account") throw new Error("must be signed in");
   const targetPersonId = String(formData.get("targetPersonId") ?? "");
   const questionText = String(formData.get("questionText") ?? "");
-  await createAsk(db, ctx, { targetPersonId, questionText });
+  // ADR-0009 Phase 3: optional subject photos the ask is ABOUT. Identity is re-resolved above; the
+  // photo ids are untrusted client input, but `createAsk` re-runs the album-access gate per id inside
+  // its write transaction (a photo the asker can't see rejects the whole ask), so passing them
+  // straight through is safe — the gate, not this endpoint, is the authority.
+  const subjectPhotoIds = formData
+    .getAll("subjectPhotoIds")
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  await createAsk(db, ctx, {
+    targetPersonId,
+    questionText,
+    ...(subjectPhotoIds.length > 0 ? { subjectPhotoIds } : {}),
+  });
   redirect("/hub?tab=asks");
 }
 
@@ -115,6 +127,7 @@ export async function AskTab() {
             placeholder={hub.ask.questionPlaceholder}
           />
         </label>
+        <AskPhotoPicker />
         <KindredButton type="submit" label={hub.ask.submit} />
       </form>
     </div>

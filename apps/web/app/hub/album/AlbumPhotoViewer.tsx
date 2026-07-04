@@ -203,6 +203,24 @@ export function AlbumPhotoViewer({
           }}
         />
 
+        {/* "Tell the story of this photo" (ADR-0009 Phase 3) — starts a telling ABOUT this photo on
+            the tell surface, carrying the photo as the story's subject/cover and a caption-derived
+            prompt. Available to anyone who can view the photo (they're a co-member the core write gate
+            authorizes); it's a compose entry, not a manage action, so it's outside the canManage block. */}
+        <KindredButton
+          variant="primary"
+          size="small"
+          onClick={() =>
+            router.push(
+              `/hub/tell?subjectPhotoId=${encodeURIComponent(photo.id)}` +
+                `&promptQuestion=${encodeURIComponent(hub.compose.photoStoryPrompt(caption))}`,
+            )
+          }
+          style={{ alignSelf: "flex-start" }}
+        >
+          {hub.album.tellStoryOfPhoto}
+        </KindredButton>
+
         {photo.canManage ? (
           <div
             aria-label={hub.album.managePhotoAria(caption)}

@@ -68,6 +68,14 @@ interface StoryComposerProps {
   /** The ask being answered (answer mode) or `null`/absent for a self-initiated telling (tell mode). */
   ask?: { id: string; questionText: string; askerName: string } | null;
   draft: DraftInfo | null;
+  /**
+   * ADR-0009 Phase 3 "tell the story of this photo": the album photo this telling is ABOUT. Carried
+   * as a client hint into `composeStoryAction` — the server re-resolves auth and the core write gate
+   * enforces the owner can actually see it. Tell mode only; null/absent for a plain telling or answer.
+   */
+  subjectPhotoId?: string | null;
+  /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
+  promptQuestion?: string | null;
 }
 
 function pickMimeType(): string {
@@ -80,7 +88,13 @@ function pickMimeType(): string {
   return "audio/webm";
 }
 
-export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
+export function StoryComposer({
+  mode,
+  ask = null,
+  draft,
+  subjectPhotoId = null,
+  promptQuestion = null,
+}: StoryComposerProps) {
   const router = useRouter();
 
   // Where a discard returns the narrator. A tell-mode draft came from the Stories tab, so send them
@@ -217,13 +231,17 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
         result = await recordFollowUpTakeAction(form);
       } else {
         if (ask) form.append("askId", ask.id);
+        // ADR-0009 Phase 3 tell-a-photo: carry the subject photo + its caption-derived prompt. The
+        // server re-resolves auth; these are hints the core write gate re-checks.
+        if (subjectPhotoId) form.append("subjectPhotoId", subjectPhotoId);
+        if (promptQuestion) form.append("promptQuestion", promptQuestion);
         result = await composeStoryAction(form);
       }
       await handleStep(result);
     } catch {
       setPendingError(hub.answer.genericError);
     }
-  }, [ask, followUp, activeStoryId, handleStep]);
+  }, [ask, followUp, activeStoryId, subjectPhotoId, promptQuestion, handleStep]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -269,12 +287,14 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       const form = new FormData();
       form.set("text", textDraft.trim());
       if (ask) form.set("askId", ask.id);
+      if (subjectPhotoId) form.set("subjectPhotoId", subjectPhotoId);
+      if (promptQuestion) form.set("promptQuestion", promptQuestion);
       const step = await composeStoryAction(form);
       await handleStep(step);
     } catch {
       setPendingError(hub.answer.genericError);
     }
-  }, [textDraft, ask, handleStep]);
+  }, [textDraft, ask, subjectPhotoId, promptQuestion, handleStep]);
 
   // ── Follow-up finish handler ────────────────────────────────────────────────
   // "That's all for now" — decline the current follow-up and finish the thread (a first-class path,
@@ -584,7 +604,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             onPolish={async (text) => {
               const form = new FormData();
               form.append("prose", text);
-              form.append("promptQuestion", ask?.questionText ?? "");
+              form.append("promptQuestion", ask?.questionText ?? promptQuestion ?? "");
               const res = await polishAnswerProseAction(form);
               if ("error" in res) throw new Error(res.error);
               return res.prose;
@@ -808,7 +828,27 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       }}
     >
       {questionHeader}
-      {/* Tell mode has no question header — show a warm prompt so the capture screen isn't blank. */}
+      {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator
+          sees exactly which photo they're telling the story of. Bytes come from the audited byte
+          route (the owner can see their own album photo). */}
+      {!ask && subjectPhotoId && (
+        // eslint-disable-next-line @next/next/no-img-element -- audited byte route, not a static asset.
+        <img
+          src={`/api/album-photo/${subjectPhotoId}`}
+          alt={promptQuestion ?? hub.compose.tellPrompt}
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            maxHeight: "40dvh",
+            objectFit: "contain",
+            borderRadius: "var(--radius-md)",
+            display: "block",
+            background: "var(--surface-sunken)",
+          }}
+        />
+      )}
+      {/* Tell mode has no question header — show a warm prompt so the capture screen isn't blank. A
+          tell-a-photo telling shows its caption-derived prompt; a plain telling the generic one. */}
       {!ask && (
         <p
           style={{
@@ -821,7 +861,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             textAlign: "center",
           }}
         >
-          {hub.compose.tellPrompt}
+          {promptQuestion ?? hub.compose.tellPrompt}
         </p>
       )}
 

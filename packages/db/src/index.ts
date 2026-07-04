@@ -70,6 +70,8 @@ export type {
   StoryImage,
   NewStoryImage,
   StoryImageProvenance,
+  AskSubjectPhoto,
+  NewAskSubjectPhoto,
 } from "./schema";
 export type {
   FollowUpType,

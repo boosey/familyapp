@@ -433,6 +433,17 @@ export const stories = pgTable(
      * for without the narrator having to pick. NOT the visibility set itself — that is `story_families`.
      */
     originatingFamilyId: uuid("originating_family_id").references(() => families.id),
+    /**
+     * The album photo this story is ABOUT (ADR-0009 Phase 3 "subject"). Nullable, ≤1 — the thin
+     * "what this is about" pointer. NO cascade: a story stays semantically about a soft-deleted
+     * photo (its bytes 404 via the existing soft-delete filter). Forward FK to `family_photos`
+     * (defined later in this file) via the AnyPgColumn arrow, mirroring proseRevisions.storyRecordingId.
+     * At creation this photo is ALSO inserted as the story's FIRST `story_images` cover row (atomic),
+     * so the subject rides on `getStoryForViewer`'s row and needs no new read arm.
+     */
+    subjectPhotoId: uuid("subject_photo_id").references(
+      (): AnyPgColumn => familyPhotos.id,
+    ),
     // --- lifecycle ---
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -974,6 +985,51 @@ export const storyImages = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// AskSubjectPhoto — the Ask→subject-photo targeting set (ADR-0009 Phase 3). The photos an Ask is
+// "about": a relative asks "tell the story of THIS photo" (one or more). Mirrors `story_families`'s
+// role — a targeting/relationship set, NOT expressive content — so it lives on the OPEN schema
+// (freely importable, NOT behind the /content guard). Composite PK (ask_id, photo_id) makes the same
+// photo attach to an Ask at most once; both FKs CASCADE so deleting the Ask (or a HARD photo-row
+// delete) clears the rows. Placed after `asks`/`familyPhotos` so both FKs resolve without a forward
+// reference.
+//
+// ADR-COMMENT (Phase 3 authz, deliberate): there is NO dedicated read-seam arm for ask photos this
+// slice. Their bytes rely on album-membership visibility (Arm 1 of `decideAlbumPhotoRead`): an Ask is
+// created within a shared ACTIVE family and every subject photo is one the asker can already see
+// (enforced by `assertPersonCanAccessAlbumPhoto` at createAsk), so a target co-member — who shares
+// that active family — can also see it via the album read model. If a future flow lets an asker
+// target a photo a co-member cannot otherwise see, add an accompaniment-style arm then.
+// ---------------------------------------------------------------------------
+
+export const askSubjectPhotos = pgTable(
+  "ask_subject_photos",
+  {
+    /**
+     * Monotonic global sequence — the DETERMINISTIC order key (mirrors proseRevisions.seq /
+     * consentRecords.seq). `added_at` is `defaultNow()`, which in Postgres is the TRANSACTION-START
+     * timestamp, so every row of a single bulk INSERT ties on it; ordering by `added_at` would then
+     * be unspecified. Slice B treats position 0 of `listAskSubjectPhotos` as the story's cover/subject
+     * photo, so a stable insertion-consistent order is load-bearing — hence this column, ordered asc.
+     */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    askId: uuid("ask_id")
+      .notNull()
+      .references(() => asks.id, { onDelete: "cascade" }),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    /** Audit timestamp (transaction-start; NOT a tiebreaker — see `seq`). */
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.askId, t.photoId] }),
+    index("ask_subject_photos_photo_idx").on(t.photoId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
 
@@ -1038,3 +1094,5 @@ export type StoryImage = typeof storyImages.$inferSelect;
 export type NewStoryImage = typeof storyImages.$inferInsert;
 export type StoryImageProvenance =
   (typeof storyImageProvenanceEnum.enumValues)[number];
+export type AskSubjectPhoto = typeof askSubjectPhotos.$inferSelect;
+export type NewAskSubjectPhoto = typeof askSubjectPhotos.$inferInsert;

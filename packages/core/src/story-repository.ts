@@ -48,6 +48,10 @@ import type {
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
+// The subject-photo cover insert routes through `attachPhotoToStoryTx`, which embeds the consolidated
+// `assertPersonCanAccessAlbumPhoto` gate (existence + soft-delete + owner-can-see) IN the creation tx —
+// so there is exactly ONE gate choke point, not a redundant second call here.
+import { attachPhotoToStoryTx } from "./story-image-repository";
 
 export interface RecordingInput {
   ownerPersonId: string;
@@ -69,6 +73,12 @@ export interface DraftStoryInput {
    * Absent for the in-hub account capture path, which carries no session family.
    */
   originatingFamilyId?: string;
+  /**
+   * The album photo this story is ABOUT (ADR-0009 Phase 3 "subject"). When set, the story is stamped
+   * with `subject_photo_id` AND the photo is atomically inserted as the story's FIRST `story_images`
+   * cover row — the owner must be able to SEE the photo (gate enforced in the same tx).
+   */
+  subjectPhotoId?: string;
 }
 
 export interface PersistedRecording {
@@ -86,6 +96,10 @@ export interface TextDraftInput {
   askId?: string;
   /** The originating family context (ADR-0010), if captured for a specific family. */
   originatingFamilyId?: string;
+  /**
+   * The album photo this text story is ABOUT (ADR-0009 Phase 3 "subject"). See `DraftStoryInput`.
+   */
+  subjectPhotoId?: string;
 }
 
 export interface CreatedTextDraft {
@@ -120,6 +134,7 @@ export async function createTextDraft(
         promptQuestion: input.promptQuestion ?? null,
         askId: input.askId ?? null,
         originatingFamilyId: input.originatingFamilyId ?? null,
+        subjectPhotoId: input.subjectPhotoId ?? null,
       })
       .returning();
 
@@ -131,6 +146,17 @@ export async function createTextDraft(
       promptText: null,
       actorPersonId: input.ownerPersonId,
     });
+
+    // ADR-0009 Phase 3: a subject photo is atomically the story's FIRST cover image. The gate inside
+    // `attachPhotoToStoryTx` (existence + soft-delete + owner-can-see) runs in THIS tx before any
+    // insert, so a story-from-a-photo the owner cannot see is rejected with NO story written.
+    if (input.subjectPhotoId !== undefined) {
+      await attachPhotoToStoryTx(tx, {
+        storyId: story!.id,
+        familyPhotoId: input.subjectPhotoId,
+        attachedByPersonId: input.ownerPersonId,
+      });
+    }
 
     return { story: story! };
   });
@@ -170,6 +196,7 @@ export async function persistRecordingAndCreateDraft(
         promptQuestion: draft.promptQuestion ?? null,
         askId: draft.askId ?? null,
         originatingFamilyId: draft.originatingFamilyId ?? null,
+        subjectPhotoId: draft.subjectPhotoId ?? null,
       })
       .returning();
 
@@ -181,6 +208,16 @@ export async function persistRecordingAndCreateDraft(
       position: 0,
       mediaId: rec!.id,
     });
+
+    // ADR-0009 Phase 3: a subject photo is atomically the story's FIRST cover image (same gate/tx
+    // discipline as `createTextDraft`). The owner is the attacher.
+    if (draft.subjectPhotoId !== undefined) {
+      await attachPhotoToStoryTx(tx, {
+        storyId: story!.id,
+        familyPhotoId: draft.subjectPhotoId,
+        attachedByPersonId: recording.ownerPersonId,
+      });
+    }
 
     return { recording: rec!, story: story! };
   });

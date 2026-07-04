@@ -21,6 +21,8 @@ import {
   appendFollowUpOutcome,
   latestUnresolvedDecision,
   listFollowUpDecisionsForStory,
+  listAskSubjectPhotos,
+  attachPhotoToStory,
 } from "@chronicle/core";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
@@ -87,6 +89,12 @@ type FollowUpStepRuntime = Pick<
 
 export type AnswerStatusActionResult = AnswerStatusResult | { error: string };
 
+/** Read an optional non-empty string field from FormData; returns `null` when absent/blank/non-string. */
+function formField(formData: FormData, key: string): string | null {
+  const v = formData.get(key);
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
 /**
  * Ask-answerability guard, shared by the voice (`recordAnswerAction`) and generalized
  * (`composeStoryAction`) paths. Confirms the ask exists, is targeted at THIS person, and is still
@@ -121,6 +129,61 @@ async function assertAnswerableAsk(
 }
 
 /**
+ * Resolve the story's SUBJECT photo (ADR-0009 Phase 3) for a new telling, plus any photos to carry
+ * forward as accompaniment. Two independent origins, ask-photos taking precedence:
+ *   - Answer→story carry-forward: when the answered ask HAS subject photos, the FIRST becomes the new
+ *     story's subject/cover and the REST are attached as accompaniment (this fn returns them so the
+ *     caller can attach after the story is created — the answerer is the ask target / co-member, so
+ *     the core album-access gate passes).
+ *   - Tell-a-photo: a self-initiated telling started from the album viewer carries a single
+ *     `subjectPhotoId` (the client hint). It is NOT trusted for identity — the core write gate
+ *     (`assertPersonCanAccessAlbumPhoto`, run inside ingest against the SERVER-resolved owner) is what
+ *     enforces the owner can actually see it; a crafted id for an unseeable photo makes ingest throw.
+ * `clientSubjectPhotoId` is ignored whenever the ask supplies photos (an answer isn't a tell-a-photo).
+ */
+async function resolveSubjectPhotos(
+  db: Awaited<ReturnType<typeof getRuntime>>["db"],
+  askId: string | null,
+  clientSubjectPhotoId: string | null,
+): Promise<{ subjectPhotoId?: string; carryForward: string[] }> {
+  if (askId) {
+    const askPhotos = await listAskSubjectPhotos(db, askId);
+    if (askPhotos.length > 0) {
+      return { subjectPhotoId: askPhotos[0], carryForward: askPhotos.slice(1) };
+    }
+  }
+  if (clientSubjectPhotoId) {
+    return { subjectPhotoId: clientSubjectPhotoId, carryForward: [] };
+  }
+  return { carryForward: [] };
+}
+
+/**
+ * Attach the carry-forward (non-subject) ask photos onto the freshly-created story as accompaniment.
+ * Best-effort per photo: the subject/cover is already durable (inserted atomically at story creation),
+ * so a hiccup attaching a secondary photo must never fail the answer. `attachedByPersonId` is the
+ * SERVER-resolved answerer (the ask target / co-member), whom the core album-access gate authorizes.
+ */
+async function attachCarryForwardPhotos(
+  db: Awaited<ReturnType<typeof getRuntime>>["db"],
+  storyId: string,
+  photoIds: string[],
+  answererPersonId: string,
+): Promise<void> {
+  for (const familyPhotoId of photoIds) {
+    try {
+      await attachPhotoToStory(db, { storyId, familyPhotoId, attachedByPersonId: answererPersonId });
+    } catch (err) {
+      plogError("answer", "carry-forward photo attach failed (non-fatal)", {
+        story: storyId,
+        photo: familyPhotoId,
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+    }
+  }
+}
+
+/**
  * Record a voice telling. When an `askId` is present, validates that the ask is targeted at the
  * signed-in person and is still answerable, then (flag ON) runs the follow-up mini-loop seeded by
  * the ask question. When `askId` is ABSENT it is a self-initiated voice telling (ADR-0007): there
@@ -152,6 +215,16 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
     askQuestionText = ask.questionText;
   }
 
+  // ADR-0009 Phase 3 subject/carry-forward. The client `subjectPhotoId` (tell-a-photo) is a hint
+  // only — the core write gate re-checks it against the server-resolved owner. Ask subject photos
+  // (carry-forward) take precedence and are read server-side from the ask.
+  const { subjectPhotoId, carryForward } = await resolveSubjectPhotos(
+    db,
+    askId,
+    formField(formData, "subjectPhotoId"),
+  );
+  const promptQuestion = formField(formData, "promptQuestion");
+
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (bytes.byteLength === 0) return { error: hub.actions.recordingEmpty };
 
@@ -169,6 +242,8 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
       actor: { kind: "account", personId: ctx.personId },
       audio: { bytes, contentType: audio.type || "audio/webm" },
       ...(askId ? { askId } : {}),
+      ...(subjectPhotoId ? { subjectPhotoId } : {}),
+      ...(promptQuestion ? { promptQuestion } : {}),
     });
     storyId = result.storyId;
   } catch (err) {
@@ -179,6 +254,10 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
     return { error: hub.actions.saveFailed };
   }
   plog("answer", "recordAnswer: ingested → draft story created", { story: storyId });
+
+  // Answer→story carry-forward: the remaining ask subject photos ride onto the story as accompaniment
+  // (the first already became the subject/cover inside ingest). Best-effort — never blocks the answer.
+  await attachCarryForwardPhotos(db, storyId, carryForward, ctx.personId);
 
   const policy = resolveFollowUpPolicyForRequest();
   // FLAG OFF, or a self-initiated telling with no ask question to seed the follow-up evaluator →
@@ -278,12 +357,22 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
       if ("error" in ask) return ask;
     }
 
+    // ADR-0009 Phase 3 subject/carry-forward — same rules as the voice path (see resolveSubjectPhotos).
+    const { subjectPhotoId, carryForward } = await resolveSubjectPhotos(
+      db,
+      askId,
+      formField(formData, "subjectPhotoId"),
+    );
+    const promptQuestion = formField(formData, "promptQuestion");
+
     let storyId: string;
     try {
       const res = await ingestTextStory(db, {
         actor: { kind: "account", personId: ctx.personId },
         text,
         ...(askId ? { askId } : {}),
+        ...(subjectPhotoId ? { subjectPhotoId } : {}),
+        ...(promptQuestion ? { promptQuestion } : {}),
       });
       storyId = res.storyId;
     } catch (err) {
@@ -294,6 +383,9 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
       return { error: hub.actions.saveFailed };
     }
     plog("answer", "composeStory(text): ingested → text draft created", { story: storyId });
+
+    // Carry-forward accompaniment (best-effort; the subject/cover is already durable). See voice path.
+    await attachCarryForwardPhotos(db, storyId, carryForward, ctx.personId);
 
     // Render BEFORE review (prose-provenance): a text story routes straight to render_story, so this
     // one dispatch reaches pending_approval in dev/CI (enqueues in prod). No follow-up loop.

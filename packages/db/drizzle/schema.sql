@@ -30,6 +30,14 @@ CREATE TABLE "accounts" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "ask_subject_photos" (
+	"seq" bigserial NOT NULL,
+	"ask_id" uuid NOT NULL,
+	"photo_id" uuid NOT NULL,
+	"added_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ask_subject_photos_ask_id_photo_id_pk" PRIMARY KEY("ask_id","photo_id")
+);
+
 CREATE TABLE "asks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"asker_person_id" uuid NOT NULL,
@@ -233,6 +241,7 @@ CREATE TABLE "stories" (
 	"prompt_question" text,
 	"ask_id" uuid,
 	"originating_family_id" uuid,
+	"subject_photo_id" uuid,
 	"approved_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -277,6 +286,8 @@ CREATE TABLE "story_views" (
 	"first_viewed_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN KEY ("asker_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
@@ -314,6 +325,7 @@ ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_recording_id
 ALTER TABLE "stories" ADD CONSTRAINT "stories_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "stories" ADD CONSTRAINT "stories_originating_family_id_families_id_fk" FOREIGN KEY ("originating_family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "stories" ADD CONSTRAINT "stories_subject_photo_id_family_photos_id_fk" FOREIGN KEY ("subject_photo_id") REFERENCES "public"."family_photos"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_images" ADD CONSTRAINT "story_images_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
@@ -324,6 +336,7 @@ ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_media_id_media_i
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
+CREATE INDEX "ask_subject_photos_photo_idx" ON "ask_subject_photos" USING btree ("photo_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
