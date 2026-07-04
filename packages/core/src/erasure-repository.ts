@@ -17,6 +17,7 @@
  */
 import { eq, inArray, sql } from "drizzle-orm";
 import {
+  familyPhotoFamilies,
   media,
   proseRevisions,
   stories,
@@ -24,10 +25,13 @@ import {
   storyRecordings,
 } from "@chronicle/db/content";
 import {
+  asks,
+  askSubjectPhotos,
   consentRecords,
   erasureAudit,
   families,
   storyFamilies,
+  voiceCaptions,
 } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { viewerPersonId, type AuthContext } from "./authorization";
@@ -186,6 +190,128 @@ export async function eraseStory(
       reason: decision.reason,
     });
 
+    return keys;
+  });
+
+  return { allowed: true, storageKeys };
+}
+
+/**
+ * Erase an Ask (ADR-0008). An Ask is owned by its asker (right-to-erasure) and moderatable by the
+ * steward of its `family_id` (nullable — an unaddressed Ask has no steward, so only the asker may
+ * erase). Unlike a story, an Ask has NO consent ledger, so NO cascade token is needed: once the
+ * parent `asks` row is gone, the existence-scoped media guard permits deleting its question audio.
+ * So delete the parent row FIRST, then its (voice-origin only) recording media, in one transaction.
+ * `ask_subject_photos` cascades on the ask delete (FK ON DELETE CASCADE); we clear it explicitly
+ * first for clarity. The produced answer (`asks.story_id`, if any) is a SEPARATE item — untouched.
+ */
+export async function eraseAsk(
+  db: Database,
+  ctx: AuthContext,
+  input: { askId: string },
+): Promise<EraseResult> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return { allowed: false, reason: "anonymous cannot erase content" };
+
+  const [ask] = await db
+    .select({
+      id: asks.id,
+      askerPersonId: asks.askerPersonId,
+      familyId: asks.familyId,
+      recordingMediaId: asks.recordingMediaId,
+    })
+    .from(asks)
+    .where(eq(asks.id, input.askId))
+    .limit(1);
+  if (!ask) return { allowed: false, reason: `ask ${input.askId} not found` };
+
+  // The steward of the Ask's family (if addressed to one) may moderate-delete it.
+  const stewardIds: (string | null)[] = [];
+  if (ask.familyId) {
+    const [fam] = await db
+      .select({ stewardPersonId: families.stewardPersonId })
+      .from(families)
+      .where(eq(families.id, ask.familyId))
+      .limit(1);
+    if (fam) stewardIds.push(fam.stewardPersonId);
+  }
+  const decision = decideManage(viewer, ask.askerPersonId, stewardIds);
+  if (!decision.allowed) return { allowed: false, reason: decision.reason };
+
+  const storageKeys = await db.transaction(async (tx) => {
+    // Voice-origin only: `recordingMediaId` is set iff the question was recorded.
+    const keys = ask.recordingMediaId ? await resolveStorageKeys(tx, [ask.recordingMediaId]) : [];
+    // Parent row FIRST (there is no consent lock), then its now-orphan audio.
+    await tx.delete(askSubjectPhotos).where(eq(askSubjectPhotos.askId, input.askId));
+    await tx.delete(asks).where(eq(asks.id, input.askId));
+    if (ask.recordingMediaId) {
+      await tx.delete(media).where(eq(media.id, ask.recordingMediaId));
+    }
+    await insertErasureAudit(tx, {
+      itemType: "ask",
+      itemId: input.askId,
+      ownerPersonId: ask.askerPersonId,
+      actorPersonId: viewer,
+      reason: decision.reason,
+    });
+    return keys;
+  });
+
+  return { allowed: true, storageKeys };
+}
+
+/**
+ * Erase a voice caption (ADR-0008). A voice caption is owned by `voiceCaptions.ownerPersonId`
+ * (right-to-erasure) and moderatable by the steward of ANY family the underlying photo is placed in
+ * (`family_photo_families ⋈ families.steward_person_id`). Like an Ask, a voice caption has NO consent
+ * ledger, so NO cascade token is needed: delete the parent `voice_captions` row FIRST, then its
+ * un-detachable `caption_audio` media (always present — `mediaId` is NOT NULL), in one transaction.
+ */
+export async function eraseVoiceCaption(
+  db: Database,
+  ctx: AuthContext,
+  input: { voiceCaptionId: string },
+): Promise<EraseResult> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return { allowed: false, reason: "anonymous cannot erase content" };
+
+  const [vc] = await db
+    .select({
+      id: voiceCaptions.id,
+      photoId: voiceCaptions.photoId,
+      mediaId: voiceCaptions.mediaId,
+      ownerPersonId: voiceCaptions.ownerPersonId,
+    })
+    .from(voiceCaptions)
+    .where(eq(voiceCaptions.id, input.voiceCaptionId))
+    .limit(1);
+  if (!vc) return { allowed: false, reason: `voice caption ${input.voiceCaptionId} not found` };
+
+  // The steward of any family the underlying photo is placed in may moderate-delete the caption.
+  const stewardRows = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(familyPhotoFamilies)
+    .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
+    .where(eq(familyPhotoFamilies.photoId, vc.photoId));
+  const decision = decideManage(
+    viewer,
+    vc.ownerPersonId,
+    stewardRows.map((r) => r.stewardPersonId),
+  );
+  if (!decision.allowed) return { allowed: false, reason: decision.reason };
+
+  const storageKeys = await db.transaction(async (tx) => {
+    const keys = await resolveStorageKeys(tx, [vc.mediaId]);
+    // Parent row FIRST (no consent lock), then its now-orphan caption audio.
+    await tx.delete(voiceCaptions).where(eq(voiceCaptions.id, input.voiceCaptionId));
+    await tx.delete(media).where(eq(media.id, vc.mediaId));
+    await insertErasureAudit(tx, {
+      itemType: "voice_caption",
+      itemId: input.voiceCaptionId,
+      ownerPersonId: vc.ownerPersonId,
+      actorPersonId: viewer,
+      reason: decision.reason,
+    });
     return keys;
   });
 

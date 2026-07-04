@@ -20,6 +20,7 @@ export {
   persons,
   storyFamilies,
   storyViews,
+  voiceCaptions,
   // enum objects (exposed for enumValues / typed inserts if a consumer wants them)
   askStatusEnum,
   audienceTierEnum,
