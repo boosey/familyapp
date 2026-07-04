@@ -68,6 +68,8 @@ export {
   getNarratorProfile,
   getNarratorBiographicalContext,
 } from "./narrator-profile";
+export { eraseStory } from "./erasure-repository";
+export type { EraseResult } from "./erasure-repository";
 export { AuthorizationError, InvariantViolation } from "./errors";
 export {
   createAsk,

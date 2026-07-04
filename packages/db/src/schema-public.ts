@@ -8,6 +8,7 @@ export {
   asks,
   askSubjectPhotos,
   consentRecords,
+  erasureAudit,
   followUpDecisions,
   intakeAnswers,
   linkSessions,
