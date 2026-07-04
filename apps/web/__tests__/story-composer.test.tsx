@@ -18,10 +18,16 @@ vi.mock("next/navigation", () => ({
 
 const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
 
+// ADR-0014 Inc 3: the compose front door now resolves to the per-take `appended` step (typed take
+// concatenated onto the draft's working prose). The client seeds the prose + refreshes; it never polls.
 const composeStoryAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ kind: "ready"; storyId: string }> => ({
-    kind: "ready",
+  async (
+    ..._args: unknown[]
+  ): Promise<{ kind: "appended"; storyId: string; prose: string; appendedSegment: string }> => ({
+    kind: "appended",
     storyId: STORY_ID,
+    prose: "The summer we drove to the coast.",
+    appendedSegment: "The summer we drove to the coast.",
   }),
 );
 const getAnswerStatusAction = vi.fn(
@@ -68,6 +74,21 @@ describe("StoryComposer capture (tell mode)", () => {
     expect(form.get("text")).toBe("The summer we drove to the coast.");
     // Self-initiated telling → no askId is attached.
     expect(form.get("askId")).toBeNull();
+  });
+
+  it("an appended text submit refreshes once and never polls the status", async () => {
+    render(<StoryComposer mode="tell" ask={null} draft={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /type it/i }));
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "The summer we drove to the coast." } });
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    // The action resolves to `appended` → the client seeds the prose and refreshes once. It must NOT
+    // poll getAnswerStatusAction (an appended draft stays `draft`) and must never show "taking longer".
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(getAnswerStatusAction).not.toHaveBeenCalled();
+    expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
 });
 

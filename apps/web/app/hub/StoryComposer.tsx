@@ -35,6 +35,7 @@ import {
   type ThreadStep,
 } from "./answer/[askId]/actions";
 import { pollUntilReady } from "@/lib/poll-status";
+import { useProseHistory } from "@/lib/use-prose-history";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { FollowUpPrompt } from "./answer/[askId]/FollowUpPrompt";
 
@@ -127,6 +128,24 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
   const [finishing, setFinishing] = useState(false);
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
 
+  // ── Lifted prose history ──────────────────────────────────────────────────────
+  // The undo/redo history is owned HERE (not inside KindredProseEditor) so an append can seed the
+  // composing prose as one undoable step via `history.replace` — an event the editor doesn't emit.
+  // Called unconditionally at the top level (before the early phase returns) to satisfy the rules of
+  // hooks. resetKey is `draft?.storyId` DELIBERATELY (NOT `activeStoryId ?? draft?.storyId`): within a
+  // single StoryComposer mount `draft?.storyId` is constant (undefined throughout capture, or the
+  // storyId throughout review — the page remounts at the capture→review boundary via
+  // `key={draft?.storyId ?? "record"}`), so it never churns intra-mount. Using `activeStoryId` would
+  // churn undefined→storyId on the FIRST append (setActiveStoryId + history.replace fire in the same
+  // handler), re-baselining the stack and silently wiping the undo step replace() just seeded — even
+  // though it is the SAME in-progress document, not a new one. The hook-level regression in
+  // use-prose-history.test.tsx pins exactly this hazard.
+  // Slice 10 forward note: once the composing editor is always-mounted across appends (no page remount
+  // at the boundary), `resetKey=draft?.storyId` will STILL collapse at capture→review, and the fresh
+  // `history` object identity each render makes handleStep/uploadRecording a live stale-closure risk —
+  // the resetKey/handoff model needs rework then.
+  const history = useProseHistory(proseDraft, setProseDraft, draft?.storyId);
+
   // Revoke the object URL when localTake changes or the component unmounts (the remount into
   // review-ready unmounts this instance), so we don't leak blob URLs. Also abort any in-flight poll.
   useEffect(() => {
@@ -170,6 +189,25 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
         router.push(backTab);
         return;
       }
+      if (step.kind === "appended") {
+        // ADR-0014 per-take APPEND: the take was transcribed/cleaned (or typed) and concatenated onto
+        // the draft's working prose synchronously — the server returned the new full prose. Seed it as
+        // ONE undoable history step (which survives across further appends WITHIN this capture mount,
+        // since the resetKey `draft?.storyId` is stable here; it re-seeds from `draft.prose` when the
+        // page remounts into review — expected) and clear the in-flight pending screen. The draft STAYS
+        // `draft`, so there is NOTHING to poll (an appended story never reaches `pending_approval` on
+        // its own — that is Finish, a later slice). Reaching the `ready` poll below would map
+        // draft→processing and falsely show "taking longer" after every capture — the bug this fixes.
+        setActiveStoryId(step.storyId);
+        history.replace(step.prose);
+        setLocalTake(null);
+        setPendingError(null);
+        // Forward-correct: once the routing/phase-collapse slices land, refresh surfaces the
+        // draft-state composing surface. Today it returns to the capture phase (the draft-state page
+        // isn't wired yet) — expected; this slice is not user-reachable end-to-end.
+        router.refresh();
+        return;
+      }
       // step.kind === "ready" — thread complete + stitched. The story may still be rendering
       // out-of-band (prod durable queue) or be ready already (dev/CI synchronous dispatch). Poll the
       // viewer-scoped status, keeping the optimistic local-audio "Polishing…" screen up meanwhile. On
@@ -193,7 +231,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       }
       // "aborted" → the component unmounted; do nothing.
     },
-    [router, backTab],
+    [router, backTab, history],
   );
 
   // ── Capture phase handlers ──────────────────────────────────────────────────
@@ -213,6 +251,10 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
       let result: ThreadStep;
       if (followUp && activeStoryId) {
         form.append("storyId", activeStoryId);
+        // §6 step 4/5: every append posts the client's CURRENT editor text so the server concatenates
+        // onto it (non-clobbering of in-flight hand-edits) instead of a fresh DB read of stories.prose.
+        // (Inert until the server reads it in a later slice — forward-plumbed per the product decision.)
+        form.append("prose", proseDraft);
         result = await recordFollowUpTakeAction(form);
       } else {
         if (ask) form.append("askId", ask.id);
@@ -222,7 +264,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
     } catch {
       setPendingError(hub.answer.genericError);
     }
-  }, [ask, followUp, activeStoryId, handleStep]);
+  }, [ask, followUp, activeStoryId, proseDraft, handleStep]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -578,7 +620,7 @@ export function StoryComposer({ mode, ask = null, draft }: StoryComposerProps) {
             value={proseDraft}
             onChange={setProseDraft}
             disabled={isRemoving}
-            historyKey={draft.storyId}
+            history={history}
             labels={common.proseEditor}
             onPolish={async (text) => {
               const form = new FormData();

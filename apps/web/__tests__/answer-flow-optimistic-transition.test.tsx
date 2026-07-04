@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 /**
  * Integration test: stopping a recording immediately shows the review-pending screen (audio +
- * "Polishing your words…" spinner, editor hidden) while recordAnswerAction is still in flight.
+ * "Polishing your words…" spinner, editor hidden) while the capture action is still in flight.
  * Mocks the browser media stack (getUserMedia, MediaRecorder, object URLs) and the server action.
+ *
+ * ADR-0014 Inc 3 (Slice 5): the flag-off voice capture now resolves to the per-take `appended` step
+ * (the take was transcribed/cleaned and concatenated onto the draft's working prose synchronously).
+ * An `appended` step must NOT poll `getAnswerStatusAction` — an appended story stays `draft`, so a
+ * poll would map to `processing` forever and falsely surface "taking longer". It refreshes once.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -20,15 +25,22 @@ const ASK = {
   askerName: "Sam",
 };
 
+type AppendedStep = {
+  kind: "appended";
+  storyId: string;
+  prose: string;
+  appendedSegment: string;
+};
+
 // A controllable compose action (the initial-capture front door): resolves only when we call
 // `resolveRecord`, so the test can assert the pending screen WHILE the action is still awaiting.
-let resolveRecord: (v: { storyId: string } | { error: string }) => void;
+let resolveRecord: (v: AppendedStep | { error: string }) => void;
 const composeStoryAction = vi.fn(
   (..._args: unknown[]) =>
-    new Promise<{ storyId: string } | { error: string }>((res) => (resolveRecord = res)),
+    new Promise<AppendedStep | { error: string }>((res) => (resolveRecord = res)),
 );
-// Status poll: defaults to "ready" on the first probe (the dev/CI synchronous-dispatch case).
-// Individual tests can override the queued return values.
+// The status poll must NEVER be called on the append path. It stays mocked (StoryComposer imports it
+// for the still-live flag-on `ready` path) so any accidental call is observable, not a crash.
 const getAnswerStatusAction = vi.fn(
   async (
     ..._args: unknown[]
@@ -105,20 +117,23 @@ describe("StoryComposer optimistic transition", () => {
     const audio = document.querySelector("audio");
     expect(audio?.getAttribute("src")).toBe("blob:local-take");
 
-    // On success the action returns a storyId; the status poll returns `ready` (dev/CI synchronous
-    // dispatch) and the client refreshes (the keyed remount to review-ready is covered elsewhere).
-    resolveRecord({ storyId: STORY_ID });
+    // On success the action resolves to an `appended` step. The client seeds the prose and refreshes
+    // once — it does NOT poll the status (an appended draft stays `draft`; there is nothing to await).
+    resolveRecord({
+      kind: "appended",
+      storyId: STORY_ID,
+      prose: "The polished words so far.",
+      appendedSegment: "The polished words so far.",
+    });
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-    expect(getAnswerStatusAction).toHaveBeenCalledWith(STORY_ID);
+    expect(getAnswerStatusAction).not.toHaveBeenCalled();
+    expect(screen.queryByText(/taking longer/i)).toBeNull();
   });
 
-  it("keeps the processing screen until the status poll reports ready, then transitions", async () => {
-    // Story is still rendering: first probe returns processing, the next returns ready (the prod
-    // durable-queue path — exercised without Inngest via the mocked status poll).
-    getAnswerStatusAction
-      .mockResolvedValueOnce({ status: "processing", storyId: STORY_ID })
-      .mockResolvedValueOnce({ status: "ready", storyId: STORY_ID });
-
+  it("never polls the status after an appended step (deploy-safety regression guard)", async () => {
+    // The bug this guards: before Slice 5, an `appended` step fell through to the `ready` poll, which
+    // maps a still-`draft` story to `processing` until the soft cap → a false "taking longer" after
+    // EVERY successful capture. This asserts the poll is never even entered.
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     clickVoiceIdle();
@@ -126,15 +141,19 @@ describe("StoryComposer optimistic transition", () => {
     clickVoiceListening();
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
-    resolveRecord({ storyId: STORY_ID });
+    resolveRecord({
+      kind: "appended",
+      storyId: STORY_ID,
+      prose: "A first take.",
+      appendedSegment: "A first take.",
+    });
 
-    // While processing, the polishing screen stays up and no refresh fires yet.
-    await waitFor(() => expect(getAnswerStatusAction).toHaveBeenCalled());
-    expect(screen.getByText(/Polishing your words/)).toBeTruthy();
-
-    // The second probe (after the ~2.5s poll interval) returns ready → refresh into review.
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce(), { timeout: 8000 });
-  }, 12000);
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    // Give any (buggy) poll a chance to fire before asserting it never did.
+    await Promise.resolve();
+    expect(getAnswerStatusAction).not.toHaveBeenCalled();
+    expect(screen.queryByText(/taking longer/i)).toBeNull();
+  });
 
   it("surfaces a render failure on the pending screen and returns to record on retry", async () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
@@ -145,7 +164,8 @@ describe("StoryComposer optimistic transition", () => {
     clickVoiceListening();
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
-    // Render fails: the error lands on the pending screen (no refresh, no remount).
+    // Render fails: the error lands on the pending screen (no refresh, no remount). The `{ error }`
+    // path is unchanged by the append contract.
     resolveRecord({ error: "Could not save your recording. Please try again." });
     await waitFor(() =>
       expect(screen.getByText(/Could not save your recording/)).toBeTruthy(),

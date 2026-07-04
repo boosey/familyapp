@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
-import { useProseHistory } from "@/lib/use-prose-history";
+import { useProseHistory, type ProseHistory } from "@/lib/use-prose-history";
 
 /**
  * Multiline prose editor in Kindred chrome. Prefilled with the AI-polished prose (L2); the narrator
@@ -41,6 +41,13 @@ export interface KindredProseEditorProps {
   onPolish?: (text: string) => Promise<string>;
   /** Change this to re-baseline undo/redo history (e.g. a different draft mounts into this editor). */
   historyKey?: string;
+  /**
+   * Lifted undo/redo history. When the parent owns the history (so it can `.replace` the prose on a
+   * take-append — an event this editor doesn't emit), it passes its own `useProseHistory` instance
+   * here. Absent → the editor manages its own history internally (the standalone default). The
+   * injected instance must be built from the SAME `value`/`onChange` this editor receives.
+   */
+  history?: ProseHistory;
   /** Copy overrides; English defaults are baked in. */
   labels?: Partial<KindredProseEditorLabels>;
 }
@@ -51,6 +58,7 @@ export function KindredProseEditor({
   disabled,
   onPolish,
   historyKey,
+  history: injectedHistory,
   labels,
 }: KindredProseEditorProps) {
   const [focused, setFocused] = useState(false);
@@ -58,7 +66,10 @@ export function KindredProseEditor({
   const [polishError, setPolishError] = useState(false);
   const l = { ...DEFAULT_LABELS, ...labels };
 
-  const history = useProseHistory(value, onChange, historyKey);
+  // Always create an own instance (rules-of-hooks: the call must be unconditional). When the parent
+  // injects one, the own instance is inert — the injected history is the single source of truth.
+  const ownHistory = useProseHistory(value, onChange, historyKey);
+  const history = injectedHistory ?? ownHistory;
 
   const runPolish = useCallback(async () => {
     if (!onPolish || polishing || disabled) return;

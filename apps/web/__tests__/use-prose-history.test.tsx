@@ -105,4 +105,34 @@ describe("useProseHistory", () => {
     // History is re-baselined to the current value → nothing to undo.
     expect(canUndo()).toBe("false");
   });
+
+  // These two pin the hazard the StoryComposer lifted-history fix relies on: a resetKey that CHURNS
+  // across a replace() silently wipes the seeded undo step, whereas a STABLE resetKey preserves it.
+  // (This is the honest guard — a StoryComposer-level assertion isn't observable pre-Slice-10, since
+  // no editor is mounted during capture; the append seeds history into an unmounted editor.)
+  it("a CHURNING resetKey across a replace collapses the stack (wipes the seeded step) — the hazard", () => {
+    const { rerender } = render(<Harness initial="a" resetKey="k1" />);
+    click("replace"); // stack: ["a", "POLISHED"], value "POLISHED"
+    expect(val()).toBe("POLISHED");
+    expect(canUndo()).toBe("true"); // the replace is undoable...
+
+    // ...until the resetKey churns to a different value. The re-baseline effect fires and collapses
+    // the stack to just the current value → the undo step replace() built is silently gone. THIS is
+    // why StoryComposer keys on the stable `draft?.storyId`, NOT the churning `activeStoryId`.
+    rerender(<Harness initial="a" resetKey="k2" />);
+    expect(val()).toBe("POLISHED"); // the text survives (value lives in the parent)...
+    expect(canUndo()).toBe("false"); // ...but the undo history was wiped.
+  });
+
+  it("a STABLE resetKey across a replace PRESERVES the seeded undo step — what the fix relies on", () => {
+    const { rerender } = render(<Harness initial="a" resetKey="k1" />);
+    click("replace");
+    expect(canUndo()).toBe("true");
+
+    // Same resetKey on the next render → the re-baseline effect early-returns; the stack is intact.
+    rerender(<Harness initial="a" resetKey="k1" />);
+    expect(canUndo()).toBe("true");
+    click("undo");
+    expect(val()).toBe("a"); // the seeded step is still walkable back to the original
+  });
 });
