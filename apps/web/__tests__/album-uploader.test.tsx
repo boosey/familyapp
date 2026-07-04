@@ -17,9 +17,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 const uploadAlbumPhotoAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ ok: true; photoId: string }> => ({
+  async (..._args: unknown[]): Promise<{ ok: true; added: number; failed: number }> => ({
     ok: true,
-    photoId: "photo-1",
+    added: 1,
+    failed: 0,
   }),
 );
 vi.mock("@/app/hub/album/actions", () => ({
@@ -66,6 +67,94 @@ describe("AlbumUploader multi-family picker", () => {
     const a = screen.getByLabelText(FAM_A.familyName) as HTMLInputElement;
     fireEvent.click(a);
     expect(submit.disabled).toBe(true);
+  });
+
+  // #16 multi-select: the file input carries `multiple` so the OS picker allows many files.
+  it("marks the file input as multiple (OS multi-select picker)", () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    expect(fileInput.multiple).toBe(true);
+  });
+
+  // #16 multi-select: selecting several files and submitting sends ALL of them to the action as
+  // repeated `photo` FormData entries (each becomes its own album photo, same chosen album[s]).
+  it("submits every selected file as a separate `photo` entry", async () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1, 2, 3])], "p1.png", { type: "image/png" });
+    const f2 = new File([new Uint8Array([4, 5, 6])], "p2.png", { type: "image/png" });
+    const f3 = new File([new Uint8Array([7, 8, 9])], "p3.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1, f2, f3] } });
+
+    // Submit the form directly (jsdom does not synthesize a submit event from a button click).
+    fireEvent.submit(fileInput.closest("form")!);
+
+    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
+    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
+    const photos = formData.getAll("photo");
+    expect(photos).toHaveLength(3);
+    expect((photos[0] as File).name).toBe("p1.png");
+    expect((photos[2] as File).name).toBe("p3.png");
+  });
+
+  // A partial-success batch (some files failed) surfaces a gentle status note, NOT an error alert.
+  it("shows a soft note (not an error) after a partial-success batch", async () => {
+    uploadAlbumPhotoAction.mockResolvedValueOnce({ ok: true, added: 2, failed: 1 });
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1] } });
+    fireEvent.submit(fileInput.closest("form")!);
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(/couldn't be added/i),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // Regression (review finding): the action can REJECT (e.g. the request body exceeds the Server
+  // Action / platform size limit) rather than return an { error } shape. That rejection must surface a
+  // clear message, not be swallowed by the transition so the upload silently does nothing.
+  it("surfaces an error when the upload action throws (does not fail silently)", async () => {
+    uploadAlbumPhotoAction.mockRejectedValueOnce(new Error("Body exceeded 1 MB limit"));
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1] } });
+    fireEvent.submit(fileInput.closest("form")!);
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/too large/i),
+    );
+    expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression (review finding): a batch over the per-batch cap is rejected client-side with a
+  // friendly message and never spends an upload (the server enforces the same cap authoritatively).
+  it("rejects an over-cap batch client-side without calling the action", async () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const tooMany = Array.from(
+      { length: 31 },
+      (_, i) => new File([new Uint8Array([i])], `p${i}.png`, { type: "image/png" }),
+    );
+    fireEvent.change(fileInput, { target: { files: tooMany } });
+    fireEvent.submit(fileInput.closest("form")!);
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/too many/i),
+    );
+    expect(uploadAlbumPhotoAction).not.toHaveBeenCalled();
   });
 
   // Regression: the family switcher is a same-route soft navigation, so this client component is

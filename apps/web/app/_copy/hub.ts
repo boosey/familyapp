@@ -244,6 +244,7 @@ export const hub = {
     noAlbumChosen: "Choose at least one album for this photo.",
     photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
+    tooManyPhotos: "That's too many photos at once. Please add up to 30 at a time.",
     captionTooLong: "That caption is too long. Please shorten it.",
     notAllowedToManagePhoto: "You can't change this photo.",
   },
@@ -253,8 +254,20 @@ export const hub = {
     backToAlbum: "← Back to album",
     title: "Family album",
     empty: "No photos yet. Add the first one below.",
+    // "Add a photo" reads singular but the input accepts many at once (#16 multi-select) — the OS
+    // picker copy already signals multi-select, so the label stays warm and simple.
     addLabel: "Add a photo",
     addButton: "Add to album",
+    // Multi-upload batch summary: some files landed, some didn't. Shown as a gentle inline note (not
+    // an error) after a partial-success batch, so the contributor knows exactly what got through.
+    photosPartial: (added: number, failed: number) =>
+      `Added ${added} ${added === 1 ? "photo" : "photos"}. ${failed} ${
+        failed === 1 ? "photo" : "photos"
+      } couldn't be added — you can try those again.`,
+    // Shown when the upload never completes (the request threw — most often the photos were too large
+    // for one request, or the connection dropped). Distinct from a per-file failure inside a batch.
+    uploadError:
+      "Couldn't add those photos. They may be too large — try adding fewer, or smaller, photos.",
     chooseAlbums: "Which albums?",
     switcherAria: "Choose which family album to view",
     photoAlt: (caption: string | null) => caption ?? "Family photo",
@@ -270,6 +283,14 @@ export const hub = {
       caption ? `Manage “${caption}”` : "Manage photo",
     captionSaveError: "Couldn't save that caption. Please try again.",
     photoDeleteError: "Couldn't remove that photo. Please try again.",
+    // Photo viewer (#18): tapping a tile opens a larger view that HOSTS the per-photo options
+    // (edit caption, delete). The tile itself is the trigger; its label names what opens.
+    viewPhoto: (caption: string | null) =>
+      caption ? `View “${caption}”` : "View photo",
+    // Dialog accessible name + its close control.
+    viewerAria: (caption: string | null) =>
+      caption ? `Photo: ${caption}` : "Photo",
+    closeViewer: "Close",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.
