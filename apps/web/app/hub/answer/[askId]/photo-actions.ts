@@ -24,7 +24,9 @@ import {
   reorderStoryImages,
   type AuthContext,
 } from "@chronicle/core";
-import type { Database } from "@chronicle/db";
+import type { Database, Story } from "@chronicle/db";
+import { rankPhotosForStory, pickPhotoNudge } from "@chronicle/pipeline";
+import type { PhotoCandidate, StorySignals } from "@chronicle/pipeline";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 
@@ -44,7 +46,14 @@ export interface EditorAlbumPhoto {
 }
 
 export type StoryPhotoEditorData =
-  | { ok: true; attached: EditorStoryImage[]; album: EditorAlbumPhoto[] }
+  | {
+      ok: true;
+      attached: EditorStoryImage[];
+      album: EditorAlbumPhoto[];
+      // ADR-0009 Phase 4 · Slice B — a caption-driven "add this photo?" suggestion, or null when no
+      // candidate's caption overlaps the story text (the common case; the picker just looks normal).
+      nudge: { photoId: string; caption: string | null } | null;
+    }
   | { error: string };
 
 export type StoryPhotoActionResult = { ok: true } | { error: string };
@@ -58,7 +67,7 @@ export type StoryPhotoActionResult = { ok: true } | { error: string };
 async function requireDraftOwner(
   storyId: string,
 ): Promise<
-  | { db: Database; ctx: AuthContext; personId: string }
+  | { db: Database; ctx: AuthContext; personId: string; story: Story }
   | { error: string }
 > {
   const { db, auth } = await getRuntime();
@@ -70,7 +79,7 @@ async function requireDraftOwner(
   if (!story || story.ownerPersonId !== ctx.personId) {
     return { error: hub.actions.storyNotFound };
   }
-  return { db, ctx, personId: ctx.personId };
+  return { db, ctx, personId: ctx.personId, story };
 }
 
 /**
@@ -83,7 +92,7 @@ export async function loadStoryPhotoEditorAction(
 ): Promise<StoryPhotoEditorData> {
   const gate = await requireDraftOwner(storyId);
   if ("error" in gate) return gate;
-  const { db, ctx, personId } = gate;
+  const { db, ctx, personId, story } = gate;
 
   try {
     const images = await listStoryImages(db, storyId);
@@ -100,20 +109,45 @@ export async function loadStoryPhotoEditorAction(
     const attachedPhotoIds = new Set(attached.map((a) => a.familyPhotoId));
 
     // The owner's whole album pool (every family they are an active member of), deduped by photo id
-    // (a photo shared into two families appears once), minus what's already on the story.
+    // (a photo shared into two families appears once), minus what's already on the story. This pool
+    // is already authorized by `listAlbumPhotos` (active membership gated); the ranker below only
+    // RE-ORDERS it — it opens no new read path and never widens the candidate set.
     const families = await listActiveFamiliesForPerson(db, personId);
     const seen = new Set<string>();
-    const album: EditorAlbumPhoto[] = [];
+    const candidates: PhotoCandidate[] = [];
     for (const fam of families) {
       const photos = await listAlbumPhotos(db, ctx, fam.familyId);
       for (const p of photos) {
         if (seen.has(p.id) || attachedPhotoIds.has(p.id)) continue;
         seen.add(p.id);
-        album.push({ photoId: p.id, caption: p.caption });
+        // `exifCapturedAt` is used ONLY here, server-side, by the ranker — it never rides to the
+        // client (the emitted `EditorAlbumPhoto` carries only photoId + caption).
+        candidates.push({ id: p.id, caption: p.caption, exifCapturedAt: p.exifCapturedAt });
       }
     }
 
-    return { ok: true, attached, album };
+    // Silent, deterministic ranking (ADR-0009 Phase 4 · Slice A): caption-overlap ∪ era-year
+    // proximity. Usually there is no signal (eraYear/exif null) → recency order is preserved, so the
+    // picker looks exactly as it did before and `nudge` is null.
+    const signals: StorySignals = {
+      text: [
+        story.title,
+        story.prose,
+        story.transcript,
+        story.summary,
+        (story.tags ?? []).join(" "),
+        story.promptQuestion,
+        story.eraLabel,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      eraYear: story.eraYear,
+    };
+    const ranked = rankPhotosForStory(signals, candidates);
+    const album: EditorAlbumPhoto[] = ranked.map((r) => ({ photoId: r.id, caption: r.caption }));
+    const nudge = pickPhotoNudge(ranked);
+
+    return { ok: true, attached, album, nudge };
   } catch {
     return { error: hub.storyImages.loadError };
   }

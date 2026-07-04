@@ -24,9 +24,13 @@ import {
   type EditorAlbumPhoto,
 } from "./answer/[askId]/photo-actions";
 
+type Nudge = { photoId: string; caption: string | null };
+
 export function StoryPhotosEditor({ storyId }: { storyId: string }) {
   const [attached, setAttached] = useState<EditorStoryImage[]>([]);
   const [album, setAlbum] = useState<EditorAlbumPhoto[]>([]);
+  const [nudge, setNudge] = useState<Nudge | null>(null);
+  const [dismissedNudge, setDismissedNudge] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -40,6 +44,7 @@ export function StoryPhotosEditor({ storyId }: { storyId: string }) {
     setError(null);
     setAttached(res.attached);
     setAlbum(res.album);
+    setNudge(res.nudge);
   }, [storyId]);
 
   useEffect(() => {
@@ -173,6 +178,37 @@ export function StoryPhotosEditor({ storyId }: { storyId: string }) {
         </div>
       ) : null}
 
+      {/* Caption-driven "add this photo?" nudge (ADR-0009 Phase 4 · Slice B). Shown only on a real
+          caption match, only while the suggested photo is still unattached (guarded defensively —
+          the candidate pool is already unattached), and until the owner dismisses it. Attaching
+          reuses the SAME `attach` server action as the manual picker below. */}
+      {nudge && !dismissedNudge && !attached.some((a) => a.familyPhotoId === nudge.photoId) ? (
+        <div role="note" aria-label={hub.compose.photoNudgeAria} style={nudgeBanner}>
+          <img
+            src={`/api/album-photo/${nudge.photoId}`}
+            alt={hub.storyImages.imageAlt(nudge.caption)}
+            style={nudgeThumb}
+          />
+          <p style={nudgeText}>{hub.compose.photoNudge(nudge.caption)}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <KindredButton
+              label={hub.compose.photoNudgeAdd}
+              variant="primary"
+              size="small"
+              disabled={pending}
+              onClick={() => attach(nudge.photoId)}
+            />
+            <KindredButton
+              label={hub.compose.photoNudgeDismiss}
+              variant="ghost"
+              size="small"
+              aria-label={hub.compose.photoNudgeDismissAria}
+              onClick={() => setDismissedNudge(true)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {/* Album picker — tap a photo to attach it. */}
       <div>
         <p style={subLabel}>{hub.storyImages.pickerHeading}</p>
@@ -237,6 +273,37 @@ const errorText: React.CSSProperties = {
   fontSize: "var(--text-ui-sm)",
   color: "var(--text-danger, #b00)",
   margin: "0 0 14px",
+};
+
+const nudgeBanner: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 14,
+  marginBottom: 20,
+  padding: 14,
+  background: "var(--accent-soft)",
+  border: "var(--border-width) solid var(--border-strong)",
+  borderRadius: "var(--radius-md)",
+};
+
+const nudgeThumb: React.CSSProperties = {
+  width: 56,
+  height: 56,
+  objectFit: "cover",
+  borderRadius: "var(--radius-sm)",
+  display: "block",
+  background: "var(--surface-sunken)",
+  flexShrink: 0,
+};
+
+const nudgeText: React.CSSProperties = {
+  flex: 1,
+  minWidth: 160,
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-ui-sm)",
+  color: "var(--text-body)",
+  margin: 0,
 };
 
 const grid: React.CSSProperties = {

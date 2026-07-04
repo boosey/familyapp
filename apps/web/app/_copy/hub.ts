@@ -245,6 +245,14 @@ export const hub = {
     // caption seeds a warm prompt; the photo rides through as the story's subject/cover.
     photoStoryPrompt: (caption: string | null) =>
       caption ? `Tell the story of this photo — ${caption}` : "Tell the story of this photo",
+    // ADR-0009 Phase 4 · Slice B — the caption-driven "add this photo?" nudge above the album picker.
+    // Only ever shown on a REAL caption match, so the mentioned wording can be quoted honestly.
+    photoNudge: (caption: string | null) =>
+      caption ? `You mentioned "${caption}" — add this photo?` : "Add a related photo?",
+    photoNudgeAria: "Suggested photo",
+    photoNudgeAdd: "Add this photo",
+    photoNudgeDismiss: "Not now",
+    photoNudgeDismissAria: "Dismiss this photo suggestion",
   },
   actions: {
     notSignedIn: "Not signed in.",
