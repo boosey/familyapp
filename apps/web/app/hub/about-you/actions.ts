@@ -189,7 +189,7 @@ export async function saveIntakeAnswer(
   key: string,
   text: string,
 ): Promise<{ nextQuestion: NextQuestion | null }> {
-  const { db, auth, languageModel } = await getRuntime();
+  const { db, auth, languageModel, narratorMemory } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
 
@@ -199,6 +199,21 @@ export async function saveIntakeAnswer(
   // Persist the durable answer. Empty/whitespace text is a no-op skip (exit-without-typing).
   if (text.trim().length > 0) {
     const row = await saveIntakeText(db, { personId: ctx.personId, questionKey: key, promptQuestion, text });
+
+    // Consent-gated narrator-memory feed (ADR-0014 §9): intake Save IS the consent moment, so a saved
+    // answer feeds the (deferred) memory model here. Currently a no-op sink; the SEAM is placed so
+    // extraction lands here when the model arrives. Best-effort in its OWN try/catch — independent of
+    // the revision-logging and field-extraction try/catches below — so a memory-feed failure can never
+    // fail the Save.
+    try {
+      await narratorMemory.record({ personId: ctx.personId, source: "intake", text });
+    } catch (e) {
+      plogError("about-you", "saveIntakeAnswer: narrator-memory feed failed (non-fatal)", {
+        person: ctx.personId,
+        question: key,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
+    }
 
     // Save-time provenance (ADR-0014 §8) — best-effort; a ledger failure must NEVER fail the save. The
     // saved text is the narrator's own final word, so log it UNLESS it's byte-identical to the last

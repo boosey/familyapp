@@ -36,6 +36,10 @@ import {
   createLlmFollowUpEvaluator,
   type FollowUpEvaluator,
 } from "@chronicle/interviewer";
+import {
+  noopNarratorMemorySink,
+  type NarratorMemorySink,
+} from "@chronicle/core";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createGroqLanguageModel } from "@chronicle/llm-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
@@ -193,6 +197,13 @@ type Runtime = {
    * dev/CI, where there is no durable queue to serve.
    */
   inngest?: { client: Inngest; functions: InngestFunction.Any[] };
+  /**
+   * The consent-gated narrator-memory WRITE seam (ADR-0014 §8/§9). The memory MODEL ("picture of the
+   * person") is DEFERRED — this is currently the no-op sink. The two consent points (post-approval Story,
+   * intake Save) invoke `record` so extraction lands here when the model arrives. Retention already keeps
+   * the raw material; a discarded/unshared draft never reaches this seam (that IS the §9 gating).
+   */
+  narratorMemory: NarratorMemorySink;
 };
 
 // Survive HMR in dev: cache on globalThis so we don't reopen PGlite on every reload.
@@ -358,6 +369,7 @@ async function build(): Promise<Runtime> {
     dispatchPipeline,
     inngestConfigured,
     ...(inngest ? { inngest } : {}),
+    narratorMemory: noopNarratorMemorySink,
   };
 }
 

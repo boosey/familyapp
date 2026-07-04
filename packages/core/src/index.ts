@@ -72,6 +72,11 @@ export {
   getNarratorProfile,
   getNarratorBiographicalContext,
 } from "./narrator-profile";
+export {
+  type NarratorMemoryInput,
+  type NarratorMemorySink,
+  noopNarratorMemorySink,
+} from "./narrator-memory";
 export { AuthorizationError, InvariantViolation } from "./errors";
 export {
   createAsk,

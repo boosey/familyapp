@@ -550,7 +550,7 @@ function withTimeout<T>(ms: number, fn: () => Promise<T>): Promise<T> {
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
   // Correlate every log line for this share run (approve/share → augmentation AI call).
   beginLogContext();
-  const { db, auth, languageModel } = await getRuntime();
+  const { db, auth, languageModel, narratorMemory } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -647,6 +647,27 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       // silently-never-working feature still leaves a breadcrumb (matches the turn loop's
       // best-effort pattern for markRouted / intake extraction).
       plogError("answer", "shareAnswer: profile augmentation failed (non-fatal)", {
+        story: storyId,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
+    }
+
+    // Consent-gated narrator-memory feed (ADR-0014 §9): a Story feeds the (deferred) memory model
+    // ONLY here, post-approval — a discarded/unshared draft never reaches this seam. Currently a
+    // no-op sink; the SEAM is placed so extraction lands here when the model arrives. Best-effort in
+    // its OWN try/catch: a memory-feed failure must never fail the share/redirect. Only when the
+    // approved story has prose (the consented text mined for memory).
+    try {
+      const approved = await getStoryForViewer(db, ctx, storyId);
+      if (approved?.prose) {
+        await narratorMemory.record({
+          personId: ctx.personId,
+          source: "story",
+          text: approved.prose,
+        });
+      }
+    } catch (e) {
+      plogError("answer", "shareAnswer: narrator-memory feed failed (non-fatal)", {
         story: storyId,
         error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
       });
