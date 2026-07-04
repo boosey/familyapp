@@ -1,6 +1,6 @@
 # ADR-0014 — The composing surface: authored prose, per-take capture, and the four passes
 
-Status: **Accepted (design) — 2026-07-03. Not yet implemented.**
+Status: **Accepted (2026-07-03) · Implemented (2026-07-04) — ADR-0014 Increment 0–5.**
 Supersedes parts of the `2026-06-29 prose-provenance-and-human-correction` design (render-before-
 review, "AI runs exactly once," polish-not-logged) and amends the "canonical" wording of **ADR-0007**.
 Builds on **ADR-0012** (follow-up thread is one multi-take story) and **ADR-0004** (approval is a tap).
@@ -128,6 +128,17 @@ memory **only post-approval** (a discarded/unshared draft never does); **intake*
 - **Observability:** the record/type/edit/polish/finish sequence must emit verbose logs across
   client + server (the original live test had none — `plog` is hard-off in prod). See the companion
   hang diagnosis.
+
+  > **Implementation note (Inc 5, 2026-07-04):** done. Server `plog`/`plogError`
+  > (`@chronicle/pipeline/logger`) now correlate every line of one request under a per-run **cid**
+  > bound via `beginLogContext` (an `AsyncLocalStorage`), tagged `[chronicle:<scope>:<cid>]`; every
+  > answer/compose/finish/share server action and the **intake** path (`hub/about-you/actions.ts`)
+  > open a context, so a whole run greps as a unit. A parallel client `clog` (`apps/web/lib/clog.ts`)
+  > emits one non-sensitive line per capture-state transition (record start/stop, take appended,
+  > follow-up proposed, polish, finish, share). Toggles — server `CHRONICLE_PIPELINE_LOG=1` (on in
+  > dev, off in prod/tests unless forced; `=0` forces off; `CHRONICLE_PIPELINE_LOG_FULL=1` logs full
+  > text instead of a truncated preview); client `NEXT_PUBLIC_CHRONICLE_CLIENT_LOG=1` or
+  > `localStorage["chronicle:clog"]="1"` (the latter flippable in a live console, no rebuild).
 - **Out of scope / deferred:** the narrator-memory model ("picture of the person"); interviewer
   follow-ups remain policy-flag-gated.
 
@@ -148,6 +159,17 @@ action** (short audio, single stage, returns inline — the current dev/CI synch
 does this) and reserve the durable queue for heavier/optional/back-grounded work (e.g. metadata
 derivation at Finish, memory extraction). And make the prod logging toggle usable for exactly this
 class of "is it slow or stuck?" diagnosis.
+
+> **Resolved (Inc 1/Inc 5, 2026-07-04):** the synchronous-inline decision was taken. Per-take
+> **Transcription + Cleanup run inline in the capture server action** — `recordAnswerAction` /
+> `recordFollowUpTakeAction` call `transcribeTakeToRecording` then `cleanupTake` directly and
+> `appendVoiceTakeContribution` returns the cleaned segment inline; there is **no** durable Inngest
+> round-trip per take. The old two-stage `dispatchPipeline` (`transcribe → render_story`) is no
+> longer on the composing path — the durable Inngest queue is reserved for heavier/back-grounded work
+> (its `dispatch-pipeline.ts` enqueue-vs-drain switch survives for the legacy link-session
+> `/s/[token]` surface, which still runs the monolithic orchestrator). Metadata derivation
+> (`deriveMetadata`) runs at **Finish**, and the observability toggle above closes the
+> "slow or stuck?" gap that made the original hang undiagnosable.
 
 ## Alternatives considered
 

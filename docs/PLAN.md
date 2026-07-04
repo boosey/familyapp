@@ -239,6 +239,35 @@ with an AI-generated-then-editable title — reusing the answer flow as one gene
 - Note: dev-server manual smoke (type-a-story → share; record-a-story → share) is unverified in this
       headless env (no browser/mic), consistent with Increment 2's capture-path note.
 
+## Increment — THE COMPOSING SURFACE (ADR-0014, Inc 0–5)  ✅  *(2026-07-04)*
+*DONE on this branch — all automated gates green (`pnpm -r typecheck` / `pnpm -r test` / web build);
+subagent-driven, each slice closed by a fresh cold adversarial reviewer. NOT pushed / merged to master.*
+Replaces the monolithic `transcribe → render` on-stop + `pending_approval` review editor with a live
+composing surface: authored prose, per-take capture, the four passes, an explicit Finish, and a still-
+separate Share. Implements the Accepted ADR-0014 (amends ADR-0007; builds on ADR-0012 & ADR-0004).
+- [x] **Editor lives in `DRAFT`** (`ComposingEditor.tsx`): record OR type interleaved, hand-edit, opt-in
+      ✨ Polish. The old `pending_approval` review editor + "Polishing your words" spinner are gone.
+- [x] **Four passes, enum renamed**: Transcription `ai_transcribed` → per-take Cleanup `ai_cleaned`
+      (auto, sees one take) → opt-in Polish `ai_polished` (manual, holistic) → Correction
+      `human_corrected`; typed takes are `user_authored` and skip transcribe+cleanup. Every AI pass logged.
+- [x] **Per-take Transcription + Cleanup run synchronously inline** in the capture action
+      (`transcribeTakeToRecording` + `cleanupTake`, no durable Inngest hop per take); `appendVoiceTake/
+      TypedTakeContribution` concatenate onto the CLIENT'S `priorProse` (non-clobbering). Any audio ⇒ `voice`-kind.
+- [x] **Explicit Finish** (`finishDraftAction` → `deriveMetadata` + `human_corrected` snapshot +
+      `assertStoryTransition` DRAFT → PENDING_APPROVAL) with a speculative **Finish-check** (accept = a
+      logged Polish, 0 extra LLM calls). `PENDING_APPROVAL` shrinks to confirm-title + tier + **Share**.
+- [x] **Consent still a separate tap** (ADR-0004): `shareAnswerAction` → `approveAndShareStory` appends one
+      immutable `approved_for_sharing` ledger row. Finish ≠ Share.
+- [x] **Intake unified onto the surface** (`/hub/about-you`) but stops at anchor extraction — not a Story;
+      separate `intake_revisions` ledger (Inc-4); memory extraction consent-gated (Story post-approval, intake at Save).
+- [x] **Observability** (Inc 5): server `plog`/`plogError` correlated per request via `beginLogContext`
+      (AsyncLocalStorage cid; intake path correlated too) + client `clog` per capture-state transition.
+      Toggles: `CHRONICLE_PIPELINE_LOG` / `CHRONICLE_PIPELINE_LOG_FULL`; `NEXT_PUBLIC_CHRONICLE_CLIENT_LOG`
+      / `localStorage["chronicle:clog"]`.
+- Note: docs trued up to the shipped flow (`docs/adr/0014-*` status → Implemented; `docs/adr/0007-*`
+      §7 amendment; `docs/Recording-To-Story-Pipeline.md` full rewrite). Legacy monolithic orchestrator
+      survives only for the link-session `/s/[token]` surface. Dev-server manual smoke still headless-blocked.
+
 ## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009; not started)*
 Album, attach-to-story, story-from-a-photo, cheap suggestion, Google Picker import. Each phase is a
 tracer-bullet vertical slice sized to the subagent-build + fresh-cold-reviewer loop; schema rides the

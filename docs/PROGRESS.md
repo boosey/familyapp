@@ -17,6 +17,29 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-04** — **ADR-0014 (the composing surface) Increment 0–5 COMPLETE** on the
+  `composing-surface` branch (NOT pushed / merged to master). The monolithic `transcribe → render`
+  on-stop + `pending_approval` review editor (behind the "Polishing your words" spinner) is retired
+  in favor of a live `DRAFT` composing surface: **authored prose** (a composite of spoken + typed +
+  corrected + polished input, sealed at approval — no longer regenerated from audio; amends ADR-0007
+  §7), **per-take capture** (each voice/typed take appended non-clobbering onto the client's editor
+  text), the **four passes** (Transcription `ai_transcribed` → per-take Cleanup `ai_cleaned` → opt-in
+  Polish `ai_polished` → `human_corrected`; typed = `user_authored`, skips transcribe+cleanup), an
+  explicit **Finish** (`deriveMetadata` + `human_corrected` snapshot + DRAFT → PENDING_APPROVAL) with
+  a speculative **Finish-check**, and a still-separate **Share** consent tap (ADR-0004; one immutable
+  `approved_for_sharing` ledger row). Per-take Transcription + Cleanup run **synchronously inline in
+  the capture action** (no durable Inngest hop per take; the durable queue + legacy orchestrator
+  survive only for the link-session `/s/[token]` surface). **Intake** (`/hub/about-you`) shares the
+  surface but stops at anchor extraction (not a Story; separate `intake_revisions` ledger, Inc-4);
+  memory extraction is consent-gated (Story post-approval, intake at Save). **Observability** (Inc 5):
+  server `plog`/`plogError` correlated per request by a cid via `beginLogContext` (AsyncLocalStorage;
+  intake path correlated too) + a client `clog` per capture-state transition — toggles
+  `CHRONICLE_PIPELINE_LOG` / `CHRONICLE_PIPELINE_LOG_FULL` (server) and
+  `NEXT_PUBLIC_CHRONICLE_CLIENT_LOG` / `localStorage["chronicle:clog"]` (client). Built
+  subagent-driven, each slice closed by a fresh cold adversarial reviewer; `pnpm -r typecheck` /
+  `pnpm -r test` / web build all green. Docs trued up to the shipped flow (this doc-truing unit):
+  `docs/adr/0014-*` status → Implemented + two implementation notes; `docs/adr/0007-*` §7 amendment;
+  `docs/Recording-To-Story-Pipeline.md` full rewrite; `docs/PLAN.md` ADR-0014 section.
 - **2026-06-27** — Hi-fi design pass over `apps/web` (UI/presentation only; data/auth/core
   untouched). Migrated the app off the stale flat `--kin-*` tokens to the design system's
   **semantic token layer** (`--accent`/`--surface-*`/`--text-*`, rem type scale, DM Mono, 3

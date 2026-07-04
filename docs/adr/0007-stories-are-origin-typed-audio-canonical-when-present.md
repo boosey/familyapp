@@ -1,6 +1,14 @@
 # ADR-0007 — Stories are origin-typed (voice | text); audio is canonical only when present
 
-Status: Accepted (2026-07-01) · **Implemented (2026-07-03, `feat+direct-story-creation`)**
+Status: Accepted (2026-07-01) · **Implemented (2026-07-03, `feat+direct-story-creation`)** ·
+**Amended by ADR-0014 §7 (2026-07-04)**
+
+> **Amendment (ADR-0014 §7, 2026-07-04):** prose is now understood as **authored** — a *composite* of
+> spoken + typed + hand-corrected + polished input, sealed at approval — not a regenerable derivation
+> of the audio. This narrows "canonical": the audio is the **un-discardable original record**
+> (playback, audit, improvement; immutable once consented), **not** the regenerable source of the
+> text. Only a *voice take's raw transcript* is safely regenerable; the composed prose must never be
+> blindly re-rendered from audio (it would destroy typed takes and hand-corrections). See ADR-0014.
 
 ## Context
 
