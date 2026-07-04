@@ -8,6 +8,13 @@
       "when": 1783148525801,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783194165857,
+      "tag": "0001_soft_giant_girl",
+      "breakpoints": true
     }
   ]
 }

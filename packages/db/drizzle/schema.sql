@@ -12,7 +12,7 @@ CREATE TYPE "public"."intake_origin" AS ENUM('voice', 'typed');
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');
 CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'declined');
 CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
-CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'photo', 'document');
+CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
@@ -44,6 +44,7 @@ CREATE TABLE "asks" (
 	"target_person_id" uuid NOT NULL,
 	"family_id" uuid,
 	"question_text" text NOT NULL,
+	"recording_media_id" uuid,
 	"status" "ask_status" DEFAULT 'queued' NOT NULL,
 	"story_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -63,6 +64,16 @@ CREATE TABLE "consent_records" (
 	"approval_audio_media_id" uuid,
 	"actor_person_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "erasure_audit" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"item_type" text NOT NULL,
+	"item_id" uuid NOT NULL,
+	"owner_person_id" uuid NOT NULL,
+	"actor_person_id" uuid NOT NULL,
+	"reason" text NOT NULL,
+	"at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE "families" (
@@ -287,16 +298,28 @@ CREATE TABLE "story_views" (
 	"first_viewed_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "voice_captions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"photo_id" uuid NOT NULL,
+	"media_id" uuid NOT NULL,
+	"transcript" text,
+	"owner_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN KEY ("asker_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "asks" ADD CONSTRAINT "asks_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_media_id_media_id_fk" FOREIGN KEY ("approval_audio_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "erasure_audit" ADD CONSTRAINT "erasure_audit_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "erasure_audit" ADD CONSTRAINT "erasure_audit_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_creator_person_id_persons_id_fk" FOREIGN KEY ("creator_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "families" ADD CONSTRAINT "families_steward_person_id_persons_id_fk" FOREIGN KEY ("steward_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "family_photo_families" ADD CONSTRAINT "family_photo_families_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
@@ -337,6 +360,9 @@ ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_story_id_stories
 ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
 CREATE INDEX "ask_subject_photos_photo_idx" ON "ask_subject_photos" USING btree ("photo_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
@@ -374,3 +400,4 @@ CREATE INDEX "story_recordings_story_idx" ON "story_recordings" USING btree ("st
 CREATE UNIQUE INDEX "story_recordings_story_position_uq" ON "story_recordings" USING btree ("story_id","position");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
 CREATE INDEX "story_views_person_idx" ON "story_views" USING btree ("person_id");
+CREATE INDEX "voice_captions_photo_idx" ON "voice_captions" USING btree ("photo_id");
