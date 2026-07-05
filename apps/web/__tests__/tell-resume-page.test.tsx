@@ -43,6 +43,8 @@ vi.mock("@/lib/post-auth-route", () => ({
 vi.mock("@chronicle/core", () => ({
   getStoryForViewer: (...a: unknown[]) => getStoryForViewer(...a),
   listStoryRecordings: (...a: unknown[]) => listStoryRecordings(...a),
+  // Task 4: the resume page loads the author's active families for the share-step picker. Default none.
+  listActiveFamiliesForPerson: async () => [],
 }));
 vi.mock("../app/hub/StoryComposer", () => ({
   StoryComposer: ({ mode, ask, draft }: { mode: string; ask: unknown; draft: unknown }) => (

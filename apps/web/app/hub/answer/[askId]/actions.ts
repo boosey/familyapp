@@ -27,6 +27,7 @@ import {
   listFollowUpDecisionsForStory,
   listAskSubjectPhotos,
   attachPhotoToStory,
+  listActiveFamiliesForPerson,
 } from "@chronicle/core";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
@@ -48,6 +49,7 @@ import {
   detectOffRamp,
 } from "@chronicle/interviewer";
 import { resolveFollowUpPolicyForRequest } from "@/lib/follow-up-config";
+import { resolveComposeFamilies } from "@/lib/compose-scope";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 
@@ -707,12 +709,26 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       plog("answer", "shareAnswer: saved edited title", { story: storyId });
     }
 
+    // Resolve the family targets the narrator chose at the share step — only for the family/branch
+    // tiers (public/… have no per-family target). Empty selection is auto-resolved (single-family
+    // author) or throws (ambiguous multi-family), surfacing as shareFailed; the client guard blocks
+    // an empty submit first. Absent/empty → omit familyIds so the core default targeting applies.
+    let familyIds: string[] | undefined;
+    if (audienceTier === "family" || audienceTier === "branch") {
+      const chosen = formData
+        .getAll("familyIds")
+        .filter((v): v is string => typeof v === "string" && v.length > 0);
+      const active = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
+      familyIds = resolveComposeFamilies(chosen, active);
+    }
+
     // Tap approval (ADR-0004): no approvalAudio clip. Consent record is written with
     // approvalAudioMediaId = NULL (the column is nullable since ADR-0004 landed).
     await approveAndShareStory(db, {
       storyId,
       narratorPersonId: ctx.personId,
       audienceTier,
+      ...(familyIds && familyIds.length > 0 ? { familyIds } : {}),
     });
     plog("answer", "shareAnswer: approved & shared + consent recorded", {
       story: storyId,

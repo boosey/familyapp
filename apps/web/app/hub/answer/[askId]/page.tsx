@@ -15,7 +15,10 @@ import {
   listOutstandingDrafts,
   listStoryRecordings,
   listAskSubjectPhotos,
+  listActiveFamiliesForPerson,
 } from "@chronicle/core";
+import { askFamilies } from "@chronicle/db/schema";
+import { eq } from "drizzle-orm";
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
 import { hub } from "@/app/_copy";
@@ -60,6 +63,20 @@ export default async function AnswerPage({
   // answer. The bytes are served by the audited `/api/album-photo/[id]` route, which re-checks read
   // authorization per request — a photo the narrator can't see simply 404s (no ungated endpoint).
   const subjectPhotoIds = await listAskSubjectPhotos(db, askId);
+
+  // Share-step multi-family picker (Task 4). The picker offers ALL the answerer's active families (a
+  // free picker), pre-checking those the ask targeted that the answerer still shares. Answers always
+  // have a sensible default, so no explicit choice is forced — the server auto-resolves a single
+  // family and `resolveComposeFamilies` requires a pick only for a genuinely ambiguous multi-family.
+  const answererFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  const activeIds = new Set(answererFamilies.map((f) => f.familyId));
+  const askFamRows = await db
+    .select({ familyId: askFamilies.familyId })
+    .from(askFamilies)
+    .where(eq(askFamilies.askId, askId));
+  const seededFamilyIds = askFamRows
+    .map((r) => r.familyId)
+    .filter((id) => activeIds.has(id));
 
   // Check for an outstanding draft for this ask. `listOutstandingDrafts` returns most-recent-first
   // and includes BOTH the live `draft` state and `pending_approval` (ADR-0014 Inc 3 slice 9 — a
@@ -218,6 +235,9 @@ export default async function AnswerPage({
             askerName: askDetail.askerSpokenName,
           }}
           draft={draft}
+          families={answererFamilies}
+          seededFamilyIds={seededFamilyIds}
+          familyChoiceRequired={false}
         />
       </div>
     </main>

@@ -11,9 +11,10 @@
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getStoryForViewer, listStoryRecordings } from "@chronicle/core";
+import { getStoryForViewer, listStoryRecordings, listActiveFamiliesForPerson } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
+import { seedComposeFamilies, familyChoiceRequired } from "@/lib/compose-scope";
 import { hub } from "@/app/_copy";
 import { StoryComposer } from "../../StoryComposer";
 import type { DraftInfo } from "../../StoryComposer";
@@ -23,10 +24,13 @@ export const dynamic = "force-dynamic";
 
 export default async function TellResumePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ storyId: string }>;
+  searchParams?: Promise<{ [k: string]: string | string[] | undefined }>;
 }) {
   const { storyId } = await params;
+  const sp = (await searchParams) ?? {};
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -87,6 +91,16 @@ export default async function TellResumePage({
     takes,
   };
 
+  // Share-step multi-family picker (Task 4), seeded from `?scope=` (usually ABSENT on a resume →
+  // "all"). For a multi-family author "all" means the picker shows unchecked and a pick is REQUIRED
+  // before Share — the correct fail-safe. Validated against the author's OWN active families.
+  const scopeRaw = typeof sp.scope === "string" ? sp.scope : "all";
+  const tellFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  const tellFamilyIds = tellFamilies.map((f) => f.familyId);
+  const scope = scopeRaw === "all" || tellFamilyIds.includes(scopeRaw) ? scopeRaw : "all";
+  const seededFamilyIds = [...seedComposeFamilies(scope, tellFamilyIds)];
+  const tellChoiceRequired = familyChoiceRequired(scope, tellFamilyIds);
+
   return (
     <main
       style={{
@@ -138,7 +152,15 @@ export default async function TellResumePage({
       >
         {/* key on the draft identity so the client component re-seeds its review-phase state when the
             resumed story changes (mirrors the answer page's remount rationale). */}
-        <StoryComposer key={draft.storyId} mode="tell" ask={null} draft={draft} />
+        <StoryComposer
+          key={draft.storyId}
+          mode="tell"
+          ask={null}
+          draft={draft}
+          families={tellFamilies}
+          seededFamilyIds={seededFamilyIds}
+          familyChoiceRequired={tellChoiceRequired}
+        />
       </div>
     </main>
   );

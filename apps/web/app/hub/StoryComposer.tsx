@@ -26,6 +26,12 @@ interface StoryComposerProps {
   subjectPhotoId?: string | null;
   /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
   promptQuestion?: string | null;
+  /** The narrator's active families, offered in the share-step multi-family picker (Task 4). */
+  families?: { familyId: string; familyName: string }[];
+  /** Family ids pre-checked in the picker, seeded from the hub scope (or ask ∩ active for answers). */
+  seededFamilyIds?: string[];
+  /** True when the narrator must explicitly pick ≥1 family (ambiguous "all"-with-several). */
+  familyChoiceRequired?: boolean;
 }
 
 export function StoryComposer({
@@ -34,6 +40,9 @@ export function StoryComposer({
   draft,
   subjectPhotoId = null,
   promptQuestion = null,
+  families = [],
+  seededFamilyIds = [],
+  familyChoiceRequired = false,
 }: StoryComposerProps) {
   // Where a discard returns the narrator. A tell-mode draft came from the Stories tab; an answer came
   // from the Questions tab. (A legitimate mode-dependent branch.)
@@ -59,6 +68,9 @@ export function StoryComposer({
       resumeHref={resumeHref}
       subjectPhotoId={subjectPhotoId}
       promptQuestion={promptQuestion}
+      families={families}
+      seededFamilyIds={seededFamilyIds}
+      familyChoiceRequired={familyChoiceRequired}
     />
   );
 }

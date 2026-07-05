@@ -32,7 +32,12 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/lib/runtime", () => ({
-  getRuntime: async () => ({ db: {}, auth: { getCurrentAuthContext } }),
+  getRuntime: async () => ({
+    // db.select(...).from(askFamilies).where(...) → seed families for the share-step picker (Task 4).
+    // A thenable query builder returning [] (no ask-family rows) keeps resume-routing assertions clean.
+    db: { select: () => ({ from: () => ({ where: async () => [] }) }) },
+    auth: { getCurrentAuthContext },
+  }),
 }));
 vi.mock("@/lib/answer-data", () => ({
   getAskForNarrator: (...a: unknown[]) => getAskForNarrator(...a),
@@ -42,6 +47,8 @@ vi.mock("@chronicle/core", () => ({
   listOutstandingDrafts: (...a: unknown[]) => listOutstandingDrafts(...a),
   listStoryRecordings: (...a: unknown[]) => listStoryRecordings(...a),
   listAskSubjectPhotos: (...a: unknown[]) => listAskSubjectPhotos(...a),
+  // Task 4: the page loads the answerer's active families for the share-step picker. Default none.
+  listActiveFamiliesForPerson: async () => [],
 }));
 vi.mock("../app/hub/StoryComposer", () => ({
   StoryComposer: ({ mode, ask, draft }: { mode: string; ask: unknown; draft: unknown }) => (

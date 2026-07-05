@@ -50,6 +50,7 @@ import { clog } from "@/lib/clog";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
 import { StoryPhotosEditor } from "./StoryPhotosEditor";
+import { FamilyPicker } from "./FamilyPicker";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -107,6 +108,13 @@ export interface ComposingEditorProps {
   subjectPhotoId?: string | null;
   /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
   promptQuestion?: string | null;
+  /** The narrator's active families, offered in the share-step multi-family picker (Task 4). Shown
+   * only for a multi-family author (length > 1) on the family/branch tiers. */
+  families?: { familyId: string; familyName: string }[];
+  /** Family ids pre-checked in the picker, seeded from the hub scope (or ask ∩ active for answers). */
+  seededFamilyIds?: string[];
+  /** True when the narrator must explicitly pick ≥1 family (ambiguous "all"-with-several). */
+  familyChoiceRequired?: boolean;
 }
 
 function pickMimeType(): string {
@@ -126,6 +134,9 @@ export function ComposingEditor({
   resumeHref,
   subjectPhotoId = null,
   promptQuestion = null,
+  families = [],
+  seededFamilyIds = [],
+  familyChoiceRequired = false,
 }: ComposingEditorProps) {
   const router = useRouter();
 
@@ -143,6 +154,17 @@ export function ComposingEditor({
   const [titleDraft, setTitleDraft] = useState(draft?.title ?? "");
   const [titleTouched, setTitleTouched] = useState(false);
   const [tier, setTier] = useState<Tier>("family");
+  // Share-step multi-family target (Task 4). Seeded from the hub scope / ask families; only surfaced
+  // for a multi-family author on the family/branch tiers (see `showFamilyPicker`).
+  const [pickedFamilies, setPickedFamilies] = useState<Set<string>>(() => new Set(seededFamilyIds));
+  const toggleFamily = (id: string) =>
+    setPickedFamilies((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const showFamilyPicker = families.length > 1 && (tier === "family" || tier === "branch");
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   // Non-error transient notice (decision d): shown after a follow-up take's audio is removed — the
@@ -500,11 +522,21 @@ export function ComposingEditor({
   const handleShare = async () => {
     setActionError(null);
     setOp("share");
+    // The review Share is a button (not a native form submit), so the FamilyPicker's hidden
+    // required-input can't backstop us — guard the ambiguous empty selection here before posting.
+    if (showFamilyPicker && familyChoiceRequired && pickedFamilies.size === 0) {
+      setActionError(hub.answer.whichFamiliesRequired);
+      setOp(null);
+      return;
+    }
     clog("review_share", { story: draft!.storyId, tier });
     try {
       const form = new FormData();
       form.append("storyId", draft!.storyId);
       form.append("audienceTier", tier);
+      if (showFamilyPicker) {
+        for (const id of pickedFamilies) form.append("familyIds", id);
+      }
       if (proseDraft !== draft!.prose) form.append("correctedProse", proseDraft);
       const effectiveTitle = titleTouched ? titleDraft : (draft!.title ?? "");
       if (effectiveTitle.trim() && effectiveTitle.trim() !== draft!.title) {
@@ -684,6 +716,34 @@ export function ComposingEditor({
         <StoryPhotosEditor storyId={draft.storyId} />
 
         <TierPicker tier={tier} setTier={setTier} disabled={isRemoving} />
+
+        {/* Multi-family target (Task 4) — only for a multi-family author on family/branch tiers. */}
+        {showFamilyPicker ? (
+          <fieldset style={{ border: "none", padding: 0, margin: "0 0 32px" }}>
+            <legend
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-label)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--support)",
+                marginBottom: 14,
+                display: "block",
+                width: "100%",
+              }}
+            >
+              {hub.answer.whichFamilies}
+            </legend>
+            <FamilyPicker
+              families={families}
+              selected={pickedFamilies}
+              onToggle={toggleFamily}
+              disabled={isRemoving}
+              required={familyChoiceRequired}
+              requiredMessage={hub.answer.whichFamiliesRequired}
+            />
+          </fieldset>
+        ) : null}
 
         {actionError && <ErrorLine message={actionError} />}
 

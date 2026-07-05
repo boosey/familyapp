@@ -10,8 +10,10 @@
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
+import { seedComposeFamilies, familyChoiceRequired } from "@/lib/compose-scope";
 import { hub } from "@/app/_copy";
 import { StoryComposer } from "../StoryComposer";
 
@@ -45,6 +47,15 @@ export default async function TellPage({
     typeof params.subjectPhotoId === "string" ? params.subjectPhotoId : null;
   const promptQuestion =
     typeof params.promptQuestion === "string" ? params.promptQuestion : null;
+
+  // Share-step multi-family picker (Task 4), seeded from the hub `?scope=` (default "all"), validated
+  // against the author's OWN active families — mirrors hub/page.tsx (a client scope is never trusted).
+  const scopeRaw = typeof params.scope === "string" ? params.scope : "all";
+  const tellFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  const tellFamilyIds = tellFamilies.map((f) => f.familyId);
+  const scope = scopeRaw === "all" || tellFamilyIds.includes(scopeRaw) ? scopeRaw : "all";
+  const seededFamilyIds = [...seedComposeFamilies(scope, tellFamilyIds)];
+  const tellChoiceRequired = familyChoiceRequired(scope, tellFamilyIds);
 
   return (
     <main
@@ -101,6 +112,9 @@ export default async function TellPage({
           draft={null}
           subjectPhotoId={subjectPhotoId}
           promptQuestion={promptQuestion}
+          families={tellFamilies}
+          seededFamilyIds={seededFamilyIds}
+          familyChoiceRequired={tellChoiceRequired}
         />
       </div>
     </main>
