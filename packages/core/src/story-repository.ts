@@ -27,6 +27,7 @@ import {
   storyRecordings,
 } from "@chronicle/db/content";
 import {
+  askFamilies,
   asks,
   consentRecords,
   memberships,
@@ -475,13 +476,13 @@ export interface ApproveAndShareResult {
  */
 export function computeDefaultFamilyTargets(args: {
   originatingFamilyId: string | null;
-  askFamilyId: string | null;
+  askFamilyIds: string[];
   ownerActiveFamilyIds: Set<string>;
 }): { targets: string[]; ambiguous: boolean } {
-  const { originatingFamilyId, askFamilyId, ownerActiveFamilyIds } = args;
-  const originating = [...new Set([originatingFamilyId, askFamilyId])].filter(
-    (f): f is string => f !== null && ownerActiveFamilyIds.has(f),
-  );
+  const { originatingFamilyId, askFamilyIds, ownerActiveFamilyIds } = args;
+  const originating = [
+    ...new Set([originatingFamilyId, ...askFamilyIds]),
+  ].filter((f): f is string => f !== null && ownerActiveFamilyIds.has(f));
   if (originating.length > 0) return { targets: originating, ambiguous: false };
   if (ownerActiveFamilyIds.size === 1) {
     return { targets: [...ownerActiveFamilyIds], ambiguous: false };
@@ -584,14 +585,14 @@ export async function approveAndShareStory(
     //    `routed` (interviewer marked it). `answered` with same storyId is idempotent; with a
     //    different storyId raises — an Ask answers exactly one Story.
     let answeredAsk: Ask | null = null;
-    // The ask's family (if any) is a secondary originating signal for default targeting (step 6).
-    let askFamilyId: string | null = null;
+    // The ask's family context(s) (if any) are a secondary originating signal for default targeting
+    // (step 6). An ask may now target one-or-more families (ask_families), so this is a set.
+    let askFamilyIds: string[] = [];
     if (current.askId !== null) {
       const [askCurrent] = await tx
         .select({
           status: asks.status,
           storyId: asks.storyId,
-          familyId: asks.familyId,
         })
         .from(asks)
         .where(eq(asks.id, current.askId))
@@ -601,7 +602,11 @@ export async function approveAndShareStory(
           `story ${input.storyId} references missing ask ${current.askId}`,
         );
       }
-      askFamilyId = askCurrent.familyId;
+      const askFamRows = await tx
+        .select({ familyId: askFamilies.familyId })
+        .from(askFamilies)
+        .where(eq(askFamilies.askId, current.askId));
+      askFamilyIds = askFamRows.map((r) => r.familyId);
       if (askCurrent.status === "answered" && askCurrent.storyId !== input.storyId) {
         throw new InvariantViolation(
           `ask ${current.askId} already answered by a different story`,
@@ -665,7 +670,7 @@ export async function approveAndShareStory(
           );
         const { targets, ambiguous } = computeDefaultFamilyTargets({
           originatingFamilyId: current.originatingFamilyId,
-          askFamilyId,
+          askFamilyIds,
           ownerActiveFamilyIds: new Set(ownerActive.map((r) => r.familyId)),
         });
         ambiguousDefaultTarget = ambiguous;

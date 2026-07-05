@@ -10,7 +10,7 @@
  *   - `computeDefaultFamilyTargets` is the shared, pure rule the approval path applies.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { asks } from "@chronicle/db/schema";
+import { askFamilies, asks } from "@chronicle/db/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveAndShareStory,
@@ -40,7 +40,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: F1,
-        askFamilyId: null,
+        askFamilyIds: [],
         ownerActiveFamilyIds: new Set([F1, F2]),
       }),
     ).toEqual({ targets: [F1], ambiguous: false });
@@ -51,7 +51,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: F1,
-        askFamilyId: null,
+        askFamilyIds: [],
         ownerActiveFamilyIds: new Set([F2]),
       }),
     ).toEqual({ targets: [F2], ambiguous: false });
@@ -61,7 +61,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: null,
-        askFamilyId: F2,
+        askFamilyIds: [F2],
         ownerActiveFamilyIds: new Set([F1, F2]),
       }),
     ).toEqual({ targets: [F2], ambiguous: false });
@@ -71,7 +71,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: F1,
-        askFamilyId: F1,
+        askFamilyIds: [F1],
         ownerActiveFamilyIds: new Set([F1]),
       }),
     ).toEqual({ targets: [F1], ambiguous: false });
@@ -81,7 +81,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: null,
-        askFamilyId: null,
+        askFamilyIds: [],
         ownerActiveFamilyIds: new Set([F1]),
       }),
     ).toEqual({ targets: [F1], ambiguous: false });
@@ -91,7 +91,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: null,
-        askFamilyId: null,
+        askFamilyIds: [],
         ownerActiveFamilyIds: new Set([F1, F2]),
       }),
     ).toEqual({ targets: [], ambiguous: true });
@@ -101,7 +101,7 @@ describe("computeDefaultFamilyTargets (the shared rule)", () => {
     expect(
       computeDefaultFamilyTargets({
         originatingFamilyId: null,
-        askFamilyId: null,
+        askFamilyIds: [],
         ownerActiveFamilyIds: new Set(),
       }),
     ).toEqual({ targets: [], ambiguous: false });
@@ -241,17 +241,19 @@ describe("approveAndShareStory — default family targeting", () => {
     await addMembership(db, narrator.id, carney.id);
     await addMembership(db, asker.id, carney.id);
 
-    // An ask raised in the Carney family context.
+    // An ask raised in the Carney family context (context now lives in ask_families).
     const [ask] = await db
       .insert(asks)
       .values({
         askerPersonId: asker.id,
         targetPersonId: narrator.id,
-        familyId: carney.id,
         questionText: "Tell me about the wedding",
         status: "routed",
       })
       .returning();
+    await db
+      .insert(askFamilies)
+      .values({ askId: ask!.id, familyId: carney.id });
 
     const { story } = await makeStory(db, {
       ownerPersonId: narrator.id,
@@ -265,6 +267,49 @@ describe("approveAndShareStory — default family targeting", () => {
     });
     expect(result.targetedFamilyIds).toEqual([carney.id]);
     // The asker (Carney member) sees it.
+    expect((await getStoryForViewer(db, account(asker.id), story.id))?.id).toBe(story.id);
+  });
+
+  it("seeds story_families with BOTH families when the answered ask targeted A + B", async () => {
+    // An ask can now target multiple families; on approval the story is surfaced into ALL of them
+    // (restricted to families the owner is still active in), not just one.
+    const narrator = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "Boudreaux", narrator.id);
+    const famB = await makeFamily(db, "Carney", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, asker.id, famA.id);
+    await addMembership(db, asker.id, famB.id);
+
+    const [ask] = await db
+      .insert(asks)
+      .values({
+        askerPersonId: asker.id,
+        targetPersonId: narrator.id,
+        questionText: "Tell me about the reunion",
+        status: "routed",
+      })
+      .returning();
+    await db.insert(askFamilies).values([
+      { askId: ask!.id, familyId: famA.id },
+      { askId: ask!.id, familyId: famB.id },
+    ]);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: narrator.id,
+      state: "pending_approval",
+      askId: ask!.id,
+    });
+    const result = await approveAndShareStory(db, {
+      storyId: story.id,
+      narratorPersonId: narrator.id,
+      audienceTier: "family",
+    });
+
+    expect(new Set(result.targetedFamilyIds)).toEqual(new Set([famA.id, famB.id]));
+    expect(result.ambiguousDefaultTarget).toBe(false);
+    // Both families' members see it.
     expect((await getStoryForViewer(db, account(asker.id), story.id))?.id).toBe(story.id);
   });
 });
