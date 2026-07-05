@@ -32,6 +32,7 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { HubScopeSelector } from "./HubScopeSelector";
+import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
 import { AlbumSurface } from "./album/AlbumSurface";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -174,10 +175,15 @@ export default async function HubPage({
     },
     { key: "ask", label: hub.shell.tabAsk },
     { key: "asks", label: hub.shell.tabAsks },
-    { key: "invite", label: hub.shell.tabInvite },
+    // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
+    // viewer (member of none) has nothing to invite into, so the tab is absent for them (Task 4.5).
+    ...(inviteTabVisible(activeFamilies.length)
+      ? [{ key: "invite", label: hub.shell.tabInvite }]
+      : []),
     // Tab stays visible while there are pending OR recently-decided requests; the badge counts
-    // only still-pending ones (the steward's actionable queue).
-    ...(pendingRequests.length > 0 || decidedRequests.length > 0
+    // only still-pending ones (the steward's actionable queue). Also member-only — a viewer who
+    // stewards no family has no request queue.
+    ...(requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length)
       ? [
           {
             key: "requests",
@@ -288,8 +294,8 @@ export default async function HubPage({
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab scope={scope} />}
           {activeTab === "asks" && <AsksTab scope={scope} />}
-          {activeTab === "invite" && <InviteTab />}
-          {activeTab === "requests" && <RequestsTab />}
+          {activeTab === "invite" && <InviteTab scope={scope} />}
+          {activeTab === "requests" && <RequestsTab scope={scope} />}
         </section>
       </div>
     </main>

@@ -190,7 +190,7 @@ function LinkResult({
   );
 }
 
-export async function InviteTab() {
+export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
   const jar = await cookies();
   const narratorToken = jar.get(INVITE_FLASH_COOKIE)?.value;
   const memberToken = jar.get(MEMBER_INVITE_FLASH_COOKIE)?.value;
@@ -283,6 +283,11 @@ export async function InviteTab() {
       {f.name}
     </option>
   ));
+  // An invitation is single-family. When the hub is scoped to one of the inviter's families, that
+  // family is the pre-selected target; in "all" the first family is the default and the inviter picks
+  // (Task 4.5). A scope that isn't one of the inviter's families falls back to the default.
+  const familyDefault =
+    scope !== "all" && inviterFams.some((f) => f.id === scope) ? scope : undefined;
 
   return (
     <div style={{ maxWidth: 600, display: "grid", gap: 44 }}>
@@ -323,7 +328,7 @@ export async function InviteTab() {
           </label>
           <label className="kin-form-label">
             {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required>
+            <select name="familyId" className="kin-field" required defaultValue={familyDefault}>
               {familyOptions}
             </select>
           </label>
@@ -352,7 +357,7 @@ export async function InviteTab() {
           </label>
           <label className="kin-form-label">
             {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required>
+            <select name="familyId" className="kin-field" required defaultValue={familyDefault}>
               {familyOptions}
             </select>
           </label>

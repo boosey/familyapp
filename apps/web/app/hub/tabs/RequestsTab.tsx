@@ -13,6 +13,7 @@ import {
   listPendingJoinRequestsForSteward,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { requestsInScope } from "@/lib/hub-tabs";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 
@@ -94,7 +95,7 @@ const nameStyle = {
   color: "var(--text-body)",
 } as const;
 
-export async function RequestsTab() {
+export async function RequestsTab({ scope = "all" }: { scope?: string } = {}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") {
@@ -111,10 +112,15 @@ export async function RequestsTab() {
     );
   }
 
-  const [pending, decided] = await Promise.all([
+  const [allPending, allDecided] = await Promise.all([
     listPendingJoinRequestsForSteward(db, ctx.personId),
     listDecidedJoinRequestsForSteward(db, ctx.personId),
   ]);
+  // Honor the hub scope (Task 4.5): "all" aggregates across every family the steward stewards (each
+  // row is labeled with its family name below); a family scope narrows to that family's requests. The
+  // scope is already validated upstream against the viewer's own families.
+  const pending = requestsInScope(allPending, scope);
+  const decided = requestsInScope(allDecided, scope);
 
   const heading = (
     <>
