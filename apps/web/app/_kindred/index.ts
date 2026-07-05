@@ -12,6 +12,7 @@ export { KindredStoryCard } from "./KindredStoryCard";
 export type { KindredStoryCardProps } from "./KindredStoryCard";
 export { KindredAccountMenu } from "./KindredAccountMenu";
 export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
+export { AccountMenuMount } from "./AccountMenuMount";
 export { KindredFontScale } from "./KindredFontScale";
 export { KindredProseEditor } from "./KindredProseEditor";
 export type { KindredProseEditorProps } from "./KindredProseEditor";

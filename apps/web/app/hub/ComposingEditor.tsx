@@ -734,6 +734,18 @@ export function ComposingEditor({
             >
               {hub.answer.whichFamilies}
             </legend>
+            {familyChoiceRequired ? (
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--text-label)",
+                  color: "var(--text-muted)",
+                  margin: "0 0 12px",
+                }}
+              >
+                {hub.answer.whichFamiliesHelp}
+              </p>
+            ) : null}
             <FamilyPicker
               families={families}
               selected={pickedFamilies}

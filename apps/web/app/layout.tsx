@@ -3,6 +3,7 @@ import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
+import { AccountMenuMount } from "./_kindred";
 import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "../lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "./_kindred/font-scale-constants";
 
@@ -56,7 +57,15 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const body = <body>{children}</body>;
+  const body = (
+    <body>
+      {children}
+      {/* Global account menu — self-gates to signed-in account holders, so it renders on every
+          authenticated screen and nothing on the landing / auth / link-session surfaces. Sits inside
+          <body> so it is within ClerkProvider (needed for the Clerk sign-out path). */}
+      <AccountMenuMount />
+    </body>
+  );
   const inner = isClerkConfigured()
     ? await wrapWithClerk(body)
     : body;

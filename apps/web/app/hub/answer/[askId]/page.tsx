@@ -77,6 +77,10 @@ export default async function AnswerPage({
   const seededFamilyIds = askFamRows
     .map((r) => r.familyId)
     .filter((id) => activeIds.has(id));
+  // Force an explicit pick only in the genuinely ambiguous case: a multi-family answerer with NO
+  // default seed (they left every family the ask targeted). Otherwise the seed is a sensible default
+  // and the server auto-resolves a single-family author — matching the tell path's guard.
+  const answerChoiceRequired = answererFamilies.length > 1 && seededFamilyIds.length === 0;
 
   // Check for an outstanding draft for this ask. `listOutstandingDrafts` returns most-recent-first
   // and includes BOTH the live `draft` state and `pending_approval` (ADR-0014 Inc 3 slice 9 — a
@@ -237,7 +241,7 @@ export default async function AnswerPage({
           draft={draft}
           families={answererFamilies}
           seededFamilyIds={seededFamilyIds}
-          familyChoiceRequired={false}
+          familyChoiceRequired={answerChoiceRequired}
         />
       </div>
     </main>

@@ -31,9 +31,11 @@ const composeStoryAction = vi.fn(
     appendedSegment: "The summer we drove to the coast.",
   }),
 );
+// Captured so the family-picker guard tests can assert Share is (or isn't) attempted.
+const shareAnswerAction = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   composeStoryAction: (...args: unknown[]) => composeStoryAction(...args),
-  shareAnswerAction: vi.fn(),
+  shareAnswerAction: (...args: unknown[]) => shareAnswerAction(...args),
   discardAnswerAction: vi.fn(),
   polishAnswerProseAction: vi.fn(),
 }));
@@ -158,5 +160,115 @@ describe("StoryComposer discard destination is mode-aware", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/hub?tab=questions"));
+  });
+});
+
+describe("StoryComposer share-step multi-family picker (Task 4)", () => {
+  const pendingDraft: DraftInfo = {
+    storyId: STORY_ID,
+    recordedAt: new Date(0).toISOString(),
+    mediaUrl: "",
+    prose: "The body of the story.",
+    title: "Auto Title",
+    state: "pending_approval",
+    takes: [],
+  };
+  const twoFamilies = [
+    { familyId: "fam-a", familyName: "Boudreaux" },
+    { familyId: "fam-b", familyName: "Carney" },
+  ];
+
+  // The picker legend, used to assert presence/absence of the multi-family picker.
+  const pickerText = /which families should see this/i;
+
+  it("HIDES the picker for a single-family author (nothing to choose)", () => {
+    render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={[twoFamilies[0]!]}
+        seededFamilyIds={["fam-a"]}
+      />,
+    );
+    expect(screen.queryByText(pickerText)).toBeNull();
+    // No family checkboxes either (the tier radios are type=radio, not checkbox).
+    expect(screen.queryAllByRole("checkbox").length).toBe(0);
+  });
+
+  it("SHOWS the picker for a multi-family author on the default family tier", () => {
+    render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={twoFamilies}
+        seededFamilyIds={["fam-a"]}
+      />,
+    );
+    expect(screen.getByText(pickerText)).toBeTruthy();
+    // One checkbox per family; the seeded family is pre-checked.
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.length).toBe(2);
+    expect(boxes[0]!.checked).toBe(true);
+    expect(boxes[1]!.checked).toBe(false);
+  });
+
+  it("HIDES the picker on the public tier (no per-family target)", () => {
+    const { container } = render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={twoFamilies}
+        seededFamilyIds={["fam-a"]}
+      />,
+    );
+    // Visible on the default family tier…
+    expect(screen.getByText(pickerText)).toBeTruthy();
+    // …then switching to public removes it.
+    const publicRadio = container.querySelector(
+      'input[name="audienceTier"][value="public"]',
+    ) as HTMLInputElement;
+    fireEvent.click(publicRadio);
+    expect(screen.queryByText(pickerText)).toBeNull();
+  });
+
+  it("BLOCKS Share with an empty required selection — shows the guard, never calls the action", async () => {
+    render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={twoFamilies}
+        seededFamilyIds={[]}
+        familyChoiceRequired
+      />,
+    );
+    // Nothing pre-checked (ambiguous "all"-with-several); Share must not proceed.
+    fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/choose at least one family for this story/i)).toBeTruthy(),
+    );
+    expect(shareAnswerAction).not.toHaveBeenCalled();
+  });
+
+  it("ALLOWS Share once a required family is picked", async () => {
+    render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={twoFamilies}
+        seededFamilyIds={[]}
+        familyChoiceRequired
+      />,
+    );
+    // Pick a family, then Share proceeds to the action (which carries the chosen id).
+    fireEvent.click(screen.getAllByRole("checkbox")[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
+    await waitFor(() => expect(shareAnswerAction).toHaveBeenCalledOnce());
+    const form = shareAnswerAction.mock.calls[0]![0] as FormData;
+    expect(form.getAll("familyIds")).toEqual(["fam-a"]);
   });
 });

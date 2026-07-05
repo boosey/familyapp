@@ -18,8 +18,6 @@ import {
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
-import { mockSignOut } from "@/lib/auth-mock";
-import { isClerkConfigured } from "@/lib/clerk-config";
 import {
   loadHubFeed,
   loadSeenStoryIds,
@@ -27,7 +25,6 @@ import {
   loadStoryFamilyTargets,
   loadStoryCoverPhotoIds,
 } from "@/lib/hub-data";
-import { KindredAccountMenu } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
@@ -41,16 +38,9 @@ import { AskTab } from "./tabs/AskTab";
 import { AsksTab } from "./tabs/AsksTab";
 import { InviteTab } from "./tabs/InviteTab";
 import { RequestsTab } from "./tabs/RequestsTab";
-import type { AccountMenuItem } from "@/app/_kindred";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-async function logOut(): Promise<void> {
-  "use server";
-  await mockSignOut();
-  redirect("/");
-}
 
 export default async function HubPage({
   searchParams,
@@ -144,9 +134,6 @@ export default async function HubPage({
   // that `listOutstandingAnswerDrafts` guaranteed before this refactor (Questions tab unchanged).
   const draftsByAskId = latestDraftPerAsk(answerDrafts);
 
-  // True when Clerk is wired up; drives the sign-out path selection below.
-  const clerkSignOut = isClerkConfigured();
-
   /* ── Derived display values ─────────────────────────────────────────────── */
   // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
   // joined for now — the multi-family display is a separate design question, deliberately deferred.
@@ -156,14 +143,6 @@ export default async function HubPage({
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
   // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
   const viewerDisplayName = viewerName ?? "You";
-  const initials = viewerName
-    ? viewerName
-        .split(" ")
-        .map((w) => w[0] ?? "")
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "Y";
 
   const tabs = [
     { key: "stories", label: hub.shell.tabStories },
@@ -192,13 +171,6 @@ export default async function HubPage({
           },
         ]
       : []),
-  ];
-
-  const accountItems: AccountMenuItem[] = [
-    { key: "profile", label: hub.shell.menuProfile, href: "/hub" /* stub: no backend yet */ },
-    { key: "settings", label: hub.shell.menuSettings, href: "/hub" /* stub: no backend yet */ },
-    { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
-    { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
@@ -260,12 +232,8 @@ export default async function HubPage({
                 {familyName}
               </h1>
             </div>
-            <KindredAccountMenu
-              initials={initials}
-              displayName={viewerName ?? undefined}
-              items={accountItems}
-              clerkSignOut={clerkSignOut}
-            />
+            {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root
+                layout, so the hub no longer inlines its own copy in the header. */}
           </div>
 
           {/* Tabs row */}
