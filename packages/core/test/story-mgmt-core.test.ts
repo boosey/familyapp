@@ -84,10 +84,13 @@ describe("Story Management Core", () => {
       await approveAndShareStory(db, {
         storyId: story.id,
         narratorPersonId: ownerId,
+        audienceTier: "family",
         familyIds: [familyId],
-        approvalAudioStorageKey: "approval.webm",
-        approvalAudioContentType: "audio/webm",
-        approvalAudioChecksum: "fake-checksum",
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
       });
 
       // 3. Edit title & tags
@@ -157,10 +160,13 @@ describe("Story Management Core", () => {
       await approveAndShareStory(db, {
         storyId: story.id,
         narratorPersonId: ownerId,
+        audienceTier: "family",
         familyIds: [f1],
-        approvalAudioStorageKey: "approval.webm",
-        approvalAudioContentType: "audio/webm",
-        approvalAudioChecksum: "fake-checksum",
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
       });
 
       // Retarget to f2
@@ -213,10 +219,13 @@ describe("Story Management Core", () => {
       await approveAndShareStory(db, {
         storyId: story.id,
         narratorPersonId: ownerId,
+        audienceTier: "family",
         familyIds: [f1],
-        approvalAudioStorageKey: "approval.webm",
-        approvalAudioContentType: "audio/webm",
-        approvalAudioChecksum: "fake-checksum",
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
       });
 
       const updated = await editStoryProse(db, {
@@ -265,10 +274,13 @@ describe("Story Management Core", () => {
       await approveAndShareStory(db, {
         storyId: story.id,
         narratorPersonId: ownerId,
+        audienceTier: "family",
         familyIds: [f1],
-        approvalAudioStorageKey: "approval.webm",
-        approvalAudioContentType: "audio/webm",
-        approvalAudioChecksum: "fake-checksum",
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
       });
 
       const viewerCtx = { kind: "account" as const, personId: viewerId };
@@ -335,10 +347,13 @@ describe("Story Management Core", () => {
       await approveAndShareStory(db, {
         storyId: story.id,
         narratorPersonId: ownerId,
+        audienceTier: "family",
         familyIds: [f1, f2],
-        approvalAudioStorageKey: "approval.webm",
-        approvalAudioContentType: "audio/webm",
-        approvalAudioChecksum: "fake-checksum",
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
       });
 
       // Charlie likes it
