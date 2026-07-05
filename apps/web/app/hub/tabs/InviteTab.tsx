@@ -13,9 +13,10 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createLinkSession } from "@chronicle/capture";
-import { createInvitation } from "@chronicle/core";
+import { createInvitation, listActiveFamiliesForPerson } from "@chronicle/core";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
+import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
   INVITE_FLASH_COOKIE,
@@ -46,8 +47,12 @@ async function createInvite(formData: FormData): Promise<void> {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
   const narratorId = String(formData.get("narratorId") ?? "");
-  const familyId = String(formData.get("familyId") ?? "");
-  if (!narratorId || !familyId) throw new Error("narrator and family required");
+  if (!narratorId) throw new Error("narrator required");
+  // Server-side family-target guard (Finding 2): a crafted POST can omit familyId, which the browser
+  // would otherwise have auto-filled with an arbitrary first family. Resolve it against the inviter's
+  // OWN active families — refusing the ambiguous empty-with-several case — before touching the domain.
+  const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
+  const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
 
   // The membership gate (inviter AND narrator must be active members of this family) is enforced
   // inside createLinkSession — the domain owns it, transactionally. We don't re-check here.
@@ -74,8 +79,11 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   const inviteeName = String(formData.get("inviteeName") ?? "").trim();
   const inviteeEmail = String(formData.get("inviteeEmail") ?? "").trim();
   const relationshipLabel = String(formData.get("relationshipLabel") ?? "").trim();
-  const familyId = String(formData.get("familyId") ?? "");
-  if (!inviteeName || !familyId) throw new Error("name and family required");
+  if (!inviteeName) throw new Error("name required");
+  // Server-side family-target guard (Finding 2): resolve the single-family target against the inviter's
+  // OWN active families so a crafted POST can't silently invite into an arbitrary first family.
+  const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
+  const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
 
   // createInvitation enforces the "inviter must be an active member" gate transactionally; no
   // redundant pre-check here.
@@ -245,6 +253,37 @@ export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
     .innerJoin(families, eq(families.id, memberships.familyId))
     .where(and(eq(memberships.personId, ctx.personId), eq(memberships.status, "active")));
   const familyIds = inviterFams.map((f) => f.id);
+
+  // Pending-only viewer guard (Finding 1). Invite is a member-only affordance — you invite people INTO
+  // a family you belong to. A viewer who belongs to no family has nothing to invite into; rendering the
+  // form would produce a broken zero-option `<select name="familyId" required>`. Reaching /hub?tab=invite
+  // directly must instead show the shared pending-only empty copy, mirroring StoriesTab/AsksTab. page.tsx
+  // also hides the tab and gates this dispatch, so this is a robust second line, not the only one.
+  if (inviterFams.length === 0) {
+    return (
+      <div
+        style={{
+          background: "var(--surface-card)",
+          border: "var(--border-width) solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: 30,
+          textAlign: "center",
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "var(--font-story)",
+            fontSize: "var(--text-story)",
+            color: "var(--text-muted)",
+            margin: 0,
+          }}
+        >
+          {hub.shell.pendingEmpty}
+        </p>
+      </div>
+    );
+  }
+
   const candidateRows = familyIds.length
     ? await db
         .select({ id: persons.id, displayName: persons.displayName })
@@ -284,10 +323,23 @@ export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
     </option>
   ));
   // An invitation is single-family. When the hub is scoped to one of the inviter's families, that
-  // family is the pre-selected target; in "all" the first family is the default and the inviter picks
-  // (Task 4.5). A scope that isn't one of the inviter's families falls back to the default.
+  // family is the pre-selected, deliberate target. In "all" with several families there is NO safe
+  // default — leaving `required` alone lets the browser auto-select the first (arbitrary) family, so
+  // we prepend a disabled placeholder and start with an empty selection to FORCE an explicit pick
+  // (Finding 2). A scope that isn't one of the inviter's families falls back to this same logic.
   const familyDefault =
     scope !== "all" && inviterFams.some((f) => f.id === scope) ? scope : undefined;
+  // Show the placeholder only in the genuinely ambiguous case: no deliberate default AND >1 family.
+  // With a single family the lone option is unambiguous, so no placeholder is needed.
+  const showFamilyPlaceholder = !familyDefault && inviterFams.length > 1;
+  // Effective initial selection: the deliberate default, else "" so the disabled placeholder (value="")
+  // is what's selected — which makes `required` block an empty submit.
+  const familySelectDefault = familyDefault ?? "";
+  const familyPlaceholderOption = showFamilyPlaceholder ? (
+    <option value="" disabled>
+      {hub.invite.familyChoosePlaceholder}
+    </option>
+  ) : null;
 
   return (
     <div style={{ maxWidth: 600, display: "grid", gap: 44 }}>
@@ -328,7 +380,8 @@ export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
           </label>
           <label className="kin-form-label">
             {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required defaultValue={familyDefault}>
+            <select name="familyId" className="kin-field" required defaultValue={familySelectDefault}>
+              {familyPlaceholderOption}
               {familyOptions}
             </select>
           </label>
@@ -357,7 +410,8 @@ export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
           </label>
           <label className="kin-form-label">
             {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required defaultValue={familyDefault}>
+            <select name="familyId" className="kin-field" required defaultValue={familySelectDefault}>
+              {familyPlaceholderOption}
               {familyOptions}
             </select>
           </label>

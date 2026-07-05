@@ -296,7 +296,35 @@ export default async function HubPage({
           {activeTab === "asks" && (
             <AsksTab scope={scope} hasFamily={activeFamilies.length > 0} />
           )}
-          {activeTab === "invite" && <InviteTab scope={scope} />}
+          {/* Invite is member-only: you invite people INTO a family you belong to. A pending-only
+              viewer hitting ?tab=invite directly would otherwise reach a broken zero-option family
+              form — gate the dispatch on membership and show the shared pending-only empty instead
+              (InviteTab self-guards too, but this keeps the broken form off the page entirely). */}
+          {activeTab === "invite" &&
+            (activeFamilies.length > 0 ? (
+              <InviteTab scope={scope} />
+            ) : (
+              <div
+                style={{
+                  background: "var(--surface-card)",
+                  border: "var(--border-width) solid var(--border)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: 30,
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: "var(--font-story)",
+                    fontSize: "var(--text-story)",
+                    color: "var(--text-muted)",
+                    margin: 0,
+                  }}
+                >
+                  {hub.shell.pendingEmpty}
+                </p>
+              </div>
+            ))}
           {activeTab === "requests" && <RequestsTab scope={scope} />}
         </section>
       </div>

@@ -144,6 +144,9 @@ export const hub = {
     relationshipLabelOptional: "(optional)",
     relationshipPlaceholder: "e.g. your cousin",
     familyLabel: "Family",
+    // Disabled placeholder for the family <select> when the inviter is in >1 family and the hub scope
+    // gives no default — forces an explicit pick so an invite never lands in an arbitrary first family.
+    familyChoosePlaceholder: "Choose a family…",
     createInviteLink: "Create invite link",
     narratorHeading: "Invite a narrator to record",
     narratorBody:
