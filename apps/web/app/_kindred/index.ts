@@ -12,7 +12,11 @@ export { KindredStoryCard } from "./KindredStoryCard";
 export type { KindredStoryCardProps } from "./KindredStoryCard";
 export { KindredAccountMenu } from "./KindredAccountMenu";
 export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
-export { AccountMenuMount } from "./AccountMenuMount";
+// NOTE: AccountMenuMount is intentionally NOT re-exported here. It is a server-only
+// module (`import "server-only"` + DB/auth access); pulling it into this barrel drags
+// it into every client component that imports a Kindred UI primitive (e.g.
+// CreateFamilyForm importing KindredButton), which fails the Next build. Import it
+// directly from "./AccountMenuMount" in the (server-only) root layout instead.
 export { KindredFontScale } from "./KindredFontScale";
 export { KindredProseEditor } from "./KindredProseEditor";
 export type { KindredProseEditorProps } from "./KindredProseEditor";

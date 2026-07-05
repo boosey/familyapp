@@ -3,7 +3,7 @@ import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
-import { AccountMenuMount } from "./_kindred";
+import { AccountMenuMount } from "./_kindred/AccountMenuMount";
 import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "../lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "./_kindred/font-scale-constants";
 
