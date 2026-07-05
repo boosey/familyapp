@@ -94,7 +94,11 @@ export async function AlbumSurface({
     <>
       {uploadTargetFamilyId ? (
         <div style={{ margin: "0 0 24px" }}>
-          <AlbumUploader families={active} currentFamilyId={uploadTargetFamilyId} />
+          <AlbumUploader
+            families={active}
+            currentFamilyId={uploadTargetFamilyId}
+            scope={validScope}
+          />
         </div>
       ) : null}
 

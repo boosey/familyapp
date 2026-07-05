@@ -214,4 +214,59 @@ describe("AlbumUploader multi-family picker", () => {
     expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
   });
+
+  // Consistency with the ask picker (Task 3): a concrete non-"all" hub scope seeds the default even
+  // when it differs from the current-album context. Here scope names FAM_A while the album on screen
+  // is FAM_B — the scope wins.
+  it("seeds the default from a concrete hub scope (over the current album)", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_B.familyId}
+        scope={FAM_A.familyId}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+  });
+
+  // scope="all" is ambiguous, so the current-album context still wins (behavior unchanged from before
+  // the scope prop existed). Precedence: a concrete family scope overrides; "all" defers.
+  it('defers to the current album when scope is "all"', () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_B.familyId}
+        scope="all"
+      />,
+    );
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+  });
+
+  // A scope change is a same-route soft navigation (no remount) — the default must re-seed to the new
+  // scope, just like a currentFamilyId change does. The prevKey folds BOTH signals.
+  it("re-seeds when the scope prop changes (no remount)", () => {
+    const { rerender } = render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        scope="all"
+      />,
+    );
+    // "all" → current album (FAM_A) is the default.
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+
+    // Scope narrows to FAM_B while the mount stays; the default follows.
+    rerender(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        scope={FAM_B.familyId}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+  });
 });

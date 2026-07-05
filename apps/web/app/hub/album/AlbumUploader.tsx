@@ -26,6 +26,7 @@ import { uploadAlbumPhotoAction } from "./actions";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyPicker } from "../FamilyPicker";
+import { seedComposeFamilies } from "@/lib/compose-scope";
 
 export interface AlbumFamilyOption {
   familyId: string;
@@ -38,9 +39,16 @@ const MAX_BATCH_FILES = 30;
 export function AlbumUploader({
   families,
   currentFamilyId,
+  scope = null,
 }: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
+  /**
+   * The hub's `?scope=` signal ("all" | a family id). When it names a concrete family the viewer is
+   * in, the default selection follows it (consistency with the ask picker); otherwise ("all" or
+   * absent) the default falls back to the current album on screen.
+   */
+  scope?: string | null;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,19 +56,29 @@ export function AlbumUploader({
   const [error, setError] = useState<string | null>(null);
   // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
   const [note, setNote] = useState<string | null>(null);
-  // Multi-family picker state: default to ONLY the current family context (never all).
+  // Multi-family picker state. Seed from the hub scope when it names a concrete family (shared rule
+  // with the ask picker via `seedComposeFamilies`), else fall back to ONLY the current album context
+  // (never "all"). A concrete non-"all" family scope wins; "all" defers to the current album.
   const showPicker = families.length > 1;
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set([currentFamilyId]),
-  );
-  // The family switcher is a same-route soft navigation, so this component is NOT remounted — only
-  // `currentFamilyId` changes. Re-seed the picker to ONLY the new context family whenever it changes
-  // (the "adjust state during render on a prop change" pattern), so the default always tracks the
-  // album on screen. An in-progress selection is left untouched while the context stays the same.
-  const [prevCurrent, setPrevCurrent] = useState(currentFamilyId);
-  if (prevCurrent !== currentFamilyId) {
-    setPrevCurrent(currentFamilyId);
-    setSelected(new Set([currentFamilyId]));
+  const familyIds = families.map((f) => f.familyId);
+  const seed = () => {
+    if (scope && scope !== "all") {
+      const s = seedComposeFamilies(scope, familyIds);
+      if (s.size > 0) return s;
+    }
+    return new Set([currentFamilyId]);
+  };
+  const [selected, setSelected] = useState<Set<string>>(seed);
+  // The family switcher (and a scope change) is a same-route soft navigation, so this component is
+  // NOT remounted — only its props change. Re-seed the picker whenever EITHER the scope or the
+  // current-context family changes (the "adjust state during render on a prop change" pattern), so
+  // the default always tracks the current signal. An in-progress selection is left untouched while
+  // both stay the same (the key comparison guards that).
+  const [prevKey, setPrevKey] = useState(`${scope ?? ""}|${currentFamilyId}`);
+  const key = `${scope ?? ""}|${currentFamilyId}`;
+  if (prevKey !== key) {
+    setPrevKey(key);
+    setSelected(seed());
   }
 
   function toggle(familyId: string) {
@@ -117,7 +135,7 @@ export function AlbumUploader({
           ? hub.album.photosPartial(result.added, result.failed)
           : null,
       );
-      setSelected(new Set([currentFamilyId]));
+      setSelected(seed());
       router.refresh();
     });
   }
