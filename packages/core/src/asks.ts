@@ -313,9 +313,26 @@ export interface AskerOwnAsk {
 export async function listAsksByAsker(
   db: Database,
   ctx: AuthContext,
+  opts: { familyId?: string } = {},
 ): Promise<AskerOwnAsk[]> {
   const asker = viewerPersonId(ctx);
   if (asker === null) return [];
+
+  // Scoped to a single family (the hub's `?scope=`): restrict to asks linked to that family via the
+  // OPEN `ask_families` join (ADR-0010). An ask can carry several family rows, but filtering the join
+  // to ONE family id yields at most one matching row per ask (composite PK (ask_id, family_id)), so
+  // the result is already distinct by ask id — no extra dedup needed.
+  if (opts.familyId) {
+    const rows = await db
+      .select({ ask: asks, targetSpokenName: persons.spokenName })
+      .from(asks)
+      .innerJoin(persons, eq(persons.id, asks.targetPersonId))
+      .innerJoin(askFamilies, eq(askFamilies.askId, asks.id))
+      .where(and(eq(asks.askerPersonId, asker), eq(askFamilies.familyId, opts.familyId)))
+      .orderBy(desc(asks.createdAt));
+    return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName }));
+  }
+
   const rows = await db
     .select({ ask: asks, targetSpokenName: persons.spokenName })
     .from(asks)

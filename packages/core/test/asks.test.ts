@@ -16,6 +16,7 @@ import {
   createAsk,
   createInvitation,
   listAskSubjectPhotos,
+  listAsksByAsker,
   listPendingAsksForNarrator,
 } from "../src/index";
 import { addMembership, endMembership, makeFamily, makePerson } from "./helpers";
@@ -415,6 +416,68 @@ describe("createAsk — ADR-0006 invitation floor", () => {
         { targetPersonId: inviteePersonId, questionText: "Q" },
       ),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
+describe("listAsksByAsker — family scope filter (Increment 4A)", () => {
+  it("with { familyId } returns ONLY asks linked to that family; no-arg returns all", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "A", narrator.id);
+    const famB = await makeFamily(db, "B", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, asker.id, famA.id);
+    await addMembership(db, asker.id, famB.id);
+    const ctx = { kind: "account", personId: asker.id } as const;
+
+    const askA = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famA.id],
+      questionText: "Q for A",
+    });
+    const askB = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famB.id],
+      questionText: "Q for B",
+    });
+
+    const scopedA = await listAsksByAsker(db, ctx, { familyId: famA.id });
+    expect(scopedA.map((m) => m.ask.id)).toEqual([askA.id]);
+
+    const scopedB = await listAsksByAsker(db, ctx, { familyId: famB.id });
+    expect(scopedB.map((m) => m.ask.id)).toEqual([askB.id]);
+
+    const all = await listAsksByAsker(db, ctx);
+    expect(new Set(all.map((m) => m.ask.id))).toEqual(new Set([askA.id, askB.id]));
+  });
+
+  it("returns an ask linked to MULTIPLE families exactly once per family scope (distinct by ask id)", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "A", narrator.id);
+    const famB = await makeFamily(db, "B", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, asker.id, famA.id);
+    await addMembership(db, asker.id, famB.id);
+    const ctx = { kind: "account", personId: asker.id } as const;
+
+    const ask = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famA.id, famB.id],
+      questionText: "Q for both",
+    });
+
+    // The ask carries two ask_families rows; scoping to either family must return it exactly once.
+    expect((await listAsksByAsker(db, ctx, { familyId: famA.id })).map((m) => m.ask.id)).toEqual([
+      ask.id,
+    ]);
+    expect((await listAsksByAsker(db, ctx, { familyId: famB.id })).map((m) => m.ask.id)).toEqual([
+      ask.id,
+    ]);
+    // And in the unscoped list it appears once (not once per family row).
+    expect((await listAsksByAsker(db, ctx)).map((m) => m.ask.id)).toEqual([ask.id]);
   });
 });
 

@@ -8,7 +8,7 @@ import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 
-export async function AsksTab() {
+export async function AsksTab({ scope = "all" }: { scope?: string } = {}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -26,7 +26,10 @@ export async function AsksTab() {
     );
   }
 
-  const mine = await listAsksByAsker(db, ctx);
+  // Honor the hub's single family scope: "all" lists every ask the viewer sent; a family id restricts
+  // to asks raised in that family (via ask_families). The scope is already validated upstream against
+  // the viewer's own families.
+  const mine = await listAsksByAsker(db, ctx, scope !== "all" ? { familyId: scope } : undefined);
   const enriched = await Promise.all(
     mine.map(async (m) => {
       let storyVisible = false;
