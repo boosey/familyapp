@@ -12,6 +12,7 @@
  */
 import { useState } from "react";
 import { hub } from "@/app/_copy";
+import { FamilyPicker } from "../FamilyPicker";
 
 export function AskFamilyPicker({
   families,
@@ -51,51 +52,13 @@ export function AskFamilyPicker({
           {hub.ask.familiesHelp}
         </p>
       ) : null}
-      <div style={{ display: "grid", gap: 8 }}>
-        {families.map((f) => (
-          <label
-            key={f.familyId}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-body)",
-            }}
-          >
-            <input
-              type="checkbox"
-              name="familyIds"
-              value={f.familyId}
-              checked={checked.has(f.familyId)}
-              onChange={() => toggle(f.familyId)}
-            />
-            {f.familyName}
-          </label>
-        ))}
-      </div>
-      {required ? (
-        <input
-          type="text"
-          tabIndex={-1}
-          aria-hidden="true"
-          required
-          value={checked.size > 0 ? "ok" : ""}
-          onChange={() => {}}
-          onInvalid={(e) =>
-            (e.currentTarget as HTMLInputElement).setCustomValidity(hub.ask.familiesRequired)
-          }
-          onInput={(e) => (e.currentTarget as HTMLInputElement).setCustomValidity("")}
-          style={{
-            position: "absolute",
-            width: 1,
-            height: 1,
-            opacity: 0,
-            pointerEvents: "none",
-          }}
-        />
-      ) : null}
+      <FamilyPicker
+        families={families}
+        selected={checked}
+        onToggle={toggle}
+        required={required}
+        requiredMessage={hub.ask.familiesRequired}
+      />
     </fieldset>
   );
 }

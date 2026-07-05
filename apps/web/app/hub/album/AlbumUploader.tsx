@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { uploadAlbumPhotoAction } from "./actions";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
+import { FamilyPicker } from "../FamilyPicker";
 
 export interface AlbumFamilyOption {
   familyId: string;
@@ -185,32 +186,12 @@ export function AlbumUploader({
           >
             {hub.album.chooseAlbums}
           </legend>
-          {families.map((f) => (
-            <label
-              key={f.familyId}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui)",
-                color: "var(--text-body)",
-                padding: "8px 6px",
-                cursor: pending ? "default" : "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="familyIds"
-                value={f.familyId}
-                checked={selected.has(f.familyId)}
-                disabled={pending}
-                onChange={() => toggle(f.familyId)}
-                style={{ width: 20, height: 20, flexShrink: 0 }}
-              />
-              {f.familyName}
-            </label>
-          ))}
+          <FamilyPicker
+            families={families}
+            selected={selected}
+            onToggle={toggle}
+            disabled={pending}
+          />
         </fieldset>
       ) : null}
 
