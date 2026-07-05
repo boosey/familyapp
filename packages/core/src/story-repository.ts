@@ -429,6 +429,15 @@ export interface ApproveAndShareInput {
     checksum: string;
     durationSeconds?: number;
   };
+  /**
+   * Explicit family targets chosen by the author at the share step (ADR-0010; multi-family picker).
+   * When present and non-empty for a `family`/`branch` tier, these REPLACE the default-targeting
+   * computation: the set is validated against the owner's ACTIVE memberships (a foreign family
+   * throws) and written as the story's `story_families`. Absent/empty → the existing default rule
+   * (originating family / ask families / sole active family / ambiguous) applies unchanged. Ignored
+   * for `public`.
+   */
+  familyIds?: string[];
   now?: Date;
 }
 
@@ -650,15 +659,8 @@ export async function approveAndShareStory(
     let targetedFamilyIds: string[] = [];
     let ambiguousDefaultTarget = false;
     if (input.audienceTier === "family" || input.audienceTier === "branch") {
-      const existing = await tx
-        .select({ familyId: storyFamilies.familyId })
-        .from(storyFamilies)
-        .where(eq(storyFamilies.storyId, input.storyId))
-        .orderBy(storyFamilies.familyId);
-      if (existing.length > 0) {
-        // Sorted above so the returned set is deterministic regardless of row insertion order.
-        targetedFamilyIds = existing.map((r) => r.familyId);
-      } else {
+      const explicit = [...new Set(input.familyIds ?? [])];
+      if (explicit.length > 0) {
         const ownerActive = await tx
           .select({ familyId: memberships.familyId })
           .from(memberships)
@@ -668,17 +670,50 @@ export async function approveAndShareStory(
               eq(memberships.status, "active"),
             ),
           );
-        const { targets, ambiguous } = computeDefaultFamilyTargets({
-          originatingFamilyId: current.originatingFamilyId,
-          askFamilyIds,
-          ownerActiveFamilyIds: new Set(ownerActive.map((r) => r.familyId)),
-        });
-        ambiguousDefaultTarget = ambiguous;
-        if (targets.length > 0) {
-          await tx
-            .insert(storyFamilies)
-            .values(targets.map((familyId) => ({ storyId: input.storyId, familyId })));
-          targetedFamilyIds = targets;
+        const ownerActiveSet = new Set(ownerActive.map((r) => r.familyId));
+        for (const familyId of explicit) {
+          if (!ownerActiveSet.has(familyId)) {
+            throw new InvariantViolation(
+              `approveAndShareStory: story owner ${current.ownerPersonId} is not an active member ` +
+                `of family ${familyId}; cannot surface a story into a family its owner isn't in`,
+            );
+          }
+        }
+        await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
+        await tx
+          .insert(storyFamilies)
+          .values(explicit.map((familyId) => ({ storyId: input.storyId, familyId })));
+        targetedFamilyIds = [...explicit].sort();
+      } else {
+        const existing = await tx
+          .select({ familyId: storyFamilies.familyId })
+          .from(storyFamilies)
+          .where(eq(storyFamilies.storyId, input.storyId))
+          .orderBy(storyFamilies.familyId);
+        if (existing.length > 0) {
+          targetedFamilyIds = existing.map((r) => r.familyId);
+        } else {
+          const ownerActive = await tx
+            .select({ familyId: memberships.familyId })
+            .from(memberships)
+            .where(
+              and(
+                eq(memberships.personId, current.ownerPersonId),
+                eq(memberships.status, "active"),
+              ),
+            );
+          const { targets, ambiguous } = computeDefaultFamilyTargets({
+            originatingFamilyId: current.originatingFamilyId,
+            askFamilyIds,
+            ownerActiveFamilyIds: new Set(ownerActive.map((r) => r.familyId)),
+          });
+          ambiguousDefaultTarget = ambiguous;
+          if (targets.length > 0) {
+            await tx
+              .insert(storyFamilies)
+              .values(targets.map((familyId) => ({ storyId: input.storyId, familyId })));
+            targetedFamilyIds = targets;
+          }
         }
       }
     }

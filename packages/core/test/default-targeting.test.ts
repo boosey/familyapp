@@ -313,3 +313,70 @@ describe("approveAndShareStory — default family targeting", () => {
     expect((await getStoryForViewer(db, account(asker.id), story.id))?.id).toBe(story.id);
   });
 });
+
+describe("approveAndShareStory explicit familyIds (multi-family picker)", () => {
+  it("writes exactly the explicit family targets, overriding the default computation", async () => {
+    // Owner active in famA + famB; a self-story (no ask, no originating family) would otherwise be
+    // AMBIGUOUS. An explicit pick of famB must win outright.
+    const me = await makePerson(db, "Alex");
+    const famA = await makeFamily(db, "Boudreaux", me.id);
+    const famB = await makeFamily(db, "Carney", me.id);
+    await addMembership(db, me.id, famA.id);
+    await addMembership(db, me.id, famB.id);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: me.id,
+      state: "pending_approval",
+    });
+    const result = await approveAndShareStory(db, {
+      storyId: story.id,
+      narratorPersonId: me.id,
+      audienceTier: "family",
+      familyIds: [famB.id],
+    });
+
+    expect(result.targetedFamilyIds).toEqual([famB.id]);
+    expect(result.ambiguousDefaultTarget).toBe(false);
+  });
+
+  it("rejects a family the owner is not an active member of", async () => {
+    const me = await makePerson(db, "Alex");
+    const famA = await makeFamily(db, "Boudreaux", me.id);
+    await addMembership(db, me.id, famA.id);
+    const foreignFamilyId = "99999999-9999-9999-9999-999999999999";
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: me.id,
+      state: "pending_approval",
+    });
+    await expect(
+      approveAndShareStory(db, {
+        storyId: story.id,
+        narratorPersonId: me.id,
+        audienceTier: "family",
+        familyIds: [foreignFamilyId],
+      }),
+    ).rejects.toThrow(/not an active member/i);
+  });
+
+  it("falls back to default targeting when no familyIds are given (ambiguous → nothing)", async () => {
+    const me = await makePerson(db, "Alex");
+    const famA = await makeFamily(db, "Boudreaux", me.id);
+    const famB = await makeFamily(db, "Carney", me.id);
+    await addMembership(db, me.id, famA.id);
+    await addMembership(db, me.id, famB.id);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: me.id,
+      state: "pending_approval",
+    });
+    const result = await approveAndShareStory(db, {
+      storyId: story.id,
+      narratorPersonId: me.id,
+      audienceTier: "family",
+    });
+
+    expect(result.targetedFamilyIds).toEqual([]);
+    expect(result.ambiguousDefaultTarget).toBe(true);
+  });
+});
