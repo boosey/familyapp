@@ -212,7 +212,7 @@ describe("composeStoryAction — ask carry-forward (ADR-0009 Phase 3)", () => {
     // The asker raises an ask ABOUT the two photos (both target-visible; gate passes).
     const ask = await createAsk(runtimeDb, account(asker), {
       targetPersonId: target,
-      familyId: fam,
+      familyIds: [fam],
       questionText: "Tell me about these two.",
       subjectPhotoIds: [photo1, photo2],
     });
@@ -252,7 +252,7 @@ describe("ask-attach happy path via the AskTab write path (createAsk)", () => {
 
     const ask = await createAsk(runtimeDb, account(asker), {
       targetPersonId: target,
-      familyId: fam,
+      familyIds: [fam],
       questionText: "Tell the story of this photo.",
       subjectPhotoIds: [photo],
     });

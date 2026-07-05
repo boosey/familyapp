@@ -39,7 +39,7 @@ async function makeNarratorAndAsk(db: Database) {
     { kind: "account", personId: asker.id },
     {
       targetPersonId: narrator.id,
-      familyId: fam.id,
+      familyIds: [fam.id],
       questionText: "What was your childhood like?",
     },
   );

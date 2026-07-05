@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { familyPhotos, familyPhotoFamilies, media, stories, storyRecordings } from "@chronicle/db/content";
 import {
+  askFamilies,
   asks,
   askSubjectPhotos,
   consentRecords,
@@ -133,15 +134,18 @@ describe("eraseStory — a non-owner, non-steward is denied", () => {
   });
 });
 
-async function makeVoiceAsk(askerPersonId: string, targetPersonId: string, familyId: string | null) {
+async function makeVoiceAsk(askerPersonId: string, targetPersonId: string, familyIds: string[] = []) {
   const [clip] = await db
     .insert(media)
     .values({ ownerPersonId: askerPersonId, kind: "story_audio", storageKey: `s3://b/${crypto.randomUUID()}.wav`, contentType: "audio/wav", checksum: crypto.randomUUID() })
     .returning();
   const [ask] = await db
     .insert(asks)
-    .values({ askerPersonId, targetPersonId, familyId: familyId ?? undefined, questionText: "What was your first job?", recordingMediaId: clip!.id })
+    .values({ askerPersonId, targetPersonId, questionText: "What was your first job?", recordingMediaId: clip!.id })
     .returning();
+  if (familyIds.length > 0) {
+    await db.insert(askFamilies).values(familyIds.map((familyId) => ({ askId: ask!.id, familyId })));
+  }
   return { ask: ask!, clipStorageKey: clip!.storageKey };
 }
 
@@ -150,16 +154,39 @@ describe("eraseAsk — asker erases their own voice question", () => {
     const asker = await makePerson("Asker");
     const target = await makePerson("Target");
     const family = await makeFamily(asker.id);
-    const { ask, clipStorageKey } = await makeVoiceAsk(asker.id, target.id, family.id);
+    const { ask, clipStorageKey } = await makeVoiceAsk(asker.id, target.id, [family.id]);
 
     const result = await eraseAsk(db, { kind: "account", personId: asker.id }, { askId: ask.id });
     expect(result.allowed).toBe(true);
     if (!result.allowed) return;
     expect(result.storageKeys).toContain(clipStorageKey);
     expect(await db.select().from(asks).where(eq(asks.id, ask.id))).toHaveLength(0);
+    // The join rows are cleared with the ask.
+    expect(await db.select().from(askFamilies).where(eq(askFamilies.askId, ask.id))).toHaveLength(0);
     const audit = await db.select().from(erasureAudit).where(eq(erasureAudit.itemId, ask.id));
     expect(audit[0]!.itemType).toBe("ask");
     expect(audit[0]!.reason).toBe("owner_erasure");
+  });
+});
+
+describe("eraseAsk — steward moderation across multiple targeted families", () => {
+  it("lets the steward of ANY targeted family erase the ask (not just the first)", async () => {
+    const asker = await makePerson("Asker");
+    const target = await makePerson("Target");
+    // Two families with distinct stewards; the ask targets BOTH.
+    const famA = await makeFamily(asker.id); // asker stewards famA
+    const stewardB = await makePerson("StewardB");
+    const famB = await makeFamily(stewardB.id); // stewardB stewards famB
+    const { ask } = await makeVoiceAsk(asker.id, target.id, [famA.id, famB.id]);
+
+    // The steward of the SECOND targeted family (not the asker) may moderate-delete it.
+    const result = await eraseAsk(db, { kind: "account", personId: stewardB.id }, { askId: ask.id });
+    expect(result.allowed).toBe(true);
+    if (!result.allowed) return;
+    expect(await db.select().from(asks).where(eq(asks.id, ask.id))).toHaveLength(0);
+    expect(await db.select().from(askFamilies).where(eq(askFamilies.askId, ask.id))).toHaveLength(0);
+    const audit = await db.select().from(erasureAudit).where(eq(erasureAudit.itemId, ask.id));
+    expect(audit[0]!.reason).toBe("steward_moderation");
   });
 });
 

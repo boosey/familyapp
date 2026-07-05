@@ -241,7 +241,6 @@ describe("acceptInvitation", () => {
       .values({
         askerPersonId: steward.id,
         targetPersonId: inviteePersonId,
-        familyId: fam.id,
         questionText: "What was your village like?",
         status: "queued",
       })

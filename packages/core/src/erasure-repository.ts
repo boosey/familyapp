@@ -25,6 +25,7 @@ import {
   storyRecordings,
 } from "@chronicle/db/content";
 import {
+  askFamilies,
   asks,
   askSubjectPhotos,
   consentRecords,
@@ -198,12 +199,13 @@ export async function eraseStory(
 
 /**
  * Erase an Ask (ADR-0008). An Ask is owned by its asker (right-to-erasure) and moderatable by the
- * steward of its `family_id` (nullable — an unaddressed Ask has no steward, so only the asker may
- * erase). Unlike a story, an Ask has NO consent ledger, so NO cascade token is needed: once the
- * parent `asks` row is gone, the existence-scoped media guard permits deleting its question audio.
- * So delete the parent row FIRST, then its (voice-origin only) recording media, in one transaction.
- * `ask_subject_photos` cascades on the ask delete (FK ON DELETE CASCADE); we clear it explicitly
- * first for clarity. The produced answer (`asks.story_id`, if any) is a SEPARATE item — untouched.
+ * steward of ANY family it is addressed to (`ask_families` — an unaddressed Ask targets no family,
+ * so has no steward, and only the asker may erase). Unlike a story, an Ask has NO consent ledger, so
+ * NO cascade token is needed: once the parent `asks` row is gone, the existence-scoped media guard
+ * permits deleting its question audio. So delete the parent row FIRST, then its (voice-origin only)
+ * recording media, in one transaction. `ask_subject_photos` cascades on the ask delete (FK ON DELETE
+ * CASCADE); `ask_families` has a plain FK so its rows are cleared explicitly before the ask row. The
+ * produced answer (`asks.story_id`, if any) is a SEPARATE item — untouched.
  */
 export async function eraseAsk(
   db: Database,
@@ -217,7 +219,6 @@ export async function eraseAsk(
     .select({
       id: asks.id,
       askerPersonId: asks.askerPersonId,
-      familyId: asks.familyId,
       recordingMediaId: asks.recordingMediaId,
     })
     .from(asks)
@@ -225,16 +226,14 @@ export async function eraseAsk(
     .limit(1);
   if (!ask) return { allowed: false, reason: `ask ${input.askId} not found` };
 
-  // The steward of the Ask's family (if addressed to one) may moderate-delete it.
-  const stewardIds: (string | null)[] = [];
-  if (ask.familyId) {
-    const [fam] = await db
-      .select({ stewardPersonId: families.stewardPersonId })
-      .from(families)
-      .where(eq(families.id, ask.familyId))
-      .limit(1);
-    if (fam) stewardIds.push(fam.stewardPersonId);
-  }
+  // The steward of ANY family the Ask is addressed to (ask_families ⋈ families) may moderate-delete
+  // it. An ask may target one-or-more families now, so gather every one of their stewards.
+  const stewardRows = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(askFamilies)
+    .innerJoin(families, eq(families.id, askFamilies.familyId))
+    .where(eq(askFamilies.askId, input.askId));
+  const stewardIds: (string | null)[] = stewardRows.map((r) => r.stewardPersonId);
   const decision = decideManage(viewer, ask.askerPersonId, stewardIds);
   if (!decision.allowed) return { allowed: false, reason: decision.reason };
 
@@ -243,6 +242,9 @@ export async function eraseAsk(
     const keys = ask.recordingMediaId ? await resolveStorageKeys(tx, [ask.recordingMediaId]) : [];
     // Parent row FIRST (there is no consent lock), then its now-orphan audio.
     await tx.delete(askSubjectPhotos).where(eq(askSubjectPhotos.askId, input.askId));
+    // `ask_families` has a plain (no-cascade) FK to asks, so its rows must be removed before the
+    // parent ask row or the delete would violate the FK.
+    await tx.delete(askFamilies).where(eq(askFamilies.askId, input.askId));
     await tx.delete(asks).where(eq(asks.id, input.askId));
     if (ask.recordingMediaId) {
       await tx.delete(media).where(eq(media.id, ask.recordingMediaId));

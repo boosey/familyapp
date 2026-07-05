@@ -393,7 +393,7 @@ export async function seedInto(
     { kind: "account", personId: sofiaId },
     {
       targetPersonId: eleanorId,
-      familyId: family!.id,
+      familyIds: [family!.id],
       questionText: "Grandma, what's your earliest memory of your own grandmother?",
     },
   );
@@ -402,7 +402,7 @@ export async function seedInto(
     { kind: "account", personId: sofiaId },
     {
       targetPersonId: eleanorId,
-      familyId: family!.id,
+      familyIds: [family!.id],
       questionText:
         "What's the best meal you remember from your childhood? Can you describe it?",
     },
@@ -412,7 +412,7 @@ export async function seedInto(
     { kind: "account", personId: marcoId },
     {
       targetPersonId: eleanorId,
-      familyId: family!.id,
+      familyIds: [family!.id],
       questionText:
         "Tell me about a time you felt really proud of one of your children.",
     },
@@ -422,7 +422,7 @@ export async function seedInto(
     { kind: "account", personId: marcoId },
     {
       targetPersonId: eleanorId,
-      familyId: family!.id,
+      familyIds: [family!.id],
       questionText:
         "What do you wish you'd known when you were twenty years old?",
     },
