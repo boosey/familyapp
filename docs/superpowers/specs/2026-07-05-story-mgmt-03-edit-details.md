@@ -2,8 +2,10 @@
 
 **Prerequisite:** Unit 01 (Story Action Shell) — this unit is a menu item on the owner-only
 `OwnerActionMenu` and follows Unit 01's documented server-action convention.
-**Migration:** none. **Blast radius:** one new core write fn + its export, one new server action,
-one edit-form client component, and the mount point in the story detail page.
+**Migration:** YES — one enum-value add (`human_metadata_edit`) to the `prose_revision_level` pgEnum
+(see "Revision-kind value used" + "Data / migration note"). **Blast radius:** one enum value +
+generated migration, one new core write fn + its export, one new server action, one edit-form client
+component, and the mount point in the story detail page.
 
 ## Purpose
 
@@ -17,7 +19,9 @@ narrow, owner-gated core function that works on any owner-owned story regardless
 **Locked decision:** editing a shared/consented story is FREE — no re-consent. Consent governs *who
 the story is shared with*, not a text freeze; the family already agreed to see this story, and a
 typo fix does not change that agreement. BUT every edit appends a `prose_revisions` audit row so the
-change is attributable and reversible-by-inspection. Tags are **owner-only** (unlike prose
+change is attributable and reversible-by-inspection — recorded under a dedicated
+`human_metadata_edit` revision kind so a metadata edit is never confused with a prose rewrite. Tags
+are **owner-only** (unlike prose
 corrections, which in principle a co-author could make — here tags are the owner's shelving system).
 
 ## Spec
@@ -120,33 +124,57 @@ constrain normal shelving. Adjust in one place (the core fn) if product wants di
 
 ### Revision-kind value used
 
-The `prose_revision_level` pgEnum (schema.ts ~149–156) is exactly:
-`user_authored | ai_transcribed | ai_cleaned | ai_polished | human_corrected | ai_verified`. There is
-**no** `human_metadata_edit` value, and inventing one would violate the enum/CHECK and fail the
-insert. So the audit row uses **`level: "human_corrected"`** — the only human-authored provenance
-level — with `actorPersonId = input.actorPersonId`, `modelId = null`, `promptText = null`,
-`storyRecordingId = null`. This matches how `saveProseCorrection` writes its human edit.
+The `prose_revision_level` pgEnum (schema.ts ~149–156) is today exactly:
+`user_authored | ai_transcribed | ai_cleaned | ai_polished | human_corrected | ai_verified` (all
+values snake_case/lowercase). **This unit adds a new, dedicated seventh value `human_metadata_edit`**
+(matching the sibling naming convention) to that pgEnum in `schema.ts`, appended after `ai_verified`.
+The audit row uses **`level: "human_metadata_edit"`** — with `actorPersonId = input.actorPersonId`,
+`modelId = null`, `promptText = null`, `storyRecordingId = null`. (Locked decision: do NOT overload
+the existing `human_corrected` value, which means "a human edited the prose"; a title/tags edit is a
+semantically distinct event and gets its own kind.)
 
-Because `prose_revisions.text` is `NOT NULL` and by convention holds a **full prose snapshot**, and a
-title/tag edit does **not** change prose, the audit row stores the story's **current (unchanged)
+Because `prose_revisions.text` is `NOT NULL` (schema.ts ~551 — the column is not nullable) and by
+convention holds a **full prose snapshot**, and a title/tag edit does **not** change prose, the
+`human_metadata_edit` row still needs *some* text value. It stores the story's **current (unchanged)
 prose** (the `prose` selected in step 2; `""` if prose is null). This keeps the lineage a valid
-sequence of full-prose snapshots and records "a human touched this story at time T" for provenance,
-even though the change was metadata-only. This is a documented, mild semantic stretch — noted so a
-future reader does not mistake the row for a prose rewrite. (Alternative considered and rejected:
-adding a dedicated `human_metadata_edit` enum value — that IS a schema migration and enum change for
-marginal provenance precision; out of scope for this unit. If metadata-edit auditing ever needs its
-own analytics signal, promote it to its own enum value + migration then.)
+sequence of full-prose snapshots — but now, because the row carries its own `human_metadata_edit`
+kind, a reader (or analytics consumer) can tell unambiguously that this row is a metadata edit with a
+zero prose delta by design, not a prose rewrite. The dedicated kind removes the previous semantic
+stretch; the unchanged-prose snapshot is a NOT-NULL-satisfying carry, not a claim of prose change.
+`intake_revisions` reuses this same enum verbatim (schema.ts ~407) but is unaffected — nothing writes
+`human_metadata_edit` there; adding the value is purely additive to both consumers.
 
 The `prose_revisions` append-only trigger (`prose_revisions_append_only`, invariants.sql ~78–80)
 blocks UPDATE always and DELETE unless consent-scoped — appending a new row is permitted and is the
 correct, immutable way to record the edit.
 
-### Data / no-migration note
+### Data / migration note
 
-**No schema change, no migration.** `stories.title` (`text`, nullable, schema.ts ~452) and
-`stories.tags` (`jsonb $type<string[]>` default `'[]'`, schema.ts ~454) already exist. The audit row
-reuses the existing `prose_revisions` table and the existing `human_corrected` enum value. Nothing
-new is created; `db:generate` will emit no diff.
+**One schema change → one migration.** `stories.title` (`text`, nullable, schema.ts ~452) and
+`stories.tags` (`jsonb $type<string[]>` default `'[]'`, schema.ts ~454) already exist and are
+unchanged. The only schema change is the **new `human_metadata_edit` value on the
+`prose_revision_level` pgEnum**. The audit row reuses the existing `prose_revisions` table.
+
+Per CLAUDE.md § "DB schema codegen": edit `schema.ts`, then run
+`pnpm --filter @chronicle/db db:generate`. This emits BOTH the snapshot
+(`drizzle/schema.sql` + `drizzle/invariants.sql`) AND a new incremental migration
+(`drizzle/migrations/NNNN_*.sql`) for the enum diff.
+
+**Postgres `ALTER TYPE … ADD VALUE` caveat — hand-verify the generated migration.** Adding a value to
+an existing enum compiles to `ALTER TYPE prose_revision_level ADD VALUE 'human_metadata_edit';`.
+Historically Postgres refused `ADD VALUE` inside a transaction block, and a newly-added enum value
+cannot be *used* in the same transaction/statement that adds it. drizzle-kit may wrap the migration in
+a transaction and/or interleave the DDL badly. Apply the same care the repo already documents for
+invariant/trigger changes ("invariant/trigger changes must be hand-carried into the emitted
+migration"): **review the generated `NNNN_*.sql` by hand**, ensure the `ADD VALUE` runs standalone
+(e.g. drizzle-kit's `--> statement-breakpoint` separation, or a `-- no-transaction` directive / manual
+split so it is not co-committed with a statement that references the new value), and confirm the
+snapshot `schema.sql` lists the new value. The **migration-drift-guard test**
+(`packages/db/test/migration-drift.test.ts`) bonds the snapshot and the migration chain, so a
+divergence between the two will fail CI — run it after `db:generate`.
+
+The migration is **additive** (a new enum value only; no data backfill, no column change) and is
+applied to durable Postgres by `db:migrate` in the Vercel build against prod **Neon** at deploy.
 
 ## Plan (TDD)
 
@@ -156,7 +184,18 @@ Tests first, in order:
    ~1332 for the owner-check + `prose_revisions` append idiom), `schema.ts` (the enum ~149, the
    `stories` columns ~452–454, `prose_revisions` ~540), and `page.tsx` ~150–195 for the title/tags
    render. Confirm no allowlist change is needed (staying inside `story-repository.ts`).
-2. **Core fn test** (`packages/core/test/…`, PGlite, mirroring existing story-repository tests):
+2. **Schema + migration FIRST** (before any core code — the enum value must exist or the insert
+   fails):
+   - Add `"human_metadata_edit"` to `proseRevisionLevelEnum` in `schema.ts` (append after
+     `"ai_verified"`; extend the doc comment above the enum to explain the new value).
+   - Run `pnpm --filter @chronicle/db db:generate`. Verify it emits an updated snapshot
+     (`drizzle/schema.sql`) AND a new `drizzle/migrations/NNNN_*.sql` containing the enum `ADD VALUE`.
+   - **Hand-verify the migration** for the `ALTER TYPE … ADD VALUE` transaction caveat (see "Data /
+     migration note"): the `ADD VALUE` must run standalone / not be co-committed with a statement that
+     uses the value. Adjust the generated SQL if drizzle-kit wrapped it unsafely.
+   - Run the drift-guard test: `pnpm --filter @chronicle/db test` (or the specific
+     `migration-drift.test.ts`) — it must stay green, bonding snapshot ↔ migration chain.
+3. **Core fn test** (`packages/core/test/…`, PGlite, mirroring existing story-repository tests):
    - **Owner can edit a `shared` story** — approve+share a story, then `editStoryDetails` with a new
      title + tags succeeds and the returned `Story` reflects them (this is the load-bearing case:
      the existing owner fns would reject this state).
@@ -166,26 +205,27 @@ Tests first, in order:
      `["Family", "trip"]` (trim, dedupe, drop-empty); over-12 or over-40-char inputs throw.
    - **Empty title rejected** — `"   "` throws; story unchanged.
    - **Audit row appended** — after an edit, `listProseRevisions(db, storyId)` has one additional
-     `human_corrected` row with `actorPersonId = owner`, `modelId = null`, and `text` equal to the
-     (unchanged) prose snapshot. Editing again appends a second row (append-only, never mutates).
+     row whose `level === "human_metadata_edit"` (NOT `human_corrected`) with `actorPersonId = owner`,
+     `modelId = null`, and `text` equal to the (unchanged) prose snapshot. Editing again appends a
+     second `human_metadata_edit` row (append-only, never mutates).
    - **Draft also editable** — the same fn works on a `draft` story (no state gate), sanity check.
-3. **Implement** `editStoryDetails` in `story-repository.ts`; export from `index.ts` (add the fn name
+4. **Implement** `editStoryDetails` in `story-repository.ts`; export from `index.ts` (add the fn name
    AND its `EditStoryDetailsInput` type to the `./story-repository` export block, ~22–61).
-4. **Web action test** (`apps/web/__tests__/…`, the project's existing web test setup): the server
+5. **Web action test** (`apps/web/__tests__/…`, the project's existing web test setup): the server
    action rejects a non-account context and a non-owner context without writing, and forwards
    `{ storyId, title, tags }` with the **server-derived** `personId` to core on the happy path
    (assert it does not read ownership/personId from its arguments). Mirror the answer-route action
    tests.
-5. **Implement** the server action (`actions.ts` on the story route) + the inline edit-form client
+6. **Implement** the server action (`actions.ts` on the story route) + the inline edit-form client
    component; wire it as the "Edit details" item inside `OwnerActionMenu` (additive to Unit 01's
    props contract — pass current `title`/`tags` in). Confirm the detail page re-renders with new
    values after save.
-6. **Regression test (project rule):** the "owner can edit a `shared` story + audit row appended"
+7. **Regression test (project rule):** the "owner can edit a `shared` story + audit row appended"
    core test IS the companion regression guard for this unit's central risk — that a post-share edit
    is allowed, gated to the owner, and always leaves a provenance trail. Keep it named so it is
    obviously the regression anchor.
-7. **Green:** `pnpm --filter @chronicle/core test`, then `pnpm --filter @chronicle/web typecheck test
-   lint`, then `pnpm -r typecheck` to be safe.
+8. **Green:** `pnpm --filter @chronicle/db test` (drift guard), `pnpm --filter @chronicle/core test`,
+   then `pnpm --filter @chronicle/web typecheck test lint`, then `pnpm -r typecheck` to be safe.
 
 ## Done when
 
@@ -193,13 +233,15 @@ Tests first, in order:
       owner-gated, **state-agnostic**, exported from `index.ts` (fn + input type).
 - [ ] It updates only `title` + `tags` (+ `updatedAt`); never touches transcript/prose/recording.
 - [ ] Tags normalized per the stated rules; empty title rejected; caps enforced server-side.
-- [ ] Every successful edit appends exactly one immutable `prose_revisions` `human_corrected` row
+- [ ] Every successful edit appends exactly one immutable `prose_revisions` `human_metadata_edit` row
       (unchanged-prose snapshot, `actorPersonId = owner`).
 - [ ] Server action re-derives identity server-side; non-account / non-owner rejected before core.
 - [ ] Inline in-DOM edit form (no native dialog); Cancel discards; Save revalidates the detail page.
-- [ ] No migration (verified: `db:generate` emits no diff).
-- [ ] Core test suite + `@chronicle/web typecheck test lint` + `pnpm -r typecheck` green; the
-      shared-story-edit test is retained as the regression guard.
+- [ ] `human_metadata_edit` added to `proseRevisionLevelEnum` in `schema.ts`; `db:generate` ran and
+      emitted an updated snapshot + a new `NNNN_*.sql` migration; the migration was **hand-verified**
+      for the `ALTER TYPE … ADD VALUE` transaction caveat; drift-guard test green.
+- [ ] `@chronicle/db test` (drift guard) + core test suite + `@chronicle/web typecheck test lint` +
+      `pnpm -r typecheck` green; the shared-story-edit test is retained as the regression guard.
 
 ## Shell fallback
 
@@ -230,8 +272,17 @@ form component are unaffected. This keeps the units independently grabbable.
   is acceptable and matches the composing-surface precedent (`appendTypedTakeContribution` et al.
   are explicitly last-writer-wins). We do NOT add optimistic-concurrency versioning here; note it so
   a future multi-editor scenario knows this is unfenced.
-- **`prose_revisions.text` semantic honesty.** Storing the unchanged prose in a `human_corrected`
-  row for a metadata-only edit slightly overloads that level's meaning. The mitigation is
-  documentation (this spec + a code comment on the insert). An analytics consumer that diffs
-  consecutive `human_corrected` rows will see a zero-prose-delta row — that is the correct signal for
-  "metadata-only edit," but it must be read as such, not as a no-op prose correction.
+- **Enum-add migration must be hand-verified + reach prod.** The `human_metadata_edit` value is a
+  schema change: `db:generate` emits an incremental migration, and Postgres's `ALTER TYPE … ADD VALUE`
+  historically cannot run inside a transaction block and cannot be referenced in the same statement
+  that adds it. Review the generated `NNNN_*.sql` by hand (same care the repo documents for
+  invariant/trigger changes), keep the `ADD VALUE` standalone, and let the drift-guard test bond
+  snapshot ↔ migration. The value only exists in prod once `db:migrate` runs in the Vercel build
+  against Neon at deploy — if the migration is skipped or malformed, `editStoryDetails`'s insert will
+  fail at runtime in prod with an invalid-enum error even though PGlite tests (which apply the
+  snapshot wholesale) pass. Confirm the deploy-time migration applied before considering this shipped.
+- **`prose_revisions.text` NOT-NULL carry.** The `human_metadata_edit` row stores the unchanged prose
+  purely to satisfy the `NOT NULL` `text` column; it is not a claim of prose change. Because the row
+  carries its own dedicated kind, an analytics consumer sees an explicit "metadata edit" signal (with
+  a zero prose delta by design) rather than an ambiguous `human_corrected` row — the previous semantic
+  overload is resolved by the dedicated enum value.

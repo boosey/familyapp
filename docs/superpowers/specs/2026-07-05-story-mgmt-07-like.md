@@ -12,7 +12,8 @@ server action. Cascade touch in `erasure-repository.ts` (`eraseStory`).
 ## Purpose
 
 Give any authorized viewer a one-tap, **visible** way to react to a story — a thumbs-up with a
-count everyone can see. This is the social counterpart to Unit 06's private favorite: a
+count everyone can see, plus a row of avatars showing *who* liked it (the likers the viewer is
+authorized to see). This is the social counterpart to Unit 06's private favorite: a
 favorite is a silent, owner-only bookmark; a like is a public signal to the family that "I saw
 this and it landed." The two are structurally near-identical (per-person-per-story boolean +
 count) but semantically opposite on the one axis that matters: **visibility**. This unit keeps
@@ -35,21 +36,37 @@ them as two independent tables so that opposite semantics can never leak into ea
 Because a like is *explicitly visible*, the design question is whether the UI reveals **who**
 liked (names/avatars) or only a **count**.
 
-**Decision for v1: ship the count + the viewer's own toggle state; treat the liker *list*
-(names/avatars) as a fast follow-up, gated on the same leak-safe filtering described below.**
+**Decision for v1: ship the count + the viewer's own toggle state + the liker *list*
+(names/avatars) — but the liker list is a LEAK-SAFE, viewer-scoped subset, never the full liker
+set.** A like is an explicitly visible reaction, so showing *who* liked (as names/avatars) is
+core to the feature, not a follow-up — provided the identities shown are only those the viewer is
+already authorized to see.
 
-Rationale:
-- The count + own-toggle delivers the entire social signal ("this was seen and appreciated,
-  and here's whether *I* reacted") with zero leak surface — a count is an aggregate that reveals
-  no identity.
-- Revealing liker identities is desirable in a family app and is *allowed* (likes are visible by
-  definition), but it introduces a real leak vector: a story visible to viewer V via family A
-  may have been liked by person P who shares family B (not A) with the *owner* but **not** with V.
-  Naively listing all likers would disclose P's existence/name to V across a family boundary V
-  cannot see. Getting that filter right is a discrete, testable piece of work, so it is scoped as
-  its own step rather than bundled into the first landing.
-- `getLikeState` returns an **optional** `likers` field from day one so the follow-up is additive
-  (no signature churn): v1 returns `likers: undefined`; the follow-up populates it.
+The one hard constraint that makes this safe: **`count` and `likers` are NOT the same set.**
+- `count` is the TOTAL like count (every liker) — a leak-free aggregate that reveals no identity.
+- `likers` is ONLY the subset of likers the viewer may see: people who share an ACTIVE family
+  membership with the *viewer*. It is generally a subset of `count`.
+
+So a story with twelve likers may render as **"12 likes"** with avatars for only the **3** the
+viewer personally shares a family with. The UI shows an honest total and a partial, safe roster —
+never a name the viewer isn't entitled to.
+
+Why the intersection is load-bearing (the leak this closes):
+- A story visible to viewer V via family A may have been liked by person P who shares family B
+  (not A) with the *owner* but **not** with V. Naively listing all likers would disclose P's
+  existence/name to V across a family boundary V cannot see.
+- `likers` therefore intersects the liker set against **the viewer's** active families, exactly
+  mirroring the `loadStoryFamilyTargets` precedent (`apps/web/lib/hub-data.ts`), which only ever
+  surfaces families the viewer belongs to. Resolved in SQL, never post-filtered in the consumer.
+- `count`, being an aggregate, leaks no identity and so is unfiltered — but it MUST NOT be usable
+  to enumerate the hidden likers (see Adversarial notes): the only thing V learns is *how many*,
+  never *who*, for anyone outside V's family scope.
+
+Note on avatars: `persons` carries `display_name` (see `packages/db/src/schema.ts` ~line 187) but
+**has no avatar/photo column today**. So `likers` carries `{ personId, displayName }` as the
+minimal display fields; the UI renders an initials/monogram avatar from `displayName`. When a
+`persons` avatar/photo ref is later modeled, add it to the `likers` shape (additive) — the
+leak-safe filter is unchanged.
 
 ### Separate table vs shared `story_reactions` — DECISION
 
@@ -65,7 +82,7 @@ options:
   query/one authz path serves two visibility rules — exactly the kind of shared choke point where
   a future edit to one silently changes the other. Separate tables keep the private/visible wall
   structural.
-- **Independent evolution.** Likes may later grow a liker-list projection; favorites will not.
+- **Independent evolution.** Likes carry a viewer-scoped liker-list projection (leak-safe); favorites will not.
   Reactions may later add kinds; favorites are a fixed boolean. Divergent futures argue against a
   shared row shape.
 - **No cross-unit dependency.** Units 06 and 07 may be built in any order or independently. A
@@ -169,14 +186,20 @@ Reuse the existing read authorization (`decideStoryRead` / `getStoryForViewer` f
 export interface LikeState {
   /** Whether the current viewer has liked this story. Always false for non-account viewers. */
   likedByViewer: boolean;
-  /** Total like count (visible aggregate — no identity). */
+  /**
+   * TOTAL like count — every liker, a visible aggregate that reveals no identity. This is NOT
+   * `likers.length`: `count` counts all likers, `likers` lists only the viewer-visible subset.
+   */
   count: number;
   /**
-   * OPTIONAL liker identities — populated only by the leak-safe follow-up (see below). Undefined
-   * in v1. When present, contains ONLY likers the viewer is authorized to see (family members
-   * sharing an active membership with the viewer), never the full liker set.
+   * LEAK-SAFE liker identities — ONLY the likers the viewer is authorized to see: persons who
+   * liked this story AND share at least one ACTIVE family membership with the *viewer* (the
+   * `loadStoryFamilyTargets` intersection, applied to persons). NEVER the full liker set. Empty
+   * array (not undefined) when the viewer shares a family with none of the likers, or when the
+   * viewer is a non-account identity. `persons` has no avatar column yet, so the minimal display
+   * fields are `personId` + `displayName`; add an avatar/photo ref here when one is modeled.
    */
-  likers?: Array<{ personId: string; displayName: string }>;
+  likers: Array<{ personId: string; displayName: string }>;
 }
 
 /** Toggle the viewer's like on a story. SEE-authorized, NOT owner-gated. Idempotent. */
@@ -217,13 +240,19 @@ export async function getLikeState(
 2. `count` = `count(*)` over `story_likes` for the story.
 3. `likedByViewer` = whether a row exists for `(storyId, viewer)`; always `false` when
    `viewer === null`.
-4. `likers` — **v1: omit (`undefined`).** Follow-up: populate with a **leak-safe intersection** —
-   the likers the viewer shares an ACTIVE membership with, exactly mirroring the
-   `loadStoryFamilyTargets` precedent (`apps/web/lib/hub-data.ts`) and the family-target
-   intersection pattern: intersect the liker set with the set of persons who co-inhabit at least
-   one of the *viewer's* active families, resolved in SQL, never post-filtered in the consumer.
-   This must **not** simply list everyone who liked — that would leak identities across family
-   boundaries the viewer cannot see.
+4. `likers` — **v1 scope, leak-safe intersection.** Populate with the likers the viewer shares an
+   ACTIVE membership with, exactly mirroring the `loadStoryFamilyTargets` precedent
+   (`apps/web/lib/hub-data.ts`) and the family-target intersection in `authorization.ts`
+   (`targetFamilies ∩ ownerActive ∩ viewerActive`). Concretely, in a single SQL query: join
+   `story_likes` (for the story) → `persons` (for `display_name`) and keep only likers who hold an
+   ACTIVE membership in some family in which the **viewer** also holds an ACTIVE membership —
+   i.e. intersect the liker set against the viewer's active families
+   (`memberships WHERE person_id = viewer AND status = 'active'`), resolved in SQL, never
+   post-filtered in the consumer. The viewer's *own* like is always visible to them (they share a
+   family with themselves trivially, or special-case it). When `viewer === null` (non-account),
+   `likers` is `[]`. This must **NOT** simply list everyone who liked — that would leak identities
+   across family boundaries the viewer cannot see. `count` (step 2) stays the unfiltered total, so
+   `count >= likers.length` always.
 
 Export both `setStoryLike`, `getLikeState`, and `type LikeState` from
 `packages/core/src/index.ts` in the `./story-repository` export block.
@@ -247,14 +276,24 @@ Export both `setStoryLike`, `getLikeState`, and `type LikeState` from
   thumbs-up + count, reflects `likedByViewer` (filled vs outline), calls the server action on click.
   **Optimistic toggle is OK** (flip the icon + count immediately) but the **server action is
   authoritative** — reconcile against its returned `LikeState` (revert on error/throw).
+- **Liker avatar row.** Alongside the count, render a row of avatars for `LikeState.likers` — the
+  viewer-visible subset only. Since `persons` has no photo column yet, render an initials/monogram
+  avatar derived from `displayName` (with the name as tooltip/`aria-label`). **Cap the row** at the
+  first N avatars (e.g. N = 5) and, when `count` exceeds what is shown, append a **"+K"** overflow
+  chip. K is computed against `count` (the honest total), NOT `likers.length` — so "+K" may include
+  likers the viewer cannot see; that is intended (it discloses only *how many more*, never *who*).
+  If `likers` is empty but `count > 0` (viewer shares a family with none of the likers), show the
+  count alone (e.g. "12 likes") with no avatars — never invent placeholder faces.
 - Server action (`"use server"`, colocated `actions.ts` per Unit 01 convention): re-reads
   `getRuntime()` + `getCurrentAuthContext()` server-side, calls `setStoryLike`, then
   `revalidatePath('/hub/stories/' + storyId)` (and the hub feed path if the count surfaces there).
   Never accepts `personId` from the client.
 - **Non-account handling:** when `ctx.kind !== "account"`, **hide the toggle** (no attributable
-  identity, can't like). The **count may still show** (it's a visible aggregate) — render a
-  read-only count without the toggle affordance. State this explicitly in the component: toggle is
-  gated on `ctx.kind === "account"`; count is unconditional.
+  identity, can't like) AND **hide the liker avatar row** — a non-account identity has no viewer
+  family scope to intersect against, so `likers` is `[]` and no faces are shown. The **count may
+  still show** (it's a visible aggregate) — render a read-only count without the toggle or avatars.
+  State this explicitly in the component: toggle + avatars are gated on `ctx.kind === "account"`;
+  count is unconditional.
 - Design system: follow the existing Kindred idiom on this page (`_kindred` components, the pill /
   meta-row typography already in `page.tsx`). Match Unit 06's heart button so the two action-row
   buttons read as a pair.
@@ -263,8 +302,9 @@ Export both `setStoryLike`, `getLikeState`, and `type LikeState` from
 
 Ship the **detail-view** toggle first (single story, `getLikeState` per page load). The **feed
 card** (`apps/web/app/_kindred/KindredStoryCard.tsx`) is a follow-up — it needs a batched
-like-count/own-state load (one query for the whole feed page, mirroring `loadStoryFamilyTargets`'s
-batch shape over `storyIds`) to avoid an N+1. Note it; don't build it in this unit.
+like-count/own-state/liker load (one query for the whole feed page, mirroring
+`loadStoryFamilyTargets`'s batch shape over `storyIds`, carrying the same per-viewer active-family
+intersection for the liker subset) to avoid an N+1. Note it; don't build it in this unit.
 
 ## Plan (TDD)
 
@@ -284,25 +324,32 @@ Tests-first, ordered.
      (`AuthorizationError`) on both `setStoryLike` and `getLikeState` — no row written, no count
      leaked;
    - a non-account (`ctx.kind !== "account"`) `setStoryLike` is rejected; `getLikeState`
-     returns `likedByViewer: false` with an honest `count`;
+     returns `likedByViewer: false` with an honest `count` and `likers: []` (no family scope to
+     intersect against — no identities revealed);
    - **idempotent**: liking twice yields exactly one row / `count === 1`; un-liking twice is a
      clean no-op (`count === 0`);
    - toggle round-trip: like → `count 1, likedByViewer true`; unlike → `count 0, likedByViewer
      false`;
    - **count correctness**: three distinct co-members like → `count === 3`; each sees
      `likedByViewer` reflecting only their own row;
-   - **(if `likers` included in this unit)** liker-list is **leak-safe**: a liker who does NOT share
-     an active family with the viewer is absent from `likers` even though they contribute to
-     `count`; a liker who does share an active family is present. (If `likers` deferred, write this
-     test against the follow-up.)
+   - **liker-list is LEAK-SAFE (load-bearing, v1)**: set up a story visible to viewer V; have it
+     liked by (a) person P who shares an ACTIVE family with V, and (b) person Q who likes the story
+     but shares NO active family with V (e.g. Q co-inhabits a *different* family with the owner, or
+     Q's shared membership is `ended`/`paused`). Assert: `count` includes BOTH P and Q, but
+     `likers` contains P and **NOT** Q. Assert the viewer's own like appears in their own `likers`.
+     Flip Q's membership to active-shared and assert Q now appears — proving the filter is the
+     ACTIVE-membership intersection, not a static allowlist. Assert `count >= likers.length`.
 4. **Implement** `setStoryLike` / `getLikeState` to green. Export from `index.ts`.
 5. **Cascade test + impl.** Failing test: `eraseStory` on a story with like rows succeeds (no FK
    violation) and removes the like rows. Add the explicit `storyLikes` delete to `eraseStory` (and
    the defensive one to `discardDraftStory`). Green.
 6. **Web toggle.** Component test (RTL, existing `apps/web/__tests__/` setup): renders count;
-   renders toggle for an account viewer, hides toggle (count-only) for a non-account viewer;
-   optimistic flip on click; reconciles/reverts on server-action rejection. Implement `LikeButton`
-   + the server action; wire into the card action row on `page.tsx`.
+   renders the liker avatar row from `likers` (initials from `displayName`, name in
+   tooltip/`aria-label`) with the N-cap + "+K" overflow computed against `count`; renders toggle +
+   avatars for an account viewer, hides BOTH toggle and avatars (count-only) for a non-account
+   viewer; shows count-only when `likers` is empty but `count > 0`; optimistic flip on click;
+   reconciles/reverts on server-action rejection. Implement `LikeButton` + the server action; wire
+   into the card action row on `page.tsx`.
 7. **Regression test (project rule).** The "can't-like-what-you-can't-see" rejection test (step 3)
    AND the erase-cascade test (step 5) are the regression guards — keep them. Add a named regression
    test for the specific bug class this unit must not reintroduce: **a like on a `private` non-owner
@@ -315,13 +362,18 @@ Tests-first, ordered.
 - [ ] `story_likes` table added; `db:generate` emitted snapshot + `0004_*` migration; drift-guard green.
 - [ ] `setStoryLike` / `getLikeState` (+ `LikeState`) added to `story-repository.ts`, SEE-authorized
       (not owner-gated), idempotent, exported from `index.ts`.
-- [ ] Non-account viewers cannot like; count is an honest aggregate; `likedByViewer` false for them.
-- [ ] Who-liked decision recorded: v1 ships count + own-toggle; `likers` is the leak-safe follow-up
-      (or, if built, filtered by the viewer's active-family intersection).
+- [ ] Non-account viewers cannot like; count is an honest aggregate; `likedByViewer` false and
+      `likers: []` for them.
+- [ ] Who-liked shipped in v1: `getLikeState` returns `{ likedByViewer, count, likers }` where
+      `likers` is the LEAK-SAFE viewer-visible subset (viewer active-family intersection, SQL-resolved,
+      mirroring `loadStoryFamilyTargets`) and `count` is the unfiltered total (`count >= likers.length`).
+- [ ] Leak-safe liker test green: a liker outside the viewer's active-family scope appears in `count`
+      but NOT in `likers`; a liker sharing an active family does appear.
 - [ ] `eraseStory` (and defensively `discardDraftStory`) delete `story_likes` before the `stories`
       row; erase-cascade test green.
-- [ ] Thumbs-up toggle + visible count on the detail card action row; optimistic UI, server
-      authoritative; toggle hidden for non-account viewers.
+- [ ] Thumbs-up toggle + visible count + liker avatar row (N-cap + "+K" overflow against `count`)
+      on the detail card action row; optimistic UI, server authoritative; toggle AND avatars hidden
+      for non-account viewers (count-only).
 - [ ] Feed-card like button explicitly deferred (with the batched-load note) — not built here.
 - [ ] All suites + `pnpm -r typecheck` green.
 
@@ -332,12 +384,22 @@ Tests-first, ordered.
   copy this unit's visible-count authz onto favorites (that would leak a private bookmark). The
   two-table decision exists precisely to keep these from cross-contaminating; resist any later
   "DRY it into `story_reactions`" refactor without an ADR that re-examines both visibility rules.
-- **The leak that hides in a "visible" feature.** "Visible" means the *count* and (optionally) the
-  likers the *viewer* can see — it does NOT mean every liker's identity is public. A liker may share
-  a family with the story owner but not with the viewer; listing them leaks a person across a family
-  boundary. Any `likers` list MUST intersect against the viewer's active families
-  (`loadStoryFamilyTargets` pattern), resolved in SQL, never post-filtered. When in doubt this unit
-  ships count-only — a count leaks nothing.
+- **The central risk: leaking liker identities across family boundaries.** "Visible" means the
+  *count* and the likers the *viewer* can see — it does NOT mean every liker's identity is public. A
+  liker may share a family with the story owner but not with the viewer; listing them leaks a person
+  across a family boundary the viewer cannot see. The **intersection filter is load-bearing**:
+  `likers` MUST be intersected against the *viewer's* ACTIVE families
+  (`loadStoryFamilyTargets` / `authorization.ts` `targetFamilies ∩ ownerActive ∩ viewerActive`
+  pattern), resolved in SQL, never post-filtered in the consumer. A liker outside that scope must be
+  absent from `likers`. Get this wrong and a family app quietly discloses who-knows-whom across
+  households — the worst failure mode this unit has.
+- **`count` must not become an enumeration oracle.** `count` is the honest unfiltered total and is
+  allowed to exceed `likers.length` — that discloses only *how many* liked, never *who*. Do NOT
+  "fix" the discrepancy by padding `likers` up to `count`, and do NOT expose any per-liker handle
+  (id, order, timestamp) for the hidden likers through the count path or the "+K" chip. The only
+  thing a viewer may learn about an out-of-scope liker is that they exist in the tally — a number,
+  not an identity. Any endpoint that lets `count` be decomposed back into hidden individuals
+  re-opens the very leak the intersection closes.
 - **Existence oracle.** Authorize SEE *before* counting or inserting. If `getLikeState` returned a
   count (or `setStoryLike` succeeded) for a story the viewer can't read, the like endpoint becomes a
   probe for private-story existence. Deny (throw) uniformly, same as `getStoryForViewer` returning

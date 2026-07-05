@@ -41,7 +41,7 @@ is never truly blocked.
 |---|---|---|---|---|
 | 01 | Action shell & shared contracts | `...-01-action-shell.md` | no | `OwnerActionMenu`, `isOwner`, server-action convention |
 | 02 | Delete story | `...-02-delete.md` | no | wire existing `eraseStory` to UI |
-| 03 | Edit title & tags | `...-03-edit-details.md` | no | new owner-gated `editStoryDetails` core fn |
+| 03 | Edit title & tags | `...-03-edit-details.md` | **yes** | new owner-gated `editStoryDetails` core fn + new `human_metadata_edit` enum value |
 | 04 | Manage family sharing | `...-04-manage-sharing.md` | no | owner gate over existing `setStoryFamilyTargets` |
 | 05 | Edit story prose (post-share) | `...-05-edit-prose.md` | no | new owner-gated `editStoryProse` core fn |
 | 06 | Favorite (private bookmark + count) | `...-06-favorite.md` | **yes** | `story_favorites` table + toggle/count fns + heart UI |
@@ -82,10 +82,16 @@ is never truly blocked.
 ## Cross-unit consistency notes (read before building any unit)
 
 - **Migration numbering is order-dependent.** The last migration on `master` is `0003`
-  (`ask_families`). Units 06 (favorite) and 07 (like) each add one migration. **Whichever
-  you build first takes `0004`; the second takes `0005`.** Do not hard-code the number from
-  the spec — run `pnpm --filter @chronicle/db db:generate` and use whatever it emits. The
-  like spec (07) text says `0004` illustratively; treat it as "the next free number."
+  (`ask_families`). **Three** units now add a migration: 03 (edit title & tags — new
+  `human_metadata_edit` enum value), 06 (favorite table), 07 (like table). **Whichever you
+  build first takes `0004`, then `0005`, then `0006`, in build order.** Do not hard-code the
+  number from any spec — run `pnpm --filter @chronicle/db db:generate` and use whatever it
+  emits; spec texts naming a specific number are illustrative ("the next free number").
+- **Unit 03's migration is an enum-value add** (`ALTER TYPE prose_revision_level ADD
+  VALUE 'human_metadata_edit'`). Postgres historically forbids `ALTER TYPE ... ADD VALUE`
+  inside a transaction block — review the generated migration for this and hand-verify it,
+  the same way invariant/trigger changes are hand-carried. It is otherwise additive and
+  safe to apply to prod Neon at deploy.
 - **Two core-signature shapes coexist, on purpose:**
   - Owner-gated edits (units 03 `editStoryDetails`, 05 `editStoryProse`) follow the existing
     `story-repository` write idiom `(db, { storyId, actorPersonId, … })` and assert
