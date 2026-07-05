@@ -124,11 +124,23 @@ BEGIN
       USING ERRCODE = 'restrict_violation';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM stories WHERE recording_media_id = OLD.id)
-     OR EXISTS (SELECT 1 FROM story_recordings WHERE media_id = OLD.id)
+  IF EXISTS (
+       SELECT 1 FROM stories
+       WHERE recording_media_id = OLD.id
+         AND id::text <> COALESCE(current_setting('chronicle.cascade_delete_story', true), '')
+     )
+     OR EXISTS (
+       SELECT 1 FROM story_recordings
+       WHERE media_id = OLD.id
+         AND story_id::text <> COALESCE(current_setting('chronicle.cascade_delete_story', true), '')
+     )
      OR EXISTS (SELECT 1 FROM asks WHERE recording_media_id = OLD.id)
      OR EXISTS (SELECT 1 FROM voice_captions WHERE media_id = OLD.id)
-     OR EXISTS (SELECT 1 FROM consent_records WHERE approval_audio_media_id = OLD.id)
+     OR EXISTS (
+       SELECT 1 FROM consent_records
+       WHERE approval_audio_media_id = OLD.id
+         AND story_id::text <> COALESCE(current_setting('chronicle.cascade_delete_story', true), '')
+     )
   THEN
     RAISE EXCEPTION
       'Cannot delete media %: a live item references it. Content audio is an immutable artifact while its item exists (ADR-0008); it is removed only when the item itself is deleted.',

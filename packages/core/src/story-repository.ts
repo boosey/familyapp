@@ -961,6 +961,10 @@ export async function discardDraftStory(
       );
     }
 
+    await tx.execute(
+      sql`select set_config('chronicle.cascade_delete_story', ${input.storyId}, true)`,
+    );
+
     // 2. Ownership: only the narrator who owns the draft may discard it. A session-layer
     //    check in the caller is expected, but the domain write layer enforces it too.
     if (story.ownerPersonId !== input.narratorPersonId) {

@@ -5,11 +5,13 @@ import {
   memberships,
   families,
   storyFamilies,
+  consentRecords,
+} from "@chronicle/db/schema";
+import {
+  proseRevisions,
   storyFavorites,
   storyLikes,
-  consentRecords,
-  proseRevisions,
-} from "@chronicle/db/schema";
+} from "@chronicle/db/content";
 import {
   persistRecordingAndCreateDraft,
   editStoryDetails,
@@ -23,6 +25,7 @@ import {
   approveAndShareStory,
   listProseRevisions,
   eraseStory,
+  finishDraft,
 } from "../src/index";
 import { InvariantViolation } from "../src/errors";
 import { sql, eq, and } from "drizzle-orm";
@@ -44,7 +47,7 @@ async function createPerson(name: string): Promise<string> {
 async function createActiveFamily(personId: string, name: string): Promise<string> {
   const [f] = await db
     .insert(families)
-    .values({ name, stewardPersonId: personId })
+    .values({ name, stewardPersonId: personId, creatorPersonId: personId })
     .returning();
   await db
     .insert(memberships)
@@ -71,9 +74,16 @@ describe("Story Management Core", () => {
       });
 
       // 2. Transition to approved/shared
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: null, tags: [] },
+      });
+
       await approveAndShareStory(db, {
         storyId: story.id,
-        actorPersonId: ownerId,
+        narratorPersonId: ownerId,
         familyIds: [familyId],
         approvalAudioStorageKey: "approval.webm",
         approvalAudioContentType: "audio/webm",
@@ -137,9 +147,16 @@ describe("Story Management Core", () => {
       });
 
       // Approve and share to f1
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: null, tags: [] },
+      });
+
       await approveAndShareStory(db, {
         storyId: story.id,
-        actorPersonId: ownerId,
+        narratorPersonId: ownerId,
         familyIds: [f1],
         approvalAudioStorageKey: "approval.webm",
         approvalAudioContentType: "audio/webm",
@@ -186,9 +203,16 @@ describe("Story Management Core", () => {
       });
 
       // Approve and share
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: null, tags: [] },
+      });
+
       await approveAndShareStory(db, {
         storyId: story.id,
-        actorPersonId: ownerId,
+        narratorPersonId: ownerId,
         familyIds: [f1],
         approvalAudioStorageKey: "approval.webm",
         approvalAudioContentType: "audio/webm",
@@ -231,9 +255,16 @@ describe("Story Management Core", () => {
         checksum: "fake-checksum",
       });
 
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: null, tags: [] },
+      });
+
       await approveAndShareStory(db, {
         storyId: story.id,
-        actorPersonId: ownerId,
+        narratorPersonId: ownerId,
         familyIds: [f1],
         approvalAudioStorageKey: "approval.webm",
         approvalAudioContentType: "audio/webm",
@@ -294,9 +325,16 @@ describe("Story Management Core", () => {
       });
 
       // Alice shares to both families
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: null, tags: [] },
+      });
+
       await approveAndShareStory(db, {
         storyId: story.id,
-        actorPersonId: ownerId,
+        narratorPersonId: ownerId,
         familyIds: [f1, f2],
         approvalAudioStorageKey: "approval.webm",
         approvalAudioContentType: "audio/webm",
