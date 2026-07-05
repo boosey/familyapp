@@ -661,29 +661,15 @@ export async function approveAndShareStory(
     if (input.audienceTier === "family" || input.audienceTier === "branch") {
       const explicit = [...new Set(input.familyIds ?? [])];
       if (explicit.length > 0) {
-        const ownerActive = await tx
-          .select({ familyId: memberships.familyId })
-          .from(memberships)
-          .where(
-            and(
-              eq(memberships.personId, current.ownerPersonId),
-              eq(memberships.status, "active"),
-            ),
-          );
-        const ownerActiveSet = new Set(ownerActive.map((r) => r.familyId));
-        for (const familyId of explicit) {
-          if (!ownerActiveSet.has(familyId)) {
-            throw new InvariantViolation(
-              `approveAndShareStory: story owner ${current.ownerPersonId} is not an active member ` +
-                `of family ${familyId}; cannot surface a story into a family its owner isn't in`,
-            );
-          }
-        }
-        await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
-        await tx
-          .insert(storyFamilies)
-          .values(explicit.map((familyId) => ({ storyId: input.storyId, familyId })));
-        targetedFamilyIds = [...explicit].sort();
+        // Explicit author choice REPLACES the default computation (shared validate + replace-set).
+        const written = await replaceStoryFamilyTargetsTx(
+          tx,
+          "approveAndShareStory",
+          input.storyId,
+          current.ownerPersonId,
+          explicit,
+        );
+        targetedFamilyIds = [...written].sort();
       } else {
         const existing = await tx
           .select({ familyId: storyFamilies.familyId })
@@ -1484,12 +1470,63 @@ export async function saveProseCorrection(
  * calling this. It can never widen visibility beyond the owner's own families, so the blast radius
  * of a missing gate is bounded — but it is not a substitute for an actor check.
  */
+/**
+ * Shared story→family targeting REPLACE-SET, scoped to an EXISTING transaction — it does NOT open
+ * its own `db.transaction`; the caller owns the tx. Validates every family in `familyIds` against
+ * the story OWNER's ACTIVE memberships (a family the owner isn't active in throws
+ * `InvariantViolation`), then replaces the story's `story_families` rows with the dedup'd set
+ * (delete-all, then insert). Passing `[]` clears targeting. `context` prefixes the error message so
+ * each caller's message reads true. Returns the dedup'd set actually written.
+ *
+ * Two callers share this: the public `setStoryFamilyTargets` primitive and `approveAndShareStory`'s
+ * explicit multi-family picker branch — keeping the validate + replace logic (and its error wording)
+ * in exactly one place.
+ */
+async function replaceStoryFamilyTargetsTx(
+  tx: Pick<Database, "select" | "insert" | "delete">,
+  context: string,
+  storyId: string,
+  ownerPersonId: string,
+  familyIds: string[],
+): Promise<string[]> {
+  const unique = [...new Set(familyIds)];
+  if (unique.length > 0) {
+    // The families the owner is an ACTIVE member of — the only families a story may target.
+    const ownerActive = await tx
+      .select({ familyId: memberships.familyId })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.personId, ownerPersonId),
+          eq(memberships.status, "active"),
+        ),
+      );
+    const ownerActiveSet = new Set(ownerActive.map((r) => r.familyId));
+    for (const familyId of unique) {
+      if (!ownerActiveSet.has(familyId)) {
+        throw new InvariantViolation(
+          `${context}: story owner ${ownerPersonId} is not an active member of ` +
+            `family ${familyId}; cannot surface a story into a family its owner isn't in`,
+        );
+      }
+    }
+  }
+
+  // Replace the target set: clear, then re-insert the validated, dedup'd families.
+  await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, storyId));
+  if (unique.length > 0) {
+    await tx
+      .insert(storyFamilies)
+      .values(unique.map((familyId) => ({ storyId, familyId })));
+  }
+  return unique;
+}
+
 export async function setStoryFamilyTargets(
   db: Database,
   storyId: string,
   familyIds: string[],
 ): Promise<void> {
-  const unique = [...new Set(familyIds)];
   return db.transaction(async (tx) => {
     const [story] = await tx
       .select({ ownerPersonId: stories.ownerPersonId })
@@ -1502,35 +1539,13 @@ export async function setStoryFamilyTargets(
       );
     }
 
-    if (unique.length > 0) {
-      // The families the owner is an ACTIVE member of — the only families a story may target.
-      const ownerActive = await tx
-        .select({ familyId: memberships.familyId })
-        .from(memberships)
-        .where(
-          and(
-            eq(memberships.personId, story.ownerPersonId),
-            eq(memberships.status, "active"),
-          ),
-        );
-      const ownerActiveSet = new Set(ownerActive.map((r) => r.familyId));
-      for (const familyId of unique) {
-        if (!ownerActiveSet.has(familyId)) {
-          throw new InvariantViolation(
-            `setStoryFamilyTargets: story owner ${story.ownerPersonId} is not an active member of ` +
-              `family ${familyId}; cannot surface a story into a family its owner isn't in`,
-          );
-        }
-      }
-    }
-
-    // Replace the target set: clear, then re-insert the validated, dedup'd families.
-    await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, storyId));
-    if (unique.length > 0) {
-      await tx
-        .insert(storyFamilies)
-        .values(unique.map((familyId) => ({ storyId, familyId })));
-    }
+    await replaceStoryFamilyTargetsTx(
+      tx,
+      "setStoryFamilyTargets",
+      storyId,
+      story.ownerPersonId,
+      familyIds,
+    );
   });
 }
 

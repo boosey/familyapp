@@ -10,12 +10,14 @@
  *   - `computeDefaultFamilyTargets` is the shared, pure rule the approval path applies.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { askFamilies, asks } from "@chronicle/db/schema";
+import { askFamilies, asks, storyFamilies } from "@chronicle/db/schema";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveAndShareStory,
   computeDefaultFamilyTargets,
   getStoryForViewer,
+  setStoryFamilyTargets,
 } from "../src/index";
 import {
   addMembership,
@@ -319,10 +321,14 @@ describe("approveAndShareStory explicit familyIds (multi-family picker)", () => 
     // Owner active in famA + famB; a self-story (no ask, no originating family) would otherwise be
     // AMBIGUOUS. An explicit pick of famB must win outright.
     const me = await makePerson(db, "Alex");
+    const famBCousin = await makePerson(db, "Carney cousin");
+    const famAOnlyCousin = await makePerson(db, "Boudreaux cousin");
     const famA = await makeFamily(db, "Boudreaux", me.id);
     const famB = await makeFamily(db, "Carney", me.id);
     await addMembership(db, me.id, famA.id);
     await addMembership(db, me.id, famB.id);
+    await addMembership(db, famBCousin.id, famB.id);
+    await addMembership(db, famAOnlyCousin.id, famA.id);
 
     const { story } = await makeStory(db, {
       ownerPersonId: me.id,
@@ -337,6 +343,17 @@ describe("approveAndShareStory explicit familyIds (multi-family picker)", () => 
 
     expect(result.targetedFamilyIds).toEqual([famB.id]);
     expect(result.ambiguousDefaultTarget).toBe(false);
+
+    // Verify actual DB state, not just the input-derived return value: exactly famB's row exists.
+    const rows = await db
+      .select({ familyId: storyFamilies.familyId })
+      .from(storyFamilies)
+      .where(eq(storyFamilies.storyId, story.id));
+    expect(rows.map((r) => r.familyId)).toEqual([famB.id]);
+
+    // And the visibility seam agrees: the famB member sees it; the famA-only member does not.
+    expect((await getStoryForViewer(db, account(famBCousin.id), story.id))?.id).toBe(story.id);
+    expect(await getStoryForViewer(db, account(famAOnlyCousin.id), story.id)).toBeNull();
   });
 
   it("rejects a family the owner is not an active member of", async () => {
@@ -378,5 +395,36 @@ describe("approveAndShareStory explicit familyIds (multi-family picker)", () => 
 
     expect(result.targetedFamilyIds).toEqual([]);
     expect(result.ambiguousDefaultTarget).toBe(true);
+  });
+
+  it("REPLACES (not unions) a wider pre-approval target set — stale rows are deleted", async () => {
+    // Story pre-targeted to famA + famB before approval; approving with only famB must drop the
+    // stale famA row (replace, not union). Verified via DB state, not just the return value.
+    const me = await makePerson(db, "Alex");
+    const famA = await makeFamily(db, "Boudreaux", me.id);
+    const famB = await makeFamily(db, "Carney", me.id);
+    await addMembership(db, me.id, famA.id);
+    await addMembership(db, me.id, famB.id);
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: me.id,
+      state: "pending_approval",
+    });
+    await setStoryFamilyTargets(db, story.id, [famA.id, famB.id]);
+
+    const result = await approveAndShareStory(db, {
+      storyId: story.id,
+      narratorPersonId: me.id,
+      audienceTier: "family",
+      familyIds: [famB.id],
+    });
+
+    expect(result.targetedFamilyIds).toEqual([famB.id]);
+
+    const rows = await db
+      .select({ familyId: storyFamilies.familyId })
+      .from(storyFamilies)
+      .where(eq(storyFamilies.storyId, story.id));
+    expect(rows.map((r) => r.familyId)).toEqual([famB.id]);
   });
 });
