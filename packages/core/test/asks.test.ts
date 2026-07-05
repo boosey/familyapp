@@ -6,7 +6,7 @@
  * system-actor read (`listPendingAsksForNarrator`) is separately covered for ordering and inclusion.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { askSubjectPhotos, asks, memberships } from "@chronicle/db/schema";
+import { askFamilies, askSubjectPhotos, asks, memberships } from "@chronicle/db/schema";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -38,14 +38,47 @@ describe("createAsk — co-membership authorization", () => {
       { kind: "account", personId: cousin.id },
       {
         targetPersonId: narrator.id,
-        familyId: fam.id,
+        familyIds: [fam.id],
         questionText: "What was your wedding day like?",
       },
     );
     expect(ask.status).toBe("queued");
     expect(ask.askerPersonId).toBe(cousin.id);
     expect(ask.targetPersonId).toBe(narrator.id);
-    expect(ask.familyId).toBe(fam.id);
+    // The family context now lives in the ask_families M2M join, not on the ask row.
+    const famRows = await db
+      .select({ familyId: askFamilies.familyId })
+      .from(askFamilies)
+      .where(eq(askFamilies.askId, ask.id));
+    expect(famRows.map((r) => r.familyId)).toEqual([fam.id]);
+  });
+
+  it("targets MULTIPLE families supplied on one ask", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const cousin = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "A", narrator.id);
+    const famB = await makeFamily(db, "B", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, cousin.id, famA.id);
+    await addMembership(db, cousin.id, famB.id);
+
+    const ask = await createAsk(
+      db,
+      { kind: "account", personId: cousin.id },
+      {
+        targetPersonId: narrator.id,
+        familyIds: [famA.id, famB.id],
+        questionText: "Q for both families",
+      },
+    );
+    const famRows = await db
+      .select({ familyId: askFamilies.familyId })
+      .from(askFamilies)
+      .where(eq(askFamilies.askId, ask.id));
+    expect(new Set(famRows.map((r) => r.familyId))).toEqual(
+      new Set([famA.id, famB.id]),
+    );
   });
 
   it("rejects a stranger (no shared family)", async () => {
@@ -118,7 +151,7 @@ describe("createAsk — co-membership authorization", () => {
         { kind: "account", personId: cousin.id },
         {
           targetPersonId: narrator.id,
-          familyId: other.id,
+          familyIds: [other.id],
           questionText: "Q",
         },
       ),
@@ -154,7 +187,7 @@ describe("createAsk with subject photos (ADR-0009 Phase 3)", () => {
       { kind: "account", personId: cousin.id },
       {
         targetPersonId: narrator.id,
-        familyId: fam.id,
+        familyIds: [fam.id],
         questionText: "Tell the story of these photos",
         subjectPhotoIds: requested,
       },
@@ -260,7 +293,7 @@ describe("createAsk with subject photos (ADR-0009 Phase 3)", () => {
         { kind: "account", personId: cousin.id },
         {
           targetPersonId: narrator.id,
-          familyId: fam.id,
+          familyIds: [fam.id],
           questionText: "Tell me about this",
           subjectPhotoIds: [askerVisibleTargetInvisible.id],
         },
@@ -320,7 +353,7 @@ describe("createAsk — ADR-0006 invitation floor", () => {
       { kind: "account", personId: inviter.id },
       {
         targetPersonId: inviteePersonId,
-        familyId: fam.id,
+        familyIds: [fam.id],
         questionText: "What was your wedding day like?",
       },
     );

@@ -13,6 +13,7 @@
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
+  askFamilies,
   askSubjectPhotos,
   asks,
   invitations,
@@ -29,8 +30,13 @@ import { PENDING_ASKS_DEFAULT_LIMIT } from "./constants";
 export interface CreateAskInput {
   /** The target narrator the question is for. */
   targetPersonId: string;
-  /** The family context the ask is raised in (optional — informs routing/notification). */
-  familyId?: string;
+  /**
+   * The family context(s) the ask is raised in (optional — informs routing/notification). An ask
+   * may target one-or-more families (ADR-0010 mirror of story targeting); each MUST be one the asker
+   * is an active member of. Rows go into the OPEN `ask_families` join, deduped. Absent/empty ⇒ an
+   * ask with no family context.
+   */
+  familyIds?: string[];
   questionText: string;
   /**
    * Album photos the Ask is ABOUT (ADR-0009 Phase 3 "subject") — "tell the story of THIS photo",
@@ -141,12 +147,16 @@ export async function createAsk(
     );
   }
 
-  // If a family context was supplied, it must be one the asker is actually in. Defense in depth
-  // against a hand-crafted form submission picking an arbitrary family id.
-  if (input.familyId !== undefined && !askerFamilies.has(input.familyId)) {
-    throw new AuthorizationError(
-      "supplied familyId is not one the asker is an active member of",
-    );
+  // If family context(s) were supplied, each must be one the asker is actually in. Defense in depth
+  // against a hand-crafted form submission picking an arbitrary family id. Deduped so a repeated id
+  // does not produce duplicate join rows (the unique index would reject those anyway).
+  const familyIds = [...new Set(input.familyIds ?? [])];
+  for (const familyId of familyIds) {
+    if (!askerFamilies.has(familyId)) {
+      throw new AuthorizationError(
+        "supplied familyId is not one the asker is an active member of",
+      );
+    }
   }
 
   // Subject photos (ADR-0009 Phase 3), deduped. Each must be visible to BOTH the asker AND the
@@ -169,11 +179,15 @@ export async function createAsk(
       .values({
         askerPersonId: asker,
         targetPersonId: input.targetPersonId,
-        familyId: input.familyId ?? null,
         questionText: question,
         status: "queued",
       })
       .returning();
+    if (familyIds.length > 0) {
+      await tx
+        .insert(askFamilies)
+        .values(familyIds.map((familyId) => ({ askId: row!.id, familyId })));
+    }
     if (subjectPhotoIds.length > 0) {
       await tx
         .insert(askSubjectPhotos)
