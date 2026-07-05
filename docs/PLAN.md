@@ -268,6 +268,32 @@ separate Share. Implements the Accepted ADR-0014 (amends ADR-0007; builds on ADR
       §7 amendment; `docs/Recording-To-Story-Pipeline.md` full rewrite). Legacy monolithic orchestrator
       survives only for the link-session `/s/[token]` surface. Dev-server manual smoke still headless-blocked.
 
+## Increment — FAMILY SCOPE SELECTOR (create/join any time, multi-family hub)  ✅  *(2026-07-05)*
+*DONE on the `feat/family-scope-selector` branch — Increments 1–4 + the Invite-gate fix.*
+Design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`;
+plan: `docs/superpowers/plans/2026-07-05-family-scope-selector.md`.
+Creating a family and requesting to join are now always-available in-app actions, and the hub is
+multi-family aware.
+- [x] Hub scope selector `[ All ▾ ]` (`apps/web/app/hub/HubScopeSelector.tsx`): All + active-family
+      scope rows, muted pending-join rows, pinned `+ Create a family` / `Find a family to join`. Owns a
+      single server-read `?scope=` param (default `all`, validated in `hub/page.tsx`, leak-safe fallback
+      to `all`). Dead `manage-family` account-menu stub removed; per-tab controls (Stories `?scope=`,
+      Album `?family=`) retired into this one param.
+- [x] Routing: `resolvePostAuthRoute` Gate C DELETED — onboarded pending-only user → `/hub`
+      (empty-state) instead of `/families/find`; zero-relationship → `/families/start`; not-onboarded
+      → `/welcome`. `/hub` guard admits pending-only viewers.
+- [x] Read tabs (Stories, Album, Asks) — deduped union in `All`, filter to one family when scoped.
+      Ask compose family multi-select seeded from scope (≥1 family, server-guarded); Requests filters
+      by scope + aggregates per-family in `All`; Invite single-family (`resolveInviteFamilyId`, explicit
+      pick in `All` with >1, hidden/empty for members-of-none).
+- [x] Data model: asks become N-family — `ask_families` M2M join replaces nullable `asks.familyId`;
+      `createAsk(familyIds: string[])`; approval unions ask families into `story_families`; `eraseAsk`
+      gathers stewards across all. Migration `0003_equal_master_mold.sql` (create → backfill → drop
+      column) applies to Neon at deploy; snapshot regenerated (drift-guard green).
+- Deferral (not a bug): story-compose has NO family-target picker — story targets stay auto-derived at
+      approval (`computeDefaultFamilyTargets`); `setStoryFamilyTargets` exists in core but is unwired;
+      the ADR-0010 story multi-target picker remains future work.
+
 ## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009; not started)*
 Album, attach-to-story, story-from-a-photo, cheap suggestion, Google Picker import. Each phase is a
 tracer-bullet vertical slice sized to the subagent-build + fresh-cold-reviewer loop; schema rides the

@@ -82,3 +82,20 @@ The read seam and the write side landed together (so the hub never narrows reads
   deliberately **not** kept — the go-forward approval path covers every new story, and a repair pass
   is trivially re-derivable from `computeDefaultFamilyTargets` if a future import ever needs one.
 - **No migration needed:** the new column rides the reseed workflow, per the single-schema policy.
+
+## Follow-up (2026-07-05): asks join the N-family content model; story-compose UI still unbuilt
+
+Asks joined the N-family content model: the single nullable `asks.familyId` was replaced by an
+`ask_families` M2M join table mirroring `story_families`, so an Ask now carries a *set* of target
+families (retiring the "Asymmetry with Ask, on purpose" note above — an Ask is now N-family like a
+Story). `createAsk` takes `familyIds: string[]`; story approval unions the answered ask's families
+into `story_families`. Migration `0003_equal_master_mold.sql` (create `ask_families` → backfill one
+row per existing ask from its legacy non-null `family_id` → drop the column) applies to Neon at
+deploy; the snapshot was regenerated so the drift-guard stays green. `invitations`/`joinRequests`/
+`memberships` stay single-FK (relationship acts, not content).
+
+The **story-compose multi-target UI remains unbuilt.** A story's `story_families` targets are still
+auto-derived from narrator membership at approval via `computeDefaultFamilyTargets` (above);
+`setStoryFamilyTargets` exists in core but is unwired to any UI. The multi-target picker this ADR
+anticipates ("a multi-family member multi-selects to widen") is realized for **asks** only so far;
+for stories it stays future work.

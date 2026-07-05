@@ -484,6 +484,57 @@ schema-parity section — dev and tests are unchanged.
   migration); data-transformation/backfill migrations (none needed; the hand-authored SQL format
   already supports them).
 
+## Family scope selector: create/join any time, multi-family hub (2026-07-05)
+
+Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`; plan:
+`docs/superpowers/plans/2026-07-05-family-scope-selector.md`.
+
+- **Create-a-family and request-to-join are always-available in-app actions, not one-time
+  onboarding stops.** The router's "park a pending-only user on `/families/find`" fork is gone
+  (see Gate C below); create/join now live permanently at the bottom of the hub scope selector,
+  reachable by any authenticated user in every non-zero-relationship state. Cold-start (zero
+  membership AND zero pending request) still routes to `/families/start`, unchanged. This makes
+  ADR-0001's discovery/join flows repeatable rather than reachable only before you join a family.
+- **Routing Gate C deleted (pending-only → hub, not `/families/find`).** `resolvePostAuthRoute`
+  no longer parks an onboarded-but-awaiting-approval user on the find screen. Gate A (zero
+  relationship → `/families/start`) and Gate B (has intent but not onboarded → `/welcome`) stand;
+  everyone past cold-start — member OR pending-only — falls through to `/hub`, and the `/hub`
+  guard is relaxed to admit pending-only viewers (who get a coherent empty-state hub). A regression
+  pins the pending-only → `/hub` route.
+- **One unified server-read `?scope=` param is the single family-scope control; the per-tab
+  controls were retired.** The hub header's `[ All ▾ ]` selector (`apps/web/app/hub/HubScopeSelector.tsx`)
+  owns everything "family" — rows for `All` + each active family, muted pending-join rows (open a
+  status/withdraw view, never become a scope), and pinned `+ Create a family` / `Find a family to
+  join` actions. Scope lives in the URL (`?scope=all|<familyId>`, default `all`), validated in
+  `hub/page.tsx` against the viewer's own active families with a **leak-safe fallback to `all`**
+  (a `?scope=` for a family you're not an active member of never returns its content). This replaced
+  the pre-existing per-tab controls — Stories' client-side `?scope=` and Album's `?family=` were
+  hoisted into this one server-read param — and removed the dead `manage-family` account-menu stub
+  (the avatar menu stays purely account-level).
+- **Per-tab scope semantics: reads take a deduped union in `All` and filter to one family when
+  scoped; writes/steward acts resolve a single target.** A read item tagged to N families (Stories,
+  Album, Asks) appears **once** in `All` (deduped by id) and in each of its families' scoped views
+  (scoping is a membership test against the tag set). Ask compose has a family multi-select seeded
+  from scope (requires ≥1 family, server-guarded). Invite is single-family: an explicit pick is
+  forced in `All` when the inviter is in >1 family, resolved server-side by `resolveInviteFamilyId`,
+  and the tab is hidden / empty-stated for a member-of-none. Requests filters by scope and, in `All`,
+  aggregates pending requests across every family you steward with per-family row labels (a
+  multi-family steward shouldn't have to switch scopes to notice a request elsewhere).
+- **Asks joined the N-family content model via `ask_families`; relationship acts stay
+  single-family.** The single nullable `asks.familyId` was replaced by an `ask_families` M2M join
+  table mirroring `story_families` (ADR-0010); `createAsk` now takes `familyIds: string[]`, story
+  approval unions the answered ask's families into `story_families`, and `eraseAsk` gathers stewards
+  across all of the ask's families. Migration `0003_equal_master_mold.sql` (create join table →
+  backfill one row per existing ask from its legacy non-null `family_id` → drop the column) applies
+  to Neon at deploy like `0001`/`0002`; the snapshot was regenerated so the drift-guard stays green.
+  `invitations.familyId`, `joinRequests.familyId`, and `memberships.familyId` stay single-FK — they
+  are relationship acts, not content.
+- **Story-compose has no family-target picker (deferred, not a bug).** "Seed the compose family set
+  from scope" is realized for **asks only**. Story `story_families` targets are still auto-derived
+  from narrator membership at approval (`approveAndShareStory` → `computeDefaultFamilyTargets`);
+  `setStoryFamilyTargets` exists in core but is unwired to any UI. The ADR-0010 story multi-target
+  picker remains future work.
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the

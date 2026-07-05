@@ -17,6 +17,33 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-05** — **Family scope selector COMPLETE** on the `feat/family-scope-selector` branch
+  (Increments 1–4 + the Invite-gate fix). Creating a family and requesting to join a family are now
+  always-available in-app actions rather than one-time onboarding stops, and the hub is multi-family
+  aware. **Inc 1** — hub scope selector `[ All ▾ ]` (`apps/web/app/hub/HubScopeSelector.tsx`): rows
+  for `All` + each active family, muted pending-join rows, pinned `+ Create a family` / `Find a family
+  to join` actions; owns a single server-read `?scope=` param (default `all`, validated in
+  `hub/page.tsx` against the viewer's active families with a leak-safe fallback to `all`); dead
+  `manage-family` account-menu stub removed; the pre-existing per-tab controls (Stories' client-side
+  `?scope=`, Album's `?family=`) retired into this one param. **Routing** — `resolvePostAuthRoute`
+  Gate C DELETED: an onboarded pending-only user now lands in `/hub` (empty-state hub) instead of
+  `/families/find`; zero-relationship still → `/families/start`, not-onboarded still → `/welcome`.
+  **Inc 2–3** — read tabs (Stories, Album, Asks) show a deduped union in `All` and filter to one
+  family when scoped (an item tagged to N families appears once in `All`, once per family scope);
+  Ask compose gets a family multi-select seeded from scope (requires ≥1 family, server-guarded);
+  Requests filters by scope and aggregates per-family in `All`. **Inc 4 data model** — asks joined
+  the N-family content model: new `ask_families` M2M join table replaced the single nullable
+  `asks.familyId`; `createAsk` takes `familyIds: string[]`, story approval unions the ask's families
+  into `story_families`, `eraseAsk` gathers stewards across all of them. **Invite-gate fix** — Invite
+  is single-family: forces an explicit pick in `All` with >1 family (`resolveInviteFamilyId`), hidden/
+  empty-stated for members-of-none. **Deferral (not a bug):** story-compose has NO family-target
+  picker — story `story_families` targets stay auto-derived at approval
+  (`computeDefaultFamilyTargets`); `setStoryFamilyTargets` exists in core but is unwired; the ADR-0010
+  story multi-target picker remains future work. Migration `0003_equal_master_mold.sql` (create
+  `ask_families` → backfill from legacy `family_id` → drop the column) applies to Neon at deploy like
+  `0001`/`0002`; snapshot regenerated so the drift-guard stays green. Design +
+  plan: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`,
+  `docs/superpowers/plans/2026-07-05-family-scope-selector.md`.
 - **2026-07-04** — **ADR-0014 (the composing surface) Increment 0–5 COMPLETE** on the
   `composing-surface` branch (NOT pushed / merged to master). The monolithic `transcribe → render`
   on-stop + `pending_approval` review editor (behind the "Polishing your words" spinner) is retired
