@@ -529,11 +529,22 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   to Neon at deploy like `0001`/`0002`; the snapshot was regenerated so the drift-guard stays green.
   `invitations.familyId`, `joinRequests.familyId`, and `memberships.familyId` stay single-FK — they
   are relationship acts, not content.
-- **Story-compose has no family-target picker (deferred, not a bug).** "Seed the compose family set
-  from scope" is realized for **asks only**. Story `story_families` targets are still auto-derived
-  from narrator membership at approval (`approveAndShareStory` → `computeDefaultFamilyTargets`);
-  `setStoryFamilyTargets` exists in core but is unwired to any UI. The ADR-0010 story multi-target
-  picker remains future work.
+- **Story family targets are chosen at the SHARE step, not compose time (`feat/multi-family-picker`,
+  2026-07-05).** Retires the earlier "story-compose has no family-target picker (deferred)" note: the
+  ADR-0010 story multi-target picker is now wired at the share/review step for self-authored tellings
+  AND answers to asks (shared `<FamilyPicker>`, also backing the ask and album pickers). The decision
+  is to make the family choice at *share* — the point where consent is granted — rather than at
+  compose time, so an author picks audience alongside the decision to share at all. The picker's
+  candidate set is bounded by the **author's own** active memberships (server-resolved by
+  `resolveComposeFamilies`), seeded from the answered ask's families (answers) or hub `?scope=`
+  (tellings); a single-family author sees no picker (auto-resolved), an ambiguous case forces an
+  explicit pick. Core does not trust the UI: `approveAndShareStory` takes the chosen set as an
+  explicit `familyIds` param that, when non-empty, **replaces** `computeDefaultFamilyTargets`,
+  **re-validates** every id against the owner's ACTIVE memberships, and writes `story_families` in the
+  same transaction (shared `replaceStoryFamilyTargetsTx`, now also backing `setStoryFamilyTargets`).
+  The auto-derived default still governs when no explicit set is supplied. No leakage-suppression
+  display gate was built — no answer-story renders its originating question in any feed, so that
+  concern was found MOOT.
 
 ## Workflow
 

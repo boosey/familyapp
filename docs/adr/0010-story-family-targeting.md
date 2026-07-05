@@ -83,7 +83,7 @@ The read seam and the write side landed together (so the hub never narrows reads
   is trivially re-derivable from `computeDefaultFamilyTargets` if a future import ever needs one.
 - **No migration needed:** the new column rides the reseed workflow, per the single-schema policy.
 
-## Follow-up (2026-07-05): asks join the N-family content model; story-compose UI still unbuilt
+## Follow-up (2026-07-05): asks join the N-family content model; story-share picker wired
 
 Asks joined the N-family content model: the single nullable `asks.familyId` was replaced by an
 `ask_families` M2M join table mirroring `story_families`, so an Ask now carries a *set* of target
@@ -94,8 +94,17 @@ row per existing ask from its legacy non-null `family_id` → drop the column) a
 deploy; the snapshot was regenerated so the drift-guard stays green. `invitations`/`joinRequests`/
 `memberships` stay single-FK (relationship acts, not content).
 
-The **story-compose multi-target UI remains unbuilt.** A story's `story_families` targets are still
-auto-derived from narrator membership at approval via `computeDefaultFamilyTargets` (above);
-`setStoryFamilyTargets` exists in core but is unwired to any UI. The multi-target picker this ADR
-anticipates ("a multi-family member multi-selects to widen") is realized for **asks** only so far;
-for stories it stays future work.
+The **story multi-target picker this ADR anticipates ("a multi-family member multi-selects to widen")
+is now wired at the share step** — for self-authored tellings *and* answers to asks. The web
+share/review step renders a multi-family picker (the shared `<FamilyPicker>` component, also backing
+the ask and album pickers) for `family`/`branch` tiers, seeded from the answered ask's families
+(answers) or the hub `?scope=` (tellings) and resolved server-side by `resolveComposeFamilies` in
+`shareAnswerAction`. A single-family author sees no picker (the sole active family auto-resolves); an
+ambiguous multi-family case forces an explicit pick. The chosen set is passed as an explicit
+`familyIds` param into `approveAndShareStory`, which — when non-empty — **replaces** the
+`computeDefaultFamilyTargets` computation, re-validates every id against the owner's ACTIVE
+memberships, and writes `story_families` in the same transaction (via the shared
+`replaceStoryFamilyTargetsTx` helper that now also backs `setStoryFamilyTargets`). The default
+auto-derivation still governs when no explicit set is supplied. `public`/`private` skip targeting as
+before. (No leakage-suppression display gate was added: no answer-story renders its originating
+question in any feed, so that concern was found MOOT and left untouched.)

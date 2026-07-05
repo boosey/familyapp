@@ -17,6 +17,21 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-05** — **Story-share multi-family picker COMPLETE** on the `feat/multi-family-picker`
+  branch. Retires the "story-compose has NO family-target picker" deferral from the family-scope-
+  selector increment below: the web share/review step (self-authored tellings AND answers to asks)
+  now renders a multi-family picker for `family`/`branch` tiers via the shared `<FamilyPicker>`
+  component (unifying the ask, album, and story-share pickers). The selection is seeded from the
+  answered ask's families (answers) or the hub `?scope=` (tellings) and resolved server-side by
+  `resolveComposeFamilies` in `shareAnswerAction`; a single-family author sees no picker (auto-
+  resolved), an ambiguous multi-family case forces an explicit pick. Core: `approveAndShareStory`
+  now takes an explicit `familyIds` param that, when non-empty, **replaces** the
+  `computeDefaultFamilyTargets` default, is re-validated against the owner's ACTIVE memberships, and
+  is written as `story_families` in the same transaction — the new shared `replaceStoryFamilyTargetsTx`
+  helper now backs both this and `setStoryFamilyTargets`. The album/photo-upload picker also seeds its
+  default from `?scope=`. Ask multi-family targeting (`ask_families`) is unchanged. No leakage-
+  suppression display gate was built — no answer-story renders its originating question in any feed, so
+  that concern was investigated and found MOOT.
 - **2026-07-05** — **Family scope selector COMPLETE** on the `feat/family-scope-selector` branch
   (Increments 1–4 + the Invite-gate fix). Creating a family and requesting to join a family are now
   always-available in-app actions rather than one-time onboarding stops, and the hub is multi-family

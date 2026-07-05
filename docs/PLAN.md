@@ -290,9 +290,25 @@ multi-family aware.
       `createAsk(familyIds: string[])`; approval unions ask families into `story_families`; `eraseAsk`
       gathers stewards across all. Migration `0003_equal_master_mold.sql` (create → backfill → drop
       column) applies to Neon at deploy; snapshot regenerated (drift-guard green).
-- Deferral (not a bug): story-compose has NO family-target picker — story targets stay auto-derived at
-      approval (`computeDefaultFamilyTargets`); `setStoryFamilyTargets` exists in core but is unwired;
-      the ADR-0010 story multi-target picker remains future work.
+- ~~Deferral (not a bug): story-compose has NO family-target picker~~ — RESOLVED by the increment
+      below (`feat/multi-family-picker`, 2026-07-05).
+
+## Increment — STORY-SHARE MULTI-FAMILY PICKER  ✅  *(2026-07-05)*
+*DONE on the `feat/multi-family-picker` branch.* Resolves the story-compose deferral from the
+family-scope-selector increment above — the ADR-0010 story multi-target picker is now wired.
+- [x] Web share/review step (self-authored tellings AND answers to asks) renders a multi-family
+      picker for `family`/`branch` tiers via a shared `<FamilyPicker>` component (unifies the ask,
+      album, and story-share pickers). Seeded from the answered ask's families (answers) or hub
+      `?scope=` (tellings); resolved server-side by `resolveComposeFamilies` in `shareAnswerAction`.
+      Single-family author → no picker (auto-resolved); ambiguous multi-family → explicit pick forced.
+- [x] Core: `approveAndShareStory` takes an explicit `familyIds` param that, when non-empty,
+      **replaces** `computeDefaultFamilyTargets`, re-validates against the owner's ACTIVE memberships,
+      and writes `story_families` in the same transaction. New shared `replaceStoryFamilyTargetsTx`
+      helper now backs both this and `setStoryFamilyTargets`.
+- [x] Album/photo-upload picker also seeds its default from hub `?scope=`. Ask targeting
+      (`ask_families`) unchanged.
+- No leakage-suppression display gate built (investigated, found MOOT — no answer-story renders its
+      originating question in any feed).
 
 ## STORY IMAGERY (photos) — 5-phase plan  📸  *(designed 2026-07-03; ADR-0009; not started)*
 Album, attach-to-story, story-from-a-photo, cheap suggestion, Google Picker import. Each phase is a
