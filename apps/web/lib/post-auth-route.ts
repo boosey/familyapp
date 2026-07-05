@@ -5,8 +5,8 @@
  *
  *   Gate A. no family AND no pending join request → /families/start (the create-or-find fork)
  *   Gate B. a family intent exists but not onboarded (onboarded_at IS NULL) → /welcome (DOB)
- *   Gate C. onboarded but still awaiting approval on a join request → /families/find
- *   else  → /hub
+ *   else  → /hub  (a pending-only requester is admitted; the finder's "Your requests" section,
+ *                  reachable from the hub, is where that request's status lives)
  *
  * Identity-graph reads only (persons + the audited membership/join-request core funcs) — no content.
  */
@@ -40,9 +40,7 @@ export async function resolvePostAuthRoute(
   // Gate B — DOB is the one required onboarding step, asked once a family intent exists.
   if (!p || p.onboardedAt == null) return "/welcome";
 
-  // Gate C — onboarded but still awaiting approval on a join request: the finder's "Your requests"
-  // section is where that request's status lives.
-  if (active.length === 0 && hasPending) return "/families/find";
-
+  // A pending-only requester (no active membership yet, but a request in flight) is admitted to the
+  // hub; the finder's "Your requests" section, reachable from there, is where the status lives.
   return "/hub";
 }

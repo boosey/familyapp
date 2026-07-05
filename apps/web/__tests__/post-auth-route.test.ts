@@ -1,9 +1,9 @@
 /**
  * `resolvePostAuthRoute` — the single post-auth/onboarding/family gate.
  *
- * Regression focus: an onboarded, family-less requester with a PENDING join request routes to
- * `/families/find` (NOT the old `/families/find?pending=1` — that dead param was ignored once the
- * finder grew its own "Your requests" section). The other branches are pinned alongside it.
+ * Regression focus: an onboarded, family-less requester with a PENDING join request now falls
+ * through to `/hub` (Gate C deleted — a pending request is a family intent, so the hub admits them
+ * rather than parking them on `/families/find`). The other branches are pinned alongside it.
  */
 import { describe, expect, it } from "vitest";
 import { createTestDatabase } from "@chronicle/db";
@@ -67,7 +67,7 @@ describe("resolvePostAuthRoute", () => {
     await expect(resolvePostAuthRoute(db, personId)).resolves.toBe("/welcome");
   });
 
-  it("routes an onboarded, family-less person WITH a pending request to /families/find (no dead param)", async () => {
+  it("routes an onboarded, family-less person WITH a pending request to /hub (Gate C deleted)", async () => {
     const db = await createTestDatabase();
     const { boudreauxFamilyId } = await seedInto(db, new InMemoryMediaStorage());
     const requester = await newOnboardedPerson(db, "pending");
@@ -75,7 +75,8 @@ describe("resolvePostAuthRoute", () => {
       familyId: boudreauxFamilyId!,
       requesterPersonId: requester,
     });
-    await expect(resolvePostAuthRoute(db, requester)).resolves.toBe("/families/find");
+    // A pending join request IS a family intent → the hub admits them (no auto-park on /families/find).
+    await expect(resolvePostAuthRoute(db, requester)).resolves.toBe("/hub");
   });
 
   it("routes an onboarded, family-less person with NO requests to /families/start", async () => {
