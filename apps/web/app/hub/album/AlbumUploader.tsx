@@ -1,21 +1,24 @@
 "use client";
 
 /**
- * Album upload control (ADR-0009 · #15 · #16). A file input + submit that calls the
- * `uploadAlbumPhotoAction` server action (which re-resolves auth and re-validates the target albums
- * server-side — the client passes only the files + its picker choice). On success it refreshes the
- * server component so the new tiles appear; on failure it surfaces the action's error string.
+ * Album upload control (ADR-0009 · #15 · #16). A single "Add to album" button that opens the OS file
+ * picker directly (the file input itself is hidden — no visible "choose files" control) and uploads
+ * the chosen files the moment the picker closes. It calls the `uploadAlbumPhotoAction` server action
+ * (which re-resolves auth and re-validates the target albums server-side — the client passes only the
+ * files + its picker choice). On success it refreshes the server component so the new tiles appear; on
+ * failure it surfaces the action's error string. The control sits ABOVE the album grid.
  *
- * Multi-select (#16): the file input carries `multiple`, so the OS picker lets the contributor
- * choose MANY photos at once. A `multiple` input serializes as repeated `photo` entries on the
- * FormData, which the action reads via `getAll("photo")` — each selected file becomes its own album
- * photo placed into the SAME chosen album(s). The action returns a batch summary (`added`/`failed`);
- * a partial success (some files failed) surfaces a gentle inline note rather than an error.
+ * Multi-select (#16): the hidden file input carries `multiple`, so the OS picker lets the contributor
+ * choose MANY photos at once. Each selected file is appended as its own `photo` entry on the FormData,
+ * which the action reads via `getAll("photo")` — each becomes its own album photo placed into the SAME
+ * chosen album(s). The action returns a batch summary (`added`/`failed`); a partial success (some files
+ * failed) surfaces a gentle inline note rather than an error.
  *
  * #16 — multi-family placement: a contributor in >=2 families sees a checkbox per family and chooses
- * which albums receive the batch. The default pre-selection is the album currently on screen
- * (`currentFamilyId`), pre-checked but deselectable; at least one must stay selected. A solo-family
- * contributor sees NO checkboxes — the server defaults to the sole family (behavior unchanged).
+ * which albums receive the batch BEFORE opening the picker. The default pre-selection is the album
+ * currently on screen (`currentFamilyId`), pre-checked but deselectable; at least one must stay
+ * selected (the button is disabled otherwise). A solo-family contributor sees NO checkboxes — the
+ * server defaults to the sole family (behavior unchanged).
  */
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -39,13 +42,11 @@ export function AlbumUploader({
   currentFamilyId: string;
 }) {
   const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
   const [note, setNote] = useState<string | null>(null);
-  const [hasFile, setHasFile] = useState(false);
   // Multi-family picker state: default to ONLY the current family context (never all).
   const showPicker = families.length > 1;
   const [selected, setSelected] = useState<Set<string>>(
@@ -70,24 +71,24 @@ export function AlbumUploader({
     });
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    // A `multiple` file input serializes as repeated `photo` entries in the browser, but some
-    // environments (jsdom under test) only keep the first. Re-append every selected file explicitly
-    // so each becomes its own `photo` entry the action reads via getAll("photo") — deterministic
-    // everywhere, and a no-op net effect in a real browser (delete then re-append the same files).
-    const input = fileInputRef.current;
-    if (input?.files && input.files.length > 0) {
-      formData.delete("photo");
-      for (const file of Array.from(input.files)) formData.append("photo", file);
-    }
+  // Upload the files the OS picker just handed back. Triggered by the hidden input's change event —
+  // there is no separate submit step; choosing files IS the upload.
+  function onFilesChosen(files: FileList | null) {
+    if (!files || files.length === 0) return;
     // Guard the obvious mistake client-side (fast, friendly) before spending an upload; the server
     // re-checks the same cap and is authoritative.
-    if ((input?.files?.length ?? 0) > MAX_BATCH_FILES) {
+    if (files.length > MAX_BATCH_FILES) {
       setError(hub.actions.tooManyPhotos);
       setNote(null);
       return;
+    }
+    // Build the payload explicitly: one `photo` entry per file (the action reads getAll("photo")),
+    // plus the chosen albums when the multi-family picker is shown (a solo contributor sends none and
+    // the server defaults to their sole family).
+    const formData = new FormData();
+    for (const file of Array.from(files)) formData.append("photo", file);
+    if (showPicker) {
+      for (const familyId of selected) formData.append("familyIds", familyId);
     }
     startTransition(async () => {
       // The action can REJECT (throw) rather than return an error shape — most notably when the
@@ -115,28 +116,38 @@ export function AlbumUploader({
           ? hub.album.photosPartial(result.added, result.failed)
           : null,
       );
-      formRef.current?.reset();
-      setHasFile(false);
       setSelected(new Set([currentFamilyId]));
       router.refresh();
     });
   }
 
-  // >=1 album must stay selected when the picker is shown.
-  const submitDisabled =
-    pending || !hasFile || (showPicker && selected.size === 0);
+  // Open the OS file picker. Reset the input's value first so re-choosing the SAME file(s) still
+  // fires a change event (the browser suppresses change when the value is unchanged).
+  function openPicker() {
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
+  // >=1 album must stay selected when the picker is shown, and never while an upload is in flight.
+  const addDisabled = pending || (showPicker && selected.size === 0);
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={onSubmit}
-      style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360 }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360 }}>
+      {/* Hidden file input — the "Add to album" button clicks it programmatically, so no visible
+          native "choose files" control appears. The label keeps it accessibly named. */}
       <label
         style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-sm)",
-          color: "var(--text-meta)",
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
         }}
       >
         {hub.album.addLabel}
@@ -146,10 +157,9 @@ export function AlbumUploader({
           name="photo"
           accept="image/*"
           multiple
-          required
           disabled={pending}
-          onChange={(e) => setHasFile((e.currentTarget.files?.length ?? 0) > 0)}
-          style={{ display: "block", marginTop: 8 }}
+          onChange={(e) => onFilesChosen(e.currentTarget.files)}
+          tabIndex={-1}
         />
       </label>
 
@@ -205,10 +215,11 @@ export function AlbumUploader({
       ) : null}
 
       <KindredButton
-        type="submit"
+        type="button"
         variant="primary"
         size="small"
-        disabled={submitDisabled}
+        disabled={addDisabled}
+        onClick={openPicker}
         style={{ alignSelf: "flex-start" }}
       >
         {hub.album.addButton}
@@ -245,6 +256,6 @@ export function AlbumUploader({
           {note}
         </p>
       ) : null}
-    </form>
+    </div>
   );
 }

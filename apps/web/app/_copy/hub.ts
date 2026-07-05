@@ -285,7 +285,7 @@ export const hub = {
     // (/hub?tab=album). Names its destination tab, matching backToStories / backToQuestions.
     backToAlbum: "← Back to album",
     title: "Family album",
-    empty: "No photos yet. Add the first one below.",
+    empty: "No photos yet. Add the first one above.",
     // "Add a photo" reads singular but the input accepts many at once (#16 multi-select) — the OS
     // picker copy already signals multi-select, so the label stays warm and simple.
     addLabel: "Add a photo",

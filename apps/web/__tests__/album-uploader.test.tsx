@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
- * AlbumUploader — the multi-family placement picker (#16).
+ * AlbumUploader — the multi-family placement picker (#16) + the button-opens-picker upload flow.
  *  1. In >=2 families: one checkbox per family; ONLY the current-context family is checked by
  *     default (the default is the album on screen, never "all").
  *  2. Solo (one family): no checkboxes render — the server defaults to the sole family.
- *  3. Deselecting the last checked album disables the submit button (>=1 must stay selected).
+ *  3. Deselecting the last checked album disables the "Add to album" button (>=1 must stay selected).
+ *  4. Choosing files in the (hidden) input IS the upload — there is no separate submit step.
  * Mocks next/navigation and the server-action module (a "use server" file that pulls db at import).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -53,20 +54,29 @@ describe("AlbumUploader multi-family picker", () => {
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
 
-  it("disables submit when the only checked album is deselected", () => {
+  it("disables the add button when the only checked album is deselected", () => {
     render(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
     );
-    const submit = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
-    // With a file chosen and the current album checked, submit is enabled...
-    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
-    const file = new File([new Uint8Array([1, 2, 3])], "p.png", { type: "image/png" });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-    expect(submit.disabled).toBe(false);
+    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
+    // With the current album checked by default, the button is enabled...
+    expect(add.disabled).toBe(false);
     // ...deselecting the sole checked album disables it (>=1 must stay selected).
     const a = screen.getByLabelText(FAM_A.familyName) as HTMLInputElement;
     fireEvent.click(a);
-    expect(submit.disabled).toBe(true);
+    expect(add.disabled).toBe(true);
+  });
+
+  // The visible "Add to album" button opens the hidden OS file picker — it does NOT show a native
+  // "choose files" control. Clicking it programmatically clicks the (hidden) file input.
+  it("opens the file picker when the add button is clicked", () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const clicked = vi.spyOn(fileInput, "click");
+    fireEvent.click(screen.getByRole("button", { name: /add to album/i }));
+    expect(clicked).toHaveBeenCalledTimes(1);
   });
 
   // #16 multi-select: the file input carries `multiple` so the OS picker allows many files.
@@ -78,8 +88,9 @@ describe("AlbumUploader multi-family picker", () => {
     expect(fileInput.multiple).toBe(true);
   });
 
-  // #16 multi-select: selecting several files and submitting sends ALL of them to the action as
-  // repeated `photo` FormData entries (each becomes its own album photo, same chosen album[s]).
+  // #16 multi-select: selecting several files sends ALL of them to the action as repeated `photo`
+  // FormData entries (each becomes its own album photo, same chosen album[s]). Choosing files IS the
+  // upload — no separate submit step.
   it("submits every selected file as a separate `photo` entry", async () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
@@ -90,15 +101,47 @@ describe("AlbumUploader multi-family picker", () => {
     const f3 = new File([new Uint8Array([7, 8, 9])], "p3.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1, f2, f3] } });
 
-    // Submit the form directly (jsdom does not synthesize a submit event from a button click).
-    fireEvent.submit(fileInput.closest("form")!);
-
     await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
     const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
     const photos = formData.getAll("photo");
     expect(photos).toHaveLength(3);
     expect((photos[0] as File).name).toBe("p1.png");
     expect((photos[2] as File).name).toBe("p3.png");
+  });
+
+  // Regression: the multi-family picker's checked albums must ride along in the payload. The upload
+  // now builds FormData explicitly (rather than serializing a <form>), so the selected `familyIds`
+  // come from the picker state, not from the DOM. Checking a second album sends BOTH.
+  it("sends the checked albums as `familyIds` entries (multi-family)", async () => {
+    render(
+      <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
+    );
+    // Add the second album to the default (current) selection, then choose a file.
+    fireEvent.click(screen.getByLabelText(FAM_B.familyName));
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1] } });
+
+    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
+    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
+    expect(new Set(formData.getAll("familyIds"))).toEqual(
+      new Set([FAM_A.familyId, FAM_B.familyId]),
+    );
+  });
+
+  // Regression: a solo-family contributor sends NO `familyIds` — the server defaults to the sole
+  // family. (No picker is shown, so nothing to serialize.)
+  it("sends NO `familyIds` for a solo-family contributor", async () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1] } });
+
+    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
+    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
+    expect(formData.getAll("familyIds")).toHaveLength(0);
   });
 
   // A partial-success batch (some files failed) surfaces a gentle status note, NOT an error alert.
@@ -110,7 +153,6 @@ describe("AlbumUploader multi-family picker", () => {
     const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1] } });
-    fireEvent.submit(fileInput.closest("form")!);
 
     await vi.waitFor(() =>
       expect(screen.getByRole("status").textContent).toMatch(/couldn't be added/i),
@@ -129,7 +171,6 @@ describe("AlbumUploader multi-family picker", () => {
     const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1] } });
-    fireEvent.submit(fileInput.closest("form")!);
 
     await vi.waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/too large/i),
@@ -149,7 +190,6 @@ describe("AlbumUploader multi-family picker", () => {
       (_, i) => new File([new Uint8Array([i])], `p${i}.png`, { type: "image/png" }),
     );
     fireEvent.change(fileInput, { target: { files: tooMany } });
-    fireEvent.submit(fileInput.closest("form")!);
 
     await vi.waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/too many/i),

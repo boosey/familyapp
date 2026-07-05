@@ -101,13 +101,19 @@ export async function AlbumSurface({
         </nav>
       ) : null}
 
+      {current ? (
+        <div style={{ margin: "0 0 24px" }}>
+          <AlbumUploader families={active} currentFamilyId={current.familyId} />
+        </div>
+      ) : null}
+
       {photos.length === 0 ? (
         <p
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui)",
             color: "var(--text-meta)",
-            margin: "0 0 24px",
+            margin: 0,
           }}
         >
           {hub.album.empty}
@@ -115,10 +121,6 @@ export async function AlbumSurface({
       ) : (
         <AlbumGrid photos={gridPhotos} />
       )}
-
-      {current ? (
-        <AlbumUploader families={active} currentFamilyId={current.familyId} />
-      ) : null}
     </>
   );
 }
