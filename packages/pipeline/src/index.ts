@@ -65,7 +65,7 @@ export {
   type PipelineDeps,
 } from "./orchestrator";
 
-export { transcribeTakeToRecording, stitchAndRenderStory } from "./multi-take";
+export { transcribeTakeToRecording } from "./multi-take";
 
 export {
   applyVoiceCorrection,

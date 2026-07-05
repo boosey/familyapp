@@ -1,6 +1,4 @@
 import {
-  getStoryForViewer,
-  listProseRevisions,
   listStoryRecordings,
   persistRecordingAndCreateDraft,
   persistTakeRecording,
@@ -10,12 +8,7 @@ import { persons } from "@chronicle/db/schema";
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  ScriptedLanguageModel,
-  stitchAndRenderStory,
-  transcribeTakeToRecording,
-  type Transcriber,
-} from "../src/index";
+import { transcribeTakeToRecording, type Transcriber } from "../src/index";
 
 const sha = (b: Uint8Array) => `sha256:${createHash("sha256").update(b).digest("hex")}`;
 
@@ -92,12 +85,12 @@ async function seedTwoTakeStory(narratorId: string): Promise<{
   return { storyId, take0Id: takes[0]!.id, take1Id: takes[1]!.id };
 }
 
-describe("multi-take pipeline — per-take transcribe + stitch-then-polish-once (ADR-0012)", () => {
-  it("transcribes each take independently, then stitches + polishes ONCE at thread completion", async () => {
+describe("multi-take pipeline — per-take transcribe (ADR-0012)", () => {
+  it("transcribes each take independently into its own recording row, in position order", async () => {
     const narratorId = await makeNarrator();
     const { storyId, take0Id, take1Id } = await seedTwoTakeStory(narratorId);
 
-    // Per-take transcribe fills each take's own transcript (the evaluator's input).
+    // Per-take transcribe fills each take's own transcript (the evaluator's / composing editor's input).
     const r0 = await transcribeTakeToRecording(
       { db, storage, transcriber: byteKeyedTranscriber },
       take0Id,
@@ -116,43 +109,5 @@ describe("multi-take pipeline — per-take transcribe + stitch-then-polish-once 
     // Both per-take transcripts are persisted in position order.
     const takes = await listStoryRecordings(db, storyId);
     expect(takes.map((t) => t.transcript)).toEqual(["take zero words", "take one words"]);
-
-    // Stitch + polish ONCE. The scripted LLM records every call so we can assert exactly one.
-    const languageModel = new ScriptedLanguageModel({
-      respond: () =>
-        JSON.stringify({
-          prose: "A stitched, polished childhood memory.",
-          title: "Childhood",
-          summary: "A childhood recollection.",
-          tags: ["childhood"],
-        }),
-    });
-    await stitchAndRenderStory({ db, languageModel }, storyId);
-
-    // The polish runs exactly once — NOT per take.
-    expect(languageModel.calls).toHaveLength(1);
-
-    const story = await getStoryForViewer(
-      db,
-      { kind: "link_session", personId: narratorId },
-      storyId,
-    );
-    expect(story).not.toBeNull();
-    // Story transcript is the stitched per-take transcripts joined in order.
-    expect(story!.transcript).toBe("take zero words\n\ntake one words");
-    expect(story!.prose).toBe("A stitched, polished childhood memory.");
-    expect(story!.prose!.length).toBeGreaterThan(0);
-    expect(story!.title).toBe("Childhood");
-    expect(story!.tags).toEqual(["childhood"]);
-    expect(story!.state).toBe("pending_approval");
-    // Still private — the polish stage never touches consent/audience.
-    expect(story!.audienceTier).toBe("private");
-
-    // Provenance: L1 (stitched transcript) then L2 (cleaned) — the single audited lineage.
-    const rows = await listProseRevisions(db, storyId);
-    expect(rows.map((r) => r.level)).toEqual(["ai_transcribed", "ai_cleaned"]);
-    expect(rows[0]!.text).toBe("take zero words\n\ntake one words");
-    expect(rows[1]!.modelId).toBe("mock-claude");
-    expect(rows[1]!.promptText!.length).toBeGreaterThan(0);
   });
 });
