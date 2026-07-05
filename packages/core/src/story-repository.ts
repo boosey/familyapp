@@ -35,6 +35,8 @@ import {
   memberships,
   persons,
   storyFamilies,
+  storyViews,
+  followUpDecisions,
 } from "@chronicle/db/schema";
 import type {
   Ask,
@@ -1046,11 +1048,6 @@ export async function discardDraftStory(
       .map((id) => keyById.get(id))
       .filter((k): k is string => k !== undefined);
 
-    // 6. Delete the story's `story_families` targeting rows FIRST. Those rows reference the story
-    //    (child → parent) with an `ON DELETE no action` FK, so deleting the story while any target
-    //    row exists raises an FK violation. A draft/pending story CAN have target rows: the
-    //    pre-approval targeting primitives (`setStoryFamilyTargets`) let a narrator pick families
-    //    before approving. Clear them here (no consent implication — targeting is not content).
     await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
     // Then the ordered take set: story_recordings.story_id → stories.id is a plain FK, so the take
     // rows must go before the story. The story is consent-free (asserted above), so the
@@ -1066,6 +1063,10 @@ export async function discardDraftStory(
     // story. Detaching an image writes no consent — images are mutable presentation, off the ledger.
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
     await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
+    await tx.delete(storyFavorites).where(eq(storyFavorites.storyId, input.storyId));
+    await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
+    await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
+    await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
     //    story references the media (story is the CHILD of media there), so the story goes first,

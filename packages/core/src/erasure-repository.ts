@@ -24,6 +24,7 @@ import {
   storyImages,
   storyRecordings,
   storyLikes,
+  storyFavorites,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -34,6 +35,8 @@ import {
   families,
   storyFamilies,
   voiceCaptions,
+  storyViews,
+  followUpDecisions,
 } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { viewerPersonId, type AuthContext } from "./authorization";
@@ -175,6 +178,10 @@ export async function eraseStory(
     await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
     await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
+    await tx.delete(storyFavorites).where(eq(storyFavorites.storyId, input.storyId));
+    await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
+    await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
+    await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
     await tx.delete(consentRecords).where(eq(consentRecords.storyId, input.storyId));
     await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
