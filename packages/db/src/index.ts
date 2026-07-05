@@ -76,6 +76,10 @@ export type {
   StoryImageProvenance,
   AskSubjectPhoto,
   NewAskSubjectPhoto,
+  StoryFavorite,
+  NewStoryFavorite,
+  StoryLike,
+  NewStoryLike,
 } from "./schema";
 export type {
   FollowUpType,

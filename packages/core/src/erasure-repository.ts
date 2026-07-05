@@ -23,6 +23,7 @@ import {
   stories,
   storyImages,
   storyRecordings,
+  storyLikes,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -173,6 +174,7 @@ export async function eraseStory(
     // permit their deletes without a token, and the media guard permits the orphan audio delete).
     await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
+    await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
     await tx.delete(consentRecords).where(eq(consentRecords.storyId, input.storyId));
     await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));

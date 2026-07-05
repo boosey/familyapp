@@ -64,7 +64,7 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; label: string }> = [
   },
   { re: /@chronicle\/db\/client/, label: "imports the low-level @chronicle/db/client subpath" },
   {
-    re: /\.query\.(stories|media|proseRevisions|storyRecordings|familyPhotos|familyPhotoFamilies|storyImages)\b/,
+    re: /\.query\.(stories|media|proseRevisions|storyRecordings|familyPhotos|familyPhotoFamilies|storyImages|storyFavorites|storyLikes)\b/,
     label: "uses the Drizzle relational API on a content table (db.query.*)",
   },
 ];
@@ -197,6 +197,8 @@ describe("single front door (architecture guard)", () => {
     const query = (db as unknown as { query: Record<string, unknown> }).query;
     expect(query.stories).toBeUndefined();
     expect(query.media).toBeUndefined();
+    expect(query.storyFavorites).toBeUndefined();
+    expect(query.storyLikes).toBeUndefined();
   });
 
   it("db.query.stories / db.query.media are rejected at the TYPE level (compile-time guard)", async () => {

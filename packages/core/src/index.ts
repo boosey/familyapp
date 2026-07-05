@@ -58,6 +58,18 @@ export {
   persistTakeRecording,
   updateStoryRecordingTranscript,
   dropStoryRecording,
+  editStoryDetails,
+  editStoryProse,
+  retargetStoryFamilies,
+  setStoryFavorite,
+  getFavoriteState,
+  listFavoriteStoriesForViewer,
+  setStoryLike,
+  getLikeState,
+  type EditStoryDetailsInput,
+  type EditStoryProseInput,
+  type FavoriteState,
+  type LikeState,
 } from "./story-repository";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";

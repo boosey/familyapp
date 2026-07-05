@@ -18,13 +18,15 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   media,
   proseRevisions,
   stories,
   storyImages,
   storyRecordings,
+  storyFavorites,
+  storyLikes,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -46,9 +48,12 @@ import type {
   StoryKind,
   StoryRecording,
   StoryState,
+  StoryFavorite,
+  StoryLike,
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
+import { AuthContext, getStoryForViewer, decideStoryRead, viewerPersonId } from "./authorization";
 // The subject-photo cover insert routes through `attachPhotoToStoryTx`, which embeds the consolidated
 // `assertPersonCanAccessAlbumPhoto` gate (existence + soft-delete + owner-can-see) IN the creation tx —
 // so there is exactly ONE gate choke point, not a redundant second call here.
@@ -1056,6 +1061,7 @@ export async function discardDraftStory(
     // (ON DELETE no action, mirroring story_families), so any attached-image rows must go before the
     // story. Detaching an image writes no consent — images are mutable presentation, off the ledger.
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
+    await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
     //    story references the media (story is the CHILD of media there), so the story goes first,
@@ -1797,4 +1803,471 @@ export async function dropStoryRecording(
     await tx.delete(media).where(eq(media.id, take.mediaId));
     return { storageKey: m!.storageKey };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Unit 03: Edit story title and tags (owner only, state-agnostic, auditable)
+// ---------------------------------------------------------------------------
+
+export interface EditStoryDetailsInput {
+  storyId: string;
+  actorPersonId: string;
+  title: string;
+  tags: string[];
+}
+
+export async function editStoryDetails(
+  db: Database,
+  input: EditStoryDetailsInput,
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, prose: stories.prose })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+
+    if (!current) {
+      throw new InvariantViolation(`story not found: ${input.storyId}`);
+    }
+
+    if (current.ownerPersonId !== input.actorPersonId) {
+      throw new InvariantViolation(
+        `editStoryDetails: actor ${input.actorPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    const trimmedTitle = input.title.trim();
+    if (!trimmedTitle) {
+      throw new InvariantViolation("title must be non-empty");
+    }
+
+    // Normalize tags: trim, drop empty, dedupe case-sensitively, max 12 tags, max 40 chars per tag.
+    const normalizedTags: string[] = [];
+    const seenTags = new Set<string>();
+
+    for (const tag of input.tags) {
+      const trimmedTag = tag.trim();
+      if (!trimmedTag) continue;
+      if (trimmedTag.length > 40) {
+        throw new InvariantViolation("tag exceeds max length of 40 characters");
+      }
+      if (!seenTags.has(trimmedTag)) {
+        seenTags.add(trimmedTag);
+        normalizedTags.push(trimmedTag);
+      }
+    }
+
+    if (normalizedTags.length > 12) {
+      throw new InvariantViolation("story cannot have more than 12 tags");
+    }
+
+    const [updatedStory] = await tx
+      .update(stories)
+      .set({
+        title: trimmedTitle,
+        tags: normalizedTags,
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+
+    // Append audit row carrying the current unchanged prose snapshot in text.
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "human_metadata_edit",
+      text: current.prose ?? "",
+      actorPersonId: input.actorPersonId,
+    });
+
+    return updatedStory!;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Unit 04: Manage family sharing (retargetStoryFamilies)
+// ---------------------------------------------------------------------------
+
+export async function retargetStoryFamilies(
+  db: Database,
+  ctx: AuthContext,
+  input: { storyId: string; familyIds: string[] },
+): Promise<{ targetedFamilyIds: string[] }> {
+  if (ctx.kind !== "account") {
+    throw new InvariantViolation("retargetStoryFamilies: actor must be an identified account");
+  }
+
+  return db.transaction(async (tx) => {
+    const [story] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+
+    if (!story) {
+      throw new InvariantViolation(`retargetStoryFamilies: story ${input.storyId} not found`);
+    }
+
+    if (ctx.personId !== story.ownerPersonId) {
+      throw new InvariantViolation(
+        `retargetStoryFamilies: actor ${ctx.personId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    // Get current target families
+    const currentTargets = await tx
+      .select({ familyId: storyFamilies.familyId })
+      .from(storyFamilies)
+      .where(eq(storyFamilies.storyId, input.storyId));
+    const currentSet = new Set(currentTargets.map((t) => t.familyId));
+
+    const dedupedInput = [...new Set(input.familyIds)].sort();
+    const isNoOp =
+      dedupedInput.length === currentSet.size &&
+      dedupedInput.every((id) => currentSet.has(id));
+
+    const writtenSet = await replaceStoryFamilyTargetsTx(
+      tx,
+      "retargetStoryFamilies",
+      input.storyId,
+      story.ownerPersonId,
+      input.familyIds,
+    );
+
+    if (!isNoOp) {
+      // Record consent row on effective sharing scope change
+      const serializedFamilyIds = [...writtenSet].sort().join(",");
+      await tx.insert(consentRecords).values({
+        personId: story.ownerPersonId,
+        storyId: input.storyId,
+        action: "set_audience_tier",
+        resultingState: serializedFamilyIds,
+        actorPersonId: ctx.personId,
+        approvalAudioMediaId: null,
+      });
+    }
+
+    return { targetedFamilyIds: writtenSet };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Unit 05: Edit story prose body (post-share, owner-only, state-agnostic)
+// ---------------------------------------------------------------------------
+
+export interface EditStoryProseInput {
+  storyId: string;
+  prose: string;
+  actorPersonId: string;
+  expectedUpdatedAt?: string; // Optional optimistic concurrency check
+}
+
+export async function editStoryProse(
+  db: Database,
+  input: EditStoryProseInput,
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ ownerPersonId: stories.ownerPersonId, state: stories.state, updatedAt: stories.updatedAt })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+
+    if (!current) {
+      throw new InvariantViolation(`story not found: ${input.storyId}`);
+    }
+
+    if (current.ownerPersonId !== input.actorPersonId) {
+      throw new InvariantViolation(
+        `editStoryProse: actor ${input.actorPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    // Allowed states: draft, pending_approval, approved, shared
+    const allowedStates: StoryState[] = ["draft", "pending_approval", "approved", "shared"];
+    if (!allowedStates.includes(current.state)) {
+      throw new InvariantViolation(`editStoryProse: story state ${current.state} is not editable`);
+    }
+
+    // Optimistic concurrency check
+    if (input.expectedUpdatedAt) {
+      const clientTime = new Date(input.expectedUpdatedAt).getTime();
+      const serverTime = current.updatedAt ? new Date(current.updatedAt).getTime() : 0;
+      // Allow minor timestamp precision differences (within 1000ms)
+      if (Math.abs(serverTime - clientTime) > 1000) {
+        throw new InvariantViolation(
+          "This story changed since you opened the editor — reload and re-apply.",
+        );
+      }
+    }
+
+    const trimmedProse = input.prose.trim();
+
+    const [updatedStory] = await tx
+      .update(stories)
+      .set({
+        prose: trimmedProse,
+        updatedAt: new Date(),
+      })
+      .where(eq(stories.id, input.storyId))
+      .returning();
+
+    // Append audit row using existing human_corrected level, recording the new prose
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "human_corrected",
+      text: trimmedProse,
+      actorPersonId: input.actorPersonId,
+      modelId: null,
+      promptText: null,
+      storyRecordingId: null,
+    });
+
+    return updatedStory!;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Unit 06: Favorite (private bookmark + count)
+// ---------------------------------------------------------------------------
+
+export interface FavoriteState {
+  favoritedByViewer: boolean;
+  count: number;
+}
+
+export async function setStoryFavorite(
+  db: Database,
+  ctx: AuthContext,
+  input: { storyId: string; favorited: boolean },
+): Promise<FavoriteState> {
+  if (ctx.kind !== "account") {
+    throw new InvariantViolation("setStoryFavorite: anonymous or link_session cannot favorite a story");
+  }
+
+  // Gate on SEE permission via getStoryForViewer
+  const story = await getStoryForViewer(db, ctx, input.storyId);
+  if (!story) {
+    throw new InvariantViolation(`setStoryFavorite: story ${input.storyId} not found or access denied`);
+  }
+
+  await db.transaction(async (tx) => {
+    if (input.favorited) {
+      await tx
+        .insert(storyFavorites)
+        .values({
+          storyId: input.storyId,
+          personId: ctx.personId,
+        })
+        .onConflictDoNothing({
+          target: [storyFavorites.storyId, storyFavorites.personId],
+        });
+    } else {
+      await tx
+        .delete(storyFavorites)
+        .where(
+          and(
+            eq(storyFavorites.storyId, input.storyId),
+            eq(storyFavorites.personId, ctx.personId),
+          ),
+        );
+    }
+  });
+
+  return getFavoriteState(db, ctx, input.storyId);
+}
+
+export async function getFavoriteState(
+  db: Database,
+  ctx: AuthContext,
+  storyId: string,
+): Promise<FavoriteState> {
+  // Gate on SEE permission
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story) {
+    throw new InvariantViolation(`getFavoriteState: story ${storyId} not found or access denied`);
+  }
+
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(storyFavorites)
+    .where(eq(storyFavorites.storyId, storyId));
+
+  const favoritedByViewer =
+    ctx.kind === "account"
+      ? await db
+          .select({ id: storyFavorites.id })
+          .from(storyFavorites)
+          .where(
+            and(
+              eq(storyFavorites.storyId, storyId),
+              eq(storyFavorites.personId, ctx.personId),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows.length > 0)
+      : false;
+
+  return {
+    favoritedByViewer,
+    count: countResult?.count ?? 0,
+  };
+}
+
+export async function listFavoriteStoriesForViewer(
+  db: Database,
+  ctx: AuthContext,
+): Promise<string[]> {
+  if (ctx.kind !== "account") {
+    return [];
+  }
+
+  const rows = await db
+    .select({ storyId: storyFavorites.storyId })
+    .from(storyFavorites)
+    .where(eq(storyFavorites.personId, ctx.personId))
+    .orderBy(desc(storyFavorites.createdAt));
+
+  return rows.map((r) => r.storyId);
+}
+
+// ---------------------------------------------------------------------------
+// Unit 07: Like (visible reaction + count + leak-safe list)
+// ---------------------------------------------------------------------------
+
+export interface LikeState {
+  likedByViewer: boolean;
+  count: number;
+  likers: Array<{ personId: string; displayName: string }>;
+}
+
+export async function setStoryLike(
+  db: Database,
+  ctx: AuthContext,
+  input: { storyId: string; liked: boolean },
+): Promise<LikeState> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) {
+    throw new InvariantViolation("setStoryLike: anonymous cannot like a story");
+  }
+
+  // Gate on SEE permission
+  const story = await getStoryForViewer(db, ctx, input.storyId);
+  if (!story) {
+    throw new InvariantViolation(`setStoryLike: story ${input.storyId} not found or access denied`);
+  }
+
+  await db.transaction(async (tx) => {
+    if (input.liked) {
+      await tx
+        .insert(storyLikes)
+        .values({
+          storyId: input.storyId,
+          personId: viewer,
+        })
+        .onConflictDoNothing({
+          target: [storyLikes.storyId, storyLikes.personId],
+        });
+    } else {
+      await tx
+        .delete(storyLikes)
+        .where(
+          and(
+            eq(storyLikes.storyId, input.storyId),
+            eq(storyLikes.personId, viewer),
+          ),
+        );
+    }
+  });
+
+  return getLikeState(db, ctx, input.storyId);
+}
+
+export async function getLikeState(
+  db: Database,
+  ctx: AuthContext,
+  storyId: string,
+): Promise<LikeState> {
+  // Gate on SEE permission
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story) {
+    throw new InvariantViolation(`getLikeState: story ${storyId} not found or access denied`);
+  }
+
+  const viewer = viewerPersonId(ctx);
+
+  // Total unfiltered count
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(storyLikes)
+    .where(eq(storyLikes.storyId, storyId));
+
+  const likedByViewer =
+    viewer !== null
+      ? await db
+          .select({ id: storyLikes.id })
+          .from(storyLikes)
+          .where(
+            and(
+              eq(storyLikes.storyId, storyId),
+              eq(storyLikes.personId, viewer),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows.length > 0)
+      : false;
+
+  // Leak-safe likers list
+  let likersList: Array<{ personId: string; displayName: string }> = [];
+  if (viewer !== null) {
+    const viewerActiveFamilies = await db
+      .select({ familyId: memberships.familyId })
+      .from(memberships)
+      .where(and(eq(memberships.personId, viewer), eq(memberships.status, "active")));
+    const activeFamilyIds = viewerActiveFamilies.map((f) => f.familyId);
+
+    if (activeFamilyIds.length > 0) {
+      const rows = await db
+        .select({
+          personId: persons.id,
+          displayName: persons.displayName,
+        })
+        .from(storyLikes)
+        .innerJoin(persons, eq(persons.id, storyLikes.personId))
+        .innerJoin(memberships, eq(memberships.personId, storyLikes.personId))
+        .where(
+          and(
+            eq(storyLikes.storyId, storyId),
+            eq(memberships.status, "active"),
+            inArray(memberships.familyId, activeFamilyIds),
+          ),
+        );
+
+      const seen = new Set<string>();
+      for (const row of rows) {
+        if (!seen.has(row.personId)) {
+          seen.add(row.personId);
+          likersList.push({ personId: row.personId, displayName: row.displayName });
+        }
+      }
+    }
+
+    // Always include viewer themselves in the list if they liked it
+    if (likedByViewer && !likersList.some((l) => l.personId === viewer)) {
+      const [selfDetails] = await db
+        .select({ personId: persons.id, displayName: persons.displayName })
+        .from(persons)
+        .where(eq(persons.id, viewer))
+        .limit(1);
+      if (selfDetails) {
+        likersList.unshift(selfDetails);
+      }
+    }
+  }
+
+  return {
+    likedByViewer,
+    count: countResult?.count ?? 0,
+    likers: likersList,
+  };
 }

@@ -153,6 +153,7 @@ export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
   "ai_polished",
   "human_corrected",
   "ai_verified",
+  "human_metadata_edit",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -938,6 +939,47 @@ export const storyViews = pgTable(
   ],
 );
 
+export const storyFavorites = pgTable(
+  "story_favorites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("story_favorites_story_person_uq").on(t.storyId, t.personId),
+    index("story_favorites_person_idx").on(t.personId),
+  ],
+);
+
+export const storyLikes = pgTable(
+  "story_likes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("story_likes_story_person_uq").on(t.storyId, t.personId),
+    index("story_likes_person_idx").on(t.personId),
+  ],
+);
+
+
 // ---------------------------------------------------------------------------
 // FamilyPhoto (the album) — ADR-0009. A photo is a CONTRIBUTED-not-owned artifact that lands in
 // one or more Family albums. Kept SEPARATE from `media` on lifecycle grounds: a photo lives
@@ -1234,3 +1276,9 @@ export type VoiceCaption = typeof voiceCaptions.$inferSelect;
 export type NewVoiceCaption = typeof voiceCaptions.$inferInsert;
 export type ErasureAudit = typeof erasureAudit.$inferSelect;
 export type NewErasureAudit = typeof erasureAudit.$inferInsert;
+
+export type StoryFavorite = typeof storyFavorites.$inferSelect;
+export type NewStoryFavorite = typeof storyFavorites.$inferInsert;
+export type StoryLike = typeof storyLikes.$inferSelect;
+export type NewStoryLike = typeof storyLikes.$inferInsert;
+

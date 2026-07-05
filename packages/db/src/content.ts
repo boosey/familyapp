@@ -19,4 +19,6 @@ export {
   familyPhotos,
   familyPhotoFamilies,
   storyImages,
+  storyFavorites,
+  storyLikes,
 } from "./schema";

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."prose_revision_level" ADD VALUE 'human_metadata_edit';

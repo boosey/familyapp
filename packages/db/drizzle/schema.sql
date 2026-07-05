@@ -16,7 +16,7 @@ CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'inta
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
-CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified');
+CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified', 'human_metadata_edit');
 CREATE TYPE "public"."story_image_provenance" AS ENUM('family_photo', 'illustration');
 CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
@@ -284,6 +284,13 @@ CREATE TABLE "story_families" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "story_favorites" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "story_images" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"story_id" uuid NOT NULL,
@@ -296,6 +303,13 @@ CREATE TABLE "story_images" (
 	"is_cover" boolean DEFAULT false NOT NULL,
 	"position" integer NOT NULL,
 	"attached_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "story_likes" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -374,9 +388,13 @@ ALTER TABLE "stories" ADD CONSTRAINT "stories_originating_family_id_families_id_
 ALTER TABLE "stories" ADD CONSTRAINT "stories_subject_photo_id_family_photos_id_fk" FOREIGN KEY ("subject_photo_id") REFERENCES "public"."family_photos"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_families" ADD CONSTRAINT "story_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_favorites" ADD CONSTRAINT "story_favorites_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_favorites" ADD CONSTRAINT "story_favorites_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_images" ADD CONSTRAINT "story_images_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_images" ADD CONSTRAINT "story_images_family_photo_id_family_photos_id_fk" FOREIGN KEY ("family_photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "story_images" ADD CONSTRAINT "story_images_attached_by_person_id_persons_id_fk" FOREIGN KEY ("attached_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_likes" ADD CONSTRAINT "story_likes_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_likes" ADD CONSTRAINT "story_likes_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
@@ -418,9 +436,13 @@ CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");
 CREATE UNIQUE INDEX "story_families_story_family_uq" ON "story_families" USING btree ("story_id","family_id");
 CREATE INDEX "story_families_story_idx" ON "story_families" USING btree ("story_id");
 CREATE INDEX "story_families_family_idx" ON "story_families" USING btree ("family_id");
+CREATE UNIQUE INDEX "story_favorites_story_person_uq" ON "story_favorites" USING btree ("story_id","person_id");
+CREATE INDEX "story_favorites_person_idx" ON "story_favorites" USING btree ("person_id");
 CREATE INDEX "story_images_story_idx" ON "story_images" USING btree ("story_id");
 CREATE UNIQUE INDEX "story_images_story_position_uq" ON "story_images" USING btree ("story_id","position");
 CREATE UNIQUE INDEX "story_images_story_photo_uq" ON "story_images" USING btree ("story_id","family_photo_id");
+CREATE UNIQUE INDEX "story_likes_story_person_uq" ON "story_likes" USING btree ("story_id","person_id");
+CREATE INDEX "story_likes_person_idx" ON "story_likes" USING btree ("person_id");
 CREATE INDEX "story_recordings_story_idx" ON "story_recordings" USING btree ("story_id");
 CREATE UNIQUE INDEX "story_recordings_story_position_uq" ON "story_recordings" USING btree ("story_id","position");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
