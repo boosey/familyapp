@@ -286,7 +286,7 @@ export default async function HubPage({
           )}
           {activeTab === "album" && <AlbumSurface db={db} ctx={ctx} scope={scope} />}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
-          {activeTab === "ask" && <AskTab />}
+          {activeTab === "ask" && <AskTab scope={scope} />}
           {activeTab === "asks" && <AsksTab scope={scope} />}
           {activeTab === "invite" && <InviteTab />}
           {activeTab === "requests" && <RequestsTab />}

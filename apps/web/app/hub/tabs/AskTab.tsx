@@ -7,9 +7,16 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { createAsk } from "@chronicle/core";
 import { invitations, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
+import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { AskPhotoPicker } from "./AskPhotoPicker";
+import { AskFamilyPicker } from "./AskFamilyPicker";
+import {
+  familyChoiceRequired,
+  resolveComposeFamilies,
+  seedComposeFamilies,
+} from "@/lib/compose-scope";
 
 async function submitAsk(formData: FormData): Promise<void> {
   "use server";
@@ -18,6 +25,17 @@ async function submitAsk(formData: FormData): Promise<void> {
   if (ctx.kind !== "account") throw new Error("must be signed in");
   const targetPersonId = String(formData.get("targetPersonId") ?? "");
   const questionText = String(formData.get("questionText") ?? "");
+  // Family target set (Increment 4B, Task 4.4). The chosen ids arrive from the multi-select (or none,
+  // when the asker has a single family and no picker was shown). `resolveComposeFamilies` re-reads the
+  // asker's OWN active families server-side, auto-resolves the unambiguous cases, and THROWS when the
+  // asker has >1 family and picked none — the server-side guard mirroring the client `required`.
+  const chosenFamilyIds = formData
+    .getAll("familyIds")
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map(
+    (f) => f.familyId,
+  );
+  const familyIds = resolveComposeFamilies(chosenFamilyIds, activeFamilyIds);
   // ADR-0009 Phase 3: optional subject photos the ask is ABOUT. Identity is re-resolved above; the
   // photo ids are untrusted client input, but `createAsk` re-runs the album-access gate per id inside
   // its write transaction (a photo the asker can't see rejects the whole ask), so passing them
@@ -28,12 +46,13 @@ async function submitAsk(formData: FormData): Promise<void> {
   await createAsk(db, ctx, {
     targetPersonId,
     questionText,
+    ...(familyIds.length > 0 ? { familyIds } : {}),
     ...(subjectPhotoIds.length > 0 ? { subjectPhotoIds } : {}),
   });
   redirect("/hub?tab=asks");
 }
 
-export async function AskTab() {
+export async function AskTab({ scope = "all" }: { scope?: string } = {}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -51,11 +70,15 @@ export async function AskTab() {
     );
   }
 
-  const viewerFams = await db
-    .select({ familyId: memberships.familyId })
-    .from(memberships)
-    .where(and(eq(memberships.personId, ctx.personId), eq(memberships.status, "active")));
+  // The asker's active families — both the candidate-person filter AND the compose family multi-select
+  // (with names) draw from this single read.
+  const viewerFams = await listActiveFamiliesForPerson(db, ctx.personId);
   const familyIds = viewerFams.map((r) => r.familyId);
+  // Seed the family multi-select from the hub scope; only shown (and only `required`) when the asker
+  // is in >1 family — a single-family asker is auto-resolved in `submitAsk`.
+  const showFamilyPicker = viewerFams.length > 1;
+  const seededFamilyIds = [...seedComposeFamilies(scope, familyIds)];
+  const familyChoiceIsRequired = familyChoiceRequired(scope, familyIds);
   const rawCandidates = familyIds.length
     ? await db
         .select({ id: persons.id, displayName: persons.displayName })
@@ -151,6 +174,13 @@ export async function AskTab() {
             placeholder={hub.ask.questionPlaceholder}
           />
         </label>
+        {showFamilyPicker ? (
+          <AskFamilyPicker
+            families={viewerFams}
+            seeded={seededFamilyIds}
+            required={familyChoiceIsRequired}
+          />
+        ) : null}
         <AskPhotoPicker />
         <KindredButton type="submit" label={hub.ask.submit} />
       </form>

@@ -33,6 +33,9 @@ export const hub = {
     scopePending: (familyName: string) => `${familyName} — Pending ⏳`,
     scopeCreateFamily: "+ Create a family",
     scopeFindFamily: "🔍 Find a family to join",
+    // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
+    // yet (one pending join request). Shown by the read tabs in place of their generic empties.
+    pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
   },
   stories: {
     untitled: "Untitled",
@@ -81,6 +84,11 @@ export const hub = {
   ask: {
     signedOut: "Sign in to ask a question.",
     heading: "Ask a question",
+    // Family multi-select (Increment 4B, Task 4.4): which family/families this question belongs to.
+    // Shown only when the asker is in >1 family AND the hub scope is "all" (otherwise auto-resolved).
+    familiesLabel: "Which family?",
+    familiesHelp: "Choose at least one family this question belongs to.",
+    familiesRequired: "Choose at least one family before sending.",
     intro:
       "Your question goes into the queue. It will be asked next time they sit down to talk — never as an interruption.",
     promptEyebrow: "What would you love to hear?",
