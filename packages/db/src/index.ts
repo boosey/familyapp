@@ -28,6 +28,8 @@ export type {
   NewConsentRecord,
   Ask,
   NewAsk,
+  AskFamily,
+  NewAskFamily,
   LinkSession,
   NewLinkSession,
   Invitation,

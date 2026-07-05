@@ -696,8 +696,9 @@ export const asks = pgTable(
     targetPersonId: uuid("target_person_id")
       .notNull()
       .references(() => persons.id),
-    /** The family context the ask was raised in (for routing/notification). Nullable. */
-    familyId: uuid("family_id").references(() => families.id),
+    // The family context(s) the ask is raised in (for routing/notification) now live in the
+    // `ask_families` M2M join table (mirrors `story_families`) — an ask may target one-or-more
+    // families. The former single nullable `family_id` column has been removed.
     questionText: text("question_text").notNull(),
     /** ADR-0008: present iff the question was asked by voice; the referenced media is a
      *  protected content artifact (un-detachable while this ask lives, cascades on ask delete). */
@@ -717,6 +718,35 @@ export const asks = pgTable(
   (t) => [
     index("asks_target_idx").on(t.targetPersonId),
     index("asks_status_idx").on(t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// AskFamily — the family context(s) an Ask is raised in (M2M), mirroring `story_families`.
+// An ask may target one-or-more families for routing/notification. Like `story_families`, this is
+// a routing/visibility-scoping SET (an AUTHZ/routing INPUT), not content — it lives on the OPEN
+// schema surface, freely importable. Empty set ⇒ an ask with no family context.
+// ---------------------------------------------------------------------------
+
+export const askFamilies = pgTable(
+  "ask_families",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    askId: uuid("ask_id")
+      .notNull()
+      .references(() => asks.id),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // An ask is targeted to a given family at most once.
+    uniqueIndex("ask_families_ask_family_uq").on(t.askId, t.familyId),
+    index("ask_families_ask_idx").on(t.askId),
+    index("ask_families_family_idx").on(t.familyId),
   ],
 );
 
@@ -1149,6 +1179,8 @@ export type ConsentRecord = typeof consentRecords.$inferSelect;
 export type NewConsentRecord = typeof consentRecords.$inferInsert;
 export type Ask = typeof asks.$inferSelect;
 export type NewAsk = typeof asks.$inferInsert;
+export type AskFamily = typeof askFamilies.$inferSelect;
+export type NewAskFamily = typeof askFamilies.$inferInsert;
 export type LinkSession = typeof linkSessions.$inferSelect;
 export type NewLinkSession = typeof linkSessions.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;

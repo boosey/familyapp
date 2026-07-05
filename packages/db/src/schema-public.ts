@@ -6,6 +6,7 @@
 export {
   accounts,
   asks,
+  askFamilies,
   askSubjectPhotos,
   consentRecords,
   erasureAudit,

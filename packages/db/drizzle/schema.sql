@@ -30,6 +30,13 @@ CREATE TABLE "accounts" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "ask_families" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"ask_id" uuid NOT NULL,
+	"family_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "ask_subject_photos" (
 	"seq" bigserial NOT NULL,
 	"ask_id" uuid NOT NULL,
@@ -42,7 +49,6 @@ CREATE TABLE "asks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"asker_person_id" uuid NOT NULL,
 	"target_person_id" uuid NOT NULL,
-	"family_id" uuid,
 	"question_text" text NOT NULL,
 	"recording_media_id" uuid,
 	"status" "ask_status" DEFAULT 'queued' NOT NULL,
@@ -319,11 +325,12 @@ CREATE TABLE "voice_captions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE "ask_families" ADD CONSTRAINT "ask_families_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "ask_families" ADD CONSTRAINT "ask_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN KEY ("asker_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
-ALTER TABLE "asks" ADD CONSTRAINT "asks_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -378,6 +385,9 @@ ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_photo_id_family_phot
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
+CREATE UNIQUE INDEX "ask_families_ask_family_uq" ON "ask_families" USING btree ("ask_id","family_id");
+CREATE INDEX "ask_families_ask_idx" ON "ask_families" USING btree ("ask_id");
+CREATE INDEX "ask_families_family_idx" ON "ask_families" USING btree ("family_id");
 CREATE INDEX "ask_subject_photos_photo_idx" ON "ask_subject_photos" USING btree ("photo_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
