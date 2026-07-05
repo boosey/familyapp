@@ -1,34 +1,20 @@
 /**
- * AlbumSurface (#19) — the ONE shared album surface mounted by BOTH the `/hub/album` deep-link route
- * and the hub's new 'Album' tab. It is an async server component: invoke it as a function, render its
- * element to static markup, and assert the switcher / grid / uploader it composed.
+ * AlbumSurface (#19 · Increment 4A) — the ONE shared album surface mounted by BOTH the `/hub/album`
+ * deep-link route and the hub's 'Album' tab. It is an async server component: invoke it as a function,
+ * render its element to static markup, and assert the grid / uploader it composed.
  *
- * The two client children (AlbumGrid, AlbumUploader) are stubbed to echo the props AlbumSurface
- * computed — this both sidesteps their `useRouter`/`useTransition` client hooks under a server render
- * AND lets us assert the derived values (photo ids, canManage, families, currentFamilyId) directly.
- * `next/link` is stubbed to a plain <a> so the switcher's parameterized hrefs land in the markup.
+ * Family scope is the hub's SINGLE `?scope=` selector now — the album no longer renders its own
+ * `?family=` switcher. `scope` is "all" (the deduped union across the viewer's active families) or a
+ * family id. The two client children (AlbumGrid, AlbumUploader) are stubbed to echo the props
+ * AlbumSurface computed — this both sidesteps their `useRouter`/`useTransition` client hooks under a
+ * server render AND lets us assert the derived values (photo ids, canManage, families,
+ * currentFamilyId) directly.
  *
  * The DB reads (active families, album photos, steward) run for real against PGlite, mirroring the
  * album.server.test.ts seed helpers.
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-
-vi.mock("next/link", () => ({
-  default: ({
-    href,
-    children,
-    ...rest
-  }: {
-    href: string;
-    children: React.ReactNode;
-    [k: string]: unknown;
-  }) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
-}));
 
 vi.mock("@/app/hub/album/AlbumGrid", () => ({
   AlbumGrid: ({
@@ -108,22 +94,13 @@ async function placePhoto(
   return photo.id;
 }
 
-async function render(
-  db: Database,
-  ctx: AuthContext,
-  requestedFamily: string | undefined,
-): Promise<string> {
-  const el = await AlbumSurface({
-    db,
-    ctx,
-    requestedFamily,
-    familyHref: (id) => `/base?family=${id}`,
-  });
+async function render(db: Database, ctx: AuthContext, scope: string): Promise<string> {
+  const el = await AlbumSurface({ db, ctx, scope });
   return renderToStaticMarkup(el);
 }
 
 describe("AlbumSurface", () => {
-  it("renders a switcher with BOTH families, each href using the passed familyHref base", async () => {
+  it("renders NO internal family switcher — the hub selector owns family scope now", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -131,51 +108,53 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     await addMember(db, viewer, famB);
 
-    const html = await render(db, account(viewer), undefined);
+    const html = await render(db, account(viewer), "all");
 
-    // The switcher nav is present with both family names...
-    expect(html).toContain(hub.album.switcherAria);
-    expect(html).toContain("Esposito");
-    expect(html).toContain("Marino");
-    // ...and each switcher link uses the parameterized familyHref base (proving both mount contexts).
-    expect(html).toContain(`href="/base?family=${famA}"`);
-    expect(html).toContain(`href="/base?family=${famB}"`);
+    // The retired switcher's aria-labelled nav is gone entirely.
+    expect(html).not.toContain(hub.album.switcherAria);
   });
 
-  it("shows a placed photo's tile and the uploader when the album has a current family", async () => {
+  it("shows a placed photo's tile and the uploader when the viewer has a sole family", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
     await addMember(db, viewer, famA);
     const photoId = await placePhoto(db, viewer, [famA], "family-photos/surface-1");
 
-    const html = await render(db, account(viewer), undefined);
+    const html = await render(db, account(viewer), "all");
 
     // The grid received the placed photo (its audited bytes route appears via the grid stub)...
     expect(html).toContain(`/api/album-photo/${photoId}`);
     expect(html).toContain(`data-photo-id="${photoId}"`);
-    // ...and the uploader is mounted for the sole current family.
+    // ...and the uploader is mounted, targeting the sole family (unambiguous even in "all").
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain(`data-current-family="${famA}"`);
   });
 
-  it("renders NO switcher for a solo-family contributor, uploader still present", async () => {
+  it("scope=all shows the DEDUPED union of photos across ALL the viewer's families", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
     await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+    const photoA = await placePhoto(db, viewer, [famA], "family-photos/surface-a");
+    const photoB = await placePhoto(db, viewer, [famB], "family-photos/surface-b");
+    // A photo placed in BOTH families — it must appear exactly ONCE in the union.
+    const photoAB = await placePhoto(db, viewer, [famA, famB], "family-photos/surface-ab");
 
-    const html = await render(db, account(viewer), undefined);
+    const html = await render(db, account(viewer), "all");
 
-    // No switcher chrome at all (its aria label + a second family name are both absent).
-    expect(html).not.toContain(hub.album.switcherAria);
-    expect(html).not.toContain("Marino");
-    // The empty-state note shows (no photos yet) and the uploader is still mounted.
-    expect(html).toContain(hub.album.empty);
-    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain(`data-photo-id="${photoA}"`);
+    expect(html).toContain(`data-photo-id="${photoB}"`);
+    // Deduped: the both-families photo's tile appears once, not twice.
+    const occurrences = html.split(`data-photo-id="${photoAB}"`).length - 1;
+    expect(occurrences).toBe(1);
+    // With multiple families and no specific scope, the uploader target is ambiguous → withheld.
+    expect(html).not.toContain('data-testid="album-uploader"');
   });
 
-  it("honours requestedFamily: the SECOND family's album is the one shown", async () => {
+  it("scope=<familyId> shows ONLY that family's photos and targets the uploader there", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -187,9 +166,22 @@ describe("AlbumSurface", () => {
 
     const html = await render(db, account(viewer), famB);
 
-    // famB is the requested context, so ONLY famB's photo is on screen; the uploader defaults to famB.
+    // famB is the scope, so ONLY famB's photo is on screen; the uploader defaults to famB.
     expect(html).toContain(`data-photo-id="${photoB}"`);
     expect(html).not.toContain(`data-photo-id="${photoA}"`);
     expect(html).toContain(`data-current-family="${famB}"`);
+  });
+
+  it("falls back to 'all' when given a scope the viewer is not a member of", async () => {
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    await addMember(db, viewer, famA);
+    const photoA = await placePhoto(db, viewer, [famA], "family-photos/surface-a");
+
+    // A family the viewer is NOT a member of — a spoofed scope must not select it; fall back to "all".
+    const html = await render(db, account(viewer), "not-a-family-of-mine");
+
+    expect(html).toContain(`data-photo-id="${photoA}"`);
   });
 });

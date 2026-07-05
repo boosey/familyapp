@@ -3,7 +3,7 @@
  *
  * The album surface itself lives in the shared `AlbumSurface` component, mounted here AND in the hub's
  * 'Album' tab (`/hub?tab=album`). This route contributes only the page chrome — `<main>`, the
- * container, the back-link (to the album's tab home), and the `<h1>` — and hands the `?family=`
+ * container, the back-link (to the album's tab home), and the `<h1>` — and hands the hub `?scope=`
  * context to the surface, which does its own audited reads.
  *
  * Auth: account only, gated like the rest of the hub (anonymous → landing; family-less /
@@ -32,7 +32,9 @@ export default async function AlbumPage({
   if (dest !== "/hub") redirect(dest);
 
   const params = await searchParams;
-  const requested = typeof params.family === "string" ? params.family : undefined;
+  // The hub's single family scope ("all" | a family id). Validated inside AlbumSurface against the
+  // viewer's own active families; anything absent/unknown falls back to "all".
+  const scope = typeof params.scope === "string" ? params.scope : "all";
 
   return (
     <main
@@ -75,12 +77,7 @@ export default async function AlbumPage({
           {hub.album.title}
         </h1>
 
-        <AlbumSurface
-          db={db}
-          ctx={ctx}
-          requestedFamily={requested}
-          familyHref={(id) => `/hub/album?family=${encodeURIComponent(id)}`}
-        />
+        <AlbumSurface db={db} ctx={ctx} scope={scope} />
       </div>
     </main>
   );

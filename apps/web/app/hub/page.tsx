@@ -54,7 +54,7 @@ async function logOut(): Promise<void> {
 export default async function HubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; family?: string; scope?: string }>;
+  searchParams: Promise<{ tab?: string; scope?: string }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -78,7 +78,7 @@ export default async function HubPage({
   if (dest !== "/hub") redirect(dest);
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
-  const { tab: tabParam, family: familyParam, scope: scopeParam } = await searchParams;
+  const { tab: tabParam, scope: scopeParam } = await searchParams;
   const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
@@ -284,14 +284,7 @@ export default async function HubPage({
               scope={scope}
             />
           )}
-          {activeTab === "album" && (
-            <AlbumSurface
-              db={db}
-              ctx={ctx}
-              requestedFamily={familyParam}
-              familyHref={(id) => `/hub?tab=album&family=${encodeURIComponent(id)}`}
-            />
-          )}
+          {activeTab === "album" && <AlbumSurface db={db} ctx={ctx} scope={scope} />}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab />}
           {activeTab === "asks" && <AsksTab />}

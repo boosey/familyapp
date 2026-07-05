@@ -3,18 +3,20 @@
  *
  * The album is both a full route (`/hub/album`, a deep-link) AND a hub tab (`/hub?tab=album`). Tabs
  * render inline components while a route renders a page, so the surface itself lives here once and is
- * mounted by both: this component renders ONLY the album CONTENT — the family switcher, the grid (or
- * empty note), and the uploader. The page chrome (`<main>`, the container, the back-link, the `<h1>`)
- * belongs to each mount point.
+ * mounted by both: this component renders ONLY the album CONTENT — the grid (or empty note) and the
+ * uploader. The page chrome (`<main>`, the container, the back-link, the `<h1>`) belongs to each
+ * mount point.
  *
- * The one thing that differs per mount is where the switcher links point, so the base is injected as
- * `familyHref` (the route builds `/hub/album?family=…`; the tab builds `/hub?tab=album&family=…`).
+ * Family scope is the hub's SINGLE `?scope=` selector now (Increment 4A) — the album no longer owns
+ * its own `?family=` switcher. `scope` is "all" (the deduped union of photos across ALL the viewer's
+ * active families) or a family id (only that family's photos). It is re-validated here against the
+ * viewer's OWN active families (defense in depth), falling back to "all" — a client-submitted scope
+ * is never trusted.
  *
  * All reads go through the album front door: `listActiveFamiliesForPerson` (the viewer's OWN active
- * families — a client-submitted `requestedFamily` is validated against THIS set, never trusted),
- * `listAlbumPhotos` (enforces active membership), and `getStewardPersonId`.
+ * families), `listAlbumPhotos` (enforces active membership, called per shown family), and
+ * `getStewardPersonId`.
  */
-import Link from "next/link";
 import {
   getStewardPersonId,
   listActiveFamiliesForPerson,
@@ -29,85 +31,74 @@ import { AlbumGrid } from "./AlbumGrid";
 export async function AlbumSurface({
   db,
   ctx,
-  requestedFamily,
-  familyHref,
+  scope,
 }: {
   db: Database;
   ctx: AuthContext;
-  requestedFamily: string | undefined;
-  /** Builds each switcher link's href — mount-specific base (route vs tab). */
-  familyHref: (familyId: string) => string;
+  /** The hub's single family scope: "all" (union across the viewer's families) or a family id. */
+  scope: string;
 }): Promise<React.ReactElement> {
   // Guard: only an account has a viewer identity. Callers only mount this for an account, but treat
   // anything else as "no viewer" (no families, no photos) rather than reaching for a personId.
   const viewer = ctx.kind === "account" ? ctx.personId : null;
 
-  // #16: the album on screen is the `?family=` context (re-validated against the viewer's OWN active
-  // families), falling back to their first active family. `current` is undefined only when they have
-  // no active membership.
   const active = viewer ? await listActiveFamiliesForPerson(db, viewer) : [];
-  const current = active.find((f) => f.familyId === requestedFamily) ?? active[0];
 
-  const photos = current && viewer ? await listAlbumPhotos(db, ctx, current.familyId) : [];
+  // Re-validate the hub scope against the viewer's OWN active families (a client-crafted `?scope=`
+  // is never trusted); an unrecognized value falls back to "all". The families to show are ALL of
+  // them in "all" mode, else the single selected family.
+  const validScope =
+    scope !== "all" && active.some((f) => f.familyId === scope) ? scope : "all";
+  const shownFamilies =
+    validScope === "all" ? active : active.filter((f) => f.familyId === validScope);
 
-  // #18: a tile shows management controls when the viewer may manage the photo — they are its
-  // CONTRIBUTOR, or the STEWARD of the album on screen. NOTE this checks stewardship of the
-  // ON-SCREEN family ONLY — a deliberate UI approximation for this slice. It can UNDER-show controls
-  // (a viewer who is steward of a DIFFERENT family the photo is also placed in won't see the controls
-  // from this family's view) but it never OVER-grants: the seam re-checks stewardship of ANY
-  // placed-in family and is authoritative, so `canManage` only decides visibility, never authority.
-  const stewardId = current ? await getStewardPersonId(db, current.familyId) : null;
-  const gridPhotos = photos.map((p) => ({
-    id: p.id,
-    caption: p.caption,
-    canManage: p.contributorPersonId === viewer || stewardId === viewer,
-  }));
+  // The photos on screen — the union across `shownFamilies`, DEDUPED by photo id (a photo placed in
+  // two of the viewer's families would otherwise appear twice in the "all" union). `canManage` is
+  // #18's visibility hint: the viewer is the photo's CONTRIBUTOR, or the STEWARD of a family it is
+  // shown under. When a photo appears under two shown families we OR the hint across them. This is a
+  // deliberate UI approximation — it never OVER-grants (the delete/caption seam re-checks stewardship
+  // of ANY placed-in family and is authoritative; `canManage` only decides control visibility).
+  const merged = new Map<
+    string,
+    { id: string; caption: string | null; canManage: boolean; createdAt: Date }
+  >();
+  for (const fam of shownFamilies) {
+    const stewardId = await getStewardPersonId(db, fam.familyId);
+    const photos = viewer ? await listAlbumPhotos(db, ctx, fam.familyId) : [];
+    for (const p of photos) {
+      const canManage = p.contributorPersonId === viewer || stewardId === viewer;
+      const existing = merged.get(p.id);
+      if (existing) {
+        existing.canManage = existing.canManage || canManage;
+      } else {
+        merged.set(p.id, { id: p.id, caption: p.caption, canManage, createdAt: p.createdAt });
+      }
+    }
+  }
+  const gridPhotos = [...merged.values()]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1))
+    .map((p) => ({ id: p.id, caption: p.caption, canManage: p.canManage }));
+
+  // Where an "add photo" lands. A specific-family scope targets that family. In "all" mode the target
+  // is ambiguous, so we only offer the uploader when there is exactly ONE family to fall back to;
+  // with multiple families in "all" the uploader is withheld (pick a family from the hub selector to
+  // add). `null` ⇒ no uploader shown.
+  const uploadTargetFamilyId =
+    validScope !== "all"
+      ? validScope
+      : active.length === 1
+        ? active[0]!.familyId
+        : null;
 
   return (
     <>
-      {active.length > 1 ? (
-        <nav
-          aria-label={hub.album.switcherAria}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            margin: "0 0 24px",
-          }}
-        >
-          {active.map((f) => {
-            const isCurrent = current?.familyId === f.familyId;
-            return (
-              <Link
-                key={f.familyId}
-                href={familyHref(f.familyId)}
-                aria-current={isCurrent ? "page" : undefined}
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-ui-sm)",
-                  padding: "8px 14px",
-                  borderRadius: "var(--radius-pill)",
-                  textDecoration: "none",
-                  border: "var(--border-width) solid var(--border)",
-                  background: isCurrent ? "var(--accent)" : "transparent",
-                  color: isCurrent ? "var(--accent-on)" : "var(--text-meta)",
-                  fontWeight: isCurrent ? 600 : 400,
-                }}
-              >
-                {f.familyName}
-              </Link>
-            );
-          })}
-        </nav>
-      ) : null}
-
-      {current ? (
+      {uploadTargetFamilyId ? (
         <div style={{ margin: "0 0 24px" }}>
-          <AlbumUploader families={active} currentFamilyId={current.familyId} />
+          <AlbumUploader families={active} currentFamilyId={uploadTargetFamilyId} />
         </div>
       ) : null}
 
-      {photos.length === 0 ? (
+      {gridPhotos.length === 0 ? (
         <p
           style={{
             fontFamily: "var(--font-ui)",
