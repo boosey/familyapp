@@ -729,7 +729,19 @@ git commit -m "feat(web): multi-family picker on self-story + answer share step"
 
 ## Task 5 (follow-up, display-only): suppress ask attribution on a divergent target
 
-The approved design says: when an answer is targeted into a family the ask was never asked into, suppress the originating-question context in that family's feed. This is display-only and touches the story-render-in-feed path, which this plan has not yet mapped. Treat as a scoped follow-up.
+> **RESOLVED 2026-07-05 — no change needed (moot).** Investigation found there is NO render
+> site that shows a finished answer-story's originating question in any family feed or story
+> detail. Story feed cards (`StoryBrowse.tsx`, `story-browse-types.ts` `StoryItem`) and story
+> detail (`stories/[id]/page.tsx`, `StoryReadBody.tsx`) never fetch or render the ask/question;
+> `askId`/`ask_families` are consulted only during compose/approval default-targeting. The
+> question text never travels into any family feed, so the design's desired end-state ("question
+> not shown in a non-ask family") already holds by omission. There is nothing to suppress.
+> If product later decides an answer-story SHOULD show "In answer to …" context, the gate must be
+> built alongside that feature (thread `ask` into `StoryItem`/detail loader + the viewing family,
+> then show attribution only when the ask's families intersect the displayed target families for
+> the current scope — noting "all" scope makes "the viewing family" ambiguous). Filed, not built.
+
+The approved design said: when an answer is targeted into a family the ask was never asked into, suppress the originating-question context in that family's feed. This is display-only and touches the story-render-in-feed path, which this plan had not yet mapped. See the resolution above.
 
 **Files:** TBD — determined by Step 1.
 
