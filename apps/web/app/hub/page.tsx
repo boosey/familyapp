@@ -281,6 +281,7 @@ export default async function HubPage({
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}
+              scope={scope}
             />
           )}
           {activeTab === "album" && (

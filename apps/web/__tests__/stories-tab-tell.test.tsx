@@ -17,6 +17,7 @@ const baseProps = {
   storyCovers: new Map<string, string>(),
   viewerFamilies: [],
   viewerName: "You",
+  scope: "all",
 };
 
 afterEach(() => {

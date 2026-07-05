@@ -31,31 +31,35 @@ interface StoryBrowseProps {
   viewerPersonId: string;
   /** The viewer's display name — labels the Timeline "Just {viewer}" toggle and heading. */
   viewerName: string;
+  /**
+   * The hub's single family scope — "all" (show the whole deduped pool) or a family id (show only
+   * stories targeted to that family). CONTROLLED by the hub header selector: this surface no longer
+   * owns a family-scope control of its own; it just filters the pool by whatever the hub selected.
+   */
+  scope: string;
 }
 
 type Mode = "feed" | "timeline" | "search";
 
 const MODES: Mode[] = ["feed", "timeline", "search"];
 
-export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName }: StoryBrowseProps) {
+export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName, scope }: StoryBrowseProps) {
   const searchParams = useSearchParams();
 
-  // Initial mode + scope come from the URL (?mode= / ?scope=) so the Read view's Back can restore
-  // them; thereafter they are local state for instant, no-server-roundtrip switching.
+  // Initial mode comes from the URL (?mode=) so the Read view's Back can restore it; thereafter it is
+  // local state for instant, no-server-roundtrip switching. Family scope is NOT local — it is the
+  // controlled `scope` prop, driven by the hub header selector (a server navigation).
   const initialMode: Mode = MODES.includes(searchParams.get("mode") as Mode)
     ? (searchParams.get("mode") as Mode)
     : "feed";
-  const scopeParam = searchParams.get("scope");
-  const initialScope =
-    scopeParam && viewerFamilies.some((f) => f.id === scopeParam) ? scopeParam : "all";
 
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [scope, setScope] = useState<string>(initialScope);
   // Timeline: default "Whole family" (all in-scope stories by era); toggle to "Just {viewer}".
   const [wholeFamily, setWholeFamily] = useState(true);
   const [query, setQuery] = useState("");
 
-  // Family-scope narrowing over the authorized pool. "all" keeps everything.
+  // Family-scope narrowing over the authorized pool. "all" keeps everything; a family id keeps only
+  // stories targeted to that family (a story tagged to N of the viewer's families matches each one).
   const scoped = useMemo(
     () =>
       scope === "all"
@@ -64,11 +68,12 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName 
     [items, scope],
   );
 
-  const href = (item: StoryItem) => `${item.href}?from=${mode}&scope=${scope}`;
+  const href = (item: StoryItem) => `${item.href}?from=${mode}`;
 
   return (
     <div>
-      {/* Sub-nav: browse modes (left) + family scope (right). */}
+      {/* Sub-nav: browse modes only. Family scope is owned by the hub header selector now — this
+          surface no longer renders a duplicate per-family control. */}
       <div style={subnavRow}>
         <div style={segmentGroup} role="tablist" aria-label={hub.shell.tabStories}>
           {MODES.map((m) => (
@@ -88,30 +93,6 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName 
             </button>
           ))}
         </div>
-
-        {viewerFamilies.length > 0 ? (
-          <div style={segmentGroup} role="group" aria-label={hub.browse.scopeAll}>
-            <button
-              type="button"
-              aria-pressed={scope === "all"}
-              onClick={() => setScope("all")}
-              style={scopePill(scope === "all")}
-            >
-              {hub.browse.scopeAll}
-            </button>
-            {viewerFamilies.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={scope === f.id}
-                onClick={() => setScope(f.id)}
-                style={scopePill(scope === f.id)}
-              >
-                {f.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <div style={{ marginTop: 24 }}>
@@ -457,21 +438,6 @@ function modePill(on: boolean): CSSProperties {
     background: on ? "var(--surface-card)" : "transparent",
     color: on ? "var(--accent-strong)" : "var(--text-muted)",
     boxShadow: on ? "var(--shadow-sm)" : "none",
-  };
-}
-
-function scopePill(on: boolean): CSSProperties {
-  return {
-    padding: "10px 20px",
-    border: "none",
-    cursor: "pointer",
-    borderRadius: "var(--radius-pill)",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    background: on ? "var(--accent-soft)" : "transparent",
-    color: on ? "var(--accent-strong)" : "var(--text-muted)",
   };
 }
 

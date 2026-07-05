@@ -31,6 +31,11 @@ interface StoriesTabProps {
   viewerName: string;
   /** The viewer's own ask-less drafts still awaiting approval — the "Finish what you started" list. */
   selfDrafts: SelfDraft[];
+  /**
+   * The hub's single family scope: "all" (the deduped union across the viewer's families) or a
+   * family id (only that family's stories). Owned by the hub header selector, threaded through here.
+   */
+  scope: string;
 }
 
 /** The era a story is ABOUT, when known: "1962 · MARCH" with a place note, else "1962". Null when
@@ -55,6 +60,7 @@ export function StoriesTab({
   viewerFamilies,
   viewerName,
   selfDrafts,
+  scope,
 }: StoriesTabProps) {
   const dated = feed.flatMap((slot) =>
     slot.stories.map((story) => {
@@ -82,7 +88,17 @@ export function StoriesTab({
     }),
   );
   dated.sort((a, b) => b.sort - a.sort);
-  const items: StoryItem[] = dated.map((d) => d.item);
+  // Dedup by story id: the per-member feed union can list a story shared to two of the viewer's
+  // families more than once. Keep the first (most-recent, post-sort) occurrence so a story appears
+  // exactly once in the pool — in "all" and in EACH of its families' scoped views (StoryBrowse filters
+  // this deduped pool by the hub scope).
+  const seen = new Set<string>();
+  const items: StoryItem[] = [];
+  for (const d of dated) {
+    if (seen.has(d.item.id)) continue;
+    seen.add(d.item.id);
+    items.push(d.item);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -222,6 +238,7 @@ export function StoriesTab({
             viewerFamilies={viewerFamilies}
             viewerPersonId={viewerPersonId}
             viewerName={viewerName}
+            scope={scope}
           />
         </Suspense>
       )}

@@ -41,7 +41,13 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
 
 function renderFeed(items: StoryItem[]) {
   return render(
-    <StoryBrowse items={items} viewerFamilies={[]} viewerPersonId="p1" viewerName="You" />,
+    <StoryBrowse
+      items={items}
+      viewerFamilies={[]}
+      viewerPersonId="p1"
+      viewerName="You"
+      scope="all"
+    />,
   );
 }
 
