@@ -1,7 +1,7 @@
 # Database Migrations — Design
 
 **Date:** 2026-07-04
-**Status:** Approved (design); implementation plan to follow.
+**Status:** Implemented (2026-07-04). The drizzle-kit migration chain (`drizzle/migrations/0000_baseline.sql` + `0001`/`0002` + `meta/`) shipped and applies to Neon via `db:migrate` in the Vercel build; the snapshot drift-guard test bonds it to `schema.sql`. This document is retained as the design record.
 **Package:** `@chronicle/db` (plus a Vercel build-step change)
 
 ## Motivation
