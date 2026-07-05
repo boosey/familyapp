@@ -107,7 +107,9 @@ export async function AlbumSurface({
             margin: 0,
           }}
         >
-          {hub.album.empty}
+          {/* Pending-only viewer (member of no family) → the coherent hub-wide empty state; an
+              actual member with an empty album → the album-specific prompt (Task 4.6). */}
+          {active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
         </p>
       ) : (
         <AlbumGrid photos={gridPhotos} />

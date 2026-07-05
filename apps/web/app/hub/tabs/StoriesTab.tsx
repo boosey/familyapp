@@ -229,7 +229,10 @@ export function StoriesTab({
             margin: 0,
           }}
         >
-          {hub.stories.empty}
+          {/* A pending-only viewer (member of no family yet) reaches the hub with an empty feed since
+              Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than
+              the generic "when someone shares…" copy that assumes they already have a family. */}
+          {viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty}
         </p>
       ) : (
         <Suspense>

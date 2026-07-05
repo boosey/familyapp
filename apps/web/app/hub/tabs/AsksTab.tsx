@@ -8,7 +8,10 @@ import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 
-export async function AsksTab({ scope = "all" }: { scope?: string } = {}) {
+export async function AsksTab({
+  scope = "all",
+  hasFamily = true,
+}: { scope?: string; hasFamily?: boolean } = {}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -94,7 +97,9 @@ export async function AsksTab({ scope = "all" }: { scope?: string } = {}) {
               margin: 0,
             }}
           >
-            {hub.asks.empty}
+            {/* Pending-only viewer (member of no family) → the coherent hub-wide empty state;
+                a member who simply hasn't asked anything → the asks-specific copy (Task 4.6). */}
+            {hasFamily ? hub.asks.empty : hub.shell.pendingEmpty}
           </p>
         </div>
       </div>
