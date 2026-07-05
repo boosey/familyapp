@@ -22,11 +22,17 @@ export const hub = {
     tabRequests: "Requests",
     menuProfile: "Your profile",
     menuSettings: "Settings",
-    menuManageFamily: "Manage family",
     menuSwitchUser: "Switch user",
     menuLogOut: "Log out",
     sectionsAria: "Hub sections",
     unreadAria: (badge: number) => `${badge} unread`,
+    // Hub scope selector — the `[ All ▾ ]` pill that scopes the hub to All or one family.
+    scopeAria: "Choose which family to view",
+    scopeAll: "All",
+    scopeNoFamily: "No family yet",
+    scopePending: (familyName: string) => `${familyName} — Pending ⏳`,
+    scopeCreateFamily: "+ Create a family",
+    scopeFindFamily: "🔍 Find a family to join",
   },
   stories: {
     untitled: "Untitled",

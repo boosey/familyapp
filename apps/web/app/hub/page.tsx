@@ -13,6 +13,8 @@ import {
   listPendingJoinRequestsForSteward,
   listDecidedJoinRequestsForSteward,
   listOutstandingDrafts,
+  listActiveFamiliesForPerson,
+  listJoinRequestsByRequester,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -29,6 +31,7 @@ import { KindredAccountMenu } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
+import { HubScopeSelector } from "./HubScopeSelector";
 import { IntakeReminder } from "./IntakeReminder";
 import { AlbumSurface } from "./album/AlbumSurface";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -51,7 +54,7 @@ async function logOut(): Promise<void> {
 export default async function HubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; family?: string }>;
+  searchParams: Promise<{ tab?: string; family?: string; scope?: string }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -75,9 +78,20 @@ export default async function HubPage({
   if (dest !== "/hub") redirect(dest);
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
-  const { tab: tabParam, family: familyParam } = await searchParams;
+  const { tab: tabParam, family: familyParam, scope: scopeParam } = await searchParams;
   const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
+
+  // Hub scope: the single server-read `?scope=` param (default "all"), validated against the viewer's
+  // OWN active families — a client-submitted scope is never trusted. `pendingRequests` are the
+  // viewer's own still-pending join requests, shown as muted rows in the selector. Both are read here
+  // (distinct from the steward-side `listPendingJoinRequestsForSteward` used for the Requests tab).
+  const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  const pendingJoinRequests = (await listJoinRequestsByRequester(db, ctx.personId)).filter(
+    (r) => r.status === "pending",
+  );
+  const scope =
+    scopeParam && activeFamilies.some((f) => f.familyId === scopeParam) ? scopeParam : "all";
 
   const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts] = await Promise.all([
     loadHubFeed(db, ctx),
@@ -177,7 +191,6 @@ export default async function HubPage({
   const accountItems: AccountMenuItem[] = [
     { key: "profile", label: hub.shell.menuProfile, href: "/hub" /* stub: no backend yet */ },
     { key: "settings", label: hub.shell.menuSettings, href: "/hub" /* stub: no backend yet */ },
-    { key: "manage-family", label: hub.shell.menuManageFamily, href: "/hub" /* stub: no backend yet */ },
     { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
     { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
@@ -218,26 +231,16 @@ export default async function HubPage({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              {/* Icon placeholder — a future family crest / avatar slot. */}
-              <span
-                aria-hidden="true"
-                style={{
-                  flex: "0 0 auto",
-                  width: 44,
-                  height: 44,
-                  borderRadius: "var(--radius-md)",
-                  border: "var(--border-width) solid var(--border-strong)",
-                  background: "var(--surface-sunken)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-label)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                {familyName.charAt(0).toUpperCase()}
-              </span>
+              {/* Scope selector — [ All ▾ ] — replaces the former crest placeholder. */}
+              <HubScopeSelector
+                scope={scope}
+                tab={activeTab}
+                families={activeFamilies}
+                pending={pendingJoinRequests.map((r) => ({
+                  familyName: r.familyName,
+                  stewardName: r.stewardName,
+                }))}
+              />
               <h1
                 style={{
                   fontFamily: "var(--font-story)",
@@ -261,7 +264,7 @@ export default async function HubPage({
 
           {/* Tabs row */}
           <div style={{ marginBottom: -1 /* overlap the border */ }}>
-            <HubTabsNav tabs={tabs} active={activeTab} />
+            <HubTabsNav tabs={tabs} active={activeTab} scope={scope} />
           </div>
         </header>
 
