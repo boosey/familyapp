@@ -188,6 +188,31 @@ export default async function HubPage({
           padding: "0 clamp(16px, 4vw, 32px)",
         }}
       >
+        {/* Scope selector — floated top-right, just before the global account avatar
+            (<AccountMenuMount>: fixed top:20 right:20, 48px). It lives in the hub (not the root
+            layout) because it needs the viewer's scope/tab/families/pending data, which the
+            server-only global mount does not have. Offset tracks the avatar geometry. */}
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 80 /* 20 (avatar right margin) + 48 (avatar) + 12 gap */,
+            height: 48,
+            display: "flex",
+            alignItems: "center",
+            zIndex: 50,
+          }}
+        >
+          <HubScopeSelector
+            scope={scope}
+            tab={activeTab}
+            families={activeFamilies}
+            pending={pendingJoinRequests.map((r) => ({
+              familyName: r.familyName,
+              stewardName: r.stewardName,
+            }))}
+          />
+        </div>
         {/* Header */}
         <header
           style={{
@@ -209,16 +234,6 @@ export default async function HubPage({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              {/* Scope selector — [ All ▾ ] — replaces the former crest placeholder. */}
-              <HubScopeSelector
-                scope={scope}
-                tab={activeTab}
-                families={activeFamilies}
-                pending={pendingJoinRequests.map((r) => ({
-                  familyName: r.familyName,
-                  stewardName: r.stewardName,
-                }))}
-              />
               <h1
                 style={{
                   fontFamily: "var(--font-story)",
