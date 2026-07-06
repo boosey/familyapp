@@ -1,7 +1,14 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { familyPhotos, familyPhotoFamilies, media, stories, storyRecordings } from "@chronicle/db/content";
+import {
+  familyPhotos,
+  familyPhotoFamilies,
+  media,
+  proseRevisions,
+  stories,
+  storyRecordings,
+} from "@chronicle/db/content";
 import {
   askFamilies,
   asks,
@@ -9,6 +16,7 @@ import {
   consentRecords,
   erasureAudit,
   families,
+  followUpDecisions,
   memberships,
   persons,
   storyFamilies,
@@ -75,6 +83,71 @@ describe("eraseStory — owner erasure of a consented, shared story", () => {
     expect(audit[0]!.reason).toBe("owner_erasure");
     expect(audit[0]!.itemType).toBe("story");
     expect(audit[0]!.actorPersonId).toBe(owner.id);
+  });
+});
+
+describe("eraseStory — owner erasure of a FULLY-POPULATED shared voice story", () => {
+  // Regression for the production deletion failures (2026-07-05): a real shared story carries
+  // child rows the minimal fixtures above omit — a follow_up_decisions ledger row (ADR-0013) and
+  // a per-take prose_revisions row (ADR-0014, FK → story_recordings). The cascade must erase ALL
+  // of them. This locks in the WHOLE delete order so a guard/FK can't whack-a-mole again:
+  //   - follow_up_decisions has an append-only trigger; DELETE must be permitted inside the token.
+  //   - prose_revisions.story_recording_id FKs story_recordings, so prose must go BEFORE takes.
+  it("hard-deletes the follow_up_decisions ledger and per-take prose_revisions too", async () => {
+    const owner = await makePerson();
+    const family = await makeFamily(owner.id);
+    const { story } = await makeSharedStory(owner.id, family.id);
+
+    // The take row seeded by makeSharedStory (position 0) — prose_revisions references it.
+    const [take] = await db
+      .select({ id: storyRecordings.id })
+      .from(storyRecordings)
+      .where(eq(storyRecordings.storyId, story.id));
+    await db.insert(proseRevisions).values({
+      storyId: story.id,
+      level: "ai_transcribed",
+      text: "raw transcript",
+      storyRecordingId: take!.id,
+    });
+    await db.insert(followUpDecisions).values({
+      storyId: story.id,
+      threadPosition: 0,
+      recordKind: "decision",
+    });
+
+    const result = await eraseStory(db, { kind: "account", personId: owner.id }, { storyId: story.id });
+
+    expect(result.allowed).toBe(true);
+    expect(await db.select().from(stories).where(eq(stories.id, story.id))).toHaveLength(0);
+    expect(
+      await db.select().from(followUpDecisions).where(eq(followUpDecisions.storyId, story.id)),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(proseRevisions).where(eq(proseRevisions.storyId, story.id)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("follow_up_decisions carve-out is erasure-scoped, not a blanket unlock", () => {
+  // The guard must permit DELETE ONLY inside an authorized erasure (token set). A raw DELETE with
+  // no cascade token still raises — the ledger stays permanent outside ADR-0008 erasure.
+  it("still forbids a DELETE outside an erasure cascade (no token)", async () => {
+    const owner = await makePerson();
+    const family = await makeFamily(owner.id);
+    const { story } = await makeSharedStory(owner.id, family.id);
+    await db.insert(followUpDecisions).values({
+      storyId: story.id,
+      threadPosition: 0,
+      recordKind: "decision",
+    });
+
+    await expect(
+      db.delete(followUpDecisions).where(eq(followUpDecisions.storyId, story.id)),
+    ).rejects.toThrow(/append-only\/immutable/);
+    // The row survives the blocked delete.
+    expect(
+      await db.select().from(followUpDecisions).where(eq(followUpDecisions.storyId, story.id)),
+    ).toHaveLength(1);
   });
 });
 

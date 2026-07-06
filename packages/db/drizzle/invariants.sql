@@ -88,11 +88,37 @@ CREATE TRIGGER intake_revisions_append_only
   BEFORE UPDATE ON intake_revisions
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
 
--- Follow-up decision ledger: append-only (ADR-0013). Reuses the shared guard. A follow-up
--- OUTCOME is a NEW row referencing its decision, never an edit of the decision row.
+-- Follow-up decision ledger: append-only (ADR-0013) EXCEPT within an authorized item erasure
+-- (ADR-0008), exactly like the consent ledger. A story being erased must take its follow-up
+-- decisions with it (nothing is retained against the owner's will); the FACT of the deletion
+-- survives in `erasure_audit`. UPDATE stays forbidden ALWAYS (a follow-up OUTCOME is a NEW row
+-- referencing its decision, never an edit). DELETE is permitted ONLY inside the transaction that
+-- set `chronicle.cascade_delete_story` to this row's story_id — the same cascade token the consent
+-- ledger uses (chronicle_erasure_token_matches). Without the carve-out, any story that had reached
+-- the follow-up loop could never be erased (its ledger rows are undeletable).
+-- NOTE: the UPDATE-forbidden RAISE below is intentionally duplicated from chronicle_forbid_mutation; keep the wording in sync.
+CREATE OR REPLACE FUNCTION chronicle_follow_up_decisions_guard()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION
+      'Table % is append-only/immutable: % is not permitted (revisions must be new rows).',
+      TG_TABLE_NAME, TG_OP
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF chronicle_erasure_token_matches(OLD.story_id) THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION
+    'Table % is append-only/immutable: % is not permitted (the follow-up ledger is permanent outside an authorized item erasure).',
+    TG_TABLE_NAME, TG_OP
+    USING ERRCODE = 'restrict_violation';
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER follow_up_decisions_append_only
   BEFORE UPDATE OR DELETE ON follow_up_decisions
-  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+  FOR EACH ROW EXECUTE FUNCTION chronicle_follow_up_decisions_guard();
 
 -- ADR-0008: the transaction-local cascade token. The audited erasure repository sets
 -- `chronicle.cascade_delete_story` (LOCAL) to the id of the story it is erasing; the consent-ledger
