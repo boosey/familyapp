@@ -42,9 +42,9 @@ export async function deleteStoryAction(formData: FormData): Promise<ActionResul
       return { error: result.reason };
     }
 
-    // Best-effort storage blob deletion
+    // Best-effort storage blob deletion (non-blocking)
     for (const key of result.storageKeys) {
-      await storage.delete(key).catch((err) => {
+      storage.delete(key).catch((err) => {
         plogError("story", "deleteStory: failed to delete blob key", { key, error: String(err) });
       });
     }

@@ -90,8 +90,13 @@ describe("deleteStoryAction", () => {
     const fetched = await getStoryForViewer(runtimeDb, viewerCtx, story.id);
     expect(fetched).toBeNull();
 
-    // 4. Verify storage key is deleted
-    const exists = await runtimeStorage.exists(storageKey);
+    // 4. Verify storage key is deleted (polling to allow async deletion to finish)
+    let exists = true;
+    for (let i = 0; i < 20; i++) {
+      exists = await runtimeStorage.exists(storageKey);
+      if (!exists) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     expect(exists).toBe(false);
   });
 
