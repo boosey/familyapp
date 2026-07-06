@@ -183,8 +183,8 @@ export async function eraseStory(
     await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
     await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
     await tx.delete(consentRecords).where(eq(consentRecords.storyId, input.storyId));
-    await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
+    await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
     await tx.delete(stories).where(eq(stories.id, input.storyId));
     // Media LAST — the story (and every other referencer) is gone, so no live item references it.
     if (mediaIds.length > 0) {

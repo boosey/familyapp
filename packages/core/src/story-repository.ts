@@ -1049,15 +1049,8 @@ export async function discardDraftStory(
       .filter((k): k is string => k !== undefined);
 
     await tx.delete(storyFamilies).where(eq(storyFamilies.storyId, input.storyId));
-    // Then the ordered take set: story_recordings.story_id → stories.id is a plain FK, so the take
-    // rows must go before the story. The story is consent-free (asserted above), so the
-    // story_recordings delete-guard trigger permits it.
-    await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
-    // Then the prose provenance rows. prose_revisions.story_id → stories.id is a plain FK, so any
-    // revision rows must go before the story. A text draft (ADR-0007) ALWAYS carries a
-    // `user_authored` L1; a rendered draft may carry AI levels too. The story is consent-free
-    // (asserted above), so the prose_revisions delete-guard trigger permits it.
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
+    await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));
     // Then the accompaniment rows (ADR-0009). story_images.story_id → stories.id is a plain FK
     // (ON DELETE no action, mirroring story_families), so any attached-image rows must go before the
     // story. Detaching an image writes no consent — images are mutable presentation, off the ledger.
