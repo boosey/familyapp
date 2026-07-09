@@ -65,3 +65,17 @@ Every external vendor sits behind an interface in our code with a mock for tests
 - Domain enums/types and the Drizzle schema are the shared contract — defined in `@chronicle/db` and re-exported. Add new domain types there first.
 - Story state machine: changes to `Story.state` must go through `assertStoryTransition` (in `@chronicle/core`). It is not yet wired into a write path — wire it in at the capture/approval increments when those write paths land.
 - The build/review workflow for this repo is **subagent-driven**. A coding sub-agent writes the code for a task. When it finishes, it (or the main agent) spawns a *separate, fresh adversarial code-reviewer* sub-agent; the coding sub-agent then consumes that review output and iterates until clean. Spin up a *new* cold reviewer each round so each review is fresh-eyes. The main agent orchestrates; coding sub-agents do the writing and the fixing. (See `docs/DECISIONS.md` § Workflow.)
+
+## Agent skills
+
+### Issue tracker
+
+Issues, PRDs, and triage live in GitHub Issues (`boosey/familyapp`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles map 1:1 to their default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `CONTEXT.md` + `docs/adr/` (plus `docs/DECISIONS.md`). See `docs/agents/domain.md`.
