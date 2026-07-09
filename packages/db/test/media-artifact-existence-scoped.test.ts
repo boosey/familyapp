@@ -4,7 +4,7 @@
  * caption, or a consent approval-audio reference — regardless of consent. UPDATE is always forbidden.
  * Once no live parent references the row (the item was deleted first), the orphan is reclaimable.
  */
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   asks,

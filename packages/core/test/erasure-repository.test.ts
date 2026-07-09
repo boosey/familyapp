@@ -12,7 +12,6 @@ import {
 import {
   askFamilies,
   asks,
-  askSubjectPhotos,
   consentRecords,
   erasureAudit,
   families,

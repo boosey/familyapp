@@ -50,12 +50,10 @@ import type {
   StoryKind,
   StoryRecording,
   StoryState,
-  StoryFavorite,
-  StoryLike,
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
-import { AuthContext, getStoryForViewer, decideStoryRead, viewerPersonId } from "./authorization";
+import { type AuthContext, getStoryForViewer, viewerPersonId } from "./authorization";
 // The subject-photo cover insert routes through `attachPhotoToStoryTx`, which embeds the consolidated
 // `assertPersonCanAccessAlbumPhoto` gate (existence + soft-delete + owner-can-see) IN the creation tx —
 // so there is exactly ONE gate choke point, not a redundant second call here.

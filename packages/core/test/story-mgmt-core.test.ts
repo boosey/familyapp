@@ -1,15 +1,12 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase, type Database } from "@chronicle/db";
 import {
   persons,
   memberships,
   families,
-  storyFamilies,
   consentRecords,
 } from "@chronicle/db/schema";
 import {
-  proseRevisions,
-  storyFavorites,
   storyLikes,
 } from "@chronicle/db/content";
 import {
@@ -18,8 +15,6 @@ import {
   retargetStoryFamilies,
   editStoryProse,
   setStoryFavorite,
-  getFavoriteState,
-  listFavoriteStoriesForViewer,
   setStoryLike,
   getLikeState,
   approveAndShareStory,
@@ -28,7 +23,7 @@ import {
   finishDraft,
 } from "../src/index";
 import { InvariantViolation } from "../src/errors";
-import { sql, eq, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 let db: Database;
 
@@ -78,7 +73,7 @@ describe("Story Management Core", () => {
         storyId: story.id,
         ownerPersonId: ownerId,
         finalText: "Alice's story prose text.",
-        metadata: { title: "Alice's Story", summary: null, tags: [] },
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
       });
 
       await approveAndShareStory(db, {
@@ -154,7 +149,7 @@ describe("Story Management Core", () => {
         storyId: story.id,
         ownerPersonId: ownerId,
         finalText: "Alice's story prose text.",
-        metadata: { title: "Alice's Story", summary: null, tags: [] },
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
       });
 
       await approveAndShareStory(db, {
@@ -213,7 +208,7 @@ describe("Story Management Core", () => {
         storyId: story.id,
         ownerPersonId: ownerId,
         finalText: "Alice's story prose text.",
-        metadata: { title: "Alice's Story", summary: null, tags: [] },
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
       });
 
       await approveAndShareStory(db, {
@@ -268,7 +263,7 @@ describe("Story Management Core", () => {
         storyId: story.id,
         ownerPersonId: ownerId,
         finalText: "Alice's story prose text.",
-        metadata: { title: "Alice's Story", summary: null, tags: [] },
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
       });
 
       await approveAndShareStory(db, {
@@ -341,7 +336,7 @@ describe("Story Management Core", () => {
         storyId: story.id,
         ownerPersonId: ownerId,
         finalText: "Alice's story prose text.",
-        metadata: { title: "Alice's Story", summary: null, tags: [] },
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
       });
 
       await approveAndShareStory(db, {
@@ -379,7 +374,7 @@ describe("Story Management Core", () => {
 
     it("cascades deletion of likes when a story is erased", async () => {
       const ownerId = await createPerson("Alice");
-      const f1 = await createActiveFamily(ownerId, "Smiths");
+      await createActiveFamily(ownerId, "Smiths");
 
       const { story } = await persistRecordingAndCreateDraft(db, {
         ownerPersonId: ownerId,
