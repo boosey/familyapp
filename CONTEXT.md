@@ -52,9 +52,21 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   names. Returns family name + steward name only; never members or stories.
 - **Join request** — a discovered family is not joined, only *requested*. The steward approves
   (→ Membership) or declines. The only discovery path to membership.
-- **Onboarding** — the first-sign-on flow for an Account: confirm identity → preferred spoken name
-  (required for the interviewer) → date of birth (required) → choose to enter the hub or tell a
-  first story. Gated by `Person.onboardedAt`.
+- **Onboarding** — the first-sign-on flow for an Account after a family intent exists (create or
+  join): confirm **display name** and **date of birth** in `/welcome`, then the **Intake**
+  introduction. Gated by `Person.onboardedAt`. **Spoken name** defaults from display name here and
+  may be refined later on **Profile**.
+- **Profile** — the signed-in screen where a Person **later** views and edits their identity
+  (display name, spoken name, date of birth, read-only email) and **Biographical anchors** inline
+  (text-only, direct structured fields). Distinct from the first-time **Intake** walk at
+  `/hub/about-you`, which stays unchanged in onboarding; Profile is reached from the account menu
+  for post-onboarding edits.
+- **Settings** — the signed-in screen for **app preferences**: text size and color palette
+  (Heirloom / Archive / Hearth). Light / dark / system appearance is deferred until dark tokens
+  exist. Device-local preferences, not identity (Profile) and not account actions (sign out stays
+  in the account menu).
+- **Spoken name** — the name the interviewer speaks aloud when addressing this Person. Defaults to
+  the first word of display name; editable on Profile independently of display name.
 
 ## Narrative & consent
 - **Surfaced-into (family targeting)** — the set of Families a Story is shared into (many-to-many).
@@ -274,20 +286,13 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   post-approval** (a discarded or never-shared draft never feeds memory, even though its audio is
   still retained). **Intake** is the one exception — it extracts at **Save**, because answering a
   direct biographical question *is* the consent to build the profile. Best-effort throughout.
-- **Intake** — a structured 6-question first pass run at the start of a Person's first narrating
-  sessions, before the open story bank. Collects biographical anchors. Resumable across sessions
-  (stops where the user left off). Complete when all 6 anchor fields are populated. The hub shows
-  a reminder until complete or until story extraction has filled the gaps. Intake shares the **capture
-  interaction** with story-telling — record → transcribe → **Cleanup** → editable text, with a
-  narrator-driven **record-more/append** — but is **not a Story**: no interviewer follow-up questions,
-  no audience tier, no consent, no sharing. The extracted anchor value is the surfaced artifact; the
-  answer itself is never surfaced. "Ephemeral" refers to that non-surfacing — **the intake audio and
-  transcript are nonetheless retained** (audit trail + prompt/model improvement signal), under the
-  same universal rule below. Intake is also the **designated first surface for narrator memory** — the
-  richest self-description a Person gives — feeding the interviewer's memory beyond the six anchors.
-  The *seam* is ready now (the full transcript is retained, so a later extraction can read it); the
-  memory *model* itself (what a memory is, how stored, how the interviewer consults it) is the parked
-  "picture of the person" feature and gets its own design session — not built here.
+- **Intake** — a structured 6-question first pass that populates **Biographical anchors**. Run once
+  during onboarding at `/hub/about-you` (after `/welcome`): one question at a time, voice-first with
+  typed fallback, LLM extraction into the anchor fields. Resumable until complete; the hub reminder
+  links here until the four text facts plus `hasChildren` are set (`hasGrandchildren` conditional).
+  **Later edits** to anchors happen on **Profile** (direct structured fields, text-only). Intake is
+  **not a Story**: no follow-ups, audience tier, or consent. Answer audio/transcript is retained for
+  audit; extracted values feed the interviewer.
 - **Deeplink session** — a session initiated from a notification that carries a specific `askId`.
   The interviewer routes to that Ask first, then continues into the normal session flow. Always
   priority over warm callbacks and intake.

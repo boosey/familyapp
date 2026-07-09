@@ -379,5 +379,56 @@ export const hub = {
       caption ? `Add “${caption}” to this story` : "Add this photo to the story",
     imageAlt: (caption: string | null) => caption ?? "Attached photo",
   },
+
+  profile: {
+    backToHub: "← Back to hub",
+    title: "Your profile",
+    subtitle: "Changes save automatically when you leave each field.",
+    identityHeading: "Who you are",
+    identityIntro: "The name your family sees, what we say when we talk with you, and your birthday.",
+    spokenNameLabel: "What we call you aloud",
+    spokenNameHelp: "The interviewer uses this name — it can differ from your full name.",
+    emailLabel: "Email",
+    emailHelp: "Managed by your sign-in provider; not editable here.",
+    birthdayLabel: "Birthday",
+    introHeading: "Your introduction",
+    introIntro:
+      "These details help your family ask better questions. First-time answers are collected in the guided introduction; edit them here anytime.",
+    anchorLabels: {
+      hometown: "Where you grew up",
+      siblingContext: "Brothers and sisters",
+      currentLocation: "Where you call home now",
+      occupationSummary: "Work over the years",
+      hasChildren: "Children",
+      hasGrandchildren: "Grandchildren",
+    },
+    notAnswered: "Not answered",
+    yes: "Yes",
+    no: "No",
+    saving: "Saving…",
+    saved: "Saved",
+    saveError: "Could not save — try again.",
+  },
+
+  settings: {
+    backToHub: "← Back to hub",
+    title: "Settings",
+    subtitle: "Display preferences for this device.",
+    textSizeHeading: "Text size",
+    textSizeIntro: "Makes everything on the screen a little larger or smaller.",
+    paletteHeading: "Color palette",
+    paletteIntro: "Choose the mood of the chronicle on this device.",
+    paletteAria: "Color palette",
+    paletteShort: {
+      heirloom: "Heirloom",
+      archive: "Archive",
+      hearth: "Hearth",
+    },
+    paletteLabels: {
+      heirloom: "Heirloom palette — warm terracotta and sage",
+      archive: "Archive palette — cool gray and teal",
+      hearth: "Hearth palette — warm rose and coral",
+    },
+  },
 } as const;
 

@@ -18,5 +18,6 @@ export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountM
 // CreateFamilyForm importing KindredButton), which fails the Next build. Import it
 // directly from "./AccountMenuMount" in the (server-only) root layout instead.
 export { KindredFontScale } from "./KindredFontScale";
+export { KindredThemePicker } from "./KindredThemePicker";
 export { KindredProseEditor } from "./KindredProseEditor";
 export type { KindredProseEditorProps } from "./KindredProseEditor";

@@ -114,6 +114,14 @@ export {
   type CompleteOnboardingInput,
 } from "./onboarding";
 export {
+  updatePersonIdentity,
+  updatePersonDisplayName,
+  updatePersonSpokenName,
+  updatePersonBirthDate,
+  type UpdatePersonIdentityInput,
+} from "./person-identity";
+export { updateBiographicalAnchor } from "./person-anchors";
+export {
   createFamily,
   getFamily,
   setFamilyDiscovery,
