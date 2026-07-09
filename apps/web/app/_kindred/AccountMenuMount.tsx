@@ -41,8 +41,8 @@ export async function AccountMenuMount() {
     : "Y";
 
   const items: AccountMenuItem[] = [
-    { key: "profile", label: hub.shell.menuProfile, href: "/hub" /* stub: no backend yet */ },
-    { key: "settings", label: hub.shell.menuSettings, href: "/hub" /* stub: no backend yet */ },
+    { key: "profile", label: hub.shell.menuProfile, href: "/hub/profile" },
+    { key: "settings", label: hub.shell.menuSettings, href: "/hub/settings" },
     { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
     { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
