@@ -45,6 +45,30 @@ export interface R2Config {
 
 const DEFAULT_PRESIGN_EXPIRY_SECONDS = 3600;
 
+/**
+ * S3 client options for Cloudflare R2.
+ *
+ * AWS SDK ≥3.729 defaults to always-on CRC32 checksums that R2 rejects with
+ * 501 NotImplemented. Cloudflare's documented mitigation is WHEN_REQUIRED.
+ * https://developers.cloudflare.com/r2/examples/aws/aws-sdk-js-v3/
+ */
+export function r2ClientConfig(config: {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}): S3ClientConfig {
+  return {
+    region: "auto",
+    endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
+  };
+}
+
 export class R2MediaStorage implements MediaStorage {
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -59,15 +83,7 @@ export class R2MediaStorage implements MediaStorage {
     if (config.client) {
       this.client = config.client;
     } else {
-      const cfg: S3ClientConfig = {
-        region: "auto",
-        endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId: config.accessKeyId,
-          secretAccessKey: config.secretAccessKey,
-        },
-      };
-      this.client = new S3Client(cfg);
+      this.client = new S3Client(r2ClientConfig(config));
     }
   }
 

@@ -221,9 +221,19 @@ describe("pickerUriForWeb / parsePickerDurationMs", () => {
     ).toBe("https://photospicker.googleapis.com/v1/picker/sess-1/autoclose");
   });
 
+  it("accepts photos.google.com picker URIs and preserves query params", () => {
+    expect(
+      pickerUriForWeb(
+        "https://photos.google.com/picker?sessionId=session-123",
+      ),
+    ).toBe(
+      "https://photos.google.com/picker/autoclose?sessionId=session-123",
+    );
+  });
+
   it("rejects non-Google picker hosts", () => {
     expect(() => pickerUriForWeb("https://evil.example/picker")).toThrow(
-      /photospicker\.googleapis\.com/,
+      /trusted Google Photos picker host/,
     );
     expect(() => pickerUriForWeb("not-a-url")).toThrow(/not a valid URL/);
   });
