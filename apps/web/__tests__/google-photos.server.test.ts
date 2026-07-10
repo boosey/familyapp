@@ -270,6 +270,8 @@ describe("import actions", () => {
       ok: true,
       sessionId: "sess-1",
       pickerUri: "https://photospicker.googleapis.com/v1/picker/sess-1",
+      pollIntervalMs: 2000,
+      pollTimeoutMs: 5 * 60 * 1000,
     });
 
     const polled = await pollGooglePhotosImportAction("sess-1");

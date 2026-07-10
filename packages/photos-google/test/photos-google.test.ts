@@ -15,6 +15,9 @@ import {
   listPickedPhotos,
   downloadPickedPhoto,
   GooglePhotosPickerError,
+  parsePickerDurationMs,
+  pickerUriForWeb,
+  listPickedPhotosWhenReady,
   encryptToken,
   decryptToken,
   ScriptedGooglePhotosClient,
@@ -203,6 +206,61 @@ describe("revokeToken", () => {
     await expect(
       revokeToken("tok", { fetch: fetchSpy as unknown as typeof fetch }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("pickerUriForWeb / parsePickerDurationMs", () => {
+  it("appends /autoclose once for web picker URIs", () => {
+    expect(
+      pickerUriForWeb("https://photospicker.googleapis.com/v1/picker/sess-1"),
+    ).toBe("https://photospicker.googleapis.com/v1/picker/sess-1/autoclose");
+    expect(
+      pickerUriForWeb(
+        "https://photospicker.googleapis.com/v1/picker/sess-1/autoclose",
+      ),
+    ).toBe("https://photospicker.googleapis.com/v1/picker/sess-1/autoclose");
+  });
+
+  it("parses protobuf duration strings to milliseconds", () => {
+    expect(parsePickerDurationMs("5s")).toBe(5000);
+    expect(parsePickerDurationMs("300.5s")).toBe(300500);
+    expect(parsePickerDurationMs("0s")).toBeNull();
+    expect(parsePickerDurationMs(undefined)).toBeNull();
+    expect(parsePickerDurationMs("bad")).toBeNull();
+  });
+});
+
+describe("listPickedPhotosWhenReady", () => {
+  it("retries FAILED_PRECONDITION then succeeds", async () => {
+    let calls = 0;
+    const fetchSpy = fetchStub(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify({
+            error: { code: 400, message: "not ready", status: "FAILED_PRECONDITION" },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+      return jsonResponse({
+        mediaItems: [
+          {
+            id: "p1",
+            type: "PHOTO",
+            mediaFile: {
+              baseUrl: "https://lh3.googleusercontent.com/p/a",
+              mimeType: "image/jpeg",
+            },
+          },
+        ],
+      });
+    });
+    const result = await listPickedPhotosWhenReady("access", "sess-1", {
+      fetch: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.photos).toHaveLength(1);
+    expect(calls).toBe(2);
   });
 });
 

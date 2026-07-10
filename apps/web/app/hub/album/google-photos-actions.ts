@@ -15,6 +15,11 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createAlbumPhoto, listActiveFamiliesForPerson } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
+import {
+  GooglePhotosOAuthError,
+  GooglePhotosPickerError,
+  parsePickerDurationMs,
+} from "@chronicle/photos-google";
 import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
@@ -32,7 +37,13 @@ import {
 export type GooglePhotosActionError = { error: string };
 export type DisconnectResult = { ok: true } | GooglePhotosActionError;
 export type StartImportResult =
-  | { ok: true; sessionId: string; pickerUri: string }
+  | {
+      ok: true;
+      sessionId: string;
+      pickerUri: string;
+      pollIntervalMs: number;
+      pollTimeoutMs: number;
+    }
   | GooglePhotosActionError;
 export type PollImportResult =
   | { ok: true; mediaItemsSet: boolean }
@@ -42,6 +53,40 @@ export type CompleteImportResult =
   | GooglePhotosActionError;
 
 type AppRuntime = Awaited<ReturnType<typeof getRuntime>>;
+
+const DEFAULT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+function logGooglePhotosImportError(
+  step: "start" | "poll" | "complete" | "token",
+  err: unknown,
+): void {
+  if (err instanceof GooglePhotosOAuthError) {
+    console.error(
+      `[google-photos/import:${step}] OAuth error HTTP ${err.status}:`,
+      err.responseBody || err.message,
+    );
+    return;
+  }
+  if (err instanceof GooglePhotosPickerError) {
+    console.error(
+      `[google-photos/import:${step}] Picker error HTTP ${err.status}:`,
+      err.responseBody || err.message,
+    );
+    return;
+  }
+  console.error(
+    `[google-photos/import:${step}] unexpected error:`,
+    err instanceof Error ? err.message : String(err),
+  );
+}
+
+function googlePhotosImportErrorFor(err: unknown): string {
+  if (err instanceof GooglePhotosOAuthError) {
+    return hub.album.googlePhotosReconnect;
+  }
+  return hub.album.googlePhotosImportFailed;
+}
 
 type AccountGate =
   | { ok: true; runtime: AppRuntime; personId: string }
@@ -68,11 +113,16 @@ async function resolveAccessToken(
   if (!conn) {
     return { ok: false, error: hub.album.googlePhotosNotConnected };
   }
-  const refreshToken = decryptConnectionRefreshToken(conn);
-  const cfg = getGooglePhotosOAuthConfig();
-  const deps = getGooglePhotosDeps();
-  const { accessToken } = await deps.refreshAccessToken(cfg, refreshToken);
-  return { ok: true, accessToken };
+  try {
+    const refreshToken = decryptConnectionRefreshToken(conn);
+    const cfg = getGooglePhotosOAuthConfig();
+    const deps = getGooglePhotosDeps();
+    const { accessToken } = await deps.refreshAccessToken(cfg, refreshToken);
+    return { ok: true, accessToken };
+  } catch (err) {
+    logGooglePhotosImportError("token", err);
+    return { ok: false, error: hub.album.googlePhotosReconnect };
+  }
 }
 
 /** Resolve target family ids — identical rules to uploadAlbumPhotoAction. */
@@ -126,9 +176,22 @@ export async function startGooglePhotosImportAction(): Promise<StartImportResult
     if (!token.ok) return { error: token.error };
     const deps = getGooglePhotosDeps();
     const session = await deps.createPickerSession(token.accessToken);
-    return { ok: true, sessionId: session.id, pickerUri: session.pickerUri };
-  } catch {
-    return { error: hub.album.googlePhotosImportFailed };
+    const pollIntervalMs =
+      parsePickerDurationMs(session.pollingConfig?.pollInterval) ??
+      DEFAULT_POLL_INTERVAL_MS;
+    const pollTimeoutMs =
+      parsePickerDurationMs(session.pollingConfig?.timeoutIn) ??
+      DEFAULT_POLL_TIMEOUT_MS;
+    return {
+      ok: true,
+      sessionId: session.id,
+      pickerUri: session.pickerUri,
+      pollIntervalMs,
+      pollTimeoutMs,
+    };
+  } catch (err) {
+    logGooglePhotosImportError("start", err);
+    return { error: googlePhotosImportErrorFor(err) };
   }
 }
 
@@ -150,8 +213,9 @@ export async function pollGooglePhotosImportAction(
     const deps = getGooglePhotosDeps();
     const session = await deps.getPickerSession(token.accessToken, sessionId);
     return { ok: true, mediaItemsSet: session.mediaItemsSet };
-  } catch {
-    return { error: hub.album.googlePhotosImportFailed };
+  } catch (err) {
+    logGooglePhotosImportError("poll", err);
+    return { error: googlePhotosImportErrorFor(err) };
   }
 }
 
@@ -184,6 +248,9 @@ export async function completeGooglePhotosImportAction(
     const { photos, skipped } = await deps.listPickedPhotos(
       token.accessToken,
       sessionId,
+    );
+    console.info(
+      `[google-photos/import:complete] listed ${photos.length} photo(s), skipped ${skipped}`,
     );
 
     const { storage, db } = gate.runtime;
@@ -219,8 +286,11 @@ export async function completeGooglePhotosImportAction(
           exifGps: exif.gps,
         });
         added += 1;
-      } catch {
+      } catch (err) {
         failed += 1;
+        if (failed === 1) {
+          logGooglePhotosImportError("complete", err);
+        }
       }
     }
 
@@ -232,7 +302,8 @@ export async function completeGooglePhotosImportAction(
       return { error: hub.actions.photoUploadFailed };
     }
     return { ok: true, added, failed, skipped };
-  } catch {
-    return { error: hub.album.googlePhotosImportFailed };
+  } catch (err) {
+    logGooglePhotosImportError("complete", err);
+    return { error: googlePhotosImportErrorFor(err) };
   }
 }

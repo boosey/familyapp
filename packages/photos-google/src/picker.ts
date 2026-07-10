@@ -28,6 +28,25 @@ export interface PickedPhoto {
   baseUrl: string;
 }
 
+/** Parse Google protobuf duration strings (e.g. `"5s"`, `"300.5s"`) → milliseconds. */
+export function parsePickerDurationMs(value: string | undefined): number | null {
+  if (!value) return null;
+  const match = /^(\d+(?:\.\d+)?)s$/.exec(value.trim());
+  if (!match?.[1]) return null;
+  const seconds = Number(match[1]);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.round(seconds * 1000);
+}
+
+/**
+ * Web apps should open pickerUri with `/autoclose` so the Google Photos tab closes
+ * after the user finishes selecting (and `mediaItemsSet` flips true).
+ */
+export function pickerUriForWeb(pickerUri: string): string {
+  const trimmed = pickerUri.replace(/\/+$/, "");
+  return trimmed.endsWith("/autoclose") ? trimmed : `${trimmed}/autoclose`;
+}
+
 export class GooglePhotosPickerError extends Error {
   constructor(
     message: string,
@@ -37,6 +56,50 @@ export class GooglePhotosPickerError extends Error {
     super(message);
     this.name = "GooglePhotosPickerError";
   }
+}
+
+/** True when Google says the session is not ready for mediaItems.list yet. */
+export function isPickerSessionNotReadyError(err: unknown): boolean {
+  if (!(err instanceof GooglePhotosPickerError)) return false;
+  if (err.status === 412) return true;
+  return (
+    err.responseBody.includes("FAILED_PRECONDITION") ||
+    err.responseBody.includes("Failed precondition")
+  );
+}
+
+const LIST_NOT_READY_MAX_ATTEMPTS = 8;
+const LIST_NOT_READY_BASE_DELAY_MS = 750;
+
+/**
+ * List picked photos, retrying briefly when Google returns FAILED_PRECONDITION
+ * (mediaItemsSet can flip true slightly before list is ready).
+ */
+export async function listPickedPhotosWhenReady(
+  accessToken: string,
+  sessionId: string,
+  opts?: { fetch?: FetchLike },
+): Promise<{ photos: PickedPhoto[]; skipped: number }> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < LIST_NOT_READY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await listPickedPhotos(accessToken, sessionId, opts);
+    } catch (err) {
+      lastErr = err;
+      if (
+        !isPickerSessionNotReadyError(err) ||
+        attempt === LIST_NOT_READY_MAX_ATTEMPTS - 1
+      ) {
+        throw err;
+      }
+      await sleep(LIST_NOT_READY_BASE_DELAY_MS * (attempt + 1));
+    }
+  }
+  throw lastErr;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 type FetchLike = typeof fetch;

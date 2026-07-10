@@ -15,7 +15,7 @@ import {
   downloadPickedPhoto,
   exchangeAuthorizationCode,
   getPickerSession,
-  listPickedPhotos,
+  listPickedPhotosWhenReady,
   refreshAccessToken,
   revokeToken,
   type GooglePhotosOAuthConfig,
@@ -134,7 +134,7 @@ const realDeps: GooglePhotosDeps = {
   revokeToken,
   createPickerSession,
   getPickerSession,
-  listPickedPhotos,
+  listPickedPhotos: listPickedPhotosWhenReady,
   downloadPickedPhoto,
 };
 

@@ -22,6 +22,7 @@
  */
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { pickerUriForWeb } from "@chronicle/photos-google";
 import { uploadAlbumPhotoAction } from "./actions";
 import {
   completeGooglePhotosImportAction,
@@ -42,7 +43,7 @@ export interface AlbumFamilyOption {
 /** Most photos per batch — kept in sync with the server's MAX_BATCH_FILES (the server is authoritative). */
 const MAX_BATCH_FILES = 30;
 
-/** How long to poll the Picker session before giving up (client-side). */
+/** Fallback poll timing when Google omits pollingConfig on the session. */
 const PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const PICKER_POLL_INTERVAL_MS = 2000;
 
@@ -234,13 +235,24 @@ export function AlbumUploader({
         return;
       }
       // Open Google's Picker UI in a new window; we poll until the user finishes picking.
-      window.open(started.pickerUri, "_blank", "noopener,noreferrer");
+      const popup = window.open(
+        pickerUriForWeb(started.pickerUri),
+        "_blank",
+        "noopener,noreferrer",
+      );
+      if (!popup) {
+        setError(hub.album.googlePhotosPopupBlocked);
+        setNote(null);
+        return;
+      }
       setNote(hub.album.googlePhotosWaiting);
 
-      const deadline = Date.now() + PICKER_POLL_TIMEOUT_MS;
+      const pollIntervalMs = started.pollIntervalMs ?? PICKER_POLL_INTERVAL_MS;
+      const pollTimeoutMs = started.pollTimeoutMs ?? PICKER_POLL_TIMEOUT_MS;
+      const deadline = Date.now() + pollTimeoutMs;
       let ready = false;
       while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, PICKER_POLL_INTERVAL_MS));
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
         const polled = await pollGooglePhotosImportAction(started.sessionId);
         if ("error" in polled) {
           setError(polled.error);
@@ -248,12 +260,14 @@ export function AlbumUploader({
           return;
         }
         if (polled.mediaItemsSet) {
+          // Google can flip mediaItemsSet before mediaItems.list is ready.
+          await new Promise((r) => setTimeout(r, 500));
           ready = true;
           break;
         }
       }
       if (!ready) {
-        setError(hub.album.googlePhotosImportFailed);
+        setError(hub.album.googlePhotosPickerTimedOut);
         setNote(null);
         return;
       }
