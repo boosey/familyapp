@@ -86,6 +86,11 @@ function present(v: string | undefined): boolean {
   return typeof v === "string" && v.trim() !== "";
 }
 
+/** True on Vercel or any host wired to durable Postgres — filesystem media is dev-only. */
+function isDurableDeploy(env: StorageEnv): boolean {
+  return present(env.DATABASE_URL) || present(env.VERCEL);
+}
+
 /**
  * PURE env→MediaStorage decision, extracted from `build()` so it can be unit-tested without
  * opening PGlite (see __tests__/media-storage-selection.test.ts).
@@ -131,6 +136,13 @@ export function selectMediaStorage(env: StorageEnv): MediaStorage {
       bucket: env.R2_BUCKET!.trim(),
       // publicBaseUrl intentionally omitted — do NOT set it; see the note above.
     });
+  }
+
+  if (isDurableDeploy(env)) {
+    throw new Error(
+      "Object storage required on Vercel/production: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, " +
+        "R2_SECRET_ACCESS_KEY, and R2_BUCKET. The serverless filesystem cannot store uploaded media.",
+    );
   }
 
   return new FilesystemMediaStorage({

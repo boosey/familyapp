@@ -88,8 +88,20 @@ describe("selectMediaStorage — production R2 vs dev filesystem", () => {
     );
   });
 
-  it("falls back to FilesystemMediaStorage when no R2 vars are set", () => {
+  it("falls back to FilesystemMediaStorage when no R2 vars are set (local dev)", () => {
     expect(selectMediaStorage({})).toBeInstanceOf(FilesystemMediaStorage);
+  });
+
+  it("THROWS on Vercel when R2 is not configured (no read-only .media mkdir trap)", () => {
+    expect(() => selectMediaStorage({ VERCEL: "1" })).toThrow(
+      /Object storage required on Vercel\/production/,
+    );
+  });
+
+  it("THROWS when DATABASE_URL is set but R2 is not (durable prod host)", () => {
+    expect(() =>
+      selectMediaStorage({ DATABASE_URL: "postgres://example" }),
+    ).toThrow(/Object storage required on Vercel\/production/);
   });
 
   it("treats whitespace-only across ALL four as none → FilesystemMediaStorage (not partial, not R2)", () => {
