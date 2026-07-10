@@ -73,10 +73,20 @@ export function createClerkAuthProvider(
 
   return {
     async getCurrentAuthContext(): Promise<AuthContext> {
+      // [DIAG] Temporary auth-resolution tracing (album upload "Not signed in" investigation).
+      // The two anonymous branches below used to return silently, leaving no trace in the logs.
+      // Remove once the upload auth path is understood. Logs only a userId prefix + timings.
+      const t0 = Date.now();
       try {
         const authFn = await resolveAuthFn();
         const { userId } = await authFn();
-        if (!userId) return { kind: "anonymous" };
+        const tAuth = Date.now();
+        if (!userId) {
+          console.warn(
+            `[DIAG auth-clerk] anonymous: Clerk returned no userId clerkMs=${tAuth - t0}`,
+          );
+          return { kind: "anonymous" };
+        }
 
         // Single inner join: a row only comes back if BOTH the Account exists for this Clerk
         // userId AND a Person points at that Account. An orphan (Account with no Person, or
@@ -88,7 +98,15 @@ export function createClerkAuthProvider(
           .where(eq(accounts.authProviderUserId, userId))
           .limit(1);
 
-        if (!row) return { kind: "anonymous" };
+        if (!row) {
+          console.warn(
+            `[DIAG auth-clerk] anonymous: no account/person row userId=${userId.slice(0, 8)} clerkMs=${tAuth - t0} dbMs=${Date.now() - tAuth}`,
+          );
+          return { kind: "anonymous" };
+        }
+        console.info(
+          `[DIAG auth-clerk] account userId=${userId.slice(0, 8)} personId=${row.personId} clerkMs=${tAuth - t0} dbMs=${Date.now() - tAuth}`,
+        );
         return { kind: "account", personId: row.personId };
       } catch (err) {
         // Defense in depth: Clerk import failure, DB outage, schema drift — all become anonymous.

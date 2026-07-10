@@ -65,8 +65,16 @@ function sanitizeStorageErrorDetail(err: unknown): string {
 export async function uploadAlbumPhotoAction(
   formData: FormData,
 ): Promise<AlbumUploadResult> {
+  // [DIAG] Temporary tracing for the album-upload "Not signed in" investigation. runtimeMs exposes a
+  // cold start (the "long delay"); ctx.kind reveals whether auth degraded to anonymous. Remove once
+  // understood. Pairs with the [DIAG auth-clerk] line that names WHICH anonymous branch fired.
+  const tStart = Date.now();
   const { db, storage, auth } = await getRuntime();
+  const tRuntime = Date.now();
   const ctx = await auth.getCurrentAuthContext();
+  console.info(
+    `[DIAG album/upload] ctx.kind=${ctx.kind} runtimeMs=${tRuntime - tStart} authMs=${Date.now() - tRuntime}`,
+  );
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
   // Resolve the target album set from the client's picker choice, re-validated against the

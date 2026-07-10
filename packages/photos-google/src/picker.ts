@@ -232,10 +232,27 @@ export async function getPickerSession(
     );
   }
   const body = json as SessionApiResponse;
-  return {
-    ...mapSession(body),
+  // A poll of an EXISTING session may legitimately omit `pickerUri`: once picking is complete
+  // (mediaItemsSet=true) Google's `GET /v1/sessions/{id}` returns `{ id, mediaItemsSet, expireTime }`
+  // WITHOUT `pickerUri`. Routing this through `mapSession` (which requires pickerUri, correct for the
+  // CREATE response) would throw a GooglePhotosPickerError exactly when the session becomes ready —
+  // the caller then surfaces it as "can't import". Only `id` is required on the poll path; the poll
+  // caller reads `mediaItemsSet` only and never touches `pickerUri`.
+  if (!body.id) {
+    throw new GooglePhotosPickerError(
+      "Picker session response missing id",
+      res.status,
+      text,
+    );
+  }
+  const session: PickerSession & { mediaItemsSet: boolean } = {
+    id: body.id,
+    // Absent on a completed-session poll — preserved when present (fresh session), else "".
+    pickerUri: body.pickerUri ?? "",
     mediaItemsSet: body.mediaItemsSet === true,
   };
+  if (body.pollingConfig) session.pollingConfig = body.pollingConfig;
+  return session;
 }
 
 interface MediaItemApi {

@@ -335,6 +335,36 @@ describe("createPickerSession / getPickerSession", () => {
       createPickerSession("bad", { fetch: fetchSpy as unknown as typeof fetch }),
     ).rejects.toBeInstanceOf(GooglePhotosPickerError);
   });
+
+  // Regression: a completed-session poll drops `pickerUri` (Google returns only
+  // { id, mediaItemsSet, expireTime }). getPickerSession must NOT require pickerUri — requiring it
+  // threw a GooglePhotosPickerError exactly when the session became ready, surfacing as "can't
+  // import" in the album UI. See google-photos-actions poll path.
+  it("GETs a completed session that omits pickerUri without throwing", async () => {
+    const fetchSpy = fetchStub(async () =>
+      jsonResponse({
+        id: "sess-1",
+        mediaItemsSet: true,
+        expireTime: "2026-07-17T16:55:47.042319Z",
+      }),
+    );
+    const session = await getPickerSession("access", "sess-1", {
+      fetch: fetchSpy as unknown as typeof fetch,
+    });
+    expect(session.id).toBe("sess-1");
+    expect(session.mediaItemsSet).toBe(true);
+  });
+
+  it("throws GooglePhotosPickerError when the poll response has no id", async () => {
+    const fetchSpy = fetchStub(async () =>
+      jsonResponse({ mediaItemsSet: true }),
+    );
+    await expect(
+      getPickerSession("access", "sess-1", {
+        fetch: fetchSpy as unknown as typeof fetch,
+      }),
+    ).rejects.toBeInstanceOf(GooglePhotosPickerError);
+  });
 });
 
 describe("listPickedPhotos", () => {
