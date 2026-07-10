@@ -50,6 +50,18 @@ const MAX_CAPTION_LENGTH = 500;
  */
 const MAX_BATCH_FILES = 30;
 
+/** Safe, short error token for the UI — never include secrets or full stack traces. */
+function sanitizeStorageErrorDetail(err: unknown): string {
+  const name =
+    err && typeof err === "object" && "name" in err
+      ? String((err as { name?: unknown }).name ?? "")
+      : "";
+  const message = err instanceof Error ? err.message : String(err);
+  const raw = (name && name !== "Error" ? name : message.split(/[:\n]/)[0]) ?? "error";
+  const safe = raw.replace(/[^a-zA-Z0-9._-]+/g, "").slice(0, 48);
+  return safe || "error";
+}
+
 export async function uploadAlbumPhotoAction(
   formData: FormData,
 ): Promise<AlbumUploadResult> {
@@ -94,6 +106,7 @@ export async function uploadAlbumPhotoAction(
   // with one corrupt file still lands the other nine).
   let added = 0;
   let failed = 0;
+  let lastFailureDetail: string | null = null;
   for (const photo of files) {
     const bytes = new Uint8Array(await photo.arrayBuffer());
     const contentType = photo.type || "application/octet-stream";
@@ -124,6 +137,7 @@ export async function uploadAlbumPhotoAction(
       added += 1;
     } catch (err) {
       failed += 1;
+      lastFailureDetail = sanitizeStorageErrorDetail(err);
       if (failed === 1) {
         console.error(
           `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
@@ -134,11 +148,20 @@ export async function uploadAlbumPhotoAction(
   }
 
   // Revalidate once for the whole batch, only if at least one photo actually landed.
-  if (added > 0) revalidatePath("/hub/album");
+  // Album is mounted at BOTH /hub?tab=album and /hub/album — refresh both.
+  if (added > 0) {
+    revalidatePath("/hub");
+    revalidatePath("/hub/album");
+  }
   // The whole batch failed (nothing valid landed) → a single upload error, mirroring the single-file
   // behavior. Otherwise it's a success, with `failed` telling the client whether to nudge about the
   // ones that didn't make it.
-  if (added === 0) return { error: hub.actions.photoUploadFailed };
+  if (added === 0) {
+    if (lastFailureDetail) {
+      return { error: hub.actions.photoUploadFailedDetail(lastFailureDetail) };
+    }
+    return { error: hub.actions.photoUploadFailed };
+  }
   return { ok: true, added, failed };
 }
 

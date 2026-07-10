@@ -78,7 +78,9 @@ describe("R2MediaStorage", () => {
     expect(input.Key).toBe("rec/abc.webm");
     expect(input.ContentType).toBe("audio/webm");
     expect(input.IfNoneMatch).toBe("*");
-    expect(input.Body).toBe(bytes);
+    expect(input.ContentLength).toBe(4);
+    expect(Buffer.isBuffer(input.Body)).toBe(true);
+    expect(Buffer.from(input.Body as Buffer)).toEqual(Buffer.from(bytes));
   });
 
   it("put → PreconditionFailed (by name) surfaces as ObjectAlreadyExistsError (write-once contract)", async () => {

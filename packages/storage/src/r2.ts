@@ -48,7 +48,7 @@ const DEFAULT_PRESIGN_EXPIRY_SECONDS = 3600;
 /**
  * S3 client options for Cloudflare R2.
  *
- * AWS SDK ≥3.729 defaults to always-on CRC32 checksums that R2 rejects with
+ * AWS SDK ≥3.729 defaults to always-on CRC32 checksums that R2 historically rejected with
  * 501 NotImplemented. Cloudflare's documented mitigation is WHEN_REQUIRED.
  * https://developers.cloudflare.com/r2/examples/aws/aws-sdk-js-v3/
  */
@@ -69,6 +69,49 @@ export function r2ClientConfig(config: {
   };
 }
 
+/**
+ * Belt-and-suspenders: strip flexible-checksum headers some SDK paths still attach even with
+ * WHEN_REQUIRED (notably certain delete/get paths). Must run before signing.
+ */
+export function attachR2ChecksumHeaderCompat(client: S3Client): void {
+  const strip = async (
+    args: { request?: { headers?: Record<string, string> } },
+    next: (args: unknown) => Promise<unknown>,
+  ) => {
+    const headers = args.request?.headers;
+    if (headers) {
+      for (const key of Object.keys(headers)) {
+        const lower = key.toLowerCase();
+        if (
+          lower.startsWith("x-amz-checksum-") ||
+          lower === "x-amz-sdk-checksum-algorithm" ||
+          lower === "x-amz-checksum-mode"
+        ) {
+          delete headers[key];
+        }
+      }
+    }
+    return next(args);
+  };
+
+  try {
+    client.middlewareStack.addRelativeTo(
+      (next) => (args) => strip(args as { request?: { headers?: Record<string, string> } }, next),
+      {
+        name: "chronicleR2StripChecksumHeaders",
+        relation: "after",
+        toMiddleware: "flexibleChecksumsMiddleware",
+      },
+    );
+  } catch {
+    // flexibleChecksumsMiddleware is absent when WHEN_REQUIRED skips it — still strip at build.
+    client.middlewareStack.add(
+      (next) => (args) => strip(args as { request?: { headers?: Record<string, string> } }, next),
+      { step: "build", name: "chronicleR2StripChecksumHeaders", priority: "low" },
+    );
+  }
+}
+
 export class R2MediaStorage implements MediaStorage {
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -84,17 +127,22 @@ export class R2MediaStorage implements MediaStorage {
       this.client = config.client;
     } else {
       this.client = new S3Client(r2ClientConfig(config));
+      attachR2ChecksumHeaderCompat(this.client);
     }
   }
 
   async put({ key, bytes, contentType }: PutObjectInput): Promise<{ key: string }> {
+    // Buffer + explicit ContentLength: Uint8Array bodies have hit flaky length/checksum paths
+    // in newer AWS SDK releases against S3-compatible stores.
+    const body = Buffer.from(bytes);
     try {
       await this.client.send(
         new PutObjectCommand({
           Bucket: this.bucket,
           Key: key,
-          Body: bytes,
+          Body: body,
           ContentType: contentType,
+          ContentLength: body.byteLength,
           // Atomic write-once: server rejects with 412 if any object exists at this key.
           IfNoneMatch: "*",
         }),

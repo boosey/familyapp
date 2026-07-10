@@ -88,6 +88,18 @@ function googlePhotosImportErrorFor(err: unknown): string {
   return hub.album.googlePhotosImportFailed;
 }
 
+/** Safe, short error token for the UI — never include secrets or full stack traces. */
+function sanitizeImportErrorDetail(err: unknown): string {
+  const name =
+    err && typeof err === "object" && "name" in err
+      ? String((err as { name?: unknown }).name ?? "")
+      : "";
+  const message = err instanceof Error ? err.message : String(err);
+  const raw = (name && name !== "Error" ? name : message.split(/[:\n]/)[0]) ?? "error";
+  const safe = raw.replace(/[^a-zA-Z0-9._-]+/g, "").slice(0, 48);
+  return safe || "error";
+}
+
 type AccountGate =
   | { ok: true; runtime: AppRuntime; personId: string }
   | { ok: false; error: string };
@@ -263,6 +275,7 @@ export async function completeGooglePhotosImportAction(
     const { storage, db } = gate.runtime;
     let added = 0;
     let failed = 0;
+    let lastFailureDetail: string | null = null;
 
     for (const item of photos) {
       try {
@@ -295,6 +308,7 @@ export async function completeGooglePhotosImportAction(
         added += 1;
       } catch (err) {
         failed += 1;
+        lastFailureDetail = sanitizeImportErrorDetail(err);
         if (failed === 1) {
           logGooglePhotosImportError("complete", err);
           console.error(
@@ -310,7 +324,11 @@ export async function completeGooglePhotosImportAction(
       revalidatePath("/hub");
     }
     if (added === 0 && photos.length > 0) {
-      return { error: hub.actions.photoUploadFailed };
+      return {
+        error: lastFailureDetail
+          ? hub.actions.photoUploadFailedDetail(lastFailureDetail)
+          : hub.actions.photoUploadFailed,
+      };
     }
     return { ok: true, added, failed, skipped, rejected };
   } catch (err) {

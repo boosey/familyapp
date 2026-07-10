@@ -30,6 +30,7 @@ import {
   pollGooglePhotosImportAction,
   startGooglePhotosImportAction,
 } from "./google-photos-actions";
+import { prepareAlbumPhoto } from "./prepare-photo";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyPicker } from "../FamilyPicker";
@@ -169,15 +170,34 @@ export function AlbumUploader({
       setNote(null);
       return;
     }
-    // Build the payload explicitly: one `photo` entry per file (the action reads getAll("photo")),
-    // plus the chosen albums when the multi-family picker is shown (a solo contributor sends none and
-    // the server defaults to their sole family).
-    const formData = new FormData();
-    for (const file of Array.from(files)) formData.append("photo", file);
-    if (showPicker) {
-      for (const familyId of selected) formData.append("familyIds", familyId);
-    }
+    const selectedFiles = Array.from(files);
     startTransition(async () => {
+      // Downscale oversized phone photos so they fit under Vercel's ~4.5 MB request body limit.
+      const prepared: File[] = [];
+      for (const file of selectedFiles) {
+        const result = await prepareAlbumPhoto(file);
+        if (!result.ok) {
+          setError(
+            result.error === "heic_unsupported"
+              ? hub.actions.photoHeicUnsupported
+              : result.error === "too_large"
+                ? hub.actions.photoTooLarge
+                : hub.actions.photoEncodeFailed,
+          );
+          setNote(null);
+          return;
+        }
+        prepared.push(result.file);
+      }
+
+      // Build the payload explicitly: one `photo` entry per file (the action reads getAll("photo")),
+      // plus the chosen albums when the multi-family picker is shown (a solo contributor sends none and
+      // the server defaults to their sole family).
+      const formData = new FormData();
+      for (const file of prepared) formData.append("photo", file);
+      if (showPicker) {
+        for (const familyId of selected) formData.append("familyIds", familyId);
+      }
       // The action can REJECT (throw) rather than return an error shape — most notably when the
       // request body exceeds the Server Action / platform size limit. Without this catch that
       // rejection is swallowed by the transition and the upload silently does nothing; surface a

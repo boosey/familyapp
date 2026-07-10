@@ -360,7 +360,9 @@ describe("uploadAlbumPhotoAction", () => {
     fd.append("photo", new Blob([new Uint8Array([2]) as BlobPart], { type: "image/png" }), "b.png");
 
     const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ error: hub.actions.photoUploadFailed });
+    expect(result).toEqual({
+      error: hub.actions.photoUploadFailedDetail("storageboom"),
+    });
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toEqual([]);
   });
