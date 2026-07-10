@@ -350,12 +350,12 @@ export const hub = {
     googlePhotosImport: "Import from Google Photos",
     googlePhotosDisconnect: "Disconnect Google Photos",
     googlePhotosImporting: "Opening Google Photos…",
-    googlePhotosWaiting: "Waiting for your picks…",
+    googlePhotosWaiting: "Pick your photos in the Google Photos window…",
     googlePhotosImportFailed: "Couldn't import from Google Photos. Please try again.",
     googlePhotosPickerTimedOut:
-      "Google Photos didn't confirm your selection in time. Pick your photos, finish the flow in the Google tab, then try again.",
+      "Google Photos didn't confirm your selection in time. Finish picking in the Google Photos window, then try again.",
     googlePhotosPopupBlocked:
-      "Your browser blocked the Google Photos window. Allow pop-ups for this site, then try again.",
+      "Your browser blocked the Google Photos window. Allow pop-ups for this site (not just redirects), then try Import again.",
     googlePhotosReconnect:
       "Your Google Photos connection needs to be refreshed. Disconnect, then connect again.",
     googlePhotosNothingImported:

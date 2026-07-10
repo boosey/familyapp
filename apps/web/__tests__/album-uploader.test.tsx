@@ -342,4 +342,106 @@ describe("AlbumUploader Google Photos", () => {
     expect(await screen.findByText(hub.album.googlePhotosConnectedSuccess)).toBeTruthy();
     expect(replace).toHaveBeenCalledWith("/hub?tab=album");
   });
+
+  // Regression: window.open(..., "noopener") returns null EVEN WHEN the picker opened.
+  // Treating that as "blocked" aborted import before poll/complete — picker visible, photos never
+  // landed. Open as a sized popup (no noopener feature) and keep polling when a Window is returned.
+  it("opens the picker as a sized popup (not noopener) and completes import after mediaItemsSet", async () => {
+    const popup = { closed: false, close: vi.fn(), opener: window as unknown };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photospicker.googleapis.com/v1/picker/sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    pollGooglePhotosImportAction.mockResolvedValueOnce({ ok: true, mediaItemsSet: true });
+    completeGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      added: 2,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [url, target, features] = openSpy.mock.calls[0]!;
+    expect(String(url)).toContain("/autoclose");
+    expect(target).toBe("chronicle-google-photos-picker");
+    expect(String(features)).toMatch(/popup=yes/);
+    expect(String(features)).not.toMatch(/noopener/);
+    // Same protection as noopener, without losing the Window handle for the blocked check.
+    expect(popup.opener).toBeNull();
+    expect(pollGooglePhotosImportAction).toHaveBeenCalledWith("sess-1");
+    expect(refresh).toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("rejects a non-Google pickerUri without opening a window", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://evil.example/picker",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/couldn't import/i),
+    );
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(pollGooglePhotosImportAction).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("shows popup-blocked when window.open returns null (truly blocked)", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photospicker.googleapis.com/v1/picker/sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/blocked/i),
+    );
+    expect(pollGooglePhotosImportAction).not.toHaveBeenCalled();
+    expect(completeGooglePhotosImportAction).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
 });

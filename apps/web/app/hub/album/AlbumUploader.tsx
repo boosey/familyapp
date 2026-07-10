@@ -234,16 +234,34 @@ export function AlbumUploader({
         setNote(null);
         return;
       }
-      // Open Google's Picker UI in a new window; we poll until the user finishes picking.
+      // Open Google's Picker UI. Do NOT pass `noopener` in window features: with noopener,
+      // window.open returns null EVEN WHEN the picker opened successfully (HTML/MDN), which
+      // previously aborted the import before polling — picker tab open, photos never imported.
+      // A sized `popup=yes` window also makes /autoclose more reliable than a full browser tab.
+      // Sever opener after open (same protection as noopener) so the cross-origin picker cannot
+      // reverse-tabnab the hub; pickerUriForWeb also rejects non-Google hosts.
+      let pickerUrl: string;
+      try {
+        pickerUrl = pickerUriForWeb(started.pickerUri);
+      } catch {
+        setError(hub.album.googlePhotosImportFailed);
+        setNote(null);
+        return;
+      }
       const popup = window.open(
-        pickerUriForWeb(started.pickerUri),
-        "_blank",
-        "noopener,noreferrer",
+        pickerUrl,
+        "chronicle-google-photos-picker",
+        "popup=yes,width=1100,height=800",
       );
       if (!popup) {
         setError(hub.album.googlePhotosPopupBlocked);
         setNote(null);
         return;
+      }
+      try {
+        popup.opener = null;
+      } catch {
+        /* ignore if the browser already isolated the browsing context */
       }
       setNote(hub.album.googlePhotosWaiting);
 
@@ -265,6 +283,12 @@ export function AlbumUploader({
           ready = true;
           break;
         }
+      }
+      // Best-effort close if /autoclose didn't (e.g. browser treated it as a tab).
+      try {
+        if (!popup.closed) popup.close();
+      } catch {
+        /* ignore cross-origin / already-closed */
       }
       if (!ready) {
         setError(hub.album.googlePhotosPickerTimedOut);

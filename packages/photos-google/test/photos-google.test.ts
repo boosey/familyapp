@@ -221,6 +221,13 @@ describe("pickerUriForWeb / parsePickerDurationMs", () => {
     ).toBe("https://photospicker.googleapis.com/v1/picker/sess-1/autoclose");
   });
 
+  it("rejects non-Google picker hosts", () => {
+    expect(() => pickerUriForWeb("https://evil.example/picker")).toThrow(
+      /photospicker\.googleapis\.com/,
+    );
+    expect(() => pickerUriForWeb("not-a-url")).toThrow(/not a valid URL/);
+  });
+
   it("parses protobuf duration strings to milliseconds", () => {
     expect(parsePickerDurationMs("5s")).toBe(5000);
     expect(parsePickerDurationMs("300.5s")).toBe(300500);

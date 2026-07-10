@@ -57,6 +57,10 @@ export default defineConfig({
       "@chronicle/queue-inngest": fileURLToPath(
         new URL("../../packages/queue-inngest/src/index.ts", import.meta.url),
       ),
+      // More specific subpath BEFORE the package root (client-safe picker helpers only).
+      "@chronicle/photos-google/picker": fileURLToPath(
+        new URL("../../packages/photos-google/src/picker.ts", import.meta.url),
+      ),
       "@chronicle/photos-google": fileURLToPath(
         new URL("../../packages/photos-google/src/index.ts", import.meta.url),
       ),

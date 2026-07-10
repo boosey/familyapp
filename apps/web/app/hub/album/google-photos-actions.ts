@@ -297,6 +297,10 @@ export async function completeGooglePhotosImportAction(
         failed += 1;
         if (failed === 1) {
           logGooglePhotosImportError("complete", err);
+          console.error(
+            `[google-photos/import:complete] storage/create failed for item ${item.id}` +
+              ` (${item.mimeType}, ${item.filename ?? "no-filename"})`,
+          );
         }
       }
     }
