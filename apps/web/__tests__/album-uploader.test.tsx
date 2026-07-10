@@ -420,7 +420,7 @@ describe("AlbumUploader Google Photos", () => {
 
     await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
     expect(String(openSpy.mock.calls[0]![0])).toBe(
-      "https://photos.google.com/picker/autoclose?sessionId=sess-1",
+      "https://photos.google.com/picker?sessionId=sess-1",
     );
     openSpy.mockRestore();
   });

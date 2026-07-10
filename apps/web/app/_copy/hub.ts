@@ -293,7 +293,15 @@ export const hub = {
     noAlbumChosen: "Choose at least one album for this photo.",
     photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
+    photoUploadFailedDetail: (detail: string) =>
+      `Could not add your photo (${detail}). Please try again.`,
     tooManyPhotos: "That's too many photos at once. Please add up to 30 at a time.",
+    photoTooLarge:
+      "That photo is too large to upload here. Try a smaller image, or import it from Google Photos.",
+    photoHeicUnsupported:
+      "This device format (HEIC) can't be uploaded directly. Export as JPEG, or import it from Google Photos.",
+    photoEncodeFailed:
+      "Couldn't prepare that photo for upload. Try another image, or import it from Google Photos.",
     captionTooLong: "That caption is too long. Please shorten it.",
     notAllowedToManagePhoto: "You can't change this photo.",
     // ADR-0009 Phase 2 — story accompaniment photo attach/detach/cover/reorder errors.

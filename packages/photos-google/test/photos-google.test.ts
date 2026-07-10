@@ -221,13 +221,18 @@ describe("pickerUriForWeb / parsePickerDurationMs", () => {
     ).toBe("https://photospicker.googleapis.com/v1/picker/sess-1/autoclose");
   });
 
-  it("accepts photos.google.com picker URIs and preserves query params", () => {
+  it("accepts photos.google.com query-style URIs without rewriting /autoclose", () => {
+    // Real picker URIs often carry ?sessionId=… — path-appending /autoclose can break completion.
     expect(
       pickerUriForWeb(
         "https://photos.google.com/picker?sessionId=session-123",
       ),
-    ).toBe(
-      "https://photos.google.com/picker/autoclose?sessionId=session-123",
+    ).toBe("https://photos.google.com/picker?sessionId=session-123");
+  });
+
+  it("appends /autoclose for path-style photos.google.com URIs", () => {
+    expect(pickerUriForWeb("https://photos.google.com/picker/sess-1")).toBe(
+      "https://photos.google.com/picker/sess-1/autoclose",
     );
   });
 

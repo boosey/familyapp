@@ -39,13 +39,17 @@ export function parsePickerDurationMs(value: string | undefined): number | null 
 }
 
 /**
- * Web apps should open pickerUri with `/autoclose` so the Google Photos tab closes
- * after the user finishes selecting (and `mediaItemsSet` flips true).
+ * Web apps may append `/autoclose` so the Google Photos tab closes after picking.
  *
  * Only Google Photos picker hosts are accepted — callers must not open arbitrary URLs
  * returned from a compromised or malformed session response. The API lives on
  * `photospicker.googleapis.com`, but the user-facing `pickerUri` is typically
  * `https://photos.google.com/picker?...` (not the API host).
+ *
+ * IMPORTANT: only append `/autoclose` for path-style URIs (no query string). Real picker
+ * URIs often carry `?sessionId=…`; path-appending `/autoclose` before `?` can break the
+ * picker completion handshake so `mediaItemsSet` never flips. For query-style URIs we leave
+ * the URL alone — the Done screen is fine, and the album UI closes the popup when ready.
  */
 const TRUSTED_PICKER_HOSTS = new Set([
   "photos.google.com",
@@ -71,10 +75,11 @@ export function pickerUriForWeb(pickerUri: string): string {
       pickerUri,
     );
   }
-  // Append /autoclose on the path (preserve query string — session ids often live there).
+  url.hash = "";
+  // Query-style session URIs: do not rewrite the path (see note above).
+  if (url.search) return url.toString();
   const path = url.pathname.replace(/\/+$/, "") || "/";
   url.pathname = path.endsWith("/autoclose") ? path : `${path}/autoclose`;
-  url.hash = "";
   return url.toString();
 }
 
