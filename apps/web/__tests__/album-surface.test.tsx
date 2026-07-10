@@ -63,13 +63,22 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
 }));
 
 const isGooglePhotosConfigured = vi.fn(() => false);
-const getActiveGooglePhotosConnection = vi.fn(async () => null);
+type GoogleConn = {
+  personId: string;
+  encryptedRefreshToken: string;
+  googleAccountEmail: string | null;
+  connectedAt: Date;
+  revokedAt: Date | null;
+};
+const getActiveGooglePhotosConnection = vi.fn<
+  (db: unknown, personId: unknown) => Promise<GoogleConn | null>
+>(async () => null);
 vi.mock("@/lib/google-photos-config", () => ({
   isGooglePhotosConfigured: () => isGooglePhotosConfigured(),
 }));
 vi.mock("@/lib/google-photos-connection", () => ({
-  getActiveGooglePhotosConnection: (...args: unknown[]) =>
-    getActiveGooglePhotosConnection(...args),
+  getActiveGooglePhotosConnection: (db: unknown, personId: unknown) =>
+    getActiveGooglePhotosConnection(db, personId),
 }));
 
 import { createTestDatabase, type Database } from "@chronicle/db";
