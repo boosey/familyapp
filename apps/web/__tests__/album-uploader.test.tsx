@@ -389,6 +389,42 @@ describe("AlbumUploader Google Photos", () => {
     openSpy.mockRestore();
   });
 
+  it("opens a photos.google.com pickerUri (the real user-facing host)", async () => {
+    const popup = { closed: false, close: vi.fn(), opener: window as unknown };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    pollGooglePhotosImportAction.mockResolvedValueOnce({ ok: true, mediaItemsSet: true });
+    completeGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      added: 1,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    expect(String(openSpy.mock.calls[0]![0])).toBe(
+      "https://photos.google.com/picker/autoclose?sessionId=sess-1",
+    );
+    openSpy.mockRestore();
+  });
+
   it("rejects a non-Google pickerUri without opening a window", async () => {
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
     startGooglePhotosImportAction.mockResolvedValueOnce({

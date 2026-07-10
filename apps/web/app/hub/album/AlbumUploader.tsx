@@ -239,7 +239,7 @@ export function AlbumUploader({
       // previously aborted the import before polling — picker tab open, photos never imported.
       // A sized `popup=yes` window also makes /autoclose more reliable than a full browser tab.
       // Sever opener after open (same protection as noopener) so the cross-origin picker cannot
-      // reverse-tabnab the hub; pickerUriForWeb also rejects non-Google hosts.
+      // reverse-tabnab the hub; pickerUriForWeb also rejects non-Google Photos hosts.
       let pickerUrl: string;
       try {
         pickerUrl = pickerUriForWeb(started.pickerUri);

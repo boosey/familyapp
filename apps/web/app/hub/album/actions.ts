@@ -122,8 +122,14 @@ export async function uploadAlbumPhotoAction(
         exifGps: exif.gps,
       });
       added += 1;
-    } catch {
+    } catch (err) {
       failed += 1;
+      if (failed === 1) {
+        console.error(
+          `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
   }
 

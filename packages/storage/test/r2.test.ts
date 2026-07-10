@@ -17,7 +17,7 @@ import {
 import { mockClient } from "aws-sdk-client-mock";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ObjectAlreadyExistsError } from "../src/index";
-import { R2MediaStorage } from "../src/r2";
+import { R2MediaStorage, r2ClientConfig } from "../src/r2";
 
 const s3Mock = mockClient(S3Client);
 
@@ -53,6 +53,17 @@ beforeEach(() => {
 });
 
 describe("R2MediaStorage", () => {
+  it("r2ClientConfig disables always-on checksums (R2 rejects CRC32 with 501)", () => {
+    const cfg = r2ClientConfig({
+      accountId: "acct",
+      accessKeyId: "AKIA_TEST",
+      secretAccessKey: "secret",
+    });
+    expect(cfg.requestChecksumCalculation).toBe("WHEN_REQUIRED");
+    expect(cfg.responseChecksumValidation).toBe("WHEN_REQUIRED");
+    expect(cfg.endpoint).toBe("https://acct.r2.cloudflarestorage.com");
+  });
+
   it("put sends a PutObjectCommand with bytes, contentType, and IfNoneMatch: '*'", async () => {
     s3Mock.on(PutObjectCommand).resolves({});
     const storage = makeStorage();
