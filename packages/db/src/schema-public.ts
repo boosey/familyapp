@@ -15,6 +15,7 @@ export {
   intakeRevisions,
   linkSessions,
   families,
+  googlePhotosConnections,
   invitations,
   joinRequests,
   memberships,

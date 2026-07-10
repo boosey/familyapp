@@ -62,6 +62,9 @@
       "@chronicle/llm-groq": [
         "../../packages/llm-groq/src/index.ts"
       ],
+      "@chronicle/photos-google": [
+        "../../packages/photos-google/src/index.ts"
+      ],
       "@/*": [
         "./*"
       ]

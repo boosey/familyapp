@@ -104,9 +104,11 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   illustration source** stays deferred — schema `provenance` seam ships, but no provider/license/legal
   work and no external-image UI until its own pass; (3) **photo-library integration** collapsed on the
   web reality (Google Library read scopes gone → **Picker import** only, Phase 5; Apple has no web API
-  → just the file picker; true PhotoKit needs a future native app). Still-open: **vision
-  photo-understanding**, **external illustrations**, and a **photos-only / combined photo+story feed**
-  (deliberately deferred — v1 feed is Stories only).
+  → just the file picker; true PhotoKit needs a future native app). **Phase 5 OAuth model locked
+  2026-07-09:** connect-once (encrypted refresh token per Person) + Picker UI each import +
+  disconnect control — not strict-ephemeral re-consent. Still-open: **vision photo-understanding**,
+  **external illustrations**, and a **photos-only / combined photo+story feed** (deliberately
+  deferred — v1 feed is Stories only).
 
 ## Assumptions made (correct me if wrong)
 

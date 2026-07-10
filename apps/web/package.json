@@ -21,6 +21,7 @@
     "@chronicle/interviewer": "workspace:*",
     "@chronicle/llm-anthropic": "workspace:*",
     "@chronicle/llm-groq": "workspace:*",
+    "@chronicle/photos-google": "workspace:*",
     "@chronicle/pipeline": "workspace:*",
     "@chronicle/queue-inngest": "workspace:*",
     "@chronicle/storage": "workspace:*",

@@ -129,6 +129,14 @@ CREATE TABLE "follow_up_decisions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "google_photos_connections" (
+	"person_id" uuid PRIMARY KEY NOT NULL,
+	"encrypted_refresh_token" text NOT NULL,
+	"google_account_email" text,
+	"connected_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"revoked_at" timestamp with time zone
+);
+
 CREATE TABLE "intake_answers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"person_id" uuid NOT NULL,
@@ -360,6 +368,7 @@ ALTER TABLE "family_photo_families" ADD CONSTRAINT "family_photo_families_family
 ALTER TABLE "family_photos" ADD CONSTRAINT "family_photos_contributor_person_id_persons_id_fk" FOREIGN KEY ("contributor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "follow_up_decisions" ADD CONSTRAINT "follow_up_decisions_decision_id_follow_up_decisions_id_fk" FOREIGN KEY ("decision_id") REFERENCES "public"."follow_up_decisions"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "google_photos_connections" ADD CONSTRAINT "google_photos_connections_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_revisions" ADD CONSTRAINT "intake_revisions_intake_answer_id_intake_answers_id_fk" FOREIGN KEY ("intake_answer_id") REFERENCES "public"."intake_answers"("id") ON DELETE cascade ON UPDATE no action;

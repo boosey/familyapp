@@ -2,6 +2,17 @@
 
 Every non-obvious choice and its one-line rationale. Newest at top within each section.
 
+## Story imagery — Google Photos import (Phase 5)
+
+- **Connect-once OAuth + Picker each import (locked 2026-07-09).** Import is the user's **own**
+  Google Photos library via the **Picker API** (not Image Search; not silent Library browse — Google
+  removed broad Library read scopes for most apps). Product choice: store an **encrypted refresh
+  token per Person** so Google consent is once (until disconnect / revoke); each album import still
+  opens a **new Picker session** (user always chooses which photos). Album UI needs Connect /
+  Import / Disconnect. Rejected: strict ephemeral / no refresh token (PLAN's earlier wording) —
+  that would re-prompt Google consent often and feels broken for a family album. Scope stays
+  `photospicker.mediaitems.readonly`; bytes land as `family_photos` with `source='google_picker'`.
+
 ## Onboarding & family flows (account side)
 
 - **Family discovery is opt-in; joining is always steward-approved; discovery exposes only family

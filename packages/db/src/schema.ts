@@ -911,6 +911,28 @@ export const mockAuthUsers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// GooglePhotosConnection — ADR-0009 Phase 5. Connect-once OAuth vault for Google Photos Picker.
+// OPEN schema (like link_sessions / mock_auth_users): stores an encrypted refresh token per Person,
+// not Story/Media content. Access tokens are minted on demand and never persisted. Disconnect sets
+// `revokedAt` (or deletes the row) and best-effort revokes at Google.
+// ---------------------------------------------------------------------------
+
+export const googlePhotosConnections = pgTable("google_photos_connections", {
+  personId: uuid("person_id")
+    .primaryKey()
+    .references(() => persons.id),
+  /** AES-256-GCM ciphertext of the OAuth refresh token (never plaintext at rest). */
+  encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+  /** Optional Google account email from the token exchange (display / audit only). */
+  googleAccountEmail: text("google_account_email"),
+  connectedAt: timestamp("connected_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Soft-revoke marker; a non-null value means the connection is inactive. */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+// ---------------------------------------------------------------------------
 // StoryView — per-viewer read state. NOT Story content (it exposes nothing about a story beyond
 // "this person has opened it"), so it lives in the public schema, not behind the /content guard.
 // One row the first time a viewer opens a story; the unique index makes the open idempotent.
@@ -1231,6 +1253,8 @@ export type JoinRequest = typeof joinRequests.$inferSelect;
 export type NewJoinRequest = typeof joinRequests.$inferInsert;
 export type MockAuthUser = typeof mockAuthUsers.$inferSelect;
 export type NewMockAuthUser = typeof mockAuthUsers.$inferInsert;
+export type GooglePhotosConnection = typeof googlePhotosConnections.$inferSelect;
+export type NewGooglePhotosConnection = typeof googlePhotosConnections.$inferInsert;
 export type StoryView = typeof storyViews.$inferSelect;
 export type NewStoryView = typeof storyViews.$inferInsert;
 export type StoryFamily = typeof storyFamilies.$inferSelect;

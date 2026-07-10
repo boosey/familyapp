@@ -23,6 +23,12 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAlbumPhotoAction } from "./actions";
+import {
+  completeGooglePhotosImportAction,
+  disconnectGooglePhotosAction,
+  pollGooglePhotosImportAction,
+  startGooglePhotosImportAction,
+} from "./google-photos-actions";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyPicker } from "../FamilyPicker";
@@ -36,10 +42,17 @@ export interface AlbumFamilyOption {
 /** Most photos per batch — kept in sync with the server's MAX_BATCH_FILES (the server is authoritative). */
 const MAX_BATCH_FILES = 30;
 
+/** How long to poll the Picker session before giving up (client-side). */
+const PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const PICKER_POLL_INTERVAL_MS = 2000;
+
 export function AlbumUploader({
   families,
   currentFamilyId,
   scope = null,
+  googlePhotosConfigured = false,
+  googlePhotosConnected = false,
+  googlePhotosEmail = null,
 }: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
@@ -49,10 +62,17 @@ export function AlbumUploader({
    * absent) the default falls back to the current album on screen.
    */
   scope?: string | null;
+  /** When false (default), no Google Photos chrome — file upload only. */
+  googlePhotosConfigured?: boolean;
+  /** Active encrypted connection for this person. */
+  googlePhotosConnected?: boolean;
+  /** Optional Google account email for a quiet status line. */
+  googlePhotosEmail?: string | null;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
+  const [googlePending, setGooglePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
   const [note, setNote] = useState<string | null>(null);
@@ -150,7 +170,90 @@ export function AlbumUploader({
   }
 
   // >=1 album must stay selected when the picker is shown, and never while an upload is in flight.
-  const addDisabled = pending || (showPicker && selected.size === 0);
+  const busy = pending || googlePending;
+  const addDisabled = busy || (showPicker && selected.size === 0);
+
+  async function runGoogleImport() {
+    setError(null);
+    setNote(hub.album.googlePhotosImporting);
+    setGooglePending(true);
+    try {
+      const started = await startGooglePhotosImportAction();
+      if ("error" in started) {
+        setError(started.error);
+        setNote(null);
+        return;
+      }
+      // Open Google's Picker UI in a new window; we poll until the user finishes picking.
+      window.open(started.pickerUri, "_blank", "noopener,noreferrer");
+      setNote(hub.album.googlePhotosWaiting);
+
+      const deadline = Date.now() + PICKER_POLL_TIMEOUT_MS;
+      let ready = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, PICKER_POLL_INTERVAL_MS));
+        const polled = await pollGooglePhotosImportAction(started.sessionId);
+        if ("error" in polled) {
+          setError(polled.error);
+          setNote(null);
+          return;
+        }
+        if (polled.mediaItemsSet) {
+          ready = true;
+          break;
+        }
+      }
+      if (!ready) {
+        setError(hub.album.googlePhotosImportFailed);
+        setNote(null);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("sessionId", started.sessionId);
+      if (showPicker) {
+        for (const familyId of selected) formData.append("familyIds", familyId);
+      }
+      const completed = await completeGooglePhotosImportAction(formData);
+      if ("error" in completed) {
+        setError(completed.error);
+        setNote(null);
+        return;
+      }
+      setError(null);
+      setNote(
+        completed.failed > 0 || completed.skipped > 0
+          ? hub.album.googlePhotosPartial(
+              completed.added,
+              completed.failed,
+              completed.skipped,
+            )
+          : completed.added > 0
+            ? hub.album.googlePhotosPartial(completed.added, 0, 0)
+            : null,
+      );
+      setSelected(seed());
+      router.refresh();
+    } catch {
+      setError(hub.album.googlePhotosImportFailed);
+      setNote(null);
+    } finally {
+      setGooglePending(false);
+    }
+  }
+
+  function onDisconnect() {
+    startTransition(async () => {
+      setError(null);
+      setNote(null);
+      const result = await disconnectGooglePhotosAction();
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360 }}>
@@ -176,7 +279,7 @@ export function AlbumUploader({
           name="photo"
           accept="image/*"
           multiple
-          disabled={pending}
+          disabled={busy}
           onChange={(e) => onFilesChosen(e.currentTarget.files)}
           tabIndex={-1}
         />
@@ -208,21 +311,75 @@ export function AlbumUploader({
             families={families}
             selected={selected}
             onToggle={toggle}
-            disabled={pending}
+            disabled={busy}
           />
         </fieldset>
       ) : null}
 
-      <KindredButton
-        type="button"
-        variant="primary"
-        size="small"
-        disabled={addDisabled}
-        onClick={openPicker}
-        style={{ alignSelf: "flex-start" }}
-      >
-        {hub.album.addButton}
-      </KindredButton>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <KindredButton
+          type="button"
+          variant="primary"
+          size="small"
+          disabled={addDisabled}
+          onClick={openPicker}
+          style={{ alignSelf: "flex-start" }}
+        >
+          {hub.album.addButton}
+        </KindredButton>
+
+        {googlePhotosConfigured && !googlePhotosConnected ? (
+          <a
+            href="/api/google-photos/connect"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              fontWeight: 600,
+              color: "var(--accent)",
+              textDecoration: "none",
+              padding: "10px 4px",
+            }}
+          >
+            {hub.album.googlePhotosConnect}
+          </a>
+        ) : null}
+
+        {googlePhotosConfigured && googlePhotosConnected ? (
+          <>
+            <KindredButton
+              type="button"
+              variant="secondary"
+              size="small"
+              disabled={addDisabled}
+              onClick={() => void runGoogleImport()}
+            >
+              {hub.album.googlePhotosImport}
+            </KindredButton>
+            <KindredButton
+              type="button"
+              variant="ghost"
+              size="small"
+              disabled={busy}
+              onClick={onDisconnect}
+            >
+              {hub.album.googlePhotosDisconnect}
+            </KindredButton>
+          </>
+        ) : null}
+      </div>
+
+      {googlePhotosConfigured && googlePhotosConnected && googlePhotosEmail ? (
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-meta)",
+            margin: 0,
+          }}
+        >
+          {googlePhotosEmail}
+        </p>
+      ) : null}
 
       {error ? (
         <p

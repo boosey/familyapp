@@ -345,6 +345,32 @@ export const hub = {
     closeViewer: "Close",
     // ADR-0009 Phase 3 — start a telling ABOUT this photo (carries it forward as the story's subject).
     tellStoryOfPhoto: "Tell the story of this photo",
+    // ADR-0009 Phase 5 — Google Photos Picker (connect-once). Shown only when configured.
+    googlePhotosConnect: "Connect Google Photos",
+    googlePhotosImport: "Import from Google Photos",
+    googlePhotosDisconnect: "Disconnect Google Photos",
+    googlePhotosImporting: "Opening Google Photos…",
+    googlePhotosWaiting: "Waiting for your picks…",
+    googlePhotosImportFailed: "Couldn't import from Google Photos. Please try again.",
+    googlePhotosNotConnected: "Connect Google Photos first, then try importing.",
+    googlePhotosUnavailable: "Google Photos isn't available right now.",
+    googlePhotosPartial: (added: number, failed: number, skipped: number) => {
+      const parts: string[] = [];
+      parts.push(
+        `Added ${added} ${added === 1 ? "photo" : "photos"} from Google Photos.`,
+      );
+      if (failed > 0) {
+        parts.push(
+          `${failed} ${failed === 1 ? "photo" : "photos"} couldn't be added.`,
+        );
+      }
+      if (skipped > 0) {
+        parts.push(
+          `${skipped} ${skipped === 1 ? "video was" : "videos were"} skipped.`,
+        );
+      }
+      return parts.join(" ");
+    },
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.
