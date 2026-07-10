@@ -238,7 +238,16 @@ export function AlbumUploader({
       // window.open returns null EVEN WHEN the picker opened successfully (HTML/MDN), which
       // previously aborted the import before polling — picker tab open, photos never imported.
       // A sized `popup=yes` window also makes /autoclose more reliable than a full browser tab.
-      const pickerUrl = pickerUriForWeb(started.pickerUri);
+      // Sever opener after open (same protection as noopener) so the cross-origin picker cannot
+      // reverse-tabnab the hub; pickerUriForWeb also rejects non-Google hosts.
+      let pickerUrl: string;
+      try {
+        pickerUrl = pickerUriForWeb(started.pickerUri);
+      } catch {
+        setError(hub.album.googlePhotosImportFailed);
+        setNote(null);
+        return;
+      }
       const popup = window.open(
         pickerUrl,
         "chronicle-google-photos-picker",
@@ -248,6 +257,11 @@ export function AlbumUploader({
         setError(hub.album.googlePhotosPopupBlocked);
         setNote(null);
         return;
+      }
+      try {
+        popup.opener = null;
+      } catch {
+        /* ignore if the browser already isolated the browsing context */
       }
       setNote(hub.album.googlePhotosWaiting);
 
