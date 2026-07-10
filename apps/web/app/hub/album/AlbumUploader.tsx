@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { pickerUriForWeb } from "@chronicle/photos-google";
+import { pickerUriForWeb } from "@chronicle/photos-google/picker";
 import { uploadAlbumPhotoAction } from "./actions";
 import {
   completeGooglePhotosImportAction,

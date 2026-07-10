@@ -65,6 +65,9 @@
       "@chronicle/photos-google": [
         "../../packages/photos-google/src/index.ts"
       ],
+      "@chronicle/photos-google/picker": [
+        "../../packages/photos-google/src/picker.ts"
+      ],
       "@/*": [
         "./*"
       ]

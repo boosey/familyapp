@@ -13,6 +13,7 @@ const nextConfig = {
     "@chronicle/core",
     "@chronicle/capture",
     "@chronicle/storage",
+    "@chronicle/photos-google",
   ],
   // @chronicle/db reads packages/db/drizzle/{schema,invariants}.sql at RUNTIME (migrate.ts →
   // schemaSql(), used by applySchema/resetSchema AND — the load-bearing case — the boot-time
