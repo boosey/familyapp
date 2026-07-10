@@ -20,6 +20,7 @@ import {
   type S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { BuildMiddleware, MetadataBearer } from "@smithy/types";
 import {
   ObjectAlreadyExistsError,
   type MediaStorage,
@@ -71,45 +72,32 @@ export function r2ClientConfig(config: {
 
 /**
  * Belt-and-suspenders: strip flexible-checksum headers some SDK paths still attach even with
- * WHEN_REQUIRED (notably certain delete/get paths). Must run before signing.
+ * WHEN_REQUIRED (notably certain delete/get paths). Must run in the build step before signing.
  */
 export function attachR2ChecksumHeaderCompat(client: S3Client): void {
-  const strip = async (
-    args: { request?: { headers?: Record<string, string> } },
-    next: (args: unknown) => Promise<unknown>,
-  ) => {
-    const headers = args.request?.headers;
-    if (headers) {
-      for (const key of Object.keys(headers)) {
-        const lower = key.toLowerCase();
-        if (
-          lower.startsWith("x-amz-checksum-") ||
-          lower === "x-amz-sdk-checksum-algorithm" ||
-          lower === "x-amz-checksum-mode"
-        ) {
-          delete headers[key];
+  const stripChecksumHeaders: BuildMiddleware<object, MetadataBearer> =
+    (next) => async (args) => {
+      const request = args.request as { headers?: Record<string, string> };
+      if (request.headers) {
+        for (const key of Object.keys(request.headers)) {
+          const lower = key.toLowerCase();
+          if (
+            lower.startsWith("x-amz-checksum-") ||
+            lower === "x-amz-sdk-checksum-algorithm" ||
+            lower === "x-amz-checksum-mode"
+          ) {
+            delete request.headers[key];
+          }
         }
       }
-    }
-    return next(args);
-  };
+      return next(args);
+    };
 
-  try {
-    client.middlewareStack.addRelativeTo(
-      (next) => (args) => strip(args as { request?: { headers?: Record<string, string> } }, next),
-      {
-        name: "chronicleR2StripChecksumHeaders",
-        relation: "after",
-        toMiddleware: "flexibleChecksumsMiddleware",
-      },
-    );
-  } catch {
-    // flexibleChecksumsMiddleware is absent when WHEN_REQUIRED skips it — still strip at build.
-    client.middlewareStack.add(
-      (next) => (args) => strip(args as { request?: { headers?: Record<string, string> } }, next),
-      { step: "build", name: "chronicleR2StripChecksumHeaders", priority: "low" },
-    );
-  }
+  client.middlewareStack.add(stripChecksumHeaders, {
+    step: "build",
+    name: "chronicleR2StripChecksumHeaders",
+    priority: "low",
+  });
 }
 
 export class R2MediaStorage implements MediaStorage {

@@ -73,7 +73,7 @@ importers:
         version: 7.1.3
       inngest:
         specifier: ^3.54.0
-        version: 3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3)
+        version: 3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3)
       lucide-react:
         specifier: ^1.22.0
         version: 1.22.0(react@19.2.7)
@@ -261,7 +261,7 @@ importers:
         version: link:../pipeline
       inngest:
         specifier: ^3.54.0
-        version: 3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3)
+        version: 3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3)
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -278,6 +278,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.700.0
         version: 3.1075.0
+      '@smithy/types':
+        specifier: ^4.15.0
+        version: 4.15.0
     devDependencies:
       '@smithy/util-stream':
         specifier: ^4.7.2
@@ -6905,7 +6908,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  inngest@3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3):
+  inngest@3.54.2(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(next@15.5.19(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)(zod@4.4.3):
     dependencies:
       '@bufbuild/protobuf': 2.12.1
       '@inngest/ai': 0.1.7
