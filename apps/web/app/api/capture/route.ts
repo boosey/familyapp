@@ -11,10 +11,12 @@
  * `InvalidSessionError` (→ 401) on a bad/expired/revoked token. The account-cookie auth used by
  * the hub routes does not apply to this login-free surface.
  */
-import { ingestRecording, InvalidSessionError } from "@chronicle/capture";
+import { ingestRecording, InvalidSessionError, resolveLinkSession } from "@chronicle/capture";
 import { beginLogContext, plog, plogError, startTimer } from "@chronicle/pipeline";
 import { NextResponse } from "next/server";
+import { assertAnswerableAsk } from "@/lib/answerable-ask";
 import { getRuntime } from "@/lib/runtime";
+import { resolveSubjectPhotos, attachCarryForwardPhotos } from "@/lib/subject-photo";
 
 export const runtime = "nodejs";
 
@@ -48,6 +50,39 @@ export async function POST(request: Request): Promise<NextResponse> {
   // member's question). The approval write later flips the Ask to `answered` atomically.
   const askId = typeof askIdField === "string" && askIdField !== "" ? askIdField : undefined;
 
+  // ADR-0009 Phase 3: when answering an ask that has subject photos, the FIRST becomes the story's
+  // subject/cover (threaded into ingest) and the REST ride as accompaniment after ingest. Link-
+  // session has no client tell-a-photo hint (null). Resolve the narrator personId up front so
+  // carry-forward attach can run after ingest without extending IngestResult.
+  //
+  // IDOR guard: resolve the link session FIRST, then assert the ask is targeted at that narrator
+  // and still answerable (queued/routed) — same rules as the hub's assertAnswerableAsk — BEFORE
+  // resolveSubjectPhotos / ingest. Otherwise a valid token for Person A could bind Person B's ask
+  // (and its subject photos) onto A's story.
+  let subjectPhotoId: string | undefined;
+  let carryForward: string[] = [];
+  let narratorPersonId: string | undefined;
+  if (askId) {
+    const session = await resolveLinkSession(db, token);
+    if (!session) {
+      plogError("capture", "POST /api/capture: invalid session before ingest (401)");
+      return NextResponse.json({ ok: false }, { status: 401 });
+    }
+    narratorPersonId = session.personId;
+
+    const ask = await assertAnswerableAsk(db, askId, session.personId);
+    if (!ask.ok) {
+      plogError("capture", "POST /api/capture: ask not answerable for session narrator (403)", {
+        reason: ask.reason,
+      });
+      return NextResponse.json({ ok: false }, { status: 403 });
+    }
+
+    const photos = await resolveSubjectPhotos(db, askId, null);
+    subjectPhotoId = photos.subjectPhotoId;
+    carryForward = photos.carryForward;
+  }
+
   const totalTimer = startTimer();
   plog("capture", "POST /api/capture: received (link_session)", {
     bytes: bytes.byteLength,
@@ -65,6 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         contentType: audio.type || "audio/webm",
       },
       ...(askId !== undefined ? { askId } : {}),
+      ...(subjectPhotoId ? { subjectPhotoId } : {}),
     });
     storyId = result.storyId;
   } catch (err) {
@@ -79,6 +115,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
   plog("capture", "POST /api/capture: ingested → draft story created", { story: storyId });
+
+  // Answer→story carry-forward (ADR-0009 Phase 3): remaining ask subject photos as accompaniment.
+  // Best-effort — never blocks capture. narratorPersonId is set whenever askId was present.
+  if (narratorPersonId && carryForward.length > 0) {
+    await attachCarryForwardPhotos(db, storyId, carryForward, narratorPersonId);
+  }
 
   // Render BEFORE review (prose-provenance design): transcribe → polish so the approve page can
   // show L2 prose for the narrator to read and edit. Mirrors the in-hub recordAnswerAction.

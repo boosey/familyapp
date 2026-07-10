@@ -38,6 +38,8 @@ export type {
   NewJoinRequest,
   MockAuthUser,
   NewMockAuthUser,
+  GooglePhotosConnection,
+  NewGooglePhotosConnection,
   StoryView,
   NewStoryView,
   StoryFamily,

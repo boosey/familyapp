@@ -7,8 +7,6 @@
  * always derived from the server-side session.
  */
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { asks } from "@chronicle/db/schema";
 import {
   getStoryForViewer,
   approveAndShareStory,
@@ -25,8 +23,6 @@ import {
   appendFollowUpOutcome,
   latestUnresolvedDecision,
   listFollowUpDecisionsForStory,
-  listAskSubjectPhotos,
-  attachPhotoToStory,
   listActiveFamiliesForPerson,
 } from "@chronicle/core";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
@@ -50,8 +46,17 @@ import {
 } from "@chronicle/interviewer";
 import { resolveFollowUpPolicyForRequest } from "@/lib/follow-up-config";
 import { resolveComposeFamilies } from "@/lib/compose-scope";
+import { assertAnswerableAsk } from "@/lib/answerable-ask";
+import { resolveSubjectPhotos, attachCarryForwardPhotos } from "@/lib/subject-photo";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
+
+/** Map the shared ask-guard failure reasons onto hub copy for the signed-in answer surface. */
+function answerableAskError(reason: "not_for_you" | "already_answered"): { error: string } {
+  return {
+    error: reason === "not_for_you" ? hub.actions.notForYou : hub.actions.alreadyAnswered,
+  };
+}
 
 export type ActionResult = { error: string } | undefined;
 
@@ -133,94 +138,6 @@ function formField(formData: FormData, key: string): string | null {
 }
 
 /**
- * Ask-answerability guard, shared by the voice (`recordAnswerAction`) and generalized
- * (`composeStoryAction`) paths. Confirms the ask exists, is targeted at THIS person, and is still
- * answerable (queued/routed). On success returns the ask's question text (the follow-up evaluator's
- * seed prompt); on failure returns the `{ error }` the caller surfaces verbatim.
- *
- * Recording into an already-answered ask would create a dead draft whose Share can never close
- * (approveAndShareStory rejects a second answer for an already-answered ask) — SF-4 — so we reject
- * before ingesting anything.
- */
-async function assertAnswerableAsk(
-  db: Awaited<ReturnType<typeof getRuntime>>["db"],
-  askId: string,
-  personId: string,
-): Promise<{ questionText: string } | { error: string }> {
-  const [askRow] = await db
-    .select({
-      targetPersonId: asks.targetPersonId,
-      status: asks.status,
-      question: asks.questionText,
-    })
-    .from(asks)
-    .where(eq(asks.id, askId))
-    .limit(1);
-  if (!askRow || askRow.targetPersonId !== personId) {
-    return { error: hub.actions.notForYou };
-  }
-  if (askRow.status !== "queued" && askRow.status !== "routed") {
-    return { error: hub.actions.alreadyAnswered };
-  }
-  return { questionText: askRow.question };
-}
-
-/**
- * Resolve the story's SUBJECT photo (ADR-0009 Phase 3) for a new telling, plus any photos to carry
- * forward as accompaniment. Two independent origins, ask-photos taking precedence:
- *   - Answer→story carry-forward: when the answered ask HAS subject photos, the FIRST becomes the new
- *     story's subject/cover and the REST are attached as accompaniment (this fn returns them so the
- *     caller can attach after the story is created — the answerer is the ask target / co-member, so
- *     the core album-access gate passes).
- *   - Tell-a-photo: a self-initiated telling started from the album viewer carries a single
- *     `subjectPhotoId` (the client hint). It is NOT trusted for identity — the core write gate
- *     (`assertPersonCanAccessAlbumPhoto`, run inside ingest against the SERVER-resolved owner) is what
- *     enforces the owner can actually see it; a crafted id for an unseeable photo makes ingest throw.
- * `clientSubjectPhotoId` is ignored whenever the ask supplies photos (an answer isn't a tell-a-photo).
- */
-async function resolveSubjectPhotos(
-  db: Awaited<ReturnType<typeof getRuntime>>["db"],
-  askId: string | null,
-  clientSubjectPhotoId: string | null,
-): Promise<{ subjectPhotoId?: string; carryForward: string[] }> {
-  if (askId) {
-    const askPhotos = await listAskSubjectPhotos(db, askId);
-    if (askPhotos.length > 0) {
-      return { subjectPhotoId: askPhotos[0], carryForward: askPhotos.slice(1) };
-    }
-  }
-  if (clientSubjectPhotoId) {
-    return { subjectPhotoId: clientSubjectPhotoId, carryForward: [] };
-  }
-  return { carryForward: [] };
-}
-
-/**
- * Attach the carry-forward (non-subject) ask photos onto the freshly-created story as accompaniment.
- * Best-effort per photo: the subject/cover is already durable (inserted atomically at story creation),
- * so a hiccup attaching a secondary photo must never fail the answer. `attachedByPersonId` is the
- * SERVER-resolved answerer (the ask target / co-member), whom the core album-access gate authorizes.
- */
-async function attachCarryForwardPhotos(
-  db: Awaited<ReturnType<typeof getRuntime>>["db"],
-  storyId: string,
-  photoIds: string[],
-  answererPersonId: string,
-): Promise<void> {
-  for (const familyPhotoId of photoIds) {
-    try {
-      await attachPhotoToStory(db, { storyId, familyPhotoId, attachedByPersonId: answererPersonId });
-    } catch (err) {
-      plogError("answer", "carry-forward photo attach failed (non-fatal)", {
-        story: storyId,
-        photo: familyPhotoId,
-        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-      });
-    }
-  }
-}
-
-/**
  * Record a voice telling. When an `askId` is present, validates that the ask is targeted at the
  * signed-in person and is still answerable, then (flag ON) runs the follow-up mini-loop seeded by
  * the ask question. When `askId` is ABSENT it is a self-initiated voice telling (ADR-0007): there
@@ -248,7 +165,7 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
   let askQuestionText = "";
   if (askId) {
     const ask = await assertAnswerableAsk(db, askId, ctx.personId);
-    if ("error" in ask) return ask;
+    if (!ask.ok) return answerableAskError(ask.reason);
     askQuestionText = ask.questionText;
   }
 
@@ -396,7 +313,7 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
     if (text.trim().length === 0) return { error: hub.actions.invalidInput };
     if (askId) {
       const ask = await assertAnswerableAsk(db, askId, ctx.personId);
-      if ("error" in ask) return ask;
+      if (!ask.ok) return answerableAskError(ask.reason);
     }
 
     // ADR-0009 Phase 3 subject/carry-forward — same rules as the voice path (see resolveSubjectPhotos).

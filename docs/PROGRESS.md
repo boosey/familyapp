@@ -17,6 +17,48 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-09** — **Story Imagery Phase 5 COMPLETE** (connect-once + Picker each import). Slice A:
+  `google_photos_connections` schema + migration 0007; `@chronicle/photos-google` (OAuth, Picker,
+  AES-256-GCM token vault, `ScriptedGooglePhotosClient`). Slice B: web config/connection repo,
+  signed OAuth state cookie, `/api/google-photos/connect|callback`, album import actions
+  (`start`/`poll`/`complete`/`disconnect`), AlbumUploader Connect/Import/Disconnect (hidden when
+  unconfigured), `google-photos.server.test.ts`. Videos skipped in v1 (`skipped` count). PLAN.md
+  Phase 5 checked — Story Imagery 5-phase plan done.
+- **2026-07-09** — **Story Imagery Phase 5 COMPLETE** (connect-once Google Photos Picker).
+  `@chronicle/photos-google` (OAuth + Picker fetch-only + AES token vault + Scripted client);
+  `google_photos_connections` open-schema table + migration `0007`; web connect/callback routes,
+  album Connect/Import/Disconnect UI, import actions (start/poll/complete → `source='google_picker'`).
+  Security pass: redact OAuth error bodies (no token plaintext in logs); revoke prior refresh token
+  on reconnect. Tests: photos-google 20/20, web google-photos 14/14. PLAN.md Phase 5 checked.
+  Needs live Google Cloud OAuth client + env keys for real import (dev hides Google chrome when
+  unconfigured).
+- **2026-07-09** — **Story Imagery Phase 4 COMPLETE**. Ranking engine was already in tree
+  (`packages/pipeline/src/photo-ranker.ts`, `PhotoUnderstanding` + `ScriptedPhotoUnderstanding`,
+  `loadStoryPhotoEditorAction` ranks album + returns nudge, `StoryPhotosEditor` banner). Remaining
+  gap closed: web integration tests per contract Slice B §5 —
+  `apps/web/__tests__/story-photo-suggestion.server.test.ts` (caption match → first + nudge;
+  no match → recency + null nudge; year-arm silent reorder). PLAN.md Phase 4 checked; Phase 5
+  remains.
+- **2026-07-09** — **Story Imagery Phase 3 COMPLETE**. Hub path was already done (schema, core
+  subject/cover atomic write, tell-a-photo, ask picker, answer carry-forward, web compose tests).
+  Remaining gap closed: link-session `POST /api/capture` now resolves ask subject photos via shared
+  `apps/web/lib/subject-photo.ts` helpers (`resolveSubjectPhotos` / `attachCarryForwardPhotos`),
+  threads the first into `ingestRecording`, and attaches the rest as accompaniment after ingest.
+  IDOR fix: shared `assertAnswerableAsk` (`apps/web/lib/answerable-ask.ts`) runs before photo resolve
+  / ingest (session → target+status gate → photos); foreign `askId` → 403, zero stories. Tests:
+  `capture-subject-photo.server.test.ts` (happy + IDOR). Album-photo bytes on `/s/[token]` out of
+  scope (no account cookie). PLAN.md Phase 3 checked; Phases 4–5 remain.
+- **2026-07-09** — **Story Imagery Phase 2 CONFIRMED COMPLETE** (doc status lag closed). Already in
+  tree: `story_images` schema + one-cover invariant; `story-image-repository.ts` (attach/detach/
+  cover/reorder/list + `loadStoryCovers`); album Arm 2 accompaniment read; web `StoryPhotosEditor`
+  on pending_approval review + Feed cover (no empty placeholder) + story-detail gallery; soft-delete
+  → read-time un-attach. PLAN.md Phase 2 checked; Phases 3–5 remain.
+- **2026-07-09** — **Story Imagery Phase 1a + 1b CONFIRMED COMPLETE** (doc status lag closed). Code was
+  already in tree: `family_photos` / `family_photo_families` schema + snapshot, audited
+  `album-repository.ts` (create/list/authorize/get/caption/soft-delete; architecture allowlist),
+  write-once `family-photos/<uuid>` storage via hub server actions, hub Album tab + `/hub/album`
+  surface (upload, recency grid, caption edit, soft-delete), `/api/album-photo/[photoId]` byte route.
+  `album-repository.test.ts` 29/29 green. PLAN.md 1a/1b checkboxes marked done.
 - **2026-07-05** — **Story-share multi-family picker COMPLETE** on the `feat/multi-family-picker`
   branch. Retires the "story-compose has NO family-target picker" deferral from the family-scope-
   selector increment below: the web share/review step (self-authored tellings AND answers to asks)

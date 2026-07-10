@@ -44,6 +44,9 @@ importers:
       '@chronicle/llm-groq':
         specifier: workspace:*
         version: link:../../packages/llm-groq
+      '@chronicle/photos-google':
+        specifier: workspace:*
+        version: link:../../packages/photos-google
       '@chronicle/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
@@ -215,6 +218,15 @@ importers:
       '@chronicle/pipeline':
         specifier: workspace:*
         version: link:../pipeline
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(jsdom@29.1.1)(terser@5.48.0)
+
+  packages/photos-google:
     devDependencies:
       typescript:
         specifier: ^5.7.2

@@ -50,6 +50,13 @@
       "when": 1783350000000,
       "tag": "0006_follow_up_erasure_carveout",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783635822670,
+      "tag": "0007_wandering_the_hand",
+      "breakpoints": true
     }
   ]
 }

@@ -27,6 +27,8 @@ import type { Database } from "@chronicle/db";
 import { hub } from "@/app/_copy";
 import { AlbumUploader } from "./AlbumUploader";
 import { AlbumGrid } from "./AlbumGrid";
+import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
+import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection";
 
 export async function AlbumSurface({
   db,
@@ -43,6 +45,13 @@ export async function AlbumSurface({
   const viewer = ctx.kind === "account" ? ctx.personId : null;
 
   const active = viewer ? await listActiveFamiliesForPerson(db, viewer) : [];
+
+  // Phase 5: Google chrome only when env-configured. Connection status is per-viewer.
+  const googleConfigured = isGooglePhotosConfigured();
+  const googleConn =
+    googleConfigured && viewer
+      ? await getActiveGooglePhotosConnection(db, viewer)
+      : null;
 
   // Re-validate the hub scope against the viewer's OWN active families (a client-crafted `?scope=`
   // is never trusted); an unrecognized value falls back to "all". The families to show are ALL of
@@ -98,6 +107,9 @@ export async function AlbumSurface({
             families={active}
             currentFamilyId={uploadTargetFamilyId}
             scope={validScope}
+            googlePhotosConfigured={googleConfigured}
+            googlePhotosConnected={googleConn !== null}
+            googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
           />
         </div>
       ) : null}
