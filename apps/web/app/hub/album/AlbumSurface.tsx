@@ -34,11 +34,17 @@ export async function AlbumSurface({
   db,
   ctx,
   scope,
+  googlePhotosOauthConnected = false,
+  googlePhotosOauthError = null,
 }: {
   db: Database;
   ctx: AuthContext;
   /** The hub's single family scope: "all" (union across the viewer's families) or a family id. */
   scope: string;
+  /** OAuth callback landed with `?googlePhotos=connected` (hub album tab only). */
+  googlePhotosOauthConnected?: boolean;
+  /** OAuth callback error code from `?googlePhotosError=` (hub album tab only). */
+  googlePhotosOauthError?: string | null;
 }): Promise<React.ReactElement> {
   // Guard: only an account has a viewer identity. Callers only mount this for an account, but treat
   // anything else as "no viewer" (no families, no photos) rather than reaching for a personId.
@@ -99,17 +105,25 @@ export async function AlbumSurface({
         ? active[0]!.familyId
         : null;
 
+  // File upload needs an unambiguous target family. Google Photos connect is account-level and
+  // import still uses the family picker — show the uploader chrome when either path applies.
+  const showUploader =
+    active.length > 0 && (uploadTargetFamilyId !== null || googleConfigured);
+
   return (
     <>
-      {uploadTargetFamilyId ? (
+      {showUploader ? (
         <div style={{ margin: "0 0 24px" }}>
           <AlbumUploader
             families={active}
-            currentFamilyId={uploadTargetFamilyId}
+            currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
             scope={validScope}
+            showFileUpload={uploadTargetFamilyId !== null}
             googlePhotosConfigured={googleConfigured}
             googlePhotosConnected={googleConn !== null}
             googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+            googlePhotosOauthConnected={googlePhotosOauthConnected}
+            googlePhotosOauthError={googlePhotosOauthError}
           />
         </div>
       ) : null}

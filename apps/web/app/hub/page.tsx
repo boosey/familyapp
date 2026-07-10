@@ -45,7 +45,12 @@ export const dynamic = "force-dynamic";
 export default async function HubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; scope?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    scope?: string;
+    googlePhotos?: string;
+    googlePhotosError?: string;
+  }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -69,7 +74,15 @@ export default async function HubPage({
   if (dest !== "/hub") redirect(dest);
 
   /* ── Data ───────────────────────────────────────────────────────────────── */
-  const { tab: tabParam, scope: scopeParam } = await searchParams;
+  const {
+    tab: tabParam,
+    scope: scopeParam,
+    googlePhotos: googlePhotosParam,
+    googlePhotosError: googlePhotosErrorParam,
+  } = await searchParams;
+  const googlePhotosOauthConnected = googlePhotosParam === "connected";
+  const googlePhotosOauthError =
+    typeof googlePhotosErrorParam === "string" ? googlePhotosErrorParam : null;
   const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
@@ -273,7 +286,15 @@ export default async function HubPage({
               scope={scope}
             />
           )}
-          {activeTab === "album" && <AlbumSurface db={db} ctx={ctx} scope={scope} />}
+          {activeTab === "album" && (
+            <AlbumSurface
+              db={db}
+              ctx={ctx}
+              scope={scope}
+              googlePhotosOauthConnected={googlePhotosOauthConnected}
+              googlePhotosOauthError={googlePhotosOauthError}
+            />
+          )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && <AskTab scope={scope} />}
           {activeTab === "asks" && (

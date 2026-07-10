@@ -20,7 +20,7 @@
  * selected (the button is disabled otherwise). A solo-family contributor sees NO checkboxes — the
  * server defaults to the sole family (behavior unchanged).
  */
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAlbumPhotoAction } from "./actions";
 import {
@@ -46,13 +46,32 @@ const MAX_BATCH_FILES = 30;
 const PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const PICKER_POLL_INTERVAL_MS = 2000;
 
+/** Map OAuth callback error codes to user-facing copy. */
+function oauthErrorMessage(code: string): string {
+  switch (code) {
+    case "denied":
+      return hub.album.googlePhotosOAuthDenied;
+    case "invalid_state":
+      return hub.album.googlePhotosOAuthInvalidState;
+    case "not_configured":
+      return hub.album.googlePhotosUnavailable;
+    case "exchange_failed":
+      return hub.album.googlePhotosOAuthExchangeFailed;
+    default:
+      return hub.album.googlePhotosOAuthExchangeFailed;
+  }
+}
+
 export function AlbumUploader({
   families,
   currentFamilyId,
   scope = null,
+  showFileUpload = true,
   googlePhotosConfigured = false,
   googlePhotosConnected = false,
   googlePhotosEmail = null,
+  googlePhotosOauthConnected = false,
+  googlePhotosOauthError = null,
 }: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
@@ -62,12 +81,18 @@ export function AlbumUploader({
    * absent) the default falls back to the current album on screen.
    */
   scope?: string | null;
+  /** When false, hide the OS file-upload button (multi-family "all" scope). Google import may still show. */
+  showFileUpload?: boolean;
   /** When false (default), no Google Photos chrome — file upload only. */
   googlePhotosConfigured?: boolean;
   /** Active encrypted connection for this person. */
   googlePhotosConnected?: boolean;
   /** Optional Google account email for a quiet status line. */
   googlePhotosEmail?: string | null;
+  /** One-shot success flash after OAuth callback (`?googlePhotos=connected`). */
+  googlePhotosOauthConnected?: boolean;
+  /** One-shot error flash after OAuth callback (`?googlePhotosError=`). */
+  googlePhotosOauthError?: string | null;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,10 +101,32 @@ export function AlbumUploader({
   const [error, setError] = useState<string | null>(null);
   // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
   const [note, setNote] = useState<string | null>(null);
+  const oauthFlashHandled = useRef(false);
+
+  // Surface OAuth callback flash once, then strip the query params so a refresh doesn't repeat it.
+  useEffect(() => {
+    if (oauthFlashHandled.current) return;
+    if (!googlePhotosOauthConnected && !googlePhotosOauthError) return;
+    oauthFlashHandled.current = true;
+
+    if (googlePhotosOauthConnected) {
+      setError(null);
+      setNote(hub.album.googlePhotosConnectedSuccess);
+    } else if (googlePhotosOauthError) {
+      setNote(null);
+      setError(oauthErrorMessage(googlePhotosOauthError));
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("googlePhotos");
+    url.searchParams.delete("googlePhotosError");
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    router.replace(next);
+  }, [googlePhotosOauthConnected, googlePhotosOauthError, router]);
   // Multi-family picker state. Seed from the hub scope when it names a concrete family (shared rule
   // with the ask picker via `seedComposeFamilies`), else fall back to ONLY the current album context
   // (never "all"). A concrete non-"all" family scope wins; "all" defers to the current album.
-  const showPicker = families.length > 1;
+  const showPicker = families.length > 1 && (showFileUpload || googlePhotosConfigured);
   const familyIds = families.map((f) => f.familyId);
   const seed = () => {
     if (scope && scope !== "all") {
@@ -172,6 +219,8 @@ export function AlbumUploader({
   // >=1 album must stay selected when the picker is shown, and never while an upload is in flight.
   const busy = pending || googlePending;
   const addDisabled = busy || (showPicker && selected.size === 0);
+  const importDisabled =
+    busy || (families.length > 1 && selected.size === 0);
 
   async function runGoogleImport() {
     setError(null);
@@ -259,31 +308,33 @@ export function AlbumUploader({
     <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360 }}>
       {/* Hidden file input — the "Add to album" button clicks it programmatically, so no visible
           native "choose files" control appears. The label keeps it accessibly named. */}
-      <label
-        style={{
-          position: "absolute",
-          width: 1,
-          height: 1,
-          padding: 0,
-          margin: -1,
-          overflow: "hidden",
-          clip: "rect(0, 0, 0, 0)",
-          whiteSpace: "nowrap",
-          border: 0,
-        }}
-      >
-        {hub.album.addLabel}
-        <input
-          ref={fileInputRef}
-          type="file"
-          name="photo"
-          accept="image/*"
-          multiple
-          disabled={busy}
-          onChange={(e) => onFilesChosen(e.currentTarget.files)}
-          tabIndex={-1}
-        />
-      </label>
+      {showFileUpload ? (
+        <label
+          style={{
+            position: "absolute",
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: "hidden",
+            clip: "rect(0, 0, 0, 0)",
+            whiteSpace: "nowrap",
+            border: 0,
+          }}
+        >
+          {hub.album.addLabel}
+          <input
+            ref={fileInputRef}
+            type="file"
+            name="photo"
+            accept="image/*"
+            multiple
+            disabled={busy}
+            onChange={(e) => onFilesChosen(e.currentTarget.files)}
+            tabIndex={-1}
+          />
+        </label>
+      ) : null}
 
       {showPicker ? (
         <fieldset
@@ -317,16 +368,18 @@ export function AlbumUploader({
       ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <KindredButton
-          type="button"
-          variant="primary"
-          size="small"
-          disabled={addDisabled}
-          onClick={openPicker}
-          style={{ alignSelf: "flex-start" }}
-        >
-          {hub.album.addButton}
-        </KindredButton>
+        {showFileUpload ? (
+          <KindredButton
+            type="button"
+            variant="primary"
+            size="small"
+            disabled={addDisabled}
+            onClick={openPicker}
+            style={{ alignSelf: "flex-start" }}
+          >
+            {hub.album.addButton}
+          </KindredButton>
+        ) : null}
 
         {googlePhotosConfigured && !googlePhotosConnected ? (
           <a
@@ -350,7 +403,7 @@ export function AlbumUploader({
               type="button"
               variant="secondary"
               size="small"
-              disabled={addDisabled}
+              disabled={importDisabled}
               onClick={() => void runGoogleImport()}
             >
               {hub.album.googlePhotosImport}

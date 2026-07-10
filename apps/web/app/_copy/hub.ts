@@ -354,6 +354,13 @@ export const hub = {
     googlePhotosImportFailed: "Couldn't import from Google Photos. Please try again.",
     googlePhotosNotConnected: "Connect Google Photos first, then try importing.",
     googlePhotosUnavailable: "Google Photos isn't available right now.",
+    googlePhotosConnectedSuccess:
+      "Google Photos connected. You can import photos any time.",
+    googlePhotosOAuthDenied: "Google Photos connection was cancelled.",
+    googlePhotosOAuthInvalidState:
+      "That connection link expired. Please try connecting again.",
+    googlePhotosOAuthExchangeFailed:
+      "Couldn't finish connecting Google Photos. Please try again.",
     googlePhotosPartial: (added: number, failed: number, skipped: number) => {
       const parts: string[] = [];
       parts.push(

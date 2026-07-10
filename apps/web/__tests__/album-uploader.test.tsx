@@ -11,10 +11,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AlbumUploader } from "@/app/hub/album/AlbumUploader";
+import { hub } from "@/app/_copy";
 
 const refresh = vi.fn();
+const replace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh }),
+  useRouter: () => ({ refresh, replace }),
 }));
 
 const uploadAlbumPhotoAction = vi.fn(
@@ -26,6 +28,18 @@ const uploadAlbumPhotoAction = vi.fn(
 );
 vi.mock("@/app/hub/album/actions", () => ({
   uploadAlbumPhotoAction: (...args: unknown[]) => uploadAlbumPhotoAction(...args),
+}));
+
+const startGooglePhotosImportAction = vi.fn();
+const pollGooglePhotosImportAction = vi.fn();
+const completeGooglePhotosImportAction = vi.fn();
+const disconnectGooglePhotosAction = vi.fn();
+vi.mock("@/app/hub/album/google-photos-actions", () => ({
+  startGooglePhotosImportAction: (...args: unknown[]) => startGooglePhotosImportAction(...args),
+  pollGooglePhotosImportAction: (...args: unknown[]) => pollGooglePhotosImportAction(...args),
+  completeGooglePhotosImportAction: (...args: unknown[]) =>
+    completeGooglePhotosImportAction(...args),
+  disconnectGooglePhotosAction: (...args: unknown[]) => disconnectGooglePhotosAction(...args),
 }));
 
 afterEach(() => {
@@ -268,5 +282,64 @@ describe("AlbumUploader multi-family picker", () => {
     );
     expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+  });
+});
+
+describe("AlbumUploader Google Photos", () => {
+  it("shows Connect when configured but not connected", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+      />,
+    );
+    const connect = screen.getByRole("link", { name: hub.album.googlePhotosConnect });
+    expect(connect.getAttribute("href")).toBe("/api/google-photos/connect");
+    expect(screen.queryByRole("button", { name: hub.album.googlePhotosImport })).toBeNull();
+  });
+
+  it("shows Import and Disconnect when connected", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    expect(screen.getByRole("button", { name: hub.album.googlePhotosImport })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.album.googlePhotosDisconnect })).toBeTruthy();
+    expect(screen.getByText("user@gmail.com")).toBeTruthy();
+  });
+
+  it("hides file upload but keeps Google chrome when showFileUpload is false", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        showFileUpload={false}
+        googlePhotosConfigured
+      />,
+    );
+    expect(screen.queryByRole("button", { name: hub.album.addButton })).toBeNull();
+    expect(screen.getByRole("link", { name: hub.album.googlePhotosConnect })).toBeTruthy();
+  });
+
+  it("surfaces OAuth connected flash and strips query params", async () => {
+    window.history.replaceState({}, "", "/hub?tab=album&googlePhotos=connected");
+
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosOauthConnected
+      />,
+    );
+
+    expect(await screen.findByText(hub.album.googlePhotosConnectedSuccess)).toBeTruthy();
+    expect(replace).toHaveBeenCalledWith("/hub?tab=album");
   });
 });

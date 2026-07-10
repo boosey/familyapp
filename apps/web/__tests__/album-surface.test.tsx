@@ -13,7 +13,7 @@
  * The DB reads (active families, album photos, steward) run for real against PGlite, mirroring the
  * album.server.test.ts seed helpers.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/app/hub/album/AlbumGrid", () => ({
@@ -36,11 +36,23 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
   AlbumUploader: ({
     families,
     currentFamilyId,
+    showFileUpload,
+    googlePhotosConfigured,
+    googlePhotosConnected,
   }: {
     families: Array<{ familyId: string; familyName: string }>;
     currentFamilyId: string;
+    showFileUpload?: boolean;
+    googlePhotosConfigured?: boolean;
+    googlePhotosConnected?: boolean;
   }) => (
-    <div data-testid="album-uploader" data-current-family={currentFamilyId}>
+    <div
+      data-testid="album-uploader"
+      data-current-family={currentFamilyId}
+      data-show-file-upload={String(showFileUpload ?? true)}
+      data-google-configured={String(!!googlePhotosConfigured)}
+      data-google-connected={String(!!googlePhotosConnected)}
+    >
       {families.map((f) => (
         <span key={f.familyId} data-uploader-family={f.familyId}>
           {f.familyName}
@@ -48,6 +60,16 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
       ))}
     </div>
   ),
+}));
+
+const isGooglePhotosConfigured = vi.fn(() => false);
+const getActiveGooglePhotosConnection = vi.fn(async () => null);
+vi.mock("@/lib/google-photos-config", () => ({
+  isGooglePhotosConfigured: () => isGooglePhotosConfigured(),
+}));
+vi.mock("@/lib/google-photos-connection", () => ({
+  getActiveGooglePhotosConnection: (...args: unknown[]) =>
+    getActiveGooglePhotosConnection(...args),
 }));
 
 import { createTestDatabase, type Database } from "@chronicle/db";
@@ -100,6 +122,11 @@ async function render(db: Database, ctx: AuthContext, scope: string): Promise<st
 }
 
 describe("AlbumSurface", () => {
+  beforeEach(() => {
+    isGooglePhotosConfigured.mockReturnValue(false);
+    getActiveGooglePhotosConnection.mockResolvedValue(null);
+  });
+
   it("renders NO internal family switcher — the hub selector owns family scope now", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
@@ -183,5 +210,30 @@ describe("AlbumSurface", () => {
     const html = await render(db, account(viewer), "not-a-family-of-mine");
 
     expect(html).toContain(`data-photo-id="${photoA}"`);
+  });
+
+  it("shows Google Photos chrome without file upload when scope=all and Google is configured", async () => {
+    isGooglePhotosConfigured.mockReturnValue(true);
+    getActiveGooglePhotosConnection.mockResolvedValue({
+      personId: "viewer",
+      encryptedRefreshToken: "enc",
+      googleAccountEmail: "user@gmail.com",
+      connectedAt: new Date(),
+      revokedAt: null,
+    });
+
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
+    await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+
+    const html = await render(db, account(viewer), "all");
+
+    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain('data-show-file-upload="false"');
+    expect(html).toContain('data-google-configured="true"');
+    expect(html).toContain('data-google-connected="true"');
   });
 });
