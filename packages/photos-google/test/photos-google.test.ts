@@ -367,6 +367,7 @@ describe("listPickedPhotos", () => {
       },
     ]);
     expect(result.skipped).toBe(1);
+    expect(result.rejected).toBe(0);
     const url = new URL(String(fetchSpy.mock.calls[0]![0]));
     expect(url.origin + url.pathname).toBe(
       "https://photospicker.googleapis.com/v1/mediaItems",
@@ -410,7 +411,36 @@ describe("listPickedPhotos", () => {
     });
     expect(result.photos.map((p) => p.id)).toEqual(["p1", "p2"]);
     expect(result.skipped).toBe(0);
+    expect(result.rejected).toBe(0);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+  it("keeps PHOTO items when mimeType is missing (filename / default fallback)", async () => {
+    const fetchSpy = fetchStub(async () =>
+      jsonResponse({
+        mediaItems: [
+          {
+            id: "p1",
+            type: "PHOTO",
+            mediaFile: {
+              baseUrl: "https://lh3.googleusercontent.com/p/a",
+              filename: "vacation.jpg",
+            },
+          },
+        ],
+      }),
+    );
+    const result = await listPickedPhotos("access", "sess-1", {
+      fetch: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.photos).toEqual([
+      {
+        id: "p1",
+        mimeType: "image/jpeg",
+        filename: "vacation.jpg",
+        baseUrl: "https://lh3.googleusercontent.com/p/a",
+      },
+    ]);
+    expect(result.rejected).toBe(0);
   });
 });
 

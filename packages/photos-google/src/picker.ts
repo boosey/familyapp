@@ -79,7 +79,7 @@ export async function listPickedPhotosWhenReady(
   accessToken: string,
   sessionId: string,
   opts?: { fetch?: FetchLike },
-): Promise<{ photos: PickedPhoto[]; skipped: number }> {
+): Promise<{ photos: PickedPhoto[]; skipped: number; rejected: number }> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < LIST_NOT_READY_MAX_ATTEMPTS; attempt++) {
     try {
@@ -224,18 +224,47 @@ function isPhotoItem(item: MediaItemApi): boolean {
   return mime.startsWith("image/");
 }
 
+function inferMimeFromFilename(filename: string | undefined | null): string | null {
+  if (!filename) return null;
+  const ext = filename.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "heic":
+    case "heif":
+      return "image/heic";
+    default:
+      return null;
+  }
+}
+
+function resolvePhotoMimeType(item: MediaItemApi): string | null {
+  const raw = item.mediaFile?.mimeType?.trim();
+  if (raw) return raw;
+  return inferMimeFromFilename(item.mediaFile?.filename ?? null);
+}
+
 /**
  * List PHOTO items only (skip video). Paginates until exhausted.
  * `skipped` counts VIDEO (or non-image) items the album import will not take.
+ * `rejected` counts PHOTO-shaped items missing required fields (id/baseUrl).
  */
 export async function listPickedPhotos(
   accessToken: string,
   sessionId: string,
   opts?: { fetch?: FetchLike },
-): Promise<{ photos: PickedPhoto[]; skipped: number }> {
+): Promise<{ photos: PickedPhoto[]; skipped: number; rejected: number }> {
   const fetchImpl = resolveFetch(opts);
   const out: PickedPhoto[] = [];
   let skipped = 0;
+  let rejected = 0;
   let pageToken: string | undefined;
 
   do {
@@ -262,8 +291,11 @@ export async function listPickedPhotos(
         continue;
       }
       const baseUrl = item.mediaFile?.baseUrl;
-      const mimeType = item.mediaFile?.mimeType;
-      if (!item.id || !baseUrl || !mimeType) continue;
+      const mimeType = resolvePhotoMimeType(item) ?? "image/jpeg";
+      if (!item.id || !baseUrl) {
+        rejected += 1;
+        continue;
+      }
       out.push({
         id: item.id,
         mimeType,
@@ -274,7 +306,7 @@ export async function listPickedPhotos(
     pageToken = body.nextPageToken;
   } while (pageToken);
 
-  return { photos: out, skipped };
+  return { photos: out, skipped, rejected };
 }
 
 /**

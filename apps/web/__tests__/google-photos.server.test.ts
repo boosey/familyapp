@@ -281,7 +281,7 @@ describe("import actions", () => {
     fd.append("sessionId", "sess-1");
     fd.append("familyIds", familyId);
     const completed = await completeGooglePhotosImportAction(fd);
-    expect(completed).toEqual({ ok: true, added: 1, failed: 0, skipped: 1 });
+    expect(completed).toEqual({ ok: true, added: 1, failed: 0, skipped: 1, rejected: 0 });
 
     const album = await listAlbumPhotos(runtimeDb, account(personId), familyId);
     expect(album).toHaveLength(1);

@@ -49,7 +49,7 @@ export type PollImportResult =
   | { ok: true; mediaItemsSet: boolean }
   | GooglePhotosActionError;
 export type CompleteImportResult =
-  | { ok: true; added: number; failed: number; skipped: number }
+  | { ok: true; added: number; failed: number; skipped: number; rejected: number }
   | GooglePhotosActionError;
 
 type AppRuntime = Awaited<ReturnType<typeof getRuntime>>;
@@ -245,13 +245,20 @@ export async function completeGooglePhotosImportAction(
     if (!token.ok) return { error: token.error };
 
     const deps = getGooglePhotosDeps();
-    const { photos, skipped } = await deps.listPickedPhotos(
+    const { photos, skipped, rejected } = await deps.listPickedPhotos(
       token.accessToken,
       sessionId,
     );
     console.info(
-      `[google-photos/import:complete] listed ${photos.length} photo(s), skipped ${skipped}`,
+      `[google-photos/import:complete] listed ${photos.length} photo(s), skipped ${skipped}, rejected ${rejected}`,
     );
+
+    if (photos.length === 0) {
+      if (skipped > 0) {
+        return { ok: true, added: 0, failed: 0, skipped, rejected };
+      }
+      return { error: hub.album.googlePhotosNothingImported };
+    }
 
     const { storage, db } = gate.runtime;
     let added = 0;
@@ -301,7 +308,7 @@ export async function completeGooglePhotosImportAction(
     if (added === 0 && photos.length > 0) {
       return { error: hub.actions.photoUploadFailed };
     }
-    return { ok: true, added, failed, skipped };
+    return { ok: true, added, failed, skipped, rejected };
   } catch (err) {
     logGooglePhotosImportError("complete", err);
     return { error: googlePhotosImportErrorFor(err) };

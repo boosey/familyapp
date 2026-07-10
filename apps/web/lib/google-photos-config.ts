@@ -119,7 +119,7 @@ export interface GooglePhotosDeps {
     accessToken: string,
     sessionId: string,
     opts?: { fetch?: GooglePhotosFetch },
-  ) => Promise<{ photos: PickedPhoto[]; skipped: number }>;
+  ) => Promise<{ photos: PickedPhoto[]; skipped: number; rejected: number }>;
   downloadPickedPhoto: (
     accessToken: string,
     item: PickedPhoto,

@@ -358,6 +358,8 @@ export const hub = {
       "Your browser blocked the Google Photos window. Allow pop-ups for this site, then try again.",
     googlePhotosReconnect:
       "Your Google Photos connection needs to be refreshed. Disconnect, then connect again.",
+    googlePhotosNothingImported:
+      "Google Photos finished, but no photos came through. Try again with still photos (not videos), or pick fewer at a time.",
     googlePhotosNotConnected: "Connect Google Photos first, then try importing.",
     googlePhotosUnavailable: "Google Photos isn't available right now.",
     googlePhotosConnectedSuccess:

@@ -29,7 +29,7 @@ export interface ScriptedGooglePhotosClientOptions {
   createSession?: PickerSession | Error;
   getSession?: (PickerSession & { mediaItemsSet: boolean }) | Error;
   /** Photos to return, or a full `{ photos, skipped }` result, or an Error. */
-  listPhotos?: PickedPhoto[] | { photos: PickedPhoto[]; skipped: number } | Error;
+  listPhotos?: PickedPhoto[] | { photos: PickedPhoto[]; skipped: number; rejected?: number } | Error;
   /** Used when `listPhotos` is a bare array (default 0). */
   listSkipped?: number;
   download?: ScriptedDownloadResult | Error;
@@ -110,11 +110,13 @@ export class ScriptedGooglePhotosClient {
   async listPickedPhotos(
     accessToken: string,
     sessionId: string,
-  ): Promise<{ photos: PickedPhoto[]; skipped: number }> {
+  ): Promise<{ photos: PickedPhoto[]; skipped: number; rejected: number }> {
     this.calls.push({ op: "listPickedPhotos", args: [accessToken, sessionId] });
     const r = this.script.listPhotos;
     if (r instanceof Error) throw r;
-    if (r && !Array.isArray(r) && "photos" in r) return r;
+    if (r && !Array.isArray(r) && "photos" in r) {
+      return { photos: r.photos, skipped: r.skipped, rejected: r.rejected ?? 0 };
+    }
     const photos =
       (Array.isArray(r) ? r : null) ??
       [
@@ -125,7 +127,7 @@ export class ScriptedGooglePhotosClient {
           baseUrl: "https://lh3.googleusercontent.com/p/scripted",
         },
       ];
-    return { photos, skipped: this.script.listSkipped ?? 0 };
+    return { photos, skipped: this.script.listSkipped ?? 0, rejected: 0 };
   }
 
   async downloadPickedPhoto(
