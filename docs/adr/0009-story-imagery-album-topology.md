@@ -36,13 +36,21 @@ consent for that family to see it" stays uniform; album browse stays consistent.
 
 ### Import, not sync — there is no "photo-account connection" on web
 
+> **Revised 2026-07-11 (partially superseded).** The "no stored refresh token" clause below was
+> overtaken by a shipped **connect-once Connection** model: Google Photos import now stores an
+> *encrypted refresh token* (`google_photos_connections`) so the user authorizes once rather than
+> per import. The load-bearing claim of this section still holds — import is **copy-bytes, not sync**:
+> a Connection only mints short-lived Picker access; it grants **no background access and no
+> whole-library browse**. See CONTEXT.md § **Connection** and ADR-0015.
+
 A photo enters the album by **import**, which always **copies bytes** into family object storage and
 **never** stores a live reference to a remote library. `family_photos.source`
 (`upload` | `google_picker` | …) records provenance only.
 
 - **Google Photos** = a **Picker** import: Google removed the broad Library-API read scopes in 2025
   (403 for third parties), so the only sanctioned path is the Picker API — the user picks items in
-  Google's hosted picker and we copy those bytes. No stored refresh token, no background sync, no
+  Google's hosted picker and we copy those bytes. Backed by a connect-once **Connection** (an
+  encrypted refresh token; see the revision note above) — but still no background sync and no
   whole-library browse.
 - **Apple Photos** = the **OS file picker** (which already offers the device photo library); there is
   no web Photos API at all. Indistinguishable from an `upload`. A true on-device PhotoKit integration

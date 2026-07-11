@@ -218,14 +218,22 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   "private photo". (See ADR-0009.)
 - **Photo import** — the single way a photo enters the album, from one of several **sources**
   (`upload` | `google_picker` | ... ). Import always **copies the bytes** into the family album
-  (write-once object storage); it never stores a live reference to an external library. There is no
-  "connect your photo account" concept on web: **Google Photos** is a *Picker* import (the user picks
-  items in Google's hosted picker; we copy those bytes; no stored refresh token, no background sync,
-  no whole-library browse — Google removed the broad Library-API read scopes in 2025), and **Apple
-  Photos** has no web API at all, so on web it is simply the OS file picker (which already offers the
-  device photo library) — indistinguishable from an `upload`. A true on-device PhotoKit integration
-  is possible only inside a future native iOS app and is out of scope. The photo's `source` is
-  recorded for provenance; it changes nothing about how the album row behaves afterward.
+  (write-once object storage); it never stores a live reference to an external library. **Google
+  Photos** is a *Picker* import backed by a connect-once **Connection**: the user authorizes once (an
+  encrypted refresh token is stored so they need not re-authorize each import), then picks items in
+  Google's hosted picker and we copy those bytes. No background sync, no whole-library browse — Google
+  removed the broad Library-API read scopes in 2025. **Apple Photos** has no web API at all, so on web
+  it is simply the OS file picker (which already offers the device photo library) — indistinguishable
+  from an `upload`. A true on-device PhotoKit integration is possible only inside a future native iOS
+  app and is out of scope. The photo's `source` is recorded for provenance; it changes nothing about
+  how the album row behaves afterward.
+- **Connection** — an account-level, revocable authorization linking a **Person** to an external photo
+  **Source** (currently only Google Photos), holding an encrypted refresh token so imports need not
+  re-authorize each time. **Not family-scoped** (unlike **Membership**): one Person, at most one active
+  Connection per source, independent of any Family. *Connect* establishes it (OAuth, connect-once);
+  *disconnect* revokes the token at the provider and deletes the stored credential. A Connection enables
+  Picker imports; it never grants background access to the external library. Managed by the Person who
+  owns it — surfaced in the album (where it is used) though it belongs to the Account, not the Family.
 - **Contributor** — the Person who uploaded a photo. A photo has a contributor, **not an owner**:
   uploading IS consent for any family member to view or use it, and no further consent is asked to
   reuse it on any story within that family. (This is the one asset that departs from the CONTEXT
