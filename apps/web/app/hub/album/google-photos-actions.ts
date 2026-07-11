@@ -19,6 +19,7 @@ import {
   GooglePhotosOAuthError,
   GooglePhotosPickerError,
   parsePickerDurationMs,
+  type PickedPhoto,
 } from "@chronicle/photos-google";
 import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
@@ -33,6 +34,10 @@ import {
   disconnectGooglePhotosConnection,
   getActiveGooglePhotosConnection,
 } from "@/lib/google-photos-connection";
+import type {
+  ImportOnePhotoResult,
+  ListGooglePhotosImportResult,
+} from "./import-progress";
 
 export type GooglePhotosActionError = { error: string };
 export type DisconnectResult = { ok: true } | GooglePhotosActionError;
@@ -334,5 +339,129 @@ export async function completeGooglePhotosImportAction(
   } catch (err) {
     logGooglePhotosImportError("complete", err);
     return { error: googlePhotosImportErrorFor(err) };
+  }
+}
+
+/**
+ * The list-first half of the Google split (ADR-0015 · F2). Lists the picked items and returns exact-N
+ * token-gated handles so the client can render exactly N placeholder tiles before any download begins.
+ * `baseUrl` is useless without the server-held access token, so returning it is a token-gated handle,
+ * not a credential leak. Count 0 is NOT an error — the client decides what to show.
+ */
+export async function listGooglePhotosImportAction(
+  sessionId: string,
+): Promise<ListGooglePhotosImportResult> {
+  if (!isGooglePhotosConfigured()) {
+    return { error: hub.album.googlePhotosUnavailable };
+  }
+  if (typeof sessionId !== "string" || sessionId === "") {
+    return { error: hub.actions.invalidInput };
+  }
+  const gate = await requireAccount();
+  if (!gate.ok) return { error: gate.error };
+
+  try {
+    const token = await resolveAccessToken(gate.personId, gate.runtime.db);
+    if (!token.ok) return { error: token.error };
+    const deps = getGooglePhotosDeps();
+    const { photos, skipped, rejected } = await deps.listPickedPhotos(
+      token.accessToken,
+      sessionId,
+    );
+    const items = photos.map((p) => ({
+      id: p.id,
+      mimeType: p.mimeType,
+      filename: p.filename,
+      baseUrl: p.baseUrl,
+    }));
+    return { ok: true, count: items.length, items, skipped, rejected };
+  } catch (err) {
+    logGooglePhotosImportError("complete", err);
+    return { error: googlePhotosImportErrorFor(err) };
+  }
+}
+
+/**
+ * The per-item half of the Google split (ADR-0015 · F2). Takes ONE token-gated handle (from
+ * `listGooglePhotosImportAction`), re-resolves auth + re-validates family membership server-side
+ * (identity and target are NEVER trusted), then downloads → EXIF → storage.put → createAlbumPhoto.
+ * The client only ever passes the `baseUrl` handle; the server holds the access token — an access
+ * token is never sent or accepted from the client.
+ */
+export async function importOneGooglePhotoAction(
+  formData: FormData,
+): Promise<ImportOnePhotoResult> {
+  if (!isGooglePhotosConfigured()) {
+    return { error: hub.album.googlePhotosUnavailable };
+  }
+  const gate = await requireAccount();
+  if (!gate.ok) return { error: gate.error };
+
+  const id = formData.get("id");
+  const baseUrl = formData.get("baseUrl");
+  if (
+    typeof id !== "string" ||
+    id === "" ||
+    typeof baseUrl !== "string" ||
+    baseUrl === ""
+  ) {
+    return { error: hub.actions.invalidInput };
+  }
+  const rawMime = formData.get("mimeType");
+  const mimeType =
+    typeof rawMime === "string" && rawMime !== "" ? rawMime : "image/jpeg";
+  const rawFilename = formData.get("filename");
+  const filename =
+    typeof rawFilename === "string" && rawFilename !== "" ? rawFilename : null;
+
+  const families = await resolveFamilyIds(
+    gate.runtime.db,
+    gate.personId,
+    formData,
+  );
+  if ("error" in families) return { error: families.error };
+
+  try {
+    const token = await resolveAccessToken(gate.personId, gate.runtime.db);
+    if (!token.ok) return { error: token.error };
+
+    const deps = getGooglePhotosDeps();
+    const handle: PickedPhoto = { id, mimeType, filename, baseUrl };
+    const downloaded = await deps.downloadPickedPhoto(token.accessToken, handle);
+
+    let exif: PhotoExif = { capturedAt: null, gps: null };
+    try {
+      exif = await extractPhotoExif(downloaded.bytes);
+    } catch {
+      /* never fail the import on EXIF */
+    }
+    const storageKey = `family-photos/${randomUUID()}`;
+    await gate.runtime.storage.put({
+      key: storageKey,
+      bytes: downloaded.bytes,
+      contentType: downloaded.contentType || mimeType || "application/octet-stream",
+    });
+    await createAlbumPhoto(gate.runtime.db, {
+      contributorPersonId: gate.personId,
+      familyIds: families.familyIds,
+      source: "google_picker",
+      storageKey,
+      caption: null,
+      exifCapturedAt: exif.capturedAt,
+      exifGps: exif.gps,
+    });
+
+    revalidatePath("/hub/album");
+    revalidatePath("/hub");
+    return { ok: true };
+  } catch (err) {
+    logGooglePhotosImportError("complete", err);
+    // An OAuth failure means "reconnect"; any other per-item failure surfaces a sanitized detail.
+    if (err instanceof GooglePhotosOAuthError) {
+      return { error: googlePhotosImportErrorFor(err) };
+    }
+    return {
+      error: hub.actions.photoUploadFailedDetail(sanitizeImportErrorDetail(err)),
+    };
   }
 }

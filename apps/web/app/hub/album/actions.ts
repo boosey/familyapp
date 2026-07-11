@@ -24,6 +24,7 @@ import {
 import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
+import type { ImportOnePhotoResult } from "./import-progress";
 
 /**
  * Batch upload summary. A single submit can carry MANY files (the multi-select picker, #16): each
@@ -171,6 +172,88 @@ export async function uploadAlbumPhotoAction(
     return { error: hub.actions.photoUploadFailed };
   }
   return { ok: true, added, failed };
+}
+
+/**
+ * Per-item sibling of `uploadAlbumPhotoAction` (ADR-0015 · F2). The client drives import as ONE call
+ * per photo through a bounded concurrency pool so each placeholder tile resolves — or fails with a
+ * tap-to-retry — independently. Mirrors the batch action's guards EXACTLY but for a single file:
+ * re-resolves auth server-side (identity is NEVER trusted from the client), re-validates the target
+ * family set against the contributor's OWN active memberships, then EXIF + storage.put + createAlbumPhoto.
+ * The 30-item cap moves to the client (a UX/resource guard, not a security boundary — ADR-0015).
+ */
+export async function uploadOneAlbumPhotoAction(
+  formData: FormData,
+): Promise<ImportOnePhotoResult> {
+  // [DIAG] Same tracing as the batch action — this per-item path MULTIPLIES the Clerk auth() surface
+  // (N calls instead of 1), so the "Not signed in" investigation needs it here too. Remove once solved.
+  const tStart = Date.now();
+  const { db, storage, auth } = await getRuntime();
+  const tRuntime = Date.now();
+  const ctx = await auth.getCurrentAuthContext();
+  console.info(
+    `[DIAG album/upload] ctx.kind=${ctx.kind} runtimeMs=${tRuntime - tStart} authMs=${Date.now() - tRuntime}`,
+  );
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  // Re-validate the target album set against the contributor's OWN active memberships — identical
+  // rules to the batch action; client-submitted ids are NEVER trusted.
+  const active = await listActiveFamiliesForPerson(db, ctx.personId);
+  if (active.length === 0) return { error: hub.actions.noFamily };
+  const allowed = new Set(active.map((f) => f.familyId));
+  const submitted = formData
+    .getAll("familyIds")
+    .filter((v): v is string => typeof v === "string");
+  const chosen = [...new Set(submitted.filter((id) => allowed.has(id)))];
+  let familyIds: string[];
+  if (chosen.length > 0) {
+    familyIds = chosen;
+  } else if (allowed.size === 1) {
+    familyIds = [active[0]!.familyId];
+  } else {
+    return { error: hub.actions.noAlbumChosen };
+  }
+
+  // Exactly one file: the first real, non-empty Blob among the `photo` entries.
+  const photo = formData
+    .getAll("photo")
+    .find((v): v is File => v instanceof Blob && v.size > 0);
+  if (!photo) return { error: hub.actions.photoEmpty };
+
+  const bytes = new Uint8Array(await photo.arrayBuffer());
+  const contentType = photo.type || "application/octet-stream";
+  const storageKey = `family-photos/${randomUUID()}`;
+
+  // #17: read EXIF from the SAME bytes; never fail the upload on EXIF alone.
+  let exif: PhotoExif = { capturedAt: null, gps: null };
+  try {
+    exif = await extractPhotoExif(bytes);
+  } catch {
+    /* never fail the upload on EXIF */
+  }
+
+  try {
+    await storage.put({ key: storageKey, bytes, contentType });
+    await createAlbumPhoto(db, {
+      contributorPersonId: ctx.personId,
+      familyIds,
+      source: "upload",
+      storageKey,
+      caption: null,
+      exifCapturedAt: exif.capturedAt,
+      exifGps: exif.gps,
+    });
+  } catch (err) {
+    console.error(
+      `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return { error: hub.actions.photoUploadFailedDetail(sanitizeStorageErrorDetail(err)) };
+  }
+
+  revalidatePath("/hub");
+  revalidatePath("/hub/album");
+  return { ok: true };
 }
 
 /**

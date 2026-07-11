@@ -67,6 +67,8 @@ import {
 import {
   completeGooglePhotosImportAction,
   disconnectGooglePhotosAction,
+  importOneGooglePhotoAction,
+  listGooglePhotosImportAction,
   pollGooglePhotosImportAction,
   startGooglePhotosImportAction,
 } from "@/app/hub/album/google-photos-actions";
@@ -306,6 +308,149 @@ describe("import actions", () => {
     expect(result).toEqual({ ok: true });
     expect(await getActiveGooglePhotosConnection(runtimeDb, personId)).toBeNull();
     expect(client.calls.some((c) => c.op === "revokeToken")).toBe(true);
+  });
+});
+
+// ADR-0015 · F2 — the Google split: a list-first step (exact-N handles) followed by per-item
+// download+create, so Google reaches the same exact-N placeholder UX as file upload.
+describe("per-item Google import (ADR-0015)", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+
+  function scriptedForImport(personIsMember = true) {
+    return new ScriptedGooglePhotosClient({
+      refresh: { accessToken: "access-tok", expiresIn: 3600 },
+      listPhotos: {
+        photos: [
+          {
+            id: "p1",
+            mimeType: "image/png",
+            filename: "a.png",
+            baseUrl: "https://lh3.googleusercontent.com/p/a",
+          },
+        ],
+        skipped: 1,
+      },
+      download: { bytes: PNG, contentType: "image/png" },
+    });
+  }
+
+  it("listGooglePhotosImportAction returns exact-N handles with skipped/rejected", async () => {
+    stubConfiguredEnv();
+    const personId = await makePerson("Rosa");
+    authCtx = account(personId);
+    await upsertGooglePhotosConnection(runtimeDb, {
+      personId,
+      refreshTokenPlain: "refresh-secret",
+      email: "rosa@example.com",
+    });
+    setGooglePhotosDepsForTests(depsFromScripted(scriptedForImport()));
+
+    const result = await listGooglePhotosImportAction("sess-1");
+    expect(result).toEqual({
+      ok: true,
+      count: 1,
+      items: [
+        {
+          id: "p1",
+          mimeType: "image/png",
+          filename: "a.png",
+          baseUrl: "https://lh3.googleusercontent.com/p/a",
+        },
+      ],
+      skipped: 1,
+      rejected: 0,
+    });
+  });
+
+  it("listGooglePhotosImportAction denies anonymous callers", async () => {
+    stubConfiguredEnv();
+    authCtx = { kind: "anonymous" };
+    expect(await listGooglePhotosImportAction("sess-1")).toEqual({
+      error: hub.actions.notSignedIn,
+    });
+  });
+
+  it("importOneGooglePhotoAction downloads one handle and creates a google_picker photo", async () => {
+    stubConfiguredEnv();
+    const personId = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", personId);
+    await addMember(personId, familyId);
+    authCtx = account(personId);
+    await upsertGooglePhotosConnection(runtimeDb, {
+      personId,
+      refreshTokenPlain: "refresh-secret",
+      email: "rosa@example.com",
+    });
+    setGooglePhotosDepsForTests(depsFromScripted(scriptedForImport()));
+
+    const fd = new FormData();
+    fd.append("id", "p1");
+    fd.append("mimeType", "image/png");
+    fd.append("filename", "a.png");
+    fd.append("baseUrl", "https://lh3.googleusercontent.com/p/a");
+    fd.append("familyIds", familyId);
+
+    const result = await importOneGooglePhotoAction(fd);
+    expect(result).toEqual({ ok: true });
+
+    const album = await listAlbumPhotos(runtimeDb, account(personId), familyId);
+    expect(album).toHaveLength(1);
+    expect(album[0]!.source).toBe("google_picker");
+    expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG);
+  });
+
+  it("importOneGooglePhotoAction denies anonymous callers", async () => {
+    stubConfiguredEnv();
+    authCtx = { kind: "anonymous" };
+    const fd = new FormData();
+    fd.append("id", "p1");
+    fd.append("baseUrl", "https://lh3.googleusercontent.com/p/a");
+    expect(await importOneGooglePhotoAction(fd)).toEqual({
+      error: hub.actions.notSignedIn,
+    });
+  });
+
+  it("importOneGooglePhotoAction re-validates family membership (drops a spoofed family id)", async () => {
+    stubConfiguredEnv();
+    const personId = await makePerson("Rosa");
+    const outsider = await makePerson("Vito");
+    const famA = await makeFamily("Esposito", personId);
+    const famX = await makeFamily("Corleone", outsider);
+    await addMember(personId, famA);
+    await addMember(outsider, famX);
+    authCtx = account(personId);
+    await upsertGooglePhotosConnection(runtimeDb, {
+      personId,
+      refreshTokenPlain: "refresh-secret",
+      email: "rosa@example.com",
+    });
+    setGooglePhotosDepsForTests(depsFromScripted(scriptedForImport()));
+
+    const fd = new FormData();
+    fd.append("id", "p1");
+    fd.append("mimeType", "image/png");
+    fd.append("baseUrl", "https://lh3.googleusercontent.com/p/a");
+    // Submit ONLY a foreign family id; the caller's sole owned family (famA) is used instead.
+    fd.append("familyIds", famX);
+
+    const result = await importOneGooglePhotoAction(fd);
+    expect(result).toEqual({ ok: true });
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(personId), famA);
+    expect(albumA).toHaveLength(1);
+    const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
+    expect(albumX).toEqual([]);
+  });
+
+  it("importOneGooglePhotoAction rejects a missing baseUrl handle", async () => {
+    stubConfiguredEnv();
+    const personId = await makePerson("Rosa");
+    authCtx = account(personId);
+    const fd = new FormData();
+    fd.append("id", "p1");
+    expect(await importOneGooglePhotoAction(fd)).toEqual({
+      error: hub.actions.invalidInput,
+    });
   });
 });
 

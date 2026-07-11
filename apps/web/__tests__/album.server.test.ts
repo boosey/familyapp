@@ -37,6 +37,7 @@ import {
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import {
   uploadAlbumPhotoAction,
+  uploadOneAlbumPhotoAction,
   editAlbumCaptionAction,
   deleteAlbumPhotoAction,
 } from "@/app/hub/album/actions";
@@ -401,6 +402,116 @@ describe("uploadAlbumPhotoAction", () => {
     const result = await uploadAlbumPhotoAction(fd);
     expect(result).toEqual({ error: hub.actions.tooManyPhotos });
     expect(runtimeStorage.size).toBe(0);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
+  });
+});
+
+// ADR-0015 · F2 — the per-item sibling of the batch upload. One file per call so the client can
+// drive a bounded concurrency pool and resolve each placeholder tile independently. Mirrors the
+// batch action's guards EXACTLY, but for exactly one file, returning ImportOnePhotoResult.
+describe("uploadOneAlbumPhotoAction", () => {
+  it("lands exactly one upload photo in the chosen family", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const result = await uploadOneAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [familyId]),
+    );
+    expect(result).toEqual({ ok: true });
+
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toHaveLength(1);
+    expect(album[0]!.source).toBe("upload");
+    expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG_BYTES);
+    expect(runtimeStorage.size).toBe(1);
+  });
+
+  it("resolves the sole family for a solo contributor with no selection", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const result = await uploadOneAlbumPhotoAction(photoForm(PNG_BYTES));
+    expect(result).toEqual({ ok: true });
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toHaveLength(1);
+  });
+
+  it("rejects an unauthenticated caller and writes nothing", async () => {
+    authCtx = { kind: "anonymous" };
+    const result = await uploadOneAlbumPhotoAction(photoForm(PNG_BYTES));
+    expect(result).toEqual({ error: hub.actions.notSignedIn });
+    expect(runtimeStorage.size).toBe(0);
+  });
+
+  it("returns photoEmpty when the file has no bytes", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const result = await uploadOneAlbumPhotoAction(photoForm(new Uint8Array([])));
+    expect(result).toEqual({ error: hub.actions.photoEmpty });
+    expect(runtimeStorage.size).toBe(0);
+  });
+
+  it("drops a spoofed family id and falls back to the sole owned family", async () => {
+    const contributor = await makePerson("Rosa");
+    const outsider = await makePerson("Vito");
+    const famA = await makeFamily("Esposito", contributor);
+    const famX = await makeFamily("Corleone", outsider);
+    await addMember(contributor, famA);
+    await addMember(outsider, famX);
+    authCtx = account(contributor);
+
+    // Submits only a foreign family id; with a single owned family it falls back to it.
+    const result = await uploadOneAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famX]),
+    );
+    expect(result).toEqual({ ok: true });
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    expect(albumA).toHaveLength(1);
+    const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
+    expect(albumX).toEqual([]);
+  });
+
+  it("errors when a multi-family contributor submits only a foreign family id", async () => {
+    const contributor = await makePerson("Rosa");
+    const outsider = await makePerson("Vito");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    const famX = await makeFamily("Corleone", outsider);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    await addMember(outsider, famX);
+    authCtx = account(contributor);
+
+    const result = await uploadOneAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [famX]),
+    );
+    expect(result).toEqual({ error: hub.actions.noAlbumChosen });
+    expect(runtimeStorage.size).toBe(0);
+  });
+
+  it("returns the upload-failed detail error when storage throws", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    vi.spyOn(runtimeStorage, "put").mockRejectedValue(new Error("storage boom"));
+
+    const result = await uploadOneAlbumPhotoAction(
+      photoFormWithFamilies(PNG_BYTES, [familyId]),
+    );
+    expect(result).toEqual({
+      error: hub.actions.photoUploadFailedDetail("storageboom"),
+    });
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toEqual([]);
   });

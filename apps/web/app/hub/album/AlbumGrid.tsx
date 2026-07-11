@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { hub } from "@/app/_copy";
 import { AlbumPhotoViewer } from "./AlbumPhotoViewer";
+import type { PendingTile } from "./import-progress";
 
 export interface AlbumGridPhoto {
   id: string;
@@ -22,7 +23,18 @@ export interface AlbumGridPhoto {
   canManage: boolean;
 }
 
-export function AlbumGrid({ photos }: { photos: AlbumGridPhoto[] }) {
+export function AlbumGrid({
+  photos,
+  pendingTiles = [],
+  onRetryTile,
+}: {
+  photos: AlbumGridPhoto[];
+  /** ADR-0015 · F2 — in-flight/failed placeholder tiles rendered BEFORE the real photos. Default []
+   *  so flag-off callers (which pass only `photos`) are unaffected. */
+  pendingTiles?: PendingTile[];
+  /** Called with a failed tile's `tempId` when its retry affordance is tapped. */
+  onRetryTile?: (tempId: string) => void;
+}) {
   // Which photo's viewer is open (by id — so a router.refresh() that drops the photo, e.g. after a
   // delete, cleanly unmounts the viewer when the id no longer resolves to a tile).
   const [openId, setOpenId] = useState<string | null>(null);
@@ -40,6 +52,15 @@ export function AlbumGrid({ photos }: { photos: AlbumGridPhoto[] }) {
           gap: 12,
         }}
       >
+        {/* ADR-0015 · F2 — pending import placeholders sit at the TOP of the grid, sized like a real
+            tile, and fill in (are removed) or fail (become tap-to-retry) independently. */}
+        {pendingTiles.map((tile) => (
+          <PendingImportTile
+            key={`pending-${tile.tempId}`}
+            tile={tile}
+            onRetry={onRetryTile}
+          />
+        ))}
         {photos.map((photo) => (
           <AlbumTile key={photo.id} photo={photo} onOpen={() => setOpenId(photo.id)} />
         ))}
@@ -56,6 +77,75 @@ export function AlbumGrid({ photos }: { photos: AlbumGridPhoto[] }) {
         />
       ) : null}
     </>
+  );
+}
+
+/** A same-sized placeholder tile for a photo being imported (ADR-0015 · F2). Quiet shimmer while
+ *  `importing`; a tap-to-retry button while `failed`. Both are a 1:1 box matching a real tile. */
+function PendingImportTile({
+  tile,
+  onRetry,
+}: {
+  tile: PendingTile;
+  onRetry?: (tempId: string) => void;
+}) {
+  const boxStyle: React.CSSProperties = {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    borderRadius: "var(--radius-sm)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--surface-sunken)",
+  };
+
+  if (tile.status === "failed") {
+    return (
+      <li style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => onRetry?.(tile.tempId)}
+          aria-label={hub.album.retryImportTile}
+          style={{
+            ...boxStyle,
+            border: "var(--border-width) solid var(--accent)",
+            color: "var(--accent-strong)",
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            cursor: "pointer",
+          }}
+        >
+          {hub.album.retryImportTile}
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div
+        role="img"
+        aria-label={hub.album.importingTile}
+        style={{
+          ...boxStyle,
+          border: "var(--border-width) solid var(--border)",
+        }}
+      >
+        {/* A quiet, low-motion pulse — the accessible label carries the meaning for AT. */}
+        <span
+          aria-hidden="true"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            border: "3px solid var(--border)",
+            borderTopColor: "var(--accent)",
+            animation: "album-import-spin 0.9s linear infinite",
+          }}
+        />
+        <style>{"@keyframes album-import-spin{to{transform:rotate(360deg)}}"}</style>
+      </div>
+    </li>
   );
 }
 

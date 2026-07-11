@@ -32,6 +32,37 @@ vi.mock("@/app/hub/album/AlbumGrid", () => ({
   ),
 }));
 
+// ADR-0015 · F2: the in-grid progress feature is flag-gated and dark by default. Stub AlbumBoard to
+// echo the props AlbumSurface hands it, so we can assert the flag-ON wiring without its client hooks.
+vi.mock("@/app/hub/album/AlbumBoard", () => ({
+  AlbumBoard: ({
+    currentFamilyId,
+    showFileUpload,
+    photos,
+  }: {
+    currentFamilyId: string;
+    showFileUpload?: boolean;
+    photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
+  }) => (
+    <div
+      data-testid="album-board"
+      data-current-family={currentFamilyId}
+      data-show-file-upload={String(showFileUpload ?? true)}
+    >
+      {photos.map((p) => (
+        <div key={p.id} data-board-photo-id={p.id}>
+          {`/api/album-photo/${p.id}`}
+        </div>
+      ))}
+    </div>
+  ),
+}));
+
+const isAlbumImportProgressEnabled = vi.fn(() => false);
+vi.mock("@/lib/album-import-progress-config", () => ({
+  isAlbumImportProgressEnabled: () => isAlbumImportProgressEnabled(),
+}));
+
 vi.mock("@/app/hub/album/AlbumUploader", () => ({
   AlbumUploader: ({
     families,
@@ -134,6 +165,8 @@ describe("AlbumSurface", () => {
   beforeEach(() => {
     isGooglePhotosConfigured.mockReturnValue(false);
     getActiveGooglePhotosConnection.mockResolvedValue(null);
+    // Flag OFF by default — every existing test asserts the legacy (prod) rendering path.
+    isAlbumImportProgressEnabled.mockReturnValue(false);
   });
 
   it("renders NO internal family switcher — the hub selector owns family scope now", async () => {
@@ -219,6 +252,42 @@ describe("AlbumSurface", () => {
     const html = await render(db, account(viewer), "not-a-family-of-mine");
 
     expect(html).toContain(`data-photo-id="${photoA}"`);
+  });
+
+  // ADR-0015 · F2 gate: the flag-OFF (prod) path renders the legacy AlbumUploader + AlbumGrid pair and
+  // NEVER mounts AlbumBoard — a regression guard for the "flag-off path unchanged / dark in prod" claim.
+  it("flag OFF: renders the legacy uploader + grid and NOT AlbumBoard (dark in prod)", async () => {
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    await addMember(db, viewer, famA);
+    await placePhoto(db, viewer, [famA], "family-photos/surface-off");
+
+    const html = await render(db, account(viewer), "all");
+
+    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain('data-testid="album-grid"');
+    expect(html).not.toContain('data-testid="album-board"');
+  });
+
+  // Flag ON: AlbumSurface mounts AlbumBoard (in place of the uploader/grid pair) with the same derived
+  // props — the correct target family and the computed grid photos.
+  it("flag ON: mounts AlbumBoard with the derived family + photos", async () => {
+    isAlbumImportProgressEnabled.mockReturnValue(true);
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    await addMember(db, viewer, famA);
+    const photoId = await placePhoto(db, viewer, [famA], "family-photos/surface-on");
+
+    const html = await render(db, account(viewer), "all");
+
+    expect(html).toContain('data-testid="album-board"');
+    expect(html).toContain(`data-current-family="${famA}"`);
+    expect(html).toContain(`data-board-photo-id="${photoId}"`);
+    // The legacy pair is NOT also rendered.
+    expect(html).not.toContain('data-testid="album-uploader"');
+    expect(html).not.toContain('data-testid="album-grid"');
   });
 
   it("shows Google Photos chrome without file upload when scope=all and Google is configured", async () => {

@@ -10,8 +10,10 @@
  * the real AlbumPhotoViewer mounts when a tile is opened, so those mocks cover it too.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AlbumGrid } from "@/app/hub/album/AlbumGrid";
+import { hub } from "@/app/_copy";
+import type { PendingTile } from "@/app/hub/album/import-progress";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -85,5 +87,43 @@ describe("AlbumGrid tiles open the photo viewer", () => {
     // B's viewer is fresh: delete is UNARMED (no inherited confirm state), so a single tap can't delete B.
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /tap again to remove/i })).toBeNull();
+  });
+});
+
+describe("AlbumGrid pending import tiles (ADR-0015 · F2)", () => {
+  it("renders N importing placeholder tiles BEFORE the real photos", () => {
+    const pending: PendingTile[] = [
+      { tempId: "t-1", status: "importing" },
+      { tempId: "t-2", status: "importing" },
+    ];
+    render(<AlbumGrid photos={[MANAGEABLE]} pendingTiles={pending} />);
+
+    // Two placeholders labelled "Importing…" plus one real "View photo" trigger.
+    const importing = screen.getAllByLabelText(hub.album.importingTile);
+    expect(importing).toHaveLength(2);
+    // The placeholders come first in DOM order: the first two list items are pending, the last is real.
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(within(items[0]!).getByLabelText(hub.album.importingTile)).toBeTruthy();
+    expect(within(items[1]!).getByLabelText(hub.album.importingTile)).toBeTruthy();
+    expect(within(items[2]!).getByRole("button", { name: /^view photo$/i })).toBeTruthy();
+  });
+
+  it("a failed tile shows a retry button that calls onRetryTile with its tempId", () => {
+    const onRetryTile = vi.fn();
+    const pending: PendingTile[] = [{ tempId: "t-fail", status: "failed" }];
+    render(
+      <AlbumGrid photos={[]} pendingTiles={pending} onRetryTile={onRetryTile} />,
+    );
+    const retry = screen.getByRole("button", { name: hub.album.retryImportTile });
+    fireEvent.click(retry);
+    expect(onRetryTile).toHaveBeenCalledTimes(1);
+    expect(onRetryTile).toHaveBeenCalledWith("t-fail");
+  });
+
+  it("renders no placeholder tiles when pendingTiles is omitted (flag-off callers unaffected)", () => {
+    render(<AlbumGrid photos={[MANAGEABLE]} />);
+    expect(screen.queryByLabelText(hub.album.importingTile)).toBeNull();
+    expect(screen.queryByRole("button", { name: hub.album.retryImportTile })).toBeNull();
   });
 });

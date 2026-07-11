@@ -123,6 +123,32 @@ describe("AlbumUploader multi-family picker", () => {
     expect((photos[2] as File).name).toBe("p3.png");
   });
 
+  // ADR-0015 · F2 board mode: when `onImportFiles` is provided, the uploader HANDS OFF import
+  // execution to the board (per-item pool) instead of running the batched action. Choosing files calls
+  // the delegate with the chosen files + familyIds and does NOT call uploadAlbumPhotoAction.
+  it("delegates to onImportFiles (board mode) instead of calling the batched action", async () => {
+    const onImportFiles = vi.fn();
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    const f2 = new File([new Uint8Array([2])], "p2.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1, f2] } });
+
+    await vi.waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
+    const [files, familyIds] = onImportFiles.mock.calls[0]!;
+    expect((files as File[]).map((f) => f.name)).toEqual(["p1.png", "p2.png"]);
+    // Default selection is the current-context family, handed to the board.
+    expect(familyIds).toEqual([FAM_A.familyId]);
+    // The batched action is NOT called in board mode.
+    expect(uploadAlbumPhotoAction).not.toHaveBeenCalled();
+  });
+
   // Regression: the multi-family picker's checked albums must ride along in the payload. The upload
   // now builds FormData explicitly (rather than serializing a <form>), so the selected `familyIds`
   // come from the picker state, not from the DOM. Checking a second album sends BOTH.

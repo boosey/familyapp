@@ -27,6 +27,8 @@ import type { Database } from "@chronicle/db";
 import { hub } from "@/app/_copy";
 import { AlbumUploader } from "./AlbumUploader";
 import { AlbumGrid } from "./AlbumGrid";
+import { AlbumBoard } from "./AlbumBoard";
+import { isAlbumImportProgressEnabled } from "@/lib/album-import-progress-config";
 import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
 import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection";
 
@@ -109,6 +111,26 @@ export async function AlbumSurface({
   // import still uses the family picker — show the uploader chrome when either path applies.
   const showUploader =
     active.length > 0 && (uploadTargetFamilyId !== null || googleConfigured);
+
+  // ADR-0015 · F2 (flag-gated, dark in prod): when the in-grid per-item import progress feature is on
+  // AND the uploader is shown, hand the whole uploader+grid to the client `AlbumBoard`, which owns the
+  // per-item pool + placeholder tiles. The flag-off path below is byte-for-byte unchanged.
+  if (isAlbumImportProgressEnabled() && showUploader) {
+    return (
+      <AlbumBoard
+        families={active}
+        currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
+        scope={validScope}
+        showFileUpload={uploadTargetFamilyId !== null}
+        googlePhotosConfigured={googleConfigured}
+        googlePhotosConnected={googleConn !== null}
+        googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+        googlePhotosOauthConnected={googlePhotosOauthConnected}
+        googlePhotosOauthError={googlePhotosOauthError}
+        photos={gridPhotos}
+      />
+    );
+  }
 
   return (
     <>

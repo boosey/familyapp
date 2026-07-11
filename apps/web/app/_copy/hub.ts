@@ -388,6 +388,15 @@ export const hub = {
       "That connection link expired. Please try connecting again.",
     googlePhotosOAuthExchangeFailed:
       "Couldn't finish connecting Google Photos. Please try again.",
+    // ADR-0015 · F2 — in-grid per-item import progress (flag-gated). A placeholder tile sits at the
+    // top of the grid while its photo imports; on failure it becomes a tap-to-retry button. The live
+    // "X of N" line reassures the contributor that the batch is landing one photo at a time.
+    // Accessible label on an in-flight placeholder tile (screen-reader announces the pending import).
+    importingTile: "Importing…",
+    // Label on a failed placeholder tile — the whole tile is a button that retries just that photo.
+    retryImportTile: "Tap to retry",
+    // Live progress line shown while any placeholder is still importing (done = successes so far).
+    importProgress: (done: number, total: number) => `Adding ${done} of ${total}…`,
     googlePhotosPartial: (added: number, failed: number, skipped: number) => {
       const parts: string[] = [];
       parts.push(

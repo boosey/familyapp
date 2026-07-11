@@ -75,6 +75,8 @@ export function AlbumUploader({
   googlePhotosEmail = null,
   googlePhotosOauthConnected = false,
   googlePhotosOauthError = null,
+  onImportFiles,
+  onImportGoogle,
 }: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
@@ -96,6 +98,10 @@ export function AlbumUploader({
   googlePhotosOauthConnected?: boolean;
   /** One-shot error flash after OAuth callback (`?googlePhotosError=`). */
   googlePhotosOauthError?: string | null;
+  /** F2 board mode (ADR-0015): when provided, hand import EXECUTION off to the board (per-item pool +
+   *  pending tiles) instead of running the batched actions. Absent → today's self-driving behavior. */
+  onImportFiles?: (files: File[], familyIds: string[]) => void;
+  onImportGoogle?: (sessionId: string, familyIds: string[]) => void;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,6 +175,17 @@ export function AlbumUploader({
     if (files.length > MAX_BATCH_FILES) {
       setError(hub.actions.tooManyPhotos);
       setNote(null);
+      return;
+    }
+    // F2 board mode (ADR-0015): hand execution to the board — it prepares each file per-item (so one
+    // prepare failure doesn't abort the batch) and drives the per-item pool. We keep only the client
+    // cap check above; no prepare, no batched action, no transition here.
+    if (onImportFiles) {
+      const chosen = showPicker ? [...selected] : [];
+      setError(null);
+      setNote(null);
+      onImportFiles(Array.from(files), chosen);
+      setSelected(seed());
       return;
     }
     const selectedFiles = Array.from(files);
@@ -314,6 +331,17 @@ export function AlbumUploader({
       if (!ready) {
         setError(hub.album.googlePhotosPickerTimedOut);
         setNote(null);
+        return;
+      }
+
+      // F2 board mode (ADR-0015): the picker is ready — hand the session off to the board, which
+      // runs the list-first step + per-item pool and owns the progress display. Clear our own
+      // pending/note so the board's tiles are the single source of progress truth.
+      if (onImportGoogle) {
+        const chosen = showPicker ? [...selected] : [];
+        setNote(null);
+        setGooglePending(false);
+        onImportGoogle(started.sessionId, chosen);
         return;
       }
 
