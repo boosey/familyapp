@@ -299,7 +299,9 @@ describe("AlbumUploader Google Photos", () => {
     expect(screen.queryByRole("button", { name: hub.album.googlePhotosImport })).toBeNull();
   });
 
-  it("shows Import and Disconnect when connected", () => {
+  // The inline Disconnect button and the standalone email status line are GONE — Disconnect now lives
+  // inside a right-aligned "Manage connections ▾" dropdown, and the email is a header inside that menu.
+  it("shows Import and a Manage connections trigger (no inline Disconnect / email) when connected", () => {
     render(
       <AlbumUploader
         families={[FAM_A]}
@@ -310,8 +312,172 @@ describe("AlbumUploader Google Photos", () => {
       />,
     );
     expect(screen.getByRole("button", { name: hub.album.googlePhotosImport })).toBeTruthy();
-    expect(screen.getByRole("button", { name: hub.album.googlePhotosDisconnect })).toBeTruthy();
+    // The trigger is visible...
+    expect(screen.getByRole("button", { name: hub.album.manageConnections })).toBeTruthy();
+    // ...but the raw Disconnect item and the email are hidden until the menu opens.
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosDisconnect })).toBeNull();
+    expect(screen.queryByText("user@gmail.com")).toBeNull();
+  });
+
+  it("renders the Manage connections trigger only when connected", () => {
+    // Unconfigured: no trigger.
+    const { rerender } = render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    expect(screen.queryByRole("button", { name: hub.album.manageConnections })).toBeNull();
+
+    // Configured but NOT connected: still no trigger (the inline Connect link owns that state).
+    rerender(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+      />,
+    );
+    expect(screen.queryByRole("button", { name: hub.album.manageConnections })).toBeNull();
+
+    // Connected: the trigger appears.
+    rerender(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    expect(screen.getByRole("button", { name: hub.album.manageConnections })).toBeTruthy();
+  });
+
+  it("opens a menu with the email header and a Disconnect item", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    expect(screen.getByRole("menu")).toBeTruthy();
+    // Email is the header inside the open menu.
     expect(screen.getByText("user@gmail.com")).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
+    ).toBeTruthy();
+  });
+
+  it("shows a generic source header inside the menu when email is null", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    expect(screen.getByText(hub.album.googlePhotosSourceName)).toBeTruthy();
+  });
+
+  it("calls disconnectGooglePhotosAction once and refreshes when Disconnect is tapped", async () => {
+    disconnectGooglePhotosAction.mockResolvedValueOnce({ ok: true });
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
+    );
+    await vi.waitFor(() =>
+      expect(disconnectGooglePhotosAction).toHaveBeenCalledTimes(1),
+    );
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  // Regression: a disconnect that RESOLVES with an { error } shape surfaces that error and does NOT
+  // refresh (the connection is still there).
+  it("surfaces the error and does not refresh when disconnect returns an { error }", async () => {
+    disconnectGooglePhotosAction.mockResolvedValueOnce({ error: "Nope, couldn't disconnect." });
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/couldn't disconnect/i),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // Regression (review finding): the disconnect action can REJECT (throw) at the transport level
+  // rather than return an { error } shape. Without a catch, the rejection is swallowed by the
+  // transition — the menu hangs on "Disconnecting…" with no error and no retry. It must surface a
+  // clear error instead (mirrors the upload-throws hardening).
+  it("surfaces an error when the disconnect action throws (does not hang silently)", async () => {
+    disconnectGooglePhotosAction.mockRejectedValueOnce(new Error("network dropped"));
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(
+        new RegExp(hub.album.googlePhotosDisconnectError, "i"),
+      ),
+    );
+    expect(disconnectGooglePhotosAction).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("closes the Manage connections menu on Escape and on click-outside", () => {
+    render(
+      <div>
+        <div data-testid="outside">outside</div>
+        <AlbumUploader
+          families={[FAM_A]}
+          currentFamilyId={FAM_A.familyId}
+          googlePhotosConfigured
+          googlePhotosConnected
+        />
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: hub.album.manageConnections });
+
+    // Escape closes.
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    // Click-outside closes.
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+    fireEvent.pointerDown(screen.getByTestId("outside"));
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("hides file upload but keeps Google chrome when showFileUpload is false", () => {

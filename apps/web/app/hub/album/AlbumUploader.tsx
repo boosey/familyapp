@@ -34,6 +34,7 @@ import { prepareAlbumPhoto } from "./prepare-photo";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyPicker } from "../FamilyPicker";
+import { ManageConnectionsMenu } from "./ManageConnectionsMenu";
 import { seedComposeFamilies } from "@/lib/compose-scope";
 
 export interface AlbumFamilyOption {
@@ -353,7 +354,17 @@ export function AlbumUploader({
     startTransition(async () => {
       setError(null);
       setNote(null);
-      const result = await disconnectGooglePhotosAction();
+      // The action can REJECT (throw) at the transport level (network drop, Server Action failure)
+      // rather than return an { error } shape — same hardening as onFilesChosen. Without this catch
+      // the rejection is swallowed by the transition, leaving the menu stuck on "Disconnecting…" with
+      // no error and no way to retry.
+      let result;
+      try {
+        result = await disconnectGooglePhotosAction();
+      } catch {
+        setError(hub.album.googlePhotosDisconnectError);
+        return;
+      }
       if ("error" in result) {
         setError(result.error);
         return;
@@ -466,31 +477,22 @@ export function AlbumUploader({
             >
               {hub.album.googlePhotosImport}
             </KindredButton>
-            <KindredButton
-              type="button"
-              variant="ghost"
-              size="small"
-              disabled={busy}
-              onClick={onDisconnect}
-            >
-              {hub.album.googlePhotosDisconnect}
-            </KindredButton>
+            <ManageConnectionsMenu
+              label={hub.album.manageConnections}
+              connections={[
+                {
+                  id: "google-photos",
+                  header: googlePhotosEmail ?? hub.album.googlePhotosSourceName,
+                  disconnectLabel: hub.album.googlePhotosDisconnect,
+                  pendingLabel: hub.album.googlePhotosDisconnecting,
+                  onDisconnect,
+                  pending: busy,
+                },
+              ]}
+            />
           </>
         ) : null}
       </div>
-
-      {googlePhotosConfigured && googlePhotosConnected && googlePhotosEmail ? (
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-meta)",
-            margin: 0,
-          }}
-        >
-          {googlePhotosEmail}
-        </p>
-      ) : null}
 
       {error ? (
         <p

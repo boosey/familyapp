@@ -357,6 +357,17 @@ export const hub = {
     googlePhotosConnect: "Connect Google Photos",
     googlePhotosImport: "Import from Google Photos",
     googlePhotosDisconnect: "Disconnect Google Photos",
+    // Trigger for the right-aligned "Manage connections ▾" dropdown that holds the Disconnect
+    // action(s) once a source is connected. Structured for future sources (Google is the only one now).
+    manageConnections: "Manage connections",
+    // Brief pending state on the Disconnect menu item while the connection is being torn down.
+    googlePhotosDisconnecting: "Disconnecting…",
+    // Generic menu header shown above the Disconnect item when the account email is unknown.
+    googlePhotosSourceName: "Google Photos",
+    // Shown when the disconnect action REJECTS at the transport level (network/Server Action failure)
+    // rather than returning a handled { error } — so the menu never hangs silently on "Disconnecting…".
+    googlePhotosDisconnectError:
+      "Couldn't disconnect Google Photos. Please try again.",
     googlePhotosImporting: "Opening Google Photos…",
     googlePhotosWaiting: "Pick your photos in the Google Photos window…",
     googlePhotosImportFailed: "Couldn't import from Google Photos. Please try again.",
