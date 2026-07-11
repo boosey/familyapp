@@ -54,6 +54,43 @@ describe("createClerkAuthProvider", () => {
     });
   });
 
+  it("retries a transient DB failure during the account lookup and stays signed in", async () => {
+    // Regression: Neon (prod Postgres) scales to zero; the first query after idle can drop the
+    // connection while the compute wakes. That transient throw used to hit the catch and degrade a
+    // SIGNED-IN user to anonymous — the spurious "Not signed in" observed in production. The lookup
+    // must retry past the blip and resolve to the account.
+    const db = await createTestDatabase();
+    const { personId } = await seedPersonWithAccount(db, "clerk_flaky");
+    let selectCalls = 0;
+    const realSelect = db.select.bind(db);
+    const flakyDb = new Proxy(db as object, {
+      get(target, prop, receiver) {
+        if (prop === "select") {
+          return (...args: unknown[]) => {
+            selectCalls += 1;
+            if (selectCalls === 1) {
+              // Emulate a Neon cold-start connection drop on the first attempt only.
+              throw new Error("Connection terminated unexpectedly");
+            }
+            return (realSelect as (...a: unknown[]) => unknown)(...args);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as unknown as Database;
+    const auth: ClerkAuthFn = async () => ({ userId: "clerk_flaky" });
+    const provider = createClerkAuthProvider(flakyDb, { auth });
+    // Silence the expected retry warning so test output stays clean.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(provider.getCurrentAuthContext()).resolves.toEqual({
+      kind: "account",
+      personId,
+    });
+    // Proves it actually retried past the transient failure rather than degrading.
+    expect(selectCalls).toBeGreaterThanOrEqual(2);
+    warnSpy.mockRestore();
+  });
+
   it("degrades to anonymous when Clerk userId has no matching Account (defense in depth)", async () => {
     const db = await createTestDatabase();
     // Seed a different account so the table isn't empty — the lookup must select on the right key.

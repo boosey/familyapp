@@ -58,6 +58,51 @@ export async function resolveAuthProviderUserId(
   return row?.authProviderUserId ?? null;
 }
 
+/**
+ * Neon (prod Postgres) scales to zero; the first query after an idle period can be slow OR drop the
+ * connection while the compute wakes. This account→Person lookup is an idempotent READ, so we retry
+ * a few times on ANY failure before giving up. Rationale: without a retry a transient cold-start blip
+ * hits the caller's catch and degrades a genuinely SIGNED-IN user to `anonymous` — the spurious
+ * "Not signed in" this exists to prevent. A truly-down DB simply exhausts the retries and the caller
+ * still falls back to anonymous (defense in depth preserved), at the cost of ~300ms added latency
+ * only while the DB is failing. We retry on any error rather than pattern-matching driver messages:
+ * the call is a read, so a retry is never unsafe, and message-sniffing is brittle across driver bumps.
+ */
+const AUTH_LOOKUP_MAX_ATTEMPTS = 3;
+const AUTH_LOOKUP_RETRY_BASE_MS = 100;
+
+async function resolvePersonRow(
+  db: Database,
+  userId: string,
+): Promise<{ personId: string } | null> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= AUTH_LOOKUP_MAX_ATTEMPTS; attempt++) {
+    try {
+      // Single inner join: a row only comes back if BOTH the Account exists for this Clerk userId
+      // AND a Person points at that Account. An orphan resolves to null → anonymous upstream.
+      const [row] = await db
+        .select({ personId: persons.id })
+        .from(accounts)
+        .innerJoin(persons, eq(persons.accountId, accounts.id))
+        .where(eq(accounts.authProviderUserId, userId))
+        .limit(1);
+      return row ?? null;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < AUTH_LOOKUP_MAX_ATTEMPTS) {
+        console.warn(
+          `[auth-clerk] account lookup attempt ${attempt}/${AUTH_LOOKUP_MAX_ATTEMPTS} failed; retrying: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        await new Promise((r) => setTimeout(r, AUTH_LOOKUP_RETRY_BASE_MS * attempt));
+      }
+    }
+  }
+  // Retries exhausted — propagate so the caller degrades to anonymous (a real, sustained DB outage).
+  throw lastErr;
+}
+
 export function createClerkAuthProvider(
   db: Database,
   options: ClerkAuthProviderOptions = {},
@@ -88,15 +133,9 @@ export function createClerkAuthProvider(
           return { kind: "anonymous" };
         }
 
-        // Single inner join: a row only comes back if BOTH the Account exists for this Clerk
-        // userId AND a Person points at that Account. An orphan (Account with no Person, or
-        // Person with no Account) resolves to anonymous — we never fabricate identity.
-        const [row] = await db
-          .select({ personId: persons.id })
-          .from(accounts)
-          .innerJoin(persons, eq(persons.accountId, accounts.id))
-          .where(eq(accounts.authProviderUserId, userId))
-          .limit(1);
+        // Account→Person lookup, retrying transient DB failures (Neon cold-start blips) so a
+        // signed-in user is never spuriously logged out. See resolvePersonRow.
+        const row = await resolvePersonRow(db, userId);
 
         if (!row) {
           console.warn(
