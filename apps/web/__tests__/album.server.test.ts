@@ -420,10 +420,11 @@ describe("uploadOneAlbumPhotoAction", () => {
     const result = await uploadOneAlbumPhotoAction(
       photoFormWithFamilies(PNG_BYTES, [familyId]),
     );
-    expect(result).toEqual({ ok: true });
 
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toHaveLength(1);
+    // The returned photoId is the ACTUAL persisted row id — the board renders that tile optimistically.
+    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
     expect(album[0]!.source).toBe("upload");
     expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG_BYTES);
     expect(runtimeStorage.size).toBe(1);
@@ -436,9 +437,9 @@ describe("uploadOneAlbumPhotoAction", () => {
     authCtx = account(contributor);
 
     const result = await uploadOneAlbumPhotoAction(photoForm(PNG_BYTES));
-    expect(result).toEqual({ ok: true });
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toHaveLength(1);
+    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
   });
 
   it("rejects an unauthenticated caller and writes nothing", async () => {
@@ -472,10 +473,9 @@ describe("uploadOneAlbumPhotoAction", () => {
     const result = await uploadOneAlbumPhotoAction(
       photoFormWithFamilies(PNG_BYTES, [famX]),
     );
-    expect(result).toEqual({ ok: true });
-
     const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
     expect(albumA).toHaveLength(1);
+    expect(result).toEqual({ ok: true, photoId: albumA[0]!.id });
     const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
     expect(albumX).toEqual([]);
   });

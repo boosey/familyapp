@@ -232,9 +232,10 @@ export async function uploadOneAlbumPhotoAction(
     /* never fail the upload on EXIF */
   }
 
+  let photoId: string;
   try {
     await storage.put({ key: storageKey, bytes, contentType });
-    await createAlbumPhoto(db, {
+    const photo = await createAlbumPhoto(db, {
       contributorPersonId: ctx.personId,
       familyIds,
       source: "upload",
@@ -243,6 +244,7 @@ export async function uploadOneAlbumPhotoAction(
       exifCapturedAt: exif.capturedAt,
       exifGps: exif.gps,
     });
+    photoId = photo.id;
   } catch (err) {
     console.error(
       `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
@@ -253,7 +255,9 @@ export async function uploadOneAlbumPhotoAction(
 
   revalidatePath("/hub");
   revalidatePath("/hub/album");
-  return { ok: true };
+  // Return the new id so the board renders this tile's real bytes optimistically (ADR-0015): the
+  // placeholder swaps straight to the photo instead of blanking until the server refresh lands.
+  return { ok: true, photoId };
 }
 
 /**

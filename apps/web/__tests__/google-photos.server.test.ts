@@ -391,10 +391,11 @@ describe("per-item Google import (ADR-0015)", () => {
     fd.append("familyIds", familyId);
 
     const result = await importOneGooglePhotoAction(fd);
-    expect(result).toEqual({ ok: true });
 
     const album = await listAlbumPhotos(runtimeDb, account(personId), familyId);
     expect(album).toHaveLength(1);
+    // The returned photoId is the actual persisted row id (ADR-0015 optimistic tile).
+    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
     expect(album[0]!.source).toBe("google_picker");
     expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG);
   });
@@ -434,10 +435,10 @@ describe("per-item Google import (ADR-0015)", () => {
     fd.append("familyIds", famX);
 
     const result = await importOneGooglePhotoAction(fd);
-    expect(result).toEqual({ ok: true });
 
     const albumA = await listAlbumPhotos(runtimeDb, account(personId), famA);
     expect(albumA).toHaveLength(1);
+    expect(result).toEqual({ ok: true, photoId: albumA[0]!.id });
     const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
     expect(albumX).toEqual([]);
   });

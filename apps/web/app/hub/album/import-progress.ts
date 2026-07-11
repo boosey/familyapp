@@ -22,11 +22,18 @@ export interface PendingTile {
   /** Stable client-generated key (one per selected photo). Never a server id. */
   tempId: string;
   status: PendingTileStatus;
+  /** The created photo's server id — present ONLY once `status === "loaded"`. The grid renders the
+   *  real bytes optimistically from this id so the tile never blanks between spinner and photo. */
+  photoId?: string;
 }
 
 export type PendingTileStatus =
   /** In flight (downloading/uploading + creating the row) — show a quiet spinner. */
   | "importing"
+  /** Row created: the tile immediately shows the real photo (by `photoId`) WITHOUT waiting on the
+   *  server refresh, so it never blanks. A later `router.refresh()` reconciles it into a real grid
+   *  tile and the board drops the loaded placeholder once the server list carries the id. */
+  | "loaded"
   /** This item failed; the tile shows a tap-to-retry affordance. Others are unaffected. */
   | "failed";
 
@@ -59,8 +66,9 @@ export type ListGooglePhotosImportResult =
     }
   | { error: string };
 
-/** Result of importing ONE photo (upload OR one Google handle): success, or a user-facing error. */
-export type ImportOnePhotoResult = { ok: true } | { error: string };
+/** Result of importing ONE photo (upload OR one Google handle): the created photo's id on success (so
+ *  the client can render its tile optimistically), or a user-facing error. */
+export type ImportOnePhotoResult = { ok: true; photoId: string } | { error: string };
 
 /**
  * The most photos the client will send to the per-item pool in one batch. Still enforced client-side as

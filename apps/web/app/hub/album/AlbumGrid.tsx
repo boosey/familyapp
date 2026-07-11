@@ -99,6 +99,29 @@ function PendingImportTile({
     background: "var(--surface-sunken)",
   };
 
+  // Row created (ADR-0015): show the real bytes in place of the spinner immediately — no blank gap,
+  // no waiting on the coalesced server refresh. This transient tile isn't clickable; the next refresh
+  // reconciles it into a full `AlbumTile` (the board then drops this placeholder).
+  if (tile.status === "loaded" && tile.photoId) {
+    return (
+      <li style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- audited auth route, not a static asset. */}
+        <img
+          src={`/api/album-photo/${tile.photoId}`}
+          alt={hub.album.photoAlt(null)}
+          style={{
+            width: "100%",
+            aspectRatio: "1 / 1",
+            objectFit: "cover",
+            borderRadius: "var(--radius-sm)",
+            display: "block",
+            background: "var(--surface-sunken)",
+          }}
+        />
+      </li>
+    );
+  }
+
   if (tile.status === "failed") {
     return (
       <li style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>

@@ -441,7 +441,7 @@ export async function importOneGooglePhotoAction(
       bytes: downloaded.bytes,
       contentType: downloaded.contentType || mimeType || "application/octet-stream",
     });
-    await createAlbumPhoto(gate.runtime.db, {
+    const photo = await createAlbumPhoto(gate.runtime.db, {
       contributorPersonId: gate.personId,
       familyIds: families.familyIds,
       source: "google_picker",
@@ -453,7 +453,8 @@ export async function importOneGooglePhotoAction(
 
     revalidatePath("/hub/album");
     revalidatePath("/hub");
-    return { ok: true };
+    // Return the new id so the board renders this tile optimistically (see uploadOneAlbumPhotoAction).
+    return { ok: true, photoId: photo.id };
   } catch (err) {
     logGooglePhotosImportError("complete", err);
     // An OAuth failure means "reconnect"; any other per-item failure surfaces a sanitized detail.

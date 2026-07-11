@@ -19,7 +19,7 @@
  * substitutes a client-side check, and it only ever passes a Google `baseUrl` handle (token-gated),
  * never an access token.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlbumUploader, type AlbumFamilyOption } from "./AlbumUploader";
 import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
@@ -47,6 +47,8 @@ interface Entry {
   tempId: string;
   status: PendingTileStatus;
   work: WorkItem;
+  /** The created photo's server id — set when the entry transitions to `loaded`. */
+  photoId?: string;
 }
 
 let seq = 0;
@@ -98,9 +100,48 @@ export function AlbumBoard(props: {
     );
   }, []);
 
+  // Success: flip the tile to `loaded` carrying the real photo id. The tile does NOT disappear — it
+  // renders the real bytes immediately (via `photoId`), so there is never a blank gap between the
+  // spinner and the photo, and the tiles don't all pop at once when a coalesced refresh finally lands.
+  const markLoaded = useCallback((tempId: string, photoId: string) => {
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.tempId === tempId ? { ...e, status: "loaded", photoId } : e,
+      ),
+    );
+  }, []);
+
   const removeEntry = useCallback((tempId: string) => {
     setEntries((prev) => prev.filter((e) => e.tempId !== tempId));
   }, []);
+
+  // The families whose photos actually populate this grid (`props.photos`): the single scoped family,
+  // or ALL active families in "all" scope. Only a photo landing in one of these will ever reappear in
+  // a refreshed `props.photos` — so only an in-scope import can be reconciled.
+  const viewedFamilyIds = useMemo(
+    () =>
+      props.scope && props.scope !== "all"
+        ? new Set([props.scope])
+        : new Set(props.families.map((f) => f.familyId)),
+    [props.scope, props.families],
+  );
+
+  // Settle a successful import. When the target intersects the viewed scope (a solo contributor sends
+  // NO family ids — the server defaults to the sole family, which IS the viewed one — so empty counts
+  // as in-scope), keep the tile as an optimistic `loaded` photo that the refresh will reconcile. When
+  // the target is entirely OUTSIDE the viewed scope, the photo will never appear in this grid, so the
+  // placeholder would be stuck forever — drop it (the pre-optimistic behavior) instead.
+  const settleSuccess = useCallback(
+    (tempId: string, photoId: string, familyIds: string[]): void => {
+      const inScope =
+        familyIds.length === 0 || familyIds.some((id) => viewedFamilyIds.has(id));
+      if (inScope) markLoaded(tempId, photoId);
+      else removeEntry(tempId);
+      setRun((r) => ({ ...r, completed: r.completed + 1 }));
+      router.refresh();
+    },
+    [markLoaded, removeEntry, router, viewedFamilyIds],
+  );
 
   // Run ONE work item. Never throws — a rejected action becomes a `failed` tile.
   const runOne = useCallback(
@@ -120,6 +161,9 @@ export function AlbumBoard(props: {
             setStatus(tempId, "failed");
             return;
           }
+          // Show the real photo in place of the spinner immediately, then reconcile via refresh.
+          settleSuccess(tempId, result.photoId, work.familyIds);
+          return;
         } else {
           const fd = new FormData();
           fd.append("id", work.handle.id);
@@ -132,17 +176,15 @@ export function AlbumBoard(props: {
             setStatus(tempId, "failed");
             return;
           }
+          settleSuccess(tempId, result.photoId, work.familyIds);
+          return;
         }
-        // Success: drop the placeholder, count it, and refresh so the real photo appears.
-        removeEntry(tempId);
-        setRun((r) => ({ ...r, completed: r.completed + 1 }));
-        router.refresh();
       } catch {
         // A thrown/rejected action must never crash the pool — mark this tile failed and move on.
         setStatus(tempId, "failed");
       }
     },
-    [removeEntry, router, setStatus],
+    [settleSuccess, setStatus],
   );
 
   // Drain the queue, keeping at most IMPORT_POOL_CONCURRENCY in flight. Called whenever work is
@@ -249,10 +291,26 @@ export function AlbumBoard(props: {
     [enqueue, setStatus],
   );
 
-  const tiles: PendingTile[] = entries.map((e) => ({
-    tempId: e.tempId,
-    status: e.status,
-  }));
+  // Once a refresh reconciles a loaded tile — its `photoId` now appears in the server `photos` — the
+  // real grid tile takes over, so the optimistic placeholder must drop to avoid a duplicate. Compute
+  // the set of server-known ids once, hide already-reconciled loaded tiles from render, and prune them
+  // from state so they don't accumulate.
+  const serverIds = useMemo(
+    () => new Set(props.photos.map((p) => p.id)),
+    [props.photos],
+  );
+  const reconciled = useCallback(
+    (e: Entry): boolean =>
+      e.status === "loaded" && e.photoId !== undefined && serverIds.has(e.photoId),
+    [serverIds],
+  );
+  useEffect(() => {
+    setEntries((prev) => (prev.some(reconciled) ? prev.filter((e) => !reconciled(e)) : prev));
+  }, [reconciled]);
+
+  const tiles: PendingTile[] = entries
+    .filter((e) => !reconciled(e))
+    .map((e) => ({ tempId: e.tempId, status: e.status, photoId: e.photoId }));
   const importing = entries.some((e) => e.status === "importing");
 
   return (
