@@ -513,11 +513,184 @@ export interface KinshipTreeData {
  * SHARED CONTRACT STUB — Track-B "B-core" implements this against the spec.
  */
 export async function resolveKinshipTree(
-  _db: Database,
-  _ctx: AuthContext,
-  _familyId: string,
-  _rootPersonId: string,
-  _window: TreeWindow = DEFAULT_TREE_WINDOW,
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+  rootPersonId: string,
+  window: TreeWindow = DEFAULT_TREE_WINDOW,
 ): Promise<KinshipTreeData> {
-  throw new Error("NOT_IMPLEMENTED: resolveKinshipTree (Stage-0 contract stub)");
+  // Inherit auth (active-membership required, anonymous rejected) + the latest-supersede /
+  // subject-hide overlay for free. `edges` here are already the family's VISIBLE edges only.
+  //
+  // HONESTY NOTE (scalability seam): `resolveKinshipProjection` currently reads ALL of the family's
+  // edges server-side — but those rows are cheap and id-only. The windowing below bounds the two
+  // expensive/on-the-wire parts: the HYDRATION (we hit `persons` only for in-window ids) and the
+  // RETURNED PAYLOAD (nodes/edges). Pushing the generation bound down into recursive SQL so we never
+  // even fetch the far edges is a documented later seam (see spec §5) — NOT built here.
+  const { edges: visibleEdges } = await resolveKinshipProjection(db, ctx, familyId);
+
+  // Build undirected/directed adjacency over the VISIBLE edges only. `parent_of` is directed
+  // (A=parent, B=child); `partnered_with` is same-generation and symmetric.
+  const parentsOf = new Map<string, Set<string>>(); // child -> parents
+  const childrenOf = new Map<string, Set<string>>(); // parent -> children
+  const partnersOf = new Map<string, Set<string>>(); // person -> partners
+  const add = (m: Map<string, Set<string>>, k: string, v: string) => {
+    let s = m.get(k);
+    if (s === undefined) {
+      s = new Set<string>();
+      m.set(k, s);
+    }
+    s.add(v);
+  };
+  for (const e of visibleEdges) {
+    if (e.edgeType === "parent_of") {
+      add(parentsOf, e.personBId, e.personAId);
+      add(childrenOf, e.personAId, e.personBId);
+    } else {
+      add(partnersOf, e.personAId, e.personBId);
+      add(partnersOf, e.personBId, e.personAId);
+    }
+  }
+  const nb = (m: Map<string, Set<string>>, k: string): Set<string> =>
+    m.get(k) ?? new Set<string>();
+
+  // Assign each reachable person a generation offset from root (root = 0), then materialize only
+  // those within [-generationsUp, +generationsDown].
+  //
+  // Generation is defined by `parent_of` DISTANCE — that primitive alone encodes generational depth
+  // (a parent is gen-1, a child gen+1). `partnered_with` is same-generation but is a SOFT hint, never
+  // authoritative: a person could be both someone's partner (a step-parent, my-generation-of-partner)
+  // AND, by blood via `parent_of`, a different generation entirely (e.g. also my grandparent). Letting
+  // a partner hop set a generation on equal footing with parent hops makes the result depend on BFS
+  // visitation order and can mis-window such a node (cold-review finding). So we do it in two phases:
+  //   (1) BFS over `parent_of` only → authoritative, order-independent generations.
+  //   (2) fixpoint: a still-ungenerationed person adjacent to a generationed one via `partnered_with`
+  //       inherits that generation (partners share a row). Parent-derived generations always win.
+  // Pure `parent_of` DAGs (cousins sharing a grandparent) never conflict — every path to the shared
+  // ancestor is a parent hop and agrees — so this is correct AND order-independent for them too.
+  const up = window.generationsUp;
+  const down = window.generationsDown;
+  const genOf = new Map<string, number>();
+  // Whether a person's current generation came from a `parent_of` path (authoritative) vs. a
+  // `partner_of` hint (soft). A parent_of relaxation may overwrite a soft gen and re-enqueue; a
+  // partner hint may only set an as-yet-unset person. This makes blood generations win regardless of
+  // visitation order, while still letting a partner bridge into a new subgraph whose OWN parent_of
+  // edges are then explored (so a step-child, reached via the partner, still gets its gen+1).
+  const authoritative = new Set<string>();
+
+  // Single relaxation loop from root (root = 0, authoritative). Anchor on root even with no edges (a
+  // lone node still materializes if the person row exists; an invalid root that is no real person
+  // yields zero nodes). Terminates: a person is enqueued only when its gen is newly set or upgraded
+  // from soft→authoritative, and generations along a consistent parent_of DAG are bounded.
+  genOf.set(rootPersonId, 0);
+  authoritative.add(rootPersonId);
+  const queue: string[] = [rootPersonId];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const g = genOf.get(cur)!;
+    // parent_of neighbors — authoritative. Set if unseen, or upgrade/correct a soft (partner-hinted)
+    // gen. We never contradict an existing authoritative gen (a consistent tree won't produce one).
+    const relaxParent = (other: string, og: number) => {
+      if (!genOf.has(other) || (!authoritative.has(other) && genOf.get(other) !== og)) {
+        genOf.set(other, og);
+        authoritative.add(other);
+        queue.push(other);
+      } else if (!authoritative.has(other)) {
+        // Same gen a hint already guessed — just promote it to authoritative (no re-enqueue needed).
+        authoritative.add(other);
+      }
+    };
+    for (const p of nb(parentsOf, cur)) relaxParent(p, g - 1);
+    for (const c of nb(childrenOf, cur)) relaxParent(c, g + 1);
+    // partner neighbors — soft, same generation. Only seeds an as-yet-unplaced person; once placed it
+    // is enqueued so its own parent_of edges (e.g. a step-child) get explored.
+    for (const pt of nb(partnersOf, cur)) {
+      if (!genOf.has(pt)) {
+        genOf.set(pt, g); // soft (not added to `authoritative`)
+        queue.push(pt);
+      }
+    }
+  }
+
+  // MATERIALIZE the persons whose generation is within the window. A person reachable only through a
+  // beyond-window ancestor/descendant never got a generation at all (phase-1 BFS never reached it),
+  // so it is correctly excluded; the boundary pass below still SEES it via a single edge hop.
+  const inWindow = new Set<string>();
+  for (const [person, g] of genOf) {
+    if (g >= -up && g <= down) inWindow.add(person);
+  }
+
+  // Boundary flags: a materialized node has hidden parents/children iff it has a VISIBLE parent/child
+  // edge whose other endpoint was NOT materialized. Those boundary edges are also returned so the
+  // client can justify the caret without our hydrating the beyond-window person.
+  const boundaryEdgeKeys = new Set<string>();
+  const hasHiddenParents = new Map<string, boolean>();
+  const hasHiddenChildren = new Map<string, boolean>();
+  for (const id of inWindow) {
+    for (const p of nb(parentsOf, id)) {
+      if (!inWindow.has(p)) {
+        hasHiddenParents.set(id, true);
+        boundaryEdgeKeys.add(edgeKey({ edgeType: "parent_of", personAId: p, personBId: id }));
+      }
+    }
+    for (const c of nb(childrenOf, id)) {
+      if (!inWindow.has(c)) {
+        hasHiddenChildren.set(id, true);
+        boundaryEdgeKeys.add(edgeKey({ edgeType: "parent_of", personAId: id, personBId: c }));
+      }
+    }
+  }
+
+  // Return edges: every visible edge whose BOTH endpoints are materialized, plus the boundary edges
+  // (one endpoint beyond the window) that justify the hidden flags.
+  const edges = visibleEdges.filter((e) => {
+    const bothIn = inWindow.has(e.personAId) && inWindow.has(e.personBId);
+    return bothIn || boundaryEdgeKeys.has(edgeKey(e));
+  });
+
+  // Relations are derived over the WHOLE visible edge set (not just materialized), so a relation is
+  // correct even when an intermediate node sits at the boundary. Root ⇒ "self"; unrelated/bridge ⇒ null.
+  const kin = deriveKin(visibleEdges, rootPersonId);
+  const relationOf = new Map<string, KinRelation>(kin.map((k) => [k.personId, k.relation]));
+
+  // Hydrate ONLY materialized persons. A materialized id with no `persons` row (e.g. an invalid root)
+  // is dropped — the tree simply has no node for it.
+  const ids = Array.from(inWindow);
+  const rows =
+    ids.length === 0
+      ? []
+      : await db
+          .select({
+            id: persons.id,
+            displayName: persons.displayName,
+            identified: persons.identified,
+            lifeStatus: persons.lifeStatus,
+            birthYear: persons.birthYear,
+            deathYear: persons.deathYear,
+          })
+          .from(persons)
+          .where(inArray(persons.id, ids));
+
+  const nodes: TreeNode[] = rows.map((r) => ({
+    personId: r.id,
+    displayName: r.displayName,
+    identified: r.identified,
+    lifeStatus: r.lifeStatus,
+    birthYear: r.birthYear,
+    deathYear: r.deathYear,
+    relationToRoot: r.id === rootPersonId ? "self" : (relationOf.get(r.id) ?? null),
+    hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
+    hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,
+  }));
+
+  // Materialized-but-nonexistent ids (only the invalid root, realistically) don't become nodes; drop
+  // their boundary edges too so the payload never references a person that has no node.
+  const materializedWithRow = new Set(nodes.map((n) => n.personId));
+  const prunedEdges = edges.filter(
+    (e) =>
+      (materializedWithRow.has(e.personAId) || !inWindow.has(e.personAId)) &&
+      (materializedWithRow.has(e.personBId) || !inWindow.has(e.personBId)),
+  );
+
+  return { familyId, rootPersonId, nodes, edges: prunedEdges };
 }
