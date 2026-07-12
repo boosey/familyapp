@@ -17,6 +17,28 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-12** — **KINSHIP STACK (ADR-0016) implemented, PENDING RELEASE** on the `kin-a-release`
+  branch (NOT merged to `master`; `master` = `d2636e8`, without any of it). Human-gated release —
+  runbook: `docs/superpowers/plans/2026-07-12-kinship-release-runbook.md`. Units: **#30** person
+  provenance (`person_origin` enum, nullable names, `identified`, `reapUnacceptedInvitees`; migration
+  **0008**); **#31** kinship edge model + core auth surface (append-only `kinship_assertions` +
+  `kinship_subject_hides`, guarded `@chronicle/db/kinship`, `resolveKinshipProjection`/`deriveKin`;
+  migration **0009** + hand-carried append-only triggers); **#32** add & view a relative (`addRelative`
+  + `/hub/kin`); **#33** steward affirm/deny/correct (steward is NOT a visibility gate); **#34**
+  subject-hide veto (overrides steward affirm); **#35** story-subject tagging (`story_subjects`,
+  SEE-gated, `listStoriesAboutPerson`; migration **0010**); death fields (`persons.death_year`/
+  `death_date`, additive; migration **0011**). Kinship is a distinct data category — it does NOT widen
+  the single content front door. **Migration-chain verdict:** `_journal.json` is a clean linear chain
+  `0000…0011`; 0008–0011 are all additive/non-destructive (0011 = additive nullable columns only, no
+  invariant to hand-carry); drift guard green. **Evidence (run on `kin-a-release`):**
+  `pnpm --filter @chronicle/db test` → 16 files / 82 tests passed (incl. migration-drift +
+  append-only + media/consent invariants); `pnpm --filter @chronicle/core test` → 43 files / 440 tests
+  passed (incl. `kinship-tree.test.ts` + ADR-0011 authorization oracle). **KNOWN GAP:** the visual
+  tree renderer is only partially wired on this branch — the pure `computeTreeLayout` layout engine
+  (`apps/web/app/hub/tree/tree-layout.ts`) and the `resolveKinshipTree` core read exist and are
+  unit-tested, but NO `page.tsx`/`TreeCanvas` consumes them yet, so `/hub/tree` has no rendered route.
+  Confirm the Track-B canvas landed or descope the visual tree before claiming a live tree page; the
+  `/hub/kin` add/view-relative + governance + story-subject surfaces ship regardless.
 - **2026-07-09** — **Story Imagery Phase 5 COMPLETE** (connect-once + Picker each import). Slice A:
   `google_photos_connections` schema + migration 0007; `@chronicle/photos-google` (OAuth, Picker,
   AES-256-GCM token vault, `ScriptedGooglePhotosClient`). Slice B: web config/connection repo,

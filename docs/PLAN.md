@@ -380,6 +380,40 @@ browse). Product choice: **connect once**, not re-consent every import.
 Vision photo-understanding (premium tier) · external open-license illustrations · photos-only /
 combined photo+story feed · depicted-third-party consent.
 
+## KINSHIP STACK (ADR-0016) — per-family tree of generative edges  🔨  *(pending release, 2026-07-12)*
+*Implemented across #30–#35 + a visual-tree slice, integrated on the `kin-a-release` branch, NOT yet
+merged to `master` (`master` = `d2636e8`, without any of it). Human-gated release — see
+`docs/superpowers/plans/2026-07-12-kinship-release-runbook.md`.*
+A distinct data category — kinship NEVER widens the single content front door (content visibility is
+still membership + consent alone).
+- [x] **#30 Person provenance** — `person_origin` enum (`self`/`invitee`/`mention`), nullable
+      `display_name`/`spoken_name`, `identified`; `reapUnacceptedInvitees` reaper. Migration **0008**.
+- [x] **#31 Kinship edge model + core auth surface** — append-only `kinship_assertions` +
+      `kinship_subject_hides` ledgers (guarded `@chronicle/db/kinship`); `resolveKinshipProjection` /
+      `deriveKin` derive sibling/grandparent/etc. by walking `parent_of` + `partnered_with` (never
+      stored). Migration **0009** (+ hand-carried append-only triggers).
+- [x] **#32 Add & view a relative** — `addRelative` write path + `/hub/kin` read view (first e2e
+      kinship tracer). No new migration.
+- [x] **#33 Steward governance** — affirm / deny / correct an edge (steward is NOT a visibility gate;
+      affirm is optional endorsement, deny/correct are after-the-fact moderation).
+- [x] **#34 Subject-hide veto** — the subject of an edge can hide it family-wide; overrides even a
+      steward affirmation.
+- [x] **#35 Story-subject tagging** — `story_subjects` link table (who a story is about); SEE-gated
+      tag/untag + `listStoriesAboutPerson` (narrows within the authorized set, never grants). Migration **0010**.
+- [x] **Death fields** — create-time `persons.death_year` / `death_date` capture. Migration **0011**
+      (additive nullable columns only — no invariant/trigger).
+- [x] **Visual tree — layout engine + core read** — pure `computeTreeLayout`
+      (`apps/web/app/hub/tree/tree-layout.ts`, unit-tested) + bounded root-anchored `resolveKinshipTree`
+      core read (`packages/core`, unit-tested). Fills the ADR-0016 "visual tree renderer" seam at the
+      engine level.
+- [ ] **Visual tree — rendered `/hub/tree` route** — NOT yet on this branch as of the runbook: no
+      `page.tsx` / `TreeCanvas` consumes the layout engine, so `/hub/tree` has no rendered route. Track-B
+      canvas work must land (or the visual tree is descoped) before claiming a live tree page. Design:
+      `docs/superpowers/specs/2026-07-12-kinship-tree-viz-design.md`.
+- Gates verified on `kin-a-release` (2026-07-12): `@chronicle/db` 82/82 (incl. migration-drift guard),
+  `@chronicle/core` 440/440 (incl. `kinship-tree.test.ts` + ADR-0011 oracle). Full pre-merge gate
+  (`pnpm -r typecheck && pnpm -r test && pnpm -r lint`) is the human's release step.
+
 ## Seams to leave UNBUILT (Appendix) — verify each increment doesn't foreclose them
 branch-level audience · time-gated release · telephony channel · external-record enrichment /
 timeline-map-tree · steward console & succession · avatar consent gate & story-will ·
