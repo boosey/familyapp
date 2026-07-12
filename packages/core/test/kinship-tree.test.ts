@@ -169,6 +169,29 @@ describe("resolveKinshipTree — root defaulting / invalid root", () => {
     expect(tree.nodes).toHaveLength(0);
     expect(tree.edges).toHaveLength(0);
   });
+
+  it("does NOT leak a real person from another family when rooted on their id (cross-family guard)", async () => {
+    // Regression for the integrated-review finding: a member could pass ?root=<any persons.id> and
+    // have that person's name/birth/death hydrated even though they belong to another family / have
+    // no edge here. The root is legitimate only if it is the viewer OR a visible-edge endpoint.
+    const { member, fam } = await familyWithMember("Reader");
+    // A real, named, dated person who is NOT a member of `fam` and has no edge in it (they live in
+    // their own separate family with their own kin — irrelevant here).
+    const outsider = await makePersonFull(db, {
+      displayName: "Secret Sender",
+      birthYear: 1950,
+      lifeStatus: "deceased",
+      deathYear: 1999,
+    });
+    const otherFam = await makeFamily(db, "Other", outsider.id);
+    await addMembership(db, { personId: outsider.id, familyId: otherFam.id, role: "member" });
+
+    const tree = await resolveKinshipTree(db, account(member.id), fam.id, outsider.id);
+    // No hydration, no leak: the outsider's name/dates must never surface in `fam`'s tree.
+    expect(tree.nodes).toHaveLength(0);
+    expect(tree.edges).toHaveLength(0);
+    expect(node(tree, outsider.id)).toBeUndefined();
+  });
 });
 
 describe("resolveKinshipTree — hydration + relationToRoot", () => {

@@ -529,6 +529,22 @@ export async function resolveKinshipTree(
   // even fetch the far edges is a documented later seam (see spec §5) — NOT built here.
   const { edges: visibleEdges } = await resolveKinshipProjection(db, ctx, familyId);
 
+  // ROOT GUARD (authorization — do not remove). `resolveKinshipProjection` validates that the VIEWER
+  // is an active member, but says nothing about `rootPersonId`. Without this check a member could pass
+  // `?root=<any persons.id>` (or the fetch-on-expand action an arbitrary `centerPersonId`) and we would
+  // hydrate that person's name/birth/death/lifeStatus from `persons` even though they belong to another
+  // family or have no edge here — a cross-family PII leak. A root is legitimate ONLY if it is the viewer
+  // themselves (their own tree, possibly edge-less) OR an endpoint of one of THIS family's visible
+  // edges (any reachable relative / boundary node). Anything else yields an empty tree; the caller
+  // (page) then falls back to the viewer's self-root.
+  const viewer = viewerPersonId(ctx); // non-null: projection above already rejected anon/non-members
+  const rootIsVisibleEndpoint = visibleEdges.some(
+    (e) => e.personAId === rootPersonId || e.personBId === rootPersonId,
+  );
+  if (rootPersonId !== viewer && !rootIsVisibleEndpoint) {
+    return { familyId, rootPersonId, nodes: [], edges: [] };
+  }
+
   // Build undirected/directed adjacency over the VISIBLE edges only. `parent_of` is directed
   // (A=parent, B=child); `partnered_with` is same-generation and symmetric.
   const parentsOf = new Map<string, Set<string>>(); // child -> parents
