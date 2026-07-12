@@ -38,6 +38,9 @@ export interface StoryDetailClientProps {
   canReact: boolean;
   // Back href
   backHref: string;
+  // "View in family tree" — links to /hub/tree rooted on the narrator (Task 9). Null when no
+  // family scope is available to root the tree in.
+  authorTreeHref?: string | null;
   // Accompaniments
   storyImages: Array<{ id: string; familyPhotoId: string; caption: string | null }>;
 }
@@ -60,6 +63,7 @@ export function StoryDetailClient({
   likeState,
   canReact,
   backHref,
+  authorTreeHref,
   storyImages,
 }: StoryDetailClientProps) {
   // State for content
@@ -284,6 +288,21 @@ export function StoryDetailClient({
         >
           {eraLabelStr}
         </span>
+        {authorTreeHref && (
+          <Link
+            href={authorTreeHref}
+            data-testid="story-tree-link"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              fontWeight: 600,
+              color: "var(--accent-strong)",
+              textDecoration: "none",
+            }}
+          >
+            {hub.tree.openInTree}
+          </Link>
+        )}
       </div>
 
       {/* Edit Details Inline Form */}

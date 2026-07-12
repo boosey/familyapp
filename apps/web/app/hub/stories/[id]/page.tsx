@@ -71,6 +71,14 @@ export default async function StoryDetailPage({
   if (backScope) backParams.set("scope", backScope);
   const backHref = `/hub?${backParams.toString()}`;
 
+  // "View in family tree" — root the tree on this story's narrator, scoped to a family the author
+  // is in (first story target family, else the back-scope, else the viewer's first family). The tree
+  // page validates `root` against the family's visible edges and degrades safely on a bad pairing.
+  const treeScope = targets[0]?.id ?? backScope ?? viewerFamilies[0]?.id;
+  const authorTreeHref = treeScope
+    ? `/hub/tree?scope=${treeScope}&root=${story.ownerPersonId}`
+    : null;
+
   // Reactions state
   const favoriteState = await getFavoriteState(db, ctx, story.id);
   const likeState = await getLikeState(db, ctx, story.id);
@@ -104,6 +112,7 @@ export default async function StoryDetailPage({
         likeState={likeState}
         canReact={canReact}
         backHref={backHref}
+        authorTreeHref={authorTreeHref}
         storyImages={storyImages}
       />
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 clamp(16px, 4vw, 32px)" }}>

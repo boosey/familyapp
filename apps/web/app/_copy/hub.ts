@@ -601,6 +601,8 @@ export const hub = {
     heading: "Family tree",
     // Link from the /hub/kin list surface across to the visual tree, and back.
     openTree: "View family tree",
+    // Link from a story-detail byline into the tree, rooted on that story's narrator (Task 9).
+    openInTree: "View in family tree",
     backToKin: "← Relatives",
     // Empty states.
     noFamily: "Join or start a family to see your family tree.",
