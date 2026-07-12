@@ -47,6 +47,9 @@
       "@chronicle/core/pipeline": [
         "../../packages/core/src/pipeline.ts"
       ],
+      "@chronicle/core/kinship-derive": [
+        "../../packages/core/src/kinship-derive.ts"
+      ],
       "@chronicle/pipeline": [
         "../../packages/pipeline/src/index.ts"
       ],

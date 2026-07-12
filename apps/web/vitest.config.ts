@@ -33,6 +33,9 @@ export default defineConfig({
       "@chronicle/core/pipeline": fileURLToPath(
         new URL("../../packages/core/src/pipeline.ts", import.meta.url),
       ),
+      "@chronicle/core/kinship-derive": fileURLToPath(
+        new URL("../../packages/core/src/kinship-derive.ts", import.meta.url),
+      ),
       "@chronicle/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),
@@ -75,7 +78,14 @@ export default defineConfig({
   test: {
     // Component tests are .tsx and opt into jsdom per-file via `// @vitest-environment jsdom`;
     // the default node environment is kept for the logic-only .ts suites.
-    include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
+    // Tests live under __tests__/ AND colocated beside the code they cover (the tree layout/relabel
+    // logic suites sit in app/hub/tree/). Both roots are globbed so colocated suites run in CI too.
+    include: [
+      "__tests__/**/*.test.ts",
+      "__tests__/**/*.test.tsx",
+      "app/**/*.test.ts",
+      "app/**/*.test.tsx",
+    ],
     exclude: ["__tests__/**/*-shim.ts", "node_modules/**"],
   },
 });

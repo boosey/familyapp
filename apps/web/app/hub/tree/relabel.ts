@@ -1,4 +1,8 @@
-import { deriveKin, type KinRelation, type ResolvedKinshipEdge, type TreeNode } from "@chronicle/core";
+// `deriveKin` is imported from the dependency-free subpath so this client-reachable module
+// (via tree-canvas.tsx) does not pull the server-only `@chronicle/core` barrel (node:crypto) into
+// the browser bundle. `ResolvedKinshipEdge`/`TreeNode` stay type-only imports (erased at build).
+import { deriveKin, type KinRelation } from "@chronicle/core/kinship-derive";
+import type { ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 
 /**
  * Return `nodes` with each `relationToRoot` recomputed relative to `rootPersonId` from `edges`. The
