@@ -6,7 +6,7 @@
  */
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import type { Database } from "@chronicle/db";
+import type { Database, PersonSex } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
 import { defaultSpokenName } from "./names";
 import { validateBirthDate } from "./person-dob";
@@ -81,6 +81,22 @@ export async function updatePersonBirthDate(
     .set({
       birthDate,
       birthYear: input.year,
+      updatedAt: new Date(),
+    })
+    .where(eq(persons.id, personId));
+}
+
+/** ADR-0016 tree renderer — the profile editor's Sex control. Same three values as the add-relative
+ *  form (`male`/`female`/`unknown`); validation is the caller's job (this just persists). */
+export async function updatePersonSex(
+  db: Database,
+  personId: string,
+  sex: PersonSex,
+): Promise<void> {
+  await db
+    .update(persons)
+    .set({
+      sex,
       updatedAt: new Date(),
     })
     .where(eq(persons.id, personId));

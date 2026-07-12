@@ -90,6 +90,15 @@ export function AddRelativeForm({
       </label>
 
       <label className="kin-form-label">
+        {hub.kin.sexFieldLabel}
+        <select name="sex" className="kin-field" defaultValue="unknown">
+          <option value="unknown">{hub.kin.sexUnknown}</option>
+          <option value="male">{hub.kin.sexMale}</option>
+          <option value="female">{hub.kin.sexFemale}</option>
+        </select>
+      </label>
+
+      <label className="kin-form-label">
         {hub.kin.lifeStatusFieldLabel}
         <select
           name="lifeStatus"

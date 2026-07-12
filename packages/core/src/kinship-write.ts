@@ -15,7 +15,7 @@
 import { and, eq } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
-import type { Database, KinshipEdgeType, KinshipNature } from "@chronicle/db";
+import type { Database, KinshipEdgeType, KinshipNature, PersonSex } from "@chronicle/db";
 import type { AuthContext } from "./authorization";
 import { isActiveMember } from "./memberships";
 import { normalizeEdgeEndpoints, resolveKinshipProjection } from "./kinship-repository";
@@ -48,6 +48,8 @@ export interface AddRelativeInput {
   deathYear?: number | null;
   /** For parent_of edges; default "unknown". */
   nature?: KinshipNature;
+  /** ADR-0016 tree renderer — the relative's sex. Omitted => `"unknown"` (never inferred). */
+  sex?: PersonSex;
 }
 
 export interface AddRelativeResult {
@@ -78,6 +80,8 @@ async function insertMentionPerson(
     lifeStatus: "living" | "deceased";
     deathDate?: string | null;
     deathYear?: number | null;
+    /** ADR-0016 tree renderer. Omitted => `"unknown"` — a bridge/placeholder's sex is always unknown. */
+    sex?: PersonSex;
   },
 ): Promise<string> {
   const identified = opts.displayName !== null;
@@ -98,6 +102,7 @@ async function insertMentionPerson(
       deathDate: deceased ? (opts.deathDate ?? null) : null,
       deathYear: deceased ? (opts.deathYear ?? null) : null,
       accountId: null,
+      sex: opts.sex ?? "unknown",
     })
     .returning({ id: persons.id });
   return row!.id;
@@ -250,6 +255,7 @@ export async function addRelative(
       // Only persisted when the relative is deceased (insertMentionPerson NULLs them otherwise).
       deathDate: input.deathDate ?? null,
       deathYear: input.deathYear ?? null,
+      sex: input.sex ?? "unknown",
     });
 
     const edgeIds: string[] = [];

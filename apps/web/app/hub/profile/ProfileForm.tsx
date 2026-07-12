@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState, type CSSProperties } from "react";
-import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalProfile, PersonSex } from "@chronicle/db";
 import { common, hub, welcome } from "@/app/_copy";
 import {
   saveDisplayNameAction,
   saveSpokenNameAction,
   saveBirthDateAction,
+  saveSexAction,
   saveAnchorAction,
 } from "./actions";
 
@@ -14,6 +15,7 @@ type FieldKey =
   | "displayName"
   | "spokenName"
   | "birthDate"
+  | "sex"
   | keyof BiographicalProfile;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -23,6 +25,7 @@ export interface ProfileFormProps {
   spokenName: string;
   email: string | null;
   birthDate: string | null;
+  sex: PersonSex;
   anchors: Partial<BiographicalProfile>;
 }
 
@@ -57,10 +60,12 @@ export function ProfileForm({
   spokenName: initialSpokenName,
   email,
   birthDate: initialBirthDate,
+  sex: initialSex,
   anchors: initialAnchors,
 }: ProfileFormProps) {
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [spokenName, setSpokenName] = useState(initialSpokenName);
+  const [sex, setSex] = useState<PersonSex>(initialSex);
   const parsed = parseBirthDate(initialBirthDate);
   const [month, setMonth] = useState(parsed.month);
   const [day, setDay] = useState(parsed.day);
@@ -230,6 +235,24 @@ export function ProfileForm({
             </div>
             {hintEl("birthDate")}
           </div>
+
+          <label className="kin-form-label">
+            {hub.kin.sexFieldLabel}
+            <select
+              className="kin-field"
+              value={sex}
+              onChange={(e) => {
+                const next = e.target.value as PersonSex;
+                setSex(next);
+                void runSave("sex", () => saveSexAction(next));
+              }}
+            >
+              <option value="unknown">{hub.kin.sexUnknown}</option>
+              <option value="male">{hub.kin.sexMale}</option>
+              <option value="female">{hub.kin.sexFemale}</option>
+            </select>
+            {hintEl("sex")}
+          </label>
         </div>
       </section>
 

@@ -15,7 +15,7 @@ import {
   type EdgeRef,
   type KinshipEdgeActionResult,
 } from "@chronicle/core";
-import type { KinshipEdgeType, KinshipNature } from "@chronicle/db";
+import type { KinshipEdgeType, KinshipNature, PersonSex } from "@chronicle/db";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
 import { hub } from "@/app/_copy";
 
@@ -34,6 +34,16 @@ function parseRelation(value: FormDataEntryValue | null): AddRelativeRelation | 
   return typeof value === "string" && VALID_RELATIONS.has(value as AddRelativeRelation)
     ? (value as AddRelativeRelation)
     : null;
+}
+
+const VALID_SEXES: ReadonlySet<PersonSex> = new Set<PersonSex>(["male", "female", "unknown"]);
+
+/** Never trust the raw client value: anything not one of the three valid sexes is treated as omitted
+ *  (core then defaults the created person to `"unknown"`). */
+function parseSex(value: FormDataEntryValue | null): PersonSex | undefined {
+  return typeof value === "string" && VALID_SEXES.has(value as PersonSex)
+    ? (value as PersonSex)
+    : undefined;
 }
 
 /**
@@ -103,6 +113,8 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     }
   }
 
+  const sex = parseSex(formData.get("sex"));
+
   const input: AddRelativeInput = {
     familyId,
     relation,
@@ -113,6 +125,8 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     ...(birthDate ? { birthDate } : {}),
     lifeStatus,
     ...(deathYear !== undefined ? { deathYear } : {}),
+    // Omitted/"unknown"/malformed => omit entirely; core defaults the created person to "unknown".
+    ...(sex && sex !== "unknown" ? { sex } : {}),
   };
 
   plog("kin", "addRelative: received", {

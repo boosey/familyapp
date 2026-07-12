@@ -45,6 +45,7 @@ async function personRow(id: string) {
       lifeStatus: persons.lifeStatus,
       birthDate: persons.birthDate,
       birthYear: persons.birthYear,
+      sex: persons.sex,
     })
     .from(persons)
     .where(eq(persons.id, id))
@@ -190,6 +191,44 @@ describe("addRelative — direct relations", () => {
     expect(r.identified).toBe(false);
     expect(r.displayName).toBeNull();
     expect(r.spokenName).toBeNull();
+  });
+
+  it("persists a supplied sex on the created relative", async () => {
+    const { me, fam } = await familyWithMe();
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Eleanor Vance",
+      sex: "female",
+    });
+    const r = await personRow(res.createdPersonId!);
+    expect(r.sex).toBe("female");
+  });
+
+  it("defaults the created relative's sex to `unknown` when omitted", async () => {
+    const { me, fam } = await familyWithMe();
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Eleanor Vance",
+    });
+    const r = await personRow(res.createdPersonId!);
+    expect(r.sex).toBe("unknown");
+  });
+
+  it("keeps an auto-minted bridge person's sex `unknown` even when the relative's sex is supplied", async () => {
+    const { me, fam } = await familyWithMe();
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "grandparent",
+      displayName: "Grandma Eleanor",
+      sex: "female",
+    });
+    expect(res.bridgePersonId).toBeDefined();
+    const bridge = await personRow(res.bridgePersonId!);
+    expect(bridge.sex).toBe("unknown");
+    const created = await personRow(res.createdPersonId!);
+    expect(created.sex).toBe("female");
   });
 });
 

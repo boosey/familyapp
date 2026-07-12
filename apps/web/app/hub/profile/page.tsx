@@ -32,6 +32,7 @@ export default async function ProfilePage() {
       spokenName: persons.spokenName,
       birthDate: persons.birthDate,
       biographicalAnchors: persons.biographicalAnchors,
+      sex: persons.sex,
       email: accounts.email,
     })
     .from(persons)
@@ -92,6 +93,7 @@ export default async function ProfilePage() {
           spokenName={row.spokenName ?? ""}
           email={row.email}
           birthDate={row.birthDate}
+          sex={row.sex ?? "unknown"}
           anchors={anchors}
         />
       </div>

@@ -1,10 +1,11 @@
 "use server";
 
-import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalProfile, PersonSex } from "@chronicle/db";
 import {
   updatePersonDisplayName,
   updatePersonSpokenName,
   updatePersonBirthDate,
+  updatePersonSex,
   updateBiographicalAnchor,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
@@ -51,6 +52,20 @@ export async function saveBirthDateAction(input: {
   if ("error" in ctx) return ctx;
   try {
     await updatePersonBirthDate(ctx.db, ctx.personId, input);
+    return { ok: true };
+  } catch {
+    return { error: "save_failed" };
+  }
+}
+
+const VALID_SEXES: ReadonlySet<PersonSex> = new Set<PersonSex>(["male", "female", "unknown"]);
+
+export async function saveSexAction(sex: string): Promise<SaveResult> {
+  const ctx = await requireAccount();
+  if ("error" in ctx) return ctx;
+  if (!VALID_SEXES.has(sex as PersonSex)) return { error: "save_failed" };
+  try {
+    await updatePersonSex(ctx.db, ctx.personId, sex as PersonSex);
     return { ok: true };
   } catch {
     return { error: "save_failed" };

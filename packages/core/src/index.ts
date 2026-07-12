@@ -127,6 +127,7 @@ export {
   updatePersonDisplayName,
   updatePersonSpokenName,
   updatePersonBirthDate,
+  updatePersonSex,
   type UpdatePersonIdentityInput,
 } from "./person-identity";
 export { updateBiographicalAnchor } from "./person-anchors";
