@@ -167,6 +167,10 @@ export default async function HubPage({
     },
     { key: "ask", label: hub.shell.tabAsk },
     { key: "asks", label: hub.shell.tabAsks },
+    // The visual family tree lives on its own route (/hub/tree), not as an in-page feed tab.
+    // HubTabsNav special-cases this key to navigate there (scope preserved); it is never the
+    // `active` value on /hub, so no active-state wiring is needed here.
+    { key: "tree", label: hub.tree.heading },
     // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
     // viewer (member of none) has nothing to invite into, so the tab is absent for them (Task 4.5).
     ...(inviteTabVisible(activeFamilies.length)
