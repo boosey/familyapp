@@ -480,6 +480,9 @@ export const hub = {
     saving: "Saving…",
     saved: "Saved",
     saveError: "Could not save — try again.",
+    // 2026-07-12 pedigree-nav redesign (W agent): profile Sex control (card color only). No
+    // profile-specific copy block existed pre-redesign — reuse `kin.sexFieldLabel` / `kin.sexMale`
+    // / `kin.sexFemale` / `kin.sexUnknown` here rather than duplicating the strings.
   },
 
   settings: {
@@ -552,6 +555,11 @@ export const hub = {
     // Shown only when life status = "No longer living" (ADR-0016 tree renderer death-year capture).
     deathYearFieldLabel: "Year they died (optional)",
     deathYearPlaceholder: "e.g. 1998",
+    // 2026-07-12 pedigree-nav redesign: optional Sex select (card color only, never a relation label).
+    sexFieldLabel: "Sex (optional)",
+    sexMale: "Male",
+    sexFemale: "Female",
+    sexUnknown: "Prefer not to say",
     submit: "Add relative",
     submitting: "Adding…",
     // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
@@ -628,6 +636,8 @@ export const hub = {
     fit: "Fit",
     pan: "Drag to pan",
     // Per-box caret aria-labels (ADR-0016 tree renderer): expand/collapse ancestors & descendants.
+    // OBSOLETE (2026-07-12 pedigree-nav redesign) — superseded by showEarlier/showDescendants below.
+    // Left in place until the U agent (canvas UI rewrite) removes the last reference.
     showParents: "Show parents",
     hideParents: "Hide parents",
     showChildren: "Show children",
@@ -641,6 +651,21 @@ export const hub = {
     panelManageKin: "Manage kin",
     // Generic load failure (fetch-on-expand / re-center).
     loadFailed: "Couldn't load that part of the tree. Please try again.",
+    // --- 2026-07-12 pedigree-nav redesign (spec: kinship-tree-pedigree-nav-design.md) ---
+    // Panel re-root action — the ONLY re-root trigger (select/second-tap gesture removed).
+    centerHere: "Center tree here",
+    // Panel add-partner link (relation=partner).
+    addPartner: "Add partner",
+    // Shared KebabMenu (global toolbar ⋮ + optional per-card ⋮) labels.
+    kebabAddChild: "Add child",
+    kebabAddSibling: "Add sibling",
+    kebabAddParent: "Add parent",
+    kebabAddPartner: "Add partner",
+    // Inline empty-parent-slot label (layout's EmptyParentSlot affordance).
+    addParentSlot: "Add parent",
+    // Frontier-chevron aria labels (replace the per-box carets above).
+    showEarlier: "Show earlier generations",
+    showDescendants: "Show descendants",
   },
 } as const;
 

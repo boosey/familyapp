@@ -85,6 +85,7 @@ export type {
   StorySubject,
   NewStorySubject,
   PersonOrigin,
+  PersonSex,
   KinshipAssertion,
   NewKinshipAssertion,
   KinshipSubjectHide,

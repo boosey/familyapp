@@ -56,6 +56,13 @@ export const lifeStatusEnum = pgEnum("life_status", ["living", "deceased"]);
  */
 export const personOriginEnum = pgEnum("person_origin", ["self", "invitee", "mention"]);
 
+/**
+ * ADR-0016 (tree renderer): a nullable, self-reported attribute. Null and `'unknown'` are treated
+ * identically downstream — this drives tree card color only (a left-edge accent bar), never any
+ * relation label (labels stay ungendered: "parent," "partner," "grandparent").
+ */
+export const personSexEnum = pgEnum("person_sex", ["male", "female", "unknown"]);
+
 /** Phase 0 needs exactly these three; the model leaves room for more. */
 export const membershipRoleEnum = pgEnum("membership_role", [
   "narrator",
@@ -239,6 +246,11 @@ export const persons = pgTable(
       .$type<Partial<BiographicalProfile>>()
       .default(sql`'{}'::jsonb`),
     lifeStatus: lifeStatusEnum("life_status").notNull().default("living"),
+    /**
+     * ADR-0016 (tree renderer): nullable — null and `'unknown'` are treated identically
+     * downstream. Drives the tree card color accent only; never a relation label.
+     */
+    sex: personSexEnum("sex").default("unknown"),
     /**
      * ADR-0016: provenance. Immutable. Defaults to `self` so every existing row backfills to `self`
      * and any Person minted without an explicit origin (a real actor) is correctly `self`. The
@@ -1508,6 +1520,7 @@ export type NewFollowUpDecisionRow = typeof followUpDecisions.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type PersonOrigin = (typeof personOriginEnum.enumValues)[number];
+export type PersonSex = (typeof personSexEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
 export type MembershipStatus = (typeof membershipStatusEnum.enumValues)[number];
 export type StoryState = (typeof storyStateEnum.enumValues)[number];

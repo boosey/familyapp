@@ -19,6 +19,7 @@ CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'inta
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
 CREATE TYPE "public"."person_origin" AS ENUM('self', 'invitee', 'mention');
+CREATE TYPE "public"."person_sex" AS ENUM('male', 'female', 'unknown');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
 CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified', 'human_metadata_edit');
 CREATE TYPE "public"."story_image_provenance" AS ENUM('family_photo', 'illustration');
@@ -278,6 +279,7 @@ CREATE TABLE "persons" (
 	"onboarded_at" timestamp with time zone,
 	"biographical_anchors" jsonb DEFAULT '{}'::jsonb,
 	"life_status" "life_status" DEFAULT 'living' NOT NULL,
+	"sex" "person_sex" DEFAULT 'unknown',
 	"origin" "person_origin" DEFAULT 'self' NOT NULL,
 	"identified" boolean DEFAULT true NOT NULL,
 	"account_id" uuid,

@@ -27,6 +27,7 @@ import type {
   KinshipNature,
   KinshipState,
   LifeStatus,
+  PersonSex,
 } from "@chronicle/db";
 import { AuthorizationError } from "./errors";
 import { viewerPersonId, type AuthContext } from "./authorization";
@@ -368,6 +369,8 @@ export interface TreeNode {
   lifeStatus: "living" | "deceased";
   birthYear: number | null;
   deathYear: number | null;
+  /** ADR-0016: card color only, never a relation label. Bridge/unidentified nodes surface "unknown". */
+  sex: PersonSex;
   /** Most-specific derived relation to the root; "self" for the root; null if unrelated/bridge-only. */
   relationToRoot: KinRelation | "self" | null;
   /** True when parents/children exist in the projection but were not materialized in this window. */
@@ -564,6 +567,7 @@ export async function resolveKinshipTree(
             lifeStatus: persons.lifeStatus,
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
+            sex: persons.sex,
           })
           .from(persons)
           .where(inArray(persons.id, ids));
@@ -575,6 +579,7 @@ export async function resolveKinshipTree(
     lifeStatus: r.lifeStatus,
     birthYear: r.birthYear,
     deathYear: r.deathYear,
+    sex: r.sex ?? "unknown",
     relationToRoot: r.id === rootPersonId ? "self" : (relationOf.get(r.id) ?? null),
     hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
     hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,

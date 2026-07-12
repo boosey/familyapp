@@ -83,6 +83,7 @@ async function makePersonFull(
     lifeStatus?: "living" | "deceased";
     birthYear?: number | null;
     deathYear?: number | null;
+    sex?: "male" | "female" | "unknown" | null;
   },
 ) {
   const [p] = await db
@@ -94,6 +95,7 @@ async function makePersonFull(
       lifeStatus: opts.lifeStatus ?? "living",
       birthYear: opts.birthYear ?? null,
       deathYear: opts.deathYear ?? null,
+      sex: opts.sex,
     })
     .returning();
   return p!;
@@ -246,6 +248,24 @@ describe("resolveKinshipTree — hydration + relationToRoot", () => {
     expect(node(tree, member.id)!.relationToRoot).toBe("sibling");
     expect(node(tree, pa.id)!.relationToRoot).toBe("parent");
     expect(node(tree, gp.id)!.relationToRoot).toBe("grandparent");
+  });
+});
+
+describe("resolveKinshipTree — sex projection (ADR-0016 tree card color)", () => {
+  it("projects a person's sex and coalesces a null DB value to 'unknown'", async () => {
+    const { member, fam } = await familyWithMember();
+    const root = member;
+    const dad = await makePersonFull(db, { displayName: "Dad", sex: "male" });
+    const mystery = await makePersonFull(db, { displayName: "Mystery", sex: null });
+
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: dad.id, b: root.id, actor: member.id });
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: mystery.id, b: root.id, actor: member.id });
+
+    const tree = await resolveKinshipTree(db, account(member.id), fam.id, root.id);
+
+    expect(node(tree, dad.id)!.sex).toBe("male");
+    // Null in the DB coalesces to "unknown" — never surfaced as null.
+    expect(node(tree, mystery.id)!.sex).toBe("unknown");
   });
 });
 

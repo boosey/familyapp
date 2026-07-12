@@ -80,6 +80,8 @@ export {
 } from "./story-repository";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";
+// ADR-0016 (tree renderer): card color only, mirrors `TreeNode.sex`.
+export type { PersonSex } from "@chronicle/db";
 export * from "./follow-up-record";
 // `getStoryAndRecordingForPipeline` + `PipelineStoryView` are intentionally NOT re-exported
 // here. They are a content-surfacing read with no AuthContext; the only legitimate caller is
