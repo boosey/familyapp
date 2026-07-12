@@ -7,6 +7,7 @@ import {
   getStoryForViewer,
   getNarratorProfile,
   listStoryImages,
+  listStorySubjects,
   getFavoriteState,
   getLikeState,
 } from "@chronicle/core";
@@ -14,6 +15,7 @@ import { getRuntime } from "@/lib/runtime";
 import { markStorySeen, loadStoryFamilyTargets, loadViewerFamilies } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { StoryDetailClient } from "./StoryDetailClient";
+import { StorySubjectsSection } from "./StorySubjectsSection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,6 +76,13 @@ export default async function StoryDetailPage({
   const likeState = await getLikeState(db, ctx, story.id);
   const canReact = ctx.kind === "account";
 
+  // Who this story is about (issue #35). SEE-gated read; a signed-in viewer may tag/untag.
+  const subjects = (await listStorySubjects(db, ctx, story.id)).map((s) => ({
+    personId: s.personId,
+    displayName: s.displayName,
+  }));
+  const canTagSubjects = ctx.kind === "account";
+
   return (
     <main className="kin-page">
       <StoryDetailClient
@@ -97,6 +106,13 @@ export default async function StoryDetailPage({
         backHref={backHref}
         storyImages={storyImages}
       />
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 clamp(16px, 4vw, 32px)" }}>
+        <StorySubjectsSection
+          storyId={story.id}
+          subjects={subjects}
+          canEdit={canTagSubjects}
+        />
+      </div>
     </main>
   );
 }

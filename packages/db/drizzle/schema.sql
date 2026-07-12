@@ -366,6 +366,14 @@ CREATE TABLE "story_recordings" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "story_subjects" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"story_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
+	"tagged_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "story_views" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"story_id" uuid NOT NULL,
@@ -450,6 +458,9 @@ ALTER TABLE "story_likes" ADD CONSTRAINT "story_likes_story_id_stories_id_fk" FO
 ALTER TABLE "story_likes" ADD CONSTRAINT "story_likes_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_recordings" ADD CONSTRAINT "story_recordings_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_subjects" ADD CONSTRAINT "story_subjects_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_subjects" ADD CONSTRAINT "story_subjects_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "story_subjects" ADD CONSTRAINT "story_subjects_tagged_by_person_id_persons_id_fk" FOREIGN KEY ("tagged_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
@@ -502,6 +513,9 @@ CREATE UNIQUE INDEX "story_likes_story_person_uq" ON "story_likes" USING btree (
 CREATE INDEX "story_likes_person_idx" ON "story_likes" USING btree ("person_id");
 CREATE INDEX "story_recordings_story_idx" ON "story_recordings" USING btree ("story_id");
 CREATE UNIQUE INDEX "story_recordings_story_position_uq" ON "story_recordings" USING btree ("story_id","position");
+CREATE UNIQUE INDEX "story_subjects_story_person_uq" ON "story_subjects" USING btree ("story_id","person_id");
+CREATE INDEX "story_subjects_story_idx" ON "story_subjects" USING btree ("story_id");
+CREATE INDEX "story_subjects_person_idx" ON "story_subjects" USING btree ("person_id");
 CREATE UNIQUE INDEX "story_views_story_person_uq" ON "story_views" USING btree ("story_id","person_id");
 CREATE INDEX "story_views_person_idx" ON "story_views" USING btree ("person_id");
 CREATE INDEX "voice_captions_photo_idx" ON "voice_captions" USING btree ("photo_id");

@@ -8,6 +8,7 @@ import {
   proseRevisions,
   stories,
   storyRecordings,
+  storySubjects,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -87,12 +88,15 @@ describe("eraseStory — owner erasure of a consented, shared story", () => {
 
 describe("eraseStory — owner erasure of a FULLY-POPULATED shared voice story", () => {
   // Regression for the production deletion failures (2026-07-05): a real shared story carries
-  // child rows the minimal fixtures above omit — a follow_up_decisions ledger row (ADR-0013) and
-  // a per-take prose_revisions row (ADR-0014, FK → story_recordings). The cascade must erase ALL
-  // of them. This locks in the WHOLE delete order so a guard/FK can't whack-a-mole again:
+  // child rows the minimal fixtures above omit — a follow_up_decisions ledger row (ADR-0013), a
+  // per-take prose_revisions row (ADR-0014, FK → story_recordings), and a story_subjects tag
+  // (ADR-0016, issue #35, FK → stories). The cascade must erase ALL of them. This locks in the
+  // WHOLE delete order so a guard/FK can't whack-a-mole again:
   //   - follow_up_decisions has an append-only trigger; DELETE must be permitted inside the token.
   //   - prose_revisions.story_recording_id FKs story_recordings, so prose must go BEFORE takes.
-  it("hard-deletes the follow_up_decisions ledger and per-take prose_revisions too", async () => {
+  //   - story_subjects.story_id FKs stories (ON DELETE no action), so the tag must go BEFORE the
+  //     story — else erasing a tagged story raises a foreign-key violation and rolls back.
+  it("hard-deletes the follow_up_decisions ledger, per-take prose_revisions, and story_subjects too", async () => {
     const owner = await makePerson();
     const family = await makeFamily(owner.id);
     const { story } = await makeSharedStory(owner.id, family.id);
@@ -113,6 +117,14 @@ describe("eraseStory — owner erasure of a FULLY-POPULATED shared voice story",
       threadPosition: 0,
       recordKind: "decision",
     });
+    // A story-subject tag: the person the story is ABOUT (ADR-0016 #35). Direct insert, matching
+    // this suite's fixture idiom. Its non-cascading FK to stories is the whack-a-mole this locks in.
+    const subject = await makePerson("Grandpa");
+    await db.insert(storySubjects).values({
+      storyId: story.id,
+      personId: subject.id,
+      taggedByPersonId: owner.id,
+    });
 
     const result = await eraseStory(db, { kind: "account", personId: owner.id }, { storyId: story.id });
 
@@ -124,6 +136,11 @@ describe("eraseStory — owner erasure of a FULLY-POPULATED shared voice story",
     expect(
       await db.select().from(proseRevisions).where(eq(proseRevisions.storyId, story.id)),
     ).toHaveLength(0);
+    expect(
+      await db.select().from(storySubjects).where(eq(storySubjects.storyId, story.id)),
+    ).toHaveLength(0);
+    // The tagged Person survives — it is an independent row, not a child of the story.
+    expect(await db.select().from(persons).where(eq(persons.id, subject.id))).toHaveLength(1);
   });
 });
 

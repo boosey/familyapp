@@ -27,6 +27,7 @@ import {
   storyRecordings,
   storyFavorites,
   storyLikes,
+  storySubjects,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -53,7 +54,12 @@ import type {
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
-import { type AuthContext, getStoryForViewer, viewerPersonId } from "./authorization";
+import {
+  type AuthContext,
+  getStoryForViewer,
+  storyVisibilityPredicate,
+  viewerPersonId,
+} from "./authorization";
 // The subject-photo cover insert routes through `attachPhotoToStoryTx`, which embeds the consolidated
 // `assertPersonCanAccessAlbumPhoto` gate (existence + soft-delete + owner-can-see) IN the creation tx —
 // so there is exactly ONE gate choke point, not a redundant second call here.
@@ -1055,6 +1061,7 @@ export async function discardDraftStory(
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
     await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
     await tx.delete(storyFavorites).where(eq(storyFavorites.storyId, input.storyId));
+    await tx.delete(storySubjects).where(eq(storySubjects.storyId, input.storyId));
     await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
     await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
     await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
@@ -2269,4 +2276,217 @@ export async function getLikeState(
     count: countResult?.count ?? 0,
     likers: likersList,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Story-subject tagging (ADR-0016, issue #35) — who a Story is ABOUT.
+//
+// A `story_subjects` row is a plain Person↔Story association: it records that a Story depicts a
+// given Person (a member OR a `mention`). It is CONTENT-adjacent (it references the guarded
+// `stories` table), so it lives in this audited file and every access is gated by the SAME front
+// door as story content:
+//   - WRITES (tag/untag) require the actor to be authorized to SEE the story (getStoryForViewer).
+//   - The "subjects of a story" READ requires SEE on the story too.
+//   - The "stories about X" READ is scoped by `storyVisibilityPredicate` — the SQL form of the
+//     authorization oracle — so the subject link only ever FILTERS the viewer's already-authorized
+//     set. Tagging never widens visibility (ADR-0016: "kinship never drives authorization"; the
+//     same holds for subject tags — they are not an access grant).
+//
+// The inline-mention path mirrors kinship-write.ts `insertMentionPerson`: a named subject that is
+// not yet a Person is minted as `origin='mention'`, `identified=true`, with `spokenName` = the
+// first whitespace-delimited word.
+// ---------------------------------------------------------------------------
+
+export interface StorySubjectView {
+  personId: string;
+  /** NULL only for an anonymous placeholder mention (ADR-0016); a tagged subject is always named. */
+  displayName: string | null;
+  taggedByPersonId: string;
+  createdAt: Date;
+}
+
+export interface TagStorySubjectInput {
+  storyId: string;
+  /** Tag an EXISTING Person by id. Mutually exclusive with `newPersonDisplayName`. */
+  personId?: string;
+  /** Create an identified `mention` Person with this name and tag it, in one operation. */
+  newPersonDisplayName?: string;
+}
+
+export interface TagStorySubjectResult {
+  tagged: true;
+  /** The Person now tagged as a subject (existing id, or the freshly-minted mention). */
+  personId: string;
+  /** Set only when a `mention` Person was created inline (equals `personId`). */
+  createdPersonId?: string;
+}
+
+/**
+ * Tag a Person as a subject of a Story. The actor MUST be authorized to SEE the story (the front
+ * door is unchanged: `getStoryForViewer` gates the whole operation, so a viewer who can't read the
+ * story cannot tag on it, and the inline mention is created ONLY after that gate passes — no orphan
+ * Person is left behind on a denied attempt). Either tag an existing `personId` OR create an
+ * identified `mention` from `newPersonDisplayName`; exactly one must be given. Idempotent per
+ * (storyId, personId) via the unique index.
+ */
+export async function tagStorySubject(
+  db: Database,
+  ctx: AuthContext,
+  input: TagStorySubjectInput,
+): Promise<TagStorySubjectResult> {
+  const actor = viewerPersonId(ctx);
+  if (actor === null) {
+    throw new InvariantViolation("tagStorySubject: an anonymous actor cannot tag a story subject");
+  }
+  const hasExisting = input.personId !== undefined;
+  const hasNew = input.newPersonDisplayName !== undefined;
+  if (hasExisting === hasNew) {
+    throw new InvariantViolation(
+      "tagStorySubject: provide exactly one of personId or newPersonDisplayName",
+    );
+  }
+
+  // FRONT DOOR: the actor must be able to SEE this story. This runs BEFORE any write, so a denied
+  // attempt creates neither a mention Person nor a subject row.
+  const story = await getStoryForViewer(db, ctx, input.storyId);
+  if (!story) {
+    throw new InvariantViolation(
+      `tagStorySubject: story ${input.storyId} not found or access denied`,
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    let personId: string;
+    let createdPersonId: string | undefined;
+    if (hasNew) {
+      const displayName = input.newPersonDisplayName!.trim();
+      if (displayName.length === 0) {
+        throw new InvariantViolation("tagStorySubject: newPersonDisplayName must be non-empty");
+      }
+      // Inline mention (mirrors kinship-write.ts insertMentionPerson): identified, spokenName = first word.
+      const spokenName = displayName.split(/\s+/)[0] ?? null;
+      const [row] = await tx
+        .insert(persons)
+        .values({
+          displayName,
+          spokenName,
+          origin: "mention",
+          identified: true,
+          accountId: null,
+        })
+        .returning({ id: persons.id });
+      personId = row!.id;
+      createdPersonId = personId;
+    } else {
+      personId = input.personId!;
+    }
+
+    await tx
+      .insert(storySubjects)
+      .values({ storyId: input.storyId, personId, taggedByPersonId: actor })
+      .onConflictDoNothing({
+        target: [storySubjects.storyId, storySubjects.personId],
+      });
+
+    const result: TagStorySubjectResult = { tagged: true, personId };
+    if (createdPersonId !== undefined) result.createdPersonId = createdPersonId;
+    return result;
+  });
+}
+
+/**
+ * Untag a Person from a Story. The actor must be authorized to SEE the story (same front-door gate
+ * as tagging). Removing a non-existent link is a no-op that still reports `untagged: true`.
+ */
+export async function untagStorySubject(
+  db: Database,
+  ctx: AuthContext,
+  input: { storyId: string; personId: string },
+): Promise<{ untagged: true }> {
+  const actor = viewerPersonId(ctx);
+  if (actor === null) {
+    throw new InvariantViolation(
+      "untagStorySubject: an anonymous actor cannot untag a story subject",
+    );
+  }
+  const story = await getStoryForViewer(db, ctx, input.storyId);
+  if (!story) {
+    throw new InvariantViolation(
+      `untagStorySubject: story ${input.storyId} not found or access denied`,
+    );
+  }
+  await db
+    .delete(storySubjects)
+    .where(
+      and(
+        eq(storySubjects.storyId, input.storyId),
+        eq(storySubjects.personId, input.personId),
+      ),
+    );
+  return { untagged: true };
+}
+
+/**
+ * The Persons a Story is ABOUT — gated on SEE for the story. A viewer who cannot read the story
+ * gets an empty list (no leak of who a private story depicts).
+ */
+export async function listStorySubjects(
+  db: Database,
+  ctx: AuthContext,
+  storyId: string,
+): Promise<StorySubjectView[]> {
+  const story = await getStoryForViewer(db, ctx, storyId);
+  if (!story) return [];
+  const rows = await db
+    .select({
+      personId: storySubjects.personId,
+      displayName: persons.displayName,
+      taggedByPersonId: storySubjects.taggedByPersonId,
+      createdAt: storySubjects.createdAt,
+    })
+    .from(storySubjects)
+    .innerJoin(persons, eq(persons.id, storySubjects.personId))
+    .where(eq(storySubjects.storyId, storyId))
+    .orderBy(asc(storySubjects.createdAt));
+  return rows.map((r) => ({
+    personId: r.personId,
+    displayName: r.displayName,
+    taggedByPersonId: r.taggedByPersonId,
+    createdAt: r.createdAt,
+  }));
+}
+
+/**
+ * "Stories about X" — the stories a given Person is a subject of, SCOPED to the viewer's authorized
+ * stories. This is NOT a parallel content path: the `WHERE` is `storyVisibilityPredicate(viewer)`
+ * (the SQL form of the authorization oracle, property-tested to agree with `decideStoryRead`)
+ * ANDed with an EXISTS on `story_subjects`. The subject link only NARROWS the authorized set — a
+ * story the viewer cannot already read stays hidden even when they are the tagged subject. Tagging
+ * never widens visibility.
+ *
+ * Order mirrors `listStoriesForViewer`: `COALESCE(approvedAt, createdAt) DESC`, `id DESC` tiebreak.
+ */
+export async function listStoriesAboutPerson(
+  db: Database,
+  ctx: AuthContext,
+  personId: string,
+): Promise<Story[]> {
+  const viewer = viewerPersonId(ctx);
+  return db
+    .select()
+    .from(stories)
+    .where(
+      and(
+        storyVisibilityPredicate(viewer),
+        sql`EXISTS (
+          SELECT 1 FROM ${storySubjects} ss
+          WHERE ss.story_id = ${stories.id}
+            AND ss.person_id = ${personId}
+        )`,
+      ),
+    )
+    .orderBy(
+      sql`COALESCE(${stories.approvedAt}, ${stories.createdAt}) DESC`,
+      desc(stories.id),
+    );
 }

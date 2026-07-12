@@ -10,6 +10,8 @@ import {
   editStoryProse,
   setStoryFavorite,
   setStoryLike,
+  tagStorySubject,
+  untagStorySubject,
   viewerPersonId,
   type FavoriteState,
   type LikeState,
@@ -194,6 +196,87 @@ export async function setStoryFavoriteAction(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to favorite" };
   }
+}
+
+/**
+ * Tag a Person as a subject of a story (issue #35). Accepts EITHER an existing `personId` OR a
+ * `newPersonDisplayName` to create an identified `mention` inline. The core call re-resolves the
+ * SEE gate (a viewer who can't see the story can't tag on it) — the action does not re-implement
+ * authorization; it only re-resolves the auth context and delegates.
+ */
+export async function tagStorySubjectAction(formData: FormData): Promise<ActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+
+  if (viewerPersonId(ctx) === null) {
+    return { error: hub.actions.notSignedIn };
+  }
+
+  const storyId = formData.get("storyId");
+  const personId = formData.get("personId");
+  const newPersonDisplayName = formData.get("newPersonDisplayName");
+  if (typeof storyId !== "string" || !storyId) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  const hasExisting = typeof personId === "string" && personId.length > 0;
+  const hasNew =
+    typeof newPersonDisplayName === "string" && newPersonDisplayName.trim().length > 0;
+  if (hasExisting === hasNew) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  plog("story", "tagStorySubject: received", { person: viewerPersonId(ctx), story: storyId });
+
+  try {
+    await tagStorySubject(db, ctx, {
+      storyId,
+      ...(hasExisting ? { personId: personId as string } : {}),
+      ...(hasNew ? { newPersonDisplayName: (newPersonDisplayName as string).trim() } : {}),
+    });
+    plog("story", "tagStorySubject: success", { story: storyId });
+  } catch (err) {
+    plogError("story", "tagStorySubject: error", {
+      story: storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: err instanceof Error ? err.message : hub.actions.saveFailed };
+  }
+
+  revalidatePath(`/hub/stories/${storyId}`);
+}
+
+/** Untag a Person from a story (issue #35). SEE-gated in core. */
+export async function untagStorySubjectAction(formData: FormData): Promise<ActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+
+  if (viewerPersonId(ctx) === null) {
+    return { error: hub.actions.notSignedIn };
+  }
+
+  const storyId = formData.get("storyId");
+  const personId = formData.get("personId");
+  if (typeof storyId !== "string" || !storyId || typeof personId !== "string" || !personId) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  plog("story", "untagStorySubject: received", { person: viewerPersonId(ctx), story: storyId });
+
+  try {
+    await untagStorySubject(db, ctx, { storyId, personId });
+    plog("story", "untagStorySubject: success", { story: storyId });
+  } catch (err) {
+    plogError("story", "untagStorySubject: error", {
+      story: storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: err instanceof Error ? err.message : hub.actions.saveFailed };
+  }
+
+  revalidatePath(`/hub/stories/${storyId}`);
 }
 
 export async function setStoryLikeAction(

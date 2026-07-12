@@ -1036,6 +1036,42 @@ export const storyLikes = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// StorySubject — who a Story is ABOUT (ADR-0016, issue #35). A Person↔Story link:
+// a story may be tagged with the members OR `mention`s it depicts. This is
+// CONTENT-adjacent (it references a guarded `stories` row), so the table object
+// lives behind @chronicle/db/content and is written/read only from the audited
+// story-repository. It is a PLAIN association — NOT the kinship edge model (which
+// is a separate guarded surface) and NOT an authorization grant: tagging a Person
+// on a story never widens who can see that story. `taggedByPersonId` records who
+// asserted the tag (audit); one Person is a subject of a given Story at most once.
+// ---------------------------------------------------------------------------
+export const storySubjects = pgTable(
+  "story_subjects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => stories.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** The person who applied the tag (audit trail). */
+    taggedByPersonId: uuid("tagged_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // A Person is a subject of a given Story at most once.
+    uniqueIndex("story_subjects_story_person_uq").on(t.storyId, t.personId),
+    index("story_subjects_story_idx").on(t.storyId),
+    index("story_subjects_person_idx").on(t.personId),
+  ],
+);
+
 
 // ---------------------------------------------------------------------------
 // FamilyPhoto (the album) — ADR-0009. A photo is a CONTRIBUTED-not-owned artifact that lands in
@@ -1499,6 +1535,9 @@ export type StoryFavorite = typeof storyFavorites.$inferSelect;
 export type NewStoryFavorite = typeof storyFavorites.$inferInsert;
 export type StoryLike = typeof storyLikes.$inferSelect;
 export type NewStoryLike = typeof storyLikes.$inferInsert;
+
+export type StorySubject = typeof storySubjects.$inferSelect;
+export type NewStorySubject = typeof storySubjects.$inferInsert;
 
 export type KinshipAssertion = typeof kinshipAssertions.$inferSelect;
 export type NewKinshipAssertion = typeof kinshipAssertions.$inferInsert;

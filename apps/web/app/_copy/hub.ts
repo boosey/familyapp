@@ -579,5 +579,18 @@ export const hub = {
     // Generic failure for a governance/hide action.
     govActionFailed: "Couldn't do that. Please try again.",
   },
+  // Story-subject tagging (issue #35) — who a story is about.
+  subjects: {
+    heading: "Who this is about",
+    empty: "No one is tagged in this story yet.",
+    addLabel: "Add someone this story is about",
+    namePlaceholder: "Their name",
+    add: "Tag them",
+    adding: "Tagging…",
+    remove: "Remove",
+    storiesAboutHeading: (name: string) => `Stories about ${name}`,
+    storiesAboutEmpty: "No stories yet.",
+    back: "← Back",
+  },
 } as const;
 

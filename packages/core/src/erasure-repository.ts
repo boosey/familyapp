@@ -25,6 +25,7 @@ import {
   storyRecordings,
   storyLikes,
   storyFavorites,
+  storySubjects,
 } from "@chronicle/db/content";
 import {
   askFamilies,
@@ -179,6 +180,7 @@ export async function eraseStory(
     await tx.delete(storyImages).where(eq(storyImages.storyId, input.storyId));
     await tx.delete(storyLikes).where(eq(storyLikes.storyId, input.storyId));
     await tx.delete(storyFavorites).where(eq(storyFavorites.storyId, input.storyId));
+    await tx.delete(storySubjects).where(eq(storySubjects.storyId, input.storyId));
     await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
     await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
     await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));

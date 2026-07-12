@@ -82,6 +82,8 @@ export type {
   NewStoryFavorite,
   StoryLike,
   NewStoryLike,
+  StorySubject,
+  NewStorySubject,
   PersonOrigin,
   KinshipAssertion,
   NewKinshipAssertion,

@@ -21,4 +21,5 @@ export {
   storyImages,
   storyFavorites,
   storyLikes,
+  storySubjects,
 } from "./schema";
