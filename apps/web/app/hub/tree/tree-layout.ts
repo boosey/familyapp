@@ -552,31 +552,63 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       });
     }
 
-    // --- descendant caret (one per drawn couple / lone parent) ---
-    if (handledDescendant.has(id)) continue;
-    const drawnPartner = (partnersOf.get(id) ?? []).find((s) => posOf.has(s));
-    const groupIds = drawnPartner ? [id, drawnPartner] : [id];
-    const hasChildren = groupIds.some(
-      (g) => (childrenOf.get(g) ?? []).length > 0 || (nodeById.get(g)?.hasHiddenChildren ?? false),
-    );
-    if (hasChildren) {
-      groupIds.forEach((g) => handledDescendant.add(g));
-      const anyChildDrawn = groupIds.some((g) =>
-        (childrenOf.get(g) ?? []).some((c) => drawable.has(c)),
-      );
-      // Prefer the boundary member (with hidden children) as the fetch anchor.
-      const boundaryG = groupIds.find((g) => nodeById.get(g)?.hasHiddenChildren) ?? id;
-      const cx = drawnPartner ? (posOf.get(id)!.x + posOf.get(drawnPartner)!.x) / 2 : p.x;
+    // --- descendant caret(s): attributed to the SPECIFIC union -----------
+    // A descendant caret covers exactly the children a union OWNS, so a childless
+    // union never gets one even when a member has children via a DIFFERENT union
+    // (serial-partner bug). Children partition by co-parent:
+    //   • A child SHARED by a drawn couple (a,b) — parents(child) ⊇ {a,b} — is
+    //     owned by the couple caret, keyed coupleKey(a,b), emitted once.
+    //   • A child of `id` with NO drawn co-parent among id's partners (a single
+    //     drawn parent), plus id's HIDDEN children, is owned by the lone-node
+    //     caret, keyed coupleKey(id).
+    // This guarantees: (1) childless unions get no caret, (2) every drawn child is
+    // claimed by exactly one caret, so nothing is orphaned.
+    // Unmodeled case: a child shared by two DRAWN co-parents who are NOT partnered
+    // has no couple to attribute to; it falls through to each parent's lone caret
+    // (drawn twice). That configuration is out of scope for v1 (co-parents are
+    // modeled as partners).
+    const drawnPartners = (partnersOf.get(id) ?? []).filter((s) => posOf.has(s)).sort();
+    const myChildren = childrenOf.get(id) ?? [];
+
+    // (a) One caret per drawn couple, for children the couple SHARES.
+    for (const s of drawnPartners) {
+      const ck = coupleKey(id, s);
+      if (handledDescendant.has(ck)) continue;
+      const shared = myChildren.filter((c) => (parentsOf.get(c) ?? []).includes(s));
+      if (shared.length === 0) continue; // childless union ⇒ no caret
+      handledDescendant.add(ck);
+      const anyChildDrawn = shared.some((c) => drawable.has(c));
       affordances.push({
         kind: "descendants",
-        targetId: drawnPartner ? coupleKey(id, drawnPartner) : coupleKey(id),
-        fetchPersonId: boundaryG,
-        x: cx,
+        targetId: ck,
+        fetchPersonId: id,
+        x: (posOf.get(id)!.x + posOf.get(s)!.x) / 2,
         y: p.y + NODE_H / 2,
         expanded: anyChildDrawn,
-        requiresFetch:
-          !anyChildDrawn && groupIds.some((g) => nodeById.get(g)?.hasHiddenChildren === true),
+        requiresFetch: false, // shared children are already loaded (both parents drawn)
       });
+    }
+
+    // (b) Lone-node caret for id's children with no drawn co-parent, plus hidden.
+    const lk = coupleKey(id);
+    if (!handledDescendant.has(lk)) {
+      const soloChildren = myChildren.filter(
+        (c) => !drawnPartners.some((s) => (parentsOf.get(c) ?? []).includes(s)),
+      );
+      const hidden = n.hasHiddenChildren;
+      if (soloChildren.length > 0 || hidden) {
+        handledDescendant.add(lk);
+        const anyChildDrawn = soloChildren.some((c) => drawable.has(c));
+        affordances.push({
+          kind: "descendants",
+          targetId: lk,
+          fetchPersonId: id,
+          x: p.x,
+          y: p.y + NODE_H / 2,
+          expanded: anyChildDrawn,
+          requiresFetch: !anyChildDrawn && hidden,
+        });
+      }
     }
   }
   // Deterministic affordance order: kind, then targetId, then position.

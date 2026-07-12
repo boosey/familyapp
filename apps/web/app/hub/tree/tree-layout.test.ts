@@ -141,6 +141,22 @@ function fixtureBoundaryChildren(): LayoutInput {
   return input({ rootPersonId: "root", nodes, edges });
 }
 
+/**
+ * root is partnered with BOTH x and y (serial partners). root+x have a child `kid`
+ * (both parents drawn). root+y have NO children. Only the (root,x) union should get
+ * a descendant caret; the childless (root,y) union must NOT.
+ */
+function fixtureSerialPartners(): LayoutInput {
+  const nodes = [node("root"), node("x"), node("y"), node("kid")];
+  const edges = [
+    partneredWith("root", "x"),
+    partneredWith("root", "y"),
+    parentOf("root", "kid"),
+    parentOf("x", "kid"),
+  ];
+  return input({ rootPersonId: "root", nodes, edges });
+}
+
 // ---------------------------------------------------------------------------
 
 describe("computeTreeLayout — generation assignment", () => {
@@ -364,6 +380,37 @@ describe("computeTreeLayout — per-box carets (ancestors/descendants)", () => {
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     // kid has no children => no descendant caret targeting kid.
     expect(l.affordances.some((x) => x.kind === "descendants" && x.fetchPersonId === "kid")).toBe(false);
+  });
+
+  it("serial partners: descendant caret is attributed to the union that has the child, not the childless one", () => {
+    const layout = computeTreeLayout(fixtureSerialPartners());
+    const desc = layout.affordances.filter((a) => a.kind === "descendants");
+    // Exactly ONE descendant caret: for the (root,x) union that shares `kid`.
+    expect(desc).toHaveLength(1);
+    expect(desc[0]!.targetId).toBe(coupleKey("root", "x"));
+    // The childless (root,y) union must NOT emit a caret.
+    expect(desc.some((a) => a.targetId === coupleKey("root", "y"))).toBe(false);
+  });
+
+  it("serial partners: the drawn child stays collapsible via the (root,x) caret (no orphan)", () => {
+    const base = fixtureSerialPartners();
+    const layout = computeTreeLayout(base);
+    // The (root,x) caret is expanded (child is drawn).
+    const desc = layout.affordances.find(
+      (a) => a.kind === "descendants" && a.targetId === coupleKey("root", "x"),
+    )!;
+    expect(desc.expanded).toBe(true);
+    expect(layout.placed.some((p) => p.personId === "kid")).toBe(true);
+    // Collapsing that couple's descendants removes `kid` (it was claimed by this caret).
+    const collapsed = computeTreeLayout({
+      ...base,
+      expansion: expansion({ collapsedDescendants: new Set([coupleKey("root", "x")]) }),
+    });
+    expect(collapsed.placed.find((p) => p.personId === "kid")).toBeUndefined();
+    const descAfter = collapsed.affordances.find(
+      (a) => a.kind === "descendants" && a.targetId === coupleKey("root", "x"),
+    )!;
+    expect(descAfter.expanded).toBe(false);
   });
 
   it("collapsing a couple's descendants removes the descendant subtree", () => {
