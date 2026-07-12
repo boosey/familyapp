@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   AuthorizationError,
   addMembership,
+  addRelative,
   deriveKin,
+  listMyKin,
   normalizeEdgeEndpoints,
   resolveKinshipProjection,
   type KinRelation,
@@ -270,6 +272,56 @@ describe("deriveKin — derived relations", () => {
 
     const { edges } = await resolveKinshipProjection(db, account(member.id), fam.id);
     expect(relationOf(edges, root.id, pa.id)).toBeUndefined();
+  });
+});
+
+describe("listMyKin — read composition", () => {
+  it("returns an identified relative with its displayName", async () => {
+    const { member, fam } = await familyWithMember("Me");
+    const res = await addRelative(db, account(member.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Eleanor Vance",
+      lifeStatus: "deceased",
+    });
+
+    const kin = await listMyKin(db, account(member.id), fam.id);
+    const entry = kin.find((k) => k.personId === res.createdPersonId);
+    expect(entry).toMatchObject({
+      relation: "parent",
+      displayName: "Eleanor Vance",
+      identified: true,
+      lifeStatus: "deceased",
+    });
+  });
+
+  it("returns an unidentified placeholder relative with displayName null / identified false", async () => {
+    const { member, fam } = await familyWithMember("Me");
+    // A grandparent added from a parentless me mints an anonymous bridge PARENT — which shows up in
+    // my kin list as a `parent` placeholder (displayName null).
+    await addRelative(db, account(member.id), {
+      familyId: fam.id,
+      relation: "grandparent",
+      displayName: "Grandma Eleanor",
+    });
+
+    const kin = await listMyKin(db, account(member.id), fam.id);
+    const placeholder = kin.find((k) => k.relation === "parent");
+    expect(placeholder).toBeDefined();
+    expect(placeholder!.displayName).toBeNull();
+    expect(placeholder!.identified).toBe(false);
+    // And the named grandparent is present + identified.
+    const gp = kin.find((k) => k.relation === "grandparent");
+    expect(gp?.displayName).toBe("Grandma Eleanor");
+    expect(gp?.identified).toBe(true);
+  });
+
+  it("rejects a non-member (auth flows through resolveKinshipProjection)", async () => {
+    const { fam } = await familyWithMember("Me");
+    const stranger = await makePerson(db, "Stranger");
+    await expect(listMyKin(db, account(stranger.id), fam.id)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
   });
 });
 

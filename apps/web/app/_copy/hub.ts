@@ -307,6 +307,9 @@ export const hub = {
     // ADR-0009 Phase 2 — story accompaniment photo attach/detach/cover/reorder errors.
     photoAttachFailed: "Couldn't add that photo. Please try again.",
     photoUpdateFailed: "Couldn't update the photos. Please try again.",
+    // Issue #32 — add-a-relative failures.
+    noFamilyForKin: "Join or start a family before adding relatives.",
+    addRelativeFailed: "Couldn't add that relative. Please try again.",
   },
   album: {
     // Back-link on the standalone /hub/album deep-link route; returns to the album's tab home
@@ -498,6 +501,56 @@ export const hub = {
       archive: "Archive palette — cool gray and teal",
       hearth: "Hearth palette — warm rose and coral",
     },
+  },
+  // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.
+  kin: {
+    signedOut: "Sign in to see your family tree.",
+    heading: "Your relatives",
+    intro:
+      "The people you record as kin in this family. Adding a relative is enough — no one has to confirm it.",
+    // Empty state when the viewer has recorded no kin yet.
+    empty: "You haven't added any relatives yet. Add the first one below.",
+    // Shown when the viewer belongs to no family at all.
+    noFamily: "Join or start a family before adding relatives.",
+    deceased: "In memory",
+    // Human display label per KinRelation (derived by core's deriveKin).
+    relationLabel: {
+      parent: "Parent",
+      child: "Child",
+      partner: "Partner",
+      sibling: "Sibling",
+      grandparent: "Grandparent",
+      grandchild: "Grandchild",
+      aunt_uncle: "Aunt/Uncle",
+      niece_nephew: "Niece/Nephew",
+      cousin: "Cousin",
+    },
+    // Fallback name for an unidentified placeholder person (anonymous bridge node) — rendered from
+    // its relation rather than a name. "Unknown parent" for a directly-named relation, else generic.
+    unknownRelative: "Unknown relative",
+    unknownOf: (relationLabel: string) => `Unknown ${relationLabel.toLowerCase()}`,
+    // The add-relative form.
+    addHeading: "Add a relative",
+    addIntro:
+      "Pick how they're related to you and, if you like, their name. Add a grandparent in one tap — we'll fill in the missing generation for you.",
+    relationFieldLabel: "How are they related to you?",
+    relationOptions: {
+      parent: "Parent",
+      child: "Child",
+      partner: "Partner",
+      sibling: "Sibling",
+      // Made explicit that one tap adds them + the implicit unknown parent bridge.
+      grandparent: "Grandparent (adds an unknown parent automatically)",
+    },
+    nameFieldLabel: "Their name (optional)",
+    namePlaceholder: "e.g. Eleanor",
+    nameHint: "Leave blank to add them without a name for now.",
+    dobFieldLabel: "Date of birth (optional)",
+    lifeStatusFieldLabel: "Are they living?",
+    lifeStatusLiving: "Living",
+    lifeStatusDeceased: "No longer living",
+    submit: "Add relative",
+    submitting: "Adding…",
   },
 } as const;
 

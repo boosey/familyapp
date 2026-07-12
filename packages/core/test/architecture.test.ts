@@ -57,6 +57,7 @@ const PIPELINE_HELPER_ALLOWLIST = new Set<string>([
  */
 const KINSHIP_ALLOWLIST = new Set<string>([
   "packages/core/src/kinship-repository.ts", // the single kinship read surface
+  "packages/core/src/kinship-write.ts", // the kinship write path (addRelative, #32)
 ]);
 
 /**
@@ -238,6 +239,7 @@ describe("single front door (architecture guard)", () => {
   it("the kinship allowlist is exactly the audited surface (canary)", () => {
     expect([...KINSHIP_ALLOWLIST].sort()).toEqual([
       "packages/core/src/kinship-repository.ts",
+      "packages/core/src/kinship-write.ts",
     ]);
   });
 

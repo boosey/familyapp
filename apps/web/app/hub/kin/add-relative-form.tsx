@@ -1,0 +1,103 @@
+"use client";
+
+/**
+ * Add-a-relative form (issue #32) — client component wrapping the `addRelativeAction` server action.
+ *
+ * Minimal, matching the Kindred form conventions already used by the Ask tab (`.kin-form-label` /
+ * `.kin-field` / `<KindredButton>`): a relation `<select>` (the five v1 relations), an OPTIONAL name
+ * (blank => core mints an anonymous bridge relative), and optional DOB + life status. The current
+ * family scope rides along in a hidden field; the server re-validates it (never trusts the client).
+ *
+ * "One-tap add grandparent" is satisfied here purely by choosing relation=grandparent and submitting:
+ * the implicit unknown-parent bridge is created SERVER-SIDE by core — this form authors no bridge.
+ */
+import { useState, useTransition } from "react";
+import { KindredButton } from "@/app/_kindred";
+import { hub } from "@/app/_copy";
+import { addRelativeAction } from "./actions";
+
+export function AddRelativeForm({ familyId }: { familyId: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function onSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await addRelativeAction(formData);
+      if (result?.error) {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <form action={onSubmit} style={{ display: "grid", gap: 20 }}>
+      {/* Current family scope — re-validated server-side against the viewer's own families. */}
+      <input type="hidden" name="familyId" value={familyId} />
+
+      <label className="kin-form-label">
+        {hub.kin.relationFieldLabel}
+        <select name="relation" className="kin-field" defaultValue="parent" required>
+          <option value="parent">{hub.kin.relationOptions.parent}</option>
+          <option value="child">{hub.kin.relationOptions.child}</option>
+          <option value="partner">{hub.kin.relationOptions.partner}</option>
+          <option value="sibling">{hub.kin.relationOptions.sibling}</option>
+          <option value="grandparent">{hub.kin.relationOptions.grandparent}</option>
+        </select>
+      </label>
+
+      <label className="kin-form-label">
+        {hub.kin.nameFieldLabel}
+        <input
+          type="text"
+          name="displayName"
+          className="kin-field"
+          placeholder={hub.kin.namePlaceholder}
+          autoComplete="off"
+        />
+        <span
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-muted)",
+          }}
+        >
+          {hub.kin.nameHint}
+        </span>
+      </label>
+
+      <label className="kin-form-label">
+        {hub.kin.dobFieldLabel}
+        <input type="date" name="birthDate" className="kin-field" />
+      </label>
+
+      <label className="kin-form-label">
+        {hub.kin.lifeStatusFieldLabel}
+        <select name="lifeStatus" className="kin-field" defaultValue="living">
+          <option value="living">{hub.kin.lifeStatusLiving}</option>
+          <option value="deceased">{hub.kin.lifeStatusDeceased}</option>
+        </select>
+      </label>
+
+      {error ? (
+        <p
+          role="alert"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-danger, #b00)",
+            margin: 0,
+          }}
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <KindredButton
+        type="submit"
+        label={pending ? hub.kin.submitting : hub.kin.submit}
+        disabled={pending}
+      />
+    </form>
+  );
+}

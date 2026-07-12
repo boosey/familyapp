@@ -154,11 +154,19 @@ export {
   resolveKinshipProjection,
   normalizeEdgeEndpoints,
   deriveKin,
+  listMyKin,
   type KinshipProjection,
   type ResolvedKinshipEdge,
   type KinRelation,
   type DerivedKin,
+  type KinListEntry,
 } from "./kinship-repository";
+export {
+  addRelative,
+  type AddRelativeInput,
+  type AddRelativeResult,
+  type AddRelativeRelation,
+} from "./kinship-write";
 export {
   createJoinRequest,
   listPendingJoinRequestsForSteward,
