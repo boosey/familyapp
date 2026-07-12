@@ -329,3 +329,20 @@ CREATE UNIQUE INDEX join_requests_one_pending_uq
 CREATE UNIQUE INDEX story_images_one_cover_uq
   ON story_images (story_id)
   WHERE is_cover;
+
+-- ---------------------------------------------------------------------------
+-- (5) Kinship ledgers are append-only (ADR-0016). Every kinship transition — an assertion, a
+--     Steward affirm/deny/correct, or a subject hide/un-hide — SUPERSEDES with a new row and is
+--     never edited or deleted; the current state is the latest row per logical edge (and per
+--     (edge, subject) for hides). Fully append-only (UPDATE and DELETE both forbidden), matching
+--     the consent ledger's original posture. Reuses the shared chronicle_forbid_mutation() guard.
+--     NOTE: no person-erasure carve-out yet (kinship rows FK persons with no cascade) — deferred,
+--     exactly as the consent ledger got its erasure carve-out only when erasure landed. See ADR-0016.
+-- ---------------------------------------------------------------------------
+CREATE TRIGGER kinship_assertions_append_only
+  BEFORE UPDATE OR DELETE ON kinship_assertions
+  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+
+CREATE TRIGGER kinship_subject_hides_append_only
+  BEFORE UPDATE OR DELETE ON kinship_subject_hides
+  FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();

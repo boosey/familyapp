@@ -11,6 +11,9 @@ CREATE TYPE "public"."follow_up_record_kind" AS ENUM('decision', 'outcome');
 CREATE TYPE "public"."intake_origin" AS ENUM('voice', 'typed');
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');
 CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'declined');
+CREATE TYPE "public"."kinship_edge_type" AS ENUM('parent_of', 'partnered_with');
+CREATE TYPE "public"."kinship_nature" AS ENUM('biological', 'adoptive', 'step', 'foster', 'unknown');
+CREATE TYPE "public"."kinship_state" AS ENUM('asserted', 'affirmed', 'denied', 'corrected');
 CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
@@ -189,6 +192,35 @@ CREATE TABLE "join_requests" (
 	"decided_by_person_id" uuid,
 	"resulting_membership_id" uuid,
 	"decided_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "kinship_assertions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"family_id" uuid NOT NULL,
+	"edge_type" "kinship_edge_type" NOT NULL,
+	"person_a_id" uuid NOT NULL,
+	"person_b_id" uuid NOT NULL,
+	"nature" "kinship_nature",
+	"state" "kinship_state" DEFAULT 'asserted' NOT NULL,
+	"actor_person_id" uuid NOT NULL,
+	"note" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "kinship_assertions_no_self_ck" CHECK ("kinship_assertions"."person_a_id" <> "kinship_assertions"."person_b_id"),
+	CONSTRAINT "kinship_assertions_nature_ck" CHECK (("kinship_assertions"."edge_type" = 'parent_of' AND "kinship_assertions"."nature" IS NOT NULL) OR ("kinship_assertions"."edge_type" = 'partnered_with' AND "kinship_assertions"."nature" IS NULL))
+);
+
+CREATE TABLE "kinship_subject_hides" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"family_id" uuid NOT NULL,
+	"edge_type" "kinship_edge_type" NOT NULL,
+	"person_a_id" uuid NOT NULL,
+	"person_b_id" uuid NOT NULL,
+	"subject_person_id" uuid NOT NULL,
+	"hidden" boolean NOT NULL,
+	"actor_person_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -384,6 +416,15 @@ ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_family_id_families_id_
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_requester_person_id_persons_id_fk" FOREIGN KEY ("requester_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_decided_by_person_id_persons_id_fk" FOREIGN KEY ("decided_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_resulting_membership_id_memberships_id_fk" FOREIGN KEY ("resulting_membership_id") REFERENCES "public"."memberships"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_person_a_id_persons_id_fk" FOREIGN KEY ("person_a_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_person_b_id_persons_id_fk" FOREIGN KEY ("person_b_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_person_a_id_persons_id_fk" FOREIGN KEY ("person_a_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_person_b_id_persons_id_fk" FOREIGN KEY ("person_b_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_subject_person_id_persons_id_fk" FOREIGN KEY ("subject_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_invited_by_person_id_persons_id_fk" FOREIGN KEY ("invited_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -434,6 +475,10 @@ CREATE INDEX "invitations_family_idx" ON "invitations" USING btree ("family_id")
 CREATE INDEX "join_requests_family_idx" ON "join_requests" USING btree ("family_id");
 CREATE INDEX "join_requests_requester_idx" ON "join_requests" USING btree ("requester_person_id");
 CREATE INDEX "join_requests_status_idx" ON "join_requests" USING btree ("status");
+CREATE INDEX "kinship_assertions_edge_idx" ON "kinship_assertions" USING btree ("family_id","edge_type","person_a_id","person_b_id");
+CREATE INDEX "kinship_assertions_person_a_idx" ON "kinship_assertions" USING btree ("person_a_id");
+CREATE INDEX "kinship_assertions_person_b_idx" ON "kinship_assertions" USING btree ("person_b_id");
+CREATE INDEX "kinship_subject_hides_edge_subject_idx" ON "kinship_subject_hides" USING btree ("family_id","edge_type","person_a_id","person_b_id","subject_person_id");
 CREATE UNIQUE INDEX "link_sessions_token_hash_uq" ON "link_sessions" USING btree ("token_hash");
 CREATE INDEX "link_sessions_person_idx" ON "link_sessions" USING btree ("person_id");
 CREATE INDEX "media_owner_idx" ON "media" USING btree ("owner_person_id");

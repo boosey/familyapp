@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
+  check,
   date,
   index,
   integer,
@@ -1257,6 +1258,164 @@ export const erasureAudit = pgTable("erasure_audit", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ===========================================================================
+// Kinship (ADR-0016) — the family-tree edges. A DISTINCT data category: NOT
+// Story/Media content, so it does NOT widen the single front door and never
+// grants content access. Kinship has its OWN authorized read surface
+// (`@chronicle/core`'s kinship-repository) and its OWN architecture-test
+// allowlist; the table objects live behind the guarded `@chronicle/db/kinship`
+// subpath (parallel to `@chronicle/db/content`), never on the open schema.
+// ===========================================================================
+
+/** The two GENERATIVE primitives — the only kinship facts stored. Sibling / grandparent / cousin /
+ *  in-law are DERIVED by walking these, never stored (so a derived fact can't contradict a stored
+ *  one). `parent_of` is directed (personA = parent → personB = child); `partnered_with` is
+ *  undirected (endpoints stored normalized low→high so (A,B) and (B,A) are one edge). No union node
+ *  is ever stored (a GEDCOM `FAM` is shredded into these). */
+export const kinshipEdgeTypeEnum = pgEnum("kinship_edge_type", [
+  "parent_of",
+  "partnered_with",
+]);
+
+/** The `nature` attribute of a `parent_of` edge (NULL for `partnered_with`). */
+export const kinshipNatureEnum = pgEnum("kinship_nature", [
+  "biological",
+  "adoptive",
+  "step",
+  "foster",
+  "unknown",
+]);
+
+/** The Steward-governed lifecycle of an edge (ADR-0016). Append-only: a transition SUPERSEDES with
+ *  a new row, never edits. `asserted` = first-asserter-wins provisional truth (no confirmation
+ *  needed); `affirmed`/`denied`/`corrected` = the Steward's exception governance. The latest row per
+ *  logical edge is the current state; visible states are asserted|affirmed|corrected (denied hides
+ *  it). The subject-HIDE veto is a SEPARATE dimension — see `kinship_subject_hides` — because it must
+ *  override even a later Steward affirmation, which a single latest-wins lifecycle could not express. */
+export const kinshipStateEnum = pgEnum("kinship_state", [
+  "asserted",
+  "affirmed",
+  "denied",
+  "corrected",
+]);
+
+// ---------------------------------------------------------------------------
+// KinshipAssertion — the append-only edge ledger. One row per transition; the
+// latest row per logical edge key (family_id, edge_type, person_a, person_b) is
+// the current edge. Surfaced into a Family like a Story (ADR-0010): visible to
+// that family's members, governed by that family's Steward. The same person-pair
+// may be independently asserted in another family (its own rows) — never
+// auto-propagated. Fully append-only (UPDATE/DELETE forbidden by trigger).
+// ---------------------------------------------------------------------------
+export const kinshipAssertions = pgTable(
+  "kinship_assertions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic global sequence — the DETERMINISTIC supersede key (mirrors consentRecords.seq).
+     *  The latest row per logical edge BY seq is the current state; `created_at` (transaction-start
+     *  time) can tie, seq never does. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    /** The family this edge is surfaced into (ADR-0010). Governs visibility + which Steward rules. */
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    edgeType: kinshipEdgeTypeEnum("edge_type").notNull(),
+    /** `parent_of`: the PARENT. `partnered_with`: the lower-id endpoint (normalized). */
+    personAId: uuid("person_a_id")
+      .notNull()
+      .references(() => persons.id),
+    /** `parent_of`: the CHILD. `partnered_with`: the higher-id endpoint (normalized). */
+    personBId: uuid("person_b_id")
+      .notNull()
+      .references(() => persons.id),
+    /** Set for `parent_of` (defaults to `unknown` at the write path), NULL for `partnered_with`.
+     *  Part of the mutable payload, NOT the edge key: a nature correction is a NEW row on the same
+     *  edge (Steward `corrected`), latest wins. */
+    nature: kinshipNatureEnum("nature"),
+    state: kinshipStateEnum("state").notNull().default("asserted"),
+    /** Who created THIS transition row (audit). The edge's original asserter is the actor of its
+     *  earliest row; `assertedBy` in the projection is resolved from that. */
+    actorPersonId: uuid("actor_person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** Optional free-text reason for a deny/correct (Steward exception governance). */
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Latest-per-logical-edge resolution + "kin of a person within a family" both hit this.
+    index("kinship_assertions_edge_idx").on(
+      t.familyId,
+      t.edgeType,
+      t.personAId,
+      t.personBId,
+    ),
+    index("kinship_assertions_person_a_idx").on(t.personAId),
+    index("kinship_assertions_person_b_idx").on(t.personBId),
+    // No self-edges.
+    check("kinship_assertions_no_self_ck", sql`${t.personAId} <> ${t.personBId}`),
+    // nature pairs with edge_type: present for parent_of, absent for partnered_with.
+    check(
+      "kinship_assertions_nature_ck",
+      sql`(${t.edgeType} = 'parent_of' AND ${t.nature} IS NOT NULL) OR (${t.edgeType} = 'partnered_with' AND ${t.nature} IS NULL)`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// KinshipSubjectHide — the subject's personal VETO (ADR-0016), a SEPARATE
+// append-only dimension from the Steward lifecycle. The Person an edge is about
+// may suppress it family-wide; this OVERRIDES even a Steward affirmation (being
+// depicted at all is the subject's own consent, not a dispute the Steward
+// adjudicates). Keyed to the same logical edge + the acting subject; the latest
+// row per (edge, subject) wins (hidden = true suppresses, a later false un-hides).
+// The hide-WRITE action + its "subject must be a real `self` account" rule land
+// in issue #34; this table + the read-side overlay land here so the projection is
+// correct from the start.
+// ---------------------------------------------------------------------------
+export const kinshipSubjectHides = pgTable(
+  "kinship_subject_hides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic supersede key: latest row per (edge, subject) BY seq is the current veto state. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    edgeType: kinshipEdgeTypeEnum("edge_type").notNull(),
+    personAId: uuid("person_a_id")
+      .notNull()
+      .references(() => persons.id),
+    personBId: uuid("person_b_id")
+      .notNull()
+      .references(() => persons.id),
+    /** The endpoint doing the hiding — must be personA or personB (the edge's subject). */
+    subjectPersonId: uuid("subject_person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** true = suppress the edge family-wide; false = un-hide. Latest per (edge, subject) wins. */
+    hidden: boolean("hidden").notNull(),
+    /** Who acted (== subjectPersonId; recorded for audit symmetry with the assertion ledger). */
+    actorPersonId: uuid("actor_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("kinship_subject_hides_edge_subject_idx").on(
+      t.familyId,
+      t.edgeType,
+      t.personAId,
+      t.personBId,
+      t.subjectPersonId,
+    ),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Inferred types — the shared contracts other packages import.
 // ---------------------------------------------------------------------------
@@ -1340,4 +1499,12 @@ export type StoryFavorite = typeof storyFavorites.$inferSelect;
 export type NewStoryFavorite = typeof storyFavorites.$inferInsert;
 export type StoryLike = typeof storyLikes.$inferSelect;
 export type NewStoryLike = typeof storyLikes.$inferInsert;
+
+export type KinshipAssertion = typeof kinshipAssertions.$inferSelect;
+export type NewKinshipAssertion = typeof kinshipAssertions.$inferInsert;
+export type KinshipSubjectHide = typeof kinshipSubjectHides.$inferSelect;
+export type NewKinshipSubjectHide = typeof kinshipSubjectHides.$inferInsert;
+export type KinshipEdgeType = (typeof kinshipEdgeTypeEnum.enumValues)[number];
+export type KinshipNature = (typeof kinshipNatureEnum.enumValues)[number];
+export type KinshipState = (typeof kinshipStateEnum.enumValues)[number];
 

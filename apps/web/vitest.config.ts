@@ -16,6 +16,9 @@ export default defineConfig({
       // App-root alias (mirrors tsconfig "@/*") so tests can import route handlers / lib by "@/…".
       // Key has no trailing slash so the alias plugin treats it as a path-boundary prefix.
       "@": fileURLToPath(new URL(".", import.meta.url)).replace(/[\\/]$/, ""),
+      "@chronicle/db/kinship": fileURLToPath(
+        new URL("../../packages/db/src/kinship.ts", import.meta.url),
+      ),
       "@chronicle/db/content": fileURLToPath(
         new URL("../../packages/db/src/content.ts", import.meta.url),
       ),

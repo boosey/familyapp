@@ -151,6 +151,15 @@ export {
   type ReapResult,
 } from "./person-housekeeping";
 export {
+  resolveKinshipProjection,
+  normalizeEdgeEndpoints,
+  deriveKin,
+  type KinshipProjection,
+  type ResolvedKinshipEdge,
+  type KinRelation,
+  type DerivedKin,
+} from "./kinship-repository";
+export {
   createJoinRequest,
   listPendingJoinRequestsForSteward,
   listDecidedJoinRequestsForSteward,

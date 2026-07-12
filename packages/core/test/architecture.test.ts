@@ -48,6 +48,18 @@ const PIPELINE_HELPER_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * Kinship (ADR-0016) is a SECOND authorized surface, parallel to the Story front door and NOT part
+ * of it. The guarded kinship edge tables (`kinship_assertions`, `kinship_subject_hides`) are
+ * reachable ONLY via `@chronicle/db/kinship`, and ONLY from this allowlist — every kinship read/write
+ * must route through `@chronicle/core`'s kinship-repository. This is deliberately DISTINCT from the
+ * content ALLOWLIST above: a content file may not touch kinship, and the kinship file may not touch
+ * content. Keep it small; add an entry only for a deliberate, reviewed kinship read/write path.
+ */
+const KINSHIP_ALLOWLIST = new Set<string>([
+  "packages/core/src/kinship-repository.ts", // the single kinship read surface
+]);
+
+/**
  * Every known way to reach Story/Media content outside the authorization function. Each is closed
  * by a code change and/or matched here:
  *   - importing the guarded content tables (@chronicle/db/content);
@@ -187,6 +199,46 @@ describe("single front door (architecture guard)", () => {
         "packages/core/src/erasure-repository.ts",
       ].sort(),
     );
+  });
+
+  it("only the audited kinship file imports the guarded kinship tables", () => {
+    // The kinship edge tables are a distinct guarded surface (ADR-0016). Every production file that
+    // imports @chronicle/db/kinship — outside KINSHIP_ALLOWLIST — is a bypass of kinship's own
+    // authorization function, exactly as the content scan guards Story/Media.
+    const offenders: string[] = [];
+    const scanRoots = ["packages", "apps"].map((d) => join(repoRoot, d));
+    const KINSHIP_IMPORT = /@chronicle\/db\/kinship/;
+
+    for (const root of scanRoots) {
+      for (const file of collectSourceFiles(root)) {
+        const rel = toPosix(relative(repoRoot, file));
+        if (/\/(test|__tests__)\//.test(rel)) continue;
+        if (/\.(config)\.[cm]?tsx?$/.test(rel)) continue;
+        if (rel.endsWith("-env.d.ts")) continue;
+        if (rel.startsWith("packages/db/")) continue; // the table definitions live here
+        if (KINSHIP_ALLOWLIST.has(rel)) continue;
+        const contents = readFileSync(file, "utf8");
+        if (KINSHIP_IMPORT.test(contents)) {
+          offenders.push(
+            `${rel} — imports the guarded kinship tables via @chronicle/db/kinship`,
+          );
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      `These files reach the guarded kinship tables but are not on the kinship allowlist. Route ` +
+        `kinship reads/writes through @chronicle/core's kinship-repository; for a legitimate new ` +
+        `path, add the file to KINSHIP_ALLOWLIST in this test deliberately.\nOffenders: ` +
+        JSON.stringify(offenders, null, 2),
+    ).toEqual([]);
+  });
+
+  it("the kinship allowlist is exactly the audited surface (canary)", () => {
+    expect([...KINSHIP_ALLOWLIST].sort()).toEqual([
+      "packages/core/src/kinship-repository.ts",
+    ]);
   });
 
   it("the runtime client does NOT expose Drizzle's relational API for content tables", async () => {

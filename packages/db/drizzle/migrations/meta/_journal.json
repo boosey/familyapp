@@ -64,6 +64,13 @@
       "when": 1783822754177,
       "tag": "0008_skinny_christian_walker",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783828798590,
+      "tag": "0009_premium_snowbird",
+      "breakpoints": true
     }
   ]
 }

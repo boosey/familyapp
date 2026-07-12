@@ -82,6 +82,14 @@ export type {
   NewStoryFavorite,
   StoryLike,
   NewStoryLike,
+  PersonOrigin,
+  KinshipAssertion,
+  NewKinshipAssertion,
+  KinshipSubjectHide,
+  NewKinshipSubjectHide,
+  KinshipEdgeType,
+  KinshipNature,
+  KinshipState,
 } from "./schema";
 export type {
   FollowUpType,

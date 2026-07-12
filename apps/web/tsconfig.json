@@ -29,6 +29,9 @@
       "@chronicle/db/schema": [
         "../../packages/db/src/schema-public.ts"
       ],
+      "@chronicle/db/kinship": [
+        "../../packages/db/src/kinship.ts"
+      ],
       "@chronicle/db/content": [
         "../../packages/db/src/content.ts"
       ],

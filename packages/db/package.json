@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema-public.ts",
     "./content": "./src/content.ts",
+    "./kinship": "./src/kinship.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
