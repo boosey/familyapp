@@ -13,7 +13,12 @@ import { useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import type { GovernableKinEdge } from "@chronicle/core";
-import { affirmEdgeAction, denyEdgeAction, type ActionResult } from "./actions";
+import {
+  affirmEdgeAction,
+  denyEdgeAction,
+  hideEdgeAction,
+  type ActionResult,
+} from "./actions";
 
 /** The hidden edge-identity fields every edge action reads server-side. */
 function EdgeFields({ familyId, edge }: { familyId: string; edge: GovernableKinEdge }) {
@@ -67,7 +72,7 @@ export function KinEdgeControls({
 }) {
   const [error, setError] = useState<string | null>(null);
 
-  if (!edge.viewerIsSteward) return null;
+  if (!edge.viewerIsSteward && !edge.viewerCanHide) return null;
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
@@ -88,6 +93,16 @@ export function KinEdgeControls({
           action={denyEdgeAction}
           label={hub.kin.deny}
           pendingLabel={hub.kin.denying}
+          onError={setError}
+        />
+      ) : null}
+      {edge.viewerCanHide ? (
+        <ActionButton
+          familyId={familyId}
+          edge={edge}
+          action={hideEdgeAction}
+          label={hub.kin.hide}
+          pendingLabel={hub.kin.hiding}
           onError={setError}
         />
       ) : null}

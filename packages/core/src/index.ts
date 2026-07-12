@@ -168,6 +168,8 @@ export {
   affirmEdge,
   denyEdge,
   correctEdge,
+  hideEdge,
+  unhideEdge,
   type AddRelativeInput,
   type AddRelativeResult,
   type AddRelativeRelation,

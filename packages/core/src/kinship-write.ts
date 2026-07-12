@@ -13,7 +13,7 @@
  * with the read side) so partnered_with (A,B)/(B,A) collapse to one logical edge.
  */
 import { and, eq } from "drizzle-orm";
-import { kinshipAssertions } from "@chronicle/db/kinship";
+import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
 import type { Database, KinshipEdgeType, KinshipNature } from "@chronicle/db";
 import type { AuthContext } from "./authorization";
@@ -521,4 +521,82 @@ function natureToCarryForward(
 ): KinshipNature | null {
   if (edgeType === "partnered_with") return null;
   return currentNature ?? "unknown";
+}
+
+// ---------------------------------------------------------------------------
+// Subject-hide veto (issue #34)
+// ---------------------------------------------------------------------------
+
+/**
+ * Append a subject-hide transition (`hidden` true/false) on an existing edge (#34). Gate: the actor
+ * MUST be a real `self` account (ctx.kind === "account") AND be an ENDPOINT of the edge AND that
+ * endpoint Person must hold an account (`persons.accountId` not null) — a `mention` has no account so
+ * the control is ABSENT for it. A non-endpoint cannot hide on someone else's behalf. The hide
+ * overrides even a steward affirmation (enforced by the read overlay). Append-only; latest per (edge,
+ * subject) wins.
+ */
+async function appendSubjectHide(
+  db: Database,
+  ctx: AuthContext,
+  ref: EdgeRef,
+  hidden: boolean,
+): Promise<KinshipEdgeActionResult> {
+  if (ctx.kind !== "account") {
+    return { allowed: false, reason: "not signed in" };
+  }
+  const me = ctx.personId;
+
+  const existing = await latestEdgeRow(db, ref);
+  if (existing === null) {
+    return { allowed: false, reason: "edge does not exist in this family" };
+  }
+  const { personAId, personBId } = existing;
+
+  // The actor must be an endpoint of the (normalized) edge — the subject the edge is ABOUT.
+  if (me !== personAId && me !== personBId) {
+    return { allowed: false, reason: "only a subject of this edge may hide it" };
+  }
+
+  // ...and must be a real self account (a mention endpoint has no account → the control is absent).
+  const [meRow] = await db
+    .select({ accountId: persons.accountId })
+    .from(persons)
+    .where(eq(persons.id, me))
+    .limit(1);
+  if (meRow === undefined || meRow.accountId === null) {
+    return { allowed: false, reason: "only a real account may hide an edge about them" };
+  }
+
+  const [row] = await db
+    .insert(kinshipSubjectHides)
+    .values({
+      familyId: ref.familyId,
+      edgeType: ref.edgeType,
+      personAId,
+      personBId,
+      subjectPersonId: me,
+      hidden,
+      actorPersonId: me,
+    })
+    .returning({ id: kinshipSubjectHides.id });
+  return { allowed: true, edgeId: row!.id };
+}
+
+/** Subject hides an edge they're an endpoint of (#34): suppresses it family-wide, overriding even a
+ *  steward affirm. See `appendSubjectHide` for the full gate. */
+export async function hideEdge(
+  db: Database,
+  ctx: AuthContext,
+  ref: EdgeRef,
+): Promise<KinshipEdgeActionResult> {
+  return appendSubjectHide(db, ctx, ref, true);
+}
+
+/** Subject un-hides an edge they previously hid (#34): a later `hidden=false` row restores it. */
+export async function unhideEdge(
+  db: Database,
+  ctx: AuthContext,
+  ref: EdgeRef,
+): Promise<KinshipEdgeActionResult> {
+  return appendSubjectHide(db, ctx, ref, false);
 }

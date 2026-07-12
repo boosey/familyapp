@@ -7,7 +7,9 @@ import {
   affirmEdge,
   correctEdge,
   denyEdge,
+  hideEdge,
   listActiveFamiliesForPerson,
+  unhideEdge,
   type AddRelativeInput,
   type AddRelativeRelation,
   type EdgeRef,
@@ -239,3 +241,12 @@ export async function correctEdgeAction(formData: FormData): Promise<ActionResul
   );
 }
 
+/** Subject hides an edge about them (#34). */
+export async function hideEdgeAction(formData: FormData): Promise<ActionResult> {
+  return runEdgeAction(formData, "hideEdge", (db, ctx, ref) => hideEdge(db, ctx, ref));
+}
+
+/** Subject un-hides an edge they previously hid (#34). */
+export async function unhideEdgeAction(formData: FormData): Promise<ActionResult> {
+  return runEdgeAction(formData, "unhideEdge", (db, ctx, ref) => unhideEdge(db, ctx, ref));
+}
