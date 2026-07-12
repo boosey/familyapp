@@ -57,6 +57,26 @@ async function relationOf(fam: string, root: string, target: string): Promise<Ki
   return deriveKin(edges, root).find((k) => k.personId === target)?.relation;
 }
 
+/**
+ * A family with two active `self` members — `me` (the viewer/actor) and `other`. Used to exercise
+ * the optional `anchorPersonId` on `addRelative`: anchoring a relative on `other` records a
+ * relationship that isn't about the actor, without granting the actor any new authority.
+ */
+async function seedTwoMemberFamily() {
+  const me = await makePerson(db, "Me");
+  const other = await makePerson(db, "Other");
+  const fam = await makeFamily(db, "Esposito", me.id);
+  await addMembership(db, { personId: me.id, familyId: fam.id, role: "member" });
+  await addMembership(db, { personId: other.id, familyId: fam.id, role: "member" });
+  return {
+    db,
+    ctx: account(me.id),
+    familyId: fam.id,
+    mePersonId: me.id,
+    otherPersonId: other.id,
+  };
+}
+
 describe("addRelative — auth", () => {
   it("denies an anonymous caller", async () => {
     const { fam } = await familyWithMe();
@@ -317,5 +337,77 @@ describe("addRelative — visibility & audit", () => {
       state: "asserted",
       assertedBy: me.id, // the actor of the edge
     });
+  });
+});
+
+describe("addRelative — optional anchorPersonId", () => {
+  it("anchors a parent on the given anchorPersonId, not the viewer", async () => {
+    const { db, ctx, familyId, otherPersonId } = await seedTwoMemberFamily();
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "Grandpa",
+      anchorPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const edge = proj.edges.find(
+      (e) =>
+        e.edgeType === "parent_of" &&
+        e.personBId === otherPersonId &&
+        e.personAId === res.createdPersonId,
+    );
+    expect(edge).toBeDefined();
+  });
+
+  it("defaults the anchor to the viewer when anchorPersonId is omitted", async () => {
+    const { db, ctx, familyId, mePersonId } = await seedTwoMemberFamily();
+    const res = await addRelative(db, ctx, { familyId, relation: "child", displayName: "Kid" });
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const edge = proj.edges.find(
+      (e) =>
+        e.edgeType === "parent_of" &&
+        e.personAId === mePersonId &&
+        e.personBId === res.createdPersonId,
+    );
+    expect(edge).toBeDefined();
+  });
+
+  it("a sibling anchored on X shares X's parent", async () => {
+    const { db, ctx, familyId, otherPersonId } = await seedTwoMemberFamily();
+    await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "P",
+      anchorPersonId: otherPersonId,
+    });
+    const sib = await addRelative(db, ctx, {
+      familyId,
+      relation: "sibling",
+      displayName: "S",
+      anchorPersonId: otherPersonId,
+    });
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const parentsOfOther = proj.edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === otherPersonId)
+      .map((e) => e.personAId);
+    const parentsOfSib = proj.edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === sib.createdPersonId)
+      .map((e) => e.personAId);
+    expect(parentsOfSib.some((p) => parentsOfOther.includes(p))).toBe(true);
+  });
+
+  it("rejects an anchor that is not visible in this family's projection", async () => {
+    const { db, ctx, familyId } = await seedTwoMemberFamily();
+    // A person that exists but has no edge in this family's projection is not a valid anchor.
+    const outsider = await makePerson(db, "Outsider");
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "Nope",
+      anchorPersonId: outsider.id,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/anchor/i);
   });
 });

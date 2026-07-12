@@ -18,13 +18,22 @@ import { families, persons } from "@chronicle/db/schema";
 import type { Database, KinshipEdgeType, KinshipNature } from "@chronicle/db";
 import type { AuthContext } from "./authorization";
 import { isActiveMember } from "./memberships";
-import { normalizeEdgeEndpoints } from "./kinship-repository";
+import { normalizeEdgeEndpoints, resolveKinshipProjection } from "./kinship-repository";
 
 export type AddRelativeRelation = "parent" | "child" | "partner" | "grandparent" | "sibling";
 
 export interface AddRelativeInput {
   familyId: string;
   relation: AddRelativeRelation;
+  /**
+   * ADR-0016 tree renderer (panel Add-relative): the person the relative attaches TO. Defaults to the
+   * viewer. The viewer (actor) must be an active family member; the anchor must be someone the actor
+   * can legitimately attach to in THIS family — an active member, or a person already visible in the
+   * family's kinship projection (a mention/bridge node). Assertions are first-asserter-wins, so
+   * anchoring on another visible person grants no new authority — it only records a relationship that
+   * isn't about the actor.
+   */
+  anchorPersonId?: string;
   /** Trimmed non-empty => identified mention; empty/absent => anonymous bridge relative (identified=false). */
   displayName?: string | null;
   /** Optional calendar date "YYYY-MM-DD". */
@@ -203,6 +212,29 @@ export async function addRelative(
     return { allowed: false, reason: "not a member of this family" };
   }
 
+  // Resolve + validate the anchor (the person the relative attaches TO; defaults to the viewer).
+  // Anchoring on someone else grants no new authority (first-asserter-wins), so we only require the
+  // anchor to be attachable in THIS family: an active member, or a person already visible in the
+  // family's kinship projection (a mention/bridge node). This runs on the pooled `db` (a pre-check),
+  // before the write transaction opens.
+  const anchor = input.anchorPersonId ?? me;
+  if (anchor !== me) {
+    const isMember = await isActiveMember(db, anchor, input.familyId);
+    let attachable = isMember;
+    if (!attachable) {
+      const { edges } = await resolveKinshipProjection(db, ctx, input.familyId);
+      for (const e of edges) {
+        if (e.personAId === anchor || e.personBId === anchor) {
+          attachable = true;
+          break;
+        }
+      }
+    }
+    if (!attachable) {
+      return { allowed: false, reason: "anchor person is not in this family" };
+    }
+  }
+
   const familyId = input.familyId;
   const nature: KinshipNature = input.nature ?? "unknown";
   const lifeStatus = input.lifeStatus ?? "living";
@@ -223,45 +255,46 @@ export async function addRelative(
     const edgeIds: string[] = [];
     let bridgePersonId: string | undefined;
 
+    // Every relation attaches to `anchor` (defaults to `me`); `me` remains the actor of every edge.
     switch (input.relation) {
       case "parent": {
-        edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, me, nature));
+        edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, anchor, nature));
         break;
       }
       case "child": {
-        edgeIds.push(await insertParentOf(tx, familyId, me, me, createdPersonId, nature));
+        edgeIds.push(await insertParentOf(tx, familyId, me, anchor, createdPersonId, nature));
         break;
       }
       case "partner": {
-        edgeIds.push(await insertPartneredWith(tx, familyId, me, me, createdPersonId));
+        edgeIds.push(await insertPartneredWith(tx, familyId, me, anchor, createdPersonId));
         break;
       }
       case "grandparent": {
-        const parents = await currentParentIdsOf(tx, familyId, me);
+        const parents = await currentParentIdsOf(tx, familyId, anchor);
         if (parents.length > 0) {
           // Attach the grandparent above each existing parent (R is parent of each P).
           for (const p of parents) {
             edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, p, nature));
           }
         } else {
-          // No parent yet: mint one anonymous bridge parent B, then B->me and R->B.
+          // No parent yet: mint one anonymous bridge parent B, then B->anchor and R->B.
           bridgePersonId = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, me, nature));
+          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, anchor, nature));
           edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, bridgePersonId, nature));
         }
         break;
       }
       case "sibling": {
-        const parents = await currentParentIdsOf(tx, familyId, me);
+        const parents = await currentParentIdsOf(tx, familyId, anchor);
         if (parents.length > 0) {
           // Share each existing parent (P is parent of R too).
           for (const p of parents) {
             edgeIds.push(await insertParentOf(tx, familyId, me, p, createdPersonId, nature));
           }
         } else {
-          // No parent yet: mint one anonymous bridge parent B, parent of both me and R.
+          // No parent yet: mint one anonymous bridge parent B, parent of both anchor and R.
           bridgePersonId = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, me, nature));
+          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, anchor, nature));
           edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, createdPersonId, nature));
         }
         break;
