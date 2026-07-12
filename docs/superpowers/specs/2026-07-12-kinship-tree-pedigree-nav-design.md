@@ -5,9 +5,11 @@
 **Branch/worktree:** `worktree-tree-pedigree-nav` off `kinship-integration` @ `580e63c`
 **Supersedes (nav only):** the expand/collapse interaction in
 `2026-07-12-kinship-tree-viz-design.md` §7 and
-`2026-07-12-kinship-tree-interactions-design.md`. The data model, auth surface,
-read path (`resolveKinshipTree`, `fetchSubtreeAction`), and the `KinshipTreeData`
-/ `TreeNode` / `ResolvedKinshipEdge` contracts are **unchanged** and reused.
+`2026-07-12-kinship-tree-interactions-design.md`. The auth surface, read path
+(`resolveKinshipTree`, `fetchSubtreeAction`), and the `ResolvedKinshipEdge`
+contract are **unchanged** and reused. **One additive data-model change:** a
+nullable `sex` attribute on `persons` (new migration), surfaced through
+`TreeNode`, to drive card color only (see "Person sex attribute" below).
 
 ## Problem
 
@@ -35,9 +37,10 @@ pedigree**, keeping the existing data/read/auth layers intact.
 
 - Multiple spouses / remarriage. v1 gates "Add partner" to when the person has
   no loaded partner; the multi-partner case is a deferred follow-up.
-- Gendered display (mother/father, blue/pink). The data model has **no sex
-  attribute** by design (kinship-repository.ts:170–172); everything stays
-  ungendered ("parent," "partner"). No sex field will be invented.
+- **Gendered relation labels** (mother/father, grandmother/grandfather). Labels
+  stay ungendered ("parent," "partner," "grandparent"). The new `sex` attribute
+  drives **card color only** — it does not change any relation label. Gendered
+  labels remain a deferred follow-up (kinship-repository.ts:170–172).
 - Zoom-to-fit-all, minimap, print/export. Pan + Fit + ±zoom only, as today.
 
 ## The model we are replicating (FamilySearch landscape, observed)
@@ -72,13 +75,38 @@ pedigree**, keeping the existing data/read/auth layers intact.
      `hasHiddenParents === false`, the layout emits an empty parent slot on the
      ancestor side. Clicking it opens the add-parent flow anchored on that node —
      this is how the connecting (possibly unnamed) bridge person gets created.
-7. **No gender bars.** Keep the existing deterministic monogram styling.
+7. **Sex-colored card accent.** A nullable `sex` (male / female / unknown) on
+   `persons` drives a card color bar: male / female tokens, and the existing
+   neutral monogram styling for `unknown`/null (incl. unnamed bridge nodes).
+   Captured optionally in the add-relative flow; editable on the profile surface.
 
 ## Architecture
 
-Reused unchanged: `resolveKinshipTree`, `fetchSubtreeAction`, `merge.ts`,
-`relabel.ts`, and the `KinshipTreeData` / `TreeNode` / `ResolvedKinshipEdge`
-types. All work is in `apps/web/app/hub/tree/*` plus copy strings.
+Reused unchanged: `fetchSubtreeAction`, `merge.ts`, `relabel.ts`, and the
+`ResolvedKinshipEdge` contract. `TreeNode` gains one field (`sex`);
+`resolveKinshipTree` projects it. Work spans `apps/web/app/hub/tree/*`,
+`apps/web/app/hub/kin/*` and the profile surface, `@chronicle/db` (schema +
+migration), and `@chronicle/core` (`TreeNode`, kinship read), plus copy strings.
+
+### Person sex attribute (`@chronicle/db`, `@chronicle/core`, write/edit)
+
+- **Schema (`@chronicle/db/schema.ts`):** add `sex` to `persons`. Postgres enum
+  `person_sex` = `('male','female','unknown')`, column nullable with default
+  `'unknown'` (null and `'unknown'` are treated identically downstream). Run
+  `db:generate` → new incremental migration `NNNN_*.sql` (chain currently at
+  0011 on this branch → **0012**); no invariant change. The snapshot
+  (`schema.sql`) and the drift-guard test update together.
+- **Domain type:** export `PersonSex = 'male' | 'female' | 'unknown'` from
+  `@chronicle/db` and re-export via `@chronicle/core`.
+- **`TreeNode.sex: PersonSex`** — added to the interface; `resolveKinshipTree`'s
+  SQL selects `persons.sex` (coalescing null → `'unknown'`). Bridge/unidentified
+  nodes surface `'unknown'`. This is metadata-safe (no new PII beyond what the
+  node already exposes) and passes through the subject-hide overlay unchanged.
+- **Write (add-relative):** `/hub/kin` add form gains an optional Sex select
+  (male / female / prefer not to say → `unknown`); `addRelative` accepts and
+  persists it on the created person. Default `unknown` when omitted.
+- **Edit:** the profile / person-edit surface gains a Sex control writing the
+  same column through the existing person-update path.
 
 ### `tree-layout.ts` — rewrite the placement half only
 
@@ -128,7 +156,13 @@ The function stays **pure and deterministic** — a pure function of
 - Keep single-card presentation and all four visual states (You / living /
   deceased / anonymous bridge).
 - Add an optional **per-card ⋮** button (top-right of the card) that opens the
-  `KebabMenu` for that node. No gender bar.
+  `KebabMenu` for that node.
+- **Sex color bar:** a left-edge accent colored by `node.sex` — `--sex-male`,
+  `--sex-female`, or (for `unknown`/null, incl. bridge nodes) no bar / the
+  existing neutral treatment. New Kindred tokens `--sex-male` / `--sex-female`
+  (final hex pulled from the design system; mockup used a slate `#5C7A97` and a
+  clay-rose `#B57F73` as stand-ins). The root/You accent border still wins over
+  the sex bar.
 
 ### `person-panel.tsx`
 
@@ -150,7 +184,8 @@ The function stays **pure and deterministic** — a pure function of
 ### Copy (`app/_copy`, `hub.tree.*`)
 
 Add: `centerHere`, `addPartner`, kebab labels, empty-slot label ("Add parent"),
-frontier-chevron aria labels ("Show earlier generations" / "Show descendants").
+frontier-chevron aria labels ("Show earlier generations" / "Show descendants"),
+and the Sex select labels ("Male" / "Female" / "Prefer not to say").
 
 ## Data flow
 
@@ -198,6 +233,12 @@ card with its add affordances and no chevrons.
 - **`tree-canvas` / panel test:** name click opens panel; "Center tree here"
   invokes recenter with the node id; frontier chevron invokes reveal in the
   right direction; no re-root on plain node click.
+- **Sex attribute:**
+  - migration drift-guard (snapshot vs chain) stays green with `0012`;
+  - `resolveKinshipTree` projects `sex`, coalescing null → `'unknown'`;
+  - `addRelative` persists a supplied sex and defaults to `'unknown'`;
+  - `person-node` renders `--sex-male`/`--sex-female` bars and no colored bar for
+    `unknown`/bridge; root accent overrides.
 
 ## Open items (tracked, not blocking)
 
