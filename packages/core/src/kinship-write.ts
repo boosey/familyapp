@@ -67,10 +67,15 @@ async function insertMentionPerson(
     birthDate?: string | null;
     birthYear?: number | null;
     lifeStatus: "living" | "deceased";
+    deathDate?: string | null;
+    deathYear?: number | null;
   },
 ): Promise<string> {
   const identified = opts.displayName !== null;
   const spokenName = identified ? (opts.displayName!.split(/\s+/)[0] ?? null) : null;
+  // Death fields are meaningful only for a deceased Person (ADR-0016 tree renderer). We defensively
+  // NULL them for a living relative so a stale/forged death year on a living node can never persist.
+  const deceased = opts.lifeStatus === "deceased";
   const [row] = await db
     .insert(persons)
     .values({
@@ -81,6 +86,8 @@ async function insertMentionPerson(
       lifeStatus: opts.lifeStatus,
       birthDate: opts.birthDate ?? null,
       birthYear: opts.birthYear ?? null,
+      deathDate: deceased ? (opts.deathDate ?? null) : null,
+      deathYear: deceased ? (opts.deathYear ?? null) : null,
       accountId: null,
     })
     .returning({ id: persons.id });
@@ -208,6 +215,9 @@ export async function addRelative(
       birthDate: input.birthDate ?? null,
       birthYear: input.birthYear ?? null,
       lifeStatus,
+      // Only persisted when the relative is deceased (insertMentionPerson NULLs them otherwise).
+      deathDate: input.deathDate ?? null,
+      deathYear: input.deathYear ?? null,
     });
 
     const edgeIds: string[] = [];

@@ -19,6 +19,9 @@ import { addRelativeAction } from "./actions";
 export function AddRelativeForm({ familyId }: { familyId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Drives the conditional "Year they died" field — shown ONLY when the relative is deceased
+  // (spec §4). The select is controlled so the death-year field appears/disappears live.
+  const [lifeStatus, setLifeStatus] = useState<"living" | "deceased">("living");
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -73,11 +76,33 @@ export function AddRelativeForm({ familyId }: { familyId: string }) {
 
       <label className="kin-form-label">
         {hub.kin.lifeStatusFieldLabel}
-        <select name="lifeStatus" className="kin-field" defaultValue="living">
+        <select
+          name="lifeStatus"
+          className="kin-field"
+          value={lifeStatus}
+          onChange={(e) => setLifeStatus(e.target.value === "deceased" ? "deceased" : "living")}
+        >
           <option value="living">{hub.kin.lifeStatusLiving}</option>
           <option value="deceased">{hub.kin.lifeStatusDeceased}</option>
         </select>
       </label>
+
+      {lifeStatus === "deceased" ? (
+        <label className="kin-form-label">
+          {hub.kin.deathYearFieldLabel}
+          <input
+            type="number"
+            name="deathYear"
+            className="kin-field"
+            placeholder={hub.kin.deathYearPlaceholder}
+            min={0}
+            max={new Date().getFullYear()}
+            step={1}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+        </label>
+      ) : null}
 
       {error ? (
         <p

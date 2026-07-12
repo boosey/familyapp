@@ -84,6 +84,18 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
   const rawLifeStatus = formData.get("lifeStatus");
   const lifeStatus = rawLifeStatus === "deceased" ? "deceased" : "living";
 
+  // Death year: optional, only meaningful for a deceased relative (spec §4). Parse as a sane integer
+  // year (0..current year); anything malformed or out of range is dropped, and it is ignored entirely
+  // for a living relative (core also NULLs it defensively, but we never forward a stray value).
+  const rawDeathYear = formData.get("deathYear");
+  let deathYear: number | undefined;
+  if (lifeStatus === "deceased" && typeof rawDeathYear === "string" && rawDeathYear.trim()) {
+    const parsed = Number(rawDeathYear.trim());
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= new Date().getFullYear()) {
+      deathYear = parsed;
+    }
+  }
+
   const input: AddRelativeInput = {
     familyId,
     relation,
@@ -91,6 +103,7 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     ...(trimmedName ? { displayName: trimmedName } : {}),
     ...(birthDate ? { birthDate } : {}),
     lifeStatus,
+    ...(deathYear !== undefined ? { deathYear } : {}),
   };
 
   plog("kin", "addRelative: received", {
