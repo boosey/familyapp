@@ -551,6 +551,33 @@ export const hub = {
     lifeStatusDeceased: "No longer living",
     submit: "Add relative",
     submitting: "Adding…",
+    // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
+    govHeading: "Relationships in this family",
+    govIntro:
+      "Every relationship anyone records shows up here as soon as it's added. As steward you can endorse, remove, or correct one; if a relationship is about you, you can hide it.",
+    govEmpty: "No relationships recorded in this family yet.",
+    // The two ungendered primitives, rendered for a row.
+    edgeParentOf: (parent: string, child: string) => `${parent} is a parent of ${child}`,
+    edgePartneredWith: (a: string, b: string) => `${a} and ${b} are partners`,
+    edgeUnknownPerson: "someone unnamed",
+    natureLabel: {
+      biological: "biological",
+      adoptive: "adoptive",
+      step: "step",
+      foster: "foster",
+      unknown: "",
+    } as Record<string, string>,
+    stateAffirmed: "Endorsed by steward",
+    // Steward controls.
+    affirm: "Endorse",
+    affirming: "Endorsing…",
+    deny: "Remove",
+    denying: "Removing…",
+    // Subject controls.
+    hide: "Hide this from the tree",
+    hiding: "Hiding…",
+    // Generic failure for a governance/hide action.
+    govActionFailed: "Couldn't do that. Please try again.",
   },
 } as const;
 

@@ -155,17 +155,25 @@ export {
   normalizeEdgeEndpoints,
   deriveKin,
   listMyKin,
+  listGovernableKinEdges,
   type KinshipProjection,
   type ResolvedKinshipEdge,
   type KinRelation,
   type DerivedKin,
   type KinListEntry,
+  type GovernableKinEdge,
 } from "./kinship-repository";
 export {
   addRelative,
+  affirmEdge,
+  denyEdge,
+  correctEdge,
   type AddRelativeInput,
   type AddRelativeResult,
   type AddRelativeRelation,
+  type EdgeRef,
+  type KinshipEdgeActionResult,
+  type CorrectEdgeInput,
 } from "./kinship-write";
 export {
   createJoinRequest,

@@ -11,13 +11,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   listActiveFamiliesForPerson,
+  listGovernableKinEdges,
   listMyKin,
+  type GovernableKinEdge,
   type KinListEntry,
   type KinRelation,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 import { AddRelativeForm } from "./add-relative-form";
+import { KinEdgeControls } from "./kin-edge-controls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +37,23 @@ function relationLabel(relation: KinRelation): string {
 function displayNameFor(entry: KinListEntry): string {
   if (entry.identified && entry.displayName) return entry.displayName;
   return hub.kin.unknownOf(relationLabel(entry.relation));
+}
+
+/** A person's name for an edge sentence — an unidentified bridge placeholder reads "someone unnamed". */
+function endpointName(displayName: string | null, identified: boolean): string {
+  return identified && displayName ? displayName : hub.kin.edgeUnknownPerson;
+}
+
+/** An ungendered sentence for one visible edge (parent_of / partnered_with), with an optional nature. */
+function edgeSentence(edge: GovernableKinEdge): string {
+  const a = endpointName(edge.personADisplayName, edge.personAIdentified);
+  const b = endpointName(edge.personBDisplayName, edge.personBIdentified);
+  if (edge.edgeType === "parent_of") {
+    const nature = edge.nature ? hub.kin.natureLabel[edge.nature] : "";
+    const base = hub.kin.edgeParentOf(a, b);
+    return nature ? `${base} (${nature})` : base;
+  }
+  return hub.kin.edgePartneredWith(a, b);
 }
 
 function EmptyCard({ children }: { children: React.ReactNode }) {
@@ -130,6 +150,10 @@ export default async function KinPage({
       : activeFamilies[0]!.familyId;
 
   const kin = await listMyKin(db, ctx, familyId);
+  const edges = await listGovernableKinEdges(db, ctx, familyId);
+  // The governance section is only meaningful if the viewer can act on at least one edge (steward, or
+  // a self-endpoint who could hide). Otherwise it stays hidden — a plain member sees just their kin.
+  const showGovernance = edges.some((e) => e.viewerIsSteward || e.viewerCanHide);
 
   return shell(
     <>
@@ -210,6 +234,83 @@ export default async function KinPage({
           ))}
         </ul>
       )}
+
+      {showGovernance ? (
+        <section style={{ marginTop: 40 }}>
+          <h2
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "var(--text-story)",
+              fontWeight: 500,
+              color: "var(--text-body)",
+              margin: "0 0 8px",
+            }}
+          >
+            {hub.kin.govHeading}
+          </h2>
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui-sm)",
+              lineHeight: "var(--leading-body)",
+              color: "var(--text-muted)",
+              margin: "8px 0 20px",
+            }}
+          >
+            {hub.kin.govIntro}
+          </p>
+          {edges.length === 0 ? (
+            <EmptyCard>{hub.kin.govEmpty}</EmptyCard>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
+              {edges.map((edge) => (
+                <li
+                  key={`${edge.edgeType}:${edge.personAId}:${edge.personBId}`}
+                  style={{
+                    background: "var(--surface-card)",
+                    border: "var(--border-width) solid var(--border)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "16px 20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-story)",
+                        fontSize: "var(--text-story)",
+                        color: "var(--text-body)",
+                      }}
+                    >
+                      {edgeSentence(edge)}
+                    </span>
+                    {edge.state === "affirmed" ? (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: "var(--text-ui-sm)",
+                          fontWeight: 500,
+                          color: "var(--text-muted)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {hub.kin.stateAffirmed}
+                      </span>
+                    ) : null}
+                  </div>
+                  <KinEdgeControls familyId={familyId} edge={edge} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       <section style={{ marginTop: 40 }}>
         <h2

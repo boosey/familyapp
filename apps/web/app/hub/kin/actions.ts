@@ -4,10 +4,16 @@ import { revalidatePath } from "next/cache";
 import { getRuntime } from "@/lib/runtime";
 import {
   addRelative,
+  affirmEdge,
+  correctEdge,
+  denyEdge,
   listActiveFamiliesForPerson,
   type AddRelativeInput,
   type AddRelativeRelation,
+  type EdgeRef,
+  type KinshipEdgeActionResult,
 } from "@chronicle/core";
+import type { KinshipEdgeType, KinshipNature } from "@chronicle/db";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
 import { hub } from "@/app/_copy";
 
@@ -115,3 +121,121 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
   revalidatePath("/hub/kin");
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Steward governance (issue #33) + subject hide (issue #34) actions.
+//
+// Same discipline as addRelativeAction: beginLogContext → getRuntime → auth
+// guard → parse the edge identity from the form → core call (which RE-CHECKS
+// every gate server-side — steward role for governance, self-endpoint for hide)
+// → revalidate. The form fields are UNTRUSTED; core is the authority.
+// ---------------------------------------------------------------------------
+
+const VALID_EDGE_TYPES: ReadonlySet<KinshipEdgeType> = new Set<KinshipEdgeType>([
+  "parent_of",
+  "partnered_with",
+]);
+const VALID_NATURES: ReadonlySet<KinshipNature> = new Set<KinshipNature>([
+  "biological",
+  "adoptive",
+  "step",
+  "foster",
+  "unknown",
+]);
+
+/** Parse a logical edge identity from the submitted form. Returns null if any field is malformed. */
+function parseEdgeRef(formData: FormData): EdgeRef | null {
+  const familyId = formData.get("familyId");
+  const edgeType = formData.get("edgeType");
+  const personAId = formData.get("personAId");
+  const personBId = formData.get("personBId");
+  if (
+    typeof familyId !== "string" ||
+    typeof edgeType !== "string" ||
+    !VALID_EDGE_TYPES.has(edgeType as KinshipEdgeType) ||
+    typeof personAId !== "string" ||
+    typeof personBId !== "string" ||
+    !familyId ||
+    !personAId ||
+    !personBId
+  ) {
+    return null;
+  }
+  return { familyId, edgeType: edgeType as KinshipEdgeType, personAId, personBId };
+}
+
+/**
+ * Shared runner for the five edge actions. Resolves auth, parses the edge, invokes `run` (the core
+ * call that owns the real authorization), maps a `{allowed:false}` to an error, and revalidates. The
+ * family id is re-validated against the viewer's own active families so a forged edge can't target a
+ * family the viewer doesn't belong to (core re-checks steward/endpoint on top).
+ */
+async function runEdgeAction(
+  formData: FormData,
+  logLabel: string,
+  run: (
+    db: Awaited<ReturnType<typeof getRuntime>>["db"],
+    ctx: { kind: "account"; personId: string },
+    ref: EdgeRef,
+  ) => Promise<KinshipEdgeActionResult>,
+): Promise<ActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") {
+    return { error: hub.actions.notSignedIn };
+  }
+
+  const ref = parseEdgeRef(formData);
+  if (ref === null) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  if (!activeFamilies.some((f) => f.familyId === ref.familyId)) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  try {
+    const result = await run(db, ctx, ref);
+    if (!result.allowed) {
+      plogError("kin", `${logLabel}: not allowed`, { family: ref.familyId, reason: result.reason });
+      return { error: result.reason ?? hub.kin.govActionFailed };
+    }
+    plog("kin", `${logLabel}: success`, { family: ref.familyId });
+  } catch (err) {
+    plogError("kin", `${logLabel}: error`, {
+      family: ref.familyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.kin.govActionFailed };
+  }
+
+  revalidatePath("/hub/kin");
+  return undefined;
+}
+
+/** Steward endorses an edge (#33). */
+export async function affirmEdgeAction(formData: FormData): Promise<ActionResult> {
+  return runEdgeAction(formData, "affirmEdge", (db, ctx, ref) => affirmEdge(db, ctx, ref));
+}
+
+/** Steward removes an edge (#33). Optional `note` reason. */
+export async function denyEdgeAction(formData: FormData): Promise<ActionResult> {
+  const rawNote = formData.get("note");
+  const note = typeof rawNote === "string" && rawNote.trim() ? rawNote.trim() : null;
+  return runEdgeAction(formData, "denyEdge", (db, ctx, ref) => denyEdge(db, ctx, ref, note));
+}
+
+/** Steward corrects a parent_of edge's nature (#33). */
+export async function correctEdgeAction(formData: FormData): Promise<ActionResult> {
+  const rawNature = formData.get("nature");
+  if (typeof rawNature !== "string" || !VALID_NATURES.has(rawNature as KinshipNature)) {
+    return { error: hub.actions.invalidInput };
+  }
+  const nature = rawNature as KinshipNature;
+  return runEdgeAction(formData, "correctEdge", (db, ctx, ref) =>
+    correctEdge(db, ctx, { ref, nature }),
+  );
+}
+
