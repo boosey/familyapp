@@ -74,6 +74,13 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
       ? submittedFamilyId
       : activeFamilies[0]!.familyId;
 
+  // Optional anchor (Task 7): when the add came from a person panel it carries the anchor person to
+  // target instead of the viewer. Any non-empty trimmed string is forwarded; core re-validates that it
+  // belongs to this family. Absent/blank => omit, so core defaults the anchor to the viewer.
+  const rawAnchor = formData.get("anchorPersonId");
+  const anchorPersonId =
+    typeof rawAnchor === "string" && rawAnchor.trim() ? rawAnchor.trim() : undefined;
+
   const rawName = formData.get("displayName");
   const trimmedName = typeof rawName === "string" ? rawName.trim() : "";
 
@@ -99,6 +106,8 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
   const input: AddRelativeInput = {
     familyId,
     relation,
+    // Present => target the add at this anchor person (core re-validates family membership).
+    ...(anchorPersonId ? { anchorPersonId } : {}),
     // Empty => omit, so core creates an anonymous bridge relative (identified=false).
     ...(trimmedName ? { displayName: trimmedName } : {}),
     ...(birthDate ? { birthDate } : {}),

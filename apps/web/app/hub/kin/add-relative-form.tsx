@@ -12,11 +12,22 @@
  * the implicit unknown-parent bridge is created SERVER-SIDE by core — this form authors no bridge.
  */
 import { useState, useTransition } from "react";
+import type { AddRelativeRelation } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { addRelativeAction } from "./actions";
 
-export function AddRelativeForm({ familyId }: { familyId: string }) {
+export function AddRelativeForm({
+  familyId,
+  anchorPersonId,
+  initialRelation,
+}: {
+  familyId: string;
+  /** When present (a targeted add from a person panel), rides along so core anchors on this person. */
+  anchorPersonId?: string;
+  /** Preselects the relation `<select>` when the add was launched with an intended relation. */
+  initialRelation?: AddRelativeRelation;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Drives the conditional "Year they died" field — shown ONLY when the relative is deceased
@@ -37,10 +48,14 @@ export function AddRelativeForm({ familyId }: { familyId: string }) {
     <form action={onSubmit} style={{ display: "grid", gap: 20 }}>
       {/* Current family scope — re-validated server-side against the viewer's own families. */}
       <input type="hidden" name="familyId" value={familyId} />
+      {/* Targeted add: the anchor person to hang the new relative off (server re-validates). */}
+      {anchorPersonId ? (
+        <input type="hidden" name="anchorPersonId" value={anchorPersonId} />
+      ) : null}
 
       <label className="kin-form-label">
         {hub.kin.relationFieldLabel}
-        <select name="relation" className="kin-field" defaultValue="parent" required>
+        <select name="relation" className="kin-field" defaultValue={initialRelation ?? "parent"} required>
           <option value="parent">{hub.kin.relationOptions.parent}</option>
           <option value="child">{hub.kin.relationOptions.child}</option>
           <option value="partner">{hub.kin.relationOptions.partner}</option>

@@ -13,6 +13,7 @@ import {
   listActiveFamiliesForPerson,
   listGovernableKinEdges,
   listMyKin,
+  type AddRelativeRelation,
   type GovernableKinEdge,
   type KinListEntry,
   type KinRelation,
@@ -27,6 +28,22 @@ export const dynamic = "force-dynamic";
 
 function relationLabel(relation: KinRelation): string {
   return hub.kin.relationLabel[relation];
+}
+
+/** The five relations the add-relative form offers (mirrors core's AddRelativeRelation). */
+const VALID_RELATIONS: ReadonlySet<AddRelativeRelation> = new Set<AddRelativeRelation>([
+  "parent",
+  "child",
+  "partner",
+  "grandparent",
+  "sibling",
+]);
+
+/** A `?relation=` param is honored only if it is one of the five allowed values; else ignored. */
+function parsePresetRelation(value: string | undefined): AddRelativeRelation | undefined {
+  return value && VALID_RELATIONS.has(value as AddRelativeRelation)
+    ? (value as AddRelativeRelation)
+    : undefined;
 }
 
 /**
@@ -84,7 +101,7 @@ function EmptyCard({ children }: { children: React.ReactNode }) {
 export default async function KinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; anchor?: string; relation?: string }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -94,7 +111,11 @@ export default async function KinPage({
     redirect("/");
   }
 
-  const { scope: scopeParam } = await searchParams;
+  const { scope: scopeParam, anchor: anchorParam, relation: relationParam } = await searchParams;
+  // A targeted add carries the anchor person + intended relation (Task 7); both are re-validated
+  // server-side (core checks the anchor's family membership; relation must be one of the five).
+  const anchorPersonId = anchorParam && anchorParam.trim() ? anchorParam.trim() : undefined;
+  const initialRelation = parsePresetRelation(relationParam);
 
   const backLink = (
     <div style={{ marginBottom: 20 }}>
@@ -350,7 +371,11 @@ export default async function KinPage({
         >
           {hub.kin.addIntro}
         </p>
-        <AddRelativeForm familyId={familyId} />
+        <AddRelativeForm
+          familyId={familyId}
+          {...(anchorPersonId ? { anchorPersonId } : {})}
+          {...(initialRelation ? { initialRelation } : {})}
+        />
       </section>
     </>,
   );
