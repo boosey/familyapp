@@ -12,6 +12,7 @@ const node = (id: string, rel: TreeNode["relationToRoot"] = null): TreeNode => (
   relationToRoot: rel,
   hasHiddenParents: false,
   hasHiddenChildren: false,
+  sex: "unknown",
 });
 const parentOf = (a: string, b: string): ResolvedKinshipEdge => ({
   edgeType: "parent_of",

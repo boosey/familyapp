@@ -113,6 +113,11 @@
 
   --ease-quiet: cubic-bezier(0.33, 0, 0.2, 1);
   --dur-fade: 0.15s; --dur-settle: 0.28s; --dur-pulse: 2.4s;
+
+  /* Sex accent bar on tree node cards (ADR-0016 pedigree-nav). Mockup stand-in values —
+   * card color only, never a relation label. Unknown/null draws no bar. */
+  --sex-male: #5C7A97;
+  --sex-female: #B57F73;
 }
 
 @keyframes kindred-listening {

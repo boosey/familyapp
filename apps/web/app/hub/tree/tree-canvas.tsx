@@ -1,6 +1,6 @@
 "use client";
 /**
- * TreeCanvas — the interactive visual family tree (spec §7).
+ * TreeCanvas — the interactive visual family tree (pedigree-nav redesign, spec §"tree-canvas.tsx").
  *
  * Owns the loaded `nodes`/`edges`, the `expansion` state (starts EMPTY_EXPANSION), the client-side
  * `rootPersonId` (re-rooting is a smooth client re-fetch, not a page navigation), and a `pan` offset.
@@ -8,28 +8,32 @@
  * real, tappable, accessible buttons while connectors stay crisp SVG). Supports drag-to-pan and a
  * **Fit** button that reframes on the root. No zoom (v1).
  *
- * Interaction model (spec §7):
- *   - FIRST tap on a node SELECTS it (opens the read-only panel). Cheap, no fetch.
- *   - SECOND tap on the SAME selected node RE-ROOTS the tree on that person: fetch their neighborhood,
- *     merge it in, relabel relations to the new root, reset expansion, and smoothly pan onto them.
- *   - A pointer that MOVES beyond a small threshold between down and up is a drag, not a tap.
+ * Interaction model (pedigree-nav):
+ *   - A node NAME click SELECTS it → opens the read-only <PersonPanel>. Re-rooting happens ONLY via the
+ *     panel's "Center tree here" button (the old select→second-tap re-root gesture is GONE).
+ *   - A pointer that MOVES beyond a small threshold between down and up is a drag (pan), not a tap — so
+ *     panning never accidentally selects a node.
+ *   - Frontier CHEVRONS on a node's outer edge reveal more ancestors/descendants (fetch + merge).
+ *   - EMPTY-PARENT SLOTS on a node's ancestor edge navigate to the add-parent flow (bridge creation).
+ *   - A global toolbar ⋮ (KebabMenu) and optional per-card ⋮ add relatives, gated by loaded adjacency.
  *
- * Fetch-on-expand: an ancestor/descendant caret with `requiresFetch` calls the server action for that
- * subtree and merges the result (dedup by personId / edge key), then re-runs the pure layout. In-window
- * carets are pure client reveals/collapses (mutate `expansion`). The layout function is pure and re-runs
- * on every render from (nodes, edges, root, expansion).
+ * The layout function (./tree-layout) is pure and re-runs on every render from (nodes, edges, root,
+ * expansion). Fetch-on-reveal merges a fetched subtree (dedup by personId / edge key), then re-lays out.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { KinshipTreeData, ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 import {
   computeTreeLayout,
   EMPTY_EXPANSION,
-  type Affordance,
+  type EmptyParentSlot,
   type ExpansionState,
+  type FrontierChevron,
 } from "./tree-layout";
 import { NODE_H, NODE_W, PersonNode } from "./person-node";
 import { PersonPanel } from "./person-panel";
+import { KebabMenu } from "./kebab-menu";
 import { mergeEdges, mergeNodes } from "./merge";
 import { relabelToRoot } from "./relabel";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
@@ -45,14 +49,6 @@ export interface TreeCanvasProps {
   fetchSubtree?: (familyId: string, centerPersonId: string) => Promise<FetchSubtreeResult>;
 }
 
-/** Return an immutable set copy with `value` toggled in/out. */
-function toggle<T>(set: ReadonlySet<T>, value: T): Set<T> {
-  const next = new Set(set);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-  return next;
-}
-
 /** Return an immutable set copy with `value` added. */
 function add<T>(set: ReadonlySet<T>, value: T): Set<T> {
   const next = new Set(set);
@@ -60,8 +56,35 @@ function add<T>(set: ReadonlySet<T>, value: T): Set<T> {
   return next;
 }
 
+/** Loaded adjacency counts per person, for the kebab gates (parents ≤2, partner ≤1 in v1). */
+interface AdjCounts {
+  parents: number; // # of loaded parent_of edges where this person is the CHILD
+  partners: number; // # of loaded partnered_with edges touching this person
+}
+function adjacencyCounts(edges: readonly ResolvedKinshipEdge[]): Map<string, AdjCounts> {
+  const m = new Map<string, AdjCounts>();
+  const get = (id: string): AdjCounts => {
+    let c = m.get(id);
+    if (!c) {
+      c = { parents: 0, partners: 0 };
+      m.set(id, c);
+    }
+    return c;
+  };
+  for (const e of edges) {
+    if (e.edgeType === "parent_of") {
+      get(e.personBId).parents += 1; // B is the child
+      get(e.personAId); // ensure the parent has an entry too
+    } else {
+      get(e.personAId).partners += 1;
+      get(e.personBId).partners += 1;
+    }
+  }
+  return m;
+}
+
 /** How far (px) a pointer may move between down and up and still count as a tap, not a drag. */
-const TAP_SLOP = 6;
+const DRAG_SLOP = 6;
 /** Smooth re-root pan transition duration (ms). */
 const RECENTER_MS = 300;
 
@@ -86,6 +109,10 @@ export function TreeCanvas({
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   // Tap bookkeeping (a node card): remember which node + where the pointer went down.
   const tapRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  // Drag-vs-tap guard shared by the pointer path AND the native click path (keyboard Enter/Space fire
+  // a click with NO pointer events, so this stays false and the click opens the panel — a11y). A
+  // pointer drag beyond the slop flips it true, suppressing the subsequent synthetic click.
+  const didDragRef = useRef(false);
 
   const layout = useMemo(
     () => computeTreeLayout({ nodes, edges, rootPersonId, expansion }),
@@ -93,6 +120,11 @@ export function TreeCanvas({
   );
 
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.personId, n])), [nodes]);
+  const adj = useMemo(() => adjacencyCounts(edges), [edges]);
+  const countsFor = useCallback(
+    (id: string): AdjCounts => adj.get(id) ?? { parents: 0, partners: 0 },
+    [adj],
+  );
 
   /** Reframe so the root sits near the top-center of the viewport. */
   const fitToRoot = useCallback(() => {
@@ -111,7 +143,7 @@ export function TreeCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootPersonId]);
 
-  // --- Smooth client-side re-root ----------------------------------------
+  // --- Smooth client-side re-root (panel "Center tree here" is the only trigger) -----------------
   const recenterOn = useCallback(
     async (id: string) => {
       setPending(true);
@@ -147,7 +179,7 @@ export function TreeCanvas({
     [familyId, fetchSubtree, edges, nodes],
   );
 
-  // --- Boundary reveal fetch (caret with requiresFetch) -------------------
+  // --- Frontier reveal fetch (a chevron on a node's outer edge) -----------------------------------
   const revealFetch = useCallback(
     async (kind: "parents" | "children", fetchPersonId: string) => {
       setPending(true);
@@ -178,34 +210,10 @@ export function TreeCanvas({
     [familyId, fetchSubtree, nodes, edges, rootPersonId],
   );
 
-  // --- Caret activation (pure reveal/collapse, or a boundary fetch) -------
-  const onCaret = useCallback(
-    (a: Affordance) => {
-      if (a.kind === "ancestors") {
-        if (a.expanded) {
-          setExpansion((e) => ({ ...e, collapsedAncestors: toggle(e.collapsedAncestors, a.targetId) }));
-        } else if (a.requiresFetch) {
-          void revealFetch("parents", a.fetchPersonId);
-        } else {
-          setExpansion((e) => ({
-            ...e,
-            collapsedAncestors: toggle(e.collapsedAncestors, a.targetId),
-            expandedParents: add(e.expandedParents, a.fetchPersonId),
-          }));
-        }
-      } else {
-        if (a.expanded) {
-          setExpansion((e) => ({ ...e, collapsedDescendants: toggle(e.collapsedDescendants, a.targetId) }));
-        } else if (a.requiresFetch) {
-          void revealFetch("children", a.fetchPersonId);
-        } else {
-          setExpansion((e) => ({
-            ...e,
-            collapsedDescendants: toggle(e.collapsedDescendants, a.targetId),
-            expandedChildren: add(e.expandedChildren, a.fetchPersonId),
-          }));
-        }
-      }
+  /** A chevron reveals ancestors (fetch parents) or descendants (fetch children). */
+  const onChevron = useCallback(
+    (c: FrontierChevron) => {
+      void revealFetch(c.direction === "ancestors" ? "parents" : "children", c.personId);
     },
     [revealFetch],
   );
@@ -225,22 +233,36 @@ export function TreeCanvas({
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   };
 
-  // --- Reliable node tap (first = select, second-on-same = re-root) ------
+  // --- Reliable node activation (name click / keyboard SELECTS; a drag does not) ------------
+  // Selection is driven by the node button's native onClick (`onNodeActivate`), which fires for BOTH
+  // mouse taps AND keyboard Enter/Space. The pointer handlers only maintain the drag guard so a pan
+  // that starts on a card doesn't turn into a selection when the synthetic click lands.
   const onNodePointerDown = (id: string, e: React.PointerEvent) => {
     e.stopPropagation(); // don't let the viewport treat this as a pan-start
     tapRef.current = { id, x: e.clientX, y: e.clientY };
+    didDragRef.current = false;
   };
-  const onNodePointerUp = (id: string, e: React.PointerEvent) => {
-    e.stopPropagation();
+  const onNodePointerMove = (id: string, e: React.PointerEvent) => {
     const t = tapRef.current;
-    tapRef.current = null;
     if (!t || t.id !== id) return;
-    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > TAP_SLOP) return; // a drag, not a tap
-    if (selected === id) void recenterOn(id); // second tap ⇒ re-root
-    else setSelected(id); // first tap ⇒ select + panel
+    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > DRAG_SLOP) didDragRef.current = true;
+  };
+  const onNodePointerUp = (_id: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    tapRef.current = null;
+  };
+  /** Native click (mouse tap OR keyboard Enter/Space). Opens the panel unless a drag was in progress. */
+  const onNodeActivate = (id: string) => {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return; // a pan gesture, not a tap
+    }
+    setSelected(id); // select + open the read-only panel (no re-root gesture); idempotent
   };
 
   const selectedNode = selected ? (nodeById.get(selected) ?? null) : null;
+  const rootNode = nodeById.get(rootPersonId) ?? null;
+  const rootCounts = countsFor(rootPersonId);
 
   return (
     <div style={{ position: "relative" }}>
@@ -267,6 +289,17 @@ export function TreeCanvas({
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-meta)" }}>
           {hub.tree.pan}
         </span>
+        {/* Global add-relative ⋮ targeting the current focal root. */}
+        {rootNode && (
+          <span data-testid="tree-toolbar-kebab" style={{ marginLeft: "auto" }}>
+            <KebabMenu
+              node={rootNode}
+              familyId={familyId}
+              parentCount={rootCounts.parents}
+              partnerCount={rootCounts.partners}
+            />
+          </span>
+        )}
         {pending && (
           <span data-testid="tree-loading" style={{ fontSize: "0.75rem", color: "var(--text-meta)" }}>
             …
@@ -339,21 +372,43 @@ export function TreeCanvas({
             ))}
           </svg>
 
-          {/* Node cards. */}
-          {layout.placed.map((p) => (
-            <div
-              key={p.personId}
-              onPointerDown={(e) => onNodePointerDown(p.personId, e)}
-              onPointerUp={(e) => onNodePointerUp(p.personId, e)}
-              style={{ position: "absolute", left: p.x - NODE_W / 2, top: p.y - NODE_H / 2 }}
-            >
-              <PersonNode node={p.node} isRoot={p.personId === rootPersonId} viewerPersonId={viewerPersonId} />
-            </div>
+          {/* Node cards. Each carries an optional per-card ⋮ wired with that node's adjacency counts. */}
+          {layout.placed.map((p) => {
+            const c = countsFor(p.personId);
+            return (
+              <div
+                key={p.personId}
+                onPointerDown={(e) => onNodePointerDown(p.personId, e)}
+                onPointerMove={(e) => onNodePointerMove(p.personId, e)}
+                onPointerUp={(e) => onNodePointerUp(p.personId, e)}
+                style={{ position: "absolute", left: p.x - NODE_W / 2, top: p.y - NODE_H / 2 }}
+              >
+                <PersonNode
+                  node={p.node}
+                  isRoot={p.personId === rootPersonId}
+                  viewerPersonId={viewerPersonId}
+                  onTap={onNodeActivate}
+                  kebab={
+                    <KebabMenu
+                      node={p.node}
+                      familyId={familyId}
+                      parentCount={c.parents}
+                      partnerCount={c.partners}
+                    />
+                  }
+                />
+              </div>
+            );
+          })}
+
+          {/* Frontier chevrons — reveal more ancestors (right edge) / descendants (left edge). */}
+          {layout.chevrons.map((ch) => (
+            <ChevronButton key={`${ch.direction}:${ch.personId}`} chevron={ch} onActivate={onChevron} />
           ))}
 
-          {/* Per-box carets (medium-weight chevrons). */}
-          {layout.affordances.map((aff) => (
-            <CaretButton key={`${aff.kind}:${aff.targetId}`} aff={aff} onActivate={onCaret} />
+          {/* Empty-parent slots — navigate to the add-parent flow (bridge creation). */}
+          {layout.emptyParentSlots.map((slot) => (
+            <EmptyParentSlotButton key={slot.personId} slot={slot} familyId={familyId} />
           ))}
         </div>
       </div>
@@ -364,6 +419,7 @@ export function TreeCanvas({
           isRoot={selectedNode.personId === rootPersonId}
           familyId={familyId}
           viewerPersonId={viewerPersonId}
+          onRecenter={(id) => void recenterOn(id)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -371,44 +427,34 @@ export function TreeCanvas({
   );
 }
 
-/** A single medium-weight chevron caret (expand/collapse ancestors or descendants). */
-function CaretButton({
-  aff,
+/** A single frontier chevron (reveal ancestors on the right edge, descendants on the left edge). */
+function ChevronButton({
+  chevron,
   onActivate,
 }: {
-  aff: Affordance;
-  onActivate: (aff: Affordance) => void;
+  chevron: FrontierChevron;
+  onActivate: (c: FrontierChevron) => void;
 }) {
-  // Direction: ancestors point up to reveal, down (toward the node) to collapse; descendants invert.
-  const pointsUp = aff.kind === "ancestors" ? !aff.expanded : aff.expanded;
-  const glyph = pointsUp ? "⌃" : "⌄";
-
-  const label =
-    aff.kind === "ancestors"
-      ? aff.expanded
-        ? hub.tree.hideParents
-        : hub.tree.showParents
-      : aff.expanded
-        ? hub.tree.hideChildren
-        : hub.tree.showChildren;
-
+  // Ancestors sit on the RIGHT edge → chevron points right (▸). Descendants on the LEFT edge → left (◂).
+  const glyph = chevron.direction === "ancestors" ? "▸" : "◂";
+  const label = chevron.direction === "ancestors" ? hub.tree.showEarlier : hub.tree.showDescendants;
   const size = 22;
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      data-testid={`tree-affordance-${aff.kind}-${aff.targetId}`}
+      data-testid={`tree-chevron-${chevron.direction}-${chevron.personId}`}
       onClick={(e) => {
         e.stopPropagation();
-        onActivate(aff);
+        onActivate(chevron);
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       style={{
         position: "absolute",
-        left: aff.x - size / 2,
-        top: aff.y - size / 2,
+        left: chevron.x - size / 2,
+        top: chevron.y - size / 2,
         width: size,
         height: size,
         display: "flex",
@@ -428,5 +474,44 @@ function CaretButton({
     >
       <span aria-hidden="true">{glyph}</span>
     </button>
+  );
+}
+
+/** An inline "add parent" placeholder on a node's ancestor edge → the add-parent flow (bridge). */
+function EmptyParentSlotButton({ slot, familyId }: { slot: EmptyParentSlot; familyId: string }) {
+  const label = hub.tree.addParentSlot;
+  const size = 22;
+  return (
+    <Link
+      href={`/hub/kin?scope=${familyId}&anchor=${slot.personId}&relation=parent`}
+      aria-label={label}
+      title={label}
+      data-testid={`tree-addparentslot-${slot.personId}`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      style={{
+        position: "absolute",
+        left: slot.x - size / 2,
+        top: slot.y - size / 2,
+        width: size,
+        height: size,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "50%",
+        border: "var(--border-width) dashed var(--border-strong)",
+        background: "var(--surface-card)",
+        color: "var(--text-muted)",
+        cursor: "pointer",
+        fontSize: "0.9rem",
+        fontWeight: 500,
+        lineHeight: 1,
+        padding: 0,
+        textDecoration: "none",
+        zIndex: 1,
+      }}
+    >
+      <span aria-hidden="true">{"+"}</span>
+    </Link>
   );
 }

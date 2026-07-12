@@ -66,6 +66,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     relationToRoot: over.relationToRoot ?? null,
     hasHiddenParents: false,
     hasHiddenChildren: false,
+    sex: over.sex ?? "unknown",
   };
 }
 

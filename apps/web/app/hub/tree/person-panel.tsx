@@ -18,10 +18,12 @@ export interface PersonPanelProps {
   familyId: string;
   /** The viewer's own personId — used to label their own node "You" regardless of the focal root. */
   viewerPersonId: string;
+  /** Re-root the tree on this person. The panel's "Center tree here" is the ONLY re-root trigger. */
+  onRecenter: (personId: string) => void;
   onClose: () => void;
 }
 
-export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onClose }: PersonPanelProps) {
+export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onRecenter, onClose }: PersonPanelProps) {
   const name = displayNameFor(node);
   const relation = relationToRootLabel(node, isRoot, viewerPersonId);
   const life = lifeLineFor(node);
@@ -116,6 +118,20 @@ export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onClose }:
       )}
 
       <nav style={{ display: "grid", gap: 8 }}>
+        {/* Primary re-root action — the ONLY way to re-center the tree (select/second-tap removed).
+            Hidden when this person is already the focal root. */}
+        {!isRoot && (
+          <KindredButton
+            variant="primary"
+            size="small"
+            fullWidth
+            type="button"
+            data-testid="tree-panel-recenter"
+            onClick={() => onRecenter(node.personId)}
+          >
+            {hub.tree.centerHere}
+          </KindredButton>
+        )}
         <Link href={storiesHref} style={{ textDecoration: "none" }} data-testid="tree-panel-stories">
           <KindredButton variant="secondary" size="small" fullWidth type="button">
             {hub.tree.panelStories}
@@ -134,6 +150,11 @@ export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onClose }:
         <Link href={addHref("sibling")} style={{ textDecoration: "none" }} data-testid="tree-panel-addsibling">
           <KindredButton variant="secondary" size="small" fullWidth type="button">
             {hub.tree.panelAddSibling}
+          </KindredButton>
+        </Link>
+        <Link href={addHref("partner")} style={{ textDecoration: "none" }} data-testid="tree-panel-addpartner">
+          <KindredButton variant="secondary" size="small" fullWidth type="button">
+            {hub.tree.addPartner}
           </KindredButton>
         </Link>
         <Link href={manageKinHref} style={{ textDecoration: "none" }} data-testid="tree-panel-managekin">

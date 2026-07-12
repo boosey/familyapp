@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 /**
- * TreeCanvas interaction (spec §7):
- *   - first tap on a node SELECTS it (opens the read-only panel) without any fetch;
- *   - a second tap on the SAME selected node RE-ROOTS the tree there (client-side fetch + relabel);
+ * TreeCanvas interaction (pedigree-nav redesign):
+ *   - a NAME click (pointerdown+up at the same point) SELECTS a node → opens the read-only panel,
+ *     without any fetch;
+ *   - re-rooting is NOT a node gesture anymore — it happens ONLY via the panel's "Center tree here"
+ *     button, which fetches the neighborhood, merges it, relabels, and reveals the new root's kin;
  *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never selects;
- *   - tapping a BOUNDARY ancestor caret (parents not loaded) fetches that subtree, merges without
+ *   - activating a FRONTIER CHEVRON (parents/children not loaded) fetches that subtree, merges without
  *     dupes, and reveals the new node;
  *   - a fetch failure surfaces the load error and leaves the tree unchanged.
  *
- * A "tap" is a pointerdown + pointerup at (nearly) the same point on the same node. The server action
- * is mocked (no live DB). We feed the real pure layout tiny fixtures.
+ * The server action is mocked (no live DB). We feed the real pure layout tiny fixtures.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -19,11 +20,17 @@ import type { FetchSubtreeResult } from "@/app/hub/tree/actions";
 
 afterEach(cleanup);
 
-/** Simulate a real tap: pointerdown then pointerup at the same point on the node card. */
+/**
+ * Simulate a real tap: pointerdown, pointerup, then the synthetic click the browser fires — at the
+ * same point on the node card. jsdom does NOT auto-fire click after pointerup, so we dispatch it
+ * explicitly (a real browser would). Selection is driven by the button's onClick + a drag guard, so a
+ * faithful tap must include the click.
+ */
 async function tap(el: Element, at: { x: number; y: number } = { x: 5, y: 5 }) {
   await act(async () => {
     fireEvent.pointerDown(el, { clientX: at.x, clientY: at.y, pointerId: 1 });
     fireEvent.pointerUp(el, { clientX: at.x, clientY: at.y, pointerId: 1 });
+    fireEvent.click(el, { clientX: at.x, clientY: at.y });
   });
 }
 
@@ -38,6 +45,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     relationToRoot: over.relationToRoot ?? null,
     hasHiddenParents: over.hasHiddenParents ?? false,
     hasHiddenChildren: over.hasHiddenChildren ?? false,
+    sex: over.sex ?? "unknown",
   };
 }
 
@@ -103,7 +111,7 @@ function subtreeFor(id: string): KinshipTreeData {
   return { familyId: "F", rootPersonId: id, nodes: [node({ personId: id, relationToRoot: "self" })], edges: [] };
 }
 
-it("first tap selects (opens panel); second tap on the same node re-roots", async () => {
+it("a name click selects (opens the panel) without any fetch", async () => {
   const fetchSubtree = vi.fn(
     async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
   );
@@ -113,8 +121,39 @@ it("first tap selects (opens panel); second tap on the same node re-roots", asyn
   await tap(screen.getByTestId("tree-node-marco"));
   expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
   expect(fetchSubtree).not.toHaveBeenCalled();
+});
 
+it("keyboard/native click on a node opens the panel and does NOT re-root (a11y regression, Finding 2)", async () => {
+  // A keyboard Enter/Space on the node <button> fires a native click with NO pointer events. The
+  // canvas must still open the panel (else keyboard-only users can't reach Center/add-relative), and
+  // it must NOT re-root (no fetch) on a plain activation.
+  const fetchSubtree = vi.fn(
+    async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
+  );
+  render(
+    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+  );
+  expect(screen.queryByTestId("tree-person-panel")).toBeNull();
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("tree-node-marco"));
+  });
+  expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
+  // Plain activation never re-roots.
+  expect(fetchSubtree).not.toHaveBeenCalled();
+});
+
+it("re-roots via the panel's 'Center tree here', revealing the new root's kin", async () => {
+  const fetchSubtree = vi.fn(
+    async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
+  );
+  render(
+    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+  );
+  // Select marco, then press the panel's re-root button (the ONLY re-root trigger).
   await tap(screen.getByTestId("tree-node-marco"));
+  await act(async () => {
+    screen.getByTestId("tree-panel-recenter").click();
+  });
   await waitFor(() => expect(fetchSubtree).toHaveBeenCalledWith("F", "marco"));
   // Re-rooted: the new root's newly-revealed child is drawn.
   await waitFor(() => expect(screen.getByTestId("tree-node-gia")).toBeTruthy());
@@ -135,12 +174,14 @@ it("a drag on a node does not select it", async () => {
     fireEvent.pointerDown(nodeEl, { clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerMove(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
     fireEvent.pointerUp(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
+    // A browser still fires a click after a drag-release on the element; the drag guard must swallow it.
+    fireEvent.click(nodeEl, { clientX: 40, clientY: 0 });
   });
   expect(screen.queryByTestId("tree-person-panel")).toBeNull();
 });
 
-it("fetches a boundary ancestor subtree, merges without dupes, and reveals the new node", async () => {
-  // Root has a hidden parent at the boundary ⇒ an ancestors caret with requiresFetch:true.
+it("reveals a frontier ancestor subtree, merges without dupes, and draws the new node", async () => {
+  // Root has a hidden parent at the boundary ⇒ an ancestors chevron on its right edge.
   const boundaryInitial: KinshipTreeData = {
     familyId: "F",
     rootPersonId: ROOT,
@@ -173,9 +214,9 @@ it("fetches a boundary ancestor subtree, merges without dupes, and reveals the n
   );
   expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();
 
-  const caret = screen.getByTestId(`tree-affordance-ancestors-${ROOT}`);
+  const chevron = screen.getByTestId(`tree-chevron-ancestors-${ROOT}`);
   await act(async () => {
-    caret.click();
+    chevron.click();
   });
   expect(fetchSubtree).toHaveBeenCalledWith("F", ROOT);
 
@@ -184,7 +225,47 @@ it("fetches a boundary ancestor subtree, merges without dupes, and reveals the n
   expect(screen.getAllByTestId(`tree-node-${ROOT}`)).toHaveLength(1);
 });
 
-it("surfaces a load error when the boundary fetch fails, leaving the tree unchanged", async () => {
+it("a descendants chevron reveals children (fetches that node's subtree)", async () => {
+  // Root has hidden children at the boundary ⇒ a descendants chevron on its LEFT edge → fetch children.
+  const boundaryInitial: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: ROOT,
+    nodes: [node({ personId: ROOT, relationToRoot: "self", hasHiddenChildren: true })],
+    edges: [],
+  };
+  const fetched: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: ROOT,
+    nodes: [
+      node({ personId: ROOT, relationToRoot: "self", hasHiddenChildren: false }),
+      node({ personId: "kid", displayName: "Kid", relationToRoot: "child" }),
+    ],
+    edges: [
+      {
+        edgeType: "parent_of",
+        personAId: ROOT,
+        personBId: "kid",
+        nature: "biological",
+        state: "asserted",
+        assertedBy: ROOT,
+        assertedAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ],
+  };
+  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: true, data: fetched }));
+  render(
+    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
+  );
+  const chevron = screen.getByTestId(`tree-chevron-descendants-${ROOT}`);
+  await act(async () => {
+    chevron.click();
+  });
+  expect(fetchSubtree).toHaveBeenCalledWith("F", ROOT);
+  await waitFor(() => expect(screen.getByTestId("tree-node-kid")).toBeTruthy());
+});
+
+it("surfaces a load error when the frontier fetch fails, leaving the tree unchanged", async () => {
   const boundaryInitial: KinshipTreeData = {
     familyId: "F",
     rootPersonId: ROOT,
@@ -195,9 +276,9 @@ it("surfaces a load error when the boundary fetch fails, leaving the tree unchan
   render(
     <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
   );
-  const caret = screen.getByTestId(`tree-affordance-ancestors-${ROOT}`);
+  const chevron = screen.getByTestId(`tree-chevron-ancestors-${ROOT}`);
   await act(async () => {
-    caret.click();
+    chevron.click();
   });
   await waitFor(() => expect(screen.getByTestId("tree-load-error")).toBeTruthy());
   expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();

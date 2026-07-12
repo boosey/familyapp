@@ -60,6 +60,7 @@ async function familyMembers(db: Database, familyId: string): Promise<Person[]> 
       onboardedAt: persons.onboardedAt,
       biographicalAnchors: persons.biographicalAnchors,
       lifeStatus: persons.lifeStatus,
+      sex: persons.sex,
       origin: persons.origin,
       identified: persons.identified,
       accountId: persons.accountId,

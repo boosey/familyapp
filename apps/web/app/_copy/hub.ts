@@ -635,13 +635,6 @@ export const hub = {
     // Canvas controls.
     fit: "Fit",
     pan: "Drag to pan",
-    // Per-box caret aria-labels (ADR-0016 tree renderer): expand/collapse ancestors & descendants.
-    // OBSOLETE (2026-07-12 pedigree-nav redesign) — superseded by showEarlier/showDescendants below.
-    // Left in place until the U agent (canvas UI rewrite) removes the last reference.
-    showParents: "Show parents",
-    hideParents: "Hide parents",
-    showChildren: "Show children",
-    hideChildren: "Hide children",
     // Tap detail panel — read-only actions.
     panelStories: "Stories about them",
     panelStoriesOf: (name: string) => `Stories about ${name}`,
@@ -657,6 +650,9 @@ export const hub = {
     // Panel add-partner link (relation=partner).
     addPartner: "Add partner",
     // Shared KebabMenu (global toolbar ⋮ + optional per-card ⋮) labels.
+    // Neutral label for the ⋮ trigger itself (the menu holds several add actions, so it must not be
+    // labeled as any single one).
+    moreActions: "Add a relative",
     kebabAddChild: "Add child",
     kebabAddSibling: "Add sibling",
     kebabAddParent: "Add parent",

@@ -100,15 +100,31 @@ export function monogramColor(personId: string): string {
   return `hsl(${hue} 45% 42%)`;
 }
 
+/**
+ * The left-edge sex accent color, or null for `unknown`/bridge (no bar). Bridge nodes are always
+ * unknown-sex placeholders, so they inherit the neutral no-bar treatment for free.
+ */
+function sexBarColor(node: TreeNode): string | null {
+  if (node.sex === "male") return "var(--sex-male)";
+  if (node.sex === "female") return "var(--sex-female)";
+  return null; // unknown / null
+}
+
 export interface PersonNodeProps {
   node: TreeNode;
   isRoot: boolean;
   /** The viewer's own personId — the one node labeled "You". Optional; wired by TreeCanvas. */
   viewerPersonId?: string | null;
   onTap?: (personId: string) => void;
+  /**
+   * Optional per-card ⋮ affordance (a <KebabMenu>), supplied by the canvas so PersonNode stays
+   * presentational and the menu gets the right adjacency counts. Rendered top-right, isolated from
+   * the card's tap target.
+   */
+  kebab?: React.ReactNode;
 }
 
-export function PersonNode({ node, isRoot, viewerPersonId, onTap }: PersonNodeProps) {
+export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: PersonNodeProps) {
   // `anon` drives the spec §8 anonymous-BRIDGE styling (dashed border, italics) — reserved for a
   // placeholder the model hasn't identified. An identified-but-nameless real person is NOT anon.
   const anon = isAnonymousBridge(node);
@@ -124,32 +140,63 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap }: PersonNodePr
       ? "var(--border-width) dashed var(--border-strong)"
       : "var(--border-width) solid var(--border)";
 
+  // Left-edge sex accent bar. Only drawn for male/female; the root/You accent border still visually
+  // wins (it's a full 2px accent frame around the whole card, so the thin bar reads as secondary).
+  const sexColor = sexBarColor(node);
+
   return (
-    <button
-      type="button"
-      onClick={() => onTap?.(node.personId)}
-      aria-label={name}
-      data-testid={`tree-node-${node.personId}`}
-      data-root={isRoot ? "true" : undefined}
-      data-anon={anon ? "true" : undefined}
-      data-deceased={deceased ? "true" : undefined}
-      style={{
-        boxSizing: "border-box",
-        width: NODE_W,
-        height: NODE_H,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 10px",
-        textAlign: "left",
-        cursor: "pointer",
-        borderRadius: "var(--radius-lg)",
-        border,
-        background: deceased ? "var(--surface-page)" : "var(--surface-card)",
-        opacity: deceased ? 0.9 : 1,
-        font: "inherit",
-      }}
-    >
+    <div style={{ position: "relative", width: NODE_W, height: NODE_H }}>
+      {sexColor && (
+        <span
+          aria-hidden="true"
+          data-testid={`tree-node-sexbar-${node.personId}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 8,
+            bottom: 8,
+            width: 4,
+            borderRadius: "var(--radius-pill)",
+            background: sexColor,
+            pointerEvents: "none",
+            zIndex: 1,
+          }}
+        />
+      )}
+      {kebab && (
+        <span
+          style={{ position: "absolute", top: 2, right: 2, zIndex: 2 }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+        >
+          {kebab}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={() => onTap?.(node.personId)}
+        aria-label={name}
+        data-testid={`tree-node-${node.personId}`}
+        data-root={isRoot ? "true" : undefined}
+        data-anon={anon ? "true" : undefined}
+        data-deceased={deceased ? "true" : undefined}
+        style={{
+          boxSizing: "border-box",
+          width: NODE_W,
+          height: NODE_H,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 10px",
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: "var(--radius-lg)",
+          border,
+          background: deceased ? "var(--surface-page)" : "var(--surface-card)",
+          opacity: deceased ? 0.9 : 1,
+          font: "inherit",
+        }}
+      >
       <span
         aria-hidden="true"
         style={{
@@ -198,6 +245,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap }: PersonNodePr
           </span>
         )}
       </span>
-    </button>
+      </button>
+    </div>
   );
 }

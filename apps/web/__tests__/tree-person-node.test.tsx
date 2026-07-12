@@ -25,6 +25,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     relationToRoot: over.relationToRoot ?? "parent",
     hasHiddenParents: over.hasHiddenParents ?? false,
     hasHiddenChildren: over.hasHiddenChildren ?? false,
+    sex: over.sex ?? "unknown",
   };
 }
 
@@ -121,6 +122,28 @@ it("labels a re-rooted non-viewer by relation, not 'You'", () => {
 it("labels a non-root non-viewer by relation", () => {
   const n = makeNode({ personId: "marco", relationToRoot: "child" });
   expect(relationToRootLabel(n, false, "viewer")).toBe(hub.kin.relationLabel.child);
+});
+
+it("draws a sex color bar for male/female and none for unknown", () => {
+  render(<PersonNode node={node({ personId: "p-m", sex: "male" })} isRoot={false} />);
+  expect(screen.getByTestId("tree-node-sexbar-p-m")).toBeTruthy();
+  cleanup();
+  render(<PersonNode node={node({ personId: "p-f", sex: "female" })} isRoot={false} />);
+  expect(screen.getByTestId("tree-node-sexbar-p-f")).toBeTruthy();
+  cleanup();
+  render(<PersonNode node={node({ personId: "p-u", sex: "unknown" })} isRoot={false} />);
+  expect(screen.queryByTestId("tree-node-sexbar-p-u")).toBeNull();
+});
+
+it("renders an optional per-card kebab affordance when supplied", () => {
+  render(
+    <PersonNode
+      node={node({ personId: "p-k" })}
+      isRoot={false}
+      kebab={<span data-testid="my-kebab" />}
+    />,
+  );
+  expect(screen.getByTestId("my-kebab")).toBeTruthy();
 });
 
 it("derives a deterministic monogram color from personId", () => {
