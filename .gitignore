@@ -44,3 +44,6 @@ blob-report/
 
 .vercel
 .env*
+
+# Brainstorming visual-companion mockups
+.superpowers/
