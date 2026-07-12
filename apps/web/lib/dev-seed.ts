@@ -47,10 +47,12 @@ import {
   createAsk,
   createInvitation,
   createJoinRequest,
+  normalizeEdgeEndpoints,
   persistRecordingAndCreateDraft,
   transitionStoryState,
   updateDerivedFields,
 } from "@chronicle/core";
+import type { KinshipEdgeType, KinshipNature } from "@chronicle/db";
 import { createLinkSession } from "@chronicle/capture";
 import { getRuntime } from "./runtime";
 import { tinyWav } from "./wav-util";
@@ -697,6 +699,101 @@ export async function seedInto(
   for (const spec of extras) {
     await seedApprovedStory(db, storage, eleanorId, spec);
   }
+
+  // --- Kinship fixture (ADR-0016 visual tree) ---------------------------------------------
+  // The base seed above wires accounts/families/memberships but NO kinship edges, so /hub/tree
+  // would only ever show the root-only empty state. This block asserts a multi-generation family
+  // graph around Sofia so signing in as Sofia (root = Sofia) exercises every tree affordance:
+  //   - all four node states: You (Sofia), living (Eleanor/Marco/Diego/Mateo), deceased with a life
+  //     span (Robert 1952–2010, Odette 1928–2005), and a deliberately anonymous BRIDGE
+  //     (Eleanor's unknown second parent — identified=false, no name → "Unknown grandparent").
+  //   - partners adjacent (Eleanor–Robert, Sofia–Diego, Odette–bridge).
+  //   - a >±2-generation deep tree: Celeste (Odette's mother) sits at gen -3 from Sofia, beyond the
+  //     default window, so Odette renders a boundary "hidden parents" caret → fetch-on-expand.
+  //
+  // Mention persons are account-less (origin='mention'); some are unidentified bridges. Edges are
+  // inserted with the documented raw-SQL dev bypass (mirrors the story back-date above) so this file
+  // need not import the guarded kinship subpath (the kinship-allowlist stays tiny). Every
+  // edge is a single `asserted` row — first-asserter-wins provisional truth, no confirmation needed.
+  const mentionPerson = async (opts: {
+    displayName?: string | null;
+    birthYear?: number | null;
+    deathYear?: number | null;
+    deceased?: boolean;
+    identified?: boolean;
+  }): Promise<string> => {
+    const [p] = await db
+      .insert(persons)
+      .values({
+        displayName: opts.displayName ?? null,
+        spokenName: opts.displayName ?? null,
+        birthYear: opts.birthYear ?? null,
+        deathYear: opts.deathYear ?? null,
+        lifeStatus: opts.deceased ? "deceased" : "living",
+        origin: "mention",
+        identified: opts.identified ?? true,
+      })
+      .returning();
+    return p!.id;
+  };
+
+  const assertEdge = async (
+    edgeType: KinshipEdgeType,
+    p1: string,
+    p2: string,
+    nature: KinshipNature | null,
+    actorPersonId: string,
+  ): Promise<void> => {
+    const { personAId, personBId } = normalizeEdgeEndpoints(edgeType, p1, p2);
+    await db.execute(sql`
+      INSERT INTO kinship_assertions
+        (family_id, edge_type, person_a_id, person_b_id, nature, state, actor_person_id)
+      VALUES
+        (${family!.id}, ${edgeType}, ${personAId}, ${personBId}, ${nature}, 'asserted', ${actorPersonId})
+    `);
+  };
+
+  // Extra relatives around Sofia.
+  const robertId = await mentionPerson({
+    displayName: "Robert Boudreaux",
+    birthYear: 1952,
+    deathYear: 2010,
+    deceased: true,
+  }); // Sofia's father — deceased with a full life span.
+  const odetteId = await mentionPerson({
+    displayName: "Odette",
+    birthYear: 1928,
+    deathYear: 2005,
+    deceased: true,
+  }); // Eleanor's mother (the Odette of Eleanor's story) — deceased.
+  const bridgeId = await mentionPerson({ identified: false }); // Eleanor's unknown 2nd parent — anon bridge.
+  const celesteId = await mentionPerson({
+    displayName: "Celeste",
+    birthYear: 1900,
+    deathYear: 1980,
+    deceased: true,
+  }); // Odette's mother — gen -3 from Sofia (beyond the ±2 window → fetch-on-expand boundary).
+  const diegoId = await mentionPerson({ displayName: "Diego Boudreaux", birthYear: 1986 }); // Sofia's partner.
+  const mateoId = await mentionPerson({ displayName: "Mateo Boudreaux", birthYear: 2015 }); // Sofia's child.
+
+  const BIO: KinshipNature = "biological";
+  // Sofia's parents (Eleanor + Robert), who are partners.
+  await assertEdge("parent_of", eleanorId, sofiaId, BIO, sofiaId);
+  await assertEdge("parent_of", robertId, sofiaId, BIO, sofiaId);
+  await assertEdge("partnered_with", eleanorId, robertId, null, sofiaId);
+  // Marco is Sofia's sibling (shares both parents).
+  await assertEdge("parent_of", eleanorId, marcoId, BIO, sofiaId);
+  await assertEdge("parent_of", robertId, marcoId, BIO, sofiaId);
+  // Eleanor's parents: Odette + an anonymous bridge, who are partners.
+  await assertEdge("parent_of", odetteId, eleanorId, BIO, sofiaId);
+  await assertEdge("parent_of", bridgeId, eleanorId, BIO, sofiaId);
+  await assertEdge("partnered_with", odetteId, bridgeId, null, sofiaId);
+  // Odette's mother — one generation past the window, to test the boundary caret + fetch-on-expand.
+  await assertEdge("parent_of", celesteId, odetteId, BIO, sofiaId);
+  // Sofia's own partner + child.
+  await assertEdge("partnered_with", sofiaId, diegoId, null, sofiaId);
+  await assertEdge("parent_of", sofiaId, mateoId, BIO, sofiaId);
+  await assertEdge("parent_of", diegoId, mateoId, BIO, sofiaId);
 
   return {
     narratorToken: token,

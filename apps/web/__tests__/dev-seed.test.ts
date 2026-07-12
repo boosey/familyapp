@@ -74,15 +74,18 @@ describe("dev seed — every Person has an Account (except provisional invitees)
   it("seeds no UNEXPLAINED account-less Persons (ADR-0006 allows pending invitees)", async () => {
     const { db } = await seededDb();
     // ADR-0006 loosened "every Person has an Account": a pending invitation anchors to a
-    // provisional Account-less Person. Those are legitimate; any OTHER account-less Person is the
-    // regressed-narrator bug this suite guards against. So: every account-less Person must be the
-    // invitee of a pending invitation.
+    // provisional Account-less Person. ADR-0016 (kinship) adds a second legitimate account-less
+    // kind: a `mention` — a relative recorded on the tree who has no login (a deceased ancestor, an
+    // anonymous bridge, an un-invited relative). Those are legitimate; any OTHER account-less Person
+    // is the regressed-narrator bug this suite guards against. So: every account-less Person must be
+    // either the invitee of a pending invitation OR a `mention`.
     const orphans = await db
-      .select({ id: persons.id, displayName: persons.displayName })
+      .select({ id: persons.id, displayName: persons.displayName, origin: persons.origin })
       .from(persons)
       .where(isNull(persons.accountId));
     const unexplained = [];
     for (const o of orphans) {
+      if (o.origin === "mention") continue; // ADR-0016 kinship mention — legitimately login-free.
       const [pendingInvite] = await db
         .select({ id: invitations.id })
         .from(invitations)
