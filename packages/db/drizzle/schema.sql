@@ -273,6 +273,8 @@ CREATE TABLE "persons" (
 	"spoken_name" text,
 	"birth_year" integer,
 	"birth_date" date,
+	"death_year" integer,
+	"death_date" date,
 	"onboarded_at" timestamp with time zone,
 	"biographical_anchors" jsonb DEFAULT '{}'::jsonb,
 	"life_status" "life_status" DEFAULT 'living' NOT NULL,

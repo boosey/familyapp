@@ -55,6 +55,8 @@ async function familyMembers(db: Database, familyId: string): Promise<Person[]> 
       spokenName: persons.spokenName,
       birthYear: persons.birthYear,
       birthDate: persons.birthDate,
+      deathYear: persons.deathYear,
+      deathDate: persons.deathDate,
       onboardedAt: persons.onboardedAt,
       biographicalAnchors: persons.biographicalAnchors,
       lifeStatus: persons.lifeStatus,

@@ -180,6 +180,21 @@ export default async function KinPage({
         {hub.kin.intro}
       </p>
 
+      <div style={{ margin: "0 0 28px" }}>
+        <Link
+          href={`/hub/tree?scope=${familyId}`}
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            fontWeight: 500,
+            color: "var(--accent)",
+            textDecoration: "none",
+          }}
+        >
+          {hub.tree.openTree} {"→"}
+        </Link>
+      </div>
+
       {kin.length === 0 ? (
         <EmptyCard>{hub.kin.empty}</EmptyCard>
       ) : (

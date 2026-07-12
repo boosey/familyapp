@@ -163,12 +163,17 @@ export {
   deriveKin,
   listMyKin,
   listGovernableKinEdges,
+  resolveKinshipTree,
+  DEFAULT_TREE_WINDOW,
   type KinshipProjection,
   type ResolvedKinshipEdge,
   type KinRelation,
   type DerivedKin,
   type KinListEntry,
   type GovernableKinEdge,
+  type TreeWindow,
+  type TreeNode,
+  type KinshipTreeData,
 } from "./kinship-repository";
 export {
   addRelative,

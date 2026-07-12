@@ -217,6 +217,17 @@ export const persons = pgTable(
      */
     birthDate: date("birth_date"),
     /**
+     * ADR-0016 (tree renderer): coarse year of death, the mirror of `birthYear`. Nullable — NULL for
+     * the living and for the deceased whose death year is unknown. Surfaced on tree nodes so a
+     * deceased relative can show a real `YYYY–YYYY` life span rather than only "in memory".
+     */
+    deathYear: integer("death_year"),
+    /**
+     * Full date of death when known, the mirror of `birthDate`. Nullable. `deathYear` is the coarse
+     * anchor kept alongside; both are written together when a full date is captured.
+     */
+    deathDate: date("death_date"),
+    /**
      * When this Person completed account onboarding. NULL = has not onboarded yet, which is
      * the gate the hub uses to route a fresh account into the welcome → DOB → doors flow. Persons
      * with no Account (e.g. those who only ever capture via a link session) never onboard and stay

@@ -456,3 +456,68 @@ export async function listGovernableKinEdges(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// resolveKinshipTree — the read behind the visual tree renderer (ADR-0016 seam).
+// SHARED CONTRACT (Stage-0 stub). Implemented by Track-B "B-core".
+// See docs/superpowers/specs/2026-07-12-kinship-tree-viz-design.md §5.
+// ---------------------------------------------------------------------------
+
+/**
+ * How much of the graph a single `resolveKinshipTree` read materializes, measured in generations
+ * from the root. This is the scalability seam: the read fetches a BOUNDED neighborhood, never the
+ * whole family, so a large/imported tree costs the same first read as a small one.
+ */
+export interface TreeWindow {
+  generationsUp: number;
+  generationsDown: number;
+}
+
+/** Default window: two generations each way (grandparents → grandchildren). */
+export const DEFAULT_TREE_WINDOW: TreeWindow = {
+  generationsUp: 2,
+  generationsDown: 2,
+};
+
+export interface TreeNode {
+  personId: string;
+  /** null ⇒ anonymous bridge node; render from `relationToRoot`. */
+  displayName: string | null;
+  identified: boolean;
+  lifeStatus: "living" | "deceased";
+  birthYear: number | null;
+  deathYear: number | null;
+  /** Most-specific derived relation to the root; "self" for the root; null if unrelated/bridge-only. */
+  relationToRoot: KinRelation | "self" | null;
+  /** True when parents/children exist in the projection but were not materialized in this window. */
+  hasHiddenParents: boolean;
+  hasHiddenChildren: boolean;
+}
+
+export interface KinshipTreeData {
+  familyId: string;
+  rootPersonId: string;
+  /** Only the persons within `window` of root (plus what boundary flags describe). */
+  nodes: TreeNode[];
+  /** parent_of (directed) + partnered_with (normalized) among the materialized nodes + boundary. */
+  edges: ResolvedKinshipEdge[];
+}
+
+/**
+ * Resolve a bounded, root-anchored neighborhood of a family's kinship projection for rendering the
+ * visual tree. Composes {@link resolveKinshipProjection} (family-membership gating + subject-hide
+ * overlay), walks outward from `rootPersonId` only as far as `window`, hydrates the materialized
+ * persons, and attaches `relationToRoot` via {@link deriveKin}. Kinship metadata only — never widens
+ * the content front door.
+ *
+ * SHARED CONTRACT STUB — Track-B "B-core" implements this against the spec.
+ */
+export async function resolveKinshipTree(
+  _db: Database,
+  _ctx: AuthContext,
+  _familyId: string,
+  _rootPersonId: string,
+  _window: TreeWindow = DEFAULT_TREE_WINDOW,
+): Promise<KinshipTreeData> {
+  throw new Error("NOT_IMPLEMENTED: resolveKinshipTree (Stage-0 contract stub)");
+}

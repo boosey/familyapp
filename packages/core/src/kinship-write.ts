@@ -31,6 +31,12 @@ export interface AddRelativeInput {
   birthDate?: string | null;
   birthYear?: number | null;
   lifeStatus?: "living" | "deceased";
+  /**
+   * ADR-0016 tree renderer — captured only when lifeStatus = "deceased". `deathDate` is a calendar
+   * date "YYYY-MM-DD"; `deathYear` the coarse anchor shown on tree nodes. Both optional/nullable.
+   */
+  deathDate?: string | null;
+  deathYear?: number | null;
   /** For parent_of edges; default "unknown". */
   nature?: KinshipNature;
 }

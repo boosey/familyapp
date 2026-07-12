@@ -549,6 +549,9 @@ export const hub = {
     lifeStatusFieldLabel: "Are they living?",
     lifeStatusLiving: "Living",
     lifeStatusDeceased: "No longer living",
+    // Shown only when life status = "No longer living" (ADR-0016 tree renderer death-year capture).
+    deathYearFieldLabel: "Year they died (optional)",
+    deathYearPlaceholder: "e.g. 1998",
     submit: "Add relative",
     submitting: "Adding…",
     // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
@@ -591,6 +594,47 @@ export const hub = {
     storiesAboutHeading: (name: string) => `Stories about ${name}`,
     storiesAboutEmpty: "No stories yet.",
     back: "← Back",
+  },
+  // Visual family tree (ADR-0016 tree renderer) — read-first, /hub/tree.
+  tree: {
+    signedOut: "Sign in to see your family tree.",
+    heading: "Family tree",
+    // Link from the /hub/kin list surface across to the visual tree, and back.
+    openTree: "View family tree",
+    backToKin: "← Relatives",
+    // Empty states.
+    noFamily: "Join or start a family to see your family tree.",
+    emptyRootOnly:
+      "You're the only person here so far. Add a relative to start your tree.",
+    addRelativeCta: "Add a relative",
+    // The You node.
+    you: "You",
+    // Fallback for an unidentified bridge node, rendered from its relation.
+    unknownOf: (relationLabel: string) => `Unknown ${relationLabel.toLowerCase()}`,
+    unknownRelative: "Unknown relative",
+    // Life line on a node / in the panel.
+    inMemory: "In memory",
+    lifeSpan: (birth: number | null, death: number | null) =>
+      birth != null && death != null
+        ? `${birth}–${death}`
+        : death != null
+          ? `d. ${death}`
+          : birth != null
+            ? `b. ${birth}`
+            : "",
+    // Canvas controls.
+    fit: "Fit",
+    pan: "Drag to pan",
+    expandParents: "Show parents",
+    expandChildren: "Show children",
+    collapseGeneration: "Collapse this generation",
+    // Tap detail panel — read-only actions.
+    panelStories: "Stories about them",
+    panelStoriesOf: (name: string) => `Stories about ${name}`,
+    panelCenterHere: "Center tree here",
+    panelManageKin: "Manage kin",
+    // Generic load failure (fetch-on-expand / re-center).
+    loadFailed: "Couldn't load that part of the tree. Please try again.",
   },
 } as const;
 
