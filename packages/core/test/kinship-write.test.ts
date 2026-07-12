@@ -410,4 +410,28 @@ describe("addRelative — optional anchorPersonId", () => {
     expect(res.allowed).toBe(false);
     expect(res.reason).toMatch(/anchor/i);
   });
+
+  it("rejects an anchor who is only an active member of a DIFFERENT family (no cross-family leak)", async () => {
+    const { db, ctx, familyId } = await seedTwoMemberFamily();
+    // A real person who is an ACTIVE member — but of some OTHER family, not this one.
+    const outsider = await makePerson(db, "OtherFamMember");
+    const otherFam = await makeFamily(db, "Rossi", outsider.id);
+    await addMembership(db, { personId: outsider.id, familyId: otherFam.id, role: "member" });
+
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "Nope",
+      anchorPersonId: outsider.id,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/anchor person is not in this family/i);
+
+    // And nothing about the other family leaked in: no edge references the outsider here.
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const touchesOutsider = proj.edges.some(
+      (e) => e.personAId === outsider.id || e.personBId === outsider.id,
+    );
+    expect(touchesOutsider).toBe(false);
+  });
 });
