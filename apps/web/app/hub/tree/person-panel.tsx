@@ -3,8 +3,8 @@
  * PersonPanel — the read-only tap detail for a tree node (spec §7).
  *
  * Shows name (or "Unknown <relation>"), relation-to-you, the life line, and identified/anonymous.
- * Three purely NAVIGATIONAL actions (no writes): Stories about them, Center tree here, Manage kin.
- * The panel never mutates data — it only links out.
+ * Purely NAVIGATIONAL actions (no writes): Stories about them, Add parent/child/sibling (anchored on
+ * this person), Manage kin. The panel never mutates data — it only links out.
  */
 import Link from "next/link";
 import { hub } from "@/app/_copy";
@@ -16,20 +16,24 @@ export interface PersonPanelProps {
   node: TreeNode;
   isRoot: boolean;
   familyId: string;
+  /** The viewer's own personId — used to label their own node "You" regardless of the focal root. */
+  viewerPersonId: string;
   onClose: () => void;
 }
 
-export function PersonPanel({ node, isRoot, familyId, onClose }: PersonPanelProps) {
+export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onClose }: PersonPanelProps) {
   const name = displayNameFor(node);
-  const relation = relationToRootLabel(node, isRoot);
+  const relation = relationToRootLabel(node, isRoot, viewerPersonId);
   const life = lifeLineFor(node);
   // An anonymous bridge is a placeholder; an identified person with no name on file is still real.
   const anon = isAnonymousBridge(node);
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
 
   const storiesHref = `/hub/about/${node.personId}`;
-  const centerHref = `/hub/tree?scope=${familyId}&root=${node.personId}`;
   const manageKinHref = `/hub/kin?scope=${familyId}`;
+  // Add-a-relative links, anchored on THIS person (the /hub/kin add flow reads anchor + relation).
+  const addHref = (relation: string) =>
+    `/hub/kin?scope=${familyId}&anchor=${node.personId}&relation=${relation}`;
 
   return (
     <aside
@@ -117,13 +121,21 @@ export function PersonPanel({ node, isRoot, familyId, onClose }: PersonPanelProp
             {hub.tree.panelStories}
           </KindredButton>
         </Link>
-        {!isRoot && (
-          <Link href={centerHref} style={{ textDecoration: "none" }} data-testid="tree-panel-center">
-            <KindredButton variant="secondary" size="small" fullWidth type="button">
-              {hub.tree.panelCenterHere}
-            </KindredButton>
-          </Link>
-        )}
+        <Link href={addHref("parent")} style={{ textDecoration: "none" }} data-testid="tree-panel-addparent">
+          <KindredButton variant="secondary" size="small" fullWidth type="button">
+            {hub.tree.panelAddParent}
+          </KindredButton>
+        </Link>
+        <Link href={addHref("child")} style={{ textDecoration: "none" }} data-testid="tree-panel-addchild">
+          <KindredButton variant="secondary" size="small" fullWidth type="button">
+            {hub.tree.panelAddChild}
+          </KindredButton>
+        </Link>
+        <Link href={addHref("sibling")} style={{ textDecoration: "none" }} data-testid="tree-panel-addsibling">
+          <KindredButton variant="secondary" size="small" fullWidth type="button">
+            {hub.tree.panelAddSibling}
+          </KindredButton>
+        </Link>
         <Link href={manageKinHref} style={{ textDecoration: "none" }} data-testid="tree-panel-managekin">
           <KindredButton variant="ghost" size="small" fullWidth type="button">
             {hub.tree.panelManageKin}

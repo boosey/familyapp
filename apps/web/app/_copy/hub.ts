@@ -633,7 +633,9 @@ export const hub = {
     // Tap detail panel — read-only actions.
     panelStories: "Stories about them",
     panelStoriesOf: (name: string) => `Stories about ${name}`,
-    panelCenterHere: "Center tree here",
+    panelAddParent: "Add parent",
+    panelAddChild: "Add child",
+    panelAddSibling: "Add sibling",
     panelManageKin: "Manage kin",
     // Generic load failure (fetch-on-expand / re-center).
     loadFailed: "Couldn't load that part of the tree. Please try again.",

@@ -363,6 +363,7 @@ export function TreeCanvas({
           node={selectedNode}
           isRoot={selectedNode.personId === rootPersonId}
           familyId={familyId}
+          viewerPersonId={viewerPersonId}
           onClose={() => setSelected(null)}
         />
       )}

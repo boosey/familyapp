@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /**
- * PersonPanel — read-only tap detail (spec §7). The three navigational actions must point at the
- * right routes; "Center tree here" is hidden for the root (you can't re-center on yourself). No writes.
+ * PersonPanel — read-only tap detail (spec §7). The panel links out to Stories, Manage kin, and the
+ * three "Add parent/child/sibling" targets (anchored on the selected person). No "Center" link. No writes.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { TreeNode } from "@chronicle/core";
+import { hub } from "@/app/_copy";
 import { PersonPanel } from "@/app/hub/tree/person-panel";
 
 afterEach(cleanup);
@@ -31,19 +32,33 @@ function hrefOf(testId: string): string | null {
   return anchor?.getAttribute("href") ?? null;
 }
 
-it("links the three actions to the right routes for a non-root person", () => {
-  render(<PersonPanel node={node({ personId: "p9" })} isRoot={false} familyId="fam-1" onClose={() => {}} />);
+it("links Stories and Manage kin to the right routes for a non-root person", () => {
+  render(
+    <PersonPanel node={node({ personId: "p9" })} isRoot={false} familyId="fam-1" viewerPersonId="v" onClose={() => {}} />,
+  );
   expect(hrefOf("tree-panel-stories")).toBe("/hub/about/p9");
-  expect(hrefOf("tree-panel-center")).toBe("/hub/tree?scope=fam-1&root=p9");
   expect(hrefOf("tree-panel-managekin")).toBe("/hub/kin?scope=fam-1");
 });
 
-it("hides 'Center tree here' when the person is the root", () => {
+it("shows Add parent/child/sibling anchored on the selected person and no 'Center tree here'", () => {
   render(
-    <PersonPanel node={node({ personId: "p-self", relationToRoot: "self" })} isRoot familyId="fam-1" onClose={() => {}} />,
+    <PersonPanel node={node({ personId: "x" })} isRoot={false} familyId="F" viewerPersonId="v" onClose={() => {}} />,
   );
+  // The Center link is gone entirely.
   expect(screen.queryByTestId("tree-panel-center")).toBeNull();
-  expect(screen.getByTestId("tree-panel-stories")).toBeTruthy();
+  expect(hrefOf("tree-panel-addparent")).toBe("/hub/kin?scope=F&anchor=x&relation=parent");
+  expect(hrefOf("tree-panel-addchild")).toBe("/hub/kin?scope=F&anchor=x&relation=child");
+  expect(hrefOf("tree-panel-addsibling")).toBe("/hub/kin?scope=F&anchor=x&relation=sibling");
+  expect(screen.getByText(hub.tree.panelAddParent)).toBeTruthy();
+  expect(screen.getByText(hub.tree.panelAddChild)).toBeTruthy();
+  expect(screen.getByText(hub.tree.panelAddSibling)).toBeTruthy();
+});
+
+it("labels the viewer's own node 'You' via viewerPersonId", () => {
+  render(
+    <PersonPanel node={node({ personId: "v" })} isRoot={false} familyId="fam-1" viewerPersonId="v" onClose={() => {}} />,
+  );
+  expect(screen.getByTestId("tree-person-panel").textContent).toContain(hub.tree.you);
 });
 
 it("renders 'Unknown <relation>' for an anonymous bridge person", () => {
@@ -52,6 +67,7 @@ it("renders 'Unknown <relation>' for an anonymous bridge person", () => {
       node={node({ personId: "p-anon", displayName: null, identified: false, relationToRoot: "grandparent" })}
       isRoot={false}
       familyId="fam-1"
+      viewerPersonId="v"
       onClose={() => {}}
     />,
   );
@@ -60,7 +76,9 @@ it("renders 'Unknown <relation>' for an anonymous bridge person", () => {
 
 it("calls onClose when the close control is pressed", () => {
   const onClose = vi.fn();
-  render(<PersonPanel node={node({ personId: "p9" })} isRoot={false} familyId="fam-1" onClose={onClose} />);
+  render(
+    <PersonPanel node={node({ personId: "p9" })} isRoot={false} familyId="fam-1" viewerPersonId="v" onClose={onClose} />,
+  );
   screen.getByTestId("tree-panel-close").click();
   expect(onClose).toHaveBeenCalledOnce();
 });
