@@ -71,7 +71,7 @@ export default async function DevSignIn() {
           {people.map((p) => (
             <form key={p.id} action={signInAs}>
               <input type="hidden" name="authProviderUserId" value={p.authProviderUserId} />
-              <KindredButton type="submit" label={auth.devSignIn.become(p.displayName)} fullWidth />
+              <KindredButton type="submit" label={auth.devSignIn.become(p.displayName ?? "")} fullWidth />
             </form>
           ))}
 

@@ -44,6 +44,17 @@ import type {
 /** Gates posthumous behavior downstream (story-will, time-gated release — seams). */
 export const lifeStatusEnum = pgEnum("life_status", ["living", "deceased"]);
 
+/**
+ * ADR-0016: WHY a `persons` row was created — its provenance. IMMUTABLE (never flips): a `mention`
+ * later invited keeps `origin = mention`; current state lives in `accountId`/`memberships`/`lifeStatus`.
+ *   - `self`    — a real person acting for themselves (the origin of every pre-kinship Person).
+ *   - `invitee` — a provisional Account-less Person minted to anchor an invitation (ADR-0006).
+ *                 The housekeeping reaper keys off THIS origin (unaccepted → reapable).
+ *   - `mention` — named as kin (may never be contacted, may be deceased, may be a structural bridge).
+ *                 NEVER reaped: a deceased ancestor or an anonymous bridge node must persist forever.
+ */
+export const personOriginEnum = pgEnum("person_origin", ["self", "invitee", "mention"]);
+
 /** Phase 0 needs exactly these three; the model leaves room for more. */
 export const membershipRoleEnum = pgEnum("membership_role", [
   "narrator",
@@ -185,9 +196,18 @@ export const persons = pgTable(
   "persons",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    displayName: text("display_name").notNull(),
-    /** The name the interviewer should speak aloud. */
-    spokenName: text("spoken_name").notNull(),
+    /**
+     * The person's identity name. NULLABLE (ADR-0016): a deliberately anonymous bridge node
+     * (`origin = mention`, `identified = false`) carries no name and is rendered from the relation
+     * ("your father"). Every named Person — every `self`, and any identified mention — has one.
+     */
+    displayName: text("display_name"),
+    /**
+     * The name the interviewer should speak aloud. NULLABLE for the same reason as `displayName`:
+     * a nameless placeholder mention (never interviewed) has no spoken name. Named Persons always
+     * carry one (derived from `displayName` on create; see `defaultSpokenName`).
+     */
+    spokenName: text("spoken_name"),
     birthYear: integer("birth_year"),
     /**
      * Full date of birth, captured during account onboarding (the one required step). Stored as
@@ -207,6 +227,20 @@ export const persons = pgTable(
       .$type<Partial<BiographicalProfile>>()
       .default(sql`'{}'::jsonb`),
     lifeStatus: lifeStatusEnum("life_status").notNull().default("living"),
+    /**
+     * ADR-0016: provenance. Immutable. Defaults to `self` so every existing row backfills to `self`
+     * and any Person minted without an explicit origin (a real actor) is correctly `self`. The
+     * invitation + kinship write paths set `invitee` / `mention` explicitly.
+     */
+    origin: personOriginEnum("origin").notNull().default("self"),
+    /**
+     * ADR-0016: `true` (default) when this Person has a real, typed identity; `false` only for a
+     * deliberately anonymous bridge node (a placeholder `mention` that exists solely to connect
+     * non-adjacent kin). Filling in the name flips this to `true` (origin unchanged). Chosen over
+     * inferring anonymity from a null name because *deliberately unknown* and *not-yet-typed* are
+     * different intents that drive different UI/reconciliation behavior.
+     */
+    identified: boolean("identified").notNull().default(true),
     /**
      * Pointer to the Account that may control this Person, if any (null for the many login-free
      * Persons). UNIQUE so one Account maps to exactly one Person. This is the SINGLE source of
@@ -1267,6 +1301,7 @@ export type FollowUpDecisionRow = typeof followUpDecisions.$inferSelect;
 export type NewFollowUpDecisionRow = typeof followUpDecisions.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
+export type PersonOrigin = (typeof personOriginEnum.enumValues)[number];
 export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
 export type MembershipStatus = (typeof membershipStatusEnum.enumValues)[number];
 export type StoryState = (typeof storyStateEnum.enumValues)[number];

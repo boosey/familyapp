@@ -74,7 +74,7 @@ export function StoriesTab({
         prose: story.prose ?? null,
         tags: story.tags ?? [],
         personId: slot.person.id,
-        personName: slot.person.spokenName,
+        personName: slot.person.spokenName ?? "",
         eraYear,
         eraLabel: story.eraLabel ?? null,
         eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),

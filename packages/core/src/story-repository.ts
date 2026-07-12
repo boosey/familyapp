@@ -1585,7 +1585,9 @@ export async function getStoryAndRecordingForPipeline(
   return {
     storyId: row.id,
     ownerPersonId: row.ownerPersonId,
-    ownerSpokenName: row.ownerSpokenName,
+    // A story owner is a named person; spokenName is nullable only for placeholder mentions
+    // (ADR-0016), which never own stories. `?? ""` is a compiler guard.
+    ownerSpokenName: row.ownerSpokenName ?? "",
     ownerBirthYear: row.ownerBirthYear,
     kind: row.kind,
     state: row.state,
@@ -2243,7 +2245,8 @@ export async function getLikeState(
       for (const row of rows) {
         if (!seen.has(row.personId)) {
           seen.add(row.personId);
-          likersList.push({ personId: row.personId, displayName: row.displayName });
+          // Likers are named member persons; `?? ""` is a compiler guard (ADR-0016 nullable name).
+          likersList.push({ personId: row.personId, displayName: row.displayName ?? "" });
         }
       }
     }
@@ -2256,7 +2259,7 @@ export async function getLikeState(
         .where(eq(persons.id, viewer))
         .limit(1);
       if (selfDetails) {
-        likersList.unshift(selfDetails);
+        likersList.unshift({ ...selfDetails, displayName: selfDetails.displayName ?? "" });
       }
     }
   }

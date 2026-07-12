@@ -15,6 +15,7 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."person_origin" AS ENUM('self', 'invitee', 'mention');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
 CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcribed', 'ai_cleaned', 'ai_polished', 'human_corrected', 'ai_verified', 'human_metadata_edit');
 CREATE TYPE "public"."story_image_provenance" AS ENUM('family_photo', 'illustration');
@@ -236,13 +237,15 @@ CREATE TABLE "mock_auth_users" (
 
 CREATE TABLE "persons" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"display_name" text NOT NULL,
-	"spoken_name" text NOT NULL,
+	"display_name" text,
+	"spoken_name" text,
 	"birth_year" integer,
 	"birth_date" date,
 	"onboarded_at" timestamp with time zone,
 	"biographical_anchors" jsonb DEFAULT '{}'::jsonb,
 	"life_status" "life_status" DEFAULT 'living' NOT NULL,
+	"origin" "person_origin" DEFAULT 'self' NOT NULL,
+	"identified" boolean DEFAULT true NOT NULL,
 	"account_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

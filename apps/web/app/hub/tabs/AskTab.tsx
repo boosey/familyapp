@@ -113,12 +113,14 @@ export async function AskTab({ scope = "all" }: { scope?: string } = {}) {
   for (const p of rawCandidates) {
     if (seen.has(p.id)) continue;
     seen.add(p.id);
-    candidates.push(p);
+    // displayName is nullable in schema (ADR-0016) but these ask candidates are named members;
+    // `?? ""` is a compiler guard.
+    candidates.push({ ...p, displayName: p.displayName ?? "" });
   }
   for (const p of rawInvitees) {
     if (seen.has(p.id)) continue;
     seen.add(p.id);
-    candidates.push({ ...p, pending: true });
+    candidates.push({ ...p, displayName: p.displayName ?? "", pending: true });
   }
 
   return (

@@ -31,6 +31,84 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   and *asker* are shorthand for the role a Person is playing in a specific interaction — not a
   persona, not an account category, not a permanent identity.
 
+## Kinship & the family tree
+- **Kinship edge** — a Person↔Person relationship (`mother-of`, `sibling-of`, `spouse-of`, …).
+  Orthogonal to **Membership** (Person↔Family): kinship says *how two humans are related*;
+  membership says *which family contexts a Person participates in*. Kinship **never drives
+  authorization** — a person seeing a story is decided by the single front door (membership +
+  consent), never by "we are related." A tree node is always a **Person** (no separate shadow-person
+  table); it may lack an Account, a Membership, or both.
+- **Origin** — an **immutable creation-provenance** enum on every Person recording *why the row was
+  first created*: `self` (their own account acceptance), `invitee` (a provisional Person minted
+  because someone is actively inviting them — ADR-0006), or `mention` (created only because someone
+  named them as kin in a tree; may be deceased, may never be contacted). Origin never flips — a
+  `mention` great-uncle later invited and joined keeps `origin = mention`; only his *membership*
+  changes. Current state (onboarded? member? living?) lives in `accountId` / `memberships` /
+  `lifeStatus`, not here. The housekeeping reaper keys off `origin = invitee AND never accepted` —
+  **never** off `mention`.
+- **Dedup-on-invite** — inviting a person already present as a `mention` must **not** mint a second
+  row; it reuses the existing Person and attaches the invitation. Default match heuristic is
+  *name + inviter*, but a match only **offers** ("is this the same person?") for the inviter to
+  confirm — never merges silently (two relatives can share a name; a mention and an invite can come
+  from different people).
+
+- **Placeholder (unidentified) Person** — a `mention` Person with **`identified = false`** and no
+  name, existing only to **bridge a generation** the asserter can't or won't name (a granddaughter
+  attaches to her grandmother through an "unknown father" node). Because the tree stores only
+  generative edges, an intermediate node *must* exist to connect non-adjacent kin — but it may be
+  deliberately anonymous. Rendered from the relation ("your father", "unknown"), **never reaped**
+  (it's a structural bridge), and **never invitable until identified** (invitation needs an identity;
+  filling the fields in flips `identified` true without changing `origin`). The UI may create the
+  bridge **implicitly** (one-tap "add grandmother") even though the data always holds the explicit
+  node. Two relatives independently adding "unknown father" create two placeholders for the same man —
+  tolerated (first-asserter-wins), and the prime **reconciliation** merge candidates.
+- **Parent-of / Partnered-with** — the **two generative primitives** of the tree. `parent-of` is a
+  directed Person→Person edge carrying a **`nature`** (`biological | adoptive | step | foster |
+  unknown`); `partnered-with` is an undirected union edge. These two are the *only* stored kinship
+  facts. **Sibling, half-sibling, grandparent, aunt/uncle, cousin, in-law** are **derived** by
+  walking parent/partner edges (sibling = shares a parent; half = shares exactly one; cousin =
+  parents are siblings), never stored — so a derived fact can never contradict a stored one.
+- **Union-node ban** — a genealogy file (GEDCOM) groups a marriage-plus-children into a unit it calls
+  a **`FAM`**/"family". That is **not** our **Family (Chronicle)**. We never store a union node and
+  never call it "family": on import a `FAM` is **shredded** into `parent-of` + `partnered-with`
+  edges. "Family" always means the chronicle container.
+
+- **Family-scoped edge** — a kinship edge is **surfaced into a Family**, exactly as a Story is
+  (ADR-0010): the asserter creates it in a family context; it is visible to **all members of that
+  family** and governed by **that family's Steward**. The *same* person-pair may be independently
+  asserted in another family (its own row, its own Steward's governance) — **never auto-propagated
+  across families**, because one Steward has no authority over what another family sees. "The family
+  tree" is therefore a **shared per-family projection**, one per family, not a single global object
+  and not a per-asserter private weave. Every edge still records **who asserted it** (`assertedBy`)
+  for audit, but assertion does **not** scope visibility — family membership does.
+- **First-asserter-wins** — the first assertion of an edge is shown to the whole family as
+  provisional truth (no endpoint confirmation required). Governance is by **exception**, not by
+  up-front consent: the **Steward** may **affirm, deny, or correct** any edge; later, any member may
+  **challenge** an edge and the **Steward decides**. All of it is **append-only** — a deny/correct/
+  challenge/decision **supersedes** with a new row (same discipline as the **Consent ledger** and the
+  **Follow-up decision record**), never an edit; history is never lost.
+- **Subject hide** — a **personal veto** available to the Person an edge is *about*, when they are a
+  real account (`self`). Hiding suppresses the edge family-wide (it stops being shown as fact) and
+  **overrides even a Steward affirmation** — being *depicted at all* is the subject's own consent, not
+  a factual dispute the Steward adjudicates. A `mention` subject has no account to hide, so mentions
+  stay purely Steward-governed. Append-only, like every other kinship transition.
+
+- **Tree import** — bringing in a genealogy file (GEDCOM) or connecting a genealogy API
+  (FamilySearch, Ancestry). **Steward-only** (for now — the Steward already governs the family tree,
+  so bulk assertion is a Steward act). **Always additive**: every imported individual lands as a **new
+  `mention` Person** and is **never auto-merged** onto an existing Person. Runs as a **background
+  job** (the `JobQueue` seam) with per-item progress (like album import, ADR-0015); imported edges
+  are asserted by the importing Steward and surfaced into that family. A **deceased-only fast path**
+  lets the common low-risk case (dead ancestors) skip living-person reconciliation entirely.
+- **External ref** — source provenance persisted on each imported Person: `source`
+  (`gedcom | familysearch | ancestry`), `sourceId` (the source's own person id, e.g. GEDCOM `@I42@`
+  or a FamilySearch PID), and `importBatchId`. Re-import / API **sync matches on `(source,
+  sourceId)`** to update-in-place — foreign ids, never names, drive **idempotency**.
+- **Reconciliation** — the **separate, explicit, human-confirmed** step of merging an imported
+  `mention` onto a Person already known to the chronicle. **Never part of import.** The importer is
+  *offered* likely matches ("these look like people you already know — merge?") and confirms each —
+  the same **offer-never-silent** discipline as **Dedup-on-invite**, at bulk.
+
 ## Joining a family (the new flows)
 - **Invitation** — a system-delivered link a member sends to someone (possibly unknown to the
   system). The inviter supplies the invitee's contact; the system delivers the invite over an

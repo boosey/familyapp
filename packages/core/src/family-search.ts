@@ -104,7 +104,9 @@ export function createKeywordFamilySearch(db: Database): FamilySearch {
       const memberNamesByFamily = new Map<string, string[]>();
       for (const m of memberRows) {
         const list = memberNamesByFamily.get(m.familyId) ?? [];
-        list.push(m.displayName);
+        // Members are named self/invitee persons; displayName is nullable only for placeholder
+        // mentions (ADR-0016), which are never members. `?? ""` is a compiler guard.
+        list.push(m.displayName ?? "");
         memberNamesByFamily.set(m.familyId, list);
       }
 
@@ -131,9 +133,10 @@ export function createKeywordFamilySearch(db: Database): FamilySearch {
 
         // Reason = the highest-weight signal that fired.
         let matchReason: string;
+        const stewardName = f.stewardName ?? "";
         if (nameHits > 0) matchReason = "name";
         else if (stewardHits > 0)
-          matchReason = `steward ${f.stewardName.split(/\s+/)[0] ?? f.stewardName}`;
+          matchReason = `steward ${stewardName.split(/\s+/)[0] ?? stewardName}`;
         else if (descHits > 0) matchReason = "description";
         else matchReason = "member match";
 
@@ -142,7 +145,7 @@ export function createKeywordFamilySearch(db: Database): FamilySearch {
           result: {
             familyId: f.familyId,
             familyName: f.familyName,
-            stewardName: f.stewardName,
+            stewardName,
             matchReason,
           },
         });
@@ -192,5 +195,7 @@ export async function listDiscoverableFamilies(
     .where(eq(families.discoverable, true))
     .orderBy(families.name)
     .limit(limit);
-  return rows;
+  // Steward is a named self-person; displayName is nullable only for placeholder mentions
+  // (ADR-0016), never a steward. `?? ""` is a compiler guard.
+  return rows.map((r) => ({ ...r, stewardName: r.stewardName ?? "" }));
 }

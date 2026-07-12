@@ -89,6 +89,10 @@ export async function createInvitation(
       .values({
         displayName: provisionalDisplayName,
         spokenName: defaultSpokenName(provisionalDisplayName),
+        // ADR-0016: provenance = invitee. This is the discriminator the housekeeping reaper keys
+        // off (`reapUnacceptedInvitees`) — it is what makes an abandoned invite reapable while a
+        // `mention` (deceased ancestor / structural bridge) is not.
+        origin: "invitee",
         accountId: null,
       })
       .returning({ id: persons.id });
@@ -158,7 +162,9 @@ export async function getInvitationByToken(
     invitationId: row.invitationId,
     familyId: row.familyId,
     familyName: row.familyName,
-    inviterName: row.inviterName,
+    // The inviter is a named self-person; displayName is nullable only for placeholder mentions
+    // (ADR-0016), never an inviter. `?? ""` is a compiler guard.
+    inviterName: row.inviterName ?? "",
     inviteeName: row.inviteeName,
     relationshipLabel: row.relationshipLabel,
     status: row.status,

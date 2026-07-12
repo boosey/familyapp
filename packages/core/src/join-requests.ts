@@ -158,7 +158,9 @@ export async function listPendingJoinRequestsForSteward(
       ),
     )
     .orderBy(desc(joinRequests.createdAt));
-  return rows;
+  // Requester is a named self-person; displayName is nullable only for placeholder mentions
+  // (ADR-0016), never a requester. `?? ""` is a compiler guard.
+  return rows.map((r) => ({ ...r, requesterName: r.requesterName ?? "" }));
 }
 
 /** A join request the steward has already decided (approved or declined). */
@@ -209,7 +211,7 @@ export async function listDecidedJoinRequestsForSteward(
     )
     .orderBy(desc(joinRequests.decidedAt))
     .limit(limit);
-  return rows;
+  return rows.map((r) => ({ ...r, requesterName: r.requesterName ?? "" }));
 }
 
 /**
@@ -328,5 +330,6 @@ export async function listJoinRequestsByRequester(
     .innerJoin(persons, eq(persons.id, families.stewardPersonId))
     .where(eq(joinRequests.requesterPersonId, requesterPersonId))
     .orderBy(desc(joinRequests.createdAt));
-  return rows;
+  // Steward is a named self-person; `?? ""` is a compiler guard (ADR-0016 nullable displayName).
+  return rows.map((r) => ({ ...r, stewardName: r.stewardName ?? "" }));
 }

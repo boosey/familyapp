@@ -31,7 +31,9 @@ export async function getNarratorProfile(
     .where(eq(persons.id, personId))
     .limit(1);
   if (!row) return null;
-  return { personId, spokenName: row.spokenName };
+  // A narrator is always a named person; spokenName is nullable only for placeholder mentions
+  // (ADR-0016), which never reach this token-scoped surface. `?? ""` is a compiler guard.
+  return { personId, spokenName: row.spokenName ?? "" };
 }
 
 /**
@@ -66,7 +68,7 @@ export async function getNarratorBiographicalContext(
   if (!row) return null;
   return {
     personId,
-    spokenName: row.spokenName,
+    spokenName: row.spokenName ?? "",
     birthYear: row.birthYear,
     anchors: (row.anchors ?? {}) as Record<string, unknown>,
   };

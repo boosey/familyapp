@@ -158,5 +158,7 @@ export async function listMembersOfFamily(
     .where(
       and(eq(memberships.familyId, familyId), eq(memberships.status, "active")),
     );
-  return rows;
+  // Members are named self/invitee persons; displayName is nullable only for placeholder mentions
+  // (ADR-0016), which never hold a membership. `?? ""` is a compiler guard.
+  return rows.map((r) => ({ ...r, displayName: r.displayName ?? "" }));
 }

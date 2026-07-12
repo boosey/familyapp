@@ -39,5 +39,6 @@ export async function getAskForNarrator(
 
   const row = rows[0];
   if (!row || row.targetPersonId !== narratorPersonId) return null;
-  return row;
+  // askerSpokenName is nullable in schema (ADR-0016) but an asker is a named person; `?? ""` guard.
+  return { ...row, askerSpokenName: row.askerSpokenName ?? "" };
 }

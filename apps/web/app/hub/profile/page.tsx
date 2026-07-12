@@ -88,8 +88,8 @@ export default async function ProfilePage() {
         </header>
 
         <ProfileForm
-          displayName={row.displayName}
-          spokenName={row.spokenName}
+          displayName={row.displayName ?? ""}
+          spokenName={row.spokenName ?? ""}
           email={row.email}
           birthDate={row.birthDate}
           anchors={anchors}

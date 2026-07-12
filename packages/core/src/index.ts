@@ -147,6 +147,10 @@ export {
   type InvitationView,
 } from "./invitations";
 export {
+  reapUnacceptedInvitees,
+  type ReapResult,
+} from "./person-housekeeping";
+export {
   createJoinRequest,
   listPendingJoinRequestsForSteward,
   listDecidedJoinRequestsForSteward,

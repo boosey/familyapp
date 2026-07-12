@@ -330,7 +330,9 @@ export async function listAsksByAsker(
       .innerJoin(askFamilies, eq(askFamilies.askId, asks.id))
       .where(and(eq(asks.askerPersonId, asker), eq(askFamilies.familyId, opts.familyId)))
       .orderBy(desc(asks.createdAt));
-    return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName }));
+    // spokenName is nullable in schema (ADR-0016 placeholder mentions) but an ask always targets a
+    // named narrator, so it is never null here; `?? ""` is a compiler guard, not a real fallback.
+    return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName ?? "" }));
   }
 
   const rows = await db
@@ -339,7 +341,7 @@ export async function listAsksByAsker(
     .innerJoin(persons, eq(persons.id, asks.targetPersonId))
     .where(eq(asks.askerPersonId, asker))
     .orderBy(desc(asks.createdAt));
-  return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName }));
+  return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName ?? "" }));
 }
 
 export async function listPendingAsksForNarrator(
@@ -363,5 +365,5 @@ export async function listPendingAsksForNarrator(
     )
     .orderBy(asc(asks.createdAt))
     .limit(limit);
-  return rows.map((r) => ({ ask: r.ask, askerSpokenName: r.askerSpokenName }));
+  return rows.map((r) => ({ ask: r.ask, askerSpokenName: r.askerSpokenName ?? "" }));
 }

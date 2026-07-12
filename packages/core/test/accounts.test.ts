@@ -24,7 +24,8 @@ async function spokenNameOf(personId: string): Promise<string> {
     .from(persons)
     .where(eq(persons.id, personId))
     .limit(1);
-  return p!.spokenName;
+  // spokenName is nullable in schema (ADR-0016), but an account-holder always has one.
+  return p!.spokenName ?? "";
 }
 
 describe("createAccountWithPerson", () => {
