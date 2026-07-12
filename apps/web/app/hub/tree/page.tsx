@@ -197,6 +197,7 @@ export default async function TreePage({
         key={data.rootPersonId}
         familyId={familyId}
         rootPersonId={data.rootPersonId}
+        viewerPersonId={ctx.personId}
         initial={data}
       />
     </>,

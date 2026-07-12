@@ -625,9 +625,11 @@ export const hub = {
     // Canvas controls.
     fit: "Fit",
     pan: "Drag to pan",
-    expandParents: "Show parents",
-    expandChildren: "Show children",
-    collapseGeneration: "Collapse this generation",
+    // Per-box caret aria-labels (ADR-0016 tree renderer): expand/collapse ancestors & descendants.
+    showParents: "Show parents",
+    hideParents: "Hide parents",
+    showChildren: "Show children",
+    hideChildren: "Hide children",
     // Tap detail panel — read-only actions.
     panelStories: "Stories about them",
     panelStoriesOf: (name: string) => `Stories about ${name}`,
