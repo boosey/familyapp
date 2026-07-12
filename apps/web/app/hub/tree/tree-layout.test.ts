@@ -5,7 +5,9 @@ import type { ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 import {
   EMPTY_EXPANSION,
   type ExpansionState,
+  NODE_H,
   computeTreeLayout,
+  coupleKey,
   type LayoutInput,
 } from "./tree-layout";
 
@@ -63,7 +65,8 @@ function expansion(over: Partial<ExpansionState> = {}): ExpansionState {
   return {
     expandedParents: new Set(),
     expandedChildren: new Set(),
-    collapsedGenerations: new Set(),
+    collapsedAncestors: new Set(),
+    collapsedDescendants: new Set(),
     ...over,
   };
 }
@@ -81,6 +84,61 @@ function placedFor(layout: ReturnType<typeof computeTreeLayout>, id: string) {
   const p = layout.placed.find((n) => n.personId === id);
   if (!p) throw new Error(`expected ${id} to be placed; placed=${layout.placed.map((n) => n.personId).join(",")}`);
   return p;
+}
+
+// ---------------------------------------------------------------------------
+// Task-2 caret redesign fixtures & helpers.
+// ---------------------------------------------------------------------------
+
+/** placedOf: alias for placedFor (matches the caret-test naming). */
+const placedOf = placedFor;
+
+/** Collapse a node's ancestors. */
+function collapseAncestors(id: string): ExpansionState {
+  return expansion({ collapsedAncestors: new Set([id]) });
+}
+
+/** Does a union join this exact (unordered) couple? */
+function sameCouple(u: { aPersonId: string; bPersonId: string }, a: string, b: string): boolean {
+  return (u.aPersonId === a && u.bPersonId === b) || (u.aPersonId === b && u.bPersonId === a);
+}
+
+/** gp -> parent -> root; root partnered with spouse; root+spouse -> child. */
+function fixtureThreeGen(): LayoutInput {
+  const nodes = [node("gp"), node("parent"), node("root"), node("spouse"), node("child")];
+  const edges = [
+    parentOf("gp", "parent"),
+    parentOf("parent", "root"),
+    partneredWith("root", "spouse"),
+    parentOf("root", "child"),
+    parentOf("spouse", "child"),
+  ];
+  return input({ rootPersonId: "root", nodes, edges });
+}
+
+/** root partnered with spouse; root+spouse -> child. */
+function fixtureCoupleWithChild(): LayoutInput {
+  const nodes = [node("root"), node("spouse"), node("child")];
+  const edges = [
+    partneredWith("root", "spouse"),
+    parentOf("root", "child"),
+    parentOf("spouse", "child"),
+  ];
+  return input({ rootPersonId: "root", nodes, edges });
+}
+
+/** root (no drawn partner) -> child. */
+function fixtureLoneParentWithChild(): LayoutInput {
+  const nodes = [node("root"), node("child")];
+  const edges = [parentOf("root", "child")];
+  return input({ rootPersonId: "root", nodes, edges });
+}
+
+/** root -> leaf, where leaf has hidden (unloaded) children at the boundary. */
+function fixtureBoundaryChildren(): LayoutInput {
+  const nodes = [node("root"), node("leaf", { hasHiddenChildren: true })];
+  const edges = [parentOf("root", "leaf")];
+  return input({ rootPersonId: "root", nodes, edges });
 }
 
 // ---------------------------------------------------------------------------
@@ -239,107 +297,84 @@ describe("computeTreeLayout — bounded windowing + expansion reveal", () => {
     expect(placedFor(l, "p3b").generation).toBe(-3);
     expect(l.unions.some((u) => (u.aPersonId === "p3" && u.bPersonId === "p3b") || (u.aPersonId === "p3b" && u.bPersonId === "p3"))).toBe(true);
   });
-
-  it("collapsedGenerations hides an entire level", () => {
-    const nodes = [node("me"), node("mom"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(
-      input({ rootPersonId: "me", nodes, edges, expansion: expansion({ collapsedGenerations: new Set([-1]) }) }),
-    );
-    expect(l.placed.some((n) => n.personId === "mom")).toBe(false);
-    expect(l.placed.some((n) => n.personId === "me")).toBe(true);
-    expect(l.placed.some((n) => n.personId === "kid")).toBe(true);
-  });
-
-  it("keeps a collapse-generation affordance for a collapsed level so it is reversible (regression)", () => {
-    const nodes = [node("me"), node("mom"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(
-      input({ rootPersonId: "me", nodes, edges, expansion: expansion({ collapsedGenerations: new Set([-1]) }) }),
-    );
-    // Even though gen -1 draws no nodes, its collapse affordance must remain (the
-    // only vehicle to toggle the level back on) and sit at a non-negative y.
-    const a = l.affordances.find((x) => x.kind === "collapse-generation" && x.targetId === "-1");
-    expect(a).toBeTruthy();
-    expect(a!.y).toBeGreaterThanOrEqual(0);
-  });
-
-  it("does NOT emit an inert expand caret toward a collapsed generation (regression)", () => {
-    // me's parent mom is loaded but its generation (-1) is collapsed. An
-    // expand-parents caret on me would be inert (collapse-generation is the
-    // control), so it must not be emitted.
-    const nodes = [node("me"), node("mom")];
-    const edges = [parentOf("mom", "me")];
-    const l = computeTreeLayout(
-      input({ rootPersonId: "me", nodes, edges, expansion: expansion({ collapsedGenerations: new Set([-1]) }) }),
-    );
-    expect(l.affordances.some((x) => x.kind === "expand-parents" && x.targetId === "me")).toBe(false);
-    expect(l.affordances.some((x) => x.kind === "collapse-generation" && x.targetId === "-1")).toBe(true);
-  });
 });
 
-describe("computeTreeLayout — affordances", () => {
-  it("emits expand-parents caret with requiresFetch=false when parents are loaded but not drawn", () => {
-    // p2 is at the window boundary (g-2). It has a loaded parent p3 (g-3) not drawn.
-    const nodes = [node("me"), node("p1"), node("p2"), node("p3")];
-    const edges = [parentOf("p1", "me"), parentOf("p2", "p1"), parentOf("p3", "p2")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const a = l.affordances.find((x) => x.kind === "expand-parents" && x.targetId === "p2");
-    expect(a).toBeTruthy();
-    expect(a!.requiresFetch).toBe(false);
+describe("computeTreeLayout — per-box carets (ancestors/descendants)", () => {
+  it("emits an ancestor caret on the TOP of a node that has parents, expanded when parents are drawn", () => {
+    const layout = computeTreeLayout(fixtureThreeGen());
+    const root = placedOf(layout, "root");
+    const anc = layout.affordances.find((a) => a.kind === "ancestors" && a.targetId === "root");
+    expect(anc).toBeTruthy();
+    expect(anc!.expanded).toBe(true);
+    expect(anc!.y).toBeCloseTo(root.y - NODE_H / 2);
   });
 
-  it("emits expand-parents caret with requiresFetch=true when node.hasHiddenParents (kin not loaded)", () => {
+  it("collapsing a node's ancestors removes the ancestor subtree and flips the caret to collapsed", () => {
+    const base = fixtureThreeGen();
+    const layout = computeTreeLayout({ ...base, expansion: collapseAncestors("root") });
+    expect(layout.placed.find((p) => p.personId === "parent")).toBeUndefined();
+    expect(layout.placed.find((p) => p.personId === "gp")).toBeUndefined();
+    const anc = layout.affordances.find((a) => a.kind === "ancestors" && a.targetId === "root");
+    expect(anc!.expanded).toBe(false);
+  });
+
+  it("emits exactly ONE descendant caret for a couple, on the union edge", () => {
+    const layout = computeTreeLayout(fixtureCoupleWithChild());
+    const desc = layout.affordances.filter((a) => a.kind === "descendants");
+    expect(desc).toHaveLength(1);
+    const union = layout.unions.find((u) => sameCouple(u, "root", "spouse"))!;
+    expect(desc[0]!.x).toBeCloseTo(union.x);
+    expect(desc[0]!.y).toBeGreaterThan(union.y);
+  });
+
+  it("emits the descendant caret on the node when there is no drawn partner", () => {
+    const layout = computeTreeLayout(fixtureLoneParentWithChild());
+    const desc = layout.affordances.filter((a) => a.kind === "descendants");
+    expect(desc).toHaveLength(1);
+    // Sole occupant of the couple: targetId is coupleKey(root) == "root".
+    expect(desc[0]!.targetId).toBe(coupleKey("root"));
+    expect(desc[0]!.fetchPersonId).toBe("root");
+  });
+
+  it("a boundary node (hasHiddenChildren) emits a collapsed descendant caret needing a fetch", () => {
+    const layout = computeTreeLayout(fixtureBoundaryChildren());
+    const desc = layout.affordances.find((a) => a.kind === "descendants" && a.fetchPersonId === "leaf")!;
+    expect(desc).toBeTruthy();
+    expect(desc.expanded).toBe(false);
+    expect(desc.requiresFetch).toBe(true);
+  });
+
+  it("emits NO collapse-generation affordances", () => {
+    const layout = computeTreeLayout(fixtureThreeGen());
+    expect(layout.affordances.some((a) => (a as { kind: string }).kind === "collapse-generation")).toBe(false);
+  });
+
+  it("ancestor caret requiresFetch=true when node.hasHiddenParents and none are loaded", () => {
     const nodes = [node("me", { hasHiddenParents: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    const a = l.affordances.find((x) => x.kind === "expand-parents" && x.targetId === "me");
+    const a = l.affordances.find((x) => x.kind === "ancestors" && x.targetId === "me");
     expect(a).toBeTruthy();
+    expect(a!.expanded).toBe(false);
     expect(a!.requiresFetch).toBe(true);
   });
 
-  it("sets requiresFetch=true when a node has BOTH a loaded-undrawn parent and hasHiddenParents (regression)", () => {
-    // Blended family: `me` has a loaded step-parent `step` (undrawn because
-    // collapsed) AND a still-unfetched biological parent (hasHiddenParents).
-    // The caret must require a fetch — the client can't reach the bio parent
-    // by a pure client-side reveal.
-    const nodes = [node("me", { hasHiddenParents: true }), node("step")];
-    const edges = [parentOf("step", "me")];
-    const l = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes,
-        edges,
-        expansion: expansion({ collapsedGenerations: new Set([-1]) }),
-      }),
-    );
-    const a = l.affordances.find((x) => x.kind === "expand-parents" && x.targetId === "me");
-    expect(a).toBeTruthy();
-    expect(a!.requiresFetch).toBe(true);
-  });
-
-  it("emits expand-children caret with requiresFetch=true when node.hasHiddenChildren", () => {
-    const nodes = [node("me", { hasHiddenChildren: true })];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    const a = l.affordances.find((x) => x.kind === "expand-children" && x.targetId === "me");
-    expect(a).toBeTruthy();
-    expect(a!.requiresFetch).toBe(true);
-  });
-
-  it("does NOT emit an expand caret when all kin of that direction are already drawn", () => {
+  it("does NOT emit a descendant caret when a node has no children and none hidden", () => {
     const nodes = [node("me"), node("kid")];
     const edges = [parentOf("me", "kid")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(l.affordances.some((x) => x.kind === "expand-children" && x.targetId === "me")).toBe(false);
+    // kid has no children => no descendant caret targeting kid.
+    expect(l.affordances.some((x) => x.kind === "descendants" && x.fetchPersonId === "kid")).toBe(false);
   });
 
-  it("emits one collapse-generation affordance per drawn generation", () => {
-    const nodes = [node("me"), node("mom"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const collapses = l.affordances.filter((x) => x.kind === "collapse-generation");
-    // generations drawn: -1, 0, 1
-    expect(collapses).toHaveLength(3);
-    expect(new Set(collapses.map((c) => c.targetId))).toEqual(new Set(["-1", "0", "1"]));
+  it("collapsing a couple's descendants removes the descendant subtree", () => {
+    const base = fixtureCoupleWithChild();
+    const l = computeTreeLayout({
+      ...base,
+      expansion: expansion({ collapsedDescendants: new Set([coupleKey("root", "spouse")]) }),
+    });
+    expect(l.placed.find((p) => p.personId === "child")).toBeUndefined();
+    const desc = l.affordances.find((a) => a.kind === "descendants");
+    expect(desc!.expanded).toBe(false);
   });
 });
 
@@ -444,17 +479,8 @@ describe("computeTreeLayout — bounds", () => {
     }
   });
 
-  it("bounds enclose every affordance too, incl. a collapsed row below all drawn nodes (regression)", () => {
-    // grandkid (gen 2) is in-window but its generation is collapsed. Its
-    // collapse-generation affordance sits a row below the last drawn node (kid,
-    // gen 1) and must still fall inside bounds.
-    const nodes = [node("me"), node("kid"), node("grandkid")];
-    const edges = [parentOf("me", "kid"), parentOf("kid", "grandkid")];
-    const l = computeTreeLayout(
-      input({ rootPersonId: "me", nodes, edges, expansion: expansion({ collapsedGenerations: new Set([2]) }) }),
-    );
-    const a = l.affordances.find((x) => x.kind === "collapse-generation" && x.targetId === "2");
-    expect(a).toBeTruthy();
+  it("bounds enclose every affordance glyph too", () => {
+    const l = computeTreeLayout(fixtureThreeGen());
     for (const af of l.affordances) {
       expect(af.x).toBeGreaterThanOrEqual(0);
       expect(af.y).toBeGreaterThanOrEqual(0);

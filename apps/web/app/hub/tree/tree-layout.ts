@@ -18,15 +18,27 @@ export interface ExpansionState {
   expandedParents: ReadonlySet<string>;
   /** Nodes whose hidden children have been revealed. */
   expandedChildren: ReadonlySet<string>;
-  /** Whole generations (relative to root: -2, -1, 0, +1, …) the user has collapsed. */
-  collapsedGenerations: ReadonlySet<number>;
+  /** Nodes whose ancestor subtree the user has collapsed (per-box, top caret). */
+  collapsedAncestors: ReadonlySet<string>;
+  /** Couples (by {@link coupleKey}) whose descendant subtree the user has collapsed (bottom caret). */
+  collapsedDescendants: ReadonlySet<string>;
 }
 
 export const EMPTY_EXPANSION: ExpansionState = {
   expandedParents: new Set(),
   expandedChildren: new Set(),
-  collapsedGenerations: new Set(),
+  collapsedAncestors: new Set(),
+  collapsedDescendants: new Set(),
 };
+
+/**
+ * Stable key for a couple (or a lone person). Order-independent: `coupleKey(a,b)`
+ * equals `coupleKey(b,a)`. A single person keys to their own id.
+ */
+export function coupleKey(a: string, b?: string): string {
+  if (!b) return a;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
 
 export interface PlacedNode {
   personId: string;
@@ -51,18 +63,24 @@ export interface Connector {
   kind: "descent" | "partner";
 }
 
-/** An interactive affordance the canvas renders as a medium-weight chevron caret. */
+/**
+ * An interactive per-box caret the canvas renders as a medium-weight chevron.
+ *
+ * `ancestors` sits on the TOP edge of a node that has parents; `descendants` sits on the BOTTOM
+ * edge of a couple (one per drawn couple, centered on the union) or a lone parent.
+ */
 export interface Affordance {
-  kind: "expand-parents" | "expand-children" | "collapse-generation";
-  /** personId for expand affordances; generation index for collapse-generation. */
+  kind: "ancestors" | "descendants";
+  /** ancestors: the person id. descendants: the {@link coupleKey} of the couple (or lone person). */
   targetId: string;
+  /** The person to fetch FROM when expanding a boundary (the node that owns hidden kin). */
+  fetchPersonId: string;
   x: number;
   y: number;
-  /**
-   * For expand affordances: true when the kin to reveal are NOT yet loaded (boundary node), so the
-   * client must fetch before revealing. False ⇒ a purely client-side reveal.
-   */
-  requiresFetch?: boolean;
+  /** true ⇒ the subtree is drawn (chevron points toward collapse); false ⇒ collapsed. */
+  expanded: boolean;
+  /** true ⇒ expanding needs a server fetch (a boundary node with unloaded kin). */
+  requiresFetch: boolean;
 }
 
 export interface TreeLayout {
@@ -88,7 +106,7 @@ export interface LayoutInput {
 // ---------------------------------------------------------------------------
 
 const NODE_W = 120; // node card width (px)
-const NODE_H = 72; // node card height (px)
+export const NODE_H = 72; // node card height (px)
 const H_GAP = 40; // horizontal gap between sibling/adjacent node cards
 const V_GAP = 96; // vertical gap between generation rows (card edge to edge)
 
@@ -193,9 +211,6 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   // is reachable through a chain of expanded boundary nodes. A collapsed
   // generation removes its whole row.
   const drawable = new Set<string>();
-  // Generations that had drawable nodes but were collapsed away — they still get
-  // a `collapse-generation` affordance so the user can re-expand them.
-  const collapsedButPopulated = new Set<number>();
   {
     // BFS again, but only follow into a node beyond the window when the current
     // node's expansion permits it. Start from root's reachable set with gens.
@@ -244,17 +259,30 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         }
       }
     }
-    // Apply per-generation collapse (removes the whole level). We first record
-    // which generations were actually POPULATED before collapsing — a collapsed
-    // generation must still emit its `collapse-generation` affordance (the only
-    // vehicle to toggle it back on) even though it draws no nodes, otherwise
-    // collapse would be a one-way ratchet with no recovery path in the output.
-    for (const id of drawable) {
-      const g = generation.get(id)!;
-      if (expansion.collapsedGenerations.has(g)) collapsedButPopulated.add(g);
-    }
-    for (const id of [...drawable]) {
-      if (expansion.collapsedGenerations.has(generation.get(id)!)) drawable.delete(id);
+    // Apply per-box collapse cuts. Re-walk the drawable graph from root, but
+    // refuse to cross a cut: a node in `collapsedAncestors` blocks the walk from
+    // ascending into its parents; a couple in `collapsedDescendants` blocks the
+    // walk from descending into that couple's children. Any drawable node no
+    // longer reached from root is removed (prunes the whole cut subtree).
+    {
+      const cutUp = expansion.collapsedAncestors;
+      const cutDown = expansion.collapsedDescendants;
+      const keep = new Set<string>();
+      const stack: string[] = nodeById.has(rootPersonId) ? [rootPersonId] : [];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (keep.has(cur) || !drawable.has(cur)) continue;
+        keep.add(cur);
+        if (!cutUp.has(cur))
+          for (const p of parentsOf.get(cur) ?? []) if (drawable.has(p)) stack.push(p);
+        const partners = partnersOf.get(cur) ?? [];
+        for (const s of partners) if (drawable.has(s)) stack.push(s);
+        const myCoupleKeys = [coupleKey(cur), ...partners.map((s) => coupleKey(cur, s))];
+        const downCollapsed = myCoupleKeys.some((k) => cutDown.has(k));
+        if (!downCollapsed)
+          for (const c of childrenOf.get(cur) ?? []) if (drawable.has(c)) stack.push(c);
+      }
+      for (const id of [...drawable]) if (!keep.has(id)) drawable.delete(id);
     }
   }
 
@@ -422,11 +450,8 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   for (const id of drawnIds) minX = Math.min(minX, x.get(id)!);
   if (!isFinite(minX)) minX = 0;
   const offsetX = -minX + NODE_W / 2; // leftmost card's left edge → 0
-  // Baseline row is the topmost generation that has a visible presence — drawn
-  // OR collapsed-but-populated — so a collapse affordance for a hidden top row
-  // still lands at a non-negative y.
-  const yGens = [...drawnGens, ...collapsedButPopulated];
-  const minGen = yGens.length ? Math.min(...yGens) : 0;
+  // Baseline row is the topmost drawn generation.
+  const minGen = drawnGens.length ? Math.min(...drawnGens) : 0;
   const yForGen = (g: number) => (g - minGen) * ROW_STEP + NODE_H / 2;
 
   const placed: PlacedNode[] = drawnIds
@@ -498,68 +523,61 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     });
   }
 
-  // --- Affordances --------------------------------------------------------
+  // --- Affordances (per-box carets) --------------------------------------
+  // ancestors: TOP-edge caret on any node that has parents (drawn, or hidden at a
+  //   boundary). `expanded` reflects whether any parent is currently drawn.
+  // descendants: BOTTOM-edge caret, ONE per drawn couple (centered on the union)
+  //   or per lone parent, on any node/couple that has children (drawn or hidden).
   const affordances: Affordance[] = [];
+  const handledDescendant = new Set<string>();
   for (const p of placed) {
+    const id = p.personId;
     const n = p.node;
-    // Expand parents: node has parents not currently drawn (loaded-but-hidden
-    // ⇒ client reveal, requiresFetch=false) OR hasHiddenParents (boundary,
-    // kin not loaded ⇒ requiresFetch=true).
-    // A loaded-but-undrawn parent justifies an expand caret ONLY when its row is
-    // hidden for a window reason. If it is undrawn because its GENERATION is
-    // collapsed, the caret would be inert (the reveal is immediately nullified by
-    // the collapse filter) — the `collapse-generation` affordance is the correct
-    // control there, so don't emit a dead expand caret.
-    const loadedUndrawnParents = (parentsOf.get(p.personId) ?? []).some(
-      (pp) =>
-        drawable.has(pp) === false &&
-        generation.has(pp) &&
-        !expansion.collapsedGenerations.has(generation.get(pp)!),
-    );
-    if (loadedUndrawnParents || n.hasHiddenParents) {
+
+    // --- ancestor caret ---
+    const parents = parentsOf.get(id) ?? [];
+    const hasParents = parents.length > 0 || n.hasHiddenParents;
+    if (hasParents) {
+      const anyParentDrawn = parents.some((pp) => drawable.has(pp));
+      // A fetch is required only when no parent is drawn AND kin are unloaded.
+      const requiresFetch = !anyParentDrawn && n.hasHiddenParents;
       affordances.push({
-        kind: "expand-parents",
-        targetId: p.personId,
+        kind: "ancestors",
+        targetId: id,
+        fetchPersonId: id,
         x: p.x,
         y: p.y - NODE_H / 2,
-        // A fetch is required whenever kin genuinely aren't loaded
-        // (`hasHiddenParents`) — the follow-up read is the only way to get the
-        // rest, even if SOME parents are loaded-but-undrawn (blended families:
-        // a loaded step-parent + a still-unfetched biological parent). Only a
-        // pure "loaded but not drawn" caret is a client-side reveal.
-        requiresFetch: n.hasHiddenParents,
+        expanded: anyParentDrawn,
+        requiresFetch,
       });
     }
-    const loadedUndrawnChildren = (childrenOf.get(p.personId) ?? []).some(
-      (cc) =>
-        drawable.has(cc) === false &&
-        generation.has(cc) &&
-        !expansion.collapsedGenerations.has(generation.get(cc)!),
+
+    // --- descendant caret (one per drawn couple / lone parent) ---
+    if (handledDescendant.has(id)) continue;
+    const drawnPartner = (partnersOf.get(id) ?? []).find((s) => posOf.has(s));
+    const groupIds = drawnPartner ? [id, drawnPartner] : [id];
+    const hasChildren = groupIds.some(
+      (g) => (childrenOf.get(g) ?? []).length > 0 || (nodeById.get(g)?.hasHiddenChildren ?? false),
     );
-    if (loadedUndrawnChildren || n.hasHiddenChildren) {
+    if (hasChildren) {
+      groupIds.forEach((g) => handledDescendant.add(g));
+      const anyChildDrawn = groupIds.some((g) =>
+        (childrenOf.get(g) ?? []).some((c) => drawable.has(c)),
+      );
+      // Prefer the boundary member (with hidden children) as the fetch anchor.
+      const boundaryG = groupIds.find((g) => nodeById.get(g)?.hasHiddenChildren) ?? id;
+      const cx = drawnPartner ? (posOf.get(id)!.x + posOf.get(drawnPartner)!.x) / 2 : p.x;
       affordances.push({
-        kind: "expand-children",
-        targetId: p.personId,
-        x: p.x,
+        kind: "descendants",
+        targetId: drawnPartner ? coupleKey(id, drawnPartner) : coupleKey(id),
+        fetchPersonId: boundaryG,
+        x: cx,
         y: p.y + NODE_H / 2,
-        requiresFetch: n.hasHiddenChildren,
+        expanded: anyChildDrawn,
+        requiresFetch:
+          !anyChildDrawn && groupIds.some((g) => nodeById.get(g)?.hasHiddenChildren === true),
       });
     }
-  }
-  // One collapse affordance per drawn generation, PLUS one for each generation
-  // the user has collapsed away (so it can be toggled back on — collapse is
-  // reversible, not a one-way ratchet). `yForGen` still yields a stable row slot
-  // for a collapsed generation because `minGen`/`ROW_STEP` are generation-based,
-  // not dependent on that row currently having nodes.
-  const collapseGens = new Set<number>(drawnGens.filter((g) => (byGen.get(g) ?? []).length > 0));
-  for (const g of collapsedButPopulated) collapseGens.add(g);
-  for (const g of [...collapseGens].sort((a, b) => a - b)) {
-    affordances.push({
-      kind: "collapse-generation",
-      targetId: String(g),
-      x: 0,
-      y: yForGen(g),
-    });
   }
   // Deterministic affordance order: kind, then targetId, then position.
   affordances.sort((a, b) =>
@@ -575,9 +593,9 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   );
 
   // --- Bounds -------------------------------------------------------------
-  // Enclose both node cards AND affordance glyphs — a collapse-generation
-  // affordance for a collapsed row can sit a full row below the last drawn node,
-  // so bounds must account for it or the canvas would clip that (sole) control.
+  // Enclose both node cards AND affordance glyphs — a descendant caret sits a
+  // half-card below the last drawn row, so bounds must account for it or the
+  // canvas would clip that control.
   let width = NODE_W;
   let height = NODE_H;
   for (const p of placed) {
