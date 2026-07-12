@@ -23,12 +23,18 @@ export const NODE_H = 72;
 /** Full relation label set (mirrors /hub/kin's) — used for the anonymous-bridge sublabel. */
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
 
-/** A relation-to-root label ("Parent", "You"), or empty when it can't be labeled from a relation. */
-export function relationToRootLabel(node: TreeNode, isRoot: boolean): string {
-  const rel = node.relationToRoot;
-  if (isRoot || rel === "self") return hub.tree.you;
-  if (rel === null) return "";
-  return RELATION_LABEL[rel];
+/**
+ * A relation-to-root label ("Parent", "You"), or empty when it can't be labeled from a relation.
+ *
+ * "You" is the VIEWER's own node — never merely the focal root. Re-rooting the tree on a relative
+ * makes THEM the root (`isRoot`/`relationToRoot === "self"`), but they are still labeled by relation,
+ * not "You". A focal root that isn't the viewer gets no relation line at all.
+ */
+export function relationToRootLabel(node: TreeNode, isRoot: boolean, viewerPersonId: string | null = null): string {
+  if (viewerPersonId != null && node.personId === viewerPersonId) return hub.tree.you;
+  if (isRoot || node.relationToRoot === "self") return ""; // focal root that isn't the viewer: no relation line
+  if (node.relationToRoot === null) return "";
+  return RELATION_LABEL[node.relationToRoot];
 }
 
 /**
@@ -97,16 +103,18 @@ export function monogramColor(personId: string): string {
 export interface PersonNodeProps {
   node: TreeNode;
   isRoot: boolean;
+  /** The viewer's own personId — the one node labeled "You". Optional; wired by TreeCanvas. */
+  viewerPersonId?: string | null;
   onTap?: (personId: string) => void;
 }
 
-export function PersonNode({ node, isRoot, onTap }: PersonNodeProps) {
+export function PersonNode({ node, isRoot, viewerPersonId, onTap }: PersonNodeProps) {
   // `anon` drives the spec §8 anonymous-BRIDGE styling (dashed border, italics) — reserved for a
   // placeholder the model hasn't identified. An identified-but-nameless real person is NOT anon.
   const anon = isAnonymousBridge(node);
   const deceased = node.lifeStatus === "deceased";
   const name = displayNameFor(node);
-  const relation = relationToRootLabel(node, isRoot);
+  const relation = relationToRootLabel(node, isRoot, viewerPersonId ?? null);
   const life = lifeLineFor(node);
   const initial = monogramFor(node);
 

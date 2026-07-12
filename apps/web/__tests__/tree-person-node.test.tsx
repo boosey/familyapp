@@ -6,9 +6,12 @@
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { TreeNode } from "@chronicle/core";
-import { PersonNode, monogramColor } from "@/app/hub/tree/person-node";
+import { PersonNode, monogramColor, relationToRootLabel } from "@/app/hub/tree/person-node";
+import { hub } from "@/app/_copy";
 
 afterEach(cleanup);
+
+const makeNode = node;
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -26,7 +29,9 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
 }
 
 it("renders the You node with an accent root marker and 'You' label", () => {
-  render(<PersonNode node={node({ personId: "p-self", relationToRoot: "self", birthYear: 1948 })} isRoot />);
+  render(
+    <PersonNode node={node({ personId: "p-self", relationToRoot: "self", birthYear: 1948 })} isRoot viewerPersonId="p-self" />,
+  );
   const card = screen.getByTestId("tree-node-p-self");
   expect(card.getAttribute("data-root")).toBe("true");
   expect(card.textContent).toContain("You");
@@ -96,6 +101,26 @@ it("renders an identified-but-nameless person as a real (non-bridge) node, not a
   expect(card.getAttribute("data-anon")).toBeNull(); // NOT flagged anonymous
   expect(card.textContent).toContain("Unknown relative");
   expect(card.textContent).not.toContain("Unknown parent"); // no relation-derived bridge label
+});
+
+it("labels the viewer's own node 'You' even when it is not the root", () => {
+  const n = makeNode({ personId: "viewer", relationToRoot: "parent" });
+  expect(relationToRootLabel(n, /*isRoot*/ false, /*viewerPersonId*/ "viewer")).toBe(hub.tree.you);
+});
+
+it("labels the viewer 'You' when it IS the root", () => {
+  const n = makeNode({ personId: "viewer", relationToRoot: "self" });
+  expect(relationToRootLabel(n, true, "viewer")).toBe(hub.tree.you);
+});
+
+it("labels a re-rooted non-viewer by relation, not 'You'", () => {
+  const n = makeNode({ personId: "marco", relationToRoot: "self" }); // root but not viewer
+  expect(relationToRootLabel(n, true, "viewer")).toBe(""); // focal root, not viewer => no relation line
+});
+
+it("labels a non-root non-viewer by relation", () => {
+  const n = makeNode({ personId: "marco", relationToRoot: "child" });
+  expect(relationToRootLabel(n, false, "viewer")).toBe(hub.kin.relationLabel.child);
 });
 
 it("derives a deterministic monogram color from personId", () => {
