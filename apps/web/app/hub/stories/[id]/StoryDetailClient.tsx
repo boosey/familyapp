@@ -268,7 +268,13 @@ export function StoryDetailClient({
           initialTargetFamilies={targetFamilies}
           suggestions={tagSuggestions}
           focusPhotos={focusPhotos}
-          onClose={() => setEditorOpen(false)}
+          onClose={(next) => {
+            setTitle(next.title);
+            setTags(next.tags);
+            setProse(next.prose);
+            setTargetFamilies(next.targetFamilies);
+            setEditorOpen(false);
+          }}
         />
       ) : (
         <>

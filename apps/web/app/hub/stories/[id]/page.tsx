@@ -87,7 +87,7 @@ export default async function StoryDetailPage({
   // Who this story is about (issue #35). SEE-gated read; a signed-in viewer may tag/untag.
   const subjects = (await listStorySubjects(db, ctx, story.id)).map((s) => ({
     personId: s.personId,
-    displayName: s.displayName ?? "—",
+    displayName: s.displayName ?? hub.tagInput.unnamedPerson,
   }));
 
   const suggestions = await loadTagSuggestionsAction(story.id);

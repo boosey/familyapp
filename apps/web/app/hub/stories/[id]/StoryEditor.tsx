@@ -5,7 +5,7 @@
  * Each token kind writes through its OWN existing server action; family removal (a consent revoke)
  * confirms first. This component names WHICH story; the server actions re-resolve auth + ownership.
  */
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { TagInput } from "@/app/hub/TagInput";
@@ -27,9 +27,8 @@ export interface StoryEditorProps {
   initialPersonSubjects: { personId: string; displayName: string }[];
   initialTargetFamilies: { id: string; name: string }[];
   suggestions: TagSuggestions;
-  onClose: () => void;
-  /** When true, StoryPhotosEditor scrolls into view on mount (kebab "Add Photos"). NOT wired yet —
-   * left as an accepted prop for the detail-page wiring task to use; scroll-into-view is deferred. */
+  onClose: (next: { title: string; tags: string[]; prose: string; targetFamilies: { id: string; name: string }[] }) => void;
+  /** When true, StoryPhotosEditor scrolls into view on mount (kebab "Add Photos"). */
   focusPhotos?: boolean;
 }
 
@@ -44,6 +43,11 @@ export function StoryEditor(props: StoryEditorProps) {
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const photosRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (props.focusPhotos) photosRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [props.focusPhotos]);
 
   const tokens: TagToken[] = useMemo(
     () => [
@@ -203,12 +207,20 @@ export function StoryEditor(props: StoryEditorProps) {
         />
       </label>
 
-      <StoryPhotosEditor storyId={storyId} />
+      <div ref={photosRef}>
+        <StoryPhotosEditor storyId={storyId} />
+      </div>
 
       {error && <p role="alert" style={errText}>{error}</p>}
 
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-        <KindredButton type="button" label="Done" variant="ghost" disabled={pending} onClick={onClose} />
+        <KindredButton
+          type="button"
+          label="Done"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => onClose({ title, tags, prose, targetFamilies: families })}
+        />
         <KindredButton
           type="button"
           label={pending ? "Saving…" : "Save title & story"}

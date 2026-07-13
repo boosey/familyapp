@@ -619,6 +619,7 @@ export const hub = {
     familyChipTitle: "Shared with this family",
     confirmRevoke: (name: string) => `Stop sharing this story with ${name}?`,
     remove: "Remove",
+    unnamedPerson: "Unnamed person",
   },
   // Visual family tree (ADR-0016 tree renderer) — read-first, /hub/tree.
   tree: {

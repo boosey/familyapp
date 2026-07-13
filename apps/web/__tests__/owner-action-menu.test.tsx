@@ -27,3 +27,51 @@ it("Add photos fires onAddPhotos", () => {
   fireEvent.click(getByText(/add photos/i));
   expect(onAddPhotos).toHaveBeenCalled();
 });
+
+it("renders absolutely nothing when isOwner is false", () => {
+  const { container } = render(
+    <OwnerActionMenu storyId="S" isOwner={false} onEditStory={vi.fn()} onAddPhotos={vi.fn()} onManageSharing={vi.fn()} />,
+  );
+  expect(container.firstChild).toBeNull();
+});
+
+it("renders the menu trigger with aria-haspopup when isOwner is true", () => {
+  const { getByLabelText } = render(
+    <OwnerActionMenu storyId="S" isOwner onEditStory={vi.fn()} onAddPhotos={vi.fn()} onManageSharing={vi.fn()} />,
+  );
+  const trigger = getByLabelText("Story options");
+  expect(trigger).toBeTruthy();
+  expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+});
+
+it("opens the menu on clicking the trigger (aria-expanded true), and Escape closes it", () => {
+  const { getByLabelText, getByRole, queryByRole } = render(
+    <OwnerActionMenu storyId="S" isOwner onEditStory={vi.fn()} onAddPhotos={vi.fn()} onManageSharing={vi.fn()} />,
+  );
+  const trigger = getByLabelText("Story options");
+
+  expect(queryByRole("menu")).toBeNull();
+
+  fireEvent.click(trigger);
+  expect(getByRole("menu")).toBeTruthy();
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(queryByRole("menu")).toBeNull();
+});
+
+it("closes the menu on clicking outside", () => {
+  const { getByLabelText, getByRole, queryByRole, getByTestId } = render(
+    <div>
+      <div data-testid="outside">Outside Element</div>
+      <OwnerActionMenu storyId="S" isOwner onEditStory={vi.fn()} onAddPhotos={vi.fn()} onManageSharing={vi.fn()} />
+    </div>,
+  );
+  const trigger = getByLabelText("Story options");
+
+  fireEvent.click(trigger);
+  expect(getByRole("menu")).toBeTruthy();
+
+  fireEvent.pointerDown(getByTestId("outside"));
+  expect(queryByRole("menu")).toBeNull();
+});
