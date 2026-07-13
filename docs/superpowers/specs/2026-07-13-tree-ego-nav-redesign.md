@@ -2,8 +2,8 @@
 
 Status: Accepted design (2026-07-13). **Supersedes** the three pedigree-nav specs
 (`2026-07-12-kinship-tree-viz-design.md`, `-pedigree-nav-design.md`,
-`-interactions-design.md`) for `/hub/tree`. Implements ADR-0016 (kinship tree) and ADR-0017
-(siblinghood via a placeholder parent-couple).
+`-interactions-design.md`) for `/hub/tree`. Implements ADR-0016 (kinship tree), ADR-0017
+(siblinghood via a placeholder parent-couple), and ADR-0018 (nearer-owns caret ownership).
 
 This spec is the build contract for the `/hub/tree` renderer rewrite. It replaces the shipped
 FamilySearch-style re-rootable pedigree with an **ego-centric, expand/collapse-in-place** tree.
@@ -78,13 +78,14 @@ the person are retained. More personal detail fields are TBD (out of scope for t
 
 ---
 
-## 3. Carets and "+" (rules 6–9)
+## 3. Carets and "+" — nearer-owns ownership (ADR-0018)
 
-Each **identified** card owns up to three affordances, one per direction. A direction shows:
+Each **identified** card shows, per direction, **at most one** affordance. A direction shows:
 
-- a **caret** if kin exist in that direction in the loaded data, or
-- a **"+"** if none exist (starts add-in-that-direction), or
-- **nothing** for a direction that cannot apply (see ownership below).
+- a **caret** if there is kin hidden that way **that this card is the nearest owner of** (or a drawn
+  branch that way to collapse), or
+- a **"+"** if there is no kin that way **and this card owns the reveal** (starts add-in-that-direction), or
+- **nothing** — the kin that way are already drawn, or the reveal is owned by a node nearer the anchor.
 
 Carets and "+" have a **1px circular border**. Placement (thin gutter off the card edge):
 
@@ -96,18 +97,44 @@ Carets and "+" have a **1px circular border**. Placement (thin gutter off the ca
 - **Children ↓** — centered below the bottom border. Points **up = collapsed**, **down = expanded**.
   Per **couple** (shared), not per-person (§5).
 
-### Caret-ownership dedup (resolves Model-A overlap)
+### The invariant (ADR-0018)
 
-Because siblings are *co-children of a shared parent* (derived, ADR-0016), a person's siblings and a
-couple's other children are the **same people**. To avoid two live controls for one set:
+> **Every relationship is controlled by exactly one caret, owned by whichever endpoint is *nearer the
+> anchor* along the path traveled to reach it.** The farther endpoint never shows a caret pointing back
+> toward the anchor.
 
-> A couple/person shows a **downward children-caret** only if it has children and **none are currently
-> drawn**. Once one child is drawn, every *other* child of that couple is reached through the drawn
-> child's **sibling-caret** — never a second children-caret on the parent.
+The drawn tree is a spanning tree rooted at the anchor; each drawn person (except the anchor) has one
+*discovery edge* to the node that revealed it, and that edge's caret lives on the **discoverer (nearer)
+side**. "Up from the anchor / down from the anchor" is just this rule applied to the direct lineage.
+A relationship whose **both** endpoints are already drawn but which was *not* a discovery edge (a
+laterally-revealed sibling and its shared parent) carries **no caret at all**.
 
-Consequences: an **expanded ancestor couple carries no children-caret** (its lineage child is already
-on the bus; siblings come off that child's side). An **aunt/uncle with no drawn child** shows a
-children-caret (→ reveals cousins). No person is ever revealable by two live carets.
+Direction-by-direction:
+
+- **Parents ↑ / Children ↓ — direct lineage owned once.** Going up, the anchor (or lower node) owns the
+  parent-caret; the parent shows **no** children-caret back down. Going down, the parent owns the
+  children-caret; the child shows **no** parent-caret back up. A couple hides its children-caret once
+  **any** child is drawn via a nearer path — so a **direct-lineage parent never shows a children-caret**
+  (its lineage child is on the bus; the anchor's other siblings come off that child's sibling-caret).
+- **Collateral children-caret stays.** A **collateral** couple — an aunt/uncle, one of the anchor's own
+  siblings, a cousin — whose children are still hidden **keeps** its children-caret (→ reveals
+  cousins / nieces-nephews), or a **"+"** if childless. This is not a duplicate: no nearer node owns
+  that edge. (Rules 3/4 therefore constrain the **direct lineage only**, not everyone in a row.)
+- **Siblings ↔ — one owner per set.** A sibling set has exactly one owning control, shown only on the
+  **set-owner**: the anchor, a partner, or a lineage parent reached via a parent-caret. A person reached
+  as a **set-member** — a revealed child, a fanned sibling, a cousin, a niece — shows **no** sibling
+  affordance at all, **not even a "+"** for an only child (reconciles rules 6 & 7). "Add a sibling"
+  there is "add a child to the owning parent," which is that parent's control (or the kebab).
+- **In-laws — no carve-out.** Every drawn partner is a full member with its **own** ↑/↔ carets toward
+  its own hidden kin (a child's spouse can reveal the co-in-laws; a cousin's spouse can reveal their
+  family). The ↓ children-caret is the couple's **single** shared control on the anchor-nearer side.
+  This **supersedes** the narrower rule 9 (which named only anchor/ancestor partners).
+
+### Collapse / re-expand
+
+Collapsing a caret **hides but remembers** the branch beyond it; re-expanding restores the prior nested
+state exactly. Collapse *suppresses* (via the `collapsed*` sets), it does not purge descendants'
+expansion flags — "instantly re-expandable" means no round-trip **and** no loss of sub-shape.
 
 ---
 
@@ -119,7 +146,16 @@ siblings to the caret's side; **F stays pinned at that end of the bus** (not its
 Within the fanned run, order by birth with **oldest farthest** from F (age reads monotonically
 outward). The parent bus (§6) widens to span F + siblings with a riser to each.
 
-Half-siblings are **deferred** (a sibling shares *both* parents in v1).
+**Rule 8 coupling (generalized to every sibling-set owner, ADR-0018).** Because siblings need the
+shared parent-couple as their bus, expanding **any** sibling-set owner's sibling-caret **auto-expands
+that owner's parents**; **closing the parents closes the siblings** (the bus vanishes); **closing the
+siblings leaves the parents** (the bus stands alone). This holds for the anchor, for a lineage parent
+revealing aunts/uncles (auto-expands the grandparents), and for an in-law revealing their siblings.
+When the owner's parents are unknown, add-sibling has already spawned a **placeholder parent-couple**
+(ADR-0017, dashed inert bridge) that serves as the bus.
+
+Half-siblings are **deferred** (a sibling shares *both* parents in v1); likewise multiple partners,
+cousin-marriage double-paths, and step/adoptive distinctions (see ADR-0018 scope).
 
 ---
 
@@ -179,8 +215,10 @@ instantly re-expandable.
 
 - `person-node.tsx` — card rewrite (avatar photo→monogram, dates-only, no relation line, no "You",
   keep sex bar, dashed bridge).
-- `tree-layout.ts` — new caret model (per-person parent/sibling, per-couple children), ego-side sibling
-  fan, dedup rule, single/two-parent bus geometry, `"+"` slots for all three directions.
+- `tree-layout.ts` — **nearer-owns caret model** (ADR-0018): emit only the affordance each node *owns*
+  (not "all three per node"). Per-person parent/sibling, per-couple children; direct-lineage parent has
+  no children-caret, set-members have no sibling affordance, collaterals keep their children-caret;
+  ego-side sibling fan; single/two-parent bus geometry; `"+"` slots only where the node owns the reveal.
 - `tree-canvas.tsx` — remove re-root/selection-as-navigation; keep name→panel; prefetch-one-layer;
   1px-border carets and "+"; per-card kebab only.
 - `kebab-menu.tsx` — per-card only, borderless trigger; drop the global instance.
