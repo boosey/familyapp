@@ -24,15 +24,19 @@ reaped**, and **never invitable until identified**.
 
 **Adding a sibling to a person with no shared parent auto-creates a placeholder parent-couple.**
 
-When "Add sibling" is invoked on person A (who has fewer than the needed shared parents), the write
-path eagerly and atomically creates:
+When "Add sibling" is invoked on person A, the write path **tops A's parents up to a couple** and shares
+**both** with the new sibling B, eagerly and atomically. A v1 sibling shares **both** parents (sharing
+only one is a *half*-sibling, which v1 defers), so:
 
-1. **Two** `identified = false, origin = mention` placeholder persons — an unknown couple. Two (not
-   one) because a v1 sibling shares **both** parents; a single shared parent would make them
-   *half*-siblings, which v1 defers.
-2. A **`partnered-with`** edge between the two placeholders.
-3. **`parent-of`** edges from *each* placeholder to *both* A and the new sibling B (four edges,
-   `nature = unknown`).
+- **A has 0 recorded parents** → mint **two** `identified = false, origin = mention` placeholder
+  persons, partner them, and make each a `parent-of` both A and B.
+- **A has exactly 1 recorded parent** → mint **one** placeholder to complete the couple (partner it to
+  the existing parent), then make both parents `parent-of` B (and the new placeholder `parent-of` A, so
+  A and B share the *same two* parents).
+- **A already has a full parent-couple** → **reuse it**; add B as a child of that couple, no placeholders.
+
+All minted `parent-of` edges carry `nature = unknown`; the shipped shortcut of minting a single shared
+bridge parent (which yields half-siblings) is replaced by this top-up-to-a-couple rule.
 
 The placeholders are rendered as the existing **dashed anonymous-bridge cards** and are **inert
 containers**: no parent/sibling carets, no kebab — you cannot walk up from, or add to, an unknown
