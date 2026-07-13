@@ -22,4 +22,8 @@ export {
   storyFavorites,
   storyLikes,
   storySubjects,
+  photoSubjects,
+  photoPeople,
+  places,
+  photoPlaces,
 } from "./schema";

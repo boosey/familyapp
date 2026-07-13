@@ -287,6 +287,39 @@ CREATE TABLE "persons" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "photo_people" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"photo_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
+	"tagged_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "photo_places" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"photo_id" uuid NOT NULL,
+	"place_id" uuid NOT NULL,
+	"tagged_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "photo_subjects" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"photo_id" uuid NOT NULL,
+	"person_id" uuid NOT NULL,
+	"tagged_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "places" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"family_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"exif_gps" jsonb,
+	"created_by_person_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "prose_revisions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"seq" bigserial NOT NULL,
@@ -444,6 +477,17 @@ ALTER TABLE "media" ADD CONSTRAINT "media_owner_person_id_persons_id_fk" FOREIGN
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_people" ADD CONSTRAINT "photo_people_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "photo_people" ADD CONSTRAINT "photo_people_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_people" ADD CONSTRAINT "photo_people_tagged_by_person_id_persons_id_fk" FOREIGN KEY ("tagged_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_places" ADD CONSTRAINT "photo_places_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "photo_places" ADD CONSTRAINT "photo_places_place_id_places_id_fk" FOREIGN KEY ("place_id") REFERENCES "public"."places"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_places" ADD CONSTRAINT "photo_places_tagged_by_person_id_persons_id_fk" FOREIGN KEY ("tagged_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_subjects" ADD CONSTRAINT "photo_subjects_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "photo_subjects" ADD CONSTRAINT "photo_subjects_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "photo_subjects" ADD CONSTRAINT "photo_subjects_tagged_by_person_id_persons_id_fk" FOREIGN KEY ("tagged_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "places" ADD CONSTRAINT "places_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "places" ADD CONSTRAINT "places_created_by_person_id_persons_id_fk" FOREIGN KEY ("created_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "prose_revisions" ADD CONSTRAINT "prose_revisions_story_recording_id_story_recordings_id_fk" FOREIGN KEY ("story_recording_id") REFERENCES "public"."story_recordings"("id") ON DELETE no action ON UPDATE no action;
@@ -502,6 +546,17 @@ CREATE INDEX "memberships_family_idx" ON "memberships" USING btree ("family_id")
 CREATE UNIQUE INDEX "mock_auth_users_email_uq" ON "mock_auth_users" USING btree ("email");
 CREATE UNIQUE INDEX "mock_auth_users_provider_id_uq" ON "mock_auth_users" USING btree ("auth_provider_user_id");
 CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_id");
+CREATE UNIQUE INDEX "photo_people_photo_person_uq" ON "photo_people" USING btree ("photo_id","person_id");
+CREATE INDEX "photo_people_photo_idx" ON "photo_people" USING btree ("photo_id");
+CREATE INDEX "photo_people_person_idx" ON "photo_people" USING btree ("person_id");
+CREATE UNIQUE INDEX "photo_places_photo_place_uq" ON "photo_places" USING btree ("photo_id","place_id");
+CREATE INDEX "photo_places_photo_idx" ON "photo_places" USING btree ("photo_id");
+CREATE INDEX "photo_places_place_idx" ON "photo_places" USING btree ("place_id");
+CREATE UNIQUE INDEX "photo_subjects_photo_person_uq" ON "photo_subjects" USING btree ("photo_id","person_id");
+CREATE INDEX "photo_subjects_photo_idx" ON "photo_subjects" USING btree ("photo_id");
+CREATE INDEX "photo_subjects_person_idx" ON "photo_subjects" USING btree ("person_id");
+CREATE UNIQUE INDEX "places_family_name_uq" ON "places" USING btree ("family_id","name");
+CREATE INDEX "places_family_idx" ON "places" USING btree ("family_id");
 CREATE INDEX "prose_revisions_story_idx" ON "prose_revisions" USING btree ("story_id");
 CREATE INDEX "stories_owner_idx" ON "stories" USING btree ("owner_person_id");
 CREATE INDEX "stories_state_idx" ON "stories" USING btree ("state");

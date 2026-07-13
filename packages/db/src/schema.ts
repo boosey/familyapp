@@ -1191,6 +1191,130 @@ export const familyPhotoFamilies = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Photo tagging (album enhancements, 2026-07-13) — three link tables that mirror `story_subjects`,
+// plus a `places` dimension. All reference the guarded `family_photos`, so they are CONTENT-adjacent
+// and live behind @chronicle/db/content; only the audited `album-repository.ts` touches them. Like
+// `story_subjects` these are PLAIN associations — editable (tag = insert, untag = delete, so NO
+// append-only trigger), and NOT authorization grants: tagging never widens who can see a photo. Each
+// link FKs `family_photos` ON DELETE CASCADE, matching `voice_captions`: an album delete is SOFT
+// (deletedAt) so the cascade does NOT fire on a normal delete (the READ seam must exclude tags of a
+// soft-deleted photo), while a HARD erasure delete cascades the tags away. `taggedByPersonId` is the
+// audit trail; one Person/Place tags a given photo at most once.
+//
+// Per the 2026-07-13 decision, "subjects" (who the photo is ABOUT) and "people" (who APPEARS in it)
+// are DELIBERATELY SEPARATE for photos — two tables of identical shape — unlike stories where they
+// collapse into one. `places` is a family-scoped named place (deduped within a family) that carries
+// an OPTIONAL GPS point: a place may later be SEEDED/suggested from a photo's `exif_gps` via the
+// PlaceSuggester seam (reverse-geocode → local place / landmark), but the coordinate is never the
+// dedup/filter key — the name is.
+// ---------------------------------------------------------------------------
+
+/** Who a PHOTO is ABOUT (mirrors story_subjects). Guarded; album-repository-only. */
+export const photoSubjects = pgTable(
+  "photo_subjects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    /** The person who applied the tag (audit trail). */
+    taggedByPersonId: uuid("tagged_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("photo_subjects_photo_person_uq").on(t.photoId, t.personId),
+    index("photo_subjects_photo_idx").on(t.photoId),
+    index("photo_subjects_person_idx").on(t.personId),
+  ],
+);
+
+/** Who APPEARS in a PHOTO — distinct from subjects (2026-07-13 decision). Identical shape. Guarded. */
+export const photoPeople = pgTable(
+  "photo_people",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    taggedByPersonId: uuid("tagged_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("photo_people_photo_person_uq").on(t.photoId, t.personId),
+    index("photo_people_photo_idx").on(t.photoId),
+    index("photo_people_person_idx").on(t.personId),
+  ],
+);
+
+/**
+ * A family-scoped named place (album enhancements). Deduped within a family by name — the app
+ * normalizes (trims) and reuses an existing case-insensitive match before inserting; the UNIQUE
+ * (family_id, name) is the backstop. `exifGps` is an OPTIONAL seed coordinate (a place created from a
+ * photo's EXIF GPS), never the identity of the place. Guarded; written only via album-repository.
+ */
+export const places = pgTable(
+  "places",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id),
+    name: text("name").notNull(),
+    /** Optional GPS `{lat,lng}` seed (from a photo's exif_gps); a hint, not the dedup key. */
+    exifGps: jsonb("exif_gps").$type<{ lat: number; lng: number }>(),
+    createdByPersonId: uuid("created_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("places_family_name_uq").on(t.familyId, t.name),
+    index("places_family_idx").on(t.familyId),
+  ],
+);
+
+/** A PHOTO tagged with a place (mirrors the person link tables). Guarded. */
+export const photoPlaces = pgTable(
+  "photo_places",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    photoId: uuid("photo_id")
+      .notNull()
+      .references(() => familyPhotos.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id")
+      .notNull()
+      .references(() => places.id),
+    taggedByPersonId: uuid("tagged_by_person_id")
+      .notNull()
+      .references(() => persons.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("photo_places_photo_place_uq").on(t.photoId, t.placeId),
+    index("photo_places_photo_idx").on(t.photoId),
+    index("photo_places_place_idx").on(t.placeId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // StoryImage (accompaniment) — ADR-0009. Pictures shown ALONGSIDE a Story to illustrate it: many
 // per story, exactly one COVER, ordered by `position`. This is the ONLY rendering path for a
 // story's imagery ("all rendering flows through story_images"). A row is EITHER an album photo
