@@ -52,7 +52,7 @@ export function StoryEditor(props: StoryEditorProps) {
     [tags, people, families],
   );
 
-  const run = (fn: () => Promise<{ error?: string } | undefined>) =>
+  const run = (fn: () => Promise<{ error?: string; personId?: string } | undefined>) =>
     startTransition(async () => {
       const res = await fn();
       if (res && "error" in res && res.error) setError(res.error);
@@ -81,16 +81,37 @@ export function StoryEditor(props: StoryEditorProps) {
       saveTags([...tags, token.value]);
     } else if (token.kind === "family") {
       saveFamilies([...families, { id: token.familyId, name: token.name }]);
-    } else {
+    } else if (token.personId) {
       const fd = new FormData();
       fd.set("storyId", storyId);
-      if (token.personId) fd.set("personId", token.personId);
-      else fd.set("newPersonDisplayName", token.displayName);
-      setPeople((cur) => [
-        ...cur,
-        { personId: token.personId ?? `pending:${token.displayName}`, displayName: token.displayName },
-      ]);
+      fd.set("personId", token.personId);
+      setPeople((cur) => [...cur, { personId: token.personId!, displayName: token.displayName }]);
       run(() => tagStorySubjectAction(fd));
+    } else {
+      // Newly minted person: the server mints a real Person id we don't have yet. Insert an
+      // optimistic placeholder under a stable temp key, then replace it with the real id once
+      // the action resolves — so a same-session remove posts the REAL id, not the placeholder.
+      const tempKey = `pending:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const displayName = token.displayName;
+      const fd = new FormData();
+      fd.set("storyId", storyId);
+      fd.set("newPersonDisplayName", displayName);
+      setPeople((cur) => [...cur, { personId: tempKey, displayName }]);
+      startTransition(async () => {
+        const res = await tagStorySubjectAction(fd);
+        if (res && "error" in res && res.error) {
+          setError(res.error);
+          setPeople((cur) => cur.filter((p) => p.personId !== tempKey));
+          return;
+        }
+        setError(null);
+        if (res && "personId" in res && res.personId) {
+          const realId = res.personId;
+          setPeople((cur) =>
+            cur.map((p) => (p.personId === tempKey ? { personId: realId, displayName } : p)),
+          );
+        }
+      });
     }
   };
 

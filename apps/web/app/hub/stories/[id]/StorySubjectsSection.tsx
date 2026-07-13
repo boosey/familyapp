@@ -36,7 +36,7 @@ export function StorySubjectsSection({
     setError(null);
     startTransition(async () => {
       const result = await tagStorySubjectAction(formData);
-      if (result?.error) setError(result.error);
+      if (result && "error" in result && result.error) setError(result.error);
     });
   }
 

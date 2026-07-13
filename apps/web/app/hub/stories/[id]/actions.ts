@@ -204,7 +204,9 @@ export async function setStoryFavoriteAction(
  * SEE gate (a viewer who can't see the story can't tag on it) — the action does not re-implement
  * authorization; it only re-resolves the auth context and delegates.
  */
-export async function tagStorySubjectAction(formData: FormData): Promise<ActionResult> {
+export async function tagStorySubjectAction(
+  formData: FormData,
+): Promise<ActionResult | { personId: string }> {
   beginLogContext();
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -229,8 +231,9 @@ export async function tagStorySubjectAction(formData: FormData): Promise<ActionR
 
   plog("story", "tagStorySubject: received", { person: viewerPersonId(ctx), story: storyId });
 
+  let result: Awaited<ReturnType<typeof tagStorySubject>>;
   try {
-    await tagStorySubject(db, ctx, {
+    result = await tagStorySubject(db, ctx, {
       storyId,
       ...(hasExisting ? { personId: personId as string } : {}),
       ...(hasNew ? { newPersonDisplayName: (newPersonDisplayName as string).trim() } : {}),
@@ -245,6 +248,7 @@ export async function tagStorySubjectAction(formData: FormData): Promise<ActionR
   }
 
   revalidatePath(`/hub/stories/${storyId}`);
+  return { personId: result.personId };
 }
 
 /** Untag a Person from a story (issue #35). SEE-gated in core. */
