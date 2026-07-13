@@ -36,11 +36,13 @@ export interface StoryEditorProps {
 export function StoryEditor(props: StoryEditorProps) {
   const { storyId, suggestions, onClose } = props;
   const [title, setTitle] = useState(props.initialTitle);
+  const [savedTitle, setSavedTitle] = useState(props.initialTitle);
   const [tags, setTags] = useState<string[]>(props.initialTags);
   const [prose, setProse] = useState(props.initialProse);
   const [people, setPeople] = useState(props.initialPersonSubjects);
   const [families, setFamilies] = useState(props.initialTargetFamilies);
   const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const tokens: TagToken[] = useMemo(
@@ -52,28 +54,42 @@ export function StoryEditor(props: StoryEditorProps) {
     [tags, people, families],
   );
 
-  const run = (fn: () => Promise<{ error?: string; personId?: string } | undefined>) =>
+  const run = (
+    fn: () => Promise<{ error?: string; personId?: string } | undefined>,
+    revert?: () => void,
+  ) =>
     startTransition(async () => {
-      const res = await fn();
-      if (res && "error" in res && res.error) setError(res.error);
-      else setError(null);
+      try {
+        const res = await fn();
+        if (res && "error" in res && res.error) {
+          setError(res.error);
+          revert?.();
+        } else {
+          setError(null);
+        }
+      } catch {
+        setError("Something went wrong. Please try again.");
+        revert?.();
+      }
     });
 
   const saveTags = (nextTags: string[]) => {
+    const prev = tags;
     setTags(nextTags);
     const fd = new FormData();
     fd.set("storyId", storyId);
-    fd.set("title", title);
+    fd.set("title", savedTitle);
     fd.set("tags", nextTags.join(","));
-    run(() => editStoryDetailsAction(fd));
+    run(() => editStoryDetailsAction(fd), () => setTags(prev));
   };
 
   const saveFamilies = (nextFamilies: { id: string; name: string }[]) => {
+    const prev = families;
     setFamilies(nextFamilies);
     const fd = new FormData();
     fd.set("storyId", storyId);
     for (const f of nextFamilies) fd.append("familyIds", f.id);
-    run(() => retargetStoryFamiliesAction(fd));
+    run(() => retargetStoryFamiliesAction(fd), () => setFamilies(prev));
   };
 
   const onAdd = (token: TagToken) => {
@@ -82,11 +98,12 @@ export function StoryEditor(props: StoryEditorProps) {
     } else if (token.kind === "family") {
       saveFamilies([...families, { id: token.familyId, name: token.name }]);
     } else if (token.personId) {
+      const prev = people;
       const fd = new FormData();
       fd.set("storyId", storyId);
       fd.set("personId", token.personId);
       setPeople((cur) => [...cur, { personId: token.personId!, displayName: token.displayName }]);
-      run(() => tagStorySubjectAction(fd));
+      run(() => tagStorySubjectAction(fd), () => setPeople(prev));
     } else {
       // Newly minted person: the server mints a real Person id we don't have yet. Insert an
       // optimistic placeholder under a stable temp key, then replace it with the real id once
@@ -122,15 +139,21 @@ export function StoryEditor(props: StoryEditorProps) {
       if (!confirm(hub.tagInput.confirmRevoke(token.name))) return;
       saveFamilies(families.filter((f) => f.id !== token.familyId));
     } else {
+      const prev = people;
       setPeople((cur) => cur.filter((p) => p.personId !== token.personId));
       const fd = new FormData();
       fd.set("storyId", storyId);
       fd.set("personId", token.personId ?? "");
-      run(() => untagStorySubjectAction(fd));
+      run(() => untagStorySubjectAction(fd), () => setPeople(prev));
     }
   };
 
   const saveTitleAndProse = () => {
+    if (!title.trim()) {
+      setTitleError("Title can't be empty.");
+      return;
+    }
+    setTitleError(null);
     const fdD = new FormData();
     fdD.set("storyId", storyId);
     fdD.set("title", title);
@@ -141,7 +164,10 @@ export function StoryEditor(props: StoryEditorProps) {
     run(async () => {
       const d = await editStoryDetailsAction(fdD);
       if (d && "error" in d && d.error) return d;
-      return editStoryProseAction(fdP);
+      const p = await editStoryProseAction(fdP);
+      if (p && "error" in p && p.error) return p;
+      setSavedTitle(title);
+      return p;
     });
   };
 
@@ -154,9 +180,11 @@ export function StoryEditor(props: StoryEditorProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           disabled={pending}
+          required
           style={textField}
         />
       </label>
+      {titleError && <p role="alert" style={errText}>{titleError}</p>}
 
       <div style={{ display: "grid", gap: 6 }}>
         <span style={fieldLabel}>{hub.tagInput.label}</span>
