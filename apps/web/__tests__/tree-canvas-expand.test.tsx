@@ -169,6 +169,71 @@ it("isolated focus shows the card plus three '+' (no empty-state page)", async (
   expect(screen.getByTestId(`tree-affordance-children-add-${FOCUS}`)).toBeTruthy();
 });
 
+it("expanding/collapsing parents does NOT move the focus on screen (camera stays anchored)", async () => {
+  // focus with a drawn parent (focus's parents are open by default). The layout re-normalizes its
+  // origin when the parent generation appears/disappears, shifting every node's coords by a whole
+  // GEN_STEP. The camera is anchored on the focus, so the focus's on-screen position must be invariant
+  // across a parents collapse → re-expand. (Regression: the canvas used to slide down on expand.)
+  const withParent: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: FOCUS,
+    nodes: [
+      node({ personId: FOCUS, relationToRoot: "self" }),
+      node({ personId: "jerry", displayName: "Jerry", relationToRoot: "parent" }),
+    ],
+    edges: [
+      {
+        edgeType: "parent_of",
+        personAId: "jerry",
+        personBId: FOCUS,
+        nature: "biological",
+        state: "asserted",
+        assertedBy: FOCUS,
+        assertedAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ],
+  };
+
+  // Screen position of the focus = pan-layer transform + the focus card's own left/top offset.
+  const focusScreen = (): { x: number; y: number } => {
+    const layer = screen.getByTestId("tree-pan-layer");
+    const m = /translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/.exec(layer.style.transform);
+    if (!m) throw new Error(`no translate in transform: "${layer.style.transform}"`);
+    const pos = screen.getByTestId(`tree-node-pos-${FOCUS}`);
+    return {
+      x: parseFloat(m[1]!) + parseFloat(pos.style.left),
+      y: parseFloat(m[2]!) + parseFloat(pos.style.top),
+    };
+  };
+
+  render(
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={withParent} fetchSubtree={vi.fn(noFetch)} />,
+  );
+  // Parent is drawn by default.
+  expect(screen.getByTestId("tree-node-jerry")).toBeTruthy();
+  const expanded = focusScreen();
+
+  // Collapse the parents → jerry leaves, the origin re-normalizes upward.
+  await act(async () => {
+    screen.getByTestId(`tree-affordance-parents-caret-${FOCUS}`).click();
+  });
+  await waitFor(() => expect(screen.queryByTestId("tree-node-jerry")).toBeNull());
+  const collapsed = focusScreen();
+
+  expect(collapsed.x).toBeCloseTo(expanded.x, 3);
+  expect(collapsed.y).toBeCloseTo(expanded.y, 3);
+
+  // Re-expand → jerry returns above, focus still fixed.
+  await act(async () => {
+    screen.getByTestId(`tree-affordance-parents-caret-${FOCUS}`).click();
+  });
+  await waitFor(() => expect(screen.getByTestId("tree-node-jerry")).toBeTruthy());
+  const reExpanded = focusScreen();
+  expect(reExpanded.x).toBeCloseTo(expanded.x, 3);
+  expect(reExpanded.y).toBeCloseTo(expanded.y, 3);
+});
+
 it("an anonymous bridge card is inert (no kebab, no affordances)", async () => {
   const withBridge: KinshipTreeData = {
     familyId: "F",

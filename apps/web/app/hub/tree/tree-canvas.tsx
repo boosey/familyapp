@@ -123,6 +123,15 @@ export function TreeCanvas({
 
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.personId, n])), [nodes]);
 
+  // The focus's position in layout space. The layout re-normalizes its origin on every expansion (the
+  // tightest box starts at 0), so a node's absolute (x,y) shifts by a whole generation-step when kin
+  // appear above/below. We make the FOCUS the camera origin (below) so those shifts cancel out and an
+  // expand/collapse never yanks the viewport. Falls back to (0,0) if the focus somehow isn't drawn.
+  const focusPos = useMemo(() => {
+    const f = layout.placed.find((p) => p.personId === focusPersonId);
+    return f ? { x: f.x, y: f.y } : { x: 0, y: 0 };
+  }, [layout, focusPersonId]);
+
   // Relation of each person to the VIEWER, derived from the loaded edges (the tree is focus-rooted, so
   // node.relationToRoot is relation-to-focus and can't be used for the panel). Empty when the viewer
   // isn't reachable in the loaded projection (distant focus) — the panel then omits the relation line.
@@ -139,16 +148,16 @@ export function TreeCanvas({
     [adj],
   );
 
-  /** Reframe so the focus sits horizontally centered, a bit below the vertical middle. */
+  /**
+   * Reframe on the focus. `pan` is the focus's on-screen offset from the pan-layer origin (which sits
+   * at horizontal-center / top of the viewport), so centering horizontally is x:0 and the focus rides
+   * at the vertical middle. Independent of the focus's layout coordinates — those are absorbed by the
+   * transform (see the pan-layer), which is what keeps an expansion from moving the focus.
+   */
   const fitToFocus = useCallback(() => {
-    const focus = layout.placed.find((p) => p.personId === focusPersonId) ?? layout.placed[0];
-    if (!focus) {
-      setPan({ x: 0, y: 0 });
-      return;
-    }
     const vh = viewportRef.current?.clientHeight ?? 480;
-    setPan({ x: -focus.x, y: vh * 0.5 - focus.y });
-  }, [layout, focusPersonId]);
+    setPan({ x: 0, y: vh * 0.5 });
+  }, []);
 
   // Center on the focus once, at first paint. Never on expansion (that would yank the viewport).
   useEffect(() => {
@@ -317,7 +326,10 @@ export function TreeCanvas({
             position: "absolute",
             left: "50%",
             top: 0,
-            transform: `translate(${pan.x}px, ${pan.y}px)`,
+            // Anchor the camera on the focus: subtracting its layout position makes the focus the fixed
+            // origin, so re-normalization on expand/collapse (which shifts every node's coords by a
+            // generation-step) leaves the focus — and thus the whole viewport — visually stationary.
+            transform: `translate(${pan.x - focusPos.x}px, ${pan.y - focusPos.y}px)`,
             width: layout.bounds.width,
             height: layout.bounds.height,
           }}
@@ -348,6 +360,7 @@ export function TreeCanvas({
             return (
               <div
                 key={p.personId}
+                data-testid={`tree-node-pos-${p.personId}`}
                 onPointerDown={(e) => onNodePointerDown(p.personId, e)}
                 onPointerMove={(e) => onNodePointerMove(p.personId, e)}
                 onPointerUp={(e) => onNodePointerUp(p.personId, e)}
