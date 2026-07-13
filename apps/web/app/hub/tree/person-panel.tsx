@@ -1,39 +1,41 @@
 "use client";
 /**
- * PersonPanel — the read-only tap detail for a tree node (spec §7).
+ * PersonPanel — the read-only detail panel opened by a name click (spec §2).
  *
- * Shows name (or "Unknown <relation>"), relation-to-you, the life line, and identified/anonymous.
- * Purely NAVIGATIONAL actions (no writes): Stories about them, Add parent/child/sibling (anchored on
- * this person), Manage kin. The panel never mutates data — it only links out.
+ * Read-only / navigational; it NEVER re-roots (the old "Center tree here" action is removed) and NEVER
+ * writes. Shows the name (or "Unknown <relation>"), the relation-to-VIEWER, and the dates. Because the
+ * tree is now rooted on the FOCUS (not the viewer), relation-to-viewer is derived client-side by the
+ * canvas from the loaded edges and passed in as `relationToViewer` (null when the viewer isn't in the
+ * loaded projection, e.g. a distant focus, or no relation resolves — the line is then omitted). Retains
+ * the navigational links (stories, add-relative anchored on this person, manage kin). A seam is left for
+ * TBD personal-detail fields.
  */
 import Link from "next/link";
 import { hub } from "@/app/_copy";
-import type { TreeNode } from "@chronicle/core";
+import type { KinRelation, TreeNode } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
-import { displayNameFor, isAnonymousBridge, lifeLineFor, relationToRootLabel } from "./person-node";
+import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
+
+const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
 
 export interface PersonPanelProps {
   node: TreeNode;
-  isRoot: boolean;
   familyId: string;
-  /** The viewer's own personId — used to label their own node "You" regardless of the focal root. */
-  viewerPersonId: string;
-  /** Re-root the tree on this person. The panel's "Center tree here" is the ONLY re-root trigger. */
-  onRecenter: (personId: string) => void;
+  /** Relation of this person to the VIEWER, derived client-side; "self"/null ⇒ no relation line. */
+  relationToViewer: KinRelation | "self" | null;
   onClose: () => void;
 }
 
-export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onRecenter, onClose }: PersonPanelProps) {
+export function PersonPanel({ node, familyId, relationToViewer, onClose }: PersonPanelProps) {
   const name = displayNameFor(node);
-  const relation = relationToRootLabel(node, isRoot, viewerPersonId);
-  const life = lifeLineFor(node);
-  // An anonymous bridge is a placeholder; an identified person with no name on file is still real.
+  const relation =
+    relationToViewer === null || relationToViewer === "self" ? "" : RELATION_LABEL[relationToViewer];
+  const dates = datesLineFor(node);
   const anon = isAnonymousBridge(node);
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
 
   const storiesHref = `/hub/about/${node.personId}`;
   const manageKinHref = `/hub/kin?scope=${familyId}`;
-  // Add-a-relative links, anchored on THIS person (the /hub/kin add flow reads anchor + relation).
   const addHref = (relation: string) =>
     `/hub/kin?scope=${familyId}&anchor=${node.personId}&relation=${relation}`;
 
@@ -89,7 +91,7 @@ export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onRecenter
         {name}
       </h2>
 
-      {(relation || life) && (
+      {(relation || dates) && (
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -98,12 +100,10 @@ export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onRecenter
             margin: "0 0 4px",
           }}
         >
-          {[relation, life].filter(Boolean).join(" · ")}
+          {[relation, dates].filter(Boolean).join(" · ")}
         </p>
       )}
 
-      {/* Only for an identified-but-nameless real person — an anon bridge already reads "Unknown
-          <relation>" in the heading, so a second "Unknown relative" line would be redundant. */}
       {!hasName && !anon && (
         <p
           style={{
@@ -117,21 +117,9 @@ export function PersonPanel({ node, isRoot, familyId, viewerPersonId, onRecenter
         </p>
       )}
 
-      <nav style={{ display: "grid", gap: 8 }}>
-        {/* Primary re-root action — the ONLY way to re-center the tree (select/second-tap removed).
-            Hidden when this person is already the focal root. */}
-        {!isRoot && (
-          <KindredButton
-            variant="primary"
-            size="small"
-            fullWidth
-            type="button"
-            data-testid="tree-panel-recenter"
-            onClick={() => onRecenter(node.personId)}
-          >
-            {hub.tree.centerHere}
-          </KindredButton>
-        )}
+      {/* Seam for TBD personal-detail fields (spec §2): additional read-only facts render here. */}
+
+      <nav style={{ display: "grid", gap: 8, marginTop: 14 }}>
         <Link href={storiesHref} style={{ textDecoration: "none" }} data-testid="tree-panel-stories">
           <KindredButton variant="secondary" size="small" fullWidth type="button">
             {hub.tree.panelStories}

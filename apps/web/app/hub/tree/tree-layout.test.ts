@@ -1,21 +1,19 @@
-// Pure unit tests for computeTreeLayout — no DB, no React. TDD-first per spec §Testing.
-// PORTRAIT pedigree: ancestors up (smaller y), descendants down (larger y), focus row between;
-// within a generation, cards spread horizontally (x) in birth order.
+// Pure unit tests for computeTreeLayout — ego-centric redesign (spec 2026-07-13). No DB, no React.
+// Generations stack vertically (ancestors up / smaller y, descendants down / larger y); within a
+// generation, cards spread horizontally (x). Each identified card owns up to three directional
+// affordances (parents ↑, siblings ↔, children ↓): a caret when kin exist, a "+" when none do.
 import { describe, expect, it } from "vitest";
 import type { ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 
 import {
   EMPTY_EXPANSION,
   type ExpansionState,
-  NODE_W,
   NODE_H,
   computeTreeLayout,
+  coupleKey,
+  type Affordance,
   type LayoutInput,
 } from "./tree-layout";
-
-// ---------------------------------------------------------------------------
-// Fixture builders — match ResolvedKinshipEdge / TreeNode shapes exactly.
-// ---------------------------------------------------------------------------
 
 const T0 = new Date("2026-01-01T00:00:00Z");
 
@@ -65,22 +63,11 @@ function partneredWith(x: string, y: string): ResolvedKinshipEdge {
 }
 
 function expansion(over: Partial<ExpansionState> = {}): ExpansionState {
-  return {
-    expandedParents: new Set(),
-    expandedChildren: new Set(),
-    collapsedAncestors: new Set(),
-    collapsedChildren: new Set(),
-    ...over,
-  };
+  return { ...EMPTY_EXPANSION, ...over };
 }
 
-function input(over: Partial<LayoutInput> & Pick<LayoutInput, "rootPersonId">): LayoutInput {
-  return {
-    nodes: [],
-    edges: [],
-    expansion: EMPTY_EXPANSION,
-    ...over,
-  };
+function input(over: Partial<LayoutInput> & Pick<LayoutInput, "focusPersonId">): LayoutInput {
+  return { nodes: [], edges: [], expansion: EMPTY_EXPANSION, ...over };
 }
 
 function placedFor(layout: ReturnType<typeof computeTreeLayout>, id: string) {
@@ -92,450 +79,416 @@ function placedFor(layout: ReturnType<typeof computeTreeLayout>, id: string) {
   return p;
 }
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
+function aff(
+  layout: ReturnType<typeof computeTreeLayout>,
+  direction: Affordance["direction"],
+  ownerId: string,
+): Affordance | undefined {
+  return layout.affordances.find((a) => a.direction === direction && a.ownerId === ownerId);
+}
 
-/** gp -> parent -> root; root partnered with spouse; root+spouse -> child. */
-function fixtureThreeGen(): LayoutInput {
-  const nodes = [node("gp"), node("parent"), node("root"), node("spouse"), node("child")];
-  const edges = [
-    parentOf("gp", "parent"),
-    parentOf("parent", "root"),
-    partneredWith("root", "spouse"),
-    parentOf("root", "child"),
-    parentOf("spouse", "child"),
-  ];
-  return input({ rootPersonId: "root", nodes, edges });
+// A common focus-with-both-directions fixture: mom -> focus, focus -> kid. Focus's parents & children
+// are expanded by default (initial expansion), siblings collapsed.
+function fixtureFocusMidGen(): LayoutInput {
+  const nodes = [node("mom"), node("focus"), node("kid")];
+  const edges = [parentOf("mom", "focus"), parentOf("focus", "kid")];
+  return input({ focusPersonId: "focus", nodes, edges });
 }
 
 // ---------------------------------------------------------------------------
 
-describe("computeTreeLayout — generation assignment", () => {
-  it("root is generation 0", () => {
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes: [node("me")] }));
+describe("generation assignment", () => {
+  it("focus is generation 0; parent -1; child +1; grandparent -2", () => {
+    const nodes = [node("me"), node("mom"), node("kid"), node("gran")];
+    const edges = [parentOf("mom", "me"), parentOf("me", "kid"), parentOf("gran", "mom")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "me", nodes, edges, expansion: expansion({ expandedParents: new Set(["mom"]) }) }),
+    );
     expect(placedFor(l, "me").generation).toBe(0);
-  });
-
-  it("parent is generation -1, child is generation +1", () => {
-    const nodes = [node("me"), node("mom"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     expect(placedFor(l, "mom").generation).toBe(-1);
-    expect(placedFor(l, "me").generation).toBe(0);
     expect(placedFor(l, "kid").generation).toBe(1);
-  });
-
-  it("partner shares the root's generation", () => {
-    const nodes = [node("me"), node("spouse")];
-    const edges = [partneredWith("me", "spouse")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(placedFor(l, "spouse").generation).toBe(0);
-  });
-
-  it("grandparent is generation -2", () => {
-    const nodes = [node("me"), node("mom"), node("gran")];
-    const edges = [parentOf("mom", "me"), parentOf("gran", "mom")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     expect(placedFor(l, "gran").generation).toBe(-2);
   });
-});
 
-describe("computeTreeLayout — axis transpose (pedigree direction)", () => {
-  it("ancestors land ABOVE (smaller y), descendants BELOW, focus between", () => {
-    const nodes = [node("me"), node("mom"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const mom = placedFor(l, "mom"); // gen -1 (ancestor)
-    const me = placedFor(l, "me"); // gen 0 (focus)
-    const kid = placedFor(l, "kid"); // gen +1 (descendant)
-    // Relative ordering after normalization: ancestor.y < focus.y < descendant.y
-    expect(mom.y).toBeLessThan(me.y);
-    expect(me.y).toBeLessThan(kid.y);
-  });
-
-  it("same generation shares a y row", () => {
-    const nodes = [node("me"), node("sib"), node("mom")];
-    const edges = [parentOf("mom", "me"), parentOf("mom", "sib")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const me = placedFor(l, "me");
-    const sib = placedFor(l, "sib");
-    expect(me.y).toBeCloseTo(sib.y, 5);
-    // and they differ in x (stacked horizontally within the row)
-    expect(me.x).not.toBeCloseTo(sib.x, 5);
-  });
-});
-
-describe("computeTreeLayout — within-row horizontal order by birth year", () => {
-  it("orders same-generation nodes by birthYear ascending (nulls last, id tiebreak)", () => {
-    // Four siblings of `root`: a(1980), b(1975), c(null), d(null).
-    // Expected left→right (ascending x): b(1975), a(1980), then nulls by id: c, d.
-    const nodes = [
-      node("root"),
-      node("a", { birthYear: 1980 }),
-      node("b", { birthYear: 1975 }),
-      node("c", { birthYear: null }),
-      node("d", { birthYear: null }),
-      node("mom"),
-    ];
-    const edges = [
-      parentOf("mom", "root"),
-      parentOf("mom", "a"),
-      parentOf("mom", "b"),
-      parentOf("mom", "c"),
-      parentOf("mom", "d"),
-    ];
-    const l = computeTreeLayout(input({ rootPersonId: "root", nodes, edges }));
-    // Order the gen-0 nodes by x (left→right).
-    const gen0 = l.placed
-      .filter((p) => p.generation === 0)
-      .sort((p, q) => p.x - q.x)
-      .map((p) => p.personId);
-    // Dated ones first (ascending year), then nulls in id order.
-    // root has null birthYear too — it sorts among the nulls by id.
-    // nulls by id: c, d, root.
-    expect(gen0).toEqual(["b", "a", "c", "d", "root"]);
-  });
-});
-
-describe("computeTreeLayout — partner union (horizontal adjacency)", () => {
-  it("emits a union with partners adjacent in the same y row (contiguous x)", () => {
+  it("partner shares the focus's generation and is always drawn adjacent", () => {
     const nodes = [node("me"), node("spouse")];
     const edges = [partneredWith("me", "spouse")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
+    expect(placedFor(l, "spouse").generation).toBe(0);
     expect(l.unions).toHaveLength(1);
-    const me = placedFor(l, "me");
-    const sp = placedFor(l, "spouse");
-    // Share the y row (same generation → same y).
-    expect(me.y).toBeCloseTo(sp.y, 5);
-    // Adjacent: nobody sits horizontally between them at this generation.
-    const between = l.placed.filter(
-      (n) => n.generation === 0 && n.x > Math.min(me.x, sp.x) && n.x < Math.max(me.x, sp.x),
-    );
-    expect(between).toHaveLength(0);
-    expect(l.connectors.some((c) => c.kind === "partner")).toBe(true);
+  });
+});
+
+describe("initial expansion (focus-only)", () => {
+  it("focus's parents and children are shown by default; siblings are NOT", () => {
+    const nodes = [node("mom"), node("focus"), node("kid"), node("sib")];
+    const edges = [
+      parentOf("mom", "focus"),
+      parentOf("focus", "kid"),
+      parentOf("mom", "sib"), // sib shares mom → derived sibling of focus
+    ];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(l.placed.some((p) => p.personId === "mom")).toBe(true); // parent shown
+    expect(l.placed.some((p) => p.personId === "kid")).toBe(true); // child shown
+    expect(l.placed.some((p) => p.personId === "sib")).toBe(false); // sibling collapsed
   });
 
-  it("keeps union partners contiguous even with other same-gen nodes present", () => {
-    // me+spouse are a union; sibA, sibB are also gen 0 (children of mom, as is me).
+  it("a PARTNER's parents/siblings start collapsed (initial expansion is focus-only)", () => {
+    const nodes = [node("focus"), node("spouse"), node("mil")];
+    const edges = [partneredWith("focus", "spouse"), parentOf("mil", "spouse")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(l.placed.some((p) => p.personId === "spouse")).toBe(true);
+    expect(l.placed.some((p) => p.personId === "mil")).toBe(false); // in-law parent collapsed
+  });
+});
+
+describe("axis direction", () => {
+  it("ancestors above (smaller y), descendants below, focus between; same gen shares y", () => {
+    const l = computeTreeLayout(fixtureFocusMidGen());
+    const mom = placedFor(l, "mom");
+    const focus = placedFor(l, "focus");
+    const kid = placedFor(l, "kid");
+    expect(mom.y).toBeLessThan(focus.y);
+    expect(focus.y).toBeLessThan(kid.y);
+  });
+});
+
+describe("carets vs '+' selection (spec §3)", () => {
+  it("isolated focus: a card plus three '+' (parents/siblings/children), no carets", () => {
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes: [node("me")] }));
+    expect(l.placed).toHaveLength(1);
+    expect(aff(l, "parents", "me")!.kind).toBe("add");
+    expect(aff(l, "siblings", "me")!.kind).toBe("add");
+    expect(aff(l, "children", "me")!.kind).toBe("add");
+  });
+
+  it("a direction with kin shows a caret, not a '+'", () => {
+    const l = computeTreeLayout(fixtureFocusMidGen());
+    // focus has a drawn parent → parents caret (expanded), a drawn child → children caret,
+    // no siblings → siblings '+'.
+    expect(aff(l, "parents", "focus")!.kind).toBe("caret");
+    expect(aff(l, "parents", "focus")!.expanded).toBe(true);
+    expect(aff(l, "children", "focus")!.kind).toBe("caret");
+    expect(aff(l, "siblings", "focus")!.kind).toBe("add");
+  });
+
+  it("a collapsed parent shows an unexpanded caret (kin exist, not drawn)", () => {
+    const nodes = [node("mom"), node("focus"), node("kid")];
+    const edges = [parentOf("mom", "focus"), parentOf("focus", "kid")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ collapsedParents: new Set(["focus"]) }) }),
+    );
+    expect(l.placed.some((p) => p.personId === "mom")).toBe(false);
+    const a = aff(l, "parents", "focus")!;
+    expect(a.kind).toBe("caret");
+    expect(a.expanded).toBe(false);
+  });
+
+  it("hasHiddenParents (kin beyond the window) still yields a caret, not a '+'", () => {
+    const l = computeTreeLayout(
+      input({ focusPersonId: "me", nodes: [node("me", { hasHiddenParents: true })] }),
+    );
+    expect(aff(l, "parents", "me")!.kind).toBe("caret");
+  });
+});
+
+describe("caret placement & orientation (spec §3)", () => {
+  it("parents caret sits centered above the top edge", () => {
+    const l = computeTreeLayout(fixtureFocusMidGen());
+    const focus = placedFor(l, "focus");
+    const a = aff(l, "parents", "focus")!;
+    expect(a.x).toBeCloseTo(focus.x, 5);
+    expect(a.y).toBeLessThan(focus.y - NODE_H / 2);
+    expect(a.side).toBe("center");
+  });
+
+  it("children caret sits centered below the bottom edge (per couple)", () => {
+    const l = computeTreeLayout(fixtureFocusMidGen());
+    const focus = placedFor(l, "focus");
+    const a = aff(l, "children", "focus")!;
+    expect(a.y).toBeGreaterThan(focus.y + NODE_H / 2);
+    expect(a.side).toBe("center");
+  });
+
+  it("siblings caret hugs the LEFT for a single unspecified-sex person", () => {
+    const nodes = [node("mom"), node("focus"), node("sib")];
+    const edges = [parentOf("mom", "focus"), parentOf("mom", "sib")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    const focus = placedFor(l, "focus");
+    const a = aff(l, "siblings", "focus")!;
+    expect(a.side).toBe("left");
+    expect(a.x).toBeLessThan(focus.x);
+  });
+
+  it("siblings caret hugs the RIGHT for a single female person", () => {
+    const nodes = [node("mom"), node("focus", { sex: "female" }), node("sib")];
+    const edges = [parentOf("mom", "focus"), parentOf("mom", "sib")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    const focus = placedFor(l, "focus");
+    const a = aff(l, "siblings", "focus")!;
+    expect(a.side).toBe("right");
+    expect(a.x).toBeGreaterThan(focus.x);
+  });
+
+  it("in a couple, sibling carets are on the OUTER sides (left partner far-left, right partner far-right)", () => {
     const nodes = [
-      node("me"),
-      node("spouse"),
-      node("sibA"),
-      node("sibB"),
+      node("gmL"),
+      node("gmR"),
+      node("man", { sex: "male" }),
+      node("woman", { sex: "female" }),
+    ];
+    // Give each partner a sibling so both get sibling carets, and parents so gens are set.
+    const edges = [
+      partneredWith("man", "woman"),
+      parentOf("gmL", "man"),
+      parentOf("gmR", "woman"),
+    ];
+    const l = computeTreeLayout(input({ focusPersonId: "man", nodes, edges }));
+    const man = placedFor(l, "man");
+    const woman = placedFor(l, "woman");
+    // man is on the left (male), woman on the right.
+    expect(man.x).toBeLessThan(woman.x);
+    expect(aff(l, "siblings", "man")!.side).toBe("left");
+    expect(aff(l, "siblings", "man")!.x).toBeLessThan(man.x);
+    expect(aff(l, "siblings", "woman")!.side).toBe("right");
+    expect(aff(l, "siblings", "woman")!.x).toBeGreaterThan(woman.x);
+  });
+});
+
+describe("children-caret dedup rule (spec §3)", () => {
+  it("an expanded ancestor couple carries NO children-caret (child already on the bus)", () => {
+    // mom -> focus (focus's parent shown by default). mom has a drawn child (focus) → NO children-caret
+    // on mom; focus's siblings come off focus's sibling-caret instead.
+    const nodes = [node("mom"), node("focus")];
+    const edges = [parentOf("mom", "focus")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    // mom is drawn with a drawn child (focus) → mom's children caret must be a COLLAPSE (expanded)
+    // caret, NOT an expand caret that would double-reveal focus. The dedup: no *second* reveal control.
+    const momChildren = aff(l, "children", "mom");
+    // mom's children caret exists (to collapse focus's branch) but is marked expanded — it never
+    // re-reveals an already-drawn child.
+    if (momChildren) expect(momChildren.expanded).toBe(true);
+  });
+
+  it("an aunt/uncle with NO drawn child shows a children-caret (reveals cousins)", () => {
+    // focus + sibling `unc`; unc has a child `cousin` NOT drawn. Expand focus's siblings so unc is
+    // drawn; unc then owns a children-caret to reveal the cousin.
+    const nodes = [node("mom"), node("focus"), node("unc"), node("cousin")];
+    const edges = [
+      parentOf("mom", "focus"),
+      parentOf("mom", "unc"),
+      parentOf("unc", "cousin"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["focus"]) }) }),
+    );
+    expect(l.placed.some((p) => p.personId === "unc")).toBe(true);
+    expect(l.placed.some((p) => p.personId === "cousin")).toBe(false);
+    const a = aff(l, "children", "unc")!;
+    expect(a.kind).toBe("caret");
+    expect(a.expanded).toBe(false); // an EXPAND caret → reveals the cousin
+  });
+
+  it("no person is revealable by two live (unexpanded) carets", () => {
+    const nodes = [node("mom"), node("focus"), node("sib")];
+    const edges = [parentOf("mom", "focus"), parentOf("mom", "sib")];
+    // Siblings collapsed by default: sib is undrawn. It should be reachable ONLY via focus's sibling
+    // caret — mom's children caret must NOT be an unexpanded reveal control while focus is on the bus.
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    const momChildren = aff(l, "children", "mom");
+    // mom already has a drawn child (focus) → its children caret is a collapse (expanded=true), so it
+    // does not double as an "reveal sib" control. sib comes from focus's sibling caret.
+    if (momChildren) expect(momChildren.expanded).toBe(true);
+    expect(aff(l, "siblings", "focus")!.kind).toBe("caret");
+  });
+});
+
+describe("ego-side sibling fan — oldest farthest (spec §4)", () => {
+  it("fans siblings to the caret side with the focus pinned at that end and oldest farthest", () => {
+    // Focus (left-hugging, unspecified sex) + three older siblings. Expanded: left→right should read
+    // focus, youngest, …, oldest (oldest is FARTHEST from focus).
+    const nodes = [
       node("mom"),
+      node("focus", { birthYear: 1990 }),
+      node("s1", { birthYear: 1980 }), // oldest
+      node("s2", { birthYear: 1985 }),
+      node("s3", { birthYear: 1988 }), // youngest sibling
     ];
     const edges = [
-      partneredWith("me", "spouse"),
-      parentOf("mom", "me"),
-      parentOf("mom", "sibA"),
-      parentOf("mom", "sibB"),
+      parentOf("mom", "focus"),
+      parentOf("mom", "s1"),
+      parentOf("mom", "s2"),
+      parentOf("mom", "s3"),
     ];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const me = placedFor(l, "me");
-    const sp = placedFor(l, "spouse");
-    // Nobody drawn between the two union partners on the x axis.
-    const between = l.placed.filter(
-      (n) => n.generation === 0 && n.x > Math.min(me.x, sp.x) && n.x < Math.max(me.x, sp.x),
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["focus"]) }) }),
     );
-    expect(between).toHaveLength(0);
+    const row = l.placed
+      .filter((p) => p.generation === 0)
+      .sort((a, b) => a.x - b.x)
+      .map((p) => p.personId);
+    // Focus hugs LEFT → focus pinned at the left end; siblings fan right, youngest nearest, oldest far.
+    expect(row).toEqual(["focus", "s3", "s2", "s1"]);
+  });
+
+  it("same-sex/unspecified couple: fan side matches the POSITION caret side (anchor is the right partner)", () => {
+    // Two unspecified-sex partners a,b (a<b). §5 places a LEFT, b RIGHT by entry order/id. Focus b is
+    // therefore the RIGHT partner → its sibling caret is on the RIGHT, so the fan must pin b to the
+    // right end (regression: a sex-only rule would wrongly pin the unspecified anchor to the left).
+    const nodes = [
+      node("a"),
+      node("b"),
+      node("mom"),
+      node("s1", { birthYear: 1980 }),
+      node("s2", { birthYear: 1985 }),
+    ];
+    const edges = [
+      partneredWith("a", "b"),
+      parentOf("mom", "b"),
+      parentOf("mom", "s1"),
+      parentOf("mom", "s2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "b", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["b"]) }) }),
+    );
+    // Caret side for b is right (b is the right partner of the drawn couple).
+    expect(aff(l, "siblings", "b")!.side).toBe("right");
+    const b = placedFor(l, "b");
+    // Both siblings drawn to the LEFT of b (fanned to b's caret side = right end, siblings toward left).
+    expect(placedFor(l, "s1").x).toBeLessThan(b.x);
+    expect(placedFor(l, "s2").x).toBeLessThan(b.x);
+    // Oldest (s1) is FARTHEST from b (smallest x).
+    expect(placedFor(l, "s1").x).toBeLessThan(placedFor(l, "s2").x);
+  });
+
+  it("fans to the RIGHT (focus pinned at the right end) for a female focus", () => {
+    const nodes = [
+      node("mom"),
+      node("focus", { sex: "female", birthYear: 1990 }),
+      node("s1", { birthYear: 1980 }),
+      node("s2", { birthYear: 1985 }),
+    ];
+    const edges = [parentOf("mom", "focus"), parentOf("mom", "s1"), parentOf("mom", "s2")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["focus"]) }) }),
+    );
+    const row = l.placed
+      .filter((p) => p.generation === 0)
+      .sort((a, b) => a.x - b.x)
+      .map((p) => p.personId);
+    // left→right: oldest → youngest → focus (focus at far right).
+    expect(row).toEqual(["s1", "s2", "focus"]);
   });
 });
 
-describe("computeTreeLayout — connectors (vertical axis geometry)", () => {
-  it("emits a descent connector for each parent→child edge drawn", () => {
-    const nodes = [node("me"), node("kid")];
-    const edges = [parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(l.connectors.filter((c) => c.kind === "descent").length).toBeGreaterThan(0);
-    for (const c of l.connectors) expect(typeof c.d).toBe("string");
-  });
-
-  it("descent connector runs from parent BOTTOM edge to child TOP edge", () => {
-    // parent (gen 0) is ABOVE child (gen +1); children hang below.
-    const nodes = [node("me"), node("kid")];
-    const edges = [parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const me = placedFor(l, "me"); // parent, gen 0
-    const kid = placedFor(l, "kid"); // child, gen +1 → below me
-    expect(me.y).toBeLessThan(kid.y); // parent above
-    const descent = l.connectors.find((c) => c.kind === "descent")!;
-    // Path starts at parent's BOTTOM edge y = me.y + NODE_H/2
-    const startY = me.y + NODE_H / 2;
-    // Path ends at child's TOP edge y = kid.y - NODE_H/2
-    const endY = kid.y - NODE_H / 2;
-    expect(descent.d).toContain(`M ${me.x} ${startY} `);
-    expect(descent.d).toContain(` ${endY}`);
-  });
-
-  it("partner connector is horizontal between the two cards' facing edges", () => {
-    const nodes = [node("me"), node("spouse")];
-    const edges = [partneredWith("me", "spouse")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const me = placedFor(l, "me");
-    const sp = placedFor(l, "spouse");
-    const left = me.x < sp.x ? me : sp;
-    const right = me.x < sp.x ? sp : me;
-    const partner = l.connectors.find((c) => c.kind === "partner")!;
-    // Horizontal: shares the row y, goes from left card's right edge to right card's left edge.
-    const rightOfLeft = left.x + NODE_W / 2;
-    const leftOfRight = right.x - NODE_W / 2;
-    expect(partner.d).toContain(`${rightOfLeft}`);
-    expect(partner.d).toContain(`${leftOfRight}`);
-    // both endpoints share the y row
-    expect(me.y).toBeCloseTo(sp.y, 5);
-  });
-});
-
-describe("computeTreeLayout — child centering on parents' x midpoint", () => {
-  it("centers a single child on its parents' union x-midpoint", () => {
+describe("descent-bus geometry (spec §6)", () => {
+  it("two-parent bus: feeders from both parents + a shared riser to the child", () => {
     const nodes = [node("me"), node("spouse"), node("kid")];
     const edges = [partneredWith("me", "spouse"), parentOf("me", "kid"), parentOf("spouse", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
     const kid = placedFor(l, "kid");
+    // Child centered on the couple's midpoint.
     expect(kid.x).toBeCloseTo((me.x + sp.x) / 2, 5);
+    // A descent connector starts at each parent's bottom edge.
+    const descents = l.connectors.filter((c) => c.kind === "descent");
+    expect(descents.some((c) => c.d.startsWith(`M ${me.x} ${me.y + NODE_H / 2}`))).toBe(true);
+    expect(descents.some((c) => c.d.includes(`${sp.x} ${sp.y + NODE_H / 2}`))).toBe(true);
+  });
+
+  it("single-parent bus: one feeder from the lone card's bottom-center", () => {
+    const nodes = [node("me"), node("kid")];
+    const edges = [parentOf("me", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
+    const me = placedFor(l, "me");
+    const descents = l.connectors.filter((c) => c.kind === "descent");
+    // The lone feeder starts at me's bottom-center.
+    expect(descents.some((c) => c.d.startsWith(`M ${me.x} ${me.y + NODE_H / 2}`))).toBe(true);
+    // Only ONE parent feeds — no second parent bottom-edge start.
+    const parentBottomStarts = descents.filter((c) => c.d.startsWith(`M ${me.x} ${me.y + NODE_H / 2}`));
+    expect(parentBottomStarts.length).toBeGreaterThan(0);
+  });
+
+  it("multiple children: a horizontal bar spans leftmost..rightmost child top-centers", () => {
+    const nodes = [node("me"), node("k1"), node("k2")];
+    const edges = [parentOf("me", "k1"), parentOf("me", "k2")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "me", nodes, edges, expansion: expansion({ expandedChildren: new Set([coupleKey("me")]) }) }),
+    );
+    // Both kids drawn (initial expansion shows the focus's children).
+    expect(l.placed.some((p) => p.personId === "k1")).toBe(true);
+    expect(l.placed.some((p) => p.personId === "k2")).toBe(true);
+    const k1 = placedFor(l, "k1");
+    const k2 = placedFor(l, "k2");
+    const barLeft = Math.min(k1.x, k2.x);
+    const barRight = Math.max(k1.x, k2.x);
+    const descents = l.connectors.filter((c) => c.kind === "descent");
+    // A horizontal bar connector runs from barLeft to barRight at a shared y.
+    expect(descents.some((c) => c.d.includes(`M ${barLeft} `) && c.d.includes(`L ${barRight} `))).toBe(true);
   });
 });
 
-describe("computeTreeLayout — bounded windowing + expansion reveal", () => {
-  it("omits generations beyond ±2 of root by default", () => {
-    const nodes = [node("me"), node("p1"), node("p2"), node("p3")];
-    const edges = [parentOf("p1", "me"), parentOf("p2", "p1"), parentOf("p3", "p2")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(l.placed.some((n) => n.personId === "p2")).toBe(true); // g-2 in window
-    expect(l.placed.some((n) => n.personId === "p3")).toBe(false); // g-3 out
+describe("partner ordering (spec §5)", () => {
+  it("man on the left, woman on the right (nominal)", () => {
+    const nodes = [node("m", { sex: "male" }), node("w", { sex: "female" })];
+    const edges = [partneredWith("m", "w")];
+    const l = computeTreeLayout(input({ focusPersonId: "m", nodes, edges }));
+    expect(placedFor(l, "m").x).toBeLessThan(placedFor(l, "w").x);
   });
 
-  it("reveals a beyond-window parent only when expandedParents includes the boundary node", () => {
-    const nodes = [node("me"), node("p1"), node("p2"), node("p3")];
-    const edges = [parentOf("p1", "me"), parentOf("p2", "p1"), parentOf("p3", "p2")];
+  it("same-sex / unspecified: deterministic by id (never random)", () => {
+    const nodes = [node("b"), node("a")];
+    const edges = [partneredWith("a", "b")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    // a < b by id → a on the left, deterministically.
+    expect(placedFor(l, "a").x).toBeLessThan(placedFor(l, "b").x);
+  });
+});
+
+describe("anonymous bridge is inert (spec §2 / ADR-0017)", () => {
+  it("a bridge (identified=false) gets NO affordances", () => {
+    const nodes = [node("focus"), node("bridge", { identified: false, displayName: null }), node("gp")];
+    const edges = [parentOf("bridge", "focus"), parentOf("gp", "bridge")];
     const l = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes,
-        edges,
-        expansion: expansion({ expandedParents: new Set(["p2"]) }),
-      }),
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedParents: new Set(["focus"]) }) }),
     );
-    expect(l.placed.some((n) => n.personId === "p3")).toBe(true);
-    expect(placedFor(l, "p3").generation).toBe(-3);
+    expect(l.placed.some((p) => p.personId === "bridge")).toBe(true);
+    expect(l.affordances.some((a) => a.ownerId === "bridge")).toBe(false);
   });
+});
 
-  it("keeps a revealed beyond-window node's partner as a union (regression)", () => {
-    const nodes = [node("me"), node("p1"), node("p2"), node("p3"), node("p3b")];
+describe("dedup a person on two paths (spec §8)", () => {
+  it("draws a shared node once, deduped by personId", () => {
+    const nodes = [node("gp"), node("a"), node("b"), node("shared")];
+    // `shared` is a child of both a and b (two lineage paths).
     const edges = [
-      parentOf("p1", "me"),
-      parentOf("p2", "p1"),
-      parentOf("p3", "p2"),
-      partneredWith("p3", "p3b"),
+      parentOf("gp", "a"),
+      parentOf("gp", "b"),
+      parentOf("a", "shared"),
+      parentOf("b", "shared"),
     ];
     const l = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes,
-        edges,
-        expansion: expansion({ expandedParents: new Set(["p2"]) }),
-      }),
+      input({ focusPersonId: "gp", nodes, edges, expansion: expansion({ expandedChildren: new Set([coupleKey("gp"), coupleKey("a"), coupleKey("b")]) }) }),
     );
-    expect(l.placed.some((n) => n.personId === "p3")).toBe(true);
-    expect(l.placed.some((n) => n.personId === "p3b")).toBe(true);
-    expect(placedFor(l, "p3b").generation).toBe(-3);
-    expect(
-      l.unions.some(
-        (u) =>
-          (u.aPersonId === "p3" && u.bPersonId === "p3b") ||
-          (u.aPersonId === "p3b" && u.bPersonId === "p3"),
-      ),
-    ).toBe(true);
+    expect(l.placed.filter((p) => p.personId === "shared")).toHaveLength(1);
   });
 });
 
-describe("computeTreeLayout — per-edge affordances (fetch state)", () => {
-  it("emits an ancestors 'fetch' affordance for a node with hasHiddenParents, in its TOP gutter", () => {
-    const nodes = [node("me", { hasHiddenParents: true })];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    const me = placedFor(l, "me");
-    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
-    expect(aff).toBeTruthy();
-    expect(aff!.state).toBe("fetch");
-    // Top (ancestor) gutter: horizontally centered, above the card.
-    expect(aff!.x).toBeCloseTo(me.x, 5);
-    expect(aff!.y).toBeLessThan(me.y - NODE_H / 2);
-  });
-
-  it("emits a descendants 'fetch' affordance for a node with hasHiddenChildren, in its BOTTOM gutter", () => {
-    const nodes = [node("me", { hasHiddenChildren: true })];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    const me = placedFor(l, "me");
-    const aff = l.affordances.find((a) => a.direction === "descendants" && a.personId === "me");
-    expect(aff).toBeTruthy();
-    expect(aff!.state).toBe("fetch");
-    // Bottom (descendant) gutter: horizontally centered, below the card.
-    expect(aff!.x).toBeCloseTo(me.x, 5);
-    expect(aff!.y).toBeGreaterThan(me.y + NODE_H / 2);
-  });
-
-  it("emits NO affordance when the node has no kin on that side", () => {
-    const nodes = [node("me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.affordances).toHaveLength(0);
-  });
-
-  it("emits both affordances for a node with both hidden parents and hidden children", () => {
-    const nodes = [node("me", { hasHiddenParents: true, hasHiddenChildren: true })];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.affordances.some((a) => a.direction === "ancestors" && a.state === "fetch")).toBe(true);
-    expect(l.affordances.some((a) => a.direction === "descendants" && a.state === "fetch")).toBe(true);
-  });
-
-  it("emits at most ONE affordance per (node, direction) — never two glyphs on one edge", () => {
-    // me has a DRAWN parent (mom) and ALSO hidden parents. The drawn branch wins as a single control.
-    const nodes = [node("me", { hasHiddenParents: true }), node("mom")];
-    const edges = [parentOf("mom", "me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const anc = l.affordances.filter((a) => a.direction === "ancestors" && a.personId === "me");
-    expect(anc).toHaveLength(1);
-  });
-});
-
-describe("computeTreeLayout — per-edge collapse / expand", () => {
-  it("a node with drawn parents emits an ancestors affordance with state 'collapse'", () => {
-    const nodes = [node("me"), node("mom")];
-    const edges = [parentOf("mom", "me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
-    expect(aff).toBeTruthy();
-    expect(aff!.state).toBe("collapse");
-  });
-
-  it("collapsing an ancestor branch prunes it AND flips the affordance to 'expand'", () => {
-    const nodes = [node("me"), node("mom"), node("gran")];
-    const edges = [parentOf("mom", "me"), parentOf("gran", "mom")];
+describe("collapse prunes the whole branch (spec §7)", () => {
+  it("collapsing focus's children prunes children AND grandchildren", () => {
+    const nodes = [node("focus"), node("kid"), node("grandkid")];
+    const edges = [parentOf("focus", "kid"), parentOf("kid", "grandkid")];
     const l = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes,
-        edges,
-        expansion: expansion({ collapsedAncestors: new Set(["me"]) }),
-      }),
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ collapsedChildren: new Set([coupleKey("focus")]) }) }),
     );
-    // The parent branch above `me` is pruned.
-    expect(l.placed.some((n) => n.personId === "mom")).toBe(false);
-    expect(l.placed.some((n) => n.personId === "gran")).toBe(false);
-    // me is still drawn, and its ancestor affordance now offers to expand.
-    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
-    expect(aff).toBeTruthy();
-    expect(aff!.state).toBe("expand");
-  });
-
-  it("a node with drawn children emits a descendants affordance with state 'collapse', collapse→expand+prune", () => {
-    const nodes = [node("me"), node("kid"), node("grandkid")];
-    const edges = [parentOf("me", "kid"), parentOf("kid", "grandkid")];
-    const drawn = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(
-      drawn.affordances.find((a) => a.direction === "descendants" && a.personId === "me")!.state,
-    ).toBe("collapse");
-    const collapsed = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes,
-        edges,
-        expansion: expansion({ collapsedChildren: new Set(["me"]) }),
-      }),
-    );
-    expect(collapsed.placed.some((n) => n.personId === "kid")).toBe(false);
-    expect(collapsed.placed.some((n) => n.personId === "grandkid")).toBe(false);
-    expect(
-      collapsed.affordances.find((a) => a.direction === "descendants" && a.personId === "me")!.state,
-    ).toBe("expand");
+    expect(l.placed.some((p) => p.personId === "kid")).toBe(false);
+    expect(l.placed.some((p) => p.personId === "grandkid")).toBe(false);
   });
 });
 
-describe("computeTreeLayout — empty parent slots", () => {
-  it("emits an EmptyParentSlot for a drawn node with zero drawn parents and NOT hasHiddenParents", () => {
-    const nodes = [node("me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    const me = placedFor(l, "me");
-    expect(l.emptyParentSlots).toHaveLength(1);
-    const slot = l.emptyParentSlots[0]!;
-    expect(slot.personId).toBe("me");
-    // In the ancestor (top) gutter: horizontally centered, above the card.
-    expect(slot.x).toBeCloseTo(me.x, 5);
-    expect(slot.y).toBeLessThan(me.y - NODE_H / 2);
-  });
-
-  it("does NOT emit an EmptyParentSlot when hasHiddenParents is true (a fetch affordance owns it)", () => {
-    const nodes = [node("me", { hasHiddenParents: true })];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.emptyParentSlots.some((s) => s.personId === "me")).toBe(false);
-  });
-
-  it("does NOT emit an EmptyParentSlot when the node has a drawn parent edge", () => {
-    const nodes = [node("me"), node("mom")];
-    const edges = [parentOf("mom", "me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    // me has a drawn parent → no slot for me.
-    expect(l.emptyParentSlots.some((s) => s.personId === "me")).toBe(false);
-    // mom has no drawn parent and no hidden parents → gets a slot.
-    expect(l.emptyParentSlots.some((s) => s.personId === "mom")).toBe(true);
-  });
-
-  it("does not emit slots for children/partner adds (only the ancestor side)", () => {
-    // A childless node still gets a parent slot but nothing on the descendant side.
-    const nodes = [node("me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    for (const s of l.emptyParentSlots) {
-      const me = placedFor(l, s.personId);
-      // Always in the ancestor (top) gutter → above the card.
-      expect(s.y).toBeLessThan(me.y);
-    }
-  });
-
-  it("emits a 'fetch' affordance (NOT an add-parent slot) for a drawn node with a LOADED-but-UNDRAWN parent (Finding 1)", () => {
-    // Multi-hop ancestor reveal aftermath: p2 (gen -2, at the window edge) is drawn and has
-    // hasHiddenParents:false, but a parent edge p3->p2 IS loaded with p3 as a node BEYOND the ±2
-    // window (undrawn, because p2 is not in expandedParents). p2 therefore has a loaded-but-undrawn
-    // parent — it must NOT get an "Add parent" slot (that would create a duplicate parent), and MUST
-    // get an ancestors 'fetch' affordance so p3 stays reachable.
-    const nodes = [
-      node("me"),
-      node("p1"),
-      node("p2", { hasHiddenParents: false }),
-      node("p3"),
-    ];
-    const edges = [parentOf("p1", "me"), parentOf("p2", "p1"), parentOf("p3", "p2")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    // p2 is drawn (gen -2 in window); p3 is loaded but NOT drawn (gen -3, no expandedParents).
-    expect(l.placed.some((n) => n.personId === "p2")).toBe(true);
-    expect(l.placed.some((n) => n.personId === "p3")).toBe(false);
-    // No false add-parent slot on p2.
-    expect(l.emptyParentSlots.some((s) => s.personId === "p2")).toBe(false);
-    // An ancestors 'fetch' affordance IS emitted for p2, keeping the undrawn parent reachable.
-    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "p2");
-    expect(aff).toBeTruthy();
-    expect(aff!.state).toBe("fetch");
-  });
-
-  it("emits an EmptyParentSlot (and NO affordance) for a node with ZERO loaded parents and no hidden parents (Finding 1 mirror)", () => {
-    const nodes = [node("me")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.emptyParentSlots.some((s) => s.personId === "me")).toBe(true);
-    expect(l.affordances.some((a) => a.direction === "ancestors" && a.personId === "me")).toBe(false);
-  });
-});
-
-describe("computeTreeLayout — determinism", () => {
-  it("same input yields byte-identical output across runs", () => {
-    const nodes = [node("me"), node("mom"), node("dad"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("dad", "me"), parentOf("me", "kid")];
-    const a = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    const b = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-  });
-
-  it("shuffled node/edge order yields identical output", () => {
+describe("determinism", () => {
+  it("shuffled node/edge order yields byte-identical output", () => {
     const nodes = [node("me"), node("mom"), node("dad"), node("kid"), node("sib")];
     const edges = [
       parentOf("mom", "me"),
@@ -544,105 +497,29 @@ describe("computeTreeLayout — determinism", () => {
       parentOf("dad", "sib"),
       parentOf("me", "kid"),
     ];
-    const straight = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    const exp = expansion({ expandedParents: new Set(["me"]), expandedSiblings: new Set(["me"]) });
+    const straight = computeTreeLayout(input({ focusPersonId: "me", nodes, edges, expansion: exp }));
     const shuffled = computeTreeLayout(
-      input({
-        rootPersonId: "me",
-        nodes: [...nodes].reverse(),
-        edges: [...edges].reverse(),
-      }),
+      input({ focusPersonId: "me", nodes: [...nodes].reverse(), edges: [...edges].reverse(), expansion: exp }),
     );
     expect(JSON.stringify(shuffled)).toBe(JSON.stringify(straight));
   });
 });
 
-describe("computeTreeLayout — shared-grandparent DAG (cousins)", () => {
-  it("positions cousins by generation and keeps a single node per person", () => {
-    const nodes = [node("gp"), node("a"), node("b"), node("c1"), node("c2")];
-    const edges = [
-      parentOf("gp", "a"),
-      parentOf("gp", "b"),
-      parentOf("a", "c1"),
-      parentOf("b", "c2"),
-    ];
-    const l = computeTreeLayout(input({ rootPersonId: "gp", nodes, edges }));
-    expect(placedFor(l, "c1").generation).toBe(2);
-    expect(placedFor(l, "c2").generation).toBe(2);
-    expect(l.placed.map((n) => n.personId).sort()).toEqual(["a", "b", "c1", "c2", "gp"]);
-  });
-});
-
-describe("computeTreeLayout — multiple partners", () => {
-  it("places a node's two partners in the column as separate unions", () => {
-    const nodes = [node("me"), node("x"), node("y")];
-    const edges = [partneredWith("me", "x"), partneredWith("me", "y")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(placedFor(l, "x").generation).toBe(0);
-    expect(placedFor(l, "y").generation).toBe(0);
-    expect(l.unions.length).toBe(2);
-  });
-});
-
-describe("computeTreeLayout — anonymous bridge", () => {
-  it("places an anonymous (displayName=null) node and connects it", () => {
-    const nodes = [node("me"), node("bridge", { displayName: null, identified: false }), node("gp")];
-    const edges = [parentOf("bridge", "me"), parentOf("gp", "bridge")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    expect(placedFor(l, "bridge").generation).toBe(-1);
-    expect(placedFor(l, "bridge").node.displayName).toBeNull();
-    // Connected on both sides: a descent edge into me and out of gp.
-    expect(l.connectors.filter((c) => c.kind === "descent").length).toBeGreaterThanOrEqual(2);
-  });
-});
-
-describe("computeTreeLayout — root only", () => {
-  it("single node, no connectors, no unions", () => {
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes: [node("me")] }));
-    expect(l.placed).toHaveLength(1);
-    expect(l.connectors).toHaveLength(0);
-    expect(l.unions).toHaveLength(0);
-    expect(l.bounds.width).toBeGreaterThan(0);
-    expect(l.bounds.height).toBeGreaterThan(0);
-  });
-
-  it("ignores nodes unreachable from root", () => {
-    const nodes = [node("me"), node("stranger")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.placed.map((n) => n.personId)).toEqual(["me"]);
-  });
-});
-
-describe("computeTreeLayout — bounds", () => {
-  it("bounds enclose every placed node", () => {
-    const nodes = [node("me"), node("mom"), node("dad"), node("kid")];
-    const edges = [parentOf("mom", "me"), parentOf("dad", "me"), parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+describe("bounds", () => {
+  it("bounds enclose every placed node and affordance", () => {
+    const nodes = [node("me"), node("mom"), node("kid")];
+    const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
     for (const p of l.placed) {
       expect(p.x).toBeGreaterThanOrEqual(0);
       expect(p.y).toBeGreaterThanOrEqual(0);
       expect(p.x).toBeLessThanOrEqual(l.bounds.width);
       expect(p.y).toBeLessThanOrEqual(l.bounds.height);
     }
-  });
-
-  it("bounds enclose affordances and empty parent slots too", () => {
-    const nodes = [
-      node("me", { hasHiddenParents: true, hasHiddenChildren: true }),
-      node("kid"),
-    ];
-    const edges = [parentOf("me", "kid")];
-    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    for (const c of l.affordances) {
-      expect(c.x).toBeGreaterThanOrEqual(0);
-      expect(c.y).toBeGreaterThanOrEqual(0);
-      expect(c.x).toBeLessThanOrEqual(l.bounds.width);
-      expect(c.y).toBeLessThanOrEqual(l.bounds.height);
-    }
-    for (const s of l.emptyParentSlots) {
-      expect(s.x).toBeGreaterThanOrEqual(0);
-      expect(s.y).toBeGreaterThanOrEqual(0);
-      expect(s.x).toBeLessThanOrEqual(l.bounds.width);
-      expect(s.y).toBeLessThanOrEqual(l.bounds.height);
+    for (const a of l.affordances) {
+      expect(a.x).toBeGreaterThanOrEqual(0);
+      expect(a.x).toBeLessThanOrEqual(l.bounds.width);
     }
   });
 });

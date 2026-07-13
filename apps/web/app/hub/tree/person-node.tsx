@@ -1,49 +1,33 @@
 "use client";
 /**
- * PersonNode — one monogram node card in the visual family tree (spec §7/§8).
+ * PersonNode — one uniform card in the ego-centric visual family tree (spec §2).
  *
- * A pure presentational card. It handles the four visual states from §8:
- *   - You (accent border + accent monogram)
- *   - Living relative (plain card)
- *   - Deceased (muted tint, life span / "in memory")
- *   - Anonymous bridge (dashed border, italic "Unknown <relation>", `?` monogram)
+ * Top-to-bottom: Avatar · Name · Dates. Every card is uniform — no relation line, no "You" label, no
+ * focus/root distinction. The four visual facts:
+ *   - Avatar — the person's photo/image if present; else a deterministic colored monogram (hash of
+ *     `personId`, stable across renders); else `?`.
+ *   - Name — the click target that opens the read-only detail panel. Identified-but-nameless → a
+ *     fallback ("Unknown relative").
+ *   - Dates — dob–dod, dates only. Deceased `1948–1998`; living `1948–`; degrades gracefully.
+ *   - Sex bar — kept: the top-edge accent colored by sex.
+ *   - Anonymous bridge (`identified === false`) — dashed border, `?` avatar, italic "Unknown
+ *     <relation>", no dates. INERT (carets/kebab suppressed by the canvas/layout, not here).
  *
- * The monogram color is deterministic — hashed from `personId` — so the same person always draws the
- * same color across renders and sessions. This component draws ONLY the card; the expand/collapse
- * caret affordances are drawn by TreeCanvas as separate SVG glyphs (medium-weight chevrons).
- *
- * Sized to the layout's assumed card box (NODE_W×NODE_H = 150×172, a portrait card) so connectors
- * line up. Monogram sits on top; name + relation/life are centered beneath it.
+ * This component draws ONLY the card; carets/"+" and the descent bus are drawn by TreeCanvas.
  */
 import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
 
 export const NODE_W = 150;
-export const NODE_H = 172;
+export const NODE_H = 168;
 
 /** Full relation label set (mirrors /hub/kin's) — used for the anonymous-bridge sublabel. */
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
 
 /**
- * A relation-to-root label ("Parent", "You"), or empty when it can't be labeled from a relation.
- *
- * "You" is the VIEWER's own node — never merely the focal root. Re-rooting the tree on a relative
- * makes THEM the root (`isRoot`/`relationToRoot === "self"`), but they are still labeled by relation,
- * not "You". A focal root that isn't the viewer gets no relation line at all.
- */
-export function relationToRootLabel(node: TreeNode, isRoot: boolean, viewerPersonId: string | null = null): string {
-  if (viewerPersonId != null && node.personId === viewerPersonId) return hub.tree.you;
-  if (isRoot || node.relationToRoot === "self") return ""; // focal root that isn't the viewer: no relation line
-  if (node.relationToRoot === null) return "";
-  return RELATION_LABEL[node.relationToRoot];
-}
-
-/**
- * True only for a genuine anonymous BRIDGE node — a placeholder the model has NOT identified as a real
- * person (`identified === false`). This is spec §8's fourth state (dashed, italic, `?`, "Unknown
- * <relation>"). It is deliberately distinct from an identified-but-nameless person (`identified: true`
- * with a null `displayName`, a known #30 nullable-name deviation): that person IS real, so they get a
- * plain card — never the dashed bridge treatment — just with a fallback label.
+ * True only for a genuine anonymous BRIDGE node — a placeholder the model has NOT identified
+ * (`identified === false`, ADR-0017): dashed, italic, `?`, "Unknown <relation>". Distinct from an
+ * identified-but-nameless real person (`identified: true`, null `displayName`), who gets a plain card.
  */
 export function isAnonymousBridge(node: TreeNode): boolean {
   return !node.identified;
@@ -55,9 +39,8 @@ function hasName(node: TreeNode): boolean {
 }
 
 /**
- * The name shown for a node. A named person shows their name. An anonymous bridge is rendered from its
- * relation ("Unknown grandparent"). An identified-but-nameless person shows the generic "Unknown
- * relative" — real, but nothing to display.
+ * The name shown for a node. A named person shows their name. An anonymous bridge renders from its
+ * relation ("Unknown grandparent"). An identified-but-nameless person shows the generic fallback.
  */
 export function displayNameFor(node: TreeNode): string {
   if (hasName(node)) return node.displayName!;
@@ -68,18 +51,26 @@ export function displayNameFor(node: TreeNode): string {
   return hub.tree.unknownRelative;
 }
 
-/** The life line: "1920–1998 · in memory", "in memory · b.1920", "b.1948", or "". */
-export function lifeLineFor(node: TreeNode): string {
-  const span = hub.tree.lifeSpan(node.birthYear, node.deathYear);
+/**
+ * The dates line (spec §2): DATES ONLY. Deceased `1948–1998`; living `1948–`; degrade gracefully to
+ * what's known (`1948–`, `–1998`, or ""). No "in memory" phrase, no muted tint. An anonymous bridge
+ * shows no dates.
+ */
+export function datesLineFor(node: TreeNode): string {
+  if (isAnonymousBridge(node)) return "";
+  const b = node.birthYear;
+  const d = node.deathYear;
   if (node.lifeStatus === "deceased") {
-    // Both years ⇒ "1920–1998 · in memory"; else "in memory" (optionally with the one known year).
-    if (node.birthYear != null && node.deathYear != null) return `${span} · ${hub.tree.inMemory}`;
-    return span ? `${hub.tree.inMemory} · ${span}` : hub.tree.inMemory;
+    if (b != null && d != null) return `${b}–${d}`;
+    if (b != null) return `${b}–`;
+    if (d != null) return `–${d}`;
+    return "";
   }
-  return span; // living: "b.1948" or ""
+  // Living: birth year with an open range, or nothing.
+  return b != null ? `${b}–` : "";
 }
 
-/** The monogram initial — first letter of the name, `?` when there is no name to draw one from. */
+/** The monogram initial — first letter of the name, `?` when there is no name. */
 export function monogramFor(node: TreeNode): string {
   if (hasName(node)) {
     const ch = node.displayName!.trim().charAt(0);
@@ -89,8 +80,8 @@ export function monogramFor(node: TreeNode): string {
 }
 
 /**
- * Deterministic monogram color from a hash of `personId`. A stable HSL hue keeps colors distinct and
- * legible against the card while never depending on render order or time (determinism discipline).
+ * Deterministic monogram color from a hash of `personId`. Stable HSL hue — never depends on render
+ * order or time (determinism discipline).
  */
 export function monogramColor(personId: string): string {
   let h = 0;
@@ -101,48 +92,40 @@ export function monogramColor(personId: string): string {
   return `hsl(${hue} 45% 42%)`;
 }
 
-/**
- * The top-edge sex accent color, or null for `unknown`/bridge (no strip). Bridge nodes are always
- * unknown-sex placeholders, so they inherit the neutral no-strip treatment for free.
- */
+/** The top-edge sex accent color, or null for `unknown`/bridge (no strip). */
 function sexBarColor(node: TreeNode): string | null {
   if (node.sex === "male") return "var(--sex-male)";
   if (node.sex === "female") return "var(--sex-female)";
-  return null; // unknown / null
+  return null;
+}
+
+/** A photo/image URL for the person, if the model carries one. `TreeNode` has no image field in v1. */
+function photoUrlFor(node: TreeNode): string | null {
+  const url = (node as { imageUrl?: string | null }).imageUrl;
+  return typeof url === "string" && url.length > 0 ? url : null;
 }
 
 export interface PersonNodeProps {
   node: TreeNode;
-  isRoot: boolean;
-  /** The viewer's own personId — the one node labeled "You". Optional; wired by TreeCanvas. */
-  viewerPersonId?: string | null;
   onTap?: (personId: string) => void;
   /**
-   * Optional per-card ⋮ affordance (a <KebabMenu>), supplied by the canvas so PersonNode stays
-   * presentational and the menu gets the right adjacency counts. Rendered top-right, isolated from
-   * the card's tap target.
+   * Optional per-card ⋮ affordance (a <KebabMenu>), supplied by the canvas. Rendered top-right,
+   * isolated from the card's tap target. Suppressed by the canvas for anonymous bridge nodes.
    */
   kebab?: React.ReactNode;
 }
 
-export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: PersonNodeProps) {
-  // `anon` drives the spec §8 anonymous-BRIDGE styling (dashed border, italics) — reserved for a
-  // placeholder the model hasn't identified. An identified-but-nameless real person is NOT anon.
+export function PersonNode({ node, onTap, kebab }: PersonNodeProps) {
   const anon = isAnonymousBridge(node);
-  const deceased = node.lifeStatus === "deceased";
   const name = displayNameFor(node);
-  const relation = relationToRootLabel(node, isRoot, viewerPersonId ?? null);
-  const life = lifeLineFor(node);
+  const dates = datesLineFor(node);
   const initial = monogramFor(node);
+  const photo = photoUrlFor(node);
 
-  const border = isRoot
-    ? "2px solid var(--accent)"
-    : anon
-      ? "var(--border-width) dashed var(--border-strong)"
-      : "var(--border-width) solid var(--border)";
+  const border = anon
+    ? "var(--border-width) dashed var(--border-strong)"
+    : "var(--border-width) solid var(--border)";
 
-  // Top-edge sex accent strip (FamilySearch-style colored top border). Only drawn for male/female; the
-  // root/You accent frame still visually wins (a full 2px accent border around the whole card).
   const sexColor = sexBarColor(node);
 
   return (
@@ -161,9 +144,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
         onClick={() => onTap?.(node.personId)}
         aria-label={name}
         data-testid={`tree-node-${node.personId}`}
-        data-root={isRoot ? "true" : undefined}
         data-anon={anon ? "true" : undefined}
-        data-deceased={deceased ? "true" : undefined}
         style={{
           boxSizing: "border-box",
           position: "relative",
@@ -178,8 +159,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
           cursor: "pointer",
           borderRadius: "var(--radius-lg)",
           border,
-          background: deceased ? "var(--surface-page)" : "var(--surface-card)",
-          opacity: deceased ? 0.9 : 1,
+          background: "var(--surface-card)",
           font: "inherit",
           overflow: "hidden",
         }}
@@ -199,25 +179,44 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
             }}
           />
         )}
-        <span
-          aria-hidden="true"
-          style={{
-            flex: "0 0 auto",
-            width: 52,
-            height: 52,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: "var(--font-ui)",
-            fontWeight: 600,
-            fontSize: "1.35rem",
-            color: isRoot ? "var(--accent-on)" : "#fff",
-            background: isRoot ? "var(--accent)" : monogramColor(node.personId),
-          }}
-        >
-          {initial}
-        </span>
+        {/* Avatar: photo → monogram → `?`. */}
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photo}
+            alt=""
+            aria-hidden="true"
+            data-testid={`tree-node-photo-${node.personId}`}
+            style={{
+              flex: "0 0 auto",
+              width: 52,
+              height: 52,
+              borderRadius: "50%",
+              objectFit: "cover",
+            }}
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            data-testid={`tree-node-monogram-${node.personId}`}
+            style={{
+              flex: "0 0 auto",
+              width: 52,
+              height: 52,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "var(--font-ui)",
+              fontWeight: 600,
+              fontSize: "1.35rem",
+              color: "#fff",
+              background: anon ? "var(--border-strong)" : monogramColor(node.personId),
+            }}
+          >
+            {initial}
+          </span>
+        )}
         <span style={{ width: "100%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
           <span
             style={{
@@ -234,7 +233,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
           >
             {name}
           </span>
-          {(relation || life) && (
+          {dates && (
             <span
               style={{
                 fontFamily: "var(--font-ui)",
@@ -245,7 +244,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
                 textOverflow: "ellipsis",
               }}
             >
-              {[relation, life].filter(Boolean).join(" · ")}
+              {dates}
             </span>
           )}
         </span>

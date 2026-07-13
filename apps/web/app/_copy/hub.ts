@@ -608,51 +608,29 @@ export const hub = {
   },
   // Visual family tree (ADR-0016 tree renderer) — read-first, /hub/tree.
   tree: {
-    signedOut: "Sign in to see your family tree.",
     heading: "Family tree",
     // Link from the /hub/kin list surface across to the visual tree, and back.
     openTree: "View family tree",
     // Link from a story-detail byline into the tree, rooted on that story's narrator (Task 9).
     openInTree: "View in family tree",
     backToKin: "← Relatives",
-    // Empty states.
+    // Empty state (no-family only — an isolated focus is the tree itself, spec §8).
     noFamily: "Join or start a family to see your family tree.",
-    emptyRootOnly:
-      "You're the only person here so far. Add a relative to start your tree.",
-    addRelativeCta: "Add a relative",
-    // The You node.
-    you: "You",
     // Fallback for an unidentified bridge node, rendered from its relation.
     unknownOf: (relationLabel: string) => `Unknown ${relationLabel.toLowerCase()}`,
     unknownRelative: "Unknown relative",
-    // Life line on a node / in the panel.
-    inMemory: "In memory",
-    lifeSpan: (birth: number | null, death: number | null) =>
-      birth != null && death != null
-        ? `${birth}–${death}`
-        : death != null
-          ? `d. ${death}`
-          : birth != null
-            ? `b. ${birth}`
-            : "",
     // Canvas controls.
     fit: "Fit",
     pan: "Drag to pan",
     // Tap detail panel — read-only actions.
     panelStories: "Stories about them",
-    panelStoriesOf: (name: string) => `Stories about ${name}`,
     panelAddParent: "Add parent",
     panelAddChild: "Add child",
     panelAddSibling: "Add sibling",
     panelManageKin: "Manage kin",
-    // Generic load failure (fetch-on-expand / re-center).
-    loadFailed: "Couldn't load that part of the tree. Please try again.",
-    // --- 2026-07-12 pedigree-nav redesign (spec: kinship-tree-pedigree-nav-design.md) ---
-    // Panel re-root action — the ONLY re-root trigger (select/second-tap gesture removed).
-    centerHere: "Center tree here",
     // Panel add-partner link (relation=partner).
     addPartner: "Add partner",
-    // Shared KebabMenu (global toolbar ⋮ + optional per-card ⋮) labels.
+    // Per-card KebabMenu labels.
     // Neutral label for the ⋮ trigger itself (the menu holds several add actions, so it must not be
     // labeled as any single one).
     moreActions: "Add a relative",
@@ -660,16 +638,14 @@ export const hub = {
     kebabAddSibling: "Add sibling",
     kebabAddParent: "Add parent",
     kebabAddPartner: "Add partner",
-    // Inline empty-parent-slot label (layout's EmptyParentSlot affordance).
-    addParentSlot: "Add parent",
-    // Frontier-chevron aria labels (fetch off-screen kin at a boundary node).
-    showEarlier: "Show earlier generations",
-    showDescendants: "Show descendants",
-    // Per-box collapse/expand caret aria labels (collapse an already-drawn branch).
+    // Per-direction caret aria labels (collapse/expand an already-drawn branch; add via "+").
     collapseParents: "Collapse ancestors",
     expandParents: "Expand ancestors",
     collapseChildren: "Collapse descendants",
     expandChildren: "Expand descendants",
+    // Sibling caret aria labels (ego-centric redesign, spec §3/§4).
+    collapseSiblings: "Collapse siblings",
+    expandSiblings: "Show siblings",
   },
 } as const;
 

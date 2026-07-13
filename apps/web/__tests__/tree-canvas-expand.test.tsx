@@ -1,33 +1,31 @@
 // @vitest-environment jsdom
 /**
- * TreeCanvas interaction (pedigree-nav redesign):
- *   - a NAME click (pointerdown+up at the same point) SELECTS a node → opens the read-only panel,
- *     without any fetch;
- *   - re-rooting is NOT a node gesture anymore — it happens ONLY via the panel's "Center tree here"
- *     button, which fetches the neighborhood, merges it, relabels, and reveals the new root's kin;
+ * TreeCanvas interaction (ego-centric redesign, spec §1–§8):
+ *   - a NAME click opens the read-only panel, with NO fetch and NO re-root;
  *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never selects;
- *   - activating a per-edge FETCH caret (parents/children not loaded) fetches that subtree, merges
- *     without dupes, and reveals the new node;
- *   - a per-edge COLLAPSE caret hides an already-drawn branch (client only, no fetch), and its EXPAND
- *     counterpart brings it back;
- *   - a fetch failure surfaces the load error and leaves the tree unchanged.
+ *   - a caret EXPANDS a collapsed branch and COLLAPSES a drawn one — client only, no fetch;
+ *   - a "+" affordance (no kin in that direction) navigates to the add-relative flow;
+ *   - an anonymous bridge card is inert (no kebab).
  *
- * The server action is mocked (no live DB). We feed the real pure layout tiny fixtures.
+ * The server action + router are mocked (no live DB). We feed the real pure layout tiny fixtures.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
-import { TreeCanvas } from "@/app/hub/tree/tree-canvas";
 import type { FetchSubtreeResult } from "@/app/hub/tree/actions";
 
-afterEach(cleanup);
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
-/**
- * Simulate a real tap: pointerdown, pointerup, then the synthetic click the browser fires — at the
- * same point on the node card. jsdom does NOT auto-fire click after pointerup, so we dispatch it
- * explicitly (a real browser would). Selection is driven by the button's onClick + a drag guard, so a
- * faithful tap must include the click.
- */
+import { TreeCanvas } from "@/app/hub/tree/tree-canvas";
+
+afterEach(() => {
+  cleanup();
+  push.mockClear();
+});
+
 async function tap(el: Element, at: { x: number; y: number } = { x: 5, y: 5 }) {
   await act(async () => {
     fireEvent.pointerDown(el, { clientX: at.x, clientY: at.y, pointerId: 1 });
@@ -42,7 +40,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     displayName: over.displayName ?? over.personId,
     identified: over.identified ?? true,
     lifeStatus: "living",
-    birthYear: null,
+    birthYear: over.birthYear ?? null,
     deathYear: null,
     relationToRoot: over.relationToRoot ?? null,
     hasHiddenParents: over.hasHiddenParents ?? false,
@@ -51,278 +49,152 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   };
 }
 
-const ROOT = "p-self";
+const FOCUS = "p-self";
 
-// Root "p-self" has one drawn child "marco".
+// Focus "p-self" has one drawn child "marco" (focus's children are shown by default).
 const initialData: KinshipTreeData = {
   familyId: "F",
-  rootPersonId: ROOT,
+  rootPersonId: FOCUS,
   nodes: [
-    node({ personId: ROOT, relationToRoot: "self" }),
+    node({ personId: FOCUS, relationToRoot: "self" }),
     node({ personId: "marco", displayName: "Marco", relationToRoot: "child" }),
   ],
   edges: [
     {
       edgeType: "parent_of",
-      personAId: ROOT,
+      personAId: FOCUS,
       personBId: "marco",
       nature: "biological",
       state: "asserted",
-      assertedBy: ROOT,
+      assertedBy: FOCUS,
       assertedAt: new Date(0),
       updatedAt: new Date(0),
     },
   ],
 };
 
-/** A re-root fetch centered on `id` returns a small neighborhood around it. */
-function subtreeFor(id: string): KinshipTreeData {
-  if (id === "marco") {
-    return {
-      familyId: "F",
-      rootPersonId: "marco",
-      nodes: [
-        node({ personId: "marco", displayName: "Marco", relationToRoot: "self" }),
-        node({ personId: ROOT, displayName: ROOT, relationToRoot: "parent" }),
-        node({ personId: "gia", displayName: "Gia", relationToRoot: "child" }),
-      ],
-      edges: [
-        {
-          edgeType: "parent_of",
-          personAId: ROOT,
-          personBId: "marco",
-          nature: "biological",
-          state: "asserted",
-          assertedBy: ROOT,
-          assertedAt: new Date(0),
-          updatedAt: new Date(0),
-        },
-        {
-          edgeType: "parent_of",
-          personAId: "marco",
-          personBId: "gia",
-          nature: "biological",
-          state: "asserted",
-          assertedBy: "marco",
-          assertedAt: new Date(0),
-          updatedAt: new Date(0),
-        },
-      ],
-    };
-  }
-  return { familyId: "F", rootPersonId: id, nodes: [node({ personId: id, relationToRoot: "self" })], edges: [] };
-}
+const noFetch = async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" });
 
-it("a name click selects (opens the panel) without any fetch", async () => {
-  const fetchSubtree = vi.fn(
-    async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
-  );
+it("a name click opens the read-only panel without any fetch or re-root", async () => {
+  const fetchSubtree = vi.fn(noFetch);
   render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={fetchSubtree} />,
   );
   await tap(screen.getByTestId("tree-node-marco"));
   expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
-  expect(fetchSubtree).not.toHaveBeenCalled();
+  // No re-root machinery: the panel has no "center tree here" trigger.
+  expect(screen.queryByTestId("tree-panel-recenter")).toBeNull();
 });
 
-it("keyboard/native click on a node opens the panel and does NOT re-root (a11y regression, Finding 2)", async () => {
-  // A keyboard Enter/Space on the node <button> fires a native click with NO pointer events. The
-  // canvas must still open the panel (else keyboard-only users can't reach Center/add-relative), and
-  // it must NOT re-root (no fetch) on a plain activation.
-  const fetchSubtree = vi.fn(
-    async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
-  );
+it("keyboard/native click on a node opens the panel (a11y)", async () => {
   render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={vi.fn(noFetch)} />,
   );
   expect(screen.queryByTestId("tree-person-panel")).toBeNull();
   await act(async () => {
     fireEvent.click(screen.getByTestId("tree-node-marco"));
   });
   expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
-  // Plain activation never re-roots.
-  expect(fetchSubtree).not.toHaveBeenCalled();
-});
-
-it("re-roots via the panel's 'Center tree here', revealing the new root's kin", async () => {
-  const fetchSubtree = vi.fn(
-    async (_f: string, id: string): Promise<FetchSubtreeResult> => ({ ok: true, data: subtreeFor(id) }),
-  );
-  render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
-  );
-  // Select marco, then press the panel's re-root button (the ONLY re-root trigger).
-  await tap(screen.getByTestId("tree-node-marco"));
-  await act(async () => {
-    screen.getByTestId("tree-panel-recenter").click();
-  });
-  await waitFor(() => expect(fetchSubtree).toHaveBeenCalledWith("F", "marco"));
-  // Re-rooted: the new root's newly-revealed child is drawn.
-  await waitFor(() => expect(screen.getByTestId("tree-node-gia")).toBeTruthy());
 });
 
 it("a drag on a node does not select it", async () => {
   render(
-    <TreeCanvas
-      familyId="F"
-      rootPersonId={ROOT}
-      viewerPersonId={ROOT}
-      initial={initialData}
-      fetchSubtree={async () => ({ ok: false, error: "failed" })}
-    />,
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={vi.fn(noFetch)} />,
   );
   const nodeEl = screen.getByTestId("tree-node-marco");
   await act(async () => {
     fireEvent.pointerDown(nodeEl, { clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerMove(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
     fireEvent.pointerUp(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
-    // A browser still fires a click after a drag-release on the element; the drag guard must swallow it.
     fireEvent.click(nodeEl, { clientX: 40, clientY: 0 });
   });
   expect(screen.queryByTestId("tree-person-panel")).toBeNull();
 });
 
-it("reveals a frontier ancestor subtree, merges without dupes, and draws the new node", async () => {
-  // Root has a hidden parent at the boundary ⇒ an ancestors chevron on its right edge.
-  const boundaryInitial: KinshipTreeData = {
-    familyId: "F",
-    rootPersonId: ROOT,
-    nodes: [node({ personId: ROOT, relationToRoot: "self", hasHiddenParents: true })],
-    edges: [],
-  };
-  const fetched: KinshipTreeData = {
-    familyId: "F",
-    rootPersonId: ROOT,
-    nodes: [
-      node({ personId: ROOT, relationToRoot: "self", hasHiddenParents: false }),
-      node({ personId: "p-mom", displayName: "Rosa", relationToRoot: "parent" }),
-    ],
-    edges: [
-      {
-        edgeType: "parent_of",
-        personAId: "p-mom",
-        personBId: ROOT,
-        nature: "biological",
-        state: "asserted",
-        assertedBy: "p-mom",
-        assertedAt: new Date(0),
-        updatedAt: new Date(0),
-      },
-    ],
-  };
-  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: true, data: fetched }));
+it("a children caret collapses the drawn branch (client only, no fetch) and re-expands it", async () => {
+  const fetchSubtree = vi.fn(noFetch);
   render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
-  );
-  expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();
-
-  const chevron = screen.getByTestId(`tree-affordance-ancestors-fetch-${ROOT}`);
-  await act(async () => {
-    chevron.click();
-  });
-  expect(fetchSubtree).toHaveBeenCalledWith("F", ROOT);
-
-  await waitFor(() => expect(screen.getByTestId("tree-node-p-mom")).toBeTruthy());
-  expect(screen.getAllByTestId("tree-node-p-mom")).toHaveLength(1);
-  expect(screen.getAllByTestId(`tree-node-${ROOT}`)).toHaveLength(1);
-});
-
-it("a descendants fetch caret reveals children (fetches that node's subtree)", async () => {
-  // Root has hidden children at the boundary ⇒ a descendants fetch caret on its LEFT edge → fetch children.
-  const boundaryInitial: KinshipTreeData = {
-    familyId: "F",
-    rootPersonId: ROOT,
-    nodes: [node({ personId: ROOT, relationToRoot: "self", hasHiddenChildren: true })],
-    edges: [],
-  };
-  const fetched: KinshipTreeData = {
-    familyId: "F",
-    rootPersonId: ROOT,
-    nodes: [
-      node({ personId: ROOT, relationToRoot: "self", hasHiddenChildren: false }),
-      node({ personId: "kid", displayName: "Kid", relationToRoot: "child" }),
-    ],
-    edges: [
-      {
-        edgeType: "parent_of",
-        personAId: ROOT,
-        personBId: "kid",
-        nature: "biological",
-        state: "asserted",
-        assertedBy: ROOT,
-        assertedAt: new Date(0),
-        updatedAt: new Date(0),
-      },
-    ],
-  };
-  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: true, data: fetched }));
-  render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
-  );
-  const chevron = screen.getByTestId(`tree-affordance-descendants-fetch-${ROOT}`);
-  await act(async () => {
-    chevron.click();
-  });
-  expect(fetchSubtree).toHaveBeenCalledWith("F", ROOT);
-  await waitFor(() => expect(screen.getByTestId("tree-node-kid")).toBeTruthy());
-});
-
-it("surfaces a load error when the frontier fetch fails, leaving the tree unchanged", async () => {
-  const boundaryInitial: KinshipTreeData = {
-    familyId: "F",
-    rootPersonId: ROOT,
-    nodes: [node({ personId: ROOT, relationToRoot: "self", hasHiddenParents: true })],
-    edges: [],
-  };
-  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" }));
-  render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
-  );
-  const chevron = screen.getByTestId(`tree-affordance-ancestors-fetch-${ROOT}`);
-  await act(async () => {
-    chevron.click();
-  });
-  await waitFor(() => expect(screen.getByTestId("tree-load-error")).toBeTruthy());
-  expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();
-});
-
-it("a collapse caret hides an already-drawn branch (client only, no fetch), and expand restores it", async () => {
-  // Root has a DRAWN child (marco) → a descendants 'collapse' caret on its LEFT edge. Activating it
-  // prunes marco WITHOUT any fetch; the caret flips to 'expand'; activating that redraws marco.
-  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" }));
-  render(
-    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={fetchSubtree} />,
   );
   expect(screen.getByTestId("tree-node-marco")).toBeTruthy();
 
-  const collapse = screen.getByTestId(`tree-affordance-descendants-collapse-${ROOT}`);
+  // Focus's children caret is a collapse (children drawn).
+  const caret = screen.getByTestId(`tree-affordance-children-caret-${FOCUS}`);
   await act(async () => {
-    collapse.click();
+    caret.click();
   });
-  // marco is gone; no server fetch happened (pure client collapse).
   await waitFor(() => expect(screen.queryByTestId("tree-node-marco")).toBeNull());
   expect(fetchSubtree).not.toHaveBeenCalled();
 
-  // The caret is now an 'expand'; clicking it brings marco back.
-  const expand = screen.getByTestId(`tree-affordance-descendants-expand-${ROOT}`);
+  // Now it's an expand caret; clicking brings marco back.
+  const caret2 = screen.getByTestId(`tree-affordance-children-caret-${FOCUS}`);
   await act(async () => {
-    expand.click();
+    caret2.click();
   });
   await waitFor(() => expect(screen.getByTestId("tree-node-marco")).toBeTruthy());
   expect(fetchSubtree).not.toHaveBeenCalled();
 });
 
-it("opens the read-only panel when a node is tapped", async () => {
+it("a '+' affordance navigates to the add-relative flow", async () => {
+  // Isolated focus → three "+" affordances. The parents "+" adds a parent.
+  const isolated: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: FOCUS,
+    nodes: [node({ personId: FOCUS, relationToRoot: "self" })],
+    edges: [],
+  };
   render(
-    <TreeCanvas
-      familyId="F"
-      rootPersonId={ROOT}
-      viewerPersonId={ROOT}
-      initial={initialData}
-      fetchSubtree={async () => ({ ok: false, error: "failed" })}
-    />,
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={isolated} fetchSubtree={vi.fn(noFetch)} />,
   );
-  expect(screen.queryByTestId("tree-person-panel")).toBeNull();
-  await tap(screen.getByTestId(`tree-node-${ROOT}`));
-  expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
+  const plus = screen.getByTestId(`tree-affordance-parents-add-${FOCUS}`);
+  await act(async () => {
+    plus.click();
+  });
+  expect(push).toHaveBeenCalledWith(`/hub/kin?scope=F&anchor=${FOCUS}&relation=parent`);
+});
+
+it("isolated focus shows the card plus three '+' (no empty-state page)", async () => {
+  const isolated: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: FOCUS,
+    nodes: [node({ personId: FOCUS, relationToRoot: "self" })],
+    edges: [],
+  };
+  render(
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={isolated} fetchSubtree={vi.fn(noFetch)} />,
+  );
+  expect(screen.getByTestId(`tree-node-${FOCUS}`)).toBeTruthy();
+  expect(screen.getByTestId(`tree-affordance-parents-add-${FOCUS}`)).toBeTruthy();
+  expect(screen.getByTestId(`tree-affordance-siblings-add-${FOCUS}`)).toBeTruthy();
+  expect(screen.getByTestId(`tree-affordance-children-add-${FOCUS}`)).toBeTruthy();
+});
+
+it("an anonymous bridge card is inert (no kebab, no affordances)", async () => {
+  const withBridge: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: FOCUS,
+    nodes: [
+      node({ personId: FOCUS, relationToRoot: "self" }),
+      node({ personId: "bridge", displayName: null, identified: false, relationToRoot: "parent" }),
+    ],
+    edges: [
+      {
+        edgeType: "parent_of",
+        personAId: "bridge",
+        personBId: FOCUS,
+        nature: null,
+        state: "asserted",
+        assertedBy: FOCUS,
+        assertedAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ],
+  };
+  render(
+    <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={withBridge} fetchSubtree={vi.fn(noFetch)} />,
+  );
+  expect(screen.getByTestId("tree-node-bridge")).toBeTruthy();
+  // No affordance owned by the bridge.
+  expect(screen.queryByTestId("tree-affordance-parents-add-bridge")).toBeNull();
+  expect(screen.queryByTestId("tree-affordance-parents-caret-bridge")).toBeNull();
 });

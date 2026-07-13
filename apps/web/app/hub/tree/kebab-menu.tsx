@@ -2,9 +2,9 @@
 /**
  * KebabMenu — a shared "⋮" add-relative menu (pedigree-nav redesign, spec §"kebab-menu.tsx").
  *
- * Used in two places:
- *   - the canvas toolbar's GLOBAL ⋮, targeting the current focal root;
- *   - (optionally) a per-card ⋮ on a PersonNode, targeting that card's person.
+ * Per-card only (spec §2): a ⋮ on a PersonNode, targeting that card's person. The old global toolbar
+ * instance is removed. The trigger is BORDERLESS (the carets/"+" carry the 1px border; the kebab does
+ * not).
  *
  * Every item is a plain navigation link to the /hub/kin add-relative flow, anchored on `node.personId`
  * with a `relation=<r>` query param. It writes nothing itself — the target flow does. Items are GATED
@@ -89,11 +89,11 @@ export function KebabMenu({ node, familyId, parentCount, partnerCount }: KebabMe
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           borderRadius: "50%",
-          border: "var(--border-width) solid var(--border-strong)",
-          background: "var(--surface-card)",
+          border: "none",
+          background: "transparent",
           color: "var(--text-muted)",
           cursor: "pointer",
           fontSize: "1.1rem",

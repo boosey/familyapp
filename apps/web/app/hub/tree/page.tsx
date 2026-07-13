@@ -1,13 +1,18 @@
 /**
- * Visual family tree (ADR-0016 tree renderer, spec §3/§9) — read-first, per-family, You-anchored.
+ * Visual family tree (ADR-0016/0017 renderer, ego-centric redesign spec 2026-07-13).
  *
  * Server component. Resolves the viewer, the CURRENT family from the hub's single `?scope=` param
- * (validated against the viewer's OWN active families, falling back to their first active family — the
- * same rule /hub/kin uses), and the anchor root from `?root=` (validated to be a node in the family
- * projection, else defaulting to the viewer's own person). It then calls the audited core read
- * `resolveKinshipTree` and hands the bounded neighborhood to the client `<TreeCanvas>`. This page never
- * queries `persons`/`kinship` directly — the core read hydrates everything behind the kinship front
- * door, and rejects anonymous viewers upstream (we also gate here, defense in depth).
+ * (validated against the viewer's OWN active families, falling back to their first active family), and
+ * the FOCUS person from `?anchor=` / `?root=` (the person you were switched from — spec §1/§1a), else
+ * the viewer for a direct tab visit. It roots the audited core read `resolveKinshipTree` ON THE FOCUS
+ * (so a deep-linked relative outside the viewer's own window still loads THEIR neighborhood), then hands
+ * that neighborhood plus the focus id to the client `<TreeCanvas>`. Node `relationToRoot` is therefore
+ * relation-to-FOCUS; the panel derives relation-to-VIEWER client-side from the loaded edges. This page
+ * never queries `persons`/`kinship` directly. A genuinely absent/invalid focus param falls back to the
+ * viewer's own self-root (the only fallback).
+ *
+ * There is NO empty-state page (spec §8): an isolated focus is just their card with three "+" — the
+ * tree IS the empty state. The only bail-outs are the anonymous gate and the no-family case.
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -52,7 +57,7 @@ function EmptyCard({ children }: { children: React.ReactNode }) {
 export default async function TreePage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string; root?: string }>;
+  searchParams: Promise<{ scope?: string; root?: string; anchor?: string }>;
 }) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
@@ -62,7 +67,9 @@ export default async function TreePage({
     redirect("/");
   }
 
-  const { scope: scopeParam, root: rootParam } = await searchParams;
+  const { scope: scopeParam, root: rootParam, anchor: anchorParam } = await searchParams;
+  // The focus deep-link param is either `?anchor=` or `?root=` (spec §1).
+  const focusParam = anchorParam ?? rootParam;
 
   const heading = (
     <h1
@@ -101,8 +108,6 @@ export default async function TreePage({
     </main>
   );
 
-  // Resolve the current family: `?scope=` when it is one of the viewer's own active families, else
-  // their first active family. A viewer in no family gets the no-family empty state.
   const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
   if (activeFamilies.length === 0) {
     return shell(
@@ -120,8 +125,9 @@ export default async function TreePage({
 
   const backHref = `/hub/kin?scope=${familyId}`;
 
-  // Resolve the root. Try the requested `?root=` first; validate it is a node in the projection, else
-  // fall back to the viewer's own person. Both reads go through the audited core front door.
+  // Load a focus-rooted neighborhood through the audited front door. The core ROOT GUARD returns an
+  // empty projection for a root that is neither the viewer nor a visible endpoint of THIS family, so a
+  // forged/foreign `?anchor=` never leaks and simply fails validation below.
   const loadTree = async (rootPersonId: string): Promise<KinshipTreeData | null> => {
     try {
       return await resolveKinshipTree(db, ctx, familyId, rootPersonId);
@@ -131,21 +137,24 @@ export default async function TreePage({
     }
   };
 
+  // Resolve the FOCUS + its tree. A present `?anchor=`/`?root=` is tried FIRST, rooted on that person;
+  // it is honored only if it materialized as a real node in its own projection (i.e. a visible family
+  // member). Otherwise — absent or invalid focus param — fall back to the viewer's own self-root.
+  let focusPersonId = ctx.personId;
   let data: KinshipTreeData | null = null;
-  if (rootParam && rootParam !== ctx.personId) {
-    const requested = await loadTree(rootParam);
-    // Valid only when the requested root actually materialized as a node in its own projection.
-    if (requested && requested.nodes.some((n) => n.personId === rootParam)) {
+  if (focusParam && focusParam !== ctx.personId) {
+    const requested = await loadTree(focusParam);
+    if (requested && requested.nodes.some((n) => n.personId === focusParam)) {
+      focusPersonId = focusParam;
       data = requested;
     }
   }
   if (!data) {
-    // Default (or invalid-root fallback): the viewer's own person.
+    focusPersonId = ctx.personId;
     data = await loadTree(ctx.personId);
   }
 
   if (!data) {
-    // Should be unreachable for a valid member, but keep a graceful floor.
     return shell(
       <>
         {heading}
@@ -155,48 +164,12 @@ export default async function TreePage({
     );
   }
 
-  // Root-only / no kin: just the viewer's own node, nothing to draw beyond it.
-  const rootHasKin = data.nodes.length > 1;
-  if (!rootHasKin) {
-    return shell(
-      <>
-        {heading}
-        <EmptyCard>
-          {hub.tree.emptyRootOnly}
-          <br />
-          <Link
-            href="/hub/kin"
-            style={{
-              display: "inline-block",
-              marginTop: 12,
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              fontWeight: 500,
-              color: "var(--accent)",
-              textDecoration: "none",
-            }}
-          >
-            {hub.tree.addRelativeCta} {"→"}
-          </Link>
-        </EmptyCard>
-      </>,
-      backHref,
-    );
-  }
-
   return shell(
     <>
       {heading}
-      {/*
-        Key by root identity so "Center tree here" — a SOFT next/link navigation to the same route
-        segment (`?root=`) — forces a fresh <TreeCanvas> mount. Without the key React would reuse the
-        existing instance, and TreeCanvas's `useState(initial.nodes)` (initializer-only) would keep the
-        PREVIOUS root's node/edge set, rendering blank against a root absent from the stale data.
-      */}
       <TreeCanvas
-        key={data.rootPersonId}
         familyId={familyId}
-        rootPersonId={data.rootPersonId}
+        focusPersonId={focusPersonId}
         viewerPersonId={ctx.personId}
         initial={data}
       />
