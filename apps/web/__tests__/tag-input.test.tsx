@@ -23,6 +23,17 @@ it("Enter with no dropdown match adds a freeform TEXT token", () => {
   expect(onAdd).toHaveBeenCalledWith<[TagToken]>({ kind: "text", value: "Fishing" });
 });
 
+it("typing a tag with a comma scrubs it before emitting the TEXT token", () => {
+  const onAdd = vi.fn();
+  const { getByPlaceholderText } = render(
+    <TagInput tokens={[]} suggestions={suggestions} onAdd={onAdd} onRemove={vi.fn()} />,
+  );
+  const input = getByPlaceholderText(/add a tag or name/i);
+  fireEvent.change(input, { target: { value: "a,b" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(onAdd).toHaveBeenCalledWith<[TagToken]>({ kind: "text", value: "a b" });
+});
+
 it("picking a family suggestion adds a FAMILY token", () => {
   const onAdd = vi.fn();
   const { getByPlaceholderText, getByText } = render(

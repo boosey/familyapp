@@ -54,7 +54,11 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
 
   const addText = () => {
     if (!q) return;
-    if (!has.has(`text:${q}`)) add({ kind: "text", value: q });
+    // Tags are stored/sent as a comma-joined string (editStoryDetailsAction does tags.split(",")),
+    // so a raw comma in a freeform tag would get silently split into two tags on save. Scrub it here.
+    const clean = q.replace(/,/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    if (!has.has(`text:${clean}`)) add({ kind: "text", value: clean });
     else setQuery("");
   };
 

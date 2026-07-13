@@ -793,7 +793,10 @@ export function ComposingEditor({
 
     // Lock the review mutations while a ✨Polish round-trips too (finding 5): otherwise a Share fired
     // during a Polish would post the pre-polish proseDraft as correctedProse and then redirect, losing
-    // the polish. (op === "discard" covers the Discard round-trip.)
+    // the polish. (op === "discard" covers the Discard round-trip. op === "share" is handled by the
+    // early return above: setOp("share") swaps this whole form out for the "assembling" view in the
+    // same render, so the review controls — including TagInput — are unmounted before any share I/O
+    // happens; there is no window where they're both mounted and editable.)
     const isRemoving = op === "discard" || polishing;
     return (
       <div>

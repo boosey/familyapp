@@ -23,8 +23,11 @@ export interface TagInputProps {
   /** Called when the user adds a token. */
   onAdd: (token: TagToken) => void;
   /**
-   * Called when the user removes a token. The CALLER gates family removal behind a confirm
-   * (create vs. edit differ); TagInput only marks family chips distinct and fires this.
+   * Called when the user removes a token. The CALLER gates family removal behind a confirm:
+   * StoryEditor (story-detail) confirms because removing a family there revokes live sharing;
+   * ComposingEditor does NOT confirm because families picked during compose only stage into the
+   * finish picker — nothing is shared until Finish. TagInput itself only marks family chips
+   * distinct and fires this; it holds no authorization.
    */
   onRemove: (token: TagToken) => void;
   disabled?: boolean;
