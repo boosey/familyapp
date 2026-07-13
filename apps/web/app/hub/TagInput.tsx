@@ -5,13 +5,15 @@
  * onAdd/onRemove intents and holds NO authorization. Family chips render distinct (they are access
  * grants); the caller decides whether removing one needs a confirm.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
 import type { TagInputProps, TagToken } from "./tag-input-types";
 import { tokenKey } from "./tag-input-types";
 
 export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: TagInputProps) {
   const [query, setQuery] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const q = query.trim();
   const ql = q.toLowerCase();
 
@@ -56,10 +58,22 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
     else setQuery("");
   };
 
-  const showDropdown = q.length > 0;
+  const showDropdown = q.length > 0 && !dismissed;
+
+  // Close on click outside
+  useEffect(() => {
+    if (!showDropdown) return;
+    function handlePointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setDismissed(true);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [showDropdown]);
 
   return (
-    <div style={wrap}>
+    <div ref={containerRef} style={wrap}>
       {tokens.length > 0 && (
         <ul style={chipRow}>
           {tokens.map((t) => (
@@ -90,23 +104,29 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
         placeholder={hub.tagInput.placeholder}
         aria-label={hub.tagInput.label}
         autoComplete="off"
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setDismissed(false);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
             addText();
+          } else if (e.key === "Escape") {
+            setDismissed(true);
           }
         }}
         style={field}
       />
 
       {showDropdown && (
-        <div role="listbox" style={dropdown}>
+        <div role="group" aria-label={hub.tagInput.label} style={dropdown}>
           {matchedFamilies.length > 0 && <p style={groupLabel}>{hub.tagInput.groupFamilies}</p>}
           {matchedFamilies.map((f) => (
             <button
               key={`f-${f.id}`}
               type="button"
+              disabled={disabled}
               style={option}
               onClick={() => add({ kind: "family", familyId: f.id, name: f.name })}
             >
@@ -119,6 +139,7 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
             <button
               key={`p-${p.personId}`}
               type="button"
+              disabled={disabled}
               style={option}
               onClick={() => add({ kind: "person", personId: p.personId, displayName: p.displayName })}
             >
@@ -128,17 +149,24 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
 
           {matchedTags.length > 0 && <p style={groupLabel}>{hub.tagInput.groupTags}</p>}
           {matchedTags.map((t) => (
-            <button key={`t-${t}`} type="button" style={option} onClick={() => add({ kind: "text", value: t })}>
+            <button
+              key={`t-${t}`}
+              type="button"
+              disabled={disabled}
+              style={option}
+              onClick={() => add({ kind: "text", value: t })}
+            >
               {t}
             </button>
           ))}
 
           {/* Always-available creators. */}
-          <button type="button" style={option} onClick={addText}>
+          <button type="button" disabled={disabled} style={option} onClick={addText}>
             {hub.tagInput.addAsTag(q)}
           </button>
           <button
             type="button"
+            disabled={disabled}
             style={option}
             onClick={() => add({ kind: "person", personId: null, displayName: q })}
           >

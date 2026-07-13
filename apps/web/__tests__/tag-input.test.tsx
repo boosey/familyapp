@@ -60,3 +60,24 @@ it("removing a family chip fires onRemove with the family token", () => {
   fireEvent.click(getByLabelText(/remove the boudreaux family/i));
   expect(onRemove).toHaveBeenCalledWith(tokens[0]);
 });
+
+it("disabled prevents a dropdown suggestion click from firing onAdd", () => {
+  const onAdd = vi.fn();
+  const { getByPlaceholderText, getByText } = render(
+    <TagInput tokens={[]} suggestions={suggestions} onAdd={onAdd} onRemove={vi.fn()} disabled />,
+  );
+  fireEvent.change(getByPlaceholderText(/add a tag or name/i), { target: { value: "Boud" } });
+  fireEvent.click(getByText("The Boudreaux Family"));
+  expect(onAdd).not.toHaveBeenCalled();
+});
+
+it("Escape closes the dropdown", () => {
+  const { getByPlaceholderText, queryByText } = render(
+    <TagInput tokens={[]} suggestions={suggestions} onAdd={vi.fn()} onRemove={vi.fn()} />,
+  );
+  const input = getByPlaceholderText(/add a tag or name/i);
+  fireEvent.change(input, { target: { value: "Boud" } });
+  expect(queryByText("The Boudreaux Family")).not.toBeNull();
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(queryByText("The Boudreaux Family")).toBeNull();
+});
