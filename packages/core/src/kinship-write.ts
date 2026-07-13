@@ -62,8 +62,18 @@ export interface AddRelativeResult {
   reason?: string;
   /** The relative. */
   createdPersonId?: string;
-  /** Implicit anonymous middle node, when one was created. */
+  /**
+   * Implicit anonymous middle node, when one was created. For a sibling add that mints a full
+   * placeholder couple (ADR-0017) up to TWO placeholders are created; `bridgePersonId` holds the
+   * FIRST for backward compatibility — see `bridgePersonIds` for the complete set.
+   */
   bridgePersonId?: string;
+  /**
+   * ADR-0017: every anonymous placeholder Person minted this call. A grandparent add mints at most
+   * one; a sibling add tops the anchor's parents up to a couple and may mint two (parentless anchor)
+   * or one (anchor with a single recorded parent). Absent when nothing was minted (reuse path).
+   */
+  bridgePersonIds?: string[];
   /** Ids of the appended kinshipAssertions rows. */
   edgeIds?: string[];
 }
@@ -221,11 +231,58 @@ async function currentParentIdsOf(
 }
 
 /**
+ * The CURRENT recorded partners of `personId` in this family: the OTHER endpoint of every visible
+ * `partnered_with` edge touching `personId`. `partnered_with` is undirected and endpoints are
+ * normalized (personAId < personBId), so `personId` may be on either side. Latest-state per logical
+ * edge (keyed by the pair), excluding `denied`. Used by the sibling top-up (ADR-0017) to reuse an
+ * existing partner as the second parent rather than always minting a ghost. Read directly in this
+ * allowlisted file (same rationale as `currentParentIdsOf`).
+ */
+async function currentPartnerIdsOf(
+  db: DbOrTx,
+  familyId: string,
+  personId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({
+      seq: kinshipAssertions.seq,
+      personAId: kinshipAssertions.personAId,
+      personBId: kinshipAssertions.personBId,
+      state: kinshipAssertions.state,
+    })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, familyId),
+        eq(kinshipAssertions.edgeType, "partnered_with"),
+      ),
+    );
+  // Keep only edges touching `personId`; resolve latest state per OTHER endpoint (by seq).
+  const latest = new Map<string, { seq: number; state: string }>();
+  for (const r of rows) {
+    let other: string | undefined;
+    if (r.personAId === personId) other = r.personBId;
+    else if (r.personBId === personId) other = r.personAId;
+    if (other === undefined) continue;
+    const cur = latest.get(other);
+    if (cur === undefined || r.seq > cur.seq) latest.set(other, { seq: r.seq, state: r.state });
+  }
+  const out: string[] = [];
+  for (const [other, v] of latest) {
+    if (v.state !== "denied") out.push(other);
+  }
+  return out;
+}
+
+/**
  * Add a relative of the signed-in Person to a family, first-asserter-wins. Re-resolves auth and
  * active membership server-side (never trusts the client). Creates the relative Person as a
  * `mention` (identified iff a real name is given) and appends the primitive edge(s) that express the
- * chosen relation, minting an anonymous bridge node for grandparent/sibling when `me` has no
- * recorded parent yet. Returns the created ids. See ADR-0016 and the plan's section A.
+ * chosen relation. Grandparent mints ONE anonymous bridge parent when the anchor has none. Sibling
+ * (ADR-0017) tops the anchor's parents up to a COUPLE and shares BOTH with the new sibling — minting
+ * two placeholders for a parentless anchor, one for a single-parent anchor, none when a full couple
+ * already exists — so a v1 sibling is always a FULL sibling, never a half. Returns the created ids
+ * (`bridgePersonIds` lists every placeholder minted). See ADR-0016, ADR-0017 and the plan's section A.
  */
 export async function addRelative(
   db: Database,
@@ -287,7 +344,7 @@ export async function addRelative(
     });
 
     const edgeIds: string[] = [];
-    let bridgePersonId: string | undefined;
+    const bridgePersonIds: string[] = [];
 
     // Every relation attaches to `anchor` (defaults to `me`); `me` remains the actor of every edge.
     switch (input.relation) {
@@ -315,31 +372,74 @@ export async function addRelative(
           }
         } else {
           // No parent yet: mint one anonymous bridge parent B, then B->anchor and R->B.
-          bridgePersonId = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, anchor, nature));
-          edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, bridgePersonId, nature));
+          const bridge = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+          bridgePersonIds.push(bridge);
+          edgeIds.push(await insertParentOf(tx, familyId, me, bridge, anchor, nature));
+          edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, bridge, nature));
         }
         break;
       }
       case "sibling": {
+        // ADR-0017: a v1 sibling shares BOTH parents (a single shared parent is a *half*-sibling,
+        // deferred). So we TOP the anchor's parents up to a couple and share BOTH with the new
+        // sibling B. Every parent_of edge written HERE is an INFERRED sibling-scaffold link (to a
+        // ghost, or a top-up completing the couple), whose nature we do not know — so per ADR-0017 all
+        // carry `nature = "unknown"`, NOT the caller's `input.nature`. All writes are in this tx.
+        const SIBLING_NATURE: KinshipNature = "unknown";
         const parents = await currentParentIdsOf(tx, familyId, anchor);
-        if (parents.length > 0) {
-          // Share each existing parent (P is parent of R too).
-          for (const p of parents) {
-            edgeIds.push(await insertParentOf(tx, familyId, me, p, createdPersonId, nature));
+
+        // Bring the anchor's parent set to exactly two, then share BOTH with B — so the anchor and B
+        // end up with the SAME parents (never a half-sibling).
+        const couple = [...parents];
+        if (couple.length === 0) {
+          // 0 recorded parents → mint TWO placeholders, partner them, both parent_of anchor.
+          const b1 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+          const b2 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+          bridgePersonIds.push(b1, b2);
+          edgeIds.push(await insertPartneredWith(tx, familyId, me, b1, b2));
+          edgeIds.push(await insertParentOf(tx, familyId, me, b1, anchor, SIBLING_NATURE));
+          edgeIds.push(await insertParentOf(tx, familyId, me, b2, anchor, SIBLING_NATURE));
+          couple.push(b1, b2);
+        } else if (couple.length === 1) {
+          // 1 recorded parent P → complete the couple to {P, R}. If P ALREADY has a recorded partner R
+          // in this family, REUSE R (v1 is single-partner — never mint a second partnership for P);
+          // otherwise mint a ghost Q to be P's partner.
+          const p = couple[0]!;
+          const partners = await currentPartnerIdsOf(tx, familyId, p);
+          const r = partners[0];
+          if (r !== undefined) {
+            // Reuse P's real partner R as the second parent. R may not yet be recorded as A's parent,
+            // so assert R -> anchor to complete the pair (idempotent: first-asserter-wins, and if it
+            // already exists this simply appends a superseding assertion). Mint NO ghost.
+            edgeIds.push(await insertParentOf(tx, familyId, me, r, anchor, SIBLING_NATURE));
+            couple.push(r);
+          } else {
+            // P has no partner → mint ghost Q, partner(P,Q), Q is a new parent_of anchor.
+            const q = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+            bridgePersonIds.push(q);
+            edgeIds.push(await insertPartneredWith(tx, familyId, me, p, q));
+            edgeIds.push(await insertParentOf(tx, familyId, me, q, anchor, SIBLING_NATURE));
+            couple.push(q);
           }
-        } else {
-          // No parent yet: mint one anonymous bridge parent B, parent of both anchor and R.
-          bridgePersonId = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, anchor, nature));
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridgePersonId, createdPersonId, nature));
+        }
+        // couple.length === 2 → reuse it as-is; mint nothing.
+        // couple.length >= 3 → first-asserter-wins can leave 3+ recorded parents; we DON'T reduce them.
+        //   A sibling shares ALL of the anchor's existing parents (loop below), minting nothing. This
+        //   is intentional (documented): with an over-full parent set there is no ghost to add.
+
+        // Share EACH parent of the (topped-up or over-full) set with the new sibling B.
+        for (const p of couple) {
+          edgeIds.push(await insertParentOf(tx, familyId, me, p, createdPersonId, SIBLING_NATURE));
         }
         break;
       }
     }
 
     const result: AddRelativeResult = { allowed: true, createdPersonId, edgeIds };
-    if (bridgePersonId !== undefined) result.bridgePersonId = bridgePersonId;
+    if (bridgePersonIds.length > 0) {
+      result.bridgePersonId = bridgePersonIds[0];
+      result.bridgePersonIds = bridgePersonIds;
+    }
     return result;
   });
 }

@@ -298,8 +298,26 @@ describe("addRelative — grandparent (bridge + reuse)", () => {
   });
 });
 
-describe("addRelative — sibling (bridge + reuse)", () => {
-  it("from a parentless me: creates a bridge parent + two parent_of edges, labels `sibling`", async () => {
+/** The (deduped) set of recorded parent person-ids of `child` in `fam`, as the viewer `root` sees it. */
+async function parentIdsOf(fam: string, root: string, child: string): Promise<string[]> {
+  const { edges } = await resolveKinshipProjection(db, account(root), fam);
+  const set = new Set<string>();
+  for (const e of edges) {
+    if (e.edgeType === "parent_of" && e.personBId === child) set.add(e.personAId);
+  }
+  return [...set];
+}
+
+/** Are `a` and `b` a FULL sibling pair (they share the SAME two parents, exactly)? */
+async function shareBothParents(fam: string, root: string, a: string, b: string): Promise<boolean> {
+  const pa = (await parentIdsOf(fam, root, a)).sort();
+  const pb = (await parentIdsOf(fam, root, b)).sort();
+  return pa.length === 2 && pb.length === 2 && pa[0] === pb[0] && pa[1] === pb[1];
+}
+
+describe("addRelative — sibling (ADR-0017: shares a full parent-couple)", () => {
+  // Case 1: parentless anchor → TWO placeholders (partnered), both parents of both siblings.
+  it("from a parentless anchor: mints TWO placeholder parents (identified=false), partnered, both parents of both siblings", async () => {
     const { me, fam } = await familyWithMe();
     const res = await addRelative(db, account(me.id), {
       familyId: fam.id,
@@ -307,33 +325,42 @@ describe("addRelative — sibling (bridge + reuse)", () => {
       displayName: "Bro",
     });
     expect(res.allowed).toBe(true);
-    expect(res.bridgePersonId).toBeDefined();
-    expect(res.edgeIds).toHaveLength(2);
 
-    const bridge = await personRow(res.bridgePersonId!);
-    expect(bridge.identified).toBe(false);
+    // Exactly TWO placeholder persons were minted, both anonymous (identified=false).
+    expect(res.bridgePersonIds).toHaveLength(2);
+    expect(res.bridgePersonId).toBe(res.bridgePersonIds![0]); // back-compat: first placeholder
+    const [b1, b2] = res.bridgePersonIds!;
+    expect((await personRow(b1!)).identified).toBe(false);
+    expect((await personRow(b2!)).identified).toBe(false);
 
-    // bridge -> me and bridge -> sibling.
-    const edges = await db
+    // The two placeholders are partnered.
+    const partnerEdges = await db
+      .select()
+      .from(kinshipAssertions)
+      .where(eq(kinshipAssertions.edgeType, "partnered_with"));
+    expect(partnerEdges).toHaveLength(1);
+
+    // 4 parent_of edges: each placeholder is a parent of BOTH me and the sibling.
+    const parentEdges = await db
       .select()
       .from(kinshipAssertions)
       .where(eq(kinshipAssertions.edgeType, "parent_of"));
-    expect(edges).toHaveLength(2);
-    expect(edges.every((e) => e.personAId === res.bridgePersonId)).toBe(true);
-    const childIds = edges.map((e) => e.personBId).sort();
-    expect(childIds).toEqual([me.id, res.createdPersonId!].sort());
+    expect(parentEdges).toHaveLength(4);
 
+    // me and the sibling share the SAME two parents → full sibling, not half.
+    expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
     expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
   });
 
-  it("reuses an existing parent (no new bridge) — attaches sibling below each parent", async () => {
+  // Case 2: anchor with ONE existing parent → mint ONE placeholder; A and B share TWO parents.
+  it("from an anchor with one existing parent: mints ONE placeholder and both siblings share two parents", async () => {
     const { me, fam } = await familyWithMe();
     const parentRes = await addRelative(db, account(me.id), {
       familyId: fam.id,
       relation: "parent",
       displayName: "Mom",
     });
-    const parentId = parentRes.createdPersonId!;
+    const momId = parentRes.createdPersonId!;
 
     const res = await addRelative(db, account(me.id), {
       familyId: fam.id,
@@ -341,17 +368,171 @@ describe("addRelative — sibling (bridge + reuse)", () => {
       displayName: "Sis",
     });
     expect(res.allowed).toBe(true);
-    expect(res.bridgePersonId).toBeUndefined();
-    expect(res.edgeIds).toHaveLength(1); // existing parent -> sibling
+    expect(res.bridgePersonIds).toHaveLength(1); // one placeholder minted to complete the couple
+    const q = res.bridgePersonIds![0]!;
+    expect((await personRow(q)).identified).toBe(false);
 
-    const [edge] = await db
+    // The new placeholder is partnered with the existing parent.
+    const partnerEdges = await db
       .select()
       .from(kinshipAssertions)
-      .where(eq(kinshipAssertions.id, res.edgeIds![0]!));
-    expect(edge!.personAId).toBe(parentId);
-    expect(edge!.personBId).toBe(res.createdPersonId);
+      .where(eq(kinshipAssertions.edgeType, "partnered_with"));
+    expect(partnerEdges).toHaveLength(1);
 
+    // me and the sibling now share the SAME two parents (Mom + the placeholder).
+    const meParents = (await parentIdsOf(fam.id, me.id, me.id)).sort();
+    expect(meParents).toEqual([momId, q].sort());
+    expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
     expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
+  });
+
+  // Case 3: anchor already has a full couple → reuse it, mint NOTHING.
+  it("from an anchor with a full parent-couple: mints NOTHING and attaches the sibling to both existing parents", async () => {
+    const { me, fam } = await familyWithMe();
+    // Give me a full couple: two parents (Mom + Dad as a co-parent on a shared child edge is not the
+    // shape here; instead assert Mom, then Dad, each as a parent of me directly).
+    const mom = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Mom",
+    });
+    const dad = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Dad",
+    });
+    const momId = mom.createdPersonId!;
+    const dadId = dad.createdPersonId!;
+    expect((await parentIdsOf(fam.id, me.id, me.id)).sort()).toEqual([momId, dadId].sort());
+
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Sib",
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.bridgePersonIds).toBeUndefined(); // no placeholders minted
+    expect(res.bridgePersonId).toBeUndefined();
+    expect(res.edgeIds).toHaveLength(2); // sibling attached below both existing parents
+
+    const sibParents = (await parentIdsOf(fam.id, me.id, res.createdPersonId!)).sort();
+    expect(sibParents).toEqual([momId, dadId].sort());
+    expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
+    expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
+  });
+
+  // Regression (repo policy): the shipped single-bridge shortcut yielded a HALF-sibling (one shared
+  // parent). ADR-0017 forbids that in v1 — every "add sibling" must yield a FULL sibling.
+  it("regression: sibling add never yields a half-sibling in v1 (always two shared parents)", async () => {
+    // Parentless anchor is the case that used to produce a half-sibling (single shared bridge).
+    const { me, fam } = await familyWithMe();
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Twin",
+    });
+    expect(res.allowed).toBe(true);
+    // Both siblings must have EXACTLY two parents, and they must be the SAME two (full sibling).
+    expect((await parentIdsOf(fam.id, me.id, me.id))).toHaveLength(2);
+    expect((await parentIdsOf(fam.id, me.id, res.createdPersonId!))).toHaveLength(2);
+    expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
+  });
+
+  // Case 2b (single-partner rule): when the anchor's one recorded parent ALREADY has a partner,
+  // reuse that real partner as the second parent — never mint a ghost (that would give P two partners).
+  it("from a 1-parent anchor whose parent already has a partner: reuses that partner as the second parent, mints NO placeholder", async () => {
+    const { me, fam } = await familyWithMe();
+    // me has one parent P (Mom); give P a real partner R (Dad) via a partner add anchored on Mom.
+    const mom = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Mom",
+    });
+    const momId = mom.createdPersonId!;
+    const dad = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "Dad",
+      anchorPersonId: momId,
+    });
+    const dadId = dad.createdPersonId!;
+    // Precondition: me still has exactly ONE recorded parent (Dad is Mom's partner, not yet my parent).
+    expect((await parentIdsOf(fam.id, me.id, me.id))).toEqual([momId]);
+
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Sis",
+    });
+    expect(res.allowed).toBe(true);
+    // No ghost minted — the real partner R was reused.
+    expect(res.bridgePersonIds).toBeUndefined();
+    expect(res.bridgePersonId).toBeUndefined();
+
+    // Exactly ONE partnership in the family (Mom—Dad); no second (ghost) partnership for Mom.
+    const partnerEdges = await db
+      .select()
+      .from(kinshipAssertions)
+      .where(eq(kinshipAssertions.edgeType, "partnered_with"));
+    expect(partnerEdges).toHaveLength(1);
+
+    // me and the sibling now share the SAME two REAL parents {Mom, Dad}.
+    const meParents = (await parentIdsOf(fam.id, me.id, me.id)).sort();
+    expect(meParents).toEqual([momId, dadId].sort());
+    expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
+    expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
+  });
+
+  // Case 4 (over-full): first-asserter-wins can leave an anchor with 3+ recorded parents. A sibling
+  // then shares ALL of them and mints nothing (explicit, documented behavior).
+  it("from an anchor with 3 recorded parents: shares all 3 with the sibling, mints NOTHING", async () => {
+    const { me, fam } = await familyWithMe();
+    const p1 = (await addRelative(db, account(me.id), { familyId: fam.id, relation: "parent", displayName: "P1" })).createdPersonId!;
+    const p2 = (await addRelative(db, account(me.id), { familyId: fam.id, relation: "parent", displayName: "P2" })).createdPersonId!;
+    const p3 = (await addRelative(db, account(me.id), { familyId: fam.id, relation: "parent", displayName: "P3" })).createdPersonId!;
+    expect((await parentIdsOf(fam.id, me.id, me.id)).sort()).toEqual([p1, p2, p3].sort());
+
+    const res = await addRelative(db, account(me.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Sib",
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.bridgePersonIds).toBeUndefined(); // nothing minted
+    expect(res.edgeIds).toHaveLength(3); // sibling attached below all three existing parents
+
+    const sibParents = (await parentIdsOf(fam.id, me.id, res.createdPersonId!)).sort();
+    expect(sibParents).toEqual([p1, p2, p3].sort());
+    expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
+  });
+
+  // anchor !== me exercising the 1-parent top-up path (mints one ghost to complete `other`'s couple).
+  it("anchored on another member with one parent: tops that member's parents up to a couple (one placeholder), sibling shares both", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    // Give `other` exactly one recorded parent (no partner), anchored on other.
+    const parent = await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "OtherMom",
+      anchorPersonId: otherPersonId,
+    });
+    const otherMomId = parent.createdPersonId!;
+    expect((await parentIdsOf(familyId, mePersonId, otherPersonId))).toEqual([otherMomId]);
+
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "sibling",
+      displayName: "OtherSib",
+      anchorPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.bridgePersonIds).toHaveLength(1); // one ghost minted to complete other's couple
+    const q = res.bridgePersonIds![0]!;
+
+    // `other` now has two parents {OtherMom, ghost}; the sibling shares the SAME two.
+    const otherParents = (await parentIdsOf(familyId, mePersonId, otherPersonId)).sort();
+    expect(otherParents).toEqual([otherMomId, q].sort());
+    expect(await shareBothParents(familyId, mePersonId, otherPersonId, res.createdPersonId!)).toBe(true);
   });
 });
 
