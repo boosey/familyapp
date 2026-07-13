@@ -9,6 +9,12 @@ export interface OwnerActionMenuProps {
   onEditStory: () => void;
   onAddPhotos: () => void;
   onManageSharing: () => void;
+  // When true, the kebab trigger is disabled and closed. Used to keep the two owner-only
+  // family-target mutators (StoryEditor and the Manage-Sharing overlay) mutually exclusive —
+  // both post the FULL target-family set from independent local snapshots, so having both open
+  // at once lets a later submit silently clobber/revoke families added by the other. See
+  // apps/web/__tests__/story-detail-owner-exclusive.test.tsx.
+  disabled?: boolean;
 }
 
 export function OwnerActionMenu({
@@ -17,12 +23,22 @@ export function OwnerActionMenu({
   onEditStory,
   onAddPhotos,
   onManageSharing,
+  disabled = false,
 }: OwnerActionMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // If disabled while open (e.g. another owner surface just opened), force-close.
+  useEffect(() => {
+    if (disabled && open) {
+      setOpen(false);
+      setConfirmDelete(false);
+      setError(null);
+    }
+  }, [disabled, open]);
 
   // Close on click outside
   useEffect(() => {
@@ -140,13 +156,20 @@ export function OwnerActionMenu({
         aria-label="Story options"
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           setOpen((prev) => !prev);
           setConfirmDelete(false);
           setError(null);
         }}
-        style={triggerStyle}
+        style={{
+          ...triggerStyle,
+          opacity: disabled ? 0.5 : 1,
+          cursor: disabled ? "default" : "pointer",
+        }}
         onFocus={(e) => {
+          if (disabled) return;
           e.currentTarget.style.background = "var(--accent-soft)";
           e.currentTarget.style.color = "var(--accent-strong)";
         }}
@@ -155,6 +178,7 @@ export function OwnerActionMenu({
           e.currentTarget.style.color = "var(--text-muted)";
         }}
         onMouseEnter={(e) => {
+          if (disabled) return;
           e.currentTarget.style.background = "var(--accent-soft)";
           e.currentTarget.style.color = "var(--accent-strong)";
         }}
@@ -168,7 +192,7 @@ export function OwnerActionMenu({
         ⋮
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div style={dropdownStyle} role="menu" aria-label="Story options menu">
           {!confirmDelete ? (
             <>

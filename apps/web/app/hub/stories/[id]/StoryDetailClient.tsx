@@ -160,6 +160,7 @@ export function StoryDetailClient({
           <OwnerActionMenu
             storyId={storyId}
             isOwner={isOwner}
+            disabled={editorOpen || isEditingSharing}
             onEditStory={() => {
               setFocusPhotos(false);
               setEditorOpen(true);
