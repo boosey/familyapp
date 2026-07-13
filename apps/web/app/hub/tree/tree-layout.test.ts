@@ -1,5 +1,6 @@
 // Pure unit tests for computeTreeLayout — no DB, no React. TDD-first per spec §Testing.
-// Pedigree navigation: ancestors right (x>0), descendants left (x<0), focus at x=0.
+// PORTRAIT pedigree: ancestors up (smaller y), descendants down (larger y), focus row between;
+// within a generation, cards spread horizontally (x) in birth order.
 import { describe, expect, it } from "vitest";
 import type { ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 
@@ -141,34 +142,34 @@ describe("computeTreeLayout — generation assignment", () => {
 });
 
 describe("computeTreeLayout — axis transpose (pedigree direction)", () => {
-  it("ancestors land to the RIGHT (greater x), descendants to the LEFT, focus between", () => {
+  it("ancestors land ABOVE (smaller y), descendants BELOW, focus between", () => {
     const nodes = [node("me"), node("mom"), node("kid")];
     const edges = [parentOf("mom", "me"), parentOf("me", "kid")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const mom = placedFor(l, "mom"); // gen -1 (ancestor)
     const me = placedFor(l, "me"); // gen 0 (focus)
     const kid = placedFor(l, "kid"); // gen +1 (descendant)
-    // Relative ordering after normalization: ancestor.x > focus.x > descendant.x
-    expect(mom.x).toBeGreaterThan(me.x);
-    expect(me.x).toBeGreaterThan(kid.x);
+    // Relative ordering after normalization: ancestor.y < focus.y < descendant.y
+    expect(mom.y).toBeLessThan(me.y);
+    expect(me.y).toBeLessThan(kid.y);
   });
 
-  it("same generation shares an x column", () => {
+  it("same generation shares a y row", () => {
     const nodes = [node("me"), node("sib"), node("mom")];
     const edges = [parentOf("mom", "me"), parentOf("mom", "sib")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sib = placedFor(l, "sib");
-    expect(me.x).toBeCloseTo(sib.x, 5);
-    // and they differ in y (stacked vertically within the column)
-    expect(me.y).not.toBeCloseTo(sib.y, 5);
+    expect(me.y).toBeCloseTo(sib.y, 5);
+    // and they differ in x (stacked horizontally within the row)
+    expect(me.x).not.toBeCloseTo(sib.x, 5);
   });
 });
 
-describe("computeTreeLayout — within-column vertical order by birth year", () => {
+describe("computeTreeLayout — within-row horizontal order by birth year", () => {
   it("orders same-generation nodes by birthYear ascending (nulls last, id tiebreak)", () => {
     // Four siblings of `root`: a(1980), b(1975), c(null), d(null).
-    // Expected top→down (ascending y): b(1975), a(1980), then nulls by id: c, d.
+    // Expected left→right (ascending x): b(1975), a(1980), then nulls by id: c, d.
     const nodes = [
       node("root"),
       node("a", { birthYear: 1980 }),
@@ -185,10 +186,10 @@ describe("computeTreeLayout — within-column vertical order by birth year", () 
       parentOf("mom", "d"),
     ];
     const l = computeTreeLayout(input({ rootPersonId: "root", nodes, edges }));
-    // Order the gen-0 nodes by y (top→down).
+    // Order the gen-0 nodes by x (left→right).
     const gen0 = l.placed
       .filter((p) => p.generation === 0)
-      .sort((p, q) => p.y - q.y)
+      .sort((p, q) => p.x - q.x)
       .map((p) => p.personId);
     // Dated ones first (ascending year), then nulls in id order.
     // root has null birthYear too — it sorts among the nulls by id.
@@ -197,19 +198,19 @@ describe("computeTreeLayout — within-column vertical order by birth year", () 
   });
 });
 
-describe("computeTreeLayout — partner union (vertical adjacency)", () => {
-  it("emits a union with partners adjacent in the same x column (contiguous y)", () => {
+describe("computeTreeLayout — partner union (horizontal adjacency)", () => {
+  it("emits a union with partners adjacent in the same y row (contiguous x)", () => {
     const nodes = [node("me"), node("spouse")];
     const edges = [partneredWith("me", "spouse")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     expect(l.unions).toHaveLength(1);
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
-    // Share the x column (same generation → same x).
-    expect(me.x).toBeCloseTo(sp.x, 5);
-    // Adjacent: nobody sits vertically between them at this generation.
+    // Share the y row (same generation → same y).
+    expect(me.y).toBeCloseTo(sp.y, 5);
+    // Adjacent: nobody sits horizontally between them at this generation.
     const between = l.placed.filter(
-      (n) => n.generation === 0 && n.y > Math.min(me.y, sp.y) && n.y < Math.max(me.y, sp.y),
+      (n) => n.generation === 0 && n.x > Math.min(me.x, sp.x) && n.x < Math.max(me.x, sp.x),
     );
     expect(between).toHaveLength(0);
     expect(l.connectors.some((c) => c.kind === "partner")).toBe(true);
@@ -233,15 +234,15 @@ describe("computeTreeLayout — partner union (vertical adjacency)", () => {
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
-    // Nobody drawn between the two union partners on the y axis.
+    // Nobody drawn between the two union partners on the x axis.
     const between = l.placed.filter(
-      (n) => n.generation === 0 && n.y > Math.min(me.y, sp.y) && n.y < Math.max(me.y, sp.y),
+      (n) => n.generation === 0 && n.x > Math.min(me.x, sp.x) && n.x < Math.max(me.x, sp.x),
     );
     expect(between).toHaveLength(0);
   });
 });
 
-describe("computeTreeLayout — connectors (horizontal axis geometry)", () => {
+describe("computeTreeLayout — connectors (vertical axis geometry)", () => {
   it("emits a descent connector for each parent→child edge drawn", () => {
     const nodes = [node("me"), node("kid")];
     const edges = [parentOf("me", "kid")];
@@ -250,52 +251,51 @@ describe("computeTreeLayout — connectors (horizontal axis geometry)", () => {
     for (const c of l.connectors) expect(typeof c.d).toBe("string");
   });
 
-  it("descent connector runs from parent LEFT edge to child RIGHT edge", () => {
-    // parent (gen -1) is to the RIGHT of child (gen 0); so children hang to the left.
+  it("descent connector runs from parent BOTTOM edge to child TOP edge", () => {
+    // parent (gen 0) is ABOVE child (gen +1); children hang below.
     const nodes = [node("me"), node("kid")];
     const edges = [parentOf("me", "kid")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me"); // parent, gen 0
-    const kid = placedFor(l, "kid"); // child, gen +1 → left of me
-    expect(me.x).toBeGreaterThan(kid.x); // parent to the right
+    const kid = placedFor(l, "kid"); // child, gen +1 → below me
+    expect(me.y).toBeLessThan(kid.y); // parent above
     const descent = l.connectors.find((c) => c.kind === "descent")!;
-    // Path starts at parent's LEFT edge x = me.x - NODE_W/2
-    const startX = me.x - NODE_W / 2;
-    // Path ends at child's RIGHT edge x = kid.x + NODE_W/2
-    const endX = kid.x + NODE_W / 2;
-    expect(descent.d).toContain(`M ${startX} `);
-    expect(descent.d).toContain(`L ${endX} `);
+    // Path starts at parent's BOTTOM edge y = me.y + NODE_H/2
+    const startY = me.y + NODE_H / 2;
+    // Path ends at child's TOP edge y = kid.y - NODE_H/2
+    const endY = kid.y - NODE_H / 2;
+    expect(descent.d).toContain(`M ${me.x} ${startY} `);
+    expect(descent.d).toContain(` ${endY}`);
   });
 
-  it("partner connector is vertical between the two cards' facing edges", () => {
+  it("partner connector is horizontal between the two cards' facing edges", () => {
     const nodes = [node("me"), node("spouse")];
     const edges = [partneredWith("me", "spouse")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
-    const upper = me.y < sp.y ? me : sp;
-    const lower = me.y < sp.y ? sp : me;
+    const left = me.x < sp.x ? me : sp;
+    const right = me.x < sp.x ? sp : me;
     const partner = l.connectors.find((c) => c.kind === "partner")!;
-    // Vertical: shares the column x, goes from lower card's top edge to upper card's bottom edge.
-    // Endpoints x are equal (both ~ the shared column x).
-    const topOfLower = lower.y - NODE_H / 2;
-    const botOfUpper = upper.y + NODE_H / 2;
-    expect(partner.d).toContain(`${topOfLower}`);
-    expect(partner.d).toContain(`${botOfUpper}`);
-    // both endpoints share the x column
-    expect(me.x).toBeCloseTo(sp.x, 5);
+    // Horizontal: shares the row y, goes from left card's right edge to right card's left edge.
+    const rightOfLeft = left.x + NODE_W / 2;
+    const leftOfRight = right.x - NODE_W / 2;
+    expect(partner.d).toContain(`${rightOfLeft}`);
+    expect(partner.d).toContain(`${leftOfRight}`);
+    // both endpoints share the y row
+    expect(me.y).toBeCloseTo(sp.y, 5);
   });
 });
 
-describe("computeTreeLayout — child centering on parents' y midpoint", () => {
-  it("centers a single child on its parents' union y-midpoint", () => {
+describe("computeTreeLayout — child centering on parents' x midpoint", () => {
+  it("centers a single child on its parents' union x-midpoint", () => {
     const nodes = [node("me"), node("spouse"), node("kid")];
     const edges = [partneredWith("me", "spouse"), parentOf("me", "kid"), parentOf("spouse", "kid")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
     const kid = placedFor(l, "kid");
-    expect(kid.y).toBeCloseTo((me.y + sp.y) / 2, 5);
+    expect(kid.x).toBeCloseTo((me.x + sp.x) / 2, 5);
   });
 });
 
@@ -353,28 +353,28 @@ describe("computeTreeLayout — bounded windowing + expansion reveal", () => {
 });
 
 describe("computeTreeLayout — per-edge affordances (fetch state)", () => {
-  it("emits an ancestors 'fetch' affordance for a node with hasHiddenParents, on its RIGHT edge", () => {
+  it("emits an ancestors 'fetch' affordance for a node with hasHiddenParents, in its TOP gutter", () => {
     const nodes = [node("me", { hasHiddenParents: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     const me = placedFor(l, "me");
     const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
     expect(aff).toBeTruthy();
     expect(aff!.state).toBe("fetch");
-    // Right (ancestor) edge.
-    expect(aff!.x).toBeCloseTo(me.x + NODE_W / 2, 5);
-    expect(aff!.y).toBeCloseTo(me.y, 5);
+    // Top (ancestor) gutter: horizontally centered, above the card.
+    expect(aff!.x).toBeCloseTo(me.x, 5);
+    expect(aff!.y).toBeLessThan(me.y - NODE_H / 2);
   });
 
-  it("emits a descendants 'fetch' affordance for a node with hasHiddenChildren, on its LEFT edge", () => {
+  it("emits a descendants 'fetch' affordance for a node with hasHiddenChildren, in its BOTTOM gutter", () => {
     const nodes = [node("me", { hasHiddenChildren: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     const me = placedFor(l, "me");
     const aff = l.affordances.find((a) => a.direction === "descendants" && a.personId === "me");
     expect(aff).toBeTruthy();
     expect(aff!.state).toBe("fetch");
-    // Left (descendant) edge.
-    expect(aff!.x).toBeCloseTo(me.x - NODE_W / 2, 5);
-    expect(aff!.y).toBeCloseTo(me.y, 5);
+    // Bottom (descendant) gutter: horizontally centered, below the card.
+    expect(aff!.x).toBeCloseTo(me.x, 5);
+    expect(aff!.y).toBeGreaterThan(me.y + NODE_H / 2);
   });
 
   it("emits NO affordance when the node has no kin on that side", () => {
@@ -461,9 +461,9 @@ describe("computeTreeLayout — empty parent slots", () => {
     expect(l.emptyParentSlots).toHaveLength(1);
     const slot = l.emptyParentSlots[0]!;
     expect(slot.personId).toBe("me");
-    // On the ancestor (right) edge.
-    expect(slot.x).toBeCloseTo(me.x + NODE_W / 2, 5);
-    expect(slot.y).toBeCloseTo(me.y, 5);
+    // In the ancestor (top) gutter: horizontally centered, above the card.
+    expect(slot.x).toBeCloseTo(me.x, 5);
+    expect(slot.y).toBeLessThan(me.y - NODE_H / 2);
   });
 
   it("does NOT emit an EmptyParentSlot when hasHiddenParents is true (a fetch affordance owns it)", () => {
@@ -488,8 +488,8 @@ describe("computeTreeLayout — empty parent slots", () => {
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     for (const s of l.emptyParentSlots) {
       const me = placedFor(l, s.personId);
-      // Always on the ancestor (right) edge.
-      expect(s.x).toBeGreaterThan(me.x);
+      // Always in the ancestor (top) gutter → above the card.
+      expect(s.y).toBeLessThan(me.y);
     }
   });
 

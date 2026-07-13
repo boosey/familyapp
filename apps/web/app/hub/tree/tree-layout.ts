@@ -1,5 +1,8 @@
-// Pure, dependency-free layout for the visual family tree — pedigree navigation (ADR-0016).
-// Directional pedigree: ancestors extend RIGHT (+x), descendants LEFT (−x), focus at x=0.
+// Pure, dependency-free layout for the visual family tree — PORTRAIT pedigree navigation (ADR-0016).
+// Portrait pedigree (FamilySearch-style): generations stack VERTICALLY. Ancestors sit ABOVE the focus
+// (smaller y), descendants BELOW (larger y); the focus row is in the middle. Within a generation, cards
+// spread horizontally (x) in birth order, partners kept adjacent. Expand/collapse/fetch carets live in
+// the vertical gutter — ancestors on a card's TOP edge, descendants on its BOTTOM edge.
 // See docs/superpowers/specs/2026-07-12-kinship-tree-pedigree-nav-design.md.
 //
 // NOTE: named `tree-layout.ts` (not `layout.ts`) because `layout.*` is a reserved Next.js App Router
@@ -64,11 +67,11 @@ export interface Connector {
 }
 
 /**
- * ONE per-edge expand/collapse/fetch control the canvas renders as a caret on a node's OUTER edge.
+ * ONE per-edge expand/collapse/fetch control the canvas renders as a caret in a node's OUTER gutter.
  *
  * There is at most ONE affordance per (node, direction): a node never stacks two glyphs on the same
- * edge. `ancestors` sits on the node's ancestor (RIGHT) edge; `descendants` on the descendant (LEFT)
- * edge. The `state` tells the canvas what activating it does:
+ * edge. `ancestors` sits in the node's ancestor (TOP) gutter; `descendants` in the descendant (BOTTOM)
+ * gutter. The `state` tells the canvas what activating it does:
  *   - `"collapse"` — a drawn branch exists on that side; hide it (client-only prune, adds to the
  *     collapsed set).
  *   - `"expand"` — the branch is currently collapsed; un-prune it (client-only, removes from the set).
@@ -84,7 +87,7 @@ export interface EdgeAffordance {
 }
 
 /**
- * An inline "add parent" placeholder on the ancestor (RIGHT) edge of a drawn node that has zero
+ * An inline "add parent" placeholder in the ancestor (TOP) gutter of a drawn node that has zero
  * drawn parent edges AND no hidden parents at the boundary. Clicking it opens the add-parent flow
  * anchored on `personId` — this is how the connecting (possibly unnamed) bridge person is created.
  * (Children/partner adds are kebab-only; the layout emits no slots for them.)
@@ -113,20 +116,25 @@ export interface LayoutInput {
 
 // ---------------------------------------------------------------------------
 // Geometry constants. Coordinate system: SVG-native — (0,0) top-left, x grows
-// right, y grows down. Pedigree axis: generation maps to X (ancestors right,
-// descendants left); within-generation stacking maps to Y. All emitted
+// right, y grows down. PORTRAIT pedigree axis: generation maps to Y (ancestors
+// UP, descendants DOWN); within-generation stacking maps to X. All emitted
 // coordinates are node CENTERS in px, normalized so the tightest bounding box
-// starts at (0,0) with NODE_W/2 and NODE_H/2 padding — i.e. every node card
-// fits inside `bounds`. Units are px.
+// starts at (0,0) — with NODE_W/2 side padding and enough top headroom that the
+// ancestor-gutter carets/slots aren't clipped. Units are px.
 // ---------------------------------------------------------------------------
 
-export const NODE_W = 210; // node card width (px)
-export const NODE_H = 84; // node card height (px)
-const H_GAP = 56; // horizontal gap between generation columns (card edge to edge)
-const V_GAP = 44; // vertical gap between stacked same-generation cards
+export const NODE_W = 150; // node card width (px) — portrait card (FamilySearch-style)
+export const NODE_H = 172; // node card height (px) — portrait card (monogram on top, name below)
+const CROSS_H_GAP = 22; // horizontal gap between stacked same-generation cards (siblings / partners)
+const GEN_V_GAP = 64; // vertical gap between generation rows (leaves room for gutter carets)
 
-const COL_STEP = NODE_W + H_GAP; // center-to-center horizontal step between generation columns
-const ROW_STEP = NODE_H + V_GAP; // center-to-center vertical step between stacked cards
+const CROSS_STEP = NODE_W + CROSS_H_GAP; // center-to-center horizontal step within a generation row
+const GEN_STEP = NODE_H + GEN_V_GAP; // center-to-center vertical step between generation rows
+
+/** How far a gutter caret / add-parent slot floats out past the card edge (px). */
+export const CARET_GAP = 16;
+/** Extra headroom above the top row so the ancestor-gutter carets/slots stay within bounds. */
+const TOP_PAD = 30;
 
 const DEFAULT_WINDOW_UP = 2;
 const DEFAULT_WINDOW_DOWN = 2;
@@ -288,30 +296,18 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   }
   const drawnGens = [...byGen.keys()].sort((a, b) => a - b);
 
-  // --- x by generation (pedigree transpose) ------------------------------
-  // Ancestors have negative generation → positive x (RIGHT); descendants positive
-  // generation → negative x (LEFT); focus at x=0. Same generation ⇒ same x column.
-  const xForGen = (g: number) => -g * COL_STEP;
+  // --- y by generation (portrait pedigree) -------------------------------
+  // Ancestors have negative generation → smaller y (UP); descendants positive
+  // generation → larger y (DOWN); focus at y=0. Same generation ⇒ same y row.
+  const yForGen = (g: number) => g * GEN_STEP;
 
-  // --- Vertical (y) placement within each generation column ---------------
-  // Order a column by birthYear (nulls LAST, then id tiebreak), keeping union/
-  // partner clusters contiguous & adjacent. A parent is nudged toward the
-  // midpoint of its drawn children where feasible, but birth-order + determinism
-  // win. Y is assigned per-column in ascending generation order so a parent's
-  // children (one column to the LEFT, larger generation) — no: children are drawn
-  // in a LATER column iteration. We instead assign y descendant-first isn't
-  // needed; we anchor children on parents via a two-pass approach:
-  //   pass 1: place every column by birth order into provisional slots.
-  //   pass 2: for a child with drawn parents, we already ordered columns; parent
-  //           y is nudged toward its drawn children's mean AFTER children placed.
-  // To keep this simple & deterministic we place from the DESCENDANT side inward
-  // is unnecessary; the spec says birth-order + determinism win, parent-near-
-  // children is best-effort. We do: order each column by (birthYear,id) with union
-  // clusters contiguous, lay them out top→down at ROW_STEP; then for the child-
-  // centering test (single child under a union) we special-case: a lone child of
-  // a fully-drawn set of parents is centered on its parents' y-mean.
+  // --- Horizontal (x) placement within each generation row ----------------
+  // Order a row by birthYear (nulls LAST, then id tiebreak), keeping union/
+  // partner clusters contiguous & adjacent. A child is nudged toward the
+  // midpoint of its drawn parents where feasible, but birth-order + determinism
+  // win.
 
-  const y = new Map<string, number>();
+  const x = new Map<string, number>();
 
   // Comparator: birthYear ascending, nulls last, id tiebreak.
   const cmpBirth = (a: string, b: string): number => {
@@ -367,81 +363,79 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     orderedByGen.set(g, clusterList.flat());
   }
 
-  // Assign provisional y top→down within each column.
+  // Assign provisional x left→right within each row.
   for (const g of drawnGens) {
     const order = orderedByGen.get(g)!;
-    order.forEach((id, i) => y.set(id, i * ROW_STEP));
+    order.forEach((id, i) => x.set(id, i * CROSS_STEP));
   }
 
   // Best-effort parent-near-children nudge: a child with drawn parents is centered
-  // on its parents' y-mean; process descendant columns (larger generation) using
-  // parent columns already placed. But parents (smaller gen) sit in a column
-  // processed EARLIER above with provisional y; to center a lone child on its
-  // parents we recompute child columns from parent y-means, keeping birth order
-  // when a column has multiple children. To stay deterministic and satisfy the
-  // single-child-centering contract without destabilizing sibling stacks, we only
-  // re-center a child column when EVERY node in it maps 1:1 to a distinct drawn-
-  // parent-set y-mean and the resulting order is strictly increasing (i.e. no
-  // overlap) — otherwise the birth-ordered provisional slots stand.
+  // on its parents' x-mean; process descendant rows (larger generation) using
+  // parent rows already placed. To stay deterministic and satisfy the single-child-
+  // centering contract without destabilizing sibling stacks, we only re-center a
+  // child row when EVERY node in it maps 1:1 to a distinct drawn-parent-set x-mean
+  // and the resulting order is strictly increasing (i.e. no overlap) — otherwise the
+  // birth-ordered provisional slots stand.
   for (const g of drawnGens) {
-    if (g <= 0) continue; // only descendant columns hang off parents
+    if (g <= 0) continue; // only descendant rows hang off parents
     const order = orderedByGen.get(g)!;
     const desired = new Map<string, number>();
     let ok = true;
     for (const id of order) {
-      const drawnParents = (parentsOf.get(id) ?? []).filter((p) => drawable.has(p) && y.has(p));
+      const drawnParents = (parentsOf.get(id) ?? []).filter((p) => drawable.has(p) && x.has(p));
       if (drawnParents.length === 0) {
         ok = false;
         break;
       }
-      const mean = drawnParents.reduce((acc, p) => acc + y.get(p)!, 0) / drawnParents.length;
+      const mean = drawnParents.reduce((acc, p) => acc + x.get(p)!, 0) / drawnParents.length;
       desired.set(id, mean);
     }
     if (!ok) continue;
-    // Keep birth order; require the desired means to be non-overlapping (≥ ROW_STEP
+    // Keep birth order; require the desired means to be non-overlapping (≥ CROSS_STEP
     // apart) in that order. If so, adopt them; else leave provisional slots.
     let strictly = true;
     for (let i = 1; i < order.length; i++) {
-      if (desired.get(order[i]!)! - desired.get(order[i - 1]!)! < ROW_STEP - 1e-6) {
+      if (desired.get(order[i]!)! - desired.get(order[i - 1]!)! < CROSS_STEP - 1e-6) {
         strictly = false;
         break;
       }
     }
     if (strictly) {
-      for (const id of order) y.set(id, desired.get(id)!);
+      for (const id of order) x.set(id, desired.get(id)!);
     }
   }
 
   // --- Assemble placed nodes ----------------------------------------------
-  const rawX = new Map<string, number>();
-  for (const id of drawable) rawX.set(id, xForGen(generation.get(id)!));
+  const rawY = new Map<string, number>();
+  for (const id of drawable) rawY.set(id, yForGen(generation.get(id)!));
 
   // Normalize both axes so the tightest bounding box (card edges) starts at 0.
+  // The top axis gets extra headroom (TOP_PAD) so ancestor-gutter carets don't clip.
   const drawnIds = [...drawable];
   let minX = Infinity;
   let minY = Infinity;
   for (const id of drawnIds) {
-    minX = Math.min(minX, rawX.get(id)!);
-    minY = Math.min(minY, y.get(id)!);
+    minX = Math.min(minX, x.get(id)!);
+    minY = Math.min(minY, rawY.get(id)!);
   }
   if (!isFinite(minX)) minX = 0;
   if (!isFinite(minY)) minY = 0;
   const offsetX = -minX + NODE_W / 2;
-  const offsetY = -minY + NODE_H / 2;
+  const offsetY = -minY + NODE_H / 2 + TOP_PAD;
 
   const placed: PlacedNode[] = drawnIds
     .map((id) => ({
       personId: id,
-      x: rawX.get(id)! + offsetX,
-      y: y.get(id)! + offsetY,
+      x: x.get(id)! + offsetX,
+      y: rawY.get(id)! + offsetY,
       generation: generation.get(id)!,
       node: nodeById.get(id)!,
     }))
     .sort((a, b) =>
       a.generation !== b.generation
         ? a.generation - b.generation
-        : a.y !== b.y
-          ? a.y - b.y
+        : a.x !== b.x
+          ? a.x - b.x
           : a.personId < b.personId
             ? -1
             : 1,
@@ -463,60 +457,60 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     unions.push({
       aPersonId: e.personAId,
       bPersonId: e.personBId,
-      x: a.x, // partners share a generation ⇒ same x column
-      y: (a.y + b.y) / 2,
+      x: (a.x + b.x) / 2,
+      y: a.y, // partners share a generation ⇒ same y row
     });
   }
 
   // --- Connectors ---------------------------------------------------------
+  // Descent (vertical axis): a parent (smaller generation) sits ABOVE its child,
+  // so the connector runs from the parent's BOTTOM edge to the child's TOP edge,
+  // elbowed via a mid-Y.
   const connectors: Connector[] = [];
-  // Descent (horizontal axis): a parent (smaller generation) sits to the RIGHT of
-  // its child, so the connector runs from the parent's LEFT edge to the child's
-  // RIGHT edge, elbowed via a mid-X.
   for (const e of sortedEdges) {
     if (e.edgeType !== "parent_of") continue;
     const p = posOf.get(e.personAId);
     const c = posOf.get(e.personBId);
     if (!p || !c) continue;
-    const px = p.x - NODE_W / 2; // parent's child-facing (LEFT) edge
-    const py = p.y;
-    const cx = c.x + NODE_W / 2; // child's parent-facing (RIGHT) edge
-    const cy = c.y;
-    const midX = (px + cx) / 2;
+    const px = p.x;
+    const py = p.y + NODE_H / 2; // parent's child-facing (BOTTOM) edge
+    const cx = c.x;
+    const cy = c.y - NODE_H / 2; // child's parent-facing (TOP) edge
+    const midY = (py + cy) / 2;
     connectors.push({
       kind: "descent",
-      d: `M ${px} ${py} L ${midX} ${py} L ${midX} ${cy} L ${cx} ${cy}`,
+      d: `M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`,
     });
   }
-  // Partner (vertical): the two cards share an x column and differ in y. Link runs
-  // from the lower card's TOP edge to the upper card's BOTTOM edge.
+  // Partner (horizontal): the two cards share a y row and differ in x. Link runs
+  // from the left card's RIGHT edge to the right card's LEFT edge.
   for (const u of unions) {
     const a = posOf.get(u.aPersonId)!;
     const b = posOf.get(u.bPersonId)!;
-    const upper = a.y < b.y ? a : b;
-    const lower = a.y < b.y ? b : a;
+    const left = a.x < b.x ? a : b;
+    const right = a.x < b.x ? b : a;
     connectors.push({
       kind: "partner",
-      d: `M ${lower.x} ${lower.y - NODE_H / 2} L ${upper.x} ${upper.y + NODE_H / 2}`,
+      d: `M ${left.x + NODE_W / 2} ${left.y} L ${right.x - NODE_W / 2} ${right.y}`,
     });
   }
 
   // --- Per-edge affordances (collapse / expand / fetch) -------------------
   // Exactly ONE affordance per (node, direction) — never two glyphs on the same edge. State per edge:
-  //   ANCESTOR (RIGHT) edge, for a drawn node with id and loadedParents / drawnParents:
+  //   ANCESTOR (TOP) gutter, for a drawn node with id and loadedParents / drawnParents:
   //     • node ∈ collapsedAncestors AND it has parents to show (loaded or hidden) → "expand".
   //     • else drawnParents.length > 0 (a drawn branch exists) → "collapse".
   //     • else undrawn parents exist (hasHiddenParents, or loaded-but-not-drawn) → "fetch".
   //       (This "fetch" is what preserves Finding 1: a loaded-but-undrawn parent yields a fetch caret,
   //       NOT an EmptyParentSlot, so activating it can never mint a duplicate parent.)
   //     • else (zero loaded parents and no hidden) → NO affordance; the EmptyParentSlot fires instead.
-  //   DESCENDANT (LEFT) edge mirrors the above with children / collapsedChildren / hasHiddenChildren.
+  //   DESCENDANT (BOTTOM) gutter mirrors the above with children / collapsedChildren / hasHiddenChildren.
   const affordances: EdgeAffordance[] = [];
   for (const p of placed) {
     const id = p.personId;
     const n = p.node;
 
-    // Ancestor (right) edge.
+    // Ancestor (top) gutter.
     {
       const loadedParents = parentsOf.get(id) ?? [];
       const drawnParents = loadedParents.filter((pp) => drawable.has(pp));
@@ -531,11 +525,17 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         state = "fetch";
       }
       if (state) {
-        affordances.push({ direction: "ancestors", personId: id, x: p.x + NODE_W / 2, y: p.y, state });
+        affordances.push({
+          direction: "ancestors",
+          personId: id,
+          x: p.x,
+          y: p.y - NODE_H / 2 - CARET_GAP,
+          state,
+        });
       }
     }
 
-    // Descendant (left) edge.
+    // Descendant (bottom) gutter.
     {
       const loadedChildren = childrenOf.get(id) ?? [];
       const drawnChildren = loadedChildren.filter((cc) => drawable.has(cc));
@@ -550,7 +550,13 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         state = "fetch";
       }
       if (state) {
-        affordances.push({ direction: "descendants", personId: id, x: p.x - NODE_W / 2, y: p.y, state });
+        affordances.push({
+          direction: "descendants",
+          personId: id,
+          x: p.x,
+          y: p.y + NODE_H / 2 + CARET_GAP,
+          state,
+        });
       }
     }
   }
@@ -568,8 +574,8 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
 
   // --- Empty parent slots -------------------------------------------------
   // One per drawn node with ZERO LOADED parent edges AND hasHiddenParents === false — i.e. a node with
-  // NO parent recorded at all (truly the add-parent frontier / bridge creation point), on the ancestor
-  // (RIGHT) edge. Uses the UNFILTERED loaded-parent count, not the drawn count: a node that has a
+  // NO parent recorded at all (truly the add-parent frontier / bridge creation point), in the ancestor
+  // (TOP) gutter. Uses the UNFILTERED loaded-parent count, not the drawn count: a node that has a
   // loaded-but-undrawn parent already HAS a parent, so offering "Add parent" there would create a
   // duplicate/conflicting edge (Finding 1). Such a node gets an ancestor 'fetch' affordance instead
   // (above). Mutually exclusive with the ancestor affordance: slot ⇔ zero loaded parents AND no hidden;
@@ -580,8 +586,8 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     if (loadedParents.length === 0 && !p.node.hasHiddenParents) {
       emptyParentSlots.push({
         personId: p.personId,
-        x: p.x + NODE_W / 2,
-        y: p.y,
+        x: p.x,
+        y: p.y - NODE_H / 2 - CARET_GAP,
       });
     }
   }

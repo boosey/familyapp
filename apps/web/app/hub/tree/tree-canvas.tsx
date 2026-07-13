@@ -113,6 +113,8 @@ export function TreeCanvas({
   const [pending, setPending] = useState(false);
   const [animating, setAnimating] = useState(false);
 
+  // The scroll/pan viewport element — measured so Fit can center the root vertically.
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   // Drag-to-pan bookkeeping (the viewport background).
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   // Tap bookkeeping (a node card): remember which node + where the pointer went down.
@@ -134,14 +136,18 @@ export function TreeCanvas({
     [adj],
   );
 
-  /** Reframe so the root sits near the top-center of the viewport. */
+  /**
+   * Reframe so the root sits horizontally centered and a bit below the vertical middle — leaving the
+   * ancestor rows (which stack ABOVE the root in the portrait pedigree) comfortably in view.
+   */
   const fitToRoot = useCallback(() => {
     const root = layout.placed.find((p) => p.personId === rootPersonId) ?? layout.placed[0];
     if (!root) {
       setPan({ x: 0, y: 0 });
       return;
     }
-    setPan({ x: -root.x, y: -root.y + NODE_H });
+    const vh = viewportRef.current?.clientHeight ?? 480;
+    setPan({ x: -root.x, y: vh * 0.58 - root.y });
   }, [layout, rootPersonId]);
 
   // Center on the root at first paint AND on every client re-root (spec §7 Fit). Only when the root
@@ -344,6 +350,7 @@ export function TreeCanvas({
 
       {/* Canvas viewport */}
       <div
+        ref={viewportRef}
         data-testid="tree-viewport"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -448,9 +455,35 @@ export function TreeCanvas({
 }
 
 /**
- * A single per-edge caret. Ancestors sit on the RIGHT edge, descendants on the LEFT edge. The glyph
- * points OUTWARD (away from the node) to reveal/expand more kin, and INWARD (toward the node) to
- * collapse a drawn branch. Copy/aria is keyed by direction × state (all keys already in _copy/hub.ts).
+ * A thin FamilySearch-style chevron pointing UP by default, rotated 180° to point down. Stroke-only
+ * (no fill) so it reads as a light hairline glyph, not a filled arrowhead.
+ */
+function Chevron({ down }: { down: boolean }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      style={{ display: "block", transform: down ? "rotate(180deg)" : undefined }}
+    >
+      <polyline
+        points="5,12.5 10,7.5 15,12.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * A single per-edge caret in the vertical gutter. Ancestors sit in the TOP gutter, descendants in the
+ * BOTTOM gutter (portrait pedigree). The chevron points OUTWARD (away from the node) to reveal/expand
+ * more kin — UP for ancestors, DOWN for descendants — and INWARD (toward the node) to collapse a drawn
+ * branch. Copy/aria is keyed by direction × state (all keys already in _copy/hub.ts).
  */
 function CaretButton({
   aff,
@@ -459,9 +492,9 @@ function CaretButton({
   aff: EdgeAffordance;
   onActivate: (a: EdgeAffordance) => void;
 }) {
-  const outward = aff.direction === "ancestors" ? "▸" : "◂"; // reveal/expand → point away from node
-  const inward = aff.direction === "ancestors" ? "◂" : "▸"; // collapse → point toward node
-  const glyph = aff.state === "collapse" ? inward : outward;
+  // Outward = reveal/expand; inward = collapse. For ancestors, outward is UP; for descendants, DOWN.
+  const outwardDown = aff.direction === "descendants";
+  const down = aff.state === "collapse" ? !outwardDown : outwardDown;
   const label =
     aff.direction === "ancestors"
       ? aff.state === "collapse"
@@ -474,7 +507,7 @@ function CaretButton({
         : aff.state === "expand"
           ? hub.tree.expandChildren
           : hub.tree.showDescendants;
-  const size = 22;
+  const size = 24;
   return (
     <button
       type="button"
@@ -498,18 +531,17 @@ function CaretButton({
         alignItems: "center",
         justifyContent: "center",
         borderRadius: "50%",
-        border: "var(--border-width) solid var(--border-strong)",
-        background: "var(--surface-card)",
-        color: "var(--text-muted)",
+        border: "none",
+        // A page-colored disc masks the connector line behind the glyph, so the chevron floats cleanly
+        // in the gutter (FamilySearch look) instead of colliding with the elbow it sits on.
+        background: "var(--surface-page)",
+        color: "var(--text-meta)",
         cursor: "pointer",
-        fontSize: "0.8rem",
-        fontWeight: 500,
-        lineHeight: 1,
         padding: 0,
         zIndex: 1,
       }}
     >
-      <span aria-hidden="true">{glyph}</span>
+      <Chevron down={down} />
     </button>
   );
 }
