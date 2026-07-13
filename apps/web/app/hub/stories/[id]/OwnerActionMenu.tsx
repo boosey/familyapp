@@ -6,17 +6,17 @@ import { deleteStoryAction } from "./actions";
 export interface OwnerActionMenuProps {
   storyId: string;
   isOwner: boolean;
-  onEditDetails: () => void;
-  onManageSharing: () => void;
   onEditStory: () => void;
+  onAddPhotos: () => void;
+  onManageSharing: () => void;
 }
 
 export function OwnerActionMenu({
   storyId,
   isOwner,
-  onEditDetails,
-  onManageSharing,
   onEditStory,
+  onAddPhotos,
+  onManageSharing,
 }: OwnerActionMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -177,7 +177,7 @@ export function OwnerActionMenu({
                 role="menuitem"
                 onClick={() => {
                   setOpen(false);
-                  onEditDetails();
+                  onEditStory();
                 }}
                 style={itemBaseStyle}
                 onMouseEnter={(e) => {
@@ -187,7 +187,24 @@ export function OwnerActionMenu({
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                ✏️ Edit details
+                📝 Edit story
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onAddPhotos();
+                }}
+                style={itemBaseStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--accent-soft)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                🖼️ Add photos
               </button>
               <button
                 type="button"
@@ -205,23 +222,6 @@ export function OwnerActionMenu({
                 }}
               >
                 👥 Manage sharing
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  onEditStory();
-                }}
-                style={itemBaseStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                📝 Edit story
               </button>
               <button
                 type="button"

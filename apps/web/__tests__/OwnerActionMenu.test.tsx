@@ -11,9 +11,9 @@ afterEach(() => {
 
 const defaultProps = {
   storyId: "story-123",
-  onEditDetails: vi.fn(),
-  onManageSharing: vi.fn(),
   onEditStory: vi.fn(),
+  onAddPhotos: vi.fn(),
+  onManageSharing: vi.fn(),
 };
 
 describe("OwnerActionMenu", () => {

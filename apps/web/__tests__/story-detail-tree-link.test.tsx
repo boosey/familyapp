@@ -16,11 +16,14 @@ vi.mock("@/app/hub/stories/[id]/actions", () => ({
   editStoryDetailsAction: vi.fn(),
   retargetStoryFamiliesAction: vi.fn(),
   editStoryProseAction: vi.fn(),
+  tagStorySubjectAction: vi.fn(),
+  untagStorySubjectAction: vi.fn(),
 }));
 vi.mock("@/app/hub/stories/[id]/FavoriteButton", () => ({ FavoriteButton: () => null }));
 vi.mock("@/app/hub/stories/[id]/LikeButton", () => ({ LikeButton: () => null }));
 vi.mock("@/app/hub/stories/[id]/OwnerActionMenu", () => ({ OwnerActionMenu: () => null }));
 vi.mock("@/app/hub/stories/[id]/StoryReadBody", () => ({ StoryReadBody: () => null }));
+vi.mock("@/app/hub/stories/[id]/StoryEditor", () => ({ StoryEditor: () => null }));
 
 afterEach(() => {
   cleanup();
@@ -47,6 +50,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
     canReact: false,
     backHref: "/hub?tab=stories",
     storyImages: [],
+    initialPersonSubjects: [],
+    tagSuggestions: { people: [], families: [], tags: [] },
     ...over,
   };
 }

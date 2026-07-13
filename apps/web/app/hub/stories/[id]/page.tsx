@@ -15,7 +15,7 @@ import { getRuntime } from "@/lib/runtime";
 import { markStorySeen, loadStoryFamilyTargets, loadViewerFamilies } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { StoryDetailClient } from "./StoryDetailClient";
-import { StorySubjectsSection } from "./StorySubjectsSection";
+import { loadTagSuggestionsAction } from "@/app/hub/tag-suggestions-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,9 +87,11 @@ export default async function StoryDetailPage({
   // Who this story is about (issue #35). SEE-gated read; a signed-in viewer may tag/untag.
   const subjects = (await listStorySubjects(db, ctx, story.id)).map((s) => ({
     personId: s.personId,
-    displayName: s.displayName,
+    displayName: s.displayName ?? "—",
   }));
-  const canTagSubjects = ctx.kind === "account";
+
+  const suggestions = await loadTagSuggestionsAction(story.id);
+  const tagSuggestions = "error" in suggestions ? { people: [], families: [], tags: [] } : suggestions;
 
   return (
     <main className="kin-page">
@@ -114,14 +116,9 @@ export default async function StoryDetailPage({
         backHref={backHref}
         authorTreeHref={authorTreeHref}
         storyImages={storyImages}
+        initialPersonSubjects={subjects}
+        tagSuggestions={tagSuggestions}
       />
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 clamp(16px, 4vw, 32px)" }}>
-        <StorySubjectsSection
-          storyId={story.id}
-          subjects={subjects}
-          canEdit={canTagSubjects}
-        />
-      </div>
     </main>
   );
 }

@@ -2,19 +2,16 @@
 
 import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
-import {
-  editStoryDetailsAction,
-  retargetStoryFamiliesAction,
-  editStoryProseAction,
-} from "./actions";
+import { retargetStoryFamiliesAction } from "./actions";
 import { FavoriteButton } from "./FavoriteButton";
 import { LikeButton } from "./LikeButton";
 import { OwnerActionMenu } from "./OwnerActionMenu";
 import { StoryReadBody } from "./StoryReadBody";
+import { StoryEditor } from "./StoryEditor";
 import { FamilyPicker } from "../../FamilyPicker";
-import { KindredProseEditor } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import type { FavoriteState, LikeState } from "@chronicle/core";
+import type { TagSuggestions } from "@/app/hub/tag-input-types";
 
 export interface StoryDetailClientProps {
   storyId: string;
@@ -43,6 +40,9 @@ export interface StoryDetailClientProps {
   authorTreeHref?: string | null;
   // Accompaniments
   storyImages: Array<{ id: string; familyPhotoId: string; caption: string | null }>;
+  // Unified editor (StoryEditor) — subjects + tag suggestions
+  initialPersonSubjects: { personId: string; displayName: string }[];
+  tagSuggestions: TagSuggestions;
 }
 
 export function StoryDetailClient({
@@ -65,6 +65,8 @@ export function StoryDetailClient({
   backHref,
   authorTreeHref,
   storyImages,
+  initialPersonSubjects,
+  tagSuggestions,
 }: StoryDetailClientProps) {
   // State for content
   const [title, setTitle] = useState(initialTitle);
@@ -73,20 +75,13 @@ export function StoryDetailClient({
   const [targetFamilies, setTargetFamilies] = useState(initialTargetFamilies);
 
   // UI modes
-  const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [isEditingSharing, setIsEditingSharing] = useState(false);
-  const [isEditingProse, setIsEditingProse] = useState(false);
-
-  // Edit details form state
-  const [editTitle, setEditTitle] = useState(title);
-  const [editTagsStr, setEditTagsStr] = useState(tags.join(", "));
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [focusPhotos, setFocusPhotos] = useState(false);
 
   // Manage sharing state
   const selectedFamilyIds = useMemo(() => new Set(targetFamilies.map((f) => f.id)), [targetFamilies]);
   const [editSelectedFamilies, setEditSelectedFamilies] = useState<Set<string>>(new Set(selectedFamilyIds));
-
-  // Edit prose state
-  const [editProse, setEditProse] = useState(prose);
 
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -99,30 +94,6 @@ export function StoryDetailClient({
       .slice(0, 2)
       .map((w) => w.charAt(0).toUpperCase())
       .join("");
-  };
-
-  const handleEditDetailsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setActionError(null);
-    const fd = new FormData();
-    fd.append("storyId", storyId);
-    fd.append("title", editTitle);
-    fd.append("tags", editTagsStr);
-
-    startTransition(async () => {
-      const res = await editStoryDetailsAction(fd);
-      if (res?.error) {
-        setActionError(res.error);
-      } else {
-        setTitle(editTitle.trim());
-        const processedTags = editTagsStr
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
-        setTags(processedTags);
-        setIsEditingDetails(false);
-      }
-    });
   };
 
   const handleSharingSubmit = async (e: React.FormEvent) => {
@@ -145,24 +116,6 @@ export function StoryDetailClient({
           .map((f) => ({ id: f.id, name: f.name }));
         setTargetFamilies(updated);
         setIsEditingSharing(false);
-      }
-    });
-  };
-
-  const handleProseSubmit = async () => {
-    setActionError(null);
-    const fd = new FormData();
-    fd.append("storyId", storyId);
-    fd.append("prose", editProse);
-    fd.append("expectedUpdatedAt", updatedAt);
-
-    startTransition(async () => {
-      const res = await editStoryProseAction(fd);
-      if (res?.error) {
-        setActionError(res.error);
-      } else {
-        setProse(editProse.trim());
-        setIsEditingProse(false);
       }
     });
   };
@@ -207,18 +160,17 @@ export function StoryDetailClient({
           <OwnerActionMenu
             storyId={storyId}
             isOwner={isOwner}
-            onEditDetails={() => {
-              setEditTitle(title);
-              setEditTagsStr(tags.join(", "));
-              setIsEditingDetails(true);
+            onEditStory={() => {
+              setFocusPhotos(false);
+              setEditorOpen(true);
+            }}
+            onAddPhotos={() => {
+              setFocusPhotos(true);
+              setEditorOpen(true);
             }}
             onManageSharing={() => {
               setEditSelectedFamilies(new Set(selectedFamilyIds));
               setIsEditingSharing(true);
-            }}
-            onEditStory={() => {
-              setEditProse(prose);
-              setIsEditingProse(true);
             }}
           />
         )}
@@ -305,85 +257,19 @@ export function StoryDetailClient({
         )}
       </div>
 
-      {/* Edit Details Inline Form */}
-      {isEditingDetails ? (
-        <form onSubmit={handleEditDetailsSubmit} style={{ marginTop: 20, display: "grid", gap: 16 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", fontWeight: 600 }}>Title</label>
-            <input
-              type="text"
-              required
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              disabled={isPending}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-sm, 4px)",
-                border: "1px solid var(--border)",
-                background: "var(--surface-card)",
-                fontFamily: "var(--font-story)",
-                fontSize: "var(--text-ui)",
-                color: "var(--text-body)",
-                width: "100%",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", fontWeight: 600 }}>Tags (comma separated)</label>
-            <input
-              type="text"
-              value={editTagsStr}
-              onChange={(e) => setEditTagsStr(e.target.value)}
-              disabled={isPending}
-              placeholder="e.g. Vacation, 1995, Grandparents"
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-sm, 4px)",
-                border: "1px solid var(--border)",
-                background: "var(--surface-card)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui)",
-                color: "var(--text-body)",
-                width: "100%",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-            <button
-              type="button"
-              onClick={() => setIsEditingDetails(false)}
-              disabled={isPending}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "var(--radius-pill, 999px)",
-                border: "1px solid var(--border)",
-                background: "transparent",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                padding: "8px 20px",
-                borderRadius: "var(--radius-pill, 999px)",
-                border: "none",
-                background: "var(--accent-strong)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              {isPending ? "Saving..." : "Save details"}
-            </button>
-          </div>
-        </form>
+      {/* Consolidated editor (title · tags · prose · photos) or read-only view */}
+      {editorOpen ? (
+        <StoryEditor
+          storyId={storyId}
+          initialTitle={title}
+          initialTags={tags}
+          initialProse={prose}
+          initialPersonSubjects={initialPersonSubjects}
+          initialTargetFamilies={targetFamilies}
+          suggestions={tagSuggestions}
+          focusPhotos={focusPhotos}
+          onClose={() => setEditorOpen(false)}
+        />
       ) : (
         <>
           <h1
@@ -536,48 +422,8 @@ export function StoryDetailClient({
         </div>
       )}
 
-      {/* Prose Editing Body / Reading Body */}
-      {isEditingProse ? (
-        <div style={{ display: "grid", gap: 16 }}>
-          <KindredProseEditor
-            value={editProse}
-            onChange={setEditProse}
-            disabled={isPending}
-          />
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setIsEditingProse(false)}
-              disabled={isPending}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "var(--radius-pill, 999px)",
-                border: "1px solid var(--border)",
-                background: "transparent",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleProseSubmit}
-              disabled={isPending}
-              style={{
-                padding: "8px 20px",
-                borderRadius: "var(--radius-pill, 999px)",
-                border: "none",
-                background: "var(--accent-strong)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              {isPending ? "Saving..." : "Save story"}
-            </button>
-          </div>
-        </div>
-      ) : (
+      {/* Reading Body (hidden while the consolidated editor owns prose editing) */}
+      {!editorOpen && (
         <div style={{ marginTop: 12 }}>
           <StoryReadBody
             prose={prose || initialSummary || null}
