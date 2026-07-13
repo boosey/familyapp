@@ -17,14 +17,18 @@
  * exif fields on the input already exist because they are the shared contract #16 (multi-family
  * picker) and #17 (EXIF at import) build on — this file writes whatever it is handed.
  */
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   familyPhotoFamilies,
   familyPhotos,
+  photoPeople,
+  photoPlaces,
+  photoSubjects,
+  places,
   stories,
   storyImages,
 } from "@chronicle/db/content";
-import { families, memberships } from "@chronicle/db/schema";
+import { families, memberships, persons } from "@chronicle/db/schema";
 import type { Database, FamilyPhoto, PhotoSource } from "@chronicle/db";
 import {
   type AuthContext,
@@ -417,4 +421,561 @@ export async function getAlbumPhotoForViewer(
     .limit(1);
   const decision = await decideAlbumPhotoRead(db, ctx, photo);
   return decision.allowed ? (photo ?? null) : null;
+}
+
+// ===========================================================================
+// Photo tagging — subjects, people, and places (album enhancements, 2026-07-13).
+//
+// These mirror `story_subjects` tagging (story-repository.ts): a `photo_subjects` / `photo_people` /
+// `photo_places` row is a PLAIN association behind the content wall, gated by the SAME front door as
+// the photo it references. Authorization model:
+//   - tag / untag / list  = SEE-gated. The actor must be able to READ the photo
+//     (`authorizeAlbumPhotoRead`) AND be an identified account (`viewerPersonId !== null`). Any
+//     co-viewer may tag; tagging NEVER widens who can see the photo (it is not an access grant). A
+//     viewer who cannot see the photo is DENIED on tag/untag (returns the denial `AuthDecision`, does
+//     NOT throw for authz — matching `setAlbumPhotoCaption`) and gets an EMPTY list on reads (no leak).
+//   - retargetPhotoFamilies = MANAGE-gated (contributor or steward), mirroring `retargetStoryFamilies`.
+//
+// The inline-mention path is IDENTICAL to `tagStorySubject`: a named subject/person not yet a Person
+// is minted as `origin='mention'`, `identified=true`, `spokenName` = first whitespace-delimited word.
+// ===========================================================================
+
+/** A tagged Person on a photo (subject OR appears-in). Mirrors `StorySubjectView`. */
+export interface PhotoTagPersonView {
+  personId: string;
+  /** NULL only for an anonymous placeholder mention; a tagged person is normally named. */
+  displayName: string | null;
+  taggedByPersonId: string;
+  createdAt: Date;
+}
+
+/** A place tagged on a photo. */
+export interface PhotoPlaceView {
+  placeId: string;
+  name: string;
+  familyId: string;
+  taggedByPersonId: string;
+  createdAt: Date;
+}
+
+export interface TagPhotoPersonInput {
+  photoId: string;
+  /** Tag an EXISTING Person by id. Mutually exclusive with `newPersonDisplayName`. */
+  personId?: string;
+  /** Create an identified `mention` Person with this name and tag it, in one operation. */
+  newPersonDisplayName?: string;
+}
+
+export type TagPhotoPersonResult = AuthDecision & {
+  tagged?: true;
+  /** The Person now tagged (existing id, or the freshly-minted mention). */
+  personId?: string;
+  /** Set only when a `mention` Person was created inline (equals `personId`). */
+  createdPersonId?: string;
+};
+
+/**
+ * SEE-gate helper for the tag surface: the actor must be an identified account AND able to read the
+ * photo. Returns `{ viewer, decision }`; when `decision.allowed` is false the caller returns it
+ * unchanged (no throw, no write). Mirrors `setAlbumPhotoCaption`'s pattern of returning the decision.
+ */
+async function decidePhotoTag(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<{ viewer: string | null; decision: AuthDecision }> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) {
+    return { viewer, decision: DENY("anonymous request cannot tag an album photo") };
+  }
+  const decision = await authorizeAlbumPhotoRead(db, ctx, photoId);
+  return { viewer, decision };
+}
+
+/**
+ * Mint an identified `mention` Person (mirrors `tagStorySubject` / kinship-write `insertMentionPerson`).
+ * Runs inside a caller transaction handle.
+ */
+async function insertMentionPersonTx(
+  tx: Pick<Database, "insert">,
+  newPersonDisplayName: string,
+): Promise<string> {
+  const displayName = newPersonDisplayName.trim();
+  if (displayName.length === 0) {
+    throw new InvariantViolation("newPersonDisplayName must be non-empty");
+  }
+  const spokenName = displayName.split(/\s+/)[0] ?? null;
+  const [row] = await tx
+    .insert(persons)
+    .values({ displayName, spokenName, origin: "mention", identified: true, accountId: null })
+    .returning({ id: persons.id });
+  return row!.id;
+}
+
+/**
+ * Shared tag-a-person implementation for both `photo_subjects` and `photo_people` (identical shape).
+ * `table` is the link table to write. SEE-gated; either tag `personId` or mint a `mention` from
+ * `newPersonDisplayName` (exactly one). Idempotent per (photoId, personId) via the unique index — a
+ * duplicate is a success with no new row and no mint (the mint runs only when `newPersonDisplayName`
+ * is given). If SEE-denied, returns the denial with no insert and no person minted.
+ */
+async function tagPhotoPersonInto(
+  db: Database,
+  ctx: AuthContext,
+  table: typeof photoSubjects | typeof photoPeople,
+  input: TagPhotoPersonInput,
+): Promise<TagPhotoPersonResult> {
+  const hasExisting = input.personId !== undefined;
+  const hasNew = input.newPersonDisplayName !== undefined;
+  if (hasExisting === hasNew) {
+    throw new InvariantViolation(
+      "tagPhoto*: provide exactly one of personId or newPersonDisplayName",
+    );
+  }
+  const { viewer, decision } = await decidePhotoTag(db, ctx, input.photoId);
+  if (!decision.allowed || viewer === null) return decision;
+
+  return db.transaction(async (tx) => {
+    let personId: string;
+    let createdPersonId: string | undefined;
+    if (hasNew) {
+      personId = await insertMentionPersonTx(tx, input.newPersonDisplayName!);
+      createdPersonId = personId;
+    } else {
+      personId = input.personId!;
+    }
+    await tx
+      .insert(table)
+      .values({ photoId: input.photoId, personId, taggedByPersonId: viewer })
+      .onConflictDoNothing({ target: [table.photoId, table.personId] });
+    const result: TagPhotoPersonResult = { ...ALLOW, tagged: true, personId };
+    if (createdPersonId !== undefined) result.createdPersonId = createdPersonId;
+    return result;
+  });
+}
+
+/** SEE-gated delete from a person link table (idempotent). */
+async function untagPhotoPersonFrom(
+  db: Database,
+  ctx: AuthContext,
+  table: typeof photoSubjects | typeof photoPeople,
+  input: { photoId: string; personId: string },
+): Promise<AuthDecision> {
+  const { decision } = await decidePhotoTag(db, ctx, input.photoId);
+  if (!decision.allowed) return decision;
+  await db
+    .delete(table)
+    .where(and(eq(table.photoId, input.photoId), eq(table.personId, input.personId)));
+  return decision;
+}
+
+/** SEE-gated read of a person link table; empty when the viewer cannot see the photo. */
+async function listPhotoPeopleFrom(
+  db: Database,
+  ctx: AuthContext,
+  table: typeof photoSubjects | typeof photoPeople,
+  photoId: string,
+): Promise<PhotoTagPersonView[]> {
+  const decision = await authorizeAlbumPhotoRead(db, ctx, photoId);
+  if (!decision.allowed) return [];
+  const rows = await db
+    .select({
+      personId: table.personId,
+      displayName: persons.displayName,
+      taggedByPersonId: table.taggedByPersonId,
+      createdAt: table.createdAt,
+    })
+    .from(table)
+    .innerJoin(persons, eq(persons.id, table.personId))
+    .where(eq(table.photoId, photoId))
+    .orderBy(asc(table.createdAt));
+  return rows.map((r) => ({
+    personId: r.personId,
+    displayName: r.displayName,
+    taggedByPersonId: r.taggedByPersonId,
+    createdAt: r.createdAt,
+  }));
+}
+
+/** Tag a Person as a SUBJECT of a photo (who it is ABOUT). SEE-gated. */
+export function tagPhotoSubject(
+  db: Database,
+  ctx: AuthContext,
+  input: TagPhotoPersonInput,
+): Promise<TagPhotoPersonResult> {
+  return tagPhotoPersonInto(db, ctx, photoSubjects, input);
+}
+
+/** Untag a subject Person from a photo. SEE-gated, idempotent. */
+export function untagPhotoSubject(
+  db: Database,
+  ctx: AuthContext,
+  input: { photoId: string; personId: string },
+): Promise<AuthDecision> {
+  return untagPhotoPersonFrom(db, ctx, photoSubjects, input);
+}
+
+/** The Persons a photo is ABOUT. SEE-gated; empty if the viewer cannot see the photo. */
+export function listPhotoSubjects(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<PhotoTagPersonView[]> {
+  return listPhotoPeopleFrom(db, ctx, photoSubjects, photoId);
+}
+
+/** Tag a Person as APPEARING in a photo (distinct from subjects). SEE-gated. */
+export function tagPhotoPerson(
+  db: Database,
+  ctx: AuthContext,
+  input: TagPhotoPersonInput,
+): Promise<TagPhotoPersonResult> {
+  return tagPhotoPersonInto(db, ctx, photoPeople, input);
+}
+
+/** Untag an appears-in Person from a photo. SEE-gated, idempotent. */
+export function untagPhotoPerson(
+  db: Database,
+  ctx: AuthContext,
+  input: { photoId: string; personId: string },
+): Promise<AuthDecision> {
+  return untagPhotoPersonFrom(db, ctx, photoPeople, input);
+}
+
+/** The Persons who APPEAR in a photo. SEE-gated; empty if the viewer cannot see the photo. */
+export function listPhotoPeople(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<PhotoTagPersonView[]> {
+  return listPhotoPeopleFrom(db, ctx, photoPeople, photoId);
+}
+
+// ---------------------------------------------------------------------------
+// Places
+// ---------------------------------------------------------------------------
+
+export interface TagPhotoPlaceInput {
+  photoId: string;
+  /** Link an EXISTING place by id. Mutually exclusive with `newPlaceName`. */
+  placeId?: string;
+  /** Create-or-reuse a place with this name in the resolved target family. */
+  newPlaceName?: string;
+  /**
+   * The target family for a NEW place. Honored only when the photo is placed in it AND the viewer is
+   * an active member of it. When omitted, the family is resolved from the photo's placements (must be
+   * unambiguous — exactly one). Ignored for the `placeId` path.
+   */
+  familyId?: string;
+}
+
+export type TagPhotoPlaceResult = AuthDecision & {
+  tagged?: true;
+  placeId?: string;
+  /** Set only when a new `places` row was created. */
+  createdPlaceId?: string;
+};
+
+/** Case-insensitive name reuse within a family; else insert a new `places` row seeded from EXIF GPS. */
+async function resolveOrCreatePlaceTx(
+  tx: Database,
+  familyId: string,
+  name: string,
+  createdByPersonId: string,
+  exifGps: { lat: number; lng: number } | null,
+): Promise<{ placeId: string; created: boolean }> {
+  const [existing] = await tx
+    .select({ id: places.id })
+    .from(places)
+    .where(and(eq(places.familyId, familyId), sql`lower(${places.name}) = lower(${name})`))
+    .limit(1);
+  if (existing) return { placeId: existing.id, created: false };
+  const [row] = await tx
+    .insert(places)
+    .values({ familyId, name, createdByPersonId, exifGps: exifGps ?? null })
+    .returning({ id: places.id });
+  return { placeId: row!.id, created: true };
+}
+
+/**
+ * Tag a photo with a place. SEE-gated. Two modes:
+ *   - `placeId`: link an existing place, VALIDATING its family is one the photo is placed in.
+ *   - `newPlaceName`: resolve the target family, then create-or-reuse the place (case-insensitive
+ *     dedup within that family, seeded from the photo's `exif_gps`), then link it.
+ * The `photo_places` insert is idempotent per (photoId, placeId).
+ *
+ * New-place family resolution: use `familyId` when given AND the photo is placed in it AND the viewer
+ * is an active member of it; otherwise, if the photo is in exactly ONE family, use that; otherwise
+ * DENY as ambiguous (the caller must pass `familyId`).
+ */
+export async function tagPhotoPlace(
+  db: Database,
+  ctx: AuthContext,
+  input: TagPhotoPlaceInput,
+): Promise<TagPhotoPlaceResult> {
+  const hasExisting = input.placeId !== undefined;
+  const hasNew = input.newPlaceName !== undefined;
+  if (hasExisting === hasNew) {
+    throw new InvariantViolation(
+      "tagPhotoPlace: provide exactly one of placeId or newPlaceName",
+    );
+  }
+  const { viewer, decision } = await decidePhotoTag(db, ctx, input.photoId);
+  if (!decision.allowed || viewer === null) return decision;
+
+  // The families this (non-deleted, viewer-visible) photo is placed in.
+  const placementRows = await db
+    .select({ familyId: familyPhotoFamilies.familyId })
+    .from(familyPhotoFamilies)
+    .where(eq(familyPhotoFamilies.photoId, input.photoId));
+  const placementFamilies = new Set(placementRows.map((r) => r.familyId));
+
+  return db.transaction(async (tx) => {
+    let placeId: string;
+    let createdPlaceId: string | undefined;
+
+    if (hasExisting) {
+      const [place] = await tx
+        .select({ familyId: places.familyId })
+        .from(places)
+        .where(eq(places.id, input.placeId!))
+        .limit(1);
+      if (!place) {
+        throw new InvariantViolation(`tagPhotoPlace: place ${input.placeId} not found`);
+      }
+      if (!placementFamilies.has(place.familyId)) {
+        throw new InvariantViolation(
+          `tagPhotoPlace: place ${input.placeId} belongs to a family the photo is not placed in`,
+        );
+      }
+      placeId = input.placeId!;
+    } else {
+      const name = input.newPlaceName!.trim();
+      if (name.length === 0) {
+        throw new InvariantViolation("tagPhotoPlace: newPlaceName must be non-empty");
+      }
+      // Resolve the target family.
+      const viewerFamilies = await activeFamilyIds(tx as Database, viewer);
+      let targetFamily: string | undefined;
+      if (input.familyId !== undefined) {
+        if (placementFamilies.has(input.familyId) && viewerFamilies.has(input.familyId)) {
+          targetFamily = input.familyId;
+        } else {
+          throw new InvariantViolation(
+            `tagPhotoPlace: familyId ${input.familyId} is not a family the photo is placed in ` +
+              `and the viewer is an active member of`,
+          );
+        }
+      } else if (placementFamilies.size === 1) {
+        targetFamily = [...placementFamilies][0]!;
+      } else {
+        throw new InvariantViolation(
+          "tagPhotoPlace: ambiguous family for new place — the photo is placed in multiple " +
+            "families; pass familyId",
+        );
+      }
+      // Seed exifGps from the photo when present.
+      const [photoRow] = await tx
+        .select({ exifGps: familyPhotos.exifGps })
+        .from(familyPhotos)
+        .where(eq(familyPhotos.id, input.photoId))
+        .limit(1);
+      const resolved = await resolveOrCreatePlaceTx(
+        tx as Database,
+        targetFamily,
+        name,
+        viewer,
+        photoRow?.exifGps ?? null,
+      );
+      placeId = resolved.placeId;
+      if (resolved.created) createdPlaceId = resolved.placeId;
+    }
+
+    await tx
+      .insert(photoPlaces)
+      .values({ photoId: input.photoId, placeId, taggedByPersonId: viewer })
+      .onConflictDoNothing({ target: [photoPlaces.photoId, photoPlaces.placeId] });
+
+    const result: TagPhotoPlaceResult = { ...ALLOW, tagged: true, placeId };
+    if (createdPlaceId !== undefined) result.createdPlaceId = createdPlaceId;
+    return result;
+  });
+}
+
+/** Untag a place from a photo. SEE-gated, idempotent. */
+export async function untagPhotoPlace(
+  db: Database,
+  ctx: AuthContext,
+  input: { photoId: string; placeId: string },
+): Promise<AuthDecision> {
+  const { decision } = await decidePhotoTag(db, ctx, input.photoId);
+  if (!decision.allowed) return decision;
+  await db
+    .delete(photoPlaces)
+    .where(
+      and(eq(photoPlaces.photoId, input.photoId), eq(photoPlaces.placeId, input.placeId)),
+    );
+  return decision;
+}
+
+/** The places a photo is tagged with. SEE-gated; empty if the viewer cannot see the photo. */
+export async function listPhotoPlaces(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<PhotoPlaceView[]> {
+  const decision = await authorizeAlbumPhotoRead(db, ctx, photoId);
+  if (!decision.allowed) return [];
+  const rows = await db
+    .select({
+      placeId: places.id,
+      name: places.name,
+      familyId: places.familyId,
+      taggedByPersonId: photoPlaces.taggedByPersonId,
+      createdAt: photoPlaces.createdAt,
+    })
+    .from(photoPlaces)
+    .innerJoin(places, eq(places.id, photoPlaces.placeId))
+    .where(eq(photoPlaces.photoId, photoId))
+    .orderBy(asc(photoPlaces.createdAt));
+  return rows;
+}
+
+/**
+ * The places in a family, for place suggestions/typeahead. The viewer must be an active member of
+ * `familyId`; a non-member (or anonymous) gets an empty list (no leak of a family's place names).
+ */
+export async function listPlacesForFamily(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+): Promise<{ placeId: string; name: string }[]> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return [];
+  const viewerFamilies = await activeFamilyIds(db, viewer);
+  if (!viewerFamilies.has(familyId)) return [];
+  const rows = await db
+    .select({ placeId: places.id, name: places.name })
+    .from(places)
+    .where(eq(places.familyId, familyId))
+    .orderBy(asc(places.name));
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// retargetPhotoFamilies — MANAGE-gated re-placement of a photo's album set.
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the set of families a photo is placed in. MANAGE-gated (contributor or steward), mirroring
+ * `retargetStoryFamilies`. Validates: every id in `familyIds` is a family the VIEWER is an active
+ * member of (a photo is never placed into a family the actor isn't in), de-dupes, and requires >=1.
+ * The `family_photo_families` set is replaced (delete old, insert new) in one transaction. On authz
+ * denial the decision is returned unchanged (no write).
+ */
+export async function retargetPhotoFamilies(
+  db: Database,
+  ctx: AuthContext,
+  input: { photoId: string; familyIds: string[] },
+): Promise<AuthDecision> {
+  const viewer = viewerPersonId(ctx);
+  const photo = await loadManageablePhoto(db, input.photoId);
+  const decision = await decideAlbumPhotoManage(db, ctx, photo);
+  if (!decision.allowed || viewer === null) return decision;
+
+  const familyIds = [...new Set(input.familyIds)];
+  if (familyIds.length === 0) {
+    throw new InvariantViolation(
+      "retargetPhotoFamilies: a photo must be placed in at least one family album",
+    );
+  }
+  const viewerFamilies = await activeFamilyIds(db, viewer);
+  for (const familyId of familyIds) {
+    if (!viewerFamilies.has(familyId)) {
+      throw new InvariantViolation(
+        `retargetPhotoFamilies: viewer is not an active member of family ${familyId}`,
+      );
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(familyPhotoFamilies)
+      .where(eq(familyPhotoFamilies.photoId, input.photoId));
+    await tx
+      .insert(familyPhotoFamilies)
+      .values(familyIds.map((familyId) => ({ photoId: input.photoId, familyId })));
+  });
+  return decision;
+}
+
+// ---------------------------------------------------------------------------
+// getAlbumPhotoDetail — the SEE-gated single-photo read for the tag-management UI.
+// ---------------------------------------------------------------------------
+
+export interface AlbumPhotoDetailView extends AlbumPhotoView {
+  contributorDisplayName: string | null;
+  /** The families the photo is placed in (its album placements). */
+  families: { familyId: string; familyName: string }[];
+  subjects: PhotoTagPersonView[];
+  people: PhotoTagPersonView[];
+  places: PhotoPlaceView[];
+  /** Whether the viewer may MANAGE the photo (contributor or steward). */
+  canManage: boolean;
+}
+
+/**
+ * A single photo plus everything the tag-management UI needs: its base fields, contributor name, its
+ * album placements, its tag groups, and the viewer's manage capability. SEE-gated — returns null if
+ * the viewer cannot see the photo (no leak). Tag groups are read via the same SEE-gated helpers, so
+ * they are always consistent with the top-level SEE decision.
+ */
+export async function getAlbumPhotoDetail(
+  db: Database,
+  ctx: AuthContext,
+  photoId: string,
+): Promise<AlbumPhotoDetailView | null> {
+  const [photo] = await db
+    .select()
+    .from(familyPhotos)
+    .where(eq(familyPhotos.id, photoId))
+    .limit(1);
+  const seeDecision = await decideAlbumPhotoRead(db, ctx, photo);
+  if (!seeDecision.allowed || !photo) return null;
+
+  const [contributor] = await db
+    .select({ displayName: persons.displayName })
+    .from(persons)
+    .where(eq(persons.id, photo.contributorPersonId))
+    .limit(1);
+
+  const familyRows = await db
+    .select({ familyId: families.id, familyName: families.name })
+    .from(familyPhotoFamilies)
+    .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
+    .where(eq(familyPhotoFamilies.photoId, photoId))
+    .orderBy(asc(families.name));
+
+  const [subjects, people, placeTags, manageDecision] = await Promise.all([
+    listPhotoSubjects(db, ctx, photoId),
+    listPhotoPeople(db, ctx, photoId),
+    listPhotoPlaces(db, ctx, photoId),
+    decideAlbumPhotoManage(db, ctx, photo),
+  ]);
+
+  return {
+    id: photo.id,
+    contributorPersonId: photo.contributorPersonId,
+    source: photo.source,
+    storageKey: photo.storageKey,
+    caption: photo.caption,
+    exifCapturedAt: photo.exifCapturedAt,
+    createdAt: photo.createdAt,
+    contributorDisplayName: contributor?.displayName ?? null,
+    families: familyRows,
+    subjects,
+    people,
+    places: placeTags,
+    canManage: manageDecision.allowed,
+  };
 }
