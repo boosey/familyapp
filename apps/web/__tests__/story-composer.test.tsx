@@ -57,6 +57,34 @@ vi.mock("@/app/hub/answer/[askId]/photo-actions", () => ({
   reorderStoryPhotosAction: vi.fn(),
 }));
 
+// The review phase also mounts the unified TagInput, which loads suggestions via this "use server"
+// module and autosaves text/person tags via ./stories/[id]/actions. Mock both so the compose-review
+// tests don't boot the real dev runtime.
+const loadTagSuggestionsAction = vi.fn(
+  async (
+    ..._args: unknown[]
+  ): Promise<{
+    people: { personId: string; displayName: string }[];
+    families: { id: string; name: string }[];
+    tags: string[];
+  }> => ({
+    people: [],
+    families: [],
+    tags: [],
+  }),
+);
+vi.mock("@/app/hub/tag-suggestions-actions", () => ({
+  loadTagSuggestionsAction: (...args: unknown[]) => loadTagSuggestionsAction(...args),
+}));
+const editStoryDetailsAction = vi.fn(async (..._args: unknown[]) => undefined);
+const tagStorySubjectAction = vi.fn(async (..._args: unknown[]) => undefined);
+const untagStorySubjectAction = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock("@/app/hub/stories/[id]/actions", () => ({
+  editStoryDetailsAction: (...args: unknown[]) => editStoryDetailsAction(...args),
+  tagStorySubjectAction: (...args: unknown[]) => tagStorySubjectAction(...args),
+  untagStorySubjectAction: (...args: unknown[]) => untagStorySubjectAction(...args),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -270,5 +298,68 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
     await waitFor(() => expect(shareAnswerAction).toHaveBeenCalledOnce());
     const form = shareAnswerAction.mock.calls[0]![0] as FormData;
     expect(form.getAll("familyIds")).toEqual(["fam-a"]);
+  });
+});
+
+describe("StoryComposer unified TagInput in compose review (Task 7)", () => {
+  const pendingDraft: DraftInfo = {
+    storyId: STORY_ID,
+    recordedAt: new Date(0).toISOString(),
+    mediaUrl: "",
+    prose: "The body of the story.",
+    title: "Auto Title",
+    state: "pending_approval",
+    takes: [],
+  };
+  const twoFamilies = [
+    { familyId: "fam-a", familyName: "Boudreaux" },
+    { familyId: "fam-b", familyName: "Carney" },
+  ];
+
+  it("adding a family via TagInput toggles it into the finish picker's selected set, with NO confirm", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    // TagInput's family suggestions come from loadTagSuggestionsAction; give it fam-b so it appears
+    // in the typeahead dropdown once the effect resolves.
+    loadTagSuggestionsAction.mockResolvedValueOnce({
+      people: [],
+      families: [{ id: "fam-b", name: "Carney" }],
+      tags: [],
+    });
+    render(
+      <StoryComposer
+        mode="tell"
+        ask={null}
+        draft={pendingDraft}
+        families={twoFamilies}
+        seededFamilyIds={["fam-a"]}
+      />,
+    );
+
+    // fam-a starts checked (seeded); fam-b starts unchecked.
+    const boxesBefore = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxesBefore[0]!.checked).toBe(true);
+    expect(boxesBefore[1]!.checked).toBe(false);
+
+    // Open the TagInput and add fam-b as a family token.
+    const tagField = screen.getByLabelText(/tags & people/i);
+    fireEvent.change(tagField, { target: { value: "Carney" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Carney" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Carney" }));
+
+    // fam-b is now pre-selected in the SAME FamilyPicker the Share step reads from.
+    const boxesAfter = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxesAfter[1]!.checked).toBe(true);
+    // A remove chip for it now exists in the TagInput too (proves it round-tripped into composeTokens).
+    expect(screen.getByRole("button", { name: /remove carney/i })).toBeTruthy();
+    // Nothing is shared by adding the tag — no retarget/share action fired, no confirm prompt.
+    expect(shareAnswerAction).not.toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    // Removing it toggles fam-b back off, again with no confirm (nothing was ever shared).
+    const removeButtons = screen.getAllByRole("button", { name: /remove carney/i });
+    fireEvent.click(removeButtons[0]!);
+    const boxesRemoved = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxesRemoved[1]!.checked).toBe(false);
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 });

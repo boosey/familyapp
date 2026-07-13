@@ -28,7 +28,7 @@
  * exists to enforce (§6). The old "Polishing your words…" poll gate is gone: each take is one
  * synchronous round-trip returning the new prose.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
@@ -51,6 +51,14 @@ import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
 import { StoryPhotosEditor } from "./StoryPhotosEditor";
 import { FamilyPicker } from "./FamilyPicker";
+import { TagInput } from "./TagInput";
+import { loadTagSuggestionsAction } from "./tag-suggestions-actions";
+import type { TagSuggestions, TagToken } from "./tag-input-types";
+import {
+  editStoryDetailsAction,
+  tagStorySubjectAction,
+  untagStorySubjectAction,
+} from "./stories/[id]/actions";
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -165,6 +173,7 @@ export function ComposingEditor({
       return next;
     });
   const showFamilyPicker = families.length > 1 && (tier === "family" || tier === "branch");
+
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   // Non-error transient notice (decision d): shown after a follow-up take's audio is removed — the
@@ -203,6 +212,125 @@ export function ComposingEditor({
 
   // The id every append/Finish posts against: the server draft once it lands, else the optimistic id.
   const composingStoryId = draft?.storyId ?? activeStoryId;
+
+  // ── Unified TagInput (compose review) ───────────────────────────────────────
+  // Text/person tokens autosave immediately via the existing story-detail actions; family tokens do
+  // NOT share here (nothing is shared until Finish/Share) — adding one just toggles it into the
+  // EXISTING `pickedFamilies` set that the FamilyPicker above already reads, so it shows up
+  // pre-selected there. No window.confirm on family removal in compose (see spec §2).
+  const [tagSuggestions, setTagSuggestions] = useState<TagSuggestions>({ people: [], families: [], tags: [] });
+  // Seeded from `suggestions.tags` once loaded (those are the story's EXISTING tags per
+  // loadTagSuggestionsAction) so resuming a review session with prior tags shows them as chips.
+  const [draftTags, setDraftTags] = useState<string[]>([]);
+  const [draftPeople, setDraftPeople] = useState<{ personId: string; displayName: string }[]>([]);
+  const tagsSeededRef = useRef(false);
+  const lastSavedTagsRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!composingStoryId) return;
+    void loadTagSuggestionsAction(composingStoryId).then((res) => {
+      if ("error" in res) return;
+      setTagSuggestions(res);
+      if (!tagsSeededRef.current) {
+        tagsSeededRef.current = true;
+        setDraftTags(res.tags);
+        lastSavedTagsRef.current = res.tags.join(","); // seed = already-saved; don't re-POST it
+      }
+    });
+  }, [composingStoryId]);
+
+  const composeTokens: TagToken[] = useMemo(
+    () => [
+      ...draftTags.map((value): TagToken => ({ kind: "text", value })),
+      ...draftPeople.map((p): TagToken => ({ kind: "person", personId: p.personId, displayName: p.displayName })),
+      ...families
+        .filter((f) => pickedFamilies.has(f.familyId))
+        .map((f): TagToken => ({ kind: "family", familyId: f.familyId, name: f.familyName })),
+    ],
+    [draftTags, draftPeople, families, pickedFamilies],
+  );
+
+  // Text tags write through editStoryDetailsAction, which requires a NON-EMPTY title. During compose
+  // the title may still be empty (the narrator hasn't reached the title field yet in some flows), so
+  // when it's empty we keep the tag in local state only (the chip still shows, nothing is lost) and
+  // rely on this effect to flush it once a title exists. This is the title-gating this task's spec
+  // calls out as the key risk; see the task report for why this approach was chosen over threading
+  // tags through the Share/Finish FormData (those actions don't accept a `tags` field).
+  const effectiveReviewTitle = titleTouched ? titleDraft : (draft?.title ?? "");
+  useEffect(() => {
+    if (!composingStoryId) return;
+    if (!effectiveReviewTitle.trim()) return;
+    const csv = draftTags.join(",");
+    if (lastSavedTagsRef.current === csv) return;
+    lastSavedTagsRef.current = csv;
+    const fd = new FormData();
+    fd.set("storyId", composingStoryId);
+    fd.set("title", effectiveReviewTitle.trim());
+    fd.set("tags", csv);
+    void editStoryDetailsAction(fd);
+  }, [composingStoryId, effectiveReviewTitle, draftTags]);
+
+  const onTagAdd = (token: TagToken) => {
+    if (token.kind === "family") {
+      toggleFamily(token.familyId);
+      return;
+    }
+    if (token.kind === "text") {
+      setDraftTags((prev) => (prev.includes(token.value) ? prev : [...prev, token.value]));
+      return;
+    }
+    // person
+    if (token.personId) {
+      const personId = token.personId;
+      setDraftPeople((prev) => [...prev, { personId, displayName: token.displayName }]);
+      if (!composingStoryId) return;
+      const fd = new FormData();
+      fd.set("storyId", composingStoryId);
+      fd.set("personId", personId);
+      void tagStorySubjectAction(fd).then((res) => {
+        if (res && "error" in res) setDraftPeople((prev) => prev.filter((p) => p.personId !== personId));
+      });
+    } else {
+      const tempKey = `pending:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const displayName = token.displayName;
+      setDraftPeople((prev) => [...prev, { personId: tempKey, displayName }]);
+      if (!composingStoryId) return;
+      const fd = new FormData();
+      fd.set("storyId", composingStoryId);
+      fd.set("newPersonDisplayName", displayName);
+      void tagStorySubjectAction(fd).then((res) => {
+        if (res && "error" in res) {
+          setDraftPeople((prev) => prev.filter((p) => p.personId !== tempKey));
+          return;
+        }
+        if (res && "personId" in res && res.personId) {
+          const realId = res.personId;
+          setDraftPeople((prev) =>
+            prev.map((p) => (p.personId === tempKey ? { personId: realId, displayName } : p)),
+          );
+        }
+      });
+    }
+  };
+
+  const onTagRemove = (token: TagToken) => {
+    if (token.kind === "family") {
+      // No confirm here — nothing is shared until Finish (spec §2). Just toggle it back off.
+      toggleFamily(token.familyId);
+      return;
+    }
+    if (token.kind === "text") {
+      setDraftTags((prev) => prev.filter((t) => t !== token.value));
+      return;
+    }
+    const personId = token.personId;
+    setDraftPeople((prev) => prev.filter((p) => p.personId !== personId));
+    if (!composingStoryId || !personId) return;
+    const fd = new FormData();
+    fd.set("storyId", composingStoryId);
+    fd.set("personId", personId);
+    void untagStorySubjectAction(fd);
+  };
 
   // A NON-recording mutation is round-tripping (typed append, decline, Finish, or ✨Polish). No new
   // recording may START while one is in flight (cold-review findings 3+4+5): the mic is otherwise ungated
@@ -714,6 +842,31 @@ export function ComposingEditor({
             Self-contained: fetches + mutates via its own auth-re-resolving server actions. Off the
             consent ledger, so it lives here in the pre-share review, independent of Share. */}
         <StoryPhotosEditor storyId={draft.storyId} />
+
+        {/* Unified tags/people/families field (spec 2026-07-13 §2). Text + person tokens autosave to
+            the draft immediately; a family token here only toggles it into `pickedFamilies` — nothing
+            is shared until Share/Finish, so it just pre-selects the FamilyPicker below. */}
+        <div style={{ display: "grid", gap: 6, marginBottom: 32 }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--support)",
+              display: "block",
+            }}
+          >
+            {hub.tagInput.label}
+          </span>
+          <TagInput
+            tokens={composeTokens}
+            suggestions={tagSuggestions}
+            onAdd={onTagAdd}
+            onRemove={onTagRemove}
+            disabled={isRemoving}
+          />
+        </div>
 
         <TierPicker tier={tier} setTier={setTier} disabled={isRemoving} />
 
