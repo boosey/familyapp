@@ -26,9 +26,11 @@ export async function loadTagSuggestionsAction(
 
   // People = union of the viewer's kin across every active family, deduped by personId, identified
   // rows only (an unidentified bridge node has displayName === null and is not a taggable subject).
+  const kinLists = await Promise.all(
+    families.map((fam) => listMyKin(db, ctx, fam.familyId)),
+  );
   const peopleById = new Map<string, string>();
-  for (const fam of families) {
-    const kin = await listMyKin(db, ctx, fam.familyId);
+  for (const kin of kinLists) {
     for (const k of kin) {
       if (k.identified && k.displayName) peopleById.set(k.personId, k.displayName);
     }

@@ -52,7 +52,7 @@ async function seedStoryWithTags(personId: string, tags: string[]): Promise<stri
 describe("loadTagSuggestionsAction — typeahead data for the unified tag field", () => {
   beforeEach(async () => {
     runtimeDb = await createTestDatabase();
-    authCtx = { kind: "none" };
+    authCtx = { kind: "anonymous" };
   });
 
   it("returns the owner's active families and the story's existing tags", async () => {
@@ -68,5 +68,15 @@ describe("loadTagSuggestionsAction — typeahead data for the unified tag field"
     expect(res.families.map((f) => f.id)).toContain(famId);
     expect(res.tags).toContain("childhood");
     expect(res.tags).toContain("coast");
+  });
+
+  it("rejects when not signed in", async () => {
+    authCtx = { kind: "anonymous" };
+
+    const res = await loadTagSuggestionsAction("00000000-0000-0000-0000-000000000000");
+
+    expect("error" in res).toBe(true);
+    if (!("error" in res)) throw new Error("expected error result");
+    expect(res.error).toBe("Not signed in.");
   });
 });
