@@ -464,38 +464,43 @@ export function AlbumUploader({
         </fieldset>
       ) : null}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        {showFileUpload ? (
-          <KindredButton
-            type="button"
-            variant="primary"
-            size="small"
-            disabled={addDisabled}
-            onClick={openPicker}
-            style={{ alignSelf: "flex-start" }}
-          >
-            {hub.album.addButton}
-          </KindredButton>
-        ) : null}
+      {/*
+        Outer row does NOT wrap: the left group (Add / Connect / Import) may wrap among itself, but
+        the "Manage connections ▾" menu stays pinned to the right on the top line (marginLeft:auto
+        inside the menu + flexShrink:0 here) rather than dropping below on narrow viewports.
+      */}
+      <div style={{ display: "flex", flexWrap: "nowrap", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", minWidth: 0 }}>
+          {showFileUpload ? (
+            <KindredButton
+              type="button"
+              variant="primary"
+              size="small"
+              disabled={addDisabled}
+              onClick={openPicker}
+              style={{ alignSelf: "flex-start" }}
+            >
+              {hub.album.addButton}
+            </KindredButton>
+          ) : null}
 
-        {googlePhotosConfigured && !googlePhotosConnected ? (
-          <a
-            href="/api/google-photos/connect"
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              fontWeight: 600,
-              color: "var(--accent)",
-              textDecoration: "none",
-              padding: "10px 4px",
-            }}
-          >
-            {hub.album.googlePhotosConnect}
-          </a>
-        ) : null}
+          {googlePhotosConfigured && !googlePhotosConnected ? (
+            <a
+              href="/api/google-photos/connect"
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                fontWeight: 600,
+                color: "var(--accent)",
+                textDecoration: "none",
+                padding: "10px 4px",
+              }}
+            >
+              {hub.album.googlePhotosConnect}
+            </a>
+          ) : null}
 
-        {googlePhotosConfigured && googlePhotosConnected ? (
-          <>
+          {googlePhotosConfigured && googlePhotosConnected ? (
             <KindredButton
               type="button"
               variant="secondary"
@@ -505,6 +510,11 @@ export function AlbumUploader({
             >
               {hub.album.googlePhotosImport}
             </KindredButton>
+          ) : null}
+        </div>
+
+        {googlePhotosConfigured && googlePhotosConnected ? (
+          <div style={{ flexShrink: 0, marginLeft: "auto" }}>
             <ManageConnectionsMenu
               label={hub.album.manageConnections}
               connections={[
@@ -518,7 +528,7 @@ export function AlbumUploader({
                 },
               ]}
             />
-          </>
+          </div>
         ) : null}
       </div>
 

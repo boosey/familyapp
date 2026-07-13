@@ -52,7 +52,10 @@ async function submitAsk(formData: FormData): Promise<void> {
   redirect("/hub?tab=asks");
 }
 
-export async function AskTab({ scope = "all" }: { scope?: string } = {}) {
+export async function AskTab({
+  scope = "all",
+  initialSubjectPhotoIds = [],
+}: { scope?: string; initialSubjectPhotoIds?: string[] } = {}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -183,7 +186,7 @@ export async function AskTab({ scope = "all" }: { scope?: string } = {}) {
             required={familyChoiceIsRequired}
           />
         ) : null}
-        <AskPhotoPicker />
+        <AskPhotoPicker initialSelectedPhotoIds={initialSubjectPhotoIds} />
         <KindredButton type="submit" label={hub.ask.submit} />
       </form>
     </div>

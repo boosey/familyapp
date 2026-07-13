@@ -50,6 +50,7 @@ export default async function HubPage({
     scope?: string;
     googlePhotos?: string;
     googlePhotosError?: string;
+    subjectPhotoIds?: string | string[];
   }>;
 }) {
   const { db, auth } = await getRuntime();
@@ -79,7 +80,22 @@ export default async function HubPage({
     scope: scopeParam,
     googlePhotos: googlePhotosParam,
     googlePhotosError: googlePhotosErrorParam,
+    subjectPhotoIds: subjectPhotoIdsParam,
   } = await searchParams;
+  // ADR-0009: `?subjectPhotoIds=<uuid>` may repeat, so Next hands us `string | string[] | undefined`.
+  // Normalize to a de-duped string[] to pre-select those photos in the ask picker (`/hub?tab=ask&…`).
+  // This only SEEDS the picker's initial ticks; the ask submit path re-runs the album-access gate per
+  // id in `createAsk`, so an unseeable/tampered id is rejected there, never here.
+  const subjectPhotoIds = [
+    ...new Set(
+      (Array.isArray(subjectPhotoIdsParam)
+        ? subjectPhotoIdsParam
+        : subjectPhotoIdsParam
+          ? [subjectPhotoIdsParam]
+          : []
+      ).filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  ];
   const googlePhotosOauthConnected = googlePhotosParam === "connected";
   const googlePhotosOauthError =
     typeof googlePhotosErrorParam === "string" ? googlePhotosErrorParam : null;
@@ -300,7 +316,9 @@ export default async function HubPage({
             />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
-          {activeTab === "ask" && <AskTab scope={scope} />}
+          {activeTab === "ask" && (
+            <AskTab scope={scope} initialSubjectPhotoIds={subjectPhotoIds} />
+          )}
           {activeTab === "asks" && (
             <AsksTab scope={scope} hasFamily={activeFamilies.length > 0} />
           )}

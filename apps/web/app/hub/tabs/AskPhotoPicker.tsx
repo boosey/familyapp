@@ -16,7 +16,9 @@ import { useEffect, useState } from "react";
 import { hub } from "@/app/_copy";
 import { loadAskPhotoOptionsAction, type AskAlbumPhoto } from "./ask-photo-actions";
 
-export function AskPhotoPicker() {
+export function AskPhotoPicker({
+  initialSelectedPhotoIds = [],
+}: { initialSelectedPhotoIds?: string[] } = {}) {
   const [album, setAlbum] = useState<AskAlbumPhoto[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -32,6 +34,14 @@ export function AskPhotoPicker() {
           return;
         }
         setAlbum(res.album);
+        // Seed the initial ticks from the `?subjectPhotoIds=` deep-link, but ONLY for ids that are
+        // actually among the asker's loaded (visible) options — a preselected id that isn't offered is
+        // dropped silently (never selected as a phantom, never thrown). Preserve loaded-option order.
+        if (initialSelectedPhotoIds.length > 0) {
+          const want = new Set(initialSelectedPhotoIds);
+          const seed = res.album.filter((p) => want.has(p.photoId)).map((p) => p.photoId);
+          if (seed.length > 0) setSelected(seed);
+        }
       })
       .finally(() => {
         if (active) setLoaded(true);
@@ -39,6 +49,9 @@ export function AskPhotoPicker() {
     return () => {
       active = false;
     };
+    // Mount-once fetch + one-shot seed from the initial deep-link ids (parent passes a fresh array
+    // each render; depending on it would re-fetch/clobber user edits). Intentional empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggle = (photoId: string) =>

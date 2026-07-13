@@ -338,6 +338,9 @@ export const hub = {
     addCaption: "Add a caption",
     captionLabel: "Caption",
     captionPlaceholder: "e.g. Wedding day, 1961",
+    // Always-visible caption entry field in the photo viewer (album enhancements item 3): the short
+    // placeholder shown in the standing <input>, distinct from the longer example placeholder above.
+    captionField: "Caption",
     save: "Save",
     cancel: "Cancel",
     deletePhoto: "Delete",
@@ -356,6 +359,35 @@ export const hub = {
     closeViewer: "Close",
     // ADR-0009 Phase 3 — start a telling ABOUT this photo (carries it forward as the story's subject).
     tellStoryOfPhoto: "Tell the story of this photo",
+    // Album enhancements (2026-07-13) — the shared per-photo action bar, used BOTH as a compact hover
+    // toolbar overlaid on a grid thumbnail and as the labeled action row in the photo viewer.
+    // Group accessible name wrapping the action buttons.
+    photoActionsAria: (caption: string | null) =>
+      caption ? `Actions for “${caption}”` : "Photo actions",
+    // Compact-toolbar action labels (icon buttons carry these as their accessible names / tooltips).
+    editPhoto: "Edit",
+    askAboutPhoto: "Ask a question about this photo",
+    askAboutPhotoShort: "Ask",
+    tellStoryOfPhotoShort: "Tell a story",
+    tagPeople: "Tag people",
+    tagFaces: "Tag faces",
+    // Faces is a deliberate no-op until face-region ML lands — the title explains why it does nothing.
+    tagFacesComingSoon: "Tagging faces is coming soon",
+    // View selector (Grid / Masonry / List) — a segmented control above the album.
+    viewSelectorAria: "Choose album layout",
+    viewGrid: "Grid",
+    viewMasonry: "Masonry",
+    viewList: "List",
+    // Thumbnail-size slider — one affordance that resizes tiles in every view.
+    thumbnailSizeLabel: "Thumbnail size",
+    thumbnailSmaller: "Smaller",
+    thumbnailLarger: "Larger",
+    // List-view column headers.
+    listColPhoto: "Photo",
+    listColCaption: "Caption",
+    listColUploader: "Added by",
+    listColFamilies: "Families",
+    listColTags: "Tags",
     // ADR-0009 Phase 5 — Google Photos Picker (connect-once). Shown only when configured.
     googlePhotosConnect: "Connect Google Photos",
     googlePhotosImport: "Import from Google Photos",

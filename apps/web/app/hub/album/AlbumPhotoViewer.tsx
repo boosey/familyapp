@@ -24,6 +24,7 @@ import { editAlbumCaptionAction, deleteAlbumPhotoAction } from "./actions";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import type { AlbumGridPhoto } from "./AlbumGrid";
+import { PhotoActionBar } from "./PhotoActionBar";
 
 export function AlbumPhotoViewer({
   photo,
@@ -37,12 +38,11 @@ export function AlbumPhotoViewer({
   // The viewer stays OPEN across a successful caption save, so it tracks the caption locally and
   // reflects the saved value immediately (a router.refresh() will re-seed the same value via props).
   const [caption, setCaption] = useState(photo.caption);
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(photo.caption ?? "");
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
+  const captionInputRef = useRef<HTMLInputElement>(null);
 
   // Focus management: remember what was focused when the viewer opened (the trigger tile), move
   // focus into the dialog, and restore it to the trigger when the viewer unmounts (on close/delete).
@@ -96,7 +96,12 @@ export function AlbumPhotoViewer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  function saveCaption() {
+  // The caption is an ALWAYS-visible entry field now, so it saves on blur when the value changed —
+  // no explicit Save button, but nothing is lost silently: a changed value is committed the moment
+  // focus leaves the field. A pending save is skipped (the transition is already in flight).
+  function saveCaptionIfChanged() {
+    if (pending) return;
+    if (draft === (caption ?? "")) return;
     const formData = new FormData();
     formData.append("photoId", photo.id);
     formData.append("caption", draft);
@@ -107,7 +112,6 @@ export function AlbumPhotoViewer({
         return;
       }
       setError(null);
-      setEditing(false);
       // Reflect the saved caption in the still-open viewer, then refresh the server component so the
       // grid tile (and its label) pick up the new value too.
       setCaption(draft);
@@ -115,19 +119,14 @@ export function AlbumPhotoViewer({
     });
   }
 
-  function onDeleteTap() {
-    // Two-tap confirm: the first tap arms; only the second actually deletes.
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
+  // Delete's two-tap confirm now lives inside PhotoActionBar; this runs on the CONFIRMED tap only.
+  function onDeleteConfirmed() {
     const formData = new FormData();
     formData.append("photoId", photo.id);
     startTransition(async () => {
       const result = await deleteAlbumPhotoAction(formData);
       if ("error" in result) {
         setError(result.error);
-        setConfirmingDelete(false);
         return;
       }
       // On success: close the viewer AND refresh — the tile vanishes when the server re-renders.
@@ -203,96 +202,46 @@ export function AlbumPhotoViewer({
           }}
         />
 
-        {/* "Tell the story of this photo" (ADR-0009 Phase 3) — starts a telling ABOUT this photo on
-            the tell surface, carrying the photo as the story's subject/cover and a caption-derived
-            prompt. Available to anyone who can view the photo (they're a co-member the core write gate
-            authorizes); it's a compose entry, not a manage action, so it's outside the canManage block. */}
-        <KindredButton
-          variant="primary"
-          size="small"
-          onClick={() =>
-            router.push(
-              `/hub/tell?subjectPhotoId=${encodeURIComponent(photo.id)}` +
-                `&promptQuestion=${encodeURIComponent(hub.compose.photoStoryPrompt(caption))}`,
-            )
-          }
-          style={{ alignSelf: "flex-start" }}
-        >
-          {hub.album.tellStoryOfPhoto}
-        </KindredButton>
-
         {photo.canManage ? (
           <div
             aria-label={hub.album.managePhotoAria(caption)}
             style={{ display: "flex", flexDirection: "column", gap: 12 }}
           >
-            {editing ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <input
-                  type="text"
-                  aria-label={hub.album.captionLabel}
-                  placeholder={hub.album.captionPlaceholder}
-                  value={draft}
-                  disabled={pending}
-                  maxLength={500}
-                  onChange={(e) => setDraft(e.currentTarget.value)}
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-ui)",
-                    padding: "12px 14px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "var(--border-width) solid var(--border)",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                />
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <KindredButton
-                    variant="primary"
-                    size="small"
-                    onClick={saveCaption}
-                    disabled={pending}
-                  >
-                    {hub.album.save}
-                  </KindredButton>
-                  <KindredButton
-                    variant="secondary"
-                    size="small"
-                    onClick={() => {
-                      setEditing(false);
-                      setDraft(caption ?? "");
-                      setError(null);
-                    }}
-                    disabled={pending}
-                  >
-                    {hub.album.cancel}
-                  </KindredButton>
-                </div>
-              </div>
-            ) : (
-              <KindredButton
-                variant="ghost"
-                size="small"
-                onClick={() => setEditing(true)}
-                disabled={pending}
-                style={{ alignSelf: "flex-start" }}
-              >
-                {caption ?? hub.album.addCaption}
-              </KindredButton>
-            )}
-
-            {/* Destructive action: no danger token exists — the label + two-tap confirm carry the
-                weight (see the album fixes contract). */}
-            <KindredButton
-              variant="secondary"
-              size="small"
-              onClick={onDeleteTap}
+            {/* Always-visible caption ENTRY FIELD (album enhancements item 3). It seeds from the
+                photo caption and saves on blur when changed — no explicit Save button, but nothing is
+                lost silently. The action bar's Edit affordance focuses this field via the ref. */}
+            <input
+              ref={captionInputRef}
+              type="text"
+              aria-label={hub.album.captionLabel}
+              placeholder={hub.album.captionField}
+              value={draft}
               disabled={pending}
-              aria-pressed={confirmingDelete}
-              style={{ alignSelf: "flex-start" }}
-            >
-              {confirmingDelete ? hub.album.confirmDelete : hub.album.deletePhoto}
-            </KindredButton>
+              maxLength={500}
+              onChange={(e) => setDraft(e.currentTarget.value)}
+              onBlur={saveCaptionIfChanged}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui)",
+                padding: "12px 14px",
+                borderRadius: "var(--radius-sm)",
+                border: "var(--border-width) solid var(--border)",
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            />
+
+            {/* Per-photo action buttons on ONE line below the caption field (PhotoActionBar full). It
+                owns the two-tap delete confirm internally and carries the Ask/Tell deep-links + the
+                manage-only Edit / Tag people / Tag faces / Delete. onEdit focuses the caption input;
+                onTagPeople is omitted in Phase A (renders as a disabled placeholder). */}
+            <PhotoActionBar
+              photo={{ id: photo.id, caption, canManage: photo.canManage }}
+              variant="full"
+              busy={pending}
+              onEdit={() => captionInputRef.current?.focus()}
+              onDelete={onDeleteConfirmed}
+            />
 
             {error ? (
               <p
@@ -312,18 +261,30 @@ export function AlbumPhotoViewer({
               </p>
             ) : null}
           </div>
-        ) : caption ? (
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-body)",
-              margin: 0,
-            }}
-          >
-            {caption}
-          </p>
-        ) : null}
+        ) : (
+          <>
+            {caption ? (
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--text-ui)",
+                  color: "var(--text-body)",
+                  margin: 0,
+                }}
+              >
+                {caption}
+              </p>
+            ) : null}
+            {/* A viewer who can't manage still gets the Ask/Tell deep-links (no manage-only controls). */}
+            <PhotoActionBar
+              photo={{ id: photo.id, caption, canManage: photo.canManage }}
+              variant="full"
+              busy={pending}
+              onEdit={() => {}}
+              onDelete={() => {}}
+            />
+          </>
+        )}
       </div>
     </div>
   );

@@ -345,6 +345,41 @@ describe("AlbumUploader Google Photos", () => {
     expect(screen.queryByText("user@gmail.com")).toBeNull();
   });
 
+  // Layout regression (Phase A · 1): the "Manage connections ▾" trigger must sit on the SAME row as
+  // the primary buttons (Import) and be pinned to the right — it must NOT wrap onto its own line on
+  // narrow viewports. We assert on DOM structure: the Import button and the menu trigger share a
+  // single non-wrapping outer row; the menu lives in a right-pinned slot (marginLeft:auto) whose
+  // parent is the SAME row that contains Import's group.
+  it("pins the Manage connections trigger to the right on the SAME row as Import (no wrap)", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+        googlePhotosConnected
+        googlePhotosEmail="user@gmail.com"
+      />,
+    );
+    const importBtn = screen.getByRole("button", { name: hub.album.googlePhotosImport });
+    const trigger = screen.getByRole("button", { name: hub.album.manageConnections });
+
+    // The menu's right-pinned slot: marginLeft:auto + flexShrink:0 on the wrapper around the menu.
+    // ManageConnectionsMenu's own root also carries marginLeft:auto; the slot is its parent.
+    const menuRoot = trigger.parentElement as HTMLElement; // ManageConnectionsMenu container
+    const rightSlot = menuRoot.parentElement as HTMLElement; // the flexShrink:0 slot we added
+    expect(rightSlot.style.marginLeft).toBe("auto");
+    expect(rightSlot.style.flexShrink).toBe("0");
+
+    // The outer row is the slot's parent — it must NOT wrap (menu can't drop below).
+    const outerRow = rightSlot.parentElement as HTMLElement;
+    expect(outerRow.style.display).toBe("flex");
+    expect(outerRow.style.flexWrap).toBe("nowrap");
+
+    // Import lives in the left group, whose parent is the SAME outer row: same line as the menu.
+    const leftGroup = importBtn.parentElement as HTMLElement;
+    expect(leftGroup.parentElement).toBe(outerRow);
+  });
+
   it("renders the Manage connections trigger only when connected", () => {
     // Unconfigured: no trigger.
     const { rerender } = render(
