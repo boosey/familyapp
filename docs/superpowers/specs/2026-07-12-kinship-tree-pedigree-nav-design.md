@@ -1,3 +1,6 @@
+> **SUPERSEDED (2026-07-13)** by `docs/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md`.
+> The re-rootable pedigree model here is retired; do not build from this file.
+
 # Kinship tree — pedigree navigation (design)
 
 **Date:** 2026-07-12

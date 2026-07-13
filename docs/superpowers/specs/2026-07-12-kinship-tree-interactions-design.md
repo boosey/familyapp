@@ -1,3 +1,6 @@
+> **SUPERSEDED (2026-07-13)** by `docs/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md`.
+> Click-to-center/re-root is retired; do not build from this file.
+
 # Kinship visual tree — interaction upgrades (hub tab, story deep-link, click-to-center, caret redesign)
 
 **Date:** 2026-07-12

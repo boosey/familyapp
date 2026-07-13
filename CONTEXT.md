@@ -72,6 +72,16 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   a **`FAM`**/"family". That is **not** our **Family (Chronicle)**. We never store a union node and
   never call it "family": on import a `FAM` is **shredded** into `parent-of` + `partnered-with`
   edges. "Family" always means the chronicle container.
+- **Sibling container** — because "sibling" is derived (shares a parent) and never stored, two people
+  can only be *made* siblings by giving them a **shared parent**. Adding a sibling to a person with no
+  parents therefore auto-creates a **placeholder parent-couple** — two unidentified bridge persons,
+  partnered, each a `parent-of` both siblings (ADR-0017). The couple is the storable home of the
+  siblinghood; there is no stored sibling fact.
+- **Focus person** — the single person a **tree view** is centered on: the initial framing and initial
+  expansion origin. Seeded by the entry point (the person whose menu opened the tree, or the logged-in
+  user for a direct visit) and thereafter fixed — not selectable, not re-rootable, not visually
+  distinct. Deliberately **not** called "anchor" (that word already means the *media anchor* and
+  *Biographical anchors*) nor "root" (which implied the retired re-rooting).
 
 - **Family-scoped edge** — a kinship edge is **surfaced into a Family**, exactly as a Story is
   (ADR-0010): the asserter creates it in a family context; it is visible to **all members of that
