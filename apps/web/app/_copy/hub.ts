@@ -349,6 +349,13 @@ export const hub = {
       caption ? `Manage “${caption}”` : "Manage photo",
     captionSaveError: "Couldn't save that caption. Please try again.",
     photoDeleteError: "Couldn't remove that photo. Please try again.",
+    // Photo tag management (Phase B2): a non-committal error when a tag write fails — either the
+    // viewer wasn't allowed (SEE/MANAGE denied) or the write threw (e.g. an ambiguous place). Mirrors
+    // the captionSaveError style: warm, brief, and leaks nothing about why.
+    tagSaveError: "Couldn't save that tag. Please try again.",
+    tagRemoveError: "Couldn't remove that tag. Please try again.",
+    retargetError: "Couldn't update the albums for that photo. Please try again.",
+    tagPanelLoadError: "Couldn't load the details for that photo.",
     // Photo viewer (#18): tapping a tile opens a larger view that HOSTS the per-photo options
     // (edit caption, delete). The tile itself is the trigger; its label names what opens.
     viewPhoto: (caption: string | null) =>

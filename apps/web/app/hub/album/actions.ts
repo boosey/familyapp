@@ -17,9 +17,21 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
   createAlbumPhoto,
+  getAlbumPhotoDetail,
   listActiveFamiliesForPerson,
+  listMyKin,
+  listPlacesForFamily,
+  retargetPhotoFamilies,
   setAlbumPhotoCaption,
   softDeleteAlbumPhoto,
+  tagPhotoPerson,
+  tagPhotoPlace,
+  tagPhotoSubject,
+  untagPhotoPerson,
+  untagPhotoPlace,
+  untagPhotoSubject,
+  viewerPersonId,
+  type AlbumPhotoDetailView,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
@@ -324,4 +336,271 @@ export async function deleteAlbumPhotoAction(
     // Unexpected throw → friendly inline error, not an unhandled rejection in the transition.
     return { error: hub.album.photoDeleteError };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase B2 — photo tag management (mirrors the STORY tag actions exactly).
+//
+// Each action re-resolves auth server-side (identity is NEVER trusted from the client) and forwards
+// to the audited core seam, which is the authoritative gate. The action never re-implements
+// authorization; it only maps the result to a client shape:
+//   - the core seam returns an AuthDecision — a DENY (`allowed === false`) becomes a friendly
+//     `{ error }` (a non-account caller short-circuits to the not-signed-in error first).
+//   - a THROWN InvariantViolation (ambiguous place, unknown/foreign place id, empty name, no target
+//     family) is caught and becomes a friendly `{ error }` — a stack is never leaked to the client.
+// The person/subject actions forward the minted id so the client can remove a just-minted person,
+// exactly like `tagStorySubjectAction`.
+// ---------------------------------------------------------------------------
+
+/** Success shape of a person/subject tag: the tagged (or freshly minted) person id. */
+export type PhotoTagPersonActionResult = { personId: string } | { error: string };
+/** Success shape of a place tag: the tagged (or freshly created) place id. */
+export type PhotoTagPlaceActionResult = { placeId: string } | { error: string };
+
+/**
+ * Shared body for the two person-group tag actions (subjects + appears-in people). `tag` is the core
+ * seam to call — `tagPhotoSubject` or `tagPhotoPerson`. Accepts EITHER an existing `personId` OR a
+ * `newPersonDisplayName` (exactly one, mirroring `tagStorySubjectAction`). Returns the minted id.
+ */
+async function tagPhotoPersonGroup(
+  formData: FormData,
+  tag: typeof tagPhotoSubject,
+): Promise<PhotoTagPersonActionResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (viewerPersonId(ctx) === null) return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  const personId = formData.get("personId");
+  const newPersonDisplayName = formData.get("newPersonDisplayName");
+  if (typeof photoId !== "string" || !photoId) {
+    return { error: hub.actions.invalidInput };
+  }
+  const hasExisting = typeof personId === "string" && personId.length > 0;
+  const hasNew =
+    typeof newPersonDisplayName === "string" && newPersonDisplayName.trim().length > 0;
+  if (hasExisting === hasNew) return { error: hub.actions.invalidInput };
+
+  try {
+    const result = await tag(db, ctx, {
+      photoId,
+      ...(hasExisting ? { personId: personId as string } : {}),
+      ...(hasNew ? { newPersonDisplayName: (newPersonDisplayName as string).trim() } : {}),
+    });
+    // DENY (SEE-gate) → a non-committal error; nothing was written or minted.
+    if (!result.allowed || result.personId === undefined) {
+      return { error: hub.album.tagSaveError };
+    }
+    revalidatePath("/hub/album");
+    return { personId: result.personId };
+  } catch {
+    // Thrown InvariantViolation (e.g. both/neither of personId/newName) → friendly error, no stack.
+    return { error: hub.album.tagSaveError };
+  }
+}
+
+/** Shared body for the two person-group untag actions (idempotent, SEE-gated in core). */
+async function untagPhotoPersonGroup(
+  formData: FormData,
+  untag: typeof untagPhotoSubject,
+): Promise<AlbumManageResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (viewerPersonId(ctx) === null) return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  const personId = formData.get("personId");
+  if (typeof photoId !== "string" || !photoId || typeof personId !== "string" || !personId) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  try {
+    const decision = await untag(db, ctx, { photoId, personId });
+    if (!decision.allowed) return { error: hub.album.tagRemoveError };
+    revalidatePath("/hub/album");
+    return { ok: true };
+  } catch {
+    return { error: hub.album.tagRemoveError };
+  }
+}
+
+/** Tag a Person as a SUBJECT (who the photo is about). Returns the minted id. SEE-gated in core. */
+export function tagPhotoSubjectAction(
+  formData: FormData,
+): Promise<PhotoTagPersonActionResult> {
+  return tagPhotoPersonGroup(formData, tagPhotoSubject);
+}
+
+/** Untag a subject Person from a photo. SEE-gated, idempotent. */
+export function untagPhotoSubjectAction(formData: FormData): Promise<AlbumManageResult> {
+  return untagPhotoPersonGroup(formData, untagPhotoSubject);
+}
+
+/** Tag a Person as APPEARING in a photo (distinct from subjects). Returns the minted id. SEE-gated. */
+export function tagPhotoPersonAction(
+  formData: FormData,
+): Promise<PhotoTagPersonActionResult> {
+  return tagPhotoPersonGroup(formData, tagPhotoPerson);
+}
+
+/** Untag an appears-in Person from a photo. SEE-gated, idempotent. */
+export function untagPhotoPersonAction(formData: FormData): Promise<AlbumManageResult> {
+  return untagPhotoPersonGroup(formData, untagPhotoPerson);
+}
+
+/**
+ * Tag a photo with a place: EITHER an existing `placeId` OR a `newPlaceName` (with an optional
+ * `familyId` to disambiguate the target album when the photo is placed in several). Returns the
+ * tagged (or freshly created) place id. A DENY → error; a thrown InvariantViolation (ambiguous
+ * family, foreign/unknown place id, empty name) is caught → error.
+ */
+export async function tagPhotoPlaceAction(
+  formData: FormData,
+): Promise<PhotoTagPlaceActionResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (viewerPersonId(ctx) === null) return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  const placeId = formData.get("placeId");
+  const newPlaceName = formData.get("newPlaceName");
+  const familyId = formData.get("familyId");
+  if (typeof photoId !== "string" || !photoId) {
+    return { error: hub.actions.invalidInput };
+  }
+  const hasExisting = typeof placeId === "string" && placeId.length > 0;
+  const hasNew = typeof newPlaceName === "string" && newPlaceName.trim().length > 0;
+  if (hasExisting === hasNew) return { error: hub.actions.invalidInput };
+
+  try {
+    const result = await tagPhotoPlace(db, ctx, {
+      photoId,
+      ...(hasExisting ? { placeId: placeId as string } : {}),
+      ...(hasNew ? { newPlaceName: (newPlaceName as string).trim() } : {}),
+      ...(typeof familyId === "string" && familyId ? { familyId } : {}),
+    });
+    if (!result.allowed || result.placeId === undefined) {
+      return { error: hub.album.tagSaveError };
+    }
+    revalidatePath("/hub/album");
+    return { placeId: result.placeId };
+  } catch {
+    return { error: hub.album.tagSaveError };
+  }
+}
+
+/** Untag a place from a photo. SEE-gated, idempotent. */
+export async function untagPhotoPlaceAction(
+  formData: FormData,
+): Promise<AlbumManageResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (viewerPersonId(ctx) === null) return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  const placeId = formData.get("placeId");
+  if (typeof photoId !== "string" || !photoId || typeof placeId !== "string" || !placeId) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  try {
+    const decision = await untagPhotoPlace(db, ctx, { photoId, placeId });
+    if (!decision.allowed) return { error: hub.album.tagRemoveError };
+    revalidatePath("/hub/album");
+    return { ok: true };
+  } catch {
+    return { error: hub.album.tagRemoveError };
+  }
+}
+
+/**
+ * Replace the set of family albums a photo is placed in. MANAGE-gated in core (contributor or
+ * steward). Reads repeated `familyIds` FormData entries (same pattern as `retargetStoryFamiliesAction`).
+ * A DENY → error; a thrown InvariantViolation (empty set, a family the viewer isn't an active member
+ * of) is caught → error.
+ */
+export async function retargetPhotoFamiliesAction(
+  formData: FormData,
+): Promise<AlbumManageResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (viewerPersonId(ctx) === null) return { error: hub.actions.notSignedIn };
+
+  const photoId = formData.get("photoId");
+  const familyIds = formData.getAll("familyIds").map((id) => String(id));
+  if (typeof photoId !== "string" || !photoId) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  try {
+    const decision = await retargetPhotoFamilies(db, ctx, { photoId, familyIds });
+    if (!decision.allowed) return { error: hub.actions.notAllowedToManagePhoto };
+    revalidatePath("/hub/album");
+    return { ok: true };
+  } catch {
+    return { error: hub.album.retargetError };
+  }
+}
+
+/**
+ * Everything the tag panel needs in ONE call: the SEE-gated photo detail plus the viewer's typeahead
+ * suggestions. Returns `{ error }` if the photo isn't viewable (getAlbumPhotoDetail returns null).
+ *
+ * Suggestions:
+ *   - people/families reuse the SAME source the story editor uses (`loadTagSuggestionsAction`): the
+ *     viewer's active families, and the union of their kin across those families (identified rows
+ *     only, deduped by personId).
+ *   - places = the union of `listPlacesForFamily` across the PHOTO's placement families, deduped by
+ *     placeId (each core call is itself membership-gated, so a family the viewer isn't in contributes
+ *     nothing).
+ */
+export type PhotoTagPanel = {
+  detail: AlbumPhotoDetailView;
+  suggestions: {
+    people: { personId: string; displayName: string }[];
+    families: { id: string; name: string }[];
+    places: { placeId: string; name: string }[];
+  };
+};
+
+export async function loadPhotoTagPanelAction(
+  photoId: string,
+): Promise<PhotoTagPanel | { error: string }> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  const person = viewerPersonId(ctx);
+  if (person === null) return { error: hub.actions.notSignedIn };
+
+  const detail = await getAlbumPhotoDetail(db, ctx, photoId);
+  if (detail === null) return { error: hub.album.tagPanelLoadError };
+
+  // People/families suggestions — identical source to the story editor's loadTagSuggestionsAction.
+  const families = await listActiveFamiliesForPerson(db, person);
+  const kinLists = await Promise.all(
+    families.map((fam) => listMyKin(db, ctx, fam.familyId)),
+  );
+  const peopleById = new Map<string, string>();
+  for (const kin of kinLists) {
+    for (const k of kin) {
+      if (k.identified && k.displayName) peopleById.set(k.personId, k.displayName);
+    }
+  }
+
+  // Places = union across the photo's placement families (each membership-gated), deduped by id.
+  const placeLists = await Promise.all(
+    detail.families.map((f) => listPlacesForFamily(db, ctx, f.familyId)),
+  );
+  const placesById = new Map<string, string>();
+  for (const list of placeLists) {
+    for (const p of list) placesById.set(p.placeId, p.name);
+  }
+
+  return {
+    detail,
+    suggestions: {
+      people: [...peopleById].map(([personId, displayName]) => ({ personId, displayName })),
+      families: families.map((f) => ({ id: f.familyId, name: f.familyName })),
+      places: [...placesById].map(([placeId, name]) => ({ placeId, name })),
+    },
+  };
 }
