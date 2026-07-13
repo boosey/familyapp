@@ -606,6 +606,20 @@ export const hub = {
     storiesAboutEmpty: "No stories yet.",
     back: "← Back",
   },
+  // Unified tag field (spec 2026-07-13-unified-tags-photos §1) — freeform tags + people + families.
+  tagInput: {
+    label: "Tags & people",
+    help: "Add a tag, or type a name to tag a person or share with a family.",
+    placeholder: "Add a tag or name…",
+    addAsPerson: (name: string) => `Add “${name}” as a person`,
+    addAsTag: (name: string) => `Add “${name}” as a tag`,
+    groupPeople: "People",
+    groupFamilies: "Families (shares this story)",
+    groupTags: "Tags",
+    familyChipTitle: "Shared with this family",
+    confirmRevoke: (name: string) => `Stop sharing this story with ${name}?`,
+    remove: "Remove",
+  },
   // Visual family tree (ADR-0016 tree renderer) — read-first, /hub/tree.
   tree: {
     heading: "Family tree",
