@@ -303,6 +303,111 @@ describe("children-caret dedup rule (spec §3)", () => {
   });
 });
 
+describe("nearer-owns caret ownership (ADR-0018)", () => {
+  it("a revealed child shows NO parent-caret back up (the parent owns that edge)", () => {
+    // focus -> kid, kid shown by initial children expansion (discovered via child-set). The child
+    // must not emit a parent-caret pointing back at the parent that revealed it.
+    const nodes = [node("focus"), node("kid")];
+    const edges = [parentOf("focus", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(l.placed.some((p) => p.personId === "kid")).toBe(true);
+    expect(aff(l, "parents", "kid")).toBeUndefined();
+    // The anchor's couple owns the single children control (a collapse caret — kid is drawn).
+    const fc = aff(l, "children", "focus")!;
+    expect(fc.kind).toBe("caret");
+    expect(fc.expanded).toBe(true);
+  });
+
+  it("a fanned sibling shows NO sibling (or parent) affordance; only the anchor owns the set", () => {
+    const nodes = [node("mom"), node("focus"), node("sib")];
+    const edges = [parentOf("mom", "focus"), parentOf("mom", "sib")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["focus"]) }) }),
+    );
+    expect(l.placed.some((p) => p.personId === "sib")).toBe(true);
+    // The fanned sibling is a set-member: no sibling affordance at all, and no parent-caret back up.
+    expect(aff(l, "siblings", "sib")).toBeUndefined();
+    expect(aff(l, "parents", "sib")).toBeUndefined();
+    // The anchor owns the (now expanded) sibling caret.
+    const fs = aff(l, "siblings", "focus")!;
+    expect(fs.kind).toBe("caret");
+    expect(fs.expanded).toBe(true);
+  });
+
+  it("a collateral aunt (reached sideways) KEEPS her children-caret to reveal cousins", () => {
+    // gran -> mom, gran -> aunt; mom -> focus; aunt -> cousin (hidden). Expand mom's parents (bus)
+    // + mom's siblings (rule-8 pairing the client applies) so the aunt is drawn as a set-member.
+    const nodes = [node("gran"), node("mom"), node("aunt"), node("focus"), node("cousin")];
+    const edges = [
+      parentOf("gran", "mom"),
+      parentOf("gran", "aunt"),
+      parentOf("mom", "focus"),
+      parentOf("aunt", "cousin"),
+    ];
+    const l = computeTreeLayout(
+      input({
+        focusPersonId: "focus",
+        nodes,
+        edges,
+        expansion: expansion({ expandedParents: new Set(["mom"]), expandedSiblings: new Set(["mom"]) }),
+      }),
+    );
+    expect(l.placed.some((p) => p.personId === "aunt")).toBe(true);
+    expect(l.placed.some((p) => p.personId === "cousin")).toBe(false);
+    // Collateral children-caret survives — no nearer node owns aunt->cousin.
+    const ac = aff(l, "children", "aunt")!;
+    expect(ac.kind).toBe("caret");
+    expect(ac.expanded).toBe(false); // an EXPAND caret → reveals the cousin
+    // But the aunt is a sibling-set member → she owns neither siblings nor parents.
+    expect(aff(l, "siblings", "aunt")).toBeUndefined();
+    expect(aff(l, "parents", "aunt")).toBeUndefined();
+  });
+
+  it("an only-child revealed child shows no sibling '+' (add-sibling is the parent's control)", () => {
+    const nodes = [node("focus"), node("kid")];
+    const edges = [parentOf("focus", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(aff(l, "siblings", "kid")).toBeUndefined();
+  });
+
+  it("an in-law (a child's spouse) is a full member with its OWN parent-caret", () => {
+    // focus -> kid; kid partnered with kidspouse; kidspouse's parent coinlaw is hidden.
+    const nodes = [node("focus"), node("kid"), node("kidspouse"), node("coinlaw")];
+    const edges = [
+      parentOf("focus", "kid"),
+      partneredWith("kid", "kidspouse"),
+      parentOf("coinlaw", "kidspouse"),
+    ];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(l.placed.some((p) => p.personId === "kidspouse")).toBe(true);
+    // The in-law owns its own parents caret (co-in-law hidden → caret, not yet drawn).
+    expect(aff(l, "parents", "kidspouse")!.kind).toBe("caret");
+    expect(aff(l, "parents", "kidspouse")!.expanded).toBe(false);
+    // The lineage child that revealed the couple still shows no parent-caret back up.
+    expect(aff(l, "parents", "kid")).toBeUndefined();
+  });
+
+  it("collapse suppresses without purging — re-expand restores the nested grandchild", () => {
+    const nodes = [node("focus"), node("kid"), node("grandkid")];
+    const edges = [parentOf("focus", "kid"), parentOf("kid", "grandkid")];
+    const deep = expansion({ expandedChildren: new Set([coupleKey("kid")]) });
+    // Deep state: kid's children expanded → grandkid shown.
+    const open = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges, expansion: deep }));
+    expect(open.placed.some((p) => p.personId === "grandkid")).toBe(true);
+    // Collapse the focus's children → prunes kid AND grandkid, but the kid-expand flag persists.
+    const collapsed = expansion({
+      expandedChildren: new Set([coupleKey("kid")]),
+      collapsedChildren: new Set([coupleKey("focus")]),
+    });
+    const c = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges, expansion: collapsed }));
+    expect(c.placed.some((p) => p.personId === "kid")).toBe(false);
+    expect(c.placed.some((p) => p.personId === "grandkid")).toBe(false);
+    // Re-expand (drop the collapse) → nested grandkid restored, no round-trip and no lost sub-shape.
+    const re = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges, expansion: deep }));
+    expect(re.placed.some((p) => p.personId === "grandkid")).toBe(true);
+  });
+});
+
 describe("ego-side sibling fan — oldest farthest (spec §4)", () => {
   it("fans siblings to the caret side with the focus pinned at that end and oldest farthest", () => {
     // Focus (left-hugging, unspecified sex) + three older siblings. Expanded: left→right should read

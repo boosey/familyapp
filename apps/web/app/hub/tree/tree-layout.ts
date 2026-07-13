@@ -285,6 +285,13 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   //                    AND coupleKey ∉ collapsedChildren
   // Partners of a drawn person are always drawn adjacent (a union, not an expansion).
   const drawn = new Set<string>();
+  // How each drawn person was reached (its spanning-tree discovery edge, ADR-0018). Caret OWNERSHIP
+  // keys off this: a person reached "as an individual" (`anchor` / `partner` / `parent-caret`) owns
+  // its own parents ↑ and siblings ↔ affordances; a `child-set` / `sibling-set` member owns neither
+  // (the nearer node that revealed the set owns that edge). First discovery wins (spec §8), and the
+  // walk visits partner → parents → siblings → children so the priority is deterministic.
+  type DiscoveredVia = "anchor" | "partner" | "parent-caret" | "child-set" | "sibling-set";
+  const discoveredVia = new Map<string, DiscoveredVia>();
   {
     const focusPartner = partnerOf(focusPersonId);
     const focusCoupleKey = coupleKey(focusPersonId, focusPartner);
@@ -300,26 +307,27 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       return base && !expansion.collapsedChildren.has(ck);
     };
 
-    const visit = (id: string) => {
+    const visit = (id: string, via: DiscoveredVia) => {
       if (!nodeById.has(id) || drawn.has(id)) return;
       drawn.add(id);
+      discoveredVia.set(id, via);
       const partner = partnerOf(id);
       // Partner is always adjacent.
-      if (partner && !drawn.has(partner)) visit(partner);
+      if (partner && !drawn.has(partner)) visit(partner, "partner");
 
       if (parentsOpen(id)) {
-        for (const p of parentsList(id)) visit(p);
+        for (const p of parentsList(id)) visit(p, "parent-caret");
       }
       if (siblingsOpen(id)) {
-        for (const s of siblingsOf(id)) visit(s);
+        for (const s of siblingsOf(id)) visit(s, "sibling-set");
       }
       const ck = coupleKey(id, partner);
       if (childrenOpen(ck)) {
-        for (const c of coupleChildren(id, partner)) visit(c);
+        for (const c of coupleChildren(id, partner)) visit(c, "child-set");
       }
     };
 
-    if (nodeById.has(focusPersonId)) visit(focusPersonId);
+    if (nodeById.has(focusPersonId)) visit(focusPersonId, "anchor");
     // The above walk is order-sensitive only in traversal, not in output; re-run to a fixpoint so a
     // person reached late still gets its open directions expanded.
     let changed = true;
@@ -327,17 +335,17 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       changed = false;
       for (const id of [...drawn].sort()) {
         const partner = partnerOf(id);
-        const consider = (nid: string) => {
+        const consider = (nid: string, via: DiscoveredVia) => {
           if (nodeById.has(nid) && !drawn.has(nid)) {
-            visit(nid);
+            visit(nid, via);
             changed = true;
           }
         };
-        if (partner) consider(partner);
-        if (parentsOpen(id)) for (const p of parentsList(id)) consider(p);
-        if (siblingsOpen(id)) for (const s of siblingsOf(id)) consider(s);
+        if (partner) consider(partner, "partner");
+        if (parentsOpen(id)) for (const p of parentsList(id)) consider(p, "parent-caret");
+        if (siblingsOpen(id)) for (const s of siblingsOf(id)) consider(s, "sibling-set");
         const ck = coupleKey(id, partner);
-        if (childrenOpen(ck)) for (const c of coupleChildren(id, partner)) consider(c);
+        if (childrenOpen(ck)) for (const c of coupleChildren(id, partner)) consider(c, "child-set");
       }
     }
   }
@@ -715,9 +723,16 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     if (!n.identified) continue;
 
     const partner = partnerOf(id);
+    // Nearer-owns (ADR-0018): a person emits its own parents ↑ / siblings ↔ affordances ONLY when it
+    // was reached "as an individual" — the anchor, a drawn partner (in-laws, no carve-out), or a
+    // lineage parent reached via its child's parent-caret. A `child-set` member (revealed child,
+    // cousin, niece) shows no parent-caret back up toward the anchor; a `sibling-set` member (fanned
+    // sibling) shows no sibling affordance at all — those edges are owned by the nearer discoverer.
+    const via = discoveredVia.get(id);
+    const ownsIndividual = via === "anchor" || via === "partner" || via === "parent-caret";
 
-    // --- Parents ↑ (per-person) ---
-    {
+    // --- Parents ↑ (per-person) — only the owner of its parent-reveal emits ---
+    if (ownsIndividual) {
       const loaded = parentsList(id);
       const drawnParents = loaded.filter((pp) => isDrawn(pp));
       const hasKin = loaded.length > 0 || n.hasHiddenParents;
@@ -744,8 +759,8 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       }
     }
 
-    // --- Siblings ↔ (per-person, ego-side outer border) ---
-    {
+    // --- Siblings ↔ (per-person, ego-side outer border) — only the set-owner emits ---
+    if (ownsIndividual) {
       const sibs = siblingsOf(id);
       const drawnSibs = sibs.filter((s) => isDrawn(s));
       // Side via the SHARED rule — identical to the sibling-fan's pin side (spec §3/§4).
