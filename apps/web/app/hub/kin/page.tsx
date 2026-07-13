@@ -61,6 +61,38 @@ function endpointName(displayName: string | null, identified: boolean): string {
   return identified && displayName ? displayName : hub.kin.edgeUnknownPerson;
 }
 
+/**
+ * The anchor's partners, derived from every visible `partnered_with` edge touching the anchor: the
+ * OTHER endpoint on each such edge. Powers the co-parent picker on the add-child form (the reported
+ * bug: adding a child to John only linked the child to John, not his partner Kelly) — a plain member
+ * can offer their partner as a second parent without any new authority (the write path re-validates).
+ */
+function derivePartnersOf(
+  edges: GovernableKinEdge[],
+  anchorPersonId: string,
+): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = [];
+  for (const e of edges) {
+    if (e.edgeType !== "partnered_with") continue;
+    let otherId: string | null = null;
+    let otherName: string | null = null;
+    let otherIdentified = false;
+    if (e.personAId === anchorPersonId) {
+      otherId = e.personBId;
+      otherName = e.personBDisplayName;
+      otherIdentified = e.personBIdentified;
+    } else if (e.personBId === anchorPersonId) {
+      otherId = e.personAId;
+      otherName = e.personADisplayName;
+      otherIdentified = e.personAIdentified;
+    }
+    if (otherId !== null) {
+      out.push({ id: otherId, name: endpointName(otherName, otherIdentified) });
+    }
+  }
+  return out;
+}
+
 /** An ungendered sentence for one visible edge (parent_of / partnered_with), with an optional nature. */
 function edgeSentence(edge: GovernableKinEdge): string {
   const a = endpointName(edge.personADisplayName, edge.personAIdentified);
@@ -175,6 +207,11 @@ export default async function KinPage({
   // The governance section is only meaningful if the viewer can act on at least one edge (steward, or
   // a self-endpoint who could hide). Otherwise it stays hidden — a plain member sees just their kin.
   const showGovernance = edges.some((e) => e.viewerIsSteward || e.viewerCanHide);
+
+  // The co-parent picker's candidates: partners of the effective anchor (the explicit anchor, else
+  // the viewer — mirrors core's own anchor default in addRelative).
+  const effectiveAnchorId = anchorPersonId ?? ctx.personId;
+  const coParentOptions = derivePartnersOf(edges, effectiveAnchorId);
 
   return shell(
     <>
@@ -375,6 +412,7 @@ export default async function KinPage({
           familyId={familyId}
           {...(anchorPersonId ? { anchorPersonId } : {})}
           {...(initialRelation ? { initialRelation } : {})}
+          coParentOptions={coParentOptions}
         />
       </section>
     </>,

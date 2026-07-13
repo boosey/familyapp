@@ -115,6 +115,15 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
 
   const sex = parseSex(formData.get("sex"));
 
+  // Co-parent (relation=child only): a non-empty trimmed string from the "Other parent" picker.
+  // Forwarded ONLY for relation=child — core re-validates it belongs to the family and ignores it
+  // entirely for every other relation.
+  const rawCoParent = formData.get("coParentPersonId");
+  const coParentPersonId =
+    relation === "child" && typeof rawCoParent === "string" && rawCoParent.trim()
+      ? rawCoParent.trim()
+      : undefined;
+
   const input: AddRelativeInput = {
     familyId,
     relation,
@@ -127,6 +136,7 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     ...(deathYear !== undefined ? { deathYear } : {}),
     // Omitted/"unknown"/malformed => omit entirely; core defaults the created person to "unknown".
     ...(sex && sex !== "unknown" ? { sex } : {}),
+    ...(coParentPersonId ? { coParentPersonId } : {}),
   };
 
   plog("kin", "addRelative: received", {

@@ -21,18 +21,26 @@ export function AddRelativeForm({
   familyId,
   anchorPersonId,
   initialRelation,
+  coParentOptions,
 }: {
   familyId: string;
   /** When present (a targeted add from a person panel), rides along so core anchors on this person. */
   anchorPersonId?: string;
   /** Preselects the relation `<select>` when the add was launched with an intended relation. */
   initialRelation?: AddRelativeRelation;
+  /** The anchor's partners (issue: adding a child only linked one parent, not their partner too).
+   *  Non-empty => the "Other parent" picker shows for relation=child. */
+  coParentOptions?: { id: string; name: string }[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Drives the conditional "Year they died" field — shown ONLY when the relative is deceased
   // (spec §4). The select is controlled so the death-year field appears/disappears live.
   const [lifeStatus, setLifeStatus] = useState<"living" | "deceased">("living");
+  // Drives the conditional co-parent picker — shown ONLY for relation=child. The relation select must
+  // be controlled so the field appears/disappears live as the user changes it.
+  const [relation, setRelation] = useState<AddRelativeRelation>(initialRelation ?? "parent");
+  const partners = coParentOptions ?? [];
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -55,7 +63,13 @@ export function AddRelativeForm({
 
       <label className="kin-form-label">
         {hub.kin.relationFieldLabel}
-        <select name="relation" className="kin-field" defaultValue={initialRelation ?? "parent"} required>
+        <select
+          name="relation"
+          className="kin-field"
+          value={relation}
+          onChange={(e) => setRelation(e.target.value as AddRelativeRelation)}
+          required
+        >
           <option value="parent">{hub.kin.relationOptions.parent}</option>
           <option value="child">{hub.kin.relationOptions.child}</option>
           <option value="partner">{hub.kin.relationOptions.partner}</option>
@@ -63,6 +77,20 @@ export function AddRelativeForm({
           <option value="grandparent">{hub.kin.relationOptions.grandparent}</option>
         </select>
       </label>
+
+      {relation === "child" && partners.length > 0 ? (
+        <label className="kin-form-label">
+          {hub.kin.otherParentLabel}
+          <select name="coParentPersonId" className="kin-field" defaultValue={partners[0]!.id}>
+            <option value="">{hub.kin.otherParentNone}</option>
+            {partners.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <label className="kin-form-label">
         {hub.kin.nameFieldLabel}

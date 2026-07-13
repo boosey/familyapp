@@ -379,6 +379,73 @@ describe("addRelative — visibility & audit", () => {
   });
 });
 
+describe("addRelative — optional coParentPersonId (relation=child only)", () => {
+  it("relation=child with a valid coParentPersonId creates BOTH parent_of edges", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "child",
+      displayName: "Kid",
+      coParentPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(2);
+
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const parentsOfChild = proj.edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === res.createdPersonId)
+      .map((e) => e.personAId)
+      .sort();
+    expect(parentsOfChild).toEqual([mePersonId, otherPersonId].sort());
+  });
+
+  it("relation=child WITHOUT coParentPersonId creates only the single parent edge (unchanged)", async () => {
+    const { db, ctx, familyId, mePersonId } = await seedTwoMemberFamily();
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "child",
+      displayName: "Kid",
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(1);
+
+    const proj = await resolveKinshipProjection(db, ctx, familyId);
+    const parentsOfChild = proj.edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === res.createdPersonId)
+      .map((e) => e.personAId);
+    expect(parentsOfChild).toEqual([mePersonId]);
+  });
+
+  it("rejects a coParentPersonId that is not attachable in this family", async () => {
+    const { db, ctx, familyId } = await seedTwoMemberFamily();
+    const outsider = await makePerson(db, "Outsider");
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "child",
+      displayName: "Kid",
+      coParentPersonId: outsider.id,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/co-?parent/i);
+
+    // Nothing written — no partial child creation on a rejected co-parent.
+    const rows = await db.select().from(kinshipAssertions);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("ignores coParentPersonId on a non-child relation", async () => {
+    const { db, ctx, familyId, otherPersonId } = await seedTwoMemberFamily();
+    const res = await addRelative(db, ctx, {
+      familyId,
+      relation: "parent",
+      displayName: "Grandpa",
+      coParentPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(1);
+  });
+});
+
 describe("addRelative — optional anchorPersonId", () => {
   it("anchors a parent on the given anchorPersonId, not the viewer", async () => {
     const { db, ctx, familyId, otherPersonId } = await seedTwoMemberFamily();

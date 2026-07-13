@@ -50,6 +50,11 @@ export interface AddRelativeInput {
   nature?: KinshipNature;
   /** ADR-0016 tree renderer — the relative's sex. Omitted => `"unknown"` (never inferred). */
   sex?: PersonSex;
+  /**
+   * ONLY for relation="child": also record this person as a second parent of the child; must be
+   * attachable in the family — typically the anchor's partner. Ignored for every other relation.
+   */
+  coParentPersonId?: string;
 }
 
 export interface AddRelativeResult {
@@ -65,6 +70,25 @@ export interface AddRelativeResult {
 
 /** A handle that is either the pooled client or an open transaction. */
 type DbOrTx = Pick<Database, "select" | "insert">;
+
+/**
+ * Is `candidatePersonId` attachable in `familyId`: an active member, or a person already visible in
+ * the family's kinship projection (a mention/bridge node). Shared by the anchor validation and the
+ * co-parent validation (both need the identical "attachable in THIS family" rule).
+ */
+async function isAttachableInFamily(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+  candidatePersonId: string,
+): Promise<boolean> {
+  if (await isActiveMember(db, candidatePersonId, familyId)) return true;
+  const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+  for (const e of edges) {
+    if (e.personAId === candidatePersonId || e.personBId === candidatePersonId) return true;
+  }
+  return false;
+}
 
 /**
  * Insert a `mention` Person. An identified mention carries `displayName` + `spokenName` (the first
@@ -224,20 +248,24 @@ export async function addRelative(
   // before the write transaction opens.
   const anchor = input.anchorPersonId ?? me;
   if (anchor !== me) {
-    const isMember = await isActiveMember(db, anchor, input.familyId);
-    let attachable = isMember;
-    if (!attachable) {
-      const { edges } = await resolveKinshipProjection(db, ctx, input.familyId);
-      for (const e of edges) {
-        if (e.personAId === anchor || e.personBId === anchor) {
-          attachable = true;
-          break;
-        }
-      }
-    }
-    if (!attachable) {
+    if (!(await isAttachableInFamily(db, ctx, input.familyId, anchor))) {
       return { allowed: false, reason: "anchor person is not in this family" };
     }
+  }
+
+  // Co-parent (relation=child only): validate up-front like the anchor, so a supplied-but-invalid
+  // co-parent is rejected with a clear reason rather than silently dropped (which would misleadingly
+  // create a single-parent child when the user asked for two parents).
+  let coParentPersonId: string | undefined;
+  if (input.relation === "child" && input.coParentPersonId !== undefined) {
+    const candidate = input.coParentPersonId;
+    if (candidate !== anchor) {
+      if (!(await isAttachableInFamily(db, ctx, input.familyId, candidate))) {
+        return { allowed: false, reason: "co-parent person is not in this family" };
+      }
+      coParentPersonId = candidate;
+    }
+    // candidate === anchor: same person as the primary parent, so no second edge is added.
   }
 
   const familyId = input.familyId;
@@ -269,6 +297,9 @@ export async function addRelative(
       }
       case "child": {
         edgeIds.push(await insertParentOf(tx, familyId, me, anchor, createdPersonId, nature));
+        if (coParentPersonId !== undefined) {
+          edgeIds.push(await insertParentOf(tx, familyId, me, coParentPersonId, createdPersonId, nature));
+        }
         break;
       }
       case "partner": {
