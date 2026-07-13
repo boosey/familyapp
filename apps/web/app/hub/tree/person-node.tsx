@@ -17,8 +17,8 @@
 import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
 
-export const NODE_W = 120;
-export const NODE_H = 72;
+export const NODE_W = 210;
+export const NODE_H = 84;
 
 /** Full relation label set (mirrors /hub/kin's) — used for the anonymous-bridge sublabel. */
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
@@ -186,8 +186,8 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
           height: NODE_H,
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "8px 10px",
+          gap: 12,
+          padding: "12px 34px 12px 16px",
           textAlign: "left",
           cursor: "pointer",
           borderRadius: "var(--radius-lg)",
@@ -201,15 +201,15 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
         aria-hidden="true"
         style={{
           flex: "0 0 auto",
-          width: 34,
-          height: 34,
+          width: 40,
+          height: 40,
           borderRadius: "50%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontFamily: "var(--font-ui)",
           fontWeight: 600,
-          fontSize: "1rem",
+          fontSize: "1.1rem",
           color: isRoot ? "var(--accent-on)" : "#fff",
           background: isRoot ? "var(--accent)" : monogramColor(node.personId),
         }}
@@ -220,7 +220,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
         <span
           style={{
             fontFamily: "var(--font-story)",
-            fontSize: "0.9rem",
+            fontSize: "1rem",
             fontStyle: anon ? "italic" : "normal",
             color: anon ? "var(--text-muted)" : "var(--text-body)",
             whiteSpace: "nowrap",
@@ -234,7 +234,7 @@ export function PersonNode({ node, isRoot, viewerPersonId, onTap, kebab }: Perso
           <span
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: "0.7rem",
+              fontSize: "0.78rem",
               color: "var(--text-meta)",
               whiteSpace: "nowrap",
               overflow: "hidden",

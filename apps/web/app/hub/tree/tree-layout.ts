@@ -108,10 +108,10 @@ export interface LayoutInput {
 // fits inside `bounds`. Units are px.
 // ---------------------------------------------------------------------------
 
-export const NODE_W = 120; // node card width (px)
-export const NODE_H = 72; // node card height (px)
-const H_GAP = 40; // horizontal gap between generation columns (card edge to edge)
-const V_GAP = 40; // vertical gap between stacked same-generation cards
+export const NODE_W = 210; // node card width (px)
+export const NODE_H = 84; // node card height (px)
+const H_GAP = 56; // horizontal gap between generation columns (card edge to edge)
+const V_GAP = 44; // vertical gap between stacked same-generation cards
 
 const COL_STEP = NODE_W + H_GAP; // center-to-center horizontal step between generation columns
 const ROW_STEP = NODE_H + V_GAP; // center-to-center vertical step between stacked cards
