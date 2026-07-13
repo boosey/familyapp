@@ -318,6 +318,35 @@ describe("nearer-owns caret ownership (ADR-0018)", () => {
     expect(fc.expanded).toBe(true);
   });
 
+  it("a direct-lineage parent shows NO children-caret (the anchor owns the bus via its parents-caret)", () => {
+    // mom -> focus; focus's parent mom is on the bus by default. mom is the direct-lineage parent
+    // (reached FROM BELOW via focus's parents-caret) → she must NOT draw a children-caret back down at
+    // focus. Otherwise the vertical bus carries two carets (mom's ↓ and focus's ↑) — the reported bug.
+    const nodes = [node("mom"), node("focus")];
+    const edges = [parentOf("mom", "focus")];
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges }));
+    expect(l.placed.some((p) => p.personId === "mom")).toBe(true);
+    expect(aff(l, "children", "mom")).toBeUndefined();
+    // The anchor owns the single vertical control — an expanded parents ↑ caret.
+    const fp = aff(l, "parents", "focus")!;
+    expect(fp.kind).toBe("caret");
+    expect(fp.expanded).toBe(true);
+  });
+
+  it("in a 3-gen ancestor chain the middle parent keeps its parents-caret but shows no children-caret", () => {
+    // gran -> mom -> focus; expand mom's parents so gran is drawn. mom (reached via focus's
+    // parents-caret) owns her OWN parents ↑ (→ gran) but NOT children ↓ (focus owns that edge).
+    const nodes = [node("gran"), node("mom"), node("focus")];
+    const edges = [parentOf("gran", "mom"), parentOf("mom", "focus")];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "focus", nodes, edges, expansion: expansion({ expandedParents: new Set(["mom"]) }) }),
+    );
+    expect(l.placed.some((p) => p.personId === "gran")).toBe(true);
+    expect(aff(l, "children", "mom")).toBeUndefined();
+    expect(aff(l, "parents", "mom")!.kind).toBe("caret");
+    expect(aff(l, "parents", "mom")!.expanded).toBe(true);
+  });
+
   it("a fanned sibling shows NO sibling (or parent) affordance; only the anchor owns the set", () => {
     const nodes = [node("mom"), node("focus"), node("sib")];
     const edges = [parentOf("mom", "focus"), parentOf("mom", "sib")];

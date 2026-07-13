@@ -782,7 +782,17 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     // --- Children ↓ (per-couple, dedup) ---
     // Draw the children affordance ONCE per couple, anchored on the LEFT partner (or the single
     // parent). Skip if the right partner (we only anchor on the left of a drawn pair).
-    {
+    //
+    // Nearer-owns (ADR-0018): a couple reached FROM BELOW — discovered because one of its own children
+    // expanded its parents ↑ caret — does NOT own the vertical edge to that child. The child (nearer
+    // the anchor) owns it via its parents ↑ caret, and that child's siblings come off the child's
+    // sibling-caret. So a direct-lineage parent couple draws NO children affordance at all (else the
+    // bus carries two carets: the parent's ↓ and the child's ↑). Either member reached via
+    // `parent-caret` marks the whole couple as reached-from-below.
+    const coupleFromBelow =
+      via === "parent-caret" ||
+      (partner != null && discoveredVia.get(partner) === "parent-caret");
+    if (!coupleFromBelow) {
       const partnerDrawn = partner != null && isDrawn(partner);
       const isLeftAnchor = (() => {
         if (!partnerDrawn) return true;
