@@ -686,3 +686,204 @@ export async function unhideEdge(
 ): Promise<KinshipEdgeActionResult> {
   return appendSubjectHide(db, ctx, ref, false);
 }
+
+// ===========================================================================
+// Identity reconciliation (ADR-0016) — reconcileMentionIntoAccount.
+//
+// When someone named as kin (a `mention` Person, carrying the tree edges) LATER signs up (a `self`
+// account Person, carrying login + content), the family has TWO rows for one human. Reconciliation
+// MERGES the mention INTO the account. Because `kinship_assertions` is APPEND-ONLY (a DB trigger
+// blocks UPDATE/DELETE), the merge is done ENTIRELY by APPENDING rows — never editing:
+//   • for every VISIBLE edge with the mention as an endpoint, APPEND the account's equivalent edge
+//     (asserted, actor = steward), then APPEND a superseding `denied` row for the mention's edge so
+//     it drops from the projection;
+//   • the mention Person row is LEFT as an inert tombstone (append-only forbids deleting it; all its
+//     edges are now denied, so it never renders).
+// Gated to the family's Steward. The only non-ledger write is optionally carrying the mention's `sex`
+// onto the account when the account's is unset — a person-row UPDATE (persons is not append-only).
+// ===========================================================================
+
+export interface ReconcileMentionInput {
+  familyId: string;
+  /** The loser: an `origin='mention'` Person that carries the tree edges. */
+  mentionPersonId: string;
+  /** The winner: the canonical Person (typically `origin='self'` with an account). */
+  accountPersonId: string;
+}
+
+export interface ReconcileResult {
+  allowed: boolean;
+  reason?: string;
+  /** New edges appended pointing at the account (the mention's edges, redirected). */
+  assertedEdgeIds?: string[];
+  /** Superseding `denied` rows appended for the mention's own edges. */
+  deniedEdgeIds?: string[];
+  /** Whether the account's `sex` was filled from the mention. */
+  sexCarried?: boolean;
+}
+
+/** The reconciliation-relevant fields of a Person, or null if the row does not exist. */
+async function personReconcileRow(
+  db: DbOrTx,
+  personId: string,
+): Promise<{ origin: string; accountId: string | null; sex: PersonSex | null } | null> {
+  const [row] = await db
+    .select({ origin: persons.origin, accountId: persons.accountId, sex: persons.sex })
+    .from(persons)
+    .where(eq(persons.id, personId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Reconcile a duplicate `mention` Person INTO a canonical account Person (ADR-0016). Steward-gated,
+ * ledger-native (append-only): redirects every visible mention edge onto the account and denies the
+ * mention's own, optionally carrying the mention's sex onto an unset account. Idempotent — a second
+ * run finds no visible mention edges and appends nothing. The mention row remains an inert tombstone.
+ *
+ * SAFETY GUARD: refuses if the loser is not a `mention`, or carries an `accountId` (a true mention
+ * never does — that would mean orphaning a real login/identity). Content-ownership (stories/media on
+ * the mention) is out of scope here: a mention has no content by construction, and those tables live
+ * behind the Story front door (NOT the kinship allowlist), so we do not read them from this file. See
+ * report note.
+ */
+export async function reconcileMentionIntoAccount(
+  db: Database,
+  ctx: AuthContext,
+  input: ReconcileMentionInput,
+): Promise<ReconcileResult> {
+  // 1. Auth: real account AND this family's steward.
+  if (ctx.kind !== "account") {
+    return { allowed: false, reason: "not signed in" };
+  }
+  const me = ctx.personId;
+  const steward = await stewardPersonIdOf(db, input.familyId);
+  if (steward === null) {
+    return { allowed: false, reason: "family not found" };
+  }
+  if (steward !== me) {
+    return { allowed: false, reason: "only the family steward may reconcile a mention" };
+  }
+
+  // 2. Validate the two persons.
+  if (input.mentionPersonId === input.accountPersonId) {
+    return { allowed: false, reason: "mention and account are the same person" };
+  }
+  const mention = await personReconcileRow(db, input.mentionPersonId);
+  if (mention === null) {
+    return { allowed: false, reason: "mention person does not exist" };
+  }
+  const accountPerson = await personReconcileRow(db, input.accountPersonId);
+  if (accountPerson === null) {
+    return { allowed: false, reason: "account person does not exist" };
+  }
+  if (mention.origin !== "mention") {
+    return { allowed: false, reason: "loser is not a mention — refusing to merge a real person away" };
+  }
+
+  // 3. SAFETY GUARD: a true mention never holds an account. A content-bearing loser would orphan a
+  //    real login/identity, so refuse. (Story/media content ownership is out of scope — see doc.)
+  if (mention.accountId !== null) {
+    return { allowed: false, reason: "mention carries an account — reconciliation would orphan identity" };
+  }
+
+  // 3b. PERSON-SCOPE GUARD (cross-family bypass). Persons are GLOBAL rows, not family-scoped, and the
+  //     auth gate above only proves the caller is THIS family's steward. Without this, a steward of X
+  //     (who is also a member of Y) could pass Y's mention+account ids: the edge loop finds no edges in
+  //     X (harmless), but the Step-5 sex UPDATE would still fire on Y's account — an unauthorized
+  //     cross-family attribute write. Require BOTH ids to be attachable in THIS family (active member,
+  //     or visible in its kinship projection) BEFORE any write, so a foreign person is rejected with no
+  //     partial write. A mention created in this tree is visible → attachable; the real account is an
+  //     active member → attachable; another family's persons are neither → rejected.
+  if (!(await isAttachableInFamily(db, ctx, input.familyId, input.mentionPersonId))) {
+    return { allowed: false, reason: "mention is not part of this family" };
+  }
+  if (!(await isAttachableInFamily(db, ctx, input.familyId, input.accountPersonId))) {
+    return { allowed: false, reason: "account person is not part of this family" };
+  }
+
+  const familyId = input.familyId;
+  const mentionId = input.mentionPersonId;
+  const accountId = input.accountPersonId;
+
+  return db.transaction(async (tx) => {
+    // 4. Load the family's current VISIBLE projection and redirect every edge touching the mention.
+    const { edges } = await resolveKinshipProjection(tx as unknown as Database, ctx, familyId);
+
+    // Index the visible edges by their normalized key so we can skip an edge that already exists for
+    // the account (idempotency) without re-appending it.
+    const visibleKeys = new Set<string>();
+    for (const e of edges) {
+      const { personAId, personBId } = normalizeEdgeEndpoints(e.edgeType, e.personAId, e.personBId);
+      visibleKeys.add(`${e.edgeType}|${personAId}|${personBId}`);
+    }
+    const keyOf = (edgeType: KinshipEdgeType, a: string, b: string): string => {
+      const n = normalizeEdgeEndpoints(edgeType, a, b);
+      return `${edgeType}|${n.personAId}|${n.personBId}`;
+    };
+
+    const assertedEdgeIds: string[] = [];
+    const deniedEdgeIds: string[] = [];
+
+    for (const e of edges) {
+      const touchesMention = e.personAId === mentionId || e.personBId === mentionId;
+      if (!touchesMention) continue;
+
+      // Compute the equivalent edge with the mention endpoint replaced by the account. For parent_of
+      // we keep DIRECTION (only swap the mention endpoint); partnered_with re-normalizes below.
+      const newA = e.personAId === mentionId ? accountId : e.personAId;
+      const newB = e.personBId === mentionId ? accountId : e.personBId;
+
+      // The "other" endpoint after redirect. If it IS the account, the redirected edge is a self-loop
+      // (e.g. the mention was partnered with the account itself) — skip appending it, but still deny
+      // the mention's own edge so the duplicate drops out.
+      const otherEndpoint = e.personAId === mentionId ? e.personBId : e.personAId;
+      const isSelfLoop = otherEndpoint === accountId;
+
+      if (!isSelfLoop) {
+        const equivKey = keyOf(e.edgeType, newA, newB);
+        // Idempotency: only append the redirected edge if the account doesn't already carry it.
+        if (!visibleKeys.has(equivKey)) {
+          if (e.edgeType === "parent_of") {
+            assertedEdgeIds.push(
+              await insertParentOf(tx, familyId, me, newA, newB, e.nature ?? "unknown"),
+            );
+          } else {
+            assertedEdgeIds.push(await insertPartneredWith(tx, familyId, me, newA, newB));
+          }
+          visibleKeys.add(equivKey);
+        }
+      }
+
+      // Deny the mention's OWN visible edge (same key/direction) so it leaves the projection.
+      const { personAId, personBId } = normalizeEdgeEndpoints(e.edgeType, e.personAId, e.personBId);
+      deniedEdgeIds.push(
+        await appendGovernanceRow(
+          tx,
+          { familyId, edgeType: e.edgeType, personAId, personBId },
+          personAId,
+          personBId,
+          me,
+          "denied",
+          natureToCarryForward(e.edgeType, e.nature),
+          "reconciled: mention merged into account",
+        ),
+      );
+    }
+
+    // 5. Carry sex from the mention onto the account when the account's is null/unknown and the
+    //    mention's is a real value. persons is NOT append-only, so this is a normal UPDATE.
+    let sexCarried = false;
+    const accountSexUnset = accountPerson.sex === null || accountPerson.sex === "unknown";
+    const mentionSexKnown = mention.sex === "male" || mention.sex === "female";
+    if (accountSexUnset && mentionSexKnown) {
+      await tx
+        .update(persons)
+        .set({ sex: mention.sex, updatedAt: new Date() })
+        .where(eq(persons.id, accountId));
+      sexCarried = true;
+    }
+
+    return { allowed: true, assertedEdgeIds, deniedEdgeIds, sexCarried };
+  });
+}
