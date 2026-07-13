@@ -13,7 +13,8 @@
  *     panel's "Center tree here" button (the old select→second-tap re-root gesture is GONE).
  *   - A pointer that MOVES beyond a small threshold between down and up is a drag (pan), not a tap — so
  *     panning never accidentally selects a node.
- *   - Frontier CHEVRONS on a node's outer edge reveal more ancestors/descendants (fetch + merge).
+ *   - Per-edge CARETS on a node's outer edge collapse/expand an already-drawn branch (client only),
+ *     or reveal more ancestors/descendants at a boundary (fetch + merge) — one control per edge.
  *   - EMPTY-PARENT SLOTS on a node's ancestor edge navigate to the add-parent flow (bridge creation).
  *   - A global toolbar ⋮ (KebabMenu) and optional per-card ⋮ add relatives, gated by loaded adjacency.
  *
@@ -27,9 +28,9 @@ import type { KinshipTreeData, ResolvedKinshipEdge, TreeNode } from "@chronicle/
 import {
   computeTreeLayout,
   EMPTY_EXPANSION,
+  type EdgeAffordance,
   type EmptyParentSlot,
   type ExpansionState,
-  type FrontierChevron,
 } from "./tree-layout";
 import { NODE_H, NODE_W, PersonNode } from "./person-node";
 import { PersonPanel } from "./person-panel";
@@ -53,6 +54,13 @@ export interface TreeCanvasProps {
 function add<T>(set: ReadonlySet<T>, value: T): Set<T> {
   const next = new Set(set);
   next.add(value);
+  return next;
+}
+
+/** Return an immutable set copy with `value` removed. */
+function remove<T>(set: ReadonlySet<T>, value: T): Set<T> {
+  const next = new Set(set);
+  next.delete(value);
   return next;
 }
 
@@ -210,10 +218,22 @@ export function TreeCanvas({
     [familyId, fetchSubtree, nodes, edges, rootPersonId],
   );
 
-  /** A chevron reveals ancestors (fetch parents) or descendants (fetch children). */
-  const onChevron = useCallback(
-    (c: FrontierChevron) => {
-      void revealFetch(c.direction === "ancestors" ? "parents" : "children", c.personId);
+  // --- Per-edge caret activation (collapse / expand client-side, or a boundary fetch) -------------
+  const onCaret = useCallback(
+    (a: EdgeAffordance) => {
+      const dir = a.direction; // "ancestors" | "descendants"
+      const collapsedKey = dir === "ancestors" ? "collapsedAncestors" : "collapsedChildren";
+      if (a.state === "fetch") {
+        void revealFetch(dir === "ancestors" ? "parents" : "children", a.personId);
+        return;
+      }
+      if (a.state === "collapse") {
+        // Hide the drawn branch (client only): add to the collapsed set.
+        setExpansion((e) => ({ ...e, [collapsedKey]: add(e[collapsedKey], a.personId) }));
+        return;
+      }
+      // state === "expand": un-prune (client only); the kin are already loaded.
+      setExpansion((e) => ({ ...e, [collapsedKey]: remove(e[collapsedKey], a.personId) }));
     },
     [revealFetch],
   );
@@ -401,9 +421,9 @@ export function TreeCanvas({
             );
           })}
 
-          {/* Frontier chevrons — reveal more ancestors (right edge) / descendants (left edge). */}
-          {layout.chevrons.map((ch) => (
-            <ChevronButton key={`${ch.direction}:${ch.personId}`} chevron={ch} onActivate={onChevron} />
+          {/* Per-edge carets — collapse/expand a drawn branch, or fetch more kin at a boundary. */}
+          {layout.affordances.map((aff) => (
+            <CaretButton key={`${aff.direction}:${aff.personId}`} aff={aff} onActivate={onCaret} />
           ))}
 
           {/* Empty-parent slots — navigate to the add-parent flow (bridge creation). */}
@@ -427,34 +447,51 @@ export function TreeCanvas({
   );
 }
 
-/** A single frontier chevron (reveal ancestors on the right edge, descendants on the left edge). */
-function ChevronButton({
-  chevron,
+/**
+ * A single per-edge caret. Ancestors sit on the RIGHT edge, descendants on the LEFT edge. The glyph
+ * points OUTWARD (away from the node) to reveal/expand more kin, and INWARD (toward the node) to
+ * collapse a drawn branch. Copy/aria is keyed by direction × state (all keys already in _copy/hub.ts).
+ */
+function CaretButton({
+  aff,
   onActivate,
 }: {
-  chevron: FrontierChevron;
-  onActivate: (c: FrontierChevron) => void;
+  aff: EdgeAffordance;
+  onActivate: (a: EdgeAffordance) => void;
 }) {
-  // Ancestors sit on the RIGHT edge → chevron points right (▸). Descendants on the LEFT edge → left (◂).
-  const glyph = chevron.direction === "ancestors" ? "▸" : "◂";
-  const label = chevron.direction === "ancestors" ? hub.tree.showEarlier : hub.tree.showDescendants;
+  const outward = aff.direction === "ancestors" ? "▸" : "◂"; // reveal/expand → point away from node
+  const inward = aff.direction === "ancestors" ? "◂" : "▸"; // collapse → point toward node
+  const glyph = aff.state === "collapse" ? inward : outward;
+  const label =
+    aff.direction === "ancestors"
+      ? aff.state === "collapse"
+        ? hub.tree.collapseParents
+        : aff.state === "expand"
+          ? hub.tree.expandParents
+          : hub.tree.showEarlier
+      : aff.state === "collapse"
+        ? hub.tree.collapseChildren
+        : aff.state === "expand"
+          ? hub.tree.expandChildren
+          : hub.tree.showDescendants;
   const size = 22;
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      data-testid={`tree-chevron-${chevron.direction}-${chevron.personId}`}
+      data-testid={`tree-affordance-${aff.direction}-${aff.state}-${aff.personId}`}
+      data-affordance-state={aff.state}
       onClick={(e) => {
         e.stopPropagation();
-        onActivate(chevron);
+        onActivate(aff);
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       style={{
         position: "absolute",
-        left: chevron.x - size / 2,
-        top: chevron.y - size / 2,
+        left: aff.x - size / 2,
+        top: aff.y - size / 2,
         width: size,
         height: size,
         display: "flex",

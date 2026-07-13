@@ -67,6 +67,8 @@ function expansion(over: Partial<ExpansionState> = {}): ExpansionState {
   return {
     expandedParents: new Set(),
     expandedChildren: new Set(),
+    collapsedAncestors: new Set(),
+    collapsedChildren: new Set(),
     ...over,
   };
 }
@@ -350,40 +352,104 @@ describe("computeTreeLayout — bounded windowing + expansion reveal", () => {
   });
 });
 
-describe("computeTreeLayout — frontier chevrons", () => {
-  it("emits an ancestors chevron for a node with hasHiddenParents, on its RIGHT edge", () => {
+describe("computeTreeLayout — per-edge affordances (fetch state)", () => {
+  it("emits an ancestors 'fetch' affordance for a node with hasHiddenParents, on its RIGHT edge", () => {
     const nodes = [node("me", { hasHiddenParents: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     const me = placedFor(l, "me");
-    const chev = l.chevrons.find((c) => c.direction === "ancestors" && c.personId === "me");
-    expect(chev).toBeTruthy();
+    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
+    expect(aff).toBeTruthy();
+    expect(aff!.state).toBe("fetch");
     // Right (ancestor) edge.
-    expect(chev!.x).toBeCloseTo(me.x + NODE_W / 2, 5);
-    expect(chev!.y).toBeCloseTo(me.y, 5);
+    expect(aff!.x).toBeCloseTo(me.x + NODE_W / 2, 5);
+    expect(aff!.y).toBeCloseTo(me.y, 5);
   });
 
-  it("emits a descendants chevron for a node with hasHiddenChildren, on its LEFT edge", () => {
+  it("emits a descendants 'fetch' affordance for a node with hasHiddenChildren, on its LEFT edge", () => {
     const nodes = [node("me", { hasHiddenChildren: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     const me = placedFor(l, "me");
-    const chev = l.chevrons.find((c) => c.direction === "descendants" && c.personId === "me");
-    expect(chev).toBeTruthy();
+    const aff = l.affordances.find((a) => a.direction === "descendants" && a.personId === "me");
+    expect(aff).toBeTruthy();
+    expect(aff!.state).toBe("fetch");
     // Left (descendant) edge.
-    expect(chev!.x).toBeCloseTo(me.x - NODE_W / 2, 5);
-    expect(chev!.y).toBeCloseTo(me.y, 5);
+    expect(aff!.x).toBeCloseTo(me.x - NODE_W / 2, 5);
+    expect(aff!.y).toBeCloseTo(me.y, 5);
   });
 
-  it("emits NO chevron when the node has no hidden kin", () => {
+  it("emits NO affordance when the node has no kin on that side", () => {
     const nodes = [node("me")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.chevrons).toHaveLength(0);
+    expect(l.affordances).toHaveLength(0);
   });
 
-  it("emits both chevrons for a node with both hidden parents and hidden children", () => {
+  it("emits both affordances for a node with both hidden parents and hidden children", () => {
     const nodes = [node("me", { hasHiddenParents: true, hasHiddenChildren: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
-    expect(l.chevrons.some((c) => c.direction === "ancestors")).toBe(true);
-    expect(l.chevrons.some((c) => c.direction === "descendants")).toBe(true);
+    expect(l.affordances.some((a) => a.direction === "ancestors" && a.state === "fetch")).toBe(true);
+    expect(l.affordances.some((a) => a.direction === "descendants" && a.state === "fetch")).toBe(true);
+  });
+
+  it("emits at most ONE affordance per (node, direction) — never two glyphs on one edge", () => {
+    // me has a DRAWN parent (mom) and ALSO hidden parents. The drawn branch wins as a single control.
+    const nodes = [node("me", { hasHiddenParents: true }), node("mom")];
+    const edges = [parentOf("mom", "me")];
+    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    const anc = l.affordances.filter((a) => a.direction === "ancestors" && a.personId === "me");
+    expect(anc).toHaveLength(1);
+  });
+});
+
+describe("computeTreeLayout — per-edge collapse / expand", () => {
+  it("a node with drawn parents emits an ancestors affordance with state 'collapse'", () => {
+    const nodes = [node("me"), node("mom")];
+    const edges = [parentOf("mom", "me")];
+    const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
+    expect(aff).toBeTruthy();
+    expect(aff!.state).toBe("collapse");
+  });
+
+  it("collapsing an ancestor branch prunes it AND flips the affordance to 'expand'", () => {
+    const nodes = [node("me"), node("mom"), node("gran")];
+    const edges = [parentOf("mom", "me"), parentOf("gran", "mom")];
+    const l = computeTreeLayout(
+      input({
+        rootPersonId: "me",
+        nodes,
+        edges,
+        expansion: expansion({ collapsedAncestors: new Set(["me"]) }),
+      }),
+    );
+    // The parent branch above `me` is pruned.
+    expect(l.placed.some((n) => n.personId === "mom")).toBe(false);
+    expect(l.placed.some((n) => n.personId === "gran")).toBe(false);
+    // me is still drawn, and its ancestor affordance now offers to expand.
+    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "me");
+    expect(aff).toBeTruthy();
+    expect(aff!.state).toBe("expand");
+  });
+
+  it("a node with drawn children emits a descendants affordance with state 'collapse', collapse→expand+prune", () => {
+    const nodes = [node("me"), node("kid"), node("grandkid")];
+    const edges = [parentOf("me", "kid"), parentOf("kid", "grandkid")];
+    const drawn = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
+    expect(
+      drawn.affordances.find((a) => a.direction === "descendants" && a.personId === "me")!.state,
+    ).toBe("collapse");
+    const collapsed = computeTreeLayout(
+      input({
+        rootPersonId: "me",
+        nodes,
+        edges,
+        expansion: expansion({ collapsedChildren: new Set(["me"]) }),
+      }),
+    );
+    expect(collapsed.placed.some((n) => n.personId === "kid")).toBe(false);
+    expect(collapsed.placed.some((n) => n.personId === "grandkid")).toBe(false);
+    expect(
+      collapsed.affordances.find((a) => a.direction === "descendants" && a.personId === "me")!.state,
+    ).toBe("expand");
   });
 });
 
@@ -400,7 +466,7 @@ describe("computeTreeLayout — empty parent slots", () => {
     expect(slot.y).toBeCloseTo(me.y, 5);
   });
 
-  it("does NOT emit an EmptyParentSlot when hasHiddenParents is true (chevron owns it)", () => {
+  it("does NOT emit an EmptyParentSlot when hasHiddenParents is true (a fetch affordance owns it)", () => {
     const nodes = [node("me", { hasHiddenParents: true })];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
     expect(l.emptyParentSlots.some((s) => s.personId === "me")).toBe(false);
@@ -427,12 +493,12 @@ describe("computeTreeLayout — empty parent slots", () => {
     }
   });
 
-  it("emits a chevron (NOT an add-parent slot) for a drawn node with a LOADED-but-UNDRAWN parent (Finding 1)", () => {
+  it("emits a 'fetch' affordance (NOT an add-parent slot) for a drawn node with a LOADED-but-UNDRAWN parent (Finding 1)", () => {
     // Multi-hop ancestor reveal aftermath: p2 (gen -2, at the window edge) is drawn and has
     // hasHiddenParents:false, but a parent edge p3->p2 IS loaded with p3 as a node BEYOND the ±2
     // window (undrawn, because p2 is not in expandedParents). p2 therefore has a loaded-but-undrawn
     // parent — it must NOT get an "Add parent" slot (that would create a duplicate parent), and MUST
-    // get an ancestors chevron so p3 stays reachable.
+    // get an ancestors 'fetch' affordance so p3 stays reachable.
     const nodes = [
       node("me"),
       node("p1"),
@@ -446,8 +512,17 @@ describe("computeTreeLayout — empty parent slots", () => {
     expect(l.placed.some((n) => n.personId === "p3")).toBe(false);
     // No false add-parent slot on p2.
     expect(l.emptyParentSlots.some((s) => s.personId === "p2")).toBe(false);
-    // An ancestors chevron IS emitted for p2, keeping the undrawn parent reachable.
-    expect(l.chevrons.some((c) => c.direction === "ancestors" && c.personId === "p2")).toBe(true);
+    // An ancestors 'fetch' affordance IS emitted for p2, keeping the undrawn parent reachable.
+    const aff = l.affordances.find((a) => a.direction === "ancestors" && a.personId === "p2");
+    expect(aff).toBeTruthy();
+    expect(aff!.state).toBe("fetch");
+  });
+
+  it("emits an EmptyParentSlot (and NO affordance) for a node with ZERO loaded parents and no hidden parents (Finding 1 mirror)", () => {
+    const nodes = [node("me")];
+    const l = computeTreeLayout(input({ rootPersonId: "me", nodes }));
+    expect(l.emptyParentSlots.some((s) => s.personId === "me")).toBe(true);
+    expect(l.affordances.some((a) => a.direction === "ancestors" && a.personId === "me")).toBe(false);
   });
 });
 
@@ -550,14 +625,14 @@ describe("computeTreeLayout — bounds", () => {
     }
   });
 
-  it("bounds enclose chevrons and empty parent slots too", () => {
+  it("bounds enclose affordances and empty parent slots too", () => {
     const nodes = [
       node("me", { hasHiddenParents: true, hasHiddenChildren: true }),
       node("kid"),
     ];
     const edges = [parentOf("me", "kid")];
     const l = computeTreeLayout(input({ rootPersonId: "me", nodes, edges }));
-    for (const c of l.chevrons) {
+    for (const c of l.affordances) {
       expect(c.x).toBeGreaterThanOrEqual(0);
       expect(c.y).toBeGreaterThanOrEqual(0);
       expect(c.x).toBeLessThanOrEqual(l.bounds.width);

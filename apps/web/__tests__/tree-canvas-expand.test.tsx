@@ -6,8 +6,10 @@
  *   - re-rooting is NOT a node gesture anymore — it happens ONLY via the panel's "Center tree here"
  *     button, which fetches the neighborhood, merges it, relabels, and reveals the new root's kin;
  *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never selects;
- *   - activating a FRONTIER CHEVRON (parents/children not loaded) fetches that subtree, merges without
- *     dupes, and reveals the new node;
+ *   - activating a per-edge FETCH caret (parents/children not loaded) fetches that subtree, merges
+ *     without dupes, and reveals the new node;
+ *   - a per-edge COLLAPSE caret hides an already-drawn branch (client only, no fetch), and its EXPAND
+ *     counterpart brings it back;
  *   - a fetch failure surfaces the load error and leaves the tree unchanged.
  *
  * The server action is mocked (no live DB). We feed the real pure layout tiny fixtures.
@@ -214,7 +216,7 @@ it("reveals a frontier ancestor subtree, merges without dupes, and draws the new
   );
   expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();
 
-  const chevron = screen.getByTestId(`tree-chevron-ancestors-${ROOT}`);
+  const chevron = screen.getByTestId(`tree-affordance-ancestors-fetch-${ROOT}`);
   await act(async () => {
     chevron.click();
   });
@@ -225,8 +227,8 @@ it("reveals a frontier ancestor subtree, merges without dupes, and draws the new
   expect(screen.getAllByTestId(`tree-node-${ROOT}`)).toHaveLength(1);
 });
 
-it("a descendants chevron reveals children (fetches that node's subtree)", async () => {
-  // Root has hidden children at the boundary ⇒ a descendants chevron on its LEFT edge → fetch children.
+it("a descendants fetch caret reveals children (fetches that node's subtree)", async () => {
+  // Root has hidden children at the boundary ⇒ a descendants fetch caret on its LEFT edge → fetch children.
   const boundaryInitial: KinshipTreeData = {
     familyId: "F",
     rootPersonId: ROOT,
@@ -257,7 +259,7 @@ it("a descendants chevron reveals children (fetches that node's subtree)", async
   render(
     <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
   );
-  const chevron = screen.getByTestId(`tree-chevron-descendants-${ROOT}`);
+  const chevron = screen.getByTestId(`tree-affordance-descendants-fetch-${ROOT}`);
   await act(async () => {
     chevron.click();
   });
@@ -276,12 +278,38 @@ it("surfaces a load error when the frontier fetch fails, leaving the tree unchan
   render(
     <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={boundaryInitial} fetchSubtree={fetchSubtree} />,
   );
-  const chevron = screen.getByTestId(`tree-chevron-ancestors-${ROOT}`);
+  const chevron = screen.getByTestId(`tree-affordance-ancestors-fetch-${ROOT}`);
   await act(async () => {
     chevron.click();
   });
   await waitFor(() => expect(screen.getByTestId("tree-load-error")).toBeTruthy());
   expect(screen.queryByTestId("tree-node-p-mom")).toBeNull();
+});
+
+it("a collapse caret hides an already-drawn branch (client only, no fetch), and expand restores it", async () => {
+  // Root has a DRAWN child (marco) → a descendants 'collapse' caret on its LEFT edge. Activating it
+  // prunes marco WITHOUT any fetch; the caret flips to 'expand'; activating that redraws marco.
+  const fetchSubtree = vi.fn(async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" }));
+  render(
+    <TreeCanvas familyId="F" rootPersonId={ROOT} viewerPersonId={ROOT} initial={initialData} fetchSubtree={fetchSubtree} />,
+  );
+  expect(screen.getByTestId("tree-node-marco")).toBeTruthy();
+
+  const collapse = screen.getByTestId(`tree-affordance-descendants-collapse-${ROOT}`);
+  await act(async () => {
+    collapse.click();
+  });
+  // marco is gone; no server fetch happened (pure client collapse).
+  await waitFor(() => expect(screen.queryByTestId("tree-node-marco")).toBeNull());
+  expect(fetchSubtree).not.toHaveBeenCalled();
+
+  // The caret is now an 'expand'; clicking it brings marco back.
+  const expand = screen.getByTestId(`tree-affordance-descendants-expand-${ROOT}`);
+  await act(async () => {
+    expand.click();
+  });
+  await waitFor(() => expect(screen.getByTestId("tree-node-marco")).toBeTruthy());
+  expect(fetchSubtree).not.toHaveBeenCalled();
 });
 
 it("opens the read-only panel when a node is tapped", async () => {

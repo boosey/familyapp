@@ -18,11 +18,17 @@ export interface ExpansionState {
   expandedParents: ReadonlySet<string>;
   /** Nodes whose hidden children have been revealed. */
   expandedChildren: ReadonlySet<string>;
+  /** Nodes whose (already-drawn) ancestor branch the user has manually COLLAPSED — pruned from draw. */
+  collapsedAncestors: ReadonlySet<string>;
+  /** Nodes whose (already-drawn) descendant branch the user has manually COLLAPSED — pruned from draw. */
+  collapsedChildren: ReadonlySet<string>;
 }
 
 export const EMPTY_EXPANSION: ExpansionState = {
   expandedParents: new Set(),
   expandedChildren: new Set(),
+  collapsedAncestors: new Set(),
+  collapsedChildren: new Set(),
 };
 
 /**
@@ -58,17 +64,23 @@ export interface Connector {
 }
 
 /**
- * A frontier expansion control the canvas renders as a chevron on a node's OUTER edge.
+ * ONE per-edge expand/collapse/fetch control the canvas renders as a caret on a node's OUTER edge.
  *
- * `ancestors` sits on the node's ancestor (RIGHT) edge when it has hidden parents; `descendants`
- * sits on the node's descendant (LEFT) edge when it has hidden children. Activating it calls the
- * client's `revealFetch` in that direction, anchored on `personId`.
+ * There is at most ONE affordance per (node, direction): a node never stacks two glyphs on the same
+ * edge. `ancestors` sits on the node's ancestor (RIGHT) edge; `descendants` on the descendant (LEFT)
+ * edge. The `state` tells the canvas what activating it does:
+ *   - `"collapse"` — a drawn branch exists on that side; hide it (client-only prune, adds to the
+ *     collapsed set).
+ *   - `"expand"` — the branch is currently collapsed; un-prune it (client-only, removes from the set).
+ *   - `"fetch"` — undrawn kin exist at the boundary (hidden at the server, or loaded-but-not-drawn);
+ *     activating calls the client's `revealFetch` in that direction, anchored on `personId`.
  */
-export interface FrontierChevron {
+export interface EdgeAffordance {
   direction: "ancestors" | "descendants";
   personId: string;
   x: number;
   y: number;
+  state: "collapse" | "expand" | "fetch";
 }
 
 /**
@@ -87,7 +99,7 @@ export interface TreeLayout {
   placed: PlacedNode[];
   unions: PlacedUnion[];
   connectors: Connector[];
-  chevrons: FrontierChevron[];
+  affordances: EdgeAffordance[];
   emptyParentSlots: EmptyParentSlot[];
   bounds: { width: number; height: number };
 }
@@ -131,9 +143,9 @@ function edgeKey(e: ResolvedKinshipEdge): string {
 }
 
 /**
- * Compute node positions, connector geometry, frontier chevrons, and empty-parent slots for the
- * current node/edge set rooted at `rootPersonId`. Deterministic (stable ordering) so identical data
- * always lays out identically.
+ * Compute node positions, connector geometry, per-edge affordances (collapse/expand/fetch), and
+ * empty-parent slots for the current node/edge set rooted at `rootPersonId`. Deterministic (stable
+ * ordering) so identical data always lays out identically.
  *
  * Pure & dependency-free.
  */
@@ -240,6 +252,28 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
           }
         }
       }
+    }
+    // Apply per-box manual collapse cuts. Re-walk the drawable graph from root, refusing to cross a
+    // cut: a node in `collapsedAncestors` blocks the walk from ascending into its parents; a node in
+    // `collapsedChildren` blocks the walk from descending into its children. Any drawable node no
+    // longer reached from root is removed (prunes the whole cut branch). Partners are always crossable
+    // (a collapse hides a branch, never a spouse).
+    {
+      const cutUp = expansion.collapsedAncestors;
+      const cutDown = expansion.collapsedChildren;
+      const keep = new Set<string>();
+      const stack: string[] = nodeById.has(rootPersonId) ? [rootPersonId] : [];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (keep.has(cur) || !drawable.has(cur)) continue;
+        keep.add(cur);
+        if (!cutUp.has(cur))
+          for (const p of parentsOf.get(cur) ?? []) if (drawable.has(p)) stack.push(p);
+        if (!cutDown.has(cur))
+          for (const c of childrenOf.get(cur) ?? []) if (drawable.has(c)) stack.push(c);
+        for (const s of partnersOf.get(cur) ?? []) if (drawable.has(s)) stack.push(s);
+      }
+      for (const id of [...drawable]) if (!keep.has(id)) drawable.delete(id);
     }
   }
 
@@ -467,37 +501,60 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     });
   }
 
-  // --- Frontier chevrons --------------------------------------------------
-  // Ancestor chevron (RIGHT edge): emit when there are UNDRAWN ancestors — either hidden at the server
-  // boundary (`hasHiddenParents`) OR loaded-as-nodes-but-not-yet-drawn (a parent edge exists whose
-  // parent isn't in `drawable`, e.g. after a multi-hop ancestor reveal that materialized a grandparent
-  // beyond the ±2 window). Activating it → revealFetch("parents", id), which adds `id` to
-  // expandedParents and pulls those loaded parents into `drawable`, keeping them reachable. Without
-  // this, such a node would fall through to an EmptyParentSlot and offer a duplicate-creating
-  // "Add parent" over a parent that already exists (Finding 1).
-  // Descendant chevron (LEFT edge): unchanged — driven by hasHiddenChildren.
-  const chevrons: FrontierChevron[] = [];
+  // --- Per-edge affordances (collapse / expand / fetch) -------------------
+  // Exactly ONE affordance per (node, direction) — never two glyphs on the same edge. State per edge:
+  //   ANCESTOR (RIGHT) edge, for a drawn node with id and loadedParents / drawnParents:
+  //     • node ∈ collapsedAncestors AND it has parents to show (loaded or hidden) → "expand".
+  //     • else drawnParents.length > 0 (a drawn branch exists) → "collapse".
+  //     • else undrawn parents exist (hasHiddenParents, or loaded-but-not-drawn) → "fetch".
+  //       (This "fetch" is what preserves Finding 1: a loaded-but-undrawn parent yields a fetch caret,
+  //       NOT an EmptyParentSlot, so activating it can never mint a duplicate parent.)
+  //     • else (zero loaded parents and no hidden) → NO affordance; the EmptyParentSlot fires instead.
+  //   DESCENDANT (LEFT) edge mirrors the above with children / collapsedChildren / hasHiddenChildren.
+  const affordances: EdgeAffordance[] = [];
   for (const p of placed) {
-    const loadedParents = parentsOf.get(p.personId) ?? [];
-    const drawnParents = loadedParents.filter((pp) => drawable.has(pp));
-    if (p.node.hasHiddenParents || drawnParents.length < loadedParents.length) {
-      chevrons.push({
-        direction: "ancestors",
-        personId: p.personId,
-        x: p.x + NODE_W / 2,
-        y: p.y,
-      });
+    const id = p.personId;
+    const n = p.node;
+
+    // Ancestor (right) edge.
+    {
+      const loadedParents = parentsOf.get(id) ?? [];
+      const drawnParents = loadedParents.filter((pp) => drawable.has(pp));
+      const hasHidden = n.hasHiddenParents;
+      const hasUndrawn = hasHidden || drawnParents.length < loadedParents.length;
+      let state: EdgeAffordance["state"] | null = null;
+      if (expansion.collapsedAncestors.has(id) && (loadedParents.length > 0 || hasHidden)) {
+        state = "expand";
+      } else if (drawnParents.length > 0) {
+        state = "collapse";
+      } else if (hasUndrawn) {
+        state = "fetch";
+      }
+      if (state) {
+        affordances.push({ direction: "ancestors", personId: id, x: p.x + NODE_W / 2, y: p.y, state });
+      }
     }
-    if (p.node.hasHiddenChildren) {
-      chevrons.push({
-        direction: "descendants",
-        personId: p.personId,
-        x: p.x - NODE_W / 2,
-        y: p.y,
-      });
+
+    // Descendant (left) edge.
+    {
+      const loadedChildren = childrenOf.get(id) ?? [];
+      const drawnChildren = loadedChildren.filter((cc) => drawable.has(cc));
+      const hasHidden = n.hasHiddenChildren;
+      const hasUndrawn = hasHidden || drawnChildren.length < loadedChildren.length;
+      let state: EdgeAffordance["state"] | null = null;
+      if (expansion.collapsedChildren.has(id) && (loadedChildren.length > 0 || hasHidden)) {
+        state = "expand";
+      } else if (drawnChildren.length > 0) {
+        state = "collapse";
+      } else if (hasUndrawn) {
+        state = "fetch";
+      }
+      if (state) {
+        affordances.push({ direction: "descendants", personId: id, x: p.x - NODE_W / 2, y: p.y, state });
+      }
     }
   }
-  chevrons.sort((a, b) =>
+  affordances.sort((a, b) =>
     a.direction !== b.direction
       ? a.direction < b.direction
         ? -1
@@ -514,9 +571,9 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   // NO parent recorded at all (truly the add-parent frontier / bridge creation point), on the ancestor
   // (RIGHT) edge. Uses the UNFILTERED loaded-parent count, not the drawn count: a node that has a
   // loaded-but-undrawn parent already HAS a parent, so offering "Add parent" there would create a
-  // duplicate/conflicting edge (Finding 1). Such a node gets an ancestor chevron instead (above).
-  // Mutually exclusive with the ancestor chevron: slot ⇔ zero loaded parents; chevron ⇔ some undrawn
-  // parent (hidden or loaded-not-drawn).
+  // duplicate/conflicting edge (Finding 1). Such a node gets an ancestor 'fetch' affordance instead
+  // (above). Mutually exclusive with the ancestor affordance: slot ⇔ zero loaded parents AND no hidden;
+  // affordance ⇔ some drawn/undrawn parent (drawn ⇒ collapse/expand, hidden/loaded-not-drawn ⇒ fetch).
   const emptyParentSlots: EmptyParentSlot[] = [];
   for (const p of placed) {
     const loadedParents = parentsOf.get(p.personId) ?? [];
@@ -537,16 +594,16 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     width = Math.max(width, p.x + NODE_W / 2);
     height = Math.max(height, p.y + NODE_H / 2);
   }
-  for (const c of chevrons) {
-    width = Math.max(width, c.x + NODE_W / 2);
-    height = Math.max(height, c.y + NODE_H / 2);
+  for (const a of affordances) {
+    width = Math.max(width, a.x + NODE_W / 2);
+    height = Math.max(height, a.y + NODE_H / 2);
   }
   for (const s of emptyParentSlots) {
     width = Math.max(width, s.x + NODE_W / 2);
     height = Math.max(height, s.y + NODE_H / 2);
   }
 
-  return { placed, unions, connectors, chevrons, emptyParentSlots, bounds: { width, height } };
+  return { placed, unions, connectors, affordances, emptyParentSlots, bounds: { width, height } };
 }
 
 /** Convenience: build layout straight from a {@link KinshipTreeData} read + expansion state. */
