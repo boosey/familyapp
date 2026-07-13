@@ -560,6 +560,9 @@ export const hub = {
     sexMale: "Male",
     sexFemale: "Female",
     sexUnknown: "Prefer not to say",
+    // Add-child co-parent picker: attach the child to a second parent (the anchor's partner).
+    otherParentLabel: "Other parent (optional)",
+    otherParentNone: "No other parent",
     submit: "Add relative",
     submitting: "Adding…",
     // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
@@ -659,9 +662,14 @@ export const hub = {
     kebabAddPartner: "Add partner",
     // Inline empty-parent-slot label (layout's EmptyParentSlot affordance).
     addParentSlot: "Add parent",
-    // Frontier-chevron aria labels (replace the per-box carets above).
+    // Frontier-chevron aria labels (fetch off-screen kin at a boundary node).
     showEarlier: "Show earlier generations",
     showDescendants: "Show descendants",
+    // Per-box collapse/expand caret aria labels (collapse an already-drawn branch).
+    collapseParents: "Collapse ancestors",
+    expandParents: "Expand ancestors",
+    collapseChildren: "Collapse descendants",
+    expandChildren: "Expand descendants",
   },
 } as const;
 
