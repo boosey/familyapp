@@ -536,6 +536,13 @@ export const hub = {
     byline: (narrator: string, recordedAt: string) =>
       `Told by ${narrator} · Recorded ${recordedAt}`,
     noProse: "No prose yet — the original recording above is the whole story for now.",
+    // Title/tags editor (StoryEditor) save/cancel controls.
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    // Owner action (⋮) menu on the opened story.
+    optionsLabel: "Story options",
+    optionsMenuLabel: "Story options menu",
   },
 
   // ADR-0009 Phase 2 — story accompaniment photos: the read-only gallery on the opened story and the

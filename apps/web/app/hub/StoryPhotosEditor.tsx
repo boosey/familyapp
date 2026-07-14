@@ -25,6 +25,11 @@ import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyPicker } from "./FamilyPicker";
 import { prepareAlbumPhoto } from "./album/prepare-photo";
+import {
+  PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
+  PHOTO_PICKER_POLL_INTERVAL_MS as PICKER_POLL_INTERVAL_MS,
+  PHOTO_PICKER_POLL_TIMEOUT_MS as PICKER_POLL_TIMEOUT_MS,
+} from "@/lib/constants";
 import { pickerUriForWeb } from "@chronicle/photos-google/picker";
 import { uploadOneAlbumPhotoAction } from "./album/actions";
 import {
@@ -45,11 +50,6 @@ import {
 } from "./answer/[askId]/photo-actions";
 
 type Nudge = { photoId: string; caption: string | null };
-
-/** Most photos per batch — kept in sync with the album uploader's client cap. */
-const MAX_BATCH_FILES = 30;
-const PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
-const PICKER_POLL_INTERVAL_MS = 2000;
 
 export function StoryPhotosEditor({
   storyId,
