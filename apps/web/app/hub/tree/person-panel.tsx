@@ -15,18 +15,19 @@ import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
+import { useTreeAdd } from "./add-relative-context";
 
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
 
 export interface PersonPanelProps {
   node: TreeNode;
-  familyId: string;
   /** Relation of this person to the VIEWER, derived client-side; "self"/null ⇒ no relation line. */
   relationToViewer: KinRelation | "self" | null;
   onClose: () => void;
 }
 
-export function PersonPanel({ node, familyId, relationToViewer, onClose }: PersonPanelProps) {
+export function PersonPanel({ node, relationToViewer, onClose }: PersonPanelProps) {
+  const openAdd = useTreeAdd();
   const name = displayNameFor(node);
   const relation =
     relationToViewer === null || relationToViewer === "self" ? "" : RELATION_LABEL[relationToViewer];
@@ -35,9 +36,11 @@ export function PersonPanel({ node, familyId, relationToViewer, onClose }: Perso
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
 
   const storiesHref = `/hub/about/${node.personId}`;
-  const manageKinHref = `/hub/kin?scope=${familyId}`;
-  const addHref = (relation: string) =>
-    `/hub/kin?scope=${familyId}&anchor=${node.personId}&relation=${relation}`;
+  // Add-a-relative opens the tree's shared modal (anchored on this person), then closes the panel.
+  const startAdd = (relation: "parent" | "child" | "sibling" | "partner") => {
+    openAdd(node.personId, relation);
+    onClose();
+  };
 
   return (
     <aside
@@ -125,31 +128,46 @@ export function PersonPanel({ node, familyId, relationToViewer, onClose }: Perso
             {hub.tree.panelStories}
           </KindredButton>
         </Link>
-        <Link href={addHref("parent")} style={{ textDecoration: "none" }} data-testid="tree-panel-addparent">
-          <KindredButton variant="secondary" size="small" fullWidth type="button">
-            {hub.tree.panelAddParent}
-          </KindredButton>
-        </Link>
-        <Link href={addHref("child")} style={{ textDecoration: "none" }} data-testid="tree-panel-addchild">
-          <KindredButton variant="secondary" size="small" fullWidth type="button">
-            {hub.tree.panelAddChild}
-          </KindredButton>
-        </Link>
-        <Link href={addHref("sibling")} style={{ textDecoration: "none" }} data-testid="tree-panel-addsibling">
-          <KindredButton variant="secondary" size="small" fullWidth type="button">
-            {hub.tree.panelAddSibling}
-          </KindredButton>
-        </Link>
-        <Link href={addHref("partner")} style={{ textDecoration: "none" }} data-testid="tree-panel-addpartner">
-          <KindredButton variant="secondary" size="small" fullWidth type="button">
-            {hub.tree.addPartner}
-          </KindredButton>
-        </Link>
-        <Link href={manageKinHref} style={{ textDecoration: "none" }} data-testid="tree-panel-managekin">
-          <KindredButton variant="ghost" size="small" fullWidth type="button">
-            {hub.tree.panelManageKin}
-          </KindredButton>
-        </Link>
+        <KindredButton
+          variant="secondary"
+          size="small"
+          fullWidth
+          type="button"
+          data-testid="tree-panel-addparent"
+          onClick={() => startAdd("parent")}
+        >
+          {hub.tree.panelAddParent}
+        </KindredButton>
+        <KindredButton
+          variant="secondary"
+          size="small"
+          fullWidth
+          type="button"
+          data-testid="tree-panel-addchild"
+          onClick={() => startAdd("child")}
+        >
+          {hub.tree.panelAddChild}
+        </KindredButton>
+        <KindredButton
+          variant="secondary"
+          size="small"
+          fullWidth
+          type="button"
+          data-testid="tree-panel-addsibling"
+          onClick={() => startAdd("sibling")}
+        >
+          {hub.tree.panelAddSibling}
+        </KindredButton>
+        <KindredButton
+          variant="secondary"
+          size="small"
+          fullWidth
+          type="button"
+          data-testid="tree-panel-addpartner"
+          onClick={() => startAdd("partner")}
+        >
+          {hub.tree.addPartner}
+        </KindredButton>
       </nav>
     </aside>
   );

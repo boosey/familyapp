@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { StoryBrowse } from "./StoryBrowse";
+import { TellStoryCard } from "./TellStoryCard";
 import { resolveCoverPhotoId, resolveGalleryPhotoIds } from "./story-browse-helpers";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
@@ -107,48 +108,6 @@ export function StoriesTab({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-      {/* Self-initiated telling entry — the front door to /hub/tell. Styled as a primary Kindred CTA
-          card (mirrors the accent affordance the Questions tab uses). Always shown, above the feed. */}
-      <Link
-        href="/hub/tell"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 20,
-          background: "var(--accent)",
-          color: "var(--accent-on)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-card)",
-          padding: "20px 24px",
-          textDecoration: "none",
-        }}
-      >
-        <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <span
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "var(--text-story)",
-              fontWeight: 500,
-            }}
-          >
-            {hub.stories.tellTitle}
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              opacity: 0.85,
-            }}
-          >
-            {hub.stories.tellBlurb}
-          </span>
-        </span>
-        <span aria-hidden="true" style={{ fontSize: "1.25rem", flex: "0 0 auto" }}>
-          →
-        </span>
-      </Link>
-
       {/* Resume: the viewer's own ask-less drafts still in review. Each links to /hub/tell/[storyId]. */}
       {selfDrafts.length > 0 && (
         <section>
@@ -226,19 +185,24 @@ export function StoriesTab({
       )}
 
       {items.length === 0 ? (
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui)",
-            color: "var(--text-muted)",
-            margin: 0,
-          }}
-        >
-          {/* A pending-only viewer (member of no family yet) reaches the hub with an empty feed since
-              Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than
-              the generic "when someone shares…" copy that assumes they already have a family. */}
-          {viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty}
-        </p>
+        // No stories yet — the "Tell a story" CTA still leads (it's the entry point precisely when the
+        // feed is empty), followed by the welcoming empty note.
+        <>
+          <TellStoryCard />
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui)",
+              color: "var(--text-muted)",
+              margin: 0,
+            }}
+          >
+            {/* A pending-only viewer (member of no family yet) reaches the hub with an empty feed since
+                Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than
+                the generic "when someone shares…" copy that assumes they already have a family. */}
+            {viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty}
+          </p>
+        </>
       ) : (
         <Suspense>
           <StoryBrowse

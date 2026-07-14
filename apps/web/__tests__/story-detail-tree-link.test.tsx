@@ -58,7 +58,7 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
 
 describe("StoryDetailClient — View in family tree", () => {
   it("renders the tree link with the passed href near the narrator byline", () => {
-    const href = "/hub/tree?scope=fam-a&root=p1";
+    const href = "/hub?tab=family&scope=fam-a&anchor=p1";
     render(<StoryDetailClient {...makeProps({ authorTreeHref: href })} />);
 
     const link = screen.getByTestId("story-tree-link");

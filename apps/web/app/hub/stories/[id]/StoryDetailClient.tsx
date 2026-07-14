@@ -35,7 +35,7 @@ export interface StoryDetailClientProps {
   canReact: boolean;
   // Back href
   backHref: string;
-  // "View in family tree" — links to /hub/tree rooted on the narrator (Task 9). Null when no
+  // "View in family tree" — links to the Family hub tab focused on the narrator (Task 9). Null when no
   // family scope is available to root the tree in.
   authorTreeHref?: string | null;
   // Accompaniments

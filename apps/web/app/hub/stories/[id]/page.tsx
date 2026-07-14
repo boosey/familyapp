@@ -71,12 +71,13 @@ export default async function StoryDetailPage({
   if (backScope) backParams.set("scope", backScope);
   const backHref = `/hub?${backParams.toString()}`;
 
-  // "View in family tree" — root the tree on this story's narrator, scoped to a family the author
-  // is in (first story target family, else the back-scope, else the viewer's first family). The tree
-  // page validates `root` against the family's visible edges and degrades safely on a bad pairing.
+  // "View in family tree" — the Family hub tab (Tree view), focused on this story's narrator via
+  // `?anchor=`, scoped to a family the author is in (first story target family, else the back-scope,
+  // else the viewer's first family). The tab re-validates `anchor` against the family's visible edges
+  // and degrades safely (falls back to the viewer's self-root) on a bad pairing.
   const treeScope = targets[0]?.id ?? backScope ?? viewerFamilies[0]?.id;
   const authorTreeHref = treeScope
-    ? `/hub/tree?scope=${treeScope}&root=${story.ownerPersonId}`
+    ? `/hub?tab=family&scope=${treeScope}&anchor=${story.ownerPersonId}`
     : null;
 
   // Reactions state

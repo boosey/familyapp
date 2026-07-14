@@ -2,13 +2,15 @@
 /**
  * KebabMenu — the shared ⋮ add-relative menu (pedigree-nav redesign, spec §Testing). Verifies the
  * adjacency gating (parent hidden at ≥2, partner hidden at ≥1; child/sibling always) and that each
- * visible item targets the /hub/kin add flow anchored on the node with the right relation.
+ * visible item opens the tree's Add modal (via TreeAddProvider) anchored on the node with the right
+ * relation — /hub/kin navigation is gone (2026-07-14).
  */
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { KebabMenu } from "@/app/hub/tree/kebab-menu";
+import { TreeAddProvider, type OpenAddRelative } from "@/app/hub/tree/add-relative-context";
 
 afterEach(cleanup);
 
@@ -27,23 +29,20 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   };
 }
 
-/** Render the menu and open it (items only exist once open). */
-function open(props: { parentCount: number; partnerCount: number; familyId?: string; personId?: string }) {
+/** Render the menu inside a capturing provider and open it (items only exist once open). */
+function open(props: { parentCount: number; partnerCount: number; personId?: string; onAdd?: OpenAddRelative }) {
   render(
-    <KebabMenu
-      node={node({ personId: props.personId ?? "n1" })}
-      familyId={props.familyId ?? "F"}
-      parentCount={props.parentCount}
-      partnerCount={props.partnerCount}
-    />,
+    <TreeAddProvider value={props.onAdd ?? (() => {})}>
+      <KebabMenu
+        node={node({ personId: props.personId ?? "n1" })}
+        parentCount={props.parentCount}
+        partnerCount={props.partnerCount}
+      />
+    </TreeAddProvider>,
   );
   act(() => {
     screen.getByTestId("tree-kebab-trigger").click();
   });
-}
-
-function hrefOf(testId: string): string | null {
-  return screen.getByTestId(testId).getAttribute("href");
 }
 
 it("always shows Add child and Add sibling", () => {
@@ -68,16 +67,21 @@ it("shows Add partner only when partnerCount === 0", () => {
   expect(screen.queryByTestId("tree-kebab-addpartner")).toBeNull();
 });
 
-it("targets /hub/kin with the right scope, anchor, and relation per item", () => {
-  open({ parentCount: 0, partnerCount: 0, familyId: "fam-9", personId: "px" });
-  expect(hrefOf("tree-kebab-addchild")).toBe("/hub/kin?scope=fam-9&anchor=px&relation=child");
-  expect(hrefOf("tree-kebab-addsibling")).toBe("/hub/kin?scope=fam-9&anchor=px&relation=sibling");
-  expect(hrefOf("tree-kebab-addparent")).toBe("/hub/kin?scope=fam-9&anchor=px&relation=parent");
-  expect(hrefOf("tree-kebab-addpartner")).toBe("/hub/kin?scope=fam-9&anchor=px&relation=partner");
+it("opens the Add modal anchored on the node with the right relation per item", () => {
+  const onAdd = vi.fn();
+  open({ parentCount: 0, partnerCount: 0, personId: "px", onAdd });
+
+  act(() => screen.getByTestId("tree-kebab-addchild").click());
+  expect(onAdd).toHaveBeenLastCalledWith("px", "child");
+
+  // Menu closes on select — reopen for the next item.
+  act(() => screen.getByTestId("tree-kebab-trigger").click());
+  act(() => screen.getByTestId("tree-kebab-addparent").click());
+  expect(onAdd).toHaveBeenLastCalledWith("px", "parent");
 });
 
 it("labels the trigger neutrally (not as any single add action)", () => {
-  render(<KebabMenu node={node({ personId: "n1" })} familyId="F" parentCount={0} partnerCount={0} />);
+  render(<KebabMenu node={node({ personId: "n1" })} parentCount={0} partnerCount={0} />);
   const trigger = screen.getByTestId("tree-kebab-trigger");
   expect(trigger.getAttribute("aria-label")).toBe(hub.tree.moreActions);
 });

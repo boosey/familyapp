@@ -37,8 +37,10 @@ import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
 import { AskTab } from "./tabs/AskTab";
 import { AsksTab } from "./tabs/AsksTab";
+import { FamilyTab } from "./tabs/FamilyTab";
 import { InviteTab } from "./tabs/InviteTab";
 import { RequestsTab } from "./tabs/RequestsTab";
+import { loadFamilyTabData } from "@/lib/family-tab-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +54,10 @@ export default async function HubPage({
     googlePhotos?: string;
     googlePhotosError?: string;
     subjectPhotoIds?: string | string[];
+    // Family tab: `?anchor=` focuses the tree on a person (e.g. a story's narrator); `?view=list`
+    // deep-links straight to the relatives List view.
+    anchor?: string;
+    view?: string;
   }>;
 }) {
   const { db, auth } = await getRuntime();
@@ -82,6 +88,8 @@ export default async function HubPage({
     googlePhotos: googlePhotosParam,
     googlePhotosError: googlePhotosErrorParam,
     subjectPhotoIds: subjectPhotoIdsParam,
+    anchor: anchorParam,
+    view: viewParam,
   } = await searchParams;
   // ADR-0009: `?subjectPhotoIds=<uuid>` may repeat, so Next hands us `string | string[] | undefined`.
   // Normalize to a de-duped string[] to pre-select those photos in the ask picker (`/hub?tab=ask&…`).
@@ -100,7 +108,7 @@ export default async function HubPage({
   const googlePhotosOauthConnected = googlePhotosParam === "connected";
   const googlePhotosOauthError =
     typeof googlePhotosErrorParam === "string" ? googlePhotosErrorParam : null;
-  const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "invite", "requests"]);
+  const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "family", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
   // Hub scope: the single server-read `?scope=` param (default "all"), validated against the viewer's
@@ -113,6 +121,17 @@ export default async function HubPage({
   );
   const scope =
     scopeParam && activeFamilies.some((f) => f.familyId === scopeParam) ? scopeParam : "all";
+
+  // Family tab (visual tree + relatives list, folded in from the old /hub/tree + /hub/kin routes).
+  // Resolve a concrete family — the hub scope when it names one, else the viewer's first active family
+  // — and load the focus-rooted tree + kin ONLY when the tab is active (`?anchor=` focuses the tree on
+  // a person, e.g. a story's narrator). A pending-only viewer (no active family) gets null → no-family.
+  const familyTabFamilyId = scope !== "all" ? scope : (activeFamilies[0]?.familyId ?? null);
+  const familyTabData =
+    activeTab === "family" && familyTabFamilyId
+      ? await loadFamilyTabData(db, ctx, familyTabFamilyId, anchorParam)
+      : null;
+  const familyInitialView = viewParam === "list" ? "list" : "tree";
 
   const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts] = await Promise.all([
     loadHubFeed(db, ctx),
@@ -188,10 +207,9 @@ export default async function HubPage({
     },
     { key: "ask", label: hub.shell.tabAsk },
     { key: "asks", label: hub.shell.tabAsks },
-    // The visual family tree lives on its own route (/hub/tree), not as an in-page feed tab.
-    // HubTabsNav special-cases this key to navigate there (scope preserved); it is never the
-    // `active` value on /hub, so no active-state wiring is needed here.
-    { key: "tree", label: hub.tree.heading },
+    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab now (it used
+    // to be the standalone /hub/tree route, which hid the tab bar once opened).
+    { key: "family", label: hub.shell.tabFamily },
     // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
     // viewer (member of none) has nothing to invite into, so the tab is absent for them (Task 4.5).
     ...(inviteTabVisible(activeFamilies.length)
@@ -328,6 +346,38 @@ export default async function HubPage({
           {activeTab === "asks" && (
             <AsksTab scope={scope} hasFamily={activeFamilies.length > 0} />
           )}
+          {activeTab === "family" &&
+            (familyTabData ? (
+              <FamilyTab
+                familyId={familyTabData.familyId}
+                focusPersonId={familyTabData.focusPersonId}
+                viewerPersonId={ctx.personId}
+                tree={familyTabData.tree}
+                kin={familyTabData.kin}
+                initialView={familyInitialView}
+              />
+            ) : (
+              <div
+                style={{
+                  background: "var(--surface-card)",
+                  border: "var(--border-width) solid var(--border)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: 30,
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: "var(--font-story)",
+                    fontSize: "var(--text-story)",
+                    color: "var(--text-muted)",
+                    margin: 0,
+                  }}
+                >
+                  {hub.tree.noFamily}
+                </p>
+              </div>
+            ))}
           {/* Invite is member-only: you invite people INTO a family you belong to. A pending-only
               viewer hitting ?tab=invite directly would otherwise reach a broken zero-option family
               form — gate the dispatch on membership and show the shared pending-only empty instead

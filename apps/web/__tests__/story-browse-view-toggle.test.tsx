@@ -89,6 +89,17 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 
+  it("renders the Tell-a-story CTA as the FIRST item of the feed (Column and Masonry)", () => {
+    const { container } = renderBrowse();
+    // Column: the feed container's first link is the /hub/tell CTA, ahead of the story cards.
+    const col = container.querySelector('[data-view="column"]')!;
+    expect(col.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
+
+    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewMasonry }));
+    const mas = container.querySelector('[data-view="masonry"]')!;
+    expect(mas.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
+  });
+
   it("restores a persisted Masonry choice on mount", () => {
     window.localStorage.setItem("hub:feedView", "masonry");
     const { container } = renderBrowse();

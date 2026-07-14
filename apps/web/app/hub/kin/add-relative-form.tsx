@@ -22,6 +22,7 @@ export function AddRelativeForm({
   anchorPersonId,
   initialRelation,
   coParentOptions,
+  onSuccess,
 }: {
   familyId: string;
   /** When present (a targeted add from a person panel), rides along so core anchors on this person. */
@@ -31,6 +32,8 @@ export function AddRelativeForm({
   /** The anchor's partners (issue: adding a child only linked one parent, not their partner too).
    *  Non-empty => the "Other parent" picker shows for relation=child. */
   coParentOptions?: { id: string; name: string }[];
+  /** Called after a successful add (no error). The tree modal uses it to close + refetch the anchor. */
+  onSuccess?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -48,7 +51,9 @@ export function AddRelativeForm({
       const result = await addRelativeAction(formData);
       if (result?.error) {
         setError(result.error);
+        return;
       }
+      onSuccess?.();
     });
   }
 
