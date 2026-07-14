@@ -6,7 +6,41 @@ on:
   pull_request:
 
 jobs:
-  check:
+  # Each task runs as an INDEPENDENT matrix leg with fail-fast disabled, so a failure in one
+  # (e.g. lint) can never silently skip another (e.g. build). Before this split, the steps ran
+  # sequentially in one job and lint sat ahead of build — so a red lint meant `next build` never
+  # executed, and a broken production build (non-async server action) sailed through to Vercel.
+  verify:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, typecheck, test, build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.task }}
+        run: pnpm ${{ matrix.task }}
+
+  # A dirty tree here means someone edited schema.ts without committing the regenerated snapshot +
+  # migration (or forgot to hand-carry an invariant into the migration — the drift-guard unit test
+  # also covers that case). db:generate is DB-less: drizzle-kit export/generate operate purely on
+  # schema.ts + local meta snapshots, no DATABASE_URL.
+  drift:
+    name: schema/migration drift
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,21 +57,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # A dirty tree here means someone edited schema.ts without committing the regenerated
-      # snapshot + migration (or forgot to hand-carry an invariant into the migration — the
-      # drift-guard unit test also covers that case). db:generate is DB-less: drizzle-kit
-      # export/generate operate purely on schema.ts + local meta snapshots, no DATABASE_URL.
       - name: Schema/migration drift check
         run: pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build

@@ -170,7 +170,6 @@ export function TreeCanvas({
   // (hasHiddenParents/Children) OR whose neighbors aren't yet loaded, and quietly fetch a subtree
   // centered on them. Best-effort, deduped by center id, never blocks an interaction.
   useEffect(() => {
-    const drawn = new Set(layout.placed.map((p) => p.personId));
     // Frontier = drawn identified nodes that still have hidden kin either direction.
     const frontier: string[] = [];
     for (const p of layout.placed) {

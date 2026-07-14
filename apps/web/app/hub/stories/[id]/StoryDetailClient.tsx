@@ -53,7 +53,6 @@ export function StoryDetailClient({
   initialProse,
   initialTranscript,
   initialSummary,
-  updatedAt,
   narratorName,
   eraLabelStr,
   recordingMediaId,
