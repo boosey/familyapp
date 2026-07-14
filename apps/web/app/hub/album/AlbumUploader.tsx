@@ -402,7 +402,7 @@ export function AlbumUploader({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 360 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Hidden file input — the "Add to album" button clicks it programmatically, so no visible
           native "choose files" control appears. The label keeps it accessibly named. */}
       {showFileUpload ? (
@@ -440,6 +440,7 @@ export function AlbumUploader({
             borderRadius: 8,
             padding: "12px 14px",
             margin: 0,
+            maxWidth: 360,
             display: "flex",
             flexDirection: "column",
             gap: 4,
@@ -544,6 +545,7 @@ export function AlbumUploader({
             borderRadius: "var(--radius-md)",
             padding: "12px 16px",
             margin: 0,
+            maxWidth: 480,
           }}
         >
           {error}

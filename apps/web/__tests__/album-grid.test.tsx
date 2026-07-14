@@ -11,7 +11,7 @@
  * the real AlbumPhotoViewer mounts when a tile is opened, so those mocks cover it too.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AlbumGrid } from "@/app/hub/album/AlbumGrid";
 import { hub } from "@/app/_copy";
 import type { PendingTile } from "@/app/hub/album/import-progress";
@@ -288,12 +288,9 @@ describe("AlbumGrid filtering (item 9)", () => {
     render(<AlbumGrid photos={ENRICHED} />);
     expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
 
-    // Select Ada in the People filter — only photos with Ada (subject OR appears-in) remain.
-    const people = screen.getByRole("listbox", { name: hub.album.filterPeopleLabel });
-    // jsdom multi-select: set the option selected explicitly, then fire change.
-    const adaOpt = within(people).getByRole("option", { name: "Ada" }) as HTMLOptionElement;
-    adaOpt.selected = true;
-    fireEvent.change(people);
+    // Toggle the Ada chip in the People filter — only photos with Ada (subject OR appears-in) remain.
+    const people = screen.getByRole("group", { name: hub.album.filterPeopleLabel });
+    fireEvent.click(within(people).getByRole("button", { name: "Ada", pressed: false }));
     expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage"]);
 
     // Clear restores all three.
@@ -303,10 +300,8 @@ describe("AlbumGrid filtering (item 9)", () => {
 
   it("filtering by a place narrows to photos in that place", () => {
     render(<AlbumGrid photos={ENRICHED} />);
-    const places = screen.getByRole("listbox", { name: hub.album.filterPlacesLabel });
-    const paris = within(places).getByRole("option", { name: "Paris" }) as HTMLOptionElement;
-    paris.selected = true;
-    fireEvent.change(places);
+    const places = screen.getByRole("group", { name: hub.album.filterPlacesLabel });
+    fireEvent.click(within(places).getByRole("button", { name: "Paris" }));
     expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
   });
 
@@ -391,6 +386,55 @@ describe("AlbumGrid multi-select + bulk actions (item 6)", () => {
     fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
     // …and gone once selecting.
     expect(screen.queryAllByRole("group", { name: /Actions for/ })).toHaveLength(0);
+  });
+});
+
+describe("AlbumGrid long-press + Esc entry (item 3)", () => {
+  it("long-pressing a tile enters selection mode with that photo pre-picked", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+
+      const tile = screen.getByRole("button", { name: hub.album.viewPhoto("Ada at the lab") });
+      fireEvent.pointerDown(tile);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      // Now in selection mode: a checkbox per tile, and Ada's is already checked.
+      expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+      const adaCheck = screen.getByRole("checkbox", {
+        name: hub.album.selectPhotoAria("Ada at the lab"),
+      }) as HTMLInputElement;
+      expect(adaCheck.checked).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a press released before the threshold does NOT enter selection mode", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      const tile = screen.getByRole("button", { name: hub.album.viewPhoto("Ada at the lab") });
+      fireEvent.pointerDown(tile);
+      fireEvent.pointerUp(tile); // released early — timer cancelled
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Escape cancels selection mode", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
 });
 

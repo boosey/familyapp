@@ -19,7 +19,7 @@
  * View + size are persisted to localStorage (SSR-guarded: only read/written inside effects on the
  * client), so the choice survives navigation and reload.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { AlbumPhotoViewer } from "./AlbumPhotoViewer";
@@ -221,6 +221,26 @@ export function AlbumGrid({
     setSelected(new Set());
     setBulkNote(null);
   }
+  // Long-press entry (item 3): enter selection mode with this one photo already picked. A no-op if
+  // already selecting (a normal tap toggles then). The visible "Select" toggle does the same, keeping
+  // the affordance discoverable.
+  function enterSelectAndSelect(id: string) {
+    if (selecting) return;
+    setSelecting(true);
+    setSelected(new Set([id]));
+    setBulkNote(null);
+  }
+
+  // Esc cancels selection mode (item 3). Only listens while selecting, so it never intercepts Escape
+  // for anything else (e.g. the open photo viewer, which owns its own Escape handling).
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") exitSelectMode();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting]);
 
   const selectedIds = useMemo(() => [...selected], [selected]);
 
@@ -275,53 +295,45 @@ export function AlbumGrid({
 
   return (
     <>
-      {/* Phase C search / filter row — sits ABOVE the view controls, narrows the photos client-side. */}
+      {/* Search / filter controls. People/Places chips get their own row; When·Search·Clear share ONE
+          row (left) with the view selector, size slider, and a small Select toggle (right, via rightSlot).
+          Multi-select is ALSO reachable by long-pressing a photo (see AlbumTile) — the toggle keeps the
+          affordance discoverable, and Esc cancels selection mode. */}
       <AlbumFilterBar
         people={peopleOptions}
         places={placeOptions}
         value={filter}
         onChange={setFilter}
+        rightSlot={
+          <>
+            <AlbumViewControls
+              view={view}
+              onView={changeView}
+              thumbPx={thumbPx}
+              onThumbPx={changeThumb}
+            />
+            <button
+              type="button"
+              onClick={() => (selecting ? exitSelectMode() : setSelecting(true))}
+              aria-pressed={selecting}
+              style={{
+                minHeight: 40,
+                padding: "6px 14px",
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                fontWeight: 500,
+                color: selecting ? "var(--text-heading)" : "var(--text-body)",
+                background: selecting ? "var(--surface-sunken)" : "transparent",
+                border: "var(--border-width) solid var(--border-strong)",
+                borderRadius: "var(--radius-pill)",
+                cursor: "pointer",
+              }}
+            >
+              {selecting ? hub.album.selectModeDone : hub.album.selectMode}
+            </button>
+          </>
+        }
       />
-
-      {/* Controls row: view selector + size slider, plus the Phase-C "Select" toggle. */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <AlbumViewControls
-            view={view}
-            onView={changeView}
-            thumbPx={thumbPx}
-            onThumbPx={changeThumb}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => (selecting ? exitSelectMode() : setSelecting(true))}
-          aria-pressed={selecting}
-          style={{
-            minHeight: 40,
-            padding: "8px 18px",
-            marginBottom: 16,
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            fontWeight: 500,
-            color: selecting ? "var(--text-heading)" : "var(--text-body)",
-            background: selecting ? "var(--surface-sunken)" : "transparent",
-            border: "var(--border-width) solid var(--border-strong)",
-            borderRadius: "var(--radius-pill)",
-            cursor: "pointer",
-          }}
-        >
-          {selecting ? hub.album.selectModeDone : hub.album.selectMode}
-        </button>
-      </div>
 
       {/* Sticky bulk action bar — only while in selection mode with ≥1 photo picked. */}
       {selecting && selected.size > 0 ? (
@@ -410,6 +422,7 @@ export function AlbumGrid({
               selecting={selecting}
               selected={selected.has(photo.id)}
               onToggleSelected={() => toggleSelected(photo.id)}
+              onLongPress={() => enterSelectAndSelect(photo.id)}
               onOpen={() => setOpenId(photo.id)}
               onDelete={() => handleDelete(photo)}
             />
@@ -440,6 +453,7 @@ export function AlbumGrid({
               selecting={selecting}
               selected={selected.has(photo.id)}
               onToggleSelected={() => toggleSelected(photo.id)}
+              onLongPress={() => enterSelectAndSelect(photo.id)}
               onOpen={() => setOpenId(photo.id)}
               onDelete={() => handleDelete(photo)}
             />
@@ -634,6 +648,7 @@ function AlbumTile({
   selecting = false,
   selected = false,
   onToggleSelected,
+  onLongPress,
   onOpen,
   onDelete,
 }: {
@@ -644,9 +659,42 @@ function AlbumTile({
   selecting?: boolean;
   selected?: boolean;
   onToggleSelected?: () => void;
+  /** Long-press (press-and-hold) enters selection mode with this photo picked (item 3). */
+  onLongPress?: () => void;
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  // Long-press (item 3): a press held past LONG_PRESS_MS on the image enters selection mode. We stamp a
+  // ref the moment it fires so the click that follows pointer-up is SWALLOWED (otherwise it would toggle
+  // the just-picked photo back off, or open the viewer). Only armed when NOT already selecting.
+  const LONG_PRESS_MS = 500;
+  const pressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+
+  function cancelPress() {
+    if (pressTimer.current !== null) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+  function startPress() {
+    if (selecting || !onLongPress) return;
+    longPressFired.current = false;
+    pressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      onLongPress();
+    }, LONG_PRESS_MS);
+  }
+  function handleImageClick() {
+    // Swallow the click synthesized after a long-press so it doesn't toggle/open.
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (selecting) onToggleSelected?.();
+    else onOpen();
+  }
+
   return (
     <li
       // `position: relative` anchors the absolutely-positioned hover toolbar; `break-inside: avoid`
@@ -715,7 +763,11 @@ function AlbumTile({
           pick a photo can't accidentally leave the grid. */}
       <button
         type="button"
-        onClick={selecting ? () => onToggleSelected?.() : onOpen}
+        onClick={handleImageClick}
+        onPointerDown={startPress}
+        onPointerUp={cancelPress}
+        onPointerLeave={cancelPress}
+        onPointerCancel={cancelPress}
         aria-label={selecting ? hub.album.selectPhotoAria(photo.caption) : hub.album.viewPhoto(photo.caption)}
         style={{
           padding: 0,
