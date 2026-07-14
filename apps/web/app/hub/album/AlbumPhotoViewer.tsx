@@ -25,13 +25,17 @@ import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import type { AlbumGridPhoto } from "./AlbumGrid";
 import { PhotoActionBar } from "./PhotoActionBar";
+import { PhotoTagPanel } from "./PhotoTagPanel";
 
 export function AlbumPhotoViewer({
   photo,
   onClose,
+  scopeFamilyId = null,
 }: {
   photo: AlbumGridPhoto;
   onClose: () => void;
+  /** Optional: seeds a new place's target family when the photo is placed in several. */
+  scopeFamilyId?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -43,6 +47,14 @@ export function AlbumPhotoViewer({
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const captionInputRef = useRef<HTMLInputElement>(null);
+  // The "Tag people" action bar button scrolls this section into view and focuses its input.
+  const peopleSectionRef = useRef<HTMLDivElement>(null);
+  const peopleInputRef = useRef<HTMLInputElement>(null);
+
+  function focusPeopleTagging() {
+    peopleSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    peopleInputRef.current?.focus();
+  }
 
   // Focus management: remember what was focused when the viewer opened (the trigger tile), move
   // focus into the dialog, and restore it to the trigger when the viewer unmounts (on close/delete).
@@ -241,6 +253,16 @@ export function AlbumPhotoViewer({
               busy={pending}
               onEdit={() => captionInputRef.current?.focus()}
               onDelete={onDeleteConfirmed}
+              onTagPeople={focusPeopleTagging}
+            />
+
+            {/* Tag-management panel (Phase B3): Subjects / People / Places / Family. Self-gates its
+                own editing on the photo detail's canManage; renders for all viewers. */}
+            <PhotoTagPanel
+              photoId={photo.id}
+              scopeFamilyId={scopeFamilyId}
+              peopleSectionRef={peopleSectionRef}
+              peopleInputRef={peopleInputRef}
             />
 
             {error ? (
@@ -282,6 +304,13 @@ export function AlbumPhotoViewer({
               busy={pending}
               onEdit={() => {}}
               onDelete={() => {}}
+            />
+            {/* Tags are viewable by everyone; the panel self-gates editing on its own canManage. */}
+            <PhotoTagPanel
+              photoId={photo.id}
+              scopeFamilyId={scopeFamilyId}
+              peopleSectionRef={peopleSectionRef}
+              peopleInputRef={peopleInputRef}
             />
           </>
         )}

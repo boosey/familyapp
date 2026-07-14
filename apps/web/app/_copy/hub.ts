@@ -380,6 +380,28 @@ export const hub = {
     tagFaces: "Tag faces",
     // Faces is a deliberate no-op until face-region ML lands — the title explains why it does nothing.
     tagFacesComingSoon: "Tagging faces is coming soon",
+    // Photo tag panel (Phase B3) — the four labeled sections in the viewer's manage area. Subjects =
+    // who the photo is ABOUT; People = who APPEARS in it; Places = where; Family = which album(s) it
+    // is PLACED in (a placement, not a tag).
+    tagPanelAria: "Photo details",
+    tagPanelLoading: "Loading photo details…",
+    subjectsLabel: "Who this is about",
+    subjectsHelp: "The people this photo is really about.",
+    peopleLabel: "Who appears",
+    peopleHelp: "Everyone who shows up in the photo.",
+    placesLabel: "Where",
+    placesHelp: "Places pictured in this photo.",
+    familyPlacementLabel: "Which family albums",
+    familyPlacementHelp: "Which family albums this photo lives in.",
+    // Person/place typeahead affordances (mirrors TagInput's create rows).
+    personFieldPlaceholder: "Add a person…",
+    placeFieldPlaceholder: "Add a place…",
+    addPersonNamed: (name: string) => `Add “${name}” as a new person`,
+    addPlaceNamed: (name: string) => `Add “${name}” as a new place`,
+    removeTag: (name: string) => `Remove ${name}`,
+    // The last family album can't be removed — a photo must live in at least one album.
+    lastFamilyLocked: "A photo must stay in at least one family album.",
+    unnamedPerson: "Unnamed",
     // View selector (Grid / Masonry / List) — a segmented control above the album.
     viewSelectorAria: "Choose album layout",
     viewGrid: "Grid",

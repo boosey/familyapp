@@ -27,9 +27,33 @@ const editAlbumCaptionAction = vi.fn(
 const deleteAlbumPhotoAction = vi.fn(
   async (..._args: unknown[]): Promise<{ ok: true }> => ({ ok: true }),
 );
+// The viewer now hosts PhotoTagPanel, which loads its detail via loadPhotoTagPanelAction on mount.
+// Seed a manageable detail so the People section (and its input) render for the "Tag people" test.
+const PANEL_DATA = {
+  detail: {
+    id: "photo-1",
+    caption: null,
+    canManage: true,
+    contributorDisplayName: "Ada",
+    families: [{ familyId: "fam-1", familyName: "The Lovelaces" }],
+    subjects: [],
+    people: [],
+    places: [],
+  },
+  suggestions: { people: [], families: [{ id: "fam-1", name: "The Lovelaces" }], places: [] },
+};
+const loadPhotoTagPanelAction = vi.fn(async (..._args: unknown[]) => PANEL_DATA);
 vi.mock("@/app/hub/album/actions", () => ({
   editAlbumCaptionAction: (...args: unknown[]) => editAlbumCaptionAction(...args),
   deleteAlbumPhotoAction: (...args: unknown[]) => deleteAlbumPhotoAction(...args),
+  loadPhotoTagPanelAction: (...args: unknown[]) => loadPhotoTagPanelAction(...args),
+  tagPhotoSubjectAction: vi.fn(),
+  untagPhotoSubjectAction: vi.fn(),
+  tagPhotoPersonAction: vi.fn(),
+  untagPhotoPersonAction: vi.fn(),
+  tagPhotoPlaceAction: vi.fn(),
+  untagPhotoPlaceAction: vi.fn(),
+  retargetPhotoFamiliesAction: vi.fn(),
 }));
 
 afterEach(() => {
@@ -143,6 +167,30 @@ describe("AlbumPhotoViewer", () => {
     unmount();
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+
+  // Phase B3: the viewer hosts the tag-management panel (Subjects / People / Places / Family).
+  it("renders the PhotoTagPanel inside the dialog", async () => {
+    render(<AlbumPhotoViewer photo={MANAGEABLE} onClose={vi.fn()} />);
+    expect(await screen.findByRole("group", { name: /photo details/i })).toBeTruthy();
+    expect(loadPhotoTagPanelAction).toHaveBeenCalledWith("photo-1");
+  });
+
+  // Phase B3: the now-enabled "Tag people" action bar button scrolls to + focuses the People input.
+  it("focuses the People tag input when the action bar's Tag people is tapped", async () => {
+    // jsdom has no scrollIntoView — provide a spy so the handler doesn't throw.
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(<AlbumPhotoViewer photo={MANAGEABLE} onClose={vi.fn()} />);
+    // Wait for the panel to load so the People input exists.
+    await screen.findByRole("group", { name: /photo details/i });
+    const peopleInputs = screen.getAllByPlaceholderText(/add a person/i);
+    // People is the SECOND person field (Subjects is first).
+    const peopleInput = peopleInputs[1]!;
+    expect(document.activeElement).not.toBe(peopleInput);
+    fireEvent.click(screen.getByRole("button", { name: /tag people/i }));
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(document.activeElement).toBe(peopleInput);
   });
 
   // Regression (review finding): Tab is trapped inside the dialog — without the trap, tabbing off the

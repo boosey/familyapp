@@ -28,9 +28,33 @@ const editAlbumCaptionAction = vi.fn(
 const deleteAlbumPhotoAction = vi.fn(
   async (..._args: unknown[]): Promise<{ ok: true }> => ({ ok: true }),
 );
+// The viewer opened from a tile now hosts PhotoTagPanel, which loads its detail via
+// loadPhotoTagPanelAction on mount. Seed a minimal manageable detail so the panel renders without a
+// server round-trip; the rest are present so the "use server" module mock is complete.
+const PANEL_DATA = {
+  detail: {
+    id: "photo-1",
+    caption: null,
+    canManage: true,
+    contributorDisplayName: "Ada",
+    families: [{ familyId: "fam-1", familyName: "The Lovelaces" }],
+    subjects: [],
+    people: [],
+    places: [],
+  },
+  suggestions: { people: [], families: [{ id: "fam-1", name: "The Lovelaces" }], places: [] },
+};
 vi.mock("@/app/hub/album/actions", () => ({
   editAlbumCaptionAction: (...args: unknown[]) => editAlbumCaptionAction(...args),
   deleteAlbumPhotoAction: (...args: unknown[]) => deleteAlbumPhotoAction(...args),
+  loadPhotoTagPanelAction: async (..._args: unknown[]) => PANEL_DATA,
+  tagPhotoSubjectAction: vi.fn(),
+  untagPhotoSubjectAction: vi.fn(),
+  tagPhotoPersonAction: vi.fn(),
+  untagPhotoPersonAction: vi.fn(),
+  tagPhotoPlaceAction: vi.fn(),
+  untagPhotoPlaceAction: vi.fn(),
+  retargetPhotoFamiliesAction: vi.fn(),
 }));
 
 afterEach(() => {
