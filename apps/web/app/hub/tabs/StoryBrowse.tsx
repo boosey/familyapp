@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub, common } from "@/app/_copy";
+import { TellStoryCard } from "./TellStoryCard";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import {
   groupByDecade,
@@ -180,6 +181,7 @@ function Feed({
   href: (item: StoryItem) => string;
   view: FeedView;
 }) {
+  // The "Tell a story" CTA leads the feed as its first item (both layouts) and the empty state below.
   if (items.length === 0) {
     const scopeName =
       scope === "all"
@@ -188,21 +190,26 @@ function Feed({
             viewerFamilies.find((f) => f.id === scope)?.name ?? "",
           );
     return (
-      <div style={emptyCard}>
-        <span style={{ fontSize: 40 }} aria-hidden="true">
-          📖
-        </span>
-        <p style={emptyHeadline}>{hub.browse.feedEmpty(scopeName)}</p>
-        <p style={emptySub}>{hub.browse.feedEmptySub}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <TellStoryCard />
+        <div style={emptyCard}>
+          <span style={{ fontSize: 40 }} aria-hidden="true">
+            📖
+          </span>
+          <p style={emptyHeadline}>{hub.browse.feedEmpty(scopeName)}</p>
+          <p style={emptySub}>{hub.browse.feedEmptySub}</p>
+        </div>
       </div>
     );
   }
 
   // Masonry — CSS multi-column of vertical cards, each kept whole across columns; column width sets
-  // how many columns fit. Column view is today's single stacked column of wide horizontal cards.
+  // how many columns fit. Column view is today's single stacked column of wide horizontal cards. The
+  // Tell-a-story CTA is the first cell/card in either layout.
   if (view === "masonry") {
     return (
       <div style={{ columnWidth: 320, columnGap: 18 }} data-view="masonry">
+        <TellStoryCard masonry />
         {items.map((item) => (
           <FeedCard key={item.id} item={item} href={href(item)} masonry />
         ))}
@@ -212,6 +219,7 @@ function Feed({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }} data-view="column">
+      <TellStoryCard />
       {items.map((item) => (
         <FeedCard key={item.id} item={item} href={href(item)} />
       ))}

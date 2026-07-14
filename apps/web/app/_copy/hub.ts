@@ -18,6 +18,8 @@ export const hub = {
     tabQuestions: "To answer",
     tabAsk: "Ask a question",
     tabAsks: "Your asks",
+    // The family surface (tree + relatives list) — a real in-hub tab now, not a standalone route.
+    tabFamily: "Family",
     tabInvite: "Invite",
     tabRequests: "Requests",
     menuProfile: "Your profile",
@@ -641,8 +643,12 @@ export const hub = {
     heading: "Your relatives",
     intro:
       "The people you record as kin in this family. Adding a relative is enough — no one has to confirm it.",
-    // Empty state when the viewer has recorded no kin yet.
-    empty: "You haven't added any relatives yet. Add the first one below.",
+    // Empty state when the viewer has recorded no kin yet. Adding now happens in the Tree view.
+    empty: "You haven't added any relatives yet. Switch to Tree to add your first one.",
+    // List-view search (Family tab → List). Filters the relatives list by name or relation.
+    searchPlaceholder: "Search relatives…",
+    searchAria: "Search relatives by name or relation",
+    searchNoResults: (q: string) => `No relatives match “${q}”.`,
     // Shown when the viewer belongs to no family at all.
     noFamily: "Join or start a family before adding relatives.",
     deceased: "In memory",
@@ -764,9 +770,18 @@ export const hub = {
     // Fallback for an unidentified bridge node, rendered from its relation.
     unknownOf: (relationLabel: string) => `Unknown ${relationLabel.toLowerCase()}`,
     unknownRelative: "Unknown relative",
+    // Family-tab view selector (Tree | List) — the tree is a hub tab now, not a standalone route.
+    viewSelectorAria: "Choose family view",
+    viewTree: "Tree",
+    viewList: "List",
     // Canvas controls.
     fit: "Fit",
     pan: "Drag to pan",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    // Add-a-relative modal (opened from the tree's +, kebab, and person panel).
+    addRelativeHeading: "Add a relative",
+    addRelativeClose: "Close",
     // Tap detail panel — read-only actions.
     panelStories: "Stories about them",
     panelAddParent: "Add parent",

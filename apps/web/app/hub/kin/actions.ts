@@ -166,7 +166,7 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     return { error: hub.actions.addRelativeFailed };
   }
 
-  revalidatePath("/hub/kin");
+  revalidatePath("/hub");
   return undefined;
 }
 
@@ -259,7 +259,7 @@ async function runEdgeAction(
     return { error: hub.kin.govActionFailed };
   }
 
-  revalidatePath("/hub/kin");
+  revalidatePath("/hub");
   return undefined;
 }
 

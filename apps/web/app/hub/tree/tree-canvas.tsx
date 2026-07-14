@@ -2,17 +2,18 @@
 /**
  * TreeCanvas — the interactive ego-centric visual family tree (spec 2026-07-13, §1–§8).
  *
- * Owns the loaded `nodes`/`edges`, the `expansion` state, and a `pan` offset. Renders an SVG connector
- * layer with absolutely-positioned HTML node cards over it (real, tappable, accessible buttons over
- * crisp SVG). Drag-to-pan; a **Fit** button reframes on the focus. No zoom, no re-rooting, no selection
- * state (spec §1).
+ * Owns the loaded `nodes`/`edges`, the `expansion` state, a `pan` offset, and a `scale` (zoom). Renders
+ * an SVG connector layer with absolutely-positioned HTML node cards over it (real, tappable, accessible
+ * buttons over crisp SVG). Drag-to-pan; **Fit** zooms the whole loaded tree to the viewport; +/− step
+ * the zoom about the focus (2026-07-14 — the tree is a hub tab now, and zoom/fit were added).
  *
  * Interaction model:
  *   - A node NAME click opens the read-only <PersonPanel>. It never re-roots.
  *   - Per-direction CARETS (parents ↑, siblings ↔, children ↓) expand/collapse a branch — CLIENT ONLY,
  *     instant, off the fetch path (spec §7: every drawn card's immediate kin is already loaded).
- *   - A "+" where a direction has no kin starts add-in-that-direction (navigates to /hub/kin).
- *   - A per-card ⋮ (KebabMenu) adds relatives, gated by loaded adjacency. No global kebab.
+ *   - A "+" where a direction has no kin opens the Add-a-relative MODAL (via TreeAddProvider); the
+ *     per-card ⋮ (KebabMenu) and the person panel open the same modal. No route navigation (/hub/kin is
+ *     gone); on a successful add the anchor's subtree is refetched so the new relative appears.
  *   - A pointer that MOVES beyond a small threshold is a drag (pan), not a tap.
  *
  * Data loading (spec §7): the initial read is a bounded neighborhood; after each expansion a BACKGROUND
@@ -23,9 +24,13 @@
  * expansion).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
-import type { KinshipTreeData, ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
+import type {
+  AddRelativeRelation,
+  KinshipTreeData,
+  ResolvedKinshipEdge,
+  TreeNode,
+} from "@chronicle/core";
 // Client-safe kinship derivation (type-only server barrel avoided — no node:crypto in the bundle).
 import { deriveKin, type KinRelation } from "@chronicle/core/kinship-derive";
 import {
@@ -40,6 +45,8 @@ import { PersonPanel } from "./person-panel";
 import { KebabMenu } from "./kebab-menu";
 import { mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
+import { TreeAddProvider, type OpenAddRelative } from "./add-relative-context";
+import { AddRelativeModal } from "./add-relative-modal";
 
 export interface TreeCanvasProps {
   familyId: string;
@@ -93,6 +100,22 @@ function adjacencyCounts(edges: readonly ResolvedKinshipEdge[]): Map<string, Adj
 /** How far (px) a pointer may move between down and up and still count as a tap, not a drag. */
 const DRAG_SLOP = 6;
 
+/** Zoom bounds + step. `Fit` computes its own scale within these; the +/− buttons step by ZOOM_STEP. */
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2.5;
+const ZOOM_STEP = 1.2;
+/** Leave a little breathing room around the tree when fitting the whole thing to the viewport. */
+const FIT_MARGIN = 0.9;
+/** Don't zoom a tiny tree in past this when fitting (a lone node shouldn't fill the screen). */
+const FIT_MAX_SCALE = 1.2;
+
+const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
+
+interface AddTarget {
+  anchorPersonId: string;
+  relation: AddRelativeRelation;
+}
+
 export function TreeCanvas({
   familyId,
   focusPersonId,
@@ -100,12 +123,13 @@ export function TreeCanvas({
   initial,
   fetchSubtree = fetchSubtreeAction,
 }: TreeCanvasProps) {
-  const router = useRouter();
   const [nodes, setNodes] = useState<TreeNode[]>(initial.nodes);
   const [edges, setEdges] = useState<ResolvedKinshipEdge[]>(initial.edges);
   const [expansion, setExpansion] = useState<ExpansionState>(EMPTY_EXPANSION);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
+  const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
 
   // Track which frontier centers we've already background-fetched, so top-up never re-fetches the same
   // node twice (idempotent, quiet, off the critical path).
@@ -149,19 +173,47 @@ export function TreeCanvas({
   );
 
   /**
-   * Reframe on the focus. `pan` is the focus's on-screen offset from the pan-layer origin (which sits
-   * at horizontal-center / top of the viewport), so centering horizontally is x:0 and the focus rides
-   * at the vertical middle. Independent of the focus's layout coordinates — those are absorbed by the
+   * Center on the focus at 1× (the ego-centric default framing). `pan` is the focus's on-screen offset
+   * from the pan-layer origin (horizontal-center / top of the viewport), so centering horizontally is
+   * x:0 and the focus rides at the vertical middle. The focus's layout coordinates are absorbed by the
    * transform (see the pan-layer), which is what keeps an expansion from moving the focus.
    */
-  const fitToFocus = useCallback(() => {
+  const centerOnFocus = useCallback(() => {
     const vh = viewportRef.current?.clientHeight ?? 480;
+    setScale(1);
     setPan({ x: 0, y: vh * 0.5 });
+  }, []);
+
+  // The pan-layer transform is `translate(pan) · scale(s) · translate(-focus)` with origin 0,0, so a
+  // layout point p lands at screen (vw/2 + pan.x + s·(p.x−focus.x), pan.y + s·(p.y−focus.y)). `Fit`
+  // (spec 2026-07-14) now actually ZOOMS the whole loaded tree to fit the viewport and centers its
+  // bounding box — the old "Fit" only recentred the focus at 1× (no scaling).
+  const fitToView = useCallback(() => {
+    const vp = viewportRef.current;
+    const vw = vp?.clientWidth ?? 640;
+    const vh = vp?.clientHeight ?? 480;
+    const bw = Math.max(1, layout.bounds.width);
+    const bh = Math.max(1, layout.bounds.height);
+    const s = clampScale(
+      Math.min((vw / bw) * FIT_MARGIN, (vh / bh) * FIT_MARGIN, FIT_MAX_SCALE),
+    );
+    // Land the bounding-box centre at the viewport centre.
+    setScale(s);
+    setPan({
+      x: -s * (bw / 2 - focusPos.x),
+      y: vh / 2 - s * (bh / 2 - focusPos.y),
+    });
+  }, [layout.bounds.width, layout.bounds.height, focusPos.x, focusPos.y]);
+
+  // Zoom in/out about the focus. Scale is applied around the focus (see the transform), so the focus
+  // stays put and only `scale` changes — pan is untouched.
+  const zoomBy = useCallback((factor: number) => {
+    setScale((s) => clampScale(s * factor));
   }, []);
 
   // Center on the focus once, at first paint. Never on expansion (that would yank the viewport).
   useEffect(() => {
-    fitToFocus();
+    centerOnFocus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -201,13 +253,58 @@ export function TreeCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout.placed.length, nodes.length]);
 
+  // --- Add-a-relative (modal over the tree, spec 2026-07-14) -------------------------------------
+  // The "+" gutter buttons, the per-card ⋮ menu, and the person panel all open ONE Add modal now
+  // (/hub/kin is gone). `openAdd` is shared with those child components via TreeAddProvider.
+  const openAdd: OpenAddRelative = useCallback((anchorPersonId, relation) => {
+    setAddTarget({ anchorPersonId, relation });
+  }, []);
+
+  // After a successful add, top the anchor's subtree back up so the new relative appears, then close.
+  const refetchAnchor = useCallback(
+    async (anchorId: string) => {
+      toppedUp.current.delete(anchorId);
+      try {
+        const res = await fetchSubtree(familyId, anchorId);
+        if (res.ok) {
+          setNodes((p) => mergeNodes(p, res.data.nodes));
+          setEdges((p) => mergeEdges(p, res.data.edges));
+        }
+      } catch {
+        /* best-effort — a refresh will reconcile. */
+      }
+    },
+    [familyId, fetchSubtree],
+  );
+
+  // The anchor's partners (for the modal's "Other parent" picker) — the OTHER endpoint of every
+  // partnered_with edge touching the anchor, named from the loaded nodes.
+  const partnersOf = useCallback(
+    (anchorId: string): { id: string; name: string }[] => {
+      const out: { id: string; name: string }[] = [];
+      for (const e of edges) {
+        if (e.edgeType !== "partnered_with") continue;
+        const otherId =
+          e.personAId === anchorId ? e.personBId : e.personBId === anchorId ? e.personAId : null;
+        if (!otherId) continue;
+        const n = nodeById.get(otherId);
+        out.push({
+          id: otherId,
+          name: n?.identified && n.displayName ? n.displayName : hub.kin.edgeUnknownPerson,
+        });
+      }
+      return out;
+    },
+    [edges, nodeById],
+  );
+
   // --- Caret / "+" activation --------------------------------------------------------------------
   const onAffordance = useCallback(
     (a: Affordance) => {
       if (a.kind === "add") {
-        const relation =
+        const relation: AddRelativeRelation =
           a.direction === "parents" ? "parent" : a.direction === "siblings" ? "sibling" : "child";
-        router.push(`/hub/kin?scope=${familyId}&anchor=${a.ownerId}&relation=${relation}`);
+        openAdd(a.ownerId, relation);
         return;
       }
       // caret: expand ⇄ collapse, client-only (spec §7).
@@ -229,7 +326,7 @@ export function TreeCanvas({
           : { ...e, expandedChildren: add(e.expandedChildren, ck), collapsedChildren: remove(e.collapsedChildren, ck) };
       });
     },
-    [familyId, router],
+    [openAdd],
   );
 
   // --- Drag-to-pan (viewport background) ---------------------------------------------------------
@@ -273,27 +370,40 @@ export function TreeCanvas({
   const selectedNode = selected ? (nodeById.get(selected) ?? null) : null;
 
   return (
+    <TreeAddProvider value={openAdd}>
     <div style={{ position: "relative" }}>
-      {/* Controls (no global kebab — spec §2). */}
+      {/* Controls (no global kebab — spec §2). Fit zooms-to-fit; +/− step the zoom about the focus. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <button
           type="button"
-          onClick={fitToFocus}
+          onClick={fitToView}
           data-testid="tree-fit"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            fontWeight: 600,
-            padding: "8px 16px",
-            borderRadius: "var(--radius-pill)",
-            border: "var(--border-width) solid var(--border-strong)",
-            background: "transparent",
-            color: "var(--text-body)",
-            cursor: "pointer",
-          }}
+          style={controlPill}
         >
           {hub.tree.fit}
         </button>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => zoomBy(1 / ZOOM_STEP)}
+            data-testid="tree-zoom-out"
+            aria-label={hub.tree.zoomOut}
+            disabled={scale <= ZOOM_MIN + 0.001}
+            style={zoomBtn(scale <= ZOOM_MIN + 0.001)}
+          >
+            <span aria-hidden="true">−</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomBy(ZOOM_STEP)}
+            data-testid="tree-zoom-in"
+            aria-label={hub.tree.zoomIn}
+            disabled={scale >= ZOOM_MAX - 0.001}
+            style={zoomBtn(scale >= ZOOM_MAX - 0.001)}
+          >
+            <span aria-hidden="true">+</span>
+          </button>
+        </div>
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-meta)" }}>
           {hub.tree.pan}
         </span>
@@ -325,10 +435,13 @@ export function TreeCanvas({
             position: "absolute",
             left: "50%",
             top: 0,
-            // Anchor the camera on the focus: subtracting its layout position makes the focus the fixed
-            // origin, so re-normalization on expand/collapse (which shifts every node's coords by a
-            // generation-step) leaves the focus — and thus the whole viewport — visually stationary.
-            transform: `translate(${pan.x - focusPos.x}px, ${pan.y - focusPos.y}px)`,
+            // Anchor the camera on the focus: `translate(pan) · scale · translate(-focus)` (origin 0,0)
+            // makes the focus the fixed origin — re-normalization on expand/collapse (which shifts every
+            // node's coords by a generation-step) leaves the focus visually stationary, and a scale
+            // change zooms ABOUT the focus (it stays put; only `scale` moves). At scale=1 this is exactly
+            // the old `translate(pan − focus)`.
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale}) translate(${-focusPos.x}px, ${-focusPos.y}px)`,
+            transformOrigin: "0 0",
             width: layout.bounds.width,
             height: layout.bounds.height,
           }}
@@ -372,7 +485,6 @@ export function TreeCanvas({
                     inert ? undefined : (
                       <KebabMenu
                         node={p.node}
-                        familyId={familyId}
                         parentCount={c.parents}
                         partnerCount={c.partners}
                       />
@@ -397,13 +509,59 @@ export function TreeCanvas({
       {selectedNode && (
         <PersonPanel
           node={selectedNode}
-          familyId={familyId}
           relationToViewer={viewerRelation.get(selectedNode.personId) ?? null}
           onClose={() => setSelected(null)}
         />
       )}
+
+      {addTarget && (
+        <AddRelativeModal
+          familyId={familyId}
+          anchorPersonId={addTarget.anchorPersonId}
+          initialRelation={addTarget.relation}
+          coParentOptions={partnersOf(addTarget.anchorPersonId)}
+          onClose={() => setAddTarget(null)}
+          onSuccess={() => {
+            const anchor = addTarget.anchorPersonId;
+            setAddTarget(null);
+            void refetchAnchor(anchor);
+          }}
+        />
+      )}
     </div>
+    </TreeAddProvider>
   );
+}
+
+const controlPill: React.CSSProperties = {
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-ui-sm)",
+  fontWeight: 600,
+  padding: "8px 16px",
+  borderRadius: "var(--radius-pill)",
+  border: "var(--border-width) solid var(--border-strong)",
+  background: "transparent",
+  color: "var(--text-body)",
+  cursor: "pointer",
+};
+
+function zoomBtn(disabled: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 34,
+    height: 34,
+    borderRadius: "50%",
+    border: "var(--border-width) solid var(--border-strong)",
+    background: "transparent",
+    color: "var(--text-body)",
+    fontSize: "1.2rem",
+    lineHeight: 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+    padding: 0,
+  };
 }
 
 /** A thin caret glyph pointing UP by default; rotated to point down. */

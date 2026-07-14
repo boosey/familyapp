@@ -4,26 +4,20 @@
  *   - a NAME click opens the read-only panel, with NO fetch and NO re-root;
  *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never selects;
  *   - a caret EXPANDS a collapsed branch and COLLAPSES a drawn one — client only, no fetch;
- *   - a "+" affordance (no kin in that direction) navigates to the add-relative flow;
+ *   - a "+" affordance (no kin in that direction) opens the Add-a-relative modal (over the tree);
  *   - an anonymous bridge card is inert (no kebab).
  *
- * The server action + router are mocked (no live DB). We feed the real pure layout tiny fixtures.
+ * The server action is mocked (no live DB). We feed the real pure layout tiny fixtures.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
 import type { FetchSubtreeResult } from "@/app/hub/tree/actions";
 
-const push = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-}));
-
 import { TreeCanvas } from "@/app/hub/tree/tree-canvas";
 
 afterEach(() => {
   cleanup();
-  push.mockClear();
 });
 
 async function tap(el: Element, at: { x: number; y: number } = { x: 5, y: 5 }) {
@@ -135,7 +129,7 @@ it("a children caret collapses the drawn branch (client only, no fetch) and re-e
   expect(fetchSubtree).not.toHaveBeenCalled();
 });
 
-it("a '+' affordance navigates to the add-relative flow", async () => {
+it("a '+' affordance opens the Add-a-relative modal over the tree", async () => {
   // Isolated focus → three "+" affordances. The parents "+" adds a parent.
   const isolated: KinshipTreeData = {
     familyId: "F",
@@ -146,11 +140,16 @@ it("a '+' affordance navigates to the add-relative flow", async () => {
   render(
     <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={isolated} fetchSubtree={vi.fn(noFetch)} />,
   );
+  expect(screen.queryByTestId("tree-add-relative-modal")).toBeNull();
   const plus = screen.getByTestId(`tree-affordance-parents-add-${FOCUS}`);
   await act(async () => {
     plus.click();
   });
-  expect(push).toHaveBeenCalledWith(`/hub/kin?scope=F&anchor=${FOCUS}&relation=parent`);
+  // The modal appears (no route navigation); its relation select defaults to the chosen relation.
+  const modal = screen.getByTestId("tree-add-relative-modal");
+  expect(modal).toBeTruthy();
+  const relationSelect = modal.querySelector('select[name="relation"]') as HTMLSelectElement;
+  expect(relationSelect.value).toBe("parent");
 });
 
 it("isolated focus shows the card plus three '+' (no empty-state page)", async () => {
@@ -195,16 +194,23 @@ it("expanding/collapsing parents does NOT move the focus on screen (camera stays
     ],
   };
 
-  // Screen position of the focus = pan-layer transform + the focus card's own left/top offset.
+  // Screen position of the focus card. The pan-layer transform is
+  // `translate(pan) · scale(s) · translate(-focus)` (origin 0,0), so a child at local (lx, ly) lands at
+  // screen (pan.x + s·(lx − focus.x), pan.y + s·(ly − focus.y)). We parse all three parts.
   const focusScreen = (): { x: number; y: number } => {
     const layer = screen.getByTestId("tree-pan-layer");
-    const m = /translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/.exec(layer.style.transform);
-    if (!m) throw new Error(`no translate in transform: "${layer.style.transform}"`);
+    const t = layer.style.transform;
+    const translates = [...t.matchAll(/translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/g)];
+    if (translates.length < 2) throw new Error(`expected two translates in transform: "${t}"`);
+    const scaleM = /scale\(\s*(-?[\d.]+)\s*\)/.exec(t);
+    const pan = { x: parseFloat(translates[0]![1]!), y: parseFloat(translates[0]![2]!) };
+    // Second translate is `translate(-focus)`, so it already carries the negated focus coords.
+    const negFocus = { x: parseFloat(translates[1]![1]!), y: parseFloat(translates[1]![2]!) };
+    const s = scaleM ? parseFloat(scaleM[1]!) : 1;
     const pos = screen.getByTestId(`tree-node-pos-${FOCUS}`);
-    return {
-      x: parseFloat(m[1]!) + parseFloat(pos.style.left),
-      y: parseFloat(m[2]!) + parseFloat(pos.style.top),
-    };
+    const lx = parseFloat(pos.style.left);
+    const ly = parseFloat(pos.style.top);
+    return { x: pan.x + s * (lx + negFocus.x), y: pan.y + s * (ly + negFocus.y) };
   };
 
   render(

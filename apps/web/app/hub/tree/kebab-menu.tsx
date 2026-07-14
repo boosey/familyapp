@@ -6,22 +6,21 @@
  * instance is removed. The trigger is BORDERLESS (the carets/"+" carry the 1px border; the kebab does
  * not).
  *
- * Every item is a plain navigation link to the /hub/kin add-relative flow, anchored on `node.personId`
- * with a `relation=<r>` query param. It writes nothing itself — the target flow does. Items are GATED
- * by the loaded adjacency counts so we never offer an impossible add (a person already has ≤2 parents;
- * at most one partner in v1):
+ * Every item opens the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
+ * `node.personId` with the chosen relation. It writes nothing itself — the modal's form does. Items are
+ * GATED by the loaded adjacency counts so we never offer an impossible add (a person already has ≤2
+ * parents; at most one partner in v1):
  *   - Add child / Add sibling — always
  *   - Add parent — only when `parentCount < 2`
  *   - Add partner — only when `partnerCount === 0`
  */
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
 import { hub } from "@/app/_copy";
-import type { TreeNode } from "@chronicle/core";
+import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
+import { useTreeAdd } from "./add-relative-context";
 
 export interface KebabMenuProps {
   node: TreeNode;
-  familyId: string;
   /** Loaded `parent_of` edges where this node is the CHILD. Gates "Add parent" (< 2). */
   parentCount: number;
   /** Loaded `partnered_with` edges touching this node. Gates "Add partner" (=== 0). */
@@ -29,12 +28,13 @@ export interface KebabMenuProps {
 }
 
 interface Item {
-  relation: "child" | "sibling" | "parent" | "partner";
+  relation: Extract<AddRelativeRelation, "child" | "sibling" | "parent" | "partner">;
   label: string;
   testId: string;
 }
 
-export function KebabMenu({ node, familyId, parentCount, partnerCount }: KebabMenuProps) {
+export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
+  const openAdd = useTreeAdd();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -55,9 +55,6 @@ export function KebabMenu({ node, familyId, parentCount, partnerCount }: KebabMe
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  const href = (relation: string) =>
-    `/hub/kin?scope=${familyId}&anchor=${node.personId}&relation=${relation}`;
 
   const items: Item[] = [
     { relation: "child", label: hub.tree.kebabAddChild, testId: "tree-kebab-addchild" },
@@ -125,24 +122,33 @@ export function KebabMenu({ node, familyId, parentCount, partnerCount }: KebabMe
           }}
         >
           {items.map((it) => (
-            <Link
+            <button
               key={it.relation}
-              href={href(it.relation)}
+              type="button"
               role="menuitem"
               data-testid={it.testId}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                openAdd(node.personId, it.relation);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
               style={{
                 display: "block",
+                width: "100%",
+                textAlign: "left",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
                 padding: "8px 10px",
                 borderRadius: "var(--radius-sm)",
                 fontFamily: "var(--font-ui)",
                 fontSize: "var(--text-ui-sm)",
                 color: "var(--text-body)",
-                textDecoration: "none",
               }}
             >
               {it.label}
-            </Link>
+            </button>
           ))}
         </div>
       )}
