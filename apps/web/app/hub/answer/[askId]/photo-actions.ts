@@ -29,6 +29,8 @@ import { rankPhotosForStory, pickPhotoNudge } from "@chronicle/pipeline";
 import type { PhotoCandidate, StorySignals } from "@chronicle/pipeline";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
+import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
+import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection";
 
 /** One attached accompaniment image, as the editor needs it (family-photo provenance only). */
 export interface EditorStoryImage {
@@ -45,6 +47,12 @@ export interface EditorAlbumPhoto {
   caption: string | null;
 }
 
+/** Where a newly-uploaded / imported photo can be placed (an album the owner actively belongs to). */
+export interface EditorPlacementFamily {
+  id: string;
+  name: string;
+}
+
 export type StoryPhotoEditorData =
   | {
       ok: true;
@@ -53,6 +61,14 @@ export type StoryPhotoEditorData =
       // ADR-0009 Phase 4 · Slice B — a caption-driven "add this photo?" suggestion, or null when no
       // candidate's caption overlaps the story text (the common case; the picker just looks normal).
       nudge: { photoId: string; caption: string | null } | null;
+      // The owner's active families — the candidate albums a device/Google upload lands in before it
+      // is attached to the story. The client shows a placement picker only when there is more than one.
+      families: EditorPlacementFamily[];
+      // Google Photos import chrome — env-configured AND per-owner connected. Both false ⇒ no Google
+      // button. `googleEmail` is a quiet status line only.
+      googleConfigured: boolean;
+      googleConnected: boolean;
+      googleEmail: string | null;
     }
   | { error: string };
 
@@ -147,7 +163,28 @@ export async function loadStoryPhotoEditorAction(
     const album: EditorAlbumPhoto[] = ranked.map((r) => ({ photoId: r.id, caption: r.caption }));
     const nudge = pickPhotoNudge(ranked);
 
-    return { ok: true, attached, album, nudge };
+    // Placement candidates for a device/Google upload (reuses the already-loaded active families) and
+    // the Google import chrome status (env-configured + this owner's connection), so the client can
+    // render the "Add from album" / "Add from Google" controls without a second round trip.
+    const placementFamilies: EditorPlacementFamily[] = families.map((f) => ({
+      id: f.familyId,
+      name: f.familyName,
+    }));
+    const googleConfigured = isGooglePhotosConfigured();
+    const googleConn = googleConfigured
+      ? await getActiveGooglePhotosConnection(db, personId)
+      : null;
+
+    return {
+      ok: true,
+      attached,
+      album,
+      nudge,
+      families: placementFamilies,
+      googleConfigured,
+      googleConnected: googleConn !== null,
+      googleEmail: googleConn?.googleAccountEmail ?? null,
+    };
   } catch {
     return { error: hub.storyImages.loadError };
   }

@@ -411,16 +411,19 @@ export function StoryDetailClient({
         </div>
       )}
 
-      {/* Reactions Row (Bookmarks and Likes) */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 28, flexWrap: "wrap" }}>
-        <FavoriteButton storyId={storyId} initialState={favoriteState} canFavorite={canReact} />
-        <LikeButton storyId={storyId} initialState={likeState} canLike={canReact} />
-      </div>
+      {/* Reactions Row (Bookmarks and Likes) — hidden while the consolidated editor is open: editing
+          is not a reacting context, so the reaction affordances don't belong on the edit surface. */}
+      {!editorOpen && (
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 28, flexWrap: "wrap" }}>
+          <FavoriteButton storyId={storyId} initialState={favoriteState} canFavorite={canReact} />
+          <LikeButton storyId={storyId} initialState={likeState} canLike={canReact} />
+        </div>
+      )}
 
       {/* Attached photos — a horizontal row directly below the reactions (ADR-0009). Shows ALL of the
           story's photos (there is no separate cover image on this page), each served by the audited
           /api/album-photo/[photoId] byte route. Nothing renders when the story has no photos. */}
-      {storyImages.length > 0 && (
+      {!editorOpen && storyImages.length > 0 && (
         <div
           data-testid="story-photo-row"
           role="group"

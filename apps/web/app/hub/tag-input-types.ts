@@ -31,6 +31,12 @@ export interface TagInputProps {
    */
   onRemove: (token: TagToken) => void;
   disabled?: boolean;
+  /**
+   * Token keys (see `tokenKey`) whose chip renders WITHOUT a remove (✕) button — the caller has
+   * decided they can't be removed here. StoryEditor uses this to keep the LAST remaining family chip:
+   * removing it would silently un-share the story. Absent ⇒ every chip is removable (composer default).
+   */
+  nonRemovableTokenKeys?: Set<string>;
 }
 
 /** Stable identity for a token, used as a React key and for de-dup. */
