@@ -480,26 +480,26 @@ async function untagPhotoPersonGroup(
 }
 
 /** Tag a Person as a SUBJECT (who the photo is about). Returns the minted id. SEE-gated in core. */
-export function tagPhotoSubjectAction(
+export async function tagPhotoSubjectAction(
   formData: FormData,
 ): Promise<PhotoTagPersonActionResult> {
   return tagPhotoPersonGroup(formData, tagPhotoSubject);
 }
 
 /** Untag a subject Person from a photo. SEE-gated, idempotent. */
-export function untagPhotoSubjectAction(formData: FormData): Promise<AlbumManageResult> {
+export async function untagPhotoSubjectAction(formData: FormData): Promise<AlbumManageResult> {
   return untagPhotoPersonGroup(formData, untagPhotoSubject);
 }
 
 /** Tag a Person as APPEARING in a photo (distinct from subjects). Returns the minted id. SEE-gated. */
-export function tagPhotoPersonAction(
+export async function tagPhotoPersonAction(
   formData: FormData,
 ): Promise<PhotoTagPersonActionResult> {
   return tagPhotoPersonGroup(formData, tagPhotoPerson);
 }
 
 /** Untag an appears-in Person from a photo. SEE-gated, idempotent. */
-export function untagPhotoPersonAction(formData: FormData): Promise<AlbumManageResult> {
+export async function untagPhotoPersonAction(formData: FormData): Promise<AlbumManageResult> {
   return untagPhotoPersonGroup(formData, untagPhotoPerson);
 }
 
