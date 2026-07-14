@@ -1,8 +1,9 @@
 name: CI
 
+# Runs on PRs only. Direct pushes to master intentionally skip GitHub CI and go
+# straight to a Vercel production build (small-change fast path). Use a PR for
+# anything you want gated by lint/typecheck/test/build/drift before it ships.
 on:
-  push:
-    branches: [master]
   pull_request:
 
 jobs:
