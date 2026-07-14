@@ -34,6 +34,7 @@ describe("pending-only hub — Stories tab", () => {
         seenStoryIds: new Set(),
         familyTargets: new Map(),
         storyCovers: new Map(),
+        storyPhotos: new Map(),
         viewerFamilies: [], // member of no family
         viewerName: "You",
         selfDrafts: [],

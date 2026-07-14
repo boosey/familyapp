@@ -418,6 +418,41 @@ export function StoryDetailClient({
         <LikeButton storyId={storyId} initialState={likeState} canLike={canReact} />
       </div>
 
+      {/* Attached photos — a horizontal row directly below the reactions (ADR-0009). Shows ALL of the
+          story's photos (there is no separate cover image on this page), each served by the audited
+          /api/album-photo/[photoId] byte route. Nothing renders when the story has no photos. */}
+      {storyImages.length > 0 && (
+        <div
+          data-testid="story-photo-row"
+          role="group"
+          aria-label={hub.storyImages.galleryHeading}
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 28,
+          }}
+        >
+          {storyImages.map((img) => (
+            // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
+            <img
+              key={img.id}
+              src={`/api/album-photo/${img.familyPhotoId}`}
+              alt={hub.storyImages.galleryAlt(img.caption)}
+              style={{
+                width: 96,
+                height: 96,
+                flex: "0 0 auto",
+                objectFit: "cover",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--surface-sunken)",
+                display: "block",
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Audio Playback Seam */}
       {recordingMediaId && (
         <div style={{ display: "flex", gap: 12, width: "100%", height: 38, marginBottom: 20 }}>
@@ -443,52 +478,6 @@ export function StoryDetailClient({
           />
         </div>
       )}
-
-      {/* Gallery */}
-      {storyImages.length > 0 ? (
-        <section style={{ marginTop: 40 }}>
-          <h2
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              letterSpacing: "var(--tracking-mono)",
-              textTransform: "uppercase",
-              color: "var(--text-meta)",
-              margin: "0 0 16px",
-            }}
-          >
-            {hub.storyImages.galleryHeading}
-          </h2>
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-              gap: 12,
-            }}
-          >
-            {storyImages.map((img) => (
-              <li key={img.id} style={{ margin: 0 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/album-photo/${img.familyPhotoId}`}
-                  alt={img.caption || "Story illustration"}
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    objectFit: "cover",
-                    borderRadius: "var(--radius-sm)",
-                    display: "block",
-                    background: "var(--surface-sunken)",
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </div>
   );
 }

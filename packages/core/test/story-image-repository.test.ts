@@ -16,6 +16,7 @@ import {
   getStoryCoverPhotoId,
   listStoryImages,
   loadStoryCovers,
+  loadStoryGalleryPhotoIds,
   reorderStoryImages,
   setStoryCover,
 } from "../src/index";
@@ -424,6 +425,41 @@ describe("reads exclude soft-deleted photos", () => {
     expect(await listStoryImages(db, story.id)).toEqual([]);
     expect(await getStoryCoverPhotoId(db, story.id)).toBeNull();
     expect((await loadStoryCovers(db, [story.id])).has(story.id)).toBe(false);
+  });
+
+  it("loadStoryGalleryPhotoIds drops a soft-deleted photo from the per-story list", async () => {
+    const { contributor, fam, story } = await world();
+    const p1 = await makePhoto(contributor.id, fam.id, "family-photos/g-keep");
+    const p2 = await makePhoto(contributor.id, fam.id, "family-photos/g-del");
+    await attachPhotoToStory(db, { storyId: story.id, familyPhotoId: p1.id, attachedByPersonId: contributor.id });
+    await attachPhotoToStory(db, { storyId: story.id, familyPhotoId: p2.id, attachedByPersonId: contributor.id });
+
+    // All renderable photos, cover first.
+    expect((await loadStoryGalleryPhotoIds(db, [story.id])).get(story.id)).toEqual([p1.id, p2.id]);
+
+    // Soft-delete the cover → it drops out; the survivor remains.
+    await softDelete(p1.id);
+    expect((await loadStoryGalleryPhotoIds(db, [story.id])).get(story.id)).toEqual([p2.id]);
+
+    // Soft-delete the rest → the story has no entry at all.
+    await softDelete(p2.id);
+    expect((await loadStoryGalleryPhotoIds(db, [story.id])).has(story.id)).toBe(false);
+  });
+
+  it("loadStoryGalleryPhotoIds lists the cover FIRST even when it isn't the lowest position", async () => {
+    const { contributor, fam, story } = await world();
+    const p1 = await makePhoto(contributor.id, fam.id, "family-photos/g-order-1");
+    const p2 = await makePhoto(contributor.id, fam.id, "family-photos/g-order-2");
+    const p3 = await makePhoto(contributor.id, fam.id, "family-photos/g-order-3");
+    await attachPhotoToStory(db, { storyId: story.id, familyPhotoId: p1.id, attachedByPersonId: contributor.id });
+    const second = await attachPhotoToStory(db, { storyId: story.id, familyPhotoId: p2.id, attachedByPersonId: contributor.id });
+    await attachPhotoToStory(db, { storyId: story.id, familyPhotoId: p3.id, attachedByPersonId: contributor.id });
+
+    // Promote the middle photo (position 1) to cover.
+    await setStoryCover(db, { storyId: story.id, storyImageId: second.id });
+
+    // Cover (p2) leads; the rest follow in position order (p1, p3).
+    expect((await loadStoryGalleryPhotoIds(db, [story.id])).get(story.id)).toEqual([p2.id, p1.id, p3.id]);
   });
 
   it("listStoryImages surfaces the family photo's caption as alt text", async () => {

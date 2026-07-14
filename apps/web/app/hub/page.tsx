@@ -24,6 +24,7 @@ import {
   loadViewerFamilies,
   loadStoryFamilyTargets,
   loadStoryCoverPhotoIds,
+  loadStoryPhotoIds,
 } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
@@ -146,6 +147,10 @@ export default async function HubPage({
   // Each feed story's cover accompaniment photo (ADR-0009), via the audited batched core seam. Drives
   // the card cover image; a story with no attached image has no entry → a text-only card.
   const storyCovers = await loadStoryCoverPhotoIds(db, feedStoryIds);
+
+  // Each feed story's FULL renderable photo set (cover first) — drives the card's non-cover thumbnail
+  // row below the tags. Same audited batched seam family as the covers; a text-only story has no entry.
+  const storyPhotos = await loadStoryPhotoIds(db, feedStoryIds);
 
   // Split the outstanding drafts: ask-backed feed the Questions tab (Date recordedAt, unchanged
   // shape), self-initiated (askId === null) feed the Stories tab's resume list (ISO-serialized).
@@ -300,6 +305,7 @@ export default async function HubPage({
               seenStoryIds={seenStoryIds}
               familyTargets={familyTargets}
               storyCovers={storyCovers}
+              storyPhotos={storyPhotos}
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}

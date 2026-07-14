@@ -157,6 +157,10 @@ function Feed({
 }
 
 function FeedCard({ item, href }: { item: StoryItem; href: string }) {
+  // The non-cover accompaniment photos: everything in the ordered photo set except the cover (which
+  // already shows big on the left). Filtering by id — not by position — is robust even if the cover
+  // isn't the first element, and yields [] for a text-only or cover-only story.
+  const nonCoverPhotoIds = item.photoIds.filter((id) => id !== item.coverPhotoId);
   return (
     <Link href={href} style={feedCardStyle}>
       {item.isNew ? (
@@ -208,6 +212,24 @@ function FeedCard({ item, href }: { item: StoryItem; href: string }) {
             </span>
           ))}
         </div>
+
+        {/* Non-cover accompaniment photos — a small thumbnail row below the tags (ADR-0009). The cover
+            already shows big on the left; these are the story's other attached photos, each served by
+            the audited /api/album-photo/[photoId] byte route. Nothing renders for a cover-only story. */}
+        {nonCoverPhotoIds.length > 0 ? (
+          <div style={thumbRow}>
+            {nonCoverPhotoIds.map((pid) => (
+              // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
+              <img
+                key={pid}
+                src={`/api/album-photo/${pid}`}
+                alt=""
+                data-testid="card-photo-thumb"
+                style={thumbImage}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </Link>
   );
@@ -484,6 +506,23 @@ const coverImage: CSSProperties = {
   height: 120,
   objectFit: "cover",
   borderRadius: "var(--radius-md)",
+  background: "var(--surface-sunken)",
+  display: "block",
+};
+
+const thumbRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 12,
+};
+
+const thumbImage: CSSProperties = {
+  width: 46,
+  height: 46,
+  flex: "0 0 auto",
+  objectFit: "cover",
+  borderRadius: "var(--radius-sm)",
   background: "var(--surface-sunken)",
   display: "block",
 };

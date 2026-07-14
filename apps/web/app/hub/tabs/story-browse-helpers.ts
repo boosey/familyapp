@@ -53,6 +53,19 @@ export function resolveCoverPhotoId(
   return storyCovers.get(storyId) ?? null;
 }
 
+/**
+ * All of a story's renderable accompaniment photo ids (ADR-0009 Phase 2), from the batched
+ * `loadStoryGalleryPhotoIds` map keyed by story id. Returns the ordered array (cover first) when the
+ * story has photos, else an empty array — a text-only card renders no thumbnail row. Kept pure + named
+ * so the mapping into `StoryItem.photoIds` is unit-testable.
+ */
+export function resolveGalleryPhotoIds(
+  storyPhotos: Map<string, string[]>,
+  storyId: string,
+): string[] {
+  return storyPhotos.get(storyId) ?? [];
+}
+
 /** The decade label a story's era falls in, e.g. 1958 → "1950s". */
 function decadeLabelOf(eraYear: number): string {
   return `${Math.floor(eraYear / 10) * 10}s`;

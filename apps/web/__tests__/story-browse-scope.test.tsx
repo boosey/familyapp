@@ -41,6 +41,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     families: over.families ?? [],
     isNew: over.isNew ?? false,
     coverPhotoId: over.coverPhotoId ?? null,
+    photoIds: over.photoIds ?? [],
     href: over.href ?? `/hub/stories/${over.id}`,
   };
 }
@@ -132,6 +133,7 @@ describe("StoriesTab — dedups the feed union by story id", () => {
         seenStoryIds={new Set<string>()}
         familyTargets={new Map([["dup-1", [famA, famB]]])}
         storyCovers={new Map<string, string>()}
+        storyPhotos={new Map<string, string[]>()}
         viewerFamilies={[famA, famB]}
         viewerName="You"
         selfDrafts={[]}

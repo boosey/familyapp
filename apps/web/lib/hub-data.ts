@@ -7,7 +7,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { families, memberships, persons, storyFamilies, storyViews } from "@chronicle/db/schema";
-import { listStoriesForViewer, loadStoryCovers } from "@chronicle/core";
+import { listStoriesForViewer, loadStoryCovers, loadStoryGalleryPhotoIds } from "@chronicle/core";
 import type { AuthContext } from "@chronicle/core";
 import type { Database, Family, Person, Story } from "@chronicle/db";
 
@@ -182,6 +182,20 @@ export async function loadStoryCoverPhotoIds(
 ): Promise<Map<string, string>> {
   if (storyIds.length === 0) return new Map();
   return loadStoryCovers(db, storyIds);
+}
+
+/**
+ * For each of `storyIds`, ALL of its renderable accompaniment photo ids in render order (cover first),
+ * via the audited batched `loadStoryGalleryPhotoIds` core seam — the gallery sibling of
+ * `loadStoryCoverPhotoIds`. Drives the feed card's non-cover thumbnail row (the card renders the cover
+ * big and the rest small). Soft-deleted photos are excluded; a text-only story has no entry.
+ */
+export async function loadStoryPhotoIds(
+  db: Database,
+  storyIds: string[],
+): Promise<Map<string, string[]>> {
+  if (storyIds.length === 0) return new Map();
+  return loadStoryGalleryPhotoIds(db, storyIds);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { StoryBrowse } from "./StoryBrowse";
-import { resolveCoverPhotoId } from "./story-browse-helpers";
+import { resolveCoverPhotoId, resolveGalleryPhotoIds } from "./story-browse-helpers";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
@@ -25,6 +25,9 @@ interface StoriesTabProps {
   familyTargets: Map<string, ViewerFamily[]>;
   /** For each story id with a cover accompaniment image (ADR-0009), its `family_photo_id`. */
   storyCovers: Map<string, string>;
+  /** For each story id, ALL its renderable accompaniment photo ids in render order (cover first).
+   *  Drives the card's non-cover thumbnail row. A text-only story has no entry. */
+  storyPhotos: Map<string, string[]>;
   /** The viewer's active families — the options for the family-scope filter. */
   viewerFamilies: ViewerFamily[];
   /** The viewer's display name — labels the Timeline "Just {viewer}" toggle. */
@@ -57,6 +60,7 @@ export function StoriesTab({
   seenStoryIds,
   familyTargets,
   storyCovers,
+  storyPhotos,
   viewerFamilies,
   viewerName,
   selfDrafts,
@@ -80,6 +84,7 @@ export function StoriesTab({
         eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),
         families: familyTargets.get(story.id) ?? [],
         coverPhotoId: resolveCoverPhotoId(storyCovers, story.id),
+        photoIds: resolveGalleryPhotoIds(storyPhotos, story.id),
         // New to this viewer until opened — but a narrator's own stories are never "new" to them.
         isNew: slot.person.id !== viewerPersonId && !seenStoryIds.has(story.id),
         href: `/hub/stories/${story.id}`,

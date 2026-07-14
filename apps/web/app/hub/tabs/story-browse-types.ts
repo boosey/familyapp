@@ -47,6 +47,14 @@ export interface StoryItem {
    * byte route, which re-checks read authorization for the story's audience.
    */
   coverPhotoId: string | null;
+  /**
+   * ALL of the story's renderable accompaniment photo ids in render order (cover first), sourced
+   * batched via the `loadStoryGalleryPhotoIds` core seam. The feed card renders the cover big and the
+   * remaining (non-cover) ids as a small thumbnail row below the tags. `coverPhotoId` is the first
+   * element when present; the card derives the non-cover set by excluding `coverPhotoId`. Empty when
+   * the story has no renderable image (text-only card).
+   */
+  photoIds: string[];
   /** Base detail href, e.g. "/hub/stories/{id}". Mode/scope query is appended at click time. */
   href: string;
 }

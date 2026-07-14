@@ -9,6 +9,7 @@ import {
   initials,
   matchesQuery,
   resolveCoverPhotoId,
+  resolveGalleryPhotoIds,
   timelineBase,
 } from "../app/hub/tabs/story-browse-helpers";
 import type { StoryItem } from "../app/hub/tabs/story-browse-types";
@@ -28,6 +29,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     families: over.families ?? [],
     isNew: over.isNew ?? false,
     coverPhotoId: over.coverPhotoId ?? null,
+    photoIds: over.photoIds ?? [],
     href: over.href ?? `/hub/stories/${over.id}`,
   };
 }
@@ -167,6 +169,23 @@ describe("resolveCoverPhotoId", () => {
     const without = makeItem({ id: "without", coverPhotoId: resolveCoverPhotoId(covers, "without") });
     expect(withCover.coverPhotoId).toBe("cover-x");
     expect(without.coverPhotoId).toBeNull();
+  });
+});
+
+describe("resolveGalleryPhotoIds", () => {
+  it("returns the ordered photo id list for a story that has photos in the map", () => {
+    const photos = new Map<string, string[]>([
+      ["s1", ["cover", "p2", "p3"]],
+      ["s2", ["only"]],
+    ]);
+    expect(resolveGalleryPhotoIds(photos, "s1")).toEqual(["cover", "p2", "p3"]);
+    expect(resolveGalleryPhotoIds(photos, "s2")).toEqual(["only"]);
+  });
+
+  it("returns an empty array for a story with no photos (text-only card, no thumbnail row)", () => {
+    const photos = new Map<string, string[]>([["s1", ["cover"]]]);
+    expect(resolveGalleryPhotoIds(photos, "s-none")).toEqual([]);
+    expect(resolveGalleryPhotoIds(new Map(), "s1")).toEqual([]);
   });
 });
 

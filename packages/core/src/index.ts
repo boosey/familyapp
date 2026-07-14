@@ -271,5 +271,6 @@ export {
   listStoryImages,
   getStoryCoverPhotoId,
   loadStoryCovers,
+  loadStoryGalleryPhotoIds,
   type StoryImageView,
 } from "./story-image-repository";

@@ -333,3 +333,40 @@ export async function loadStoryCovers(
   }
   return result;
 }
+
+/**
+ * Batched GALLERY lookup for the feed (sibling of `loadStoryCovers`): `storyId → [photoId, …]` — ALL
+ * renderable photo ids for each story in render order (cover first, then `position` asc), with the same
+ * soft-delete exclusion. Where `loadStoryCovers` keeps only the winning cover, this keeps the whole
+ * ordered set, so the caller can render the cover big and the remaining (non-cover) photos as a small
+ * thumbnail row. A story with no renderable image (or only photo-less illustrations) has no map entry.
+ * One query; the global `(is_cover desc, position asc)` order makes each story's first id its cover.
+ */
+export async function loadStoryGalleryPhotoIds(
+  db: Database,
+  storyIds: string[],
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  const unique = [...new Set(storyIds)];
+  if (unique.length === 0) return result;
+
+  const rows = await db
+    .select({
+      storyId: storyImages.storyId,
+      familyPhotoId: storyImages.familyPhotoId,
+    })
+    .from(storyImages)
+    .leftJoin(familyPhotos, eq(familyPhotos.id, storyImages.familyPhotoId))
+    .where(
+      and(inArray(storyImages.storyId, unique), isNull(familyPhotos.deletedAt)),
+    )
+    .orderBy(desc(storyImages.isCover), asc(storyImages.position));
+
+  for (const r of rows) {
+    if (r.familyPhotoId === null) continue; // photo-less illustration — nothing to render yet
+    const arr = result.get(r.storyId);
+    if (arr) arr.push(r.familyPhotoId);
+    else result.set(r.storyId, [r.familyPhotoId]);
+  }
+  return result;
+}

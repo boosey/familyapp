@@ -35,6 +35,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     families: over.families ?? [],
     isNew: over.isNew ?? false,
     coverPhotoId: over.coverPhotoId ?? null,
+    photoIds: over.photoIds ?? [],
     href: over.href ?? `/hub/stories/${over.id}`,
   };
 }
