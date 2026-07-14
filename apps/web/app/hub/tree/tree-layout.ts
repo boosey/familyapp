@@ -146,15 +146,22 @@ export interface LayoutInput {
 export const NODE_W = 150; // card width (px)
 export const NODE_H = 168; // card height (px) — avatar · name · dates, uniform
 const CROSS_H_GAP = 26; // horizontal gap between stacked same-generation cards
-const PARTNER_GAP = 14; // tighter gap inside a partnership (adjacent)
+const PARTNER_GAP = 7; // tight gap inside a partnership (adjacent) — partners sit ~half as far apart
 const GEN_V_GAP = 78; // vertical gap between generation rows (room for gutter carets + bus)
 
 const CROSS_STEP = NODE_W + CROSS_H_GAP; // center-to-center step for non-partner neighbors
 const PARTNER_STEP = NODE_W + PARTNER_GAP; // center-to-center step inside a partnership
 const GEN_STEP = NODE_H + GEN_V_GAP; // center-to-center vertical step between rows
+/** Drop below the parents' bottom edge where the U's floor sits and the vertical riser begins. The
+ *  children caret is placed HERE (the U/riser junction) rather than crammed against the card bottoms. */
+const JOIN_DROP = GEN_V_GAP * 0.35;
 
-/** How far a gutter caret / "+" floats out past the card edge (px). */
-export const CARET_GAP = 15;
+/**
+ * Distance from the card edge to a gutter caret/"+" CENTER (px). Set so the 22px glyph rendered by the
+ * canvas OVERLAPS the card by ~25%: with radius 11, a center 5.5px outside the edge leaves 5.5px (25% of
+ * the 22px glyph) sitting over the card. Keep in sync with the button `size` in tree-canvas.tsx.
+ */
+export const CARET_GAP = 5.5;
 /** Half-size of a caret/"+" glyph, reserved as padding so a side/edge affordance never clips. */
 const CARET_HALF = 12;
 /** Side padding reserved so a left-side sibling caret stays within bounds. */
@@ -486,22 +493,59 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     const sibs = siblingsOf(anchor).filter((s) => isDrawn(s));
     if (sibs.length === 0) continue;
 
-    // The group members present in the row: the anchor + its drawn siblings (and any drawn partners of
-    // them are kept adjacent by staying in their original relative slot — v1 siblings are single).
+    // E's caret side — the SHARED rule (position for a drawn partner, sex when single) so the fan pins
+    // to exactly the side the sibling caret is drawn on, even for same-sex/unspecified couples. Siblings
+    // fan OUTWARD from E on that side, OLDEST FARTHEST (age reads monotonically away from E).
+    const side = siblingSide(anchor);
+    const sibsOldestFirst = sibs.slice().sort(cmpBirth); // oldest (earliest birth) first
+
+    const partner = partnerOf(anchor);
+    const hasDrawnPartner =
+      partner != null && isDrawn(partner) && generation.get(partner) === g;
+
+    if (hasDrawnPartner) {
+      // Coupled anchor: keep the couple [left,right] CONTIGUOUS and place the whole sibling run on E's
+      // caret side, OUTSIDE the couple. Left partner → siblings to the LEFT; right partner → to the
+      // RIGHT (matches the caret side). Each sibling travels together with its OWN drawn same-generation
+      // partner (an in-law) as an indivisible [left,right] unit, so a fanned sibling's spouse is never
+      // wedged away from them. Lift these units out of wherever birth-order left them and reinsert them
+      // as one contiguous block hugging E on the caret side.
+      const sibUnit = (s: string): string[] => {
+        const sp = partnerOf(s);
+        if (sp != null && sp !== anchor && isDrawn(sp) && generation.get(sp) === g) {
+          return orderPartners(s, sp); // [left,right] — keep the in-law adjacent to the sibling
+        }
+        return [s];
+      };
+      // Units ordered oldest sibling → youngest. Flatten with dedup (defensive against a sibling whose
+      // partner is also a sibling — out of scope, but must never duplicate a card in the row).
+      const flattenDedup = (units: string[][]): string[] => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const u of units) for (const id of u) if (!seen.has(id)) (seen.add(id), out.push(id));
+        return out;
+      };
+      const unitsOldestFirst = sibsOldestFirst.map(sibUnit);
+      const block =
+        side === "left"
+          ? flattenDedup(unitsOldestFirst) // left→right: oldest…youngest, then E (oldest farthest-left)
+          : flattenDedup(unitsOldestFirst.slice().reverse()); // E, then youngest…oldest (oldest far-right)
+      const removeSet = new Set(block);
+      const filtered = row.filter((id) => !removeSet.has(id));
+      const anchorIdx = filtered.indexOf(anchor);
+      if (anchorIdx === -1) continue;
+      filtered.splice(side === "left" ? anchorIdx : anchorIdx + 1, 0, ...block);
+      orderedByGen.set(g, filtered);
+      continue;
+    }
+
+    // Single anchor (no drawn partner): permute in place within the group's existing slots. If E hugs
+    // the LEFT, E occupies the left slot and siblings run right (youngest nearest E). If E hugs the
+    // RIGHT, siblings run left and E sits at the far right.
     const group = new Set<string>([anchor, ...sibs]);
     const groupIdx = row.map((id, i) => ({ id, i })).filter((e) => group.has(e.id)).map((e) => e.i);
     if (groupIdx.length === 0) continue;
     const slots = groupIdx.slice().sort((a, b) => a - b); // ascending row positions to reuse
-
-    // E's caret side — the SHARED rule (position for a drawn partner, sex when single) so the fan pins
-    // to exactly the side the sibling caret is drawn on, even for same-sex/unspecified couples.
-    const side = siblingSide(anchor);
-
-    // Oldest-farthest fan: siblings sorted oldest→youngest, then placed so oldest is at the FAR end
-    // from E. If E hugs the LEFT, E occupies the LEFT slot and siblings run to the right with the
-    // youngest nearest E (i.e. order left→right: E, youngest, …, oldest). If E hugs the RIGHT, E is at
-    // the far right and order left→right is: oldest, …, youngest, E.
-    const sibsOldestFirst = sibs.slice().sort(cmpBirth); // oldest (earliest birth) first
     let ordered: string[];
     if (side === "left") {
       // left→right: E, then youngest→oldest so oldest is farthest right.
@@ -534,32 +578,97 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     });
   }
 
-  // Best-effort: center a descendant row on its parents' x-mean when it stays strictly ordered &
-  // non-overlapping (keeps single-child-under-couple centering; otherwise birth-order slots stand).
+  // Center each descendant generation UNDER its parents. Snapping every child to its parents' mean-x
+  // would collapse a whole sibling set onto one point (the reported "children float far from the bus"
+  // bug); instead GROUP children by their parent-couple, order the groups by that couple's x, lay each
+  // group's members (partners adjacent, siblings a normal gap apart) as one block CENTERED on the couple
+  // midpoint, then resolve overlaps left→right so neighbouring blocks never collide. Runs top-down (g
+  // ascending) so each generation centers on its already-final parents.
   for (const g of drawnGens) {
     if (g <= 0) continue;
     const order = orderedByGen.get(g)!;
-    const desired = new Map<string, number>();
-    let ok = true;
-    for (const id of order) {
+    const idSet = new Set(order);
+
+    // Midpoint of a person's drawn parents (couple midpoint or lone-parent x), or undefined.
+    const parentMid = (id: string): number | undefined => {
       const dp = parentsList(id).filter((p) => isDrawn(p) && x.has(p));
-      if (dp.length === 0) {
-        ok = false;
-        break;
-      }
-      desired.set(id, dp.reduce((acc, p) => acc + x.get(p)!, 0) / dp.length);
+      if (dp.length === 0) return undefined;
+      return dp.reduce((a, p) => a + x.get(p)!, 0) / dp.length;
+    };
+    // Stable key for a person's drawn parents, so FULL siblings land in the same group.
+    const parentKey = (id: string): string | null => {
+      const dp = parentsList(id).filter((pp) => isDrawn(pp)).sort();
+      return dp.length === 0 ? null : dp.join("&");
+    };
+
+    // Walk the row into UNITS — a child kept adjacent to its drawn same-generation partner (an in-law).
+    const consumed = new Set<string>();
+    interface Unit {
+      members: string[];
+      anchor: number;
+      key: string;
+      seq: number;
     }
-    if (!ok) continue;
-    let strictly = true;
-    for (let i = 1; i < order.length; i++) {
-      const prev = order[i - 1]!;
-      const step = partnersList(order[i]!).includes(prev) ? PARTNER_STEP : CROSS_STEP;
-      if (desired.get(order[i]!)! - desired.get(prev)! < step - 1e-6) {
-        strictly = false;
-        break;
+    const units: Unit[] = [];
+    let seq = 0;
+    for (const id of order) {
+      if (consumed.has(id)) continue;
+      const partner = partnerOf(id);
+      const members =
+        partner && idSet.has(partner) && !consumed.has(partner) ? orderPartners(id, partner) : [id];
+      for (const m of members) consumed.add(m);
+      // Anchor + group key come from whichever member has drawn parents (the lineage child; the other is
+      // an in-law). Fall back to the member's current x / a solo key when neither has drawn parents.
+      let anchor: number | undefined;
+      let key: string | null = null;
+      for (const m of members) {
+        const pm = parentMid(m);
+        if (pm !== undefined) {
+          anchor = pm;
+          key = parentKey(m);
+          break;
+        }
       }
+      units.push({
+        members,
+        anchor: anchor ?? x.get(members[0]!)!,
+        key: key ?? `solo:${members[0]}`,
+        seq: seq++,
+      });
     }
-    if (strictly) for (const id of order) x.set(id, desired.get(id)!);
+
+    // Group units by parent (full siblings share a group), then order groups left→right by anchor.
+    const groupsMap = new Map<string, Unit[]>();
+    for (const u of units) {
+      const arr = groupsMap.get(u.key);
+      if (arr) arr.push(u);
+      else groupsMap.set(u.key, [u]);
+    }
+    const groups = [...groupsMap.values()].sort((a, b) =>
+      a[0]!.anchor !== b[0]!.anchor ? a[0]!.anchor - b[0]!.anchor : a[0]!.seq - b[0]!.seq,
+    );
+
+    // Lay each group as a contiguous block centered on its anchor; shift right to clear the previous one.
+    let prevRight = -Infinity; // right edge (center + NODE_W/2) of the last placed member
+    const newX = new Map<string, number>();
+    for (const grp of groups) {
+      const flat: string[] = [];
+      for (const u of grp) for (const m of u.members) flat.push(m);
+      const stepBefore = (i: number): number =>
+        partnersList(flat[i]!).includes(flat[i - 1]!) ? PARTNER_STEP : CROSS_STEP;
+      let span = 0;
+      for (let i = 1; i < flat.length; i++) span += stepBefore(i);
+      let firstCenter = grp[0]!.anchor - span / 2;
+      const minFirst = prevRight + NODE_W / 2 + CROSS_H_GAP; // keep a full sibling gap between blocks
+      if (firstCenter < minFirst) firstCenter = minFirst;
+      let c = firstCenter;
+      for (let i = 0; i < flat.length; i++) {
+        if (i > 0) c += stepBefore(i);
+        newX.set(flat[i]!, c);
+      }
+      prevRight = c + NODE_W / 2;
+    }
+    for (const [id, cx] of newX) x.set(id, cx);
   }
 
   // --- Normalize both axes so the tightest box starts at 0 ---------------
@@ -638,9 +747,14 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   }
 
   // --- Descent bus connectors (spec §6) ----------------------------------
-  // For each drawn couple/parent with ≥1 DRAWN child: feeders from each parent bottom-center join at a
-  // horizontal segment; a riser drops; one child → straight into its top-center; many → a horizontal
-  // bar spanning leftmost..rightmost child top-centers, verticals to each.
+  // The parent→children descent bus for a drawn couple/parent with ≥1 DRAWN child is drawn in three
+  // parts, each conditional (per the shape rules):
+  //   1. "U" — TWO parents only: both parents' bottom-centers drop to a join level and cross; a lone
+  //      parent gets NO U (just its own bottom-center). This U is part of the descent bus, NOT a
+  //      row-level line between the spouse cards (that partner LINK is intentionally never drawn).
+  //   2. vertical riser — from the join/midpoint (or lone parent's bottom) down to the child-bar level.
+  //   3. "inverted-U" — 2+ children only: a horizontal bar with a vertical down to EACH child; a single
+  //      child gets NO inverted-U (the riser drops straight into it).
   const connectors: Connector[] = [];
   for (const couple of couplesByCenter) {
     const partner = couple.rightId;
@@ -651,20 +765,8 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
 
     const parentBottomY = left.y + NODE_H / 2;
     const busCenterX = right ? (left.x + right.x) / 2 : left.x;
-    // Join segment sits a short drop below the parent bottom.
-    const joinY = parentBottomY + GEN_V_GAP * 0.35;
-    // Feeders: parent bottom-center → down to joinY, then horizontal to busCenterX.
-    if (right) {
-      connectors.push({
-        kind: "descent",
-        d: `M ${left.x} ${parentBottomY} L ${left.x} ${joinY} L ${right.x} ${joinY} L ${right.x} ${right.y + NODE_H / 2}`,
-      });
-    } else {
-      connectors.push({
-        kind: "descent",
-        d: `M ${left.x} ${parentBottomY} L ${left.x} ${joinY}`,
-      });
-    }
+    // Join level: a short drop below the parents where the two feeders meet (the U's floor).
+    const joinY = parentBottomY + JOIN_DROP;
 
     const sortedKids = kids
       .map((c) => posOf.get(c)!)
@@ -672,32 +774,55 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     const childTopY = sortedKids[0]!.y - NODE_H / 2;
     const barY = (joinY + childTopY) / 2;
 
-    // Riser from bus center down to the bar level.
-    connectors.push({ kind: "descent", d: `M ${busCenterX} ${joinY} L ${busCenterX} ${barY}` });
+    // 1. The U — two parents only.
+    if (right) {
+      connectors.push({
+        kind: "descent",
+        d: `M ${left.x} ${parentBottomY} L ${left.x} ${joinY} L ${right.x} ${joinY} L ${right.x} ${right.y + NODE_H / 2}`,
+      });
+    }
 
+    // 2. Vertical riser from the join (couple) or the lone parent's bottom down to the bar level.
+    const riserTop = right ? joinY : parentBottomY;
+    connectors.push({ kind: "descent", d: `M ${busCenterX} ${riserTop} L ${busCenterX} ${barY}` });
+
+    // 3. Into the children.
     if (sortedKids.length === 1) {
+      // One child → NO inverted-U: drop straight into it (a short horizontal jog only if it's off-center).
       const c = sortedKids[0]!;
       connectors.push({ kind: "descent", d: `M ${busCenterX} ${barY} L ${c.x} ${barY} L ${c.x} ${childTopY}` });
     } else {
-      const barLeft = sortedKids[0]!.x;
-      const barRight = sortedKids[sortedKids.length - 1]!.x;
-      connectors.push({ kind: "descent", d: `M ${barLeft} ${barY} L ${barRight} ${barY}` });
-      for (const c of sortedKids) {
-        connectors.push({ kind: "descent", d: `M ${c.x} ${barY} L ${c.x} ${c.y - NODE_H / 2}` });
+      // 2+ children → an inverted-U whose TOP CORNERS are emitted inside one polyline so they can be
+      // ROUNDED at render time; children not on a rounded leg drop from the bar as separate verticals
+      // (plain T-junctions on the FLAT part of the bar). The riser must attach where the bar is flat or
+      // at a bar ENDPOINT — never at a rounded corner, or a visible seam opens after rounding. So when
+      // collision-avoidance pushed the block off the couple midpoint (busCenterX outside the children's
+      // span), busCenterX becomes the bar's flat endpoint and the now-interior outer child drops on its
+      // own.
+      const x0 = sortedKids[0]!.x; // leftmost child
+      const x1 = sortedKids[sortedKids.length - 1]!.x; // rightmost child
+      const drop = (cx: number) => ({ kind: "descent" as const, d: `M ${cx} ${barY} L ${cx} ${childTopY}` });
+      if (busCenterX < x0) {
+        // Riser enters at the LEFT end (flat); only the right corner rounds down into the rightmost child.
+        connectors.push({ kind: "descent", d: `M ${busCenterX} ${barY} L ${x1} ${barY} L ${x1} ${childTopY}` });
+        for (let i = 0; i < sortedKids.length - 1; i++) connectors.push(drop(sortedKids[i]!.x));
+      } else if (busCenterX > x1) {
+        connectors.push({ kind: "descent", d: `M ${x0} ${childTopY} L ${x0} ${barY} L ${busCenterX} ${barY}` });
+        for (let i = 1; i < sortedKids.length; i++) connectors.push(drop(sortedKids[i]!.x));
+      } else {
+        // Normal: an inverted-U over the outer children (both top corners round); the riser meets the
+        // flat middle of the bar, and middle children drop from the flat bar.
+        connectors.push({
+          kind: "descent",
+          d: `M ${x0} ${childTopY} L ${x0} ${barY} L ${x1} ${barY} L ${x1} ${childTopY}`,
+        });
+        for (let i = 1; i < sortedKids.length - 1; i++) connectors.push(drop(sortedKids[i]!.x));
       }
     }
   }
-  // Partner links.
-  for (const u of unions) {
-    const a = posOf.get(u.aPersonId)!;
-    const b = posOf.get(u.bPersonId)!;
-    const left = a.x < b.x ? a : b;
-    const right = a.x < b.x ? b : a;
-    connectors.push({
-      kind: "partner",
-      d: `M ${left.x + NODE_W / 2} ${left.y} L ${right.x - NODE_W / 2} ${right.y}`,
-    });
-  }
+  // NO partner-link connector: two cards sharing a row are never joined by a direct horizontal line at
+  // their own row height. A partnership reads from PROXIMITY (partners sit ~half the normal gap apart,
+  // PARTNER_GAP); the couple's connection is the descent bus below them (the U + riser).
 
   // --- Affordances (caret / "+") per spec §3 -----------------------------
   // Compute the children-caret dedup: a couple owns a children-caret only if it has children and NONE
@@ -805,6 +930,10 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         const kids = coupleChildren(id, partnerDrawn ? partner : null);
         const drawnKids = kids.filter((c) => isDrawn(c));
         const busCenterX = partnerDrawn ? (p.x + posOf.get(partner!)!.x) / 2 : p.x;
+        // A COUPLE's children caret sits at the U/riser junction (joinY) — on the bus, not crammed into
+        // the tight gap between the two partner cards. A lone parent has no U, so its caret hugs the
+        // card bottom as before.
+        const childrenCaretY = p.y + NODE_H / 2 + (partnerDrawn ? JOIN_DROP : CARET_GAP);
         // Dedup rule (spec §3): children-caret only if it has children AND none are drawn.
         if (kids.length > 0 && drawnKids.length === 0) {
           affordances.push({
@@ -815,7 +944,7 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
             coupleId: ck,
             side: "center",
             x: busCenterX,
-            y: p.y + NODE_H / 2 + CARET_GAP,
+            y: childrenCaretY,
           });
         } else if (drawnKids.length > 0) {
           // Children are drawn → a COLLAPSE caret (so the user can prune the descent branch).
@@ -827,7 +956,7 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
             coupleId: ck,
             side: "center",
             x: busCenterX,
-            y: p.y + NODE_H / 2 + CARET_GAP,
+            y: childrenCaretY,
           });
         } else {
           // No children anywhere → "+" to add one.
@@ -839,7 +968,7 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
             coupleId: ck,
             side: "center",
             x: busCenterX,
-            y: p.y + NODE_H / 2 + CARET_GAP,
+            y: childrenCaretY,
           });
         }
       }
@@ -865,6 +994,135 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   }
 
   return { placed, unions, connectors, affordances, bounds: { width, height } };
+}
+
+// ---------------------------------------------------------------------------
+// Expansion reducer — the client toggles a caret through this so Rule-8 coupling is applied uniformly.
+// ---------------------------------------------------------------------------
+
+function withAdded(s: ReadonlySet<string>, v: string): Set<string> {
+  const n = new Set(s);
+  n.add(v);
+  return n;
+}
+function withRemoved(s: ReadonlySet<string>, v: string): Set<string> {
+  const n = new Set(s);
+  n.delete(v);
+  return n;
+}
+
+/** The minimal shape of a caret the reducer needs (a subset of {@link Affordance}). */
+export interface AffordanceToggle {
+  direction: AffordanceDirection;
+  /** The person (parents/siblings) or left-anchor (children) the caret belongs to. */
+  ownerId: string;
+  /** For `children`: the {@link coupleKey}; defaults to `coupleKey(ownerId)`. */
+  coupleId?: string;
+  /** Whether the caret is CURRENTLY expanded (so activating it collapses). */
+  expanded: boolean;
+}
+
+/**
+ * Apply a caret toggle to the expansion state, enforcing the Rule-8 sibling⇄parent coupling
+ * (CONTEXT.md § "Rule 8 coupling"): expanding a person's siblings AUTO-EXPANDS that person's parents
+ * (siblings hang off the shared parent-couple's descent bus); collapsing the parents also collapses the
+ * siblings (the bus is gone). Collapsing siblings leaves the parents standing. Pure — returns a new state.
+ */
+export function toggleAffordanceExpansion(
+  e: ExpansionState,
+  a: AffordanceToggle,
+): ExpansionState {
+  if (a.direction === "parents") {
+    if (a.expanded) {
+      // Collapse parents → also collapse this person's siblings (their bus is gone).
+      return {
+        ...e,
+        collapsedParents: withAdded(e.collapsedParents, a.ownerId),
+        expandedParents: withRemoved(e.expandedParents, a.ownerId),
+        collapsedSiblings: withAdded(e.collapsedSiblings, a.ownerId),
+        expandedSiblings: withRemoved(e.expandedSiblings, a.ownerId),
+      };
+    }
+    return {
+      ...e,
+      expandedParents: withAdded(e.expandedParents, a.ownerId),
+      collapsedParents: withRemoved(e.collapsedParents, a.ownerId),
+    };
+  }
+  if (a.direction === "siblings") {
+    if (a.expanded) {
+      // Collapse siblings → parents stand alone.
+      return {
+        ...e,
+        collapsedSiblings: withAdded(e.collapsedSiblings, a.ownerId),
+        expandedSiblings: withRemoved(e.expandedSiblings, a.ownerId),
+      };
+    }
+    // Expand siblings → auto-expand parents (Rule 8).
+    return {
+      ...e,
+      expandedSiblings: withAdded(e.expandedSiblings, a.ownerId),
+      collapsedSiblings: withRemoved(e.collapsedSiblings, a.ownerId),
+      expandedParents: withAdded(e.expandedParents, a.ownerId),
+      collapsedParents: withRemoved(e.collapsedParents, a.ownerId),
+    };
+  }
+  // children (per couple)
+  const ck = a.coupleId ?? coupleKey(a.ownerId);
+  if (a.expanded) {
+    return {
+      ...e,
+      collapsedChildren: withAdded(e.collapsedChildren, ck),
+      expandedChildren: withRemoved(e.expandedChildren, ck),
+    };
+  }
+  return {
+    ...e,
+    expandedChildren: withAdded(e.expandedChildren, ck),
+    collapsedChildren: withRemoved(e.collapsedChildren, ck),
+  };
+}
+
+/**
+ * Round the corners of a connector path for display. Takes an M/L polyline (what the descent bus emits)
+ * and replaces each interior vertex with a short quadratic curve of radius ≤ `r` (clamped to half the
+ * shorter adjacent segment so it never overshoots). Straight 2-point segments pass through unchanged.
+ * Pure and render-only — the layout keeps emitting exact logical geometry; the canvas rounds for paint.
+ */
+export function roundedPath(d: string, r: number): string {
+  const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  const raw: Array<[number, number]> = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) raw.push([nums[i]!, nums[i + 1]!]);
+  // Drop zero-length segments (duplicate consecutive points).
+  const p: Array<[number, number]> = [];
+  for (const q of raw) {
+    const last = p[p.length - 1];
+    if (!last || Math.hypot(q[0] - last[0], q[1] - last[1]) > 1e-6) p.push(q);
+  }
+  if (p.length < 2) return d;
+  const fmt = (n: number) => (Math.round(n * 1000) / 1000).toString();
+  if (p.length === 2) return `M ${fmt(p[0]![0])} ${fmt(p[0]![1])} L ${fmt(p[1]![0])} ${fmt(p[1]![1])}`;
+  let out = `M ${fmt(p[0]![0])} ${fmt(p[0]![1])}`;
+  for (let i = 1; i < p.length - 1; i++) {
+    const [px, py] = p[i - 1]!;
+    const [cx, cy] = p[i]!;
+    const [nx, ny] = p[i + 1]!;
+    const d1 = Math.hypot(cx - px, cy - py);
+    const d2 = Math.hypot(nx - cx, ny - cy);
+    const rr = Math.min(r, d1 / 2, d2 / 2);
+    if (rr < 1e-3) {
+      out += ` L ${fmt(cx)} ${fmt(cy)}`;
+      continue;
+    }
+    const bx = cx - ((cx - px) / d1) * rr;
+    const by = cy - ((cy - py) / d1) * rr;
+    const ax = cx + ((nx - cx) / d2) * rr;
+    const ay = cy + ((ny - cy) / d2) * rr;
+    out += ` L ${fmt(bx)} ${fmt(by)} Q ${fmt(cx)} ${fmt(cy)} ${fmt(ax)} ${fmt(ay)}`;
+  }
+  const last = p[p.length - 1]!;
+  out += ` L ${fmt(last[0])} ${fmt(last[1])}`;
+  return out;
 }
 
 /** Convenience: build layout straight from a {@link KinshipTreeData} read + expansion state. */

@@ -34,9 +34,10 @@ import type {
 // Client-safe kinship derivation (type-only server barrel avoided — no node:crypto in the bundle).
 import { deriveKin, type KinRelation } from "@chronicle/core/kinship-derive";
 import {
-  coupleKey,
   computeTreeLayout,
   EMPTY_EXPANSION,
+  roundedPath,
+  toggleAffordanceExpansion,
   type Affordance,
   type ExpansionState,
 } from "./tree-layout";
@@ -59,16 +60,6 @@ export interface TreeCanvasProps {
   fetchSubtree?: (familyId: string, centerPersonId: string) => Promise<FetchSubtreeResult>;
 }
 
-function add<T>(set: ReadonlySet<T>, value: T): Set<T> {
-  const next = new Set(set);
-  next.add(value);
-  return next;
-}
-function remove<T>(set: ReadonlySet<T>, value: T): Set<T> {
-  const next = new Set(set);
-  next.delete(value);
-  return next;
-}
 
 /** Loaded adjacency counts per person, for the kebab gates (parents ≤2, partner ≤1 in v1). */
 interface AdjCounts {
@@ -307,24 +298,16 @@ export function TreeCanvas({
         openAdd(a.ownerId, relation);
         return;
       }
-      // caret: expand ⇄ collapse, client-only (spec §7).
-      setExpansion((e) => {
-        if (a.direction === "parents") {
-          return a.expanded
-            ? { ...e, collapsedParents: add(e.collapsedParents, a.ownerId), expandedParents: remove(e.expandedParents, a.ownerId) }
-            : { ...e, expandedParents: add(e.expandedParents, a.ownerId), collapsedParents: remove(e.collapsedParents, a.ownerId) };
-        }
-        if (a.direction === "siblings") {
-          return a.expanded
-            ? { ...e, collapsedSiblings: add(e.collapsedSiblings, a.ownerId), expandedSiblings: remove(e.expandedSiblings, a.ownerId) }
-            : { ...e, expandedSiblings: add(e.expandedSiblings, a.ownerId), collapsedSiblings: remove(e.collapsedSiblings, a.ownerId) };
-        }
-        // children (per couple)
-        const ck = a.coupleId ?? coupleKey(a.ownerId);
-        return a.expanded
-          ? { ...e, collapsedChildren: add(e.collapsedChildren, ck), expandedChildren: remove(e.expandedChildren, ck) }
-          : { ...e, expandedChildren: add(e.expandedChildren, ck), collapsedChildren: remove(e.collapsedChildren, ck) };
-      });
+      // caret: expand ⇄ collapse, client-only (spec §7). The reducer enforces the Rule-8 sibling⇄parent
+      // coupling (expanding siblings auto-expands parents; collapsing parents collapses siblings).
+      setExpansion((e) =>
+        toggleAffordanceExpansion(e, {
+          direction: a.direction,
+          ownerId: a.ownerId,
+          coupleId: a.coupleId,
+          expanded: a.expanded,
+        }),
+      );
     },
     [openAdd],
   );
@@ -454,13 +437,18 @@ export function TreeCanvas({
             style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", overflow: "visible" }}
             aria-hidden="true"
           >
+            {/* Only descent buses are drawn — same-row cards (partners, siblings) are never joined by a
+                direct line; a partnership reads from proximity and connects down through this bus. The
+                U / inverted-U corners are rounded at paint time (the layout emits exact polylines). */}
             {layout.connectors.map((c, i) => (
               <path
                 key={i}
-                d={c.d}
+                d={roundedPath(c.d, 8)}
                 fill="none"
-                stroke={c.kind === "partner" ? "var(--accent)" : "var(--border-strong)"}
-                strokeWidth={c.kind === "partner" ? 2 : 1.5}
+                stroke="var(--border-strong)"
+                strokeWidth={1.5}
+                strokeLinejoin="round"
+                strokeLinecap="round"
               />
             ))}
           </svg>

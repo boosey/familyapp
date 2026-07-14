@@ -18,7 +18,14 @@ Replaces a caret in a direction that has **no kin at all**. Starts add-a-relativ
 direction. A caret and a "+" are mutually exclusive for a given (person, direction).
 
 ## Relationship / bus
-A drawn kin connection between two cards (a descent bus for parent↔child, a link for partners).
+A drawn kin connection is ALWAYS a **descent bus** (parent→children), drawn in up to three parts:
+a **U** joining two parents' bottoms (a lone parent has no U), a **vertical riser** to the child level,
+and an **inverted-U** bar with a drop to each child (a single child has no inverted-U — the riser drops
+straight in). The U is part of the descent bus, drawn *below* the parents — it is NOT a row-level line
+between the two spouse cards. Two cards that share a row — **partners or siblings — are never joined by
+a direct horizontal line at their own row height.** A partnership reads from **proximity**: partners sit
+~half the normal same-row gap apart (`PARTNER_GAP`); their connection is the descent bus below them.
+Siblings connect only *up* through their shared parents' descent bus. There is no partner-link glyph.
 
 ## Caret ownership (the core invariant)
 Every revealed relationship is controlled by **exactly one caret**, owned by whichever endpoint is

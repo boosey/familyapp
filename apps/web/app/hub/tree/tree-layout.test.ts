@@ -11,6 +11,8 @@ import {
   NODE_H,
   computeTreeLayout,
   coupleKey,
+  roundedPath,
+  toggleAffordanceExpansion,
   type Affordance,
   type LayoutInput,
 } from "./tree-layout";
@@ -85,6 +87,66 @@ function aff(
   ownerId: string,
 ): Affordance | undefined {
   return layout.affordances.find((a) => a.direction === direction && a.ownerId === ownerId);
+}
+
+// --- Connector-path parsing helpers (connectors use only M/L commands) --------------------------
+type Seg = { x1: number; y1: number; x2: number; y2: number };
+function segmentsOf(d: string): Seg[] {
+  const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i]!, nums[i + 1]!]);
+  const segs: Seg[] = [];
+  for (let i = 1; i < pts.length; i++)
+    segs.push({ x1: pts[i - 1]![0], y1: pts[i - 1]![1], x2: pts[i]![0], y2: pts[i]![1] });
+  return segs;
+}
+/** Classify a 3-segment V–H–V path as a "U" (∪, bar below endpoints) or "cap" (∩, bar above), else null. */
+function threeSegShape(d: string): "U" | "cap" | null {
+  const s = segmentsOf(d);
+  if (s.length !== 3) return null;
+  const [a, b, c] = s as [Seg, Seg, Seg];
+  const isV = (g: Seg) => Math.abs(g.x1 - g.x2) < 1e-9;
+  const isH = (g: Seg) => Math.abs(g.y1 - g.y2) < 1e-9;
+  if (!isV(a) || !isH(b) || !isV(c)) return null;
+  const barY = b.y1;
+  if (barY > a.y1 && barY > c.y2) return "U"; // ∪ — bar dips below both endpoints
+  if (barY < a.y1 && barY < c.y2) return "cap"; // ∩ — bar rises above both endpoints
+  return null;
+}
+function hasShape(l: ReturnType<typeof computeTreeLayout>, kind: "U" | "cap"): boolean {
+  return l.connectors.some((c) => c.kind === "descent" && threeSegShape(c.d) === kind);
+}
+/** Every horizontal sub-segment across all descent connectors, as {y, lo, hi} (drops zero-length). */
+function horizontalSegs(l: ReturnType<typeof computeTreeLayout>): Array<{ y: number; lo: number; hi: number }> {
+  const out: Array<{ y: number; lo: number; hi: number }> = [];
+  for (const c of l.connectors) {
+    if (c.kind !== "descent") continue;
+    for (const s of segmentsOf(c.d))
+      if (Math.abs(s.y1 - s.y2) < 1e-9 && Math.abs(s.x1 - s.x2) > 1e-9)
+        out.push({ y: s.y1, lo: Math.min(s.x1, s.x2), hi: Math.max(s.x1, s.x2) });
+  }
+  return out;
+}
+/** True if some horizontal descent level (merged across touching segments) covers every x in `xs`. */
+function horizontalCovers(l: ReturnType<typeof computeTreeLayout>, xs: number[]): boolean {
+  const byY = new Map<number, Array<[number, number]>>();
+  for (const s of horizontalSegs(l)) {
+    const key = Math.round(s.y * 100) / 100;
+    const arr = byY.get(key) ?? [];
+    arr.push([s.lo, s.hi]);
+    byY.set(key, arr);
+  }
+  for (const arr of byY.values()) {
+    arr.sort((a, b) => a[0] - b[0]);
+    const merged: Array<[number, number]> = [];
+    for (const [lo, hi] of arr) {
+      const last = merged[merged.length - 1];
+      if (last && lo <= last[1] + 1e-6) last[1] = Math.max(last[1], hi);
+      else merged.push([lo, hi]);
+    }
+    if (merged.some(([lo, hi]) => xs.every((x) => x >= lo - 1e-6 && x <= hi + 1e-6))) return true;
+  }
+  return false;
 }
 
 // A common focus-with-both-directions fixture: mom -> focus, focus -> kid. Focus's parents & children
@@ -465,10 +527,10 @@ describe("ego-side sibling fan — oldest farthest (spec §4)", () => {
     expect(row).toEqual(["focus", "s3", "s2", "s1"]);
   });
 
-  it("same-sex/unspecified couple: fan side matches the POSITION caret side (anchor is the right partner)", () => {
+  it("same-sex/unspecified couple: siblings fan to the anchor's caret SIDE (right partner → right)", () => {
     // Two unspecified-sex partners a,b (a<b). §5 places a LEFT, b RIGHT by entry order/id. Focus b is
-    // therefore the RIGHT partner → its sibling caret is on the RIGHT, so the fan must pin b to the
-    // right end (regression: a sex-only rule would wrongly pin the unspecified anchor to the left).
+    // therefore the RIGHT partner → its sibling caret is on the RIGHT, so its siblings fan to the RIGHT
+    // (a right partner's siblings extend right), and the couple [a,b] stays contiguous.
     const nodes = [
       node("a"),
       node("b"),
@@ -488,11 +550,14 @@ describe("ego-side sibling fan — oldest farthest (spec §4)", () => {
     // Caret side for b is right (b is the right partner of the drawn couple).
     expect(aff(l, "siblings", "b")!.side).toBe("right");
     const b = placedFor(l, "b");
-    // Both siblings drawn to the LEFT of b (fanned to b's caret side = right end, siblings toward left).
-    expect(placedFor(l, "s1").x).toBeLessThan(b.x);
-    expect(placedFor(l, "s2").x).toBeLessThan(b.x);
-    // Oldest (s1) is FARTHEST from b (smallest x).
-    expect(placedFor(l, "s1").x).toBeLessThan(placedFor(l, "s2").x);
+    // Both siblings drawn to the RIGHT of b (fan matches the caret side).
+    expect(placedFor(l, "s1").x).toBeGreaterThan(b.x);
+    expect(placedFor(l, "s2").x).toBeGreaterThan(b.x);
+    // Oldest (s1) is FARTHEST from b (largest x).
+    expect(placedFor(l, "s1").x).toBeGreaterThan(placedFor(l, "s2").x);
+    // Couple stays contiguous — a immediately left of b, no sibling wedged between the partners.
+    const gen0 = l.placed.filter((p) => p.generation === 0).sort((x, y) => x.x - y.x).map((p) => p.personId);
+    expect(gen0).toEqual(["a", "b", "s2", "s1"]);
   });
 
   it("fans to the RIGHT (focus pinned at the right end) for a female focus", () => {
@@ -515,20 +580,377 @@ describe("ego-side sibling fan — oldest farthest (spec §4)", () => {
   });
 });
 
+describe("coupled sibling fan hugs the caret side, couple stays contiguous (regression)", () => {
+  it("LEFT partner: siblings fan to the LEFT; the couple stays adjacent", () => {
+    // man (left, male) partnered with woman (right); man has two older siblings.
+    const nodes = [
+      node("man", { sex: "male", birthYear: 1980 }),
+      node("woman", { sex: "female" }),
+      node("mom"),
+      node("s1", { birthYear: 1970 }), // oldest
+      node("s2", { birthYear: 1975 }),
+    ];
+    const edges = [
+      partneredWith("man", "woman"),
+      parentOf("mom", "man"),
+      parentOf("mom", "s1"),
+      parentOf("mom", "s2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "man", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["man"]) }) }),
+    );
+    const gen0 = l.placed.filter((p) => p.generation === 0).sort((a, b) => a.x - b.x).map((p) => p.personId);
+    // Siblings LEFT of the couple, oldest farthest-left, and man↔woman remain adjacent.
+    expect(gen0).toEqual(["s1", "s2", "man", "woman"]);
+    // Partners sit adjacent (not stretched across siblings) — closer than a sibling gap.
+    const coupleGap = placedFor(l, "woman").x - placedFor(l, "man").x;
+    const sibGap = placedFor(l, "s2").x - placedFor(l, "s1").x;
+    expect(coupleGap).toBeLessThan(sibGap);
+  });
+
+  it("a fanned sibling's OWN drawn partner (in-law) stays adjacent to that sibling, not wedged away", () => {
+    // anchor man+woman couple, fan LEFT. man's siblings: s1 (single) and s2 (partnered with s2p).
+    // Regression: s2p must not be left behind at its old slot with s1 wedged between it and s2.
+    const nodes = [
+      node("man", { sex: "male", birthYear: 1980 }),
+      node("woman", { sex: "female" }),
+      node("mom"),
+      node("s1", { birthYear: 1970 }), // oldest sibling
+      node("s2", { birthYear: 1975 }),
+      node("s2p"), // s2's spouse (unknown sex; id s2 < s2p → [s2, s2p])
+    ];
+    const edges = [
+      partneredWith("man", "woman"),
+      partneredWith("s2", "s2p"),
+      parentOf("mom", "man"),
+      parentOf("mom", "s1"),
+      parentOf("mom", "s2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "man", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["man"]) }) }),
+    );
+    const gen0 = l.placed.filter((p) => p.generation === 0).sort((a, b) => a.x - b.x).map((p) => p.personId);
+    // s2 and its in-law s2p are contiguous; the couple man↔woman is contiguous; oldest sibling far-left.
+    expect(gen0).toEqual(["s1", "s2", "s2p", "man", "woman"]);
+  });
+
+  it("RIGHT partner: siblings fan to the RIGHT; the couple stays adjacent", () => {
+    const nodes = [
+      node("man", { sex: "male" }),
+      node("woman", { sex: "female", birthYear: 1980 }),
+      node("mom"),
+      node("s1", { birthYear: 1970 }),
+      node("s2", { birthYear: 1975 }),
+    ];
+    const edges = [
+      partneredWith("man", "woman"),
+      parentOf("mom", "woman"),
+      parentOf("mom", "s1"),
+      parentOf("mom", "s2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "woman", nodes, edges, expansion: expansion({ expandedSiblings: new Set(["woman"]) }) }),
+    );
+    const gen0 = l.placed.filter((p) => p.generation === 0).sort((a, b) => a.x - b.x).map((p) => p.personId);
+    // Couple first, then siblings to the right with oldest (s1) farthest right.
+    expect(gen0).toEqual(["man", "woman", "s2", "s1"]);
+  });
+});
+
+describe("Rule-8 sibling⇄parent coupling (toggleAffordanceExpansion)", () => {
+  it("expanding siblings auto-expands the person's parents", () => {
+    const e = toggleAffordanceExpansion(EMPTY_EXPANSION, {
+      direction: "siblings",
+      ownerId: "x",
+      expanded: false,
+    });
+    expect(e.expandedSiblings.has("x")).toBe(true);
+    expect(e.expandedParents.has("x")).toBe(true);
+  });
+
+  it("collapsing siblings leaves the parents standing", () => {
+    const open = toggleAffordanceExpansion(EMPTY_EXPANSION, {
+      direction: "siblings",
+      ownerId: "x",
+      expanded: false,
+    });
+    const closed = toggleAffordanceExpansion(open, { direction: "siblings", ownerId: "x", expanded: true });
+    expect(closed.expandedSiblings.has("x")).toBe(false);
+    expect(closed.collapsedSiblings.has("x")).toBe(true);
+    expect(closed.expandedParents.has("x")).toBe(true);
+  });
+
+  it("collapsing parents also collapses the siblings (the shared bus is gone)", () => {
+    const open = toggleAffordanceExpansion(EMPTY_EXPANSION, {
+      direction: "siblings",
+      ownerId: "x",
+      expanded: false,
+    });
+    const noParents = toggleAffordanceExpansion(open, { direction: "parents", ownerId: "x", expanded: true });
+    expect(noParents.collapsedParents.has("x")).toBe(true);
+    expect(noParents.expandedParents.has("x")).toBe(false);
+    expect(noParents.collapsedSiblings.has("x")).toBe(true);
+    expect(noParents.expandedSiblings.has("x")).toBe(false);
+  });
+
+  it("children toggle keys off the coupleKey and does not touch parents/siblings", () => {
+    const e = toggleAffordanceExpansion(EMPTY_EXPANSION, {
+      direction: "children",
+      ownerId: "x",
+      coupleId: coupleKey("x", "y"),
+      expanded: false,
+    });
+    expect(e.expandedChildren.has(coupleKey("x", "y"))).toBe(true);
+    expect(e.expandedParents.size).toBe(0);
+    expect(e.expandedSiblings.size).toBe(0);
+  });
+
+  it("integration: an in-law expanding siblings draws that in-law's parent (the auto-expanded bus)", () => {
+    // focus -> kid; kid partnered with inlaw; inlaw's parent `granInlaw` + sibling `inlawSib` hidden.
+    const nodes = [
+      node("focus"),
+      node("kid"),
+      node("inlaw"),
+      node("granInlaw"),
+      node("inlawSib"),
+    ];
+    const edges = [
+      parentOf("focus", "kid"),
+      partneredWith("kid", "inlaw"),
+      parentOf("granInlaw", "inlaw"),
+      parentOf("granInlaw", "inlawSib"),
+    ];
+    // Simulate the client toggling the in-law's sibling caret through the reducer.
+    const exp = toggleAffordanceExpansion(EMPTY_EXPANSION, {
+      direction: "siblings",
+      ownerId: "inlaw",
+      expanded: false,
+    });
+    const l = computeTreeLayout(input({ focusPersonId: "focus", nodes, edges, expansion: exp }));
+    // The in-law's parent (the shared bus) is drawn, and so are the fanned siblings.
+    expect(l.placed.some((p) => p.personId === "granInlaw")).toBe(true);
+    expect(l.placed.some((p) => p.personId === "inlawSib")).toBe(true);
+  });
+});
+
+describe("no direct same-row bus (partners connect by proximity + the descent bus)", () => {
+  it("a couple has NO partner-link connector — only descent buses are drawn", () => {
+    const nodes = [node("me", { sex: "male" }), node("spouse", { sex: "female" }), node("kid")];
+    const edges = [partneredWith("me", "spouse"), parentOf("me", "kid"), parentOf("spouse", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
+    expect(l.connectors.every((c) => c.kind === "descent")).toBe(true);
+    expect(l.connectors.some((c) => c.kind === "partner")).toBe(false);
+    // The union is still recorded (used elsewhere) even though it draws no line.
+    expect(l.unions).toHaveLength(1);
+  });
+
+  it("partners sit ~half a normal gap apart (much closer than two siblings)", () => {
+    // A couple with two children so both descend; compare the couple gap to the sibling gap.
+    const nodes = [node("me", { sex: "male" }), node("spouse", { sex: "female" }), node("k1"), node("k2")];
+    const edges = [
+      partneredWith("me", "spouse"),
+      parentOf("me", "k1"),
+      parentOf("spouse", "k1"),
+      parentOf("me", "k2"),
+      parentOf("spouse", "k2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "me", nodes, edges, expansion: expansion({ expandedChildren: new Set([coupleKey("me", "spouse")]) }) }),
+    );
+    const coupleGap = placedFor(l, "spouse").x - placedFor(l, "me").x;
+    const sibGap = Math.abs(placedFor(l, "k2").x - placedFor(l, "k1").x);
+    expect(coupleGap).toBeLessThan(sibGap);
+  });
+});
+
+describe("descendants center under their parents — multi-child bus stays connected (regression)", () => {
+  it("2 children of a right-shifted couple sit UNDER the couple; the riser lands within the child bar", () => {
+    // DAVID ⋈ MARIA with an expanded sibling (aunt ANNA pushes the couple right) and two children.
+    // Before the fix the kids dumped at the row origin and the midpoint riser floated disconnected.
+    const nodes = [
+      node("DAVID", { sex: "male", birthYear: 1985 }),
+      node("MARIA", { sex: "female", birthYear: 1987 }),
+      node("PAPA", { sex: "male" }),
+      node("NONNA", { sex: "female" }),
+      node("ANNA", { sex: "female", birthYear: 1979 }),
+      node("SAM", { sex: "male", birthYear: 2012 }),
+      node("EVA", { sex: "female", birthYear: 2015 }),
+    ];
+    const edges = [
+      partneredWith("DAVID", "MARIA"),
+      partneredWith("PAPA", "NONNA"),
+      parentOf("PAPA", "DAVID"),
+      parentOf("NONNA", "DAVID"),
+      parentOf("PAPA", "ANNA"),
+      parentOf("NONNA", "ANNA"),
+      parentOf("DAVID", "SAM"),
+      parentOf("MARIA", "SAM"),
+      parentOf("DAVID", "EVA"),
+      parentOf("MARIA", "EVA"),
+    ];
+    const exp = expansion({ expandedSiblings: new Set(["DAVID"]), expandedParents: new Set(["DAVID"]) });
+    const l = computeTreeLayout(input({ focusPersonId: "DAVID", nodes, edges, expansion: exp }));
+    const david = placedFor(l, "DAVID");
+    const maria = placedFor(l, "MARIA");
+    const sam = placedFor(l, "SAM");
+    const eva = placedFor(l, "EVA");
+    const coupleMid = (david.x + maria.x) / 2;
+    const kidLeft = Math.min(sam.x, eva.x);
+    const kidRight = Math.max(sam.x, eva.x);
+    // Children centered on the couple midpoint …
+    expect((kidLeft + kidRight) / 2).toBeCloseTo(coupleMid, 0);
+    // … so the descent riser (drawn at the couple midpoint) lands WITHIN the child-gather bar — connected.
+    expect(coupleMid).toBeGreaterThanOrEqual(kidLeft - 1e-6);
+    expect(coupleMid).toBeLessThanOrEqual(kidRight + 1e-6);
+    // The couple is genuinely right-shifted (aunt to its left) — the non-trivial case that used to break.
+    expect(Math.min(david.x, maria.x)).toBeGreaterThan(placedFor(l, "ANNA").x);
+  });
+});
+
+describe("multi-child bar reaches the riser even when collision shifts the block (regression)", () => {
+  // Two child-bearing couples in the same descendant generation, the LEFT couple with many children so
+  // its wide block shoves the RIGHT couple's 2-child block past that couple's own midpoint. The right
+  // couple's descent riser (at its midpoint) must still be covered by its child bar — not left floating.
+  it("the child bar spans the couple midpoint (riser) after a collision right-shift", () => {
+    const nodes = [
+      node("me", { sex: "male", birthYear: 1980 }),
+      node("wife", { sex: "female", birthYear: 1982 }),
+      node("bro", { sex: "male", birthYear: 1978 }),
+      node("sil", { sex: "female", birthYear: 1979 }),
+      node("dad", { sex: "male" }),
+      node("k1", { birthYear: 2008 }), node("k2", { birthYear: 2010 }),
+      node("n1", { birthYear: 2005 }), node("n2", { birthYear: 2007 }),
+      node("n3", { birthYear: 2009 }), node("n4", { birthYear: 2011 }),
+    ];
+    const edges = [
+      partneredWith("me", "wife"), partneredWith("bro", "sil"),
+      parentOf("dad", "me"), parentOf("dad", "bro"),
+      parentOf("me", "k1"), parentOf("wife", "k1"),
+      parentOf("me", "k2"), parentOf("wife", "k2"),
+      parentOf("bro", "n1"), parentOf("sil", "n1"),
+      parentOf("bro", "n2"), parentOf("sil", "n2"),
+      parentOf("bro", "n3"), parentOf("sil", "n3"),
+      parentOf("bro", "n4"), parentOf("sil", "n4"),
+    ];
+    const exp = expansion({
+      expandedSiblings: new Set(["me"]),
+      expandedParents: new Set(["me"]),
+      expandedChildren: new Set([coupleKey("bro", "sil")]),
+    });
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges, expansion: exp }));
+    const me = placedFor(l, "me");
+    const wife = placedFor(l, "wife");
+    const k1 = placedFor(l, "k1");
+    const k2 = placedFor(l, "k2");
+    const busCenterX = (me.x + wife.x) / 2;
+    // Sanity: this scenario actually shifts me+wife's kids to the right of their midpoint (else the test
+    // wouldn't exercise the collision path).
+    expect(Math.min(k1.x, k2.x)).toBeGreaterThan(busCenterX);
+    // The bar level (inverted-U over the children + the stub extending it) reaches the riser at
+    // busCenterX AND both children — a connected path, not a floating riser.
+    expect(horizontalCovers(l, [busCenterX, k1.x, k2.x])).toBe(true);
+    // AND busCenterX is a bar ENDPOINT (not a rounded interior corner) so the riser attaches cleanly
+    // after render-time corner rounding — no seam.
+    const atEndpoint = horizontalSegs(l).some(
+      (s) => Math.abs(s.lo - busCenterX) < 1e-6 || Math.abs(s.hi - busCenterX) < 1e-6,
+    );
+    expect(atEndpoint).toBe(true);
+  });
+});
+
+describe("children caret placement (couple → U/riser junction; lone parent → card bottom)", () => {
+  it("a couple's children caret sits at the U/riser junction (joinY), on the bus", () => {
+    const nodes = [node("a", { sex: "male" }), node("b", { sex: "female" }), node("k1"), node("k2")];
+    const edges = [
+      partneredWith("a", "b"),
+      parentOf("a", "k1"), parentOf("b", "k1"),
+      parentOf("a", "k2"), parentOf("b", "k2"),
+    ];
+    const l = computeTreeLayout(
+      input({ focusPersonId: "a", nodes, edges, expansion: expansion({ expandedChildren: new Set([coupleKey("a", "b")]) }) }),
+    );
+    const a = placedFor(l, "a");
+    const b = placedFor(l, "b");
+    const caret = aff(l, "children", "a")!;
+    // Dropped well below the card bottom (onto the bus) — not crammed against the two card bottoms.
+    expect(caret.y - (a.y + NODE_H / 2)).toBeGreaterThan(15);
+    // Coincides with the U's horizontal (joinY) and the couple midpoint.
+    const uPath = l.connectors.find((c) => threeSegShape(c.d) === "U")!;
+    expect(caret.y).toBeCloseTo(segmentsOf(uPath.d)[1]!.y1, 5);
+    expect(caret.x).toBeCloseTo((a.x + b.x) / 2, 5);
+  });
+
+  it("a lone parent's children caret still hugs the card bottom (no U to sit on)", () => {
+    const nodes = [node("a"), node("kid")];
+    const edges = [parentOf("a", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    const a = placedFor(l, "a");
+    const caret = aff(l, "children", "a")!;
+    expect(caret.y - (a.y + NODE_H / 2)).toBeLessThan(15);
+  });
+});
+
+describe("descent-bus SHAPE rules (U ⇔ 2 parents, inverted-U ⇔ 2+ children)", () => {
+  // A "U" (∪) joins two parents' bottoms; an "inverted-U" (∩) gathers 2+ children. Both are 3-segment
+  // V–H–V polylines distinguished by whether the bar dips below (U) or rises above (cap) the endpoints.
+  it("2 parents + 1 child: a U joins the parents; NO inverted-U", () => {
+    const nodes = [node("a", { sex: "male" }), node("b", { sex: "female" }), node("kid")];
+    const edges = [partneredWith("a", "b"), parentOf("a", "kid"), parentOf("b", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    expect(hasShape(l, "U")).toBe(true);
+    expect(hasShape(l, "cap")).toBe(false);
+  });
+
+  it("1 parent + >1 child: NO U; an inverted-U gathers the children", () => {
+    const nodes = [node("a"), node("k1", { birthYear: 2000 }), node("k2", { birthYear: 2002 })];
+    const edges = [parentOf("a", "k1"), parentOf("a", "k2")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    expect(hasShape(l, "U")).toBe(false);
+    expect(hasShape(l, "cap")).toBe(true);
+    const k1 = placedFor(l, "k1");
+    const k2 = placedFor(l, "k2");
+    expect(horizontalCovers(l, [k1.x, k2.x])).toBe(true);
+  });
+
+  it("1 parent + 1 child: neither U nor inverted-U (just a vertical drop)", () => {
+    const nodes = [node("a"), node("kid")];
+    const edges = [parentOf("a", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    expect(hasShape(l, "U")).toBe(false);
+    expect(hasShape(l, "cap")).toBe(false);
+  });
+
+  it("3 children: the inverted-U spans the outer two; the middle child drops from the bar", () => {
+    const nodes = [node("a"), node("k1", { birthYear: 2000 }), node("k2", { birthYear: 2002 }), node("k3", { birthYear: 2004 })];
+    const edges = [parentOf("a", "k1"), parentOf("a", "k2"), parentOf("a", "k3")];
+    const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
+    const xs = ["k1", "k2", "k3"].map((id) => placedFor(l, id).x);
+    // One inverted-U over the outer children, and the bar level covers all three drops.
+    expect(hasShape(l, "cap")).toBe(true);
+    expect(horizontalCovers(l, xs)).toBe(true);
+  });
+});
+
 describe("descent-bus geometry (spec §6)", () => {
-  it("two-parent bus: feeders from both parents + a shared riser to the child", () => {
+  it("two-parent bus: a 'U' joins both parents' bottoms, then a riser drops to the child", () => {
     const nodes = [node("me"), node("spouse"), node("kid")];
     const edges = [partneredWith("me", "spouse"), parentOf("me", "kid"), parentOf("spouse", "kid")];
     const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
     const me = placedFor(l, "me");
     const sp = placedFor(l, "spouse");
     const kid = placedFor(l, "kid");
+    const mid = (me.x + sp.x) / 2;
     // Child centered on the couple's midpoint.
-    expect(kid.x).toBeCloseTo((me.x + sp.x) / 2, 5);
-    // A descent connector starts at each parent's bottom edge.
+    expect(kid.x).toBeCloseTo(mid, 5);
     const descents = l.connectors.filter((c) => c.kind === "descent");
-    expect(descents.some((c) => c.d.startsWith(`M ${me.x} ${me.y + NODE_H / 2}`))).toBe(true);
-    expect(descents.some((c) => c.d.includes(`${sp.x} ${sp.y + NODE_H / 2}`))).toBe(true);
+    const [lp, rp] = me.x < sp.x ? [me, sp] : [sp, me];
+    // The U starts at the LEFT parent's bottom-center and ends at the RIGHT parent's bottom-center,
+    // dipping to a shared join level between (a descent-bus feeder, not a row-level partner line).
+    const u = descents.find((c) => c.d.startsWith(`M ${lp.x} ${lp.y + NODE_H / 2}`));
+    expect(u).toBeDefined();
+    expect(u!.d.endsWith(`${rp.x} ${rp.y + NODE_H / 2}`)).toBe(true);
+    // A riser drops from the couple midpoint down toward the child.
+    expect(descents.some((c) => c.d.startsWith(`M ${mid} `))).toBe(true);
   });
 
   it("single-parent bus: one feeder from the lone card's bottom-center", () => {
@@ -560,6 +982,36 @@ describe("descent-bus geometry (spec §6)", () => {
     const descents = l.connectors.filter((c) => c.kind === "descent");
     // A horizontal bar connector runs from barLeft to barRight at a shared y.
     expect(descents.some((c) => c.d.includes(`M ${barLeft} `) && c.d.includes(`L ${barRight} `))).toBe(true);
+  });
+});
+
+describe("roundedPath (render-time corner rounding)", () => {
+  it("leaves a straight 2-point segment unchanged", () => {
+    expect(roundedPath("M 0 0 L 0 100", 8)).toBe("M 0 0 L 0 100");
+  });
+
+  it("rounds an interior corner with a quadratic and preserves the endpoints", () => {
+    const out = roundedPath("M 0 0 L 0 100 L 100 100", 8);
+    expect(out.startsWith("M 0 0")).toBe(true);
+    expect(out).toContain("Q 0 100"); // curve control point is the original corner vertex
+    expect(out.endsWith("L 100 100")).toBe(true);
+    expect(out.includes("L 0 100 L")).toBe(false); // the sharp corner is gone
+  });
+
+  it("clamps the radius to half the shorter adjacent segment (no overshoot)", () => {
+    // 4px segments → radius 2 even though 8 was requested.
+    expect(roundedPath("M 0 0 L 0 4 L 4 4", 8)).toContain("L 0 2 Q 0 4 2 4");
+  });
+
+  it("collapses a zero-length segment (a centered jog becomes one straight drop)", () => {
+    expect(roundedPath("M 50 10 L 50 10 L 50 40", 8)).toBe("M 50 10 L 50 40");
+  });
+
+  it("rounds both corners of a U/inverted-U (two quadratics)", () => {
+    const out = roundedPath("M 0 0 L 0 30 L 60 30 L 60 0", 8);
+    expect((out.match(/Q/g) ?? []).length).toBe(2);
+    expect(out.startsWith("M 0 0")).toBe(true);
+    expect(out.endsWith("L 60 0")).toBe(true);
   });
 });
 
