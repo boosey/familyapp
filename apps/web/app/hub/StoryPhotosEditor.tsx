@@ -11,7 +11,7 @@
  * re-resolve auth + re-verify draft ownership SERVER-side (photo-actions.ts) — the storyId here only
  * names WHICH story; it never grants anything. Errors surface inline (no native dialogs).
  */
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import {
@@ -26,7 +26,20 @@ import {
 
 type Nudge = { photoId: string; caption: string | null };
 
-export function StoryPhotosEditor({ storyId }: { storyId: string }) {
+export function StoryPhotosEditor({
+  storyId,
+  autoAttachPhotoIds = [],
+}: {
+  storyId: string;
+  /**
+   * Phase C bulk "tell one story about these N photos": non-cover selected photo ids to attach to the
+   * draft ONCE on mount, via the SAME `attachStoryPhotoAction` the manual picker uses (no bespoke
+   * path). Ids already attached — notably the cover, which the story creation already attached as the
+   * first image — are skipped, so a cover duplicated in the selection never double-attaches. The
+   * server re-checks read access per photo, so a crafted id simply fails its own attach.
+   */
+  autoAttachPhotoIds?: string[];
+}) {
   const [attached, setAttached] = useState<EditorStoryImage[]>([]);
   const [album, setAlbum] = useState<EditorAlbumPhoto[]>([]);
   const [nudge, setNudge] = useState<Nudge | null>(null);
@@ -50,6 +63,37 @@ export function StoryPhotosEditor({ storyId }: { storyId: string }) {
   useEffect(() => {
     void load().finally(() => setLoaded(true));
   }, [load]);
+
+  // Phase C: attach the bulk-selected non-cover photos ONCE, after the first load resolves so we can
+  // dedup against what the story already carries (the cover, attached at story creation). We reuse the
+  // manual picker's exact server action (`attachStoryPhotoAction`) — the same audited attach path — so
+  // this opens no new surface. Runs sequentially, then a single reload reflects them all. Guarded by a
+  // ref so the post-attach reloads don't re-trigger the sweep. The de-dup is belt-and-suspenders: the
+  // core primitive also rejects a duplicate attach, so a race can never double-attach either.
+  const autoAttachDoneRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || autoAttachDoneRef.current) return;
+    autoAttachDoneRef.current = true;
+    if (autoAttachPhotoIds.length === 0) return;
+    const alreadyAttached = new Set(attached.map((a) => a.familyPhotoId));
+    const toAttach = [...new Set(autoAttachPhotoIds)].filter((id) => !alreadyAttached.has(id));
+    if (toAttach.length === 0) return;
+    startTransition(async () => {
+      for (const familyPhotoId of toAttach) {
+        const fd = new FormData();
+        fd.set("storyId", storyId);
+        fd.set("familyPhotoId", familyPhotoId);
+        // A single failed attach (e.g. an unseeable id) shouldn't abort the rest; the reload below
+        // reconciles whatever actually landed.
+        try {
+          await attachStoryPhotoAction(fd);
+        } catch {
+          /* swallow — reconciled by the reload */
+        }
+      }
+      await load();
+    });
+  }, [loaded, autoAttachPhotoIds, attached, storyId, load]);
 
   // Run one mutation, then re-load. A returned { error } surfaces inline and skips the reload (the
   // server made no change). Any thrown error degrades to a generic inline note.

@@ -17,7 +17,7 @@
  * exif fields on the input already exist because they are the shared contract #16 (multi-family
  * picker) and #17 (EXIF at import) build on — this file writes whatever it is handed.
  */
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   familyPhotoFamilies,
   familyPhotos,
@@ -217,6 +217,175 @@ export async function listAlbumPhotos(
       ),
     )
     .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
+}
+
+/**
+ * A photo enriched for the album List view (album enhancements, Phase C): the base grid fields plus
+ * contributor name, its placements AMONG the viewer-authorized families, and its tag groups. Deliberately
+ * OMITS `canManage` (the surface computes that from steward lookups it already holds) and the storageKey
+ * (not needed for a list row). `families` reflects only the (viewer-authorized) subset of the photo's
+ * placements — never a leak of a family the viewer isn't in.
+ */
+export interface AlbumPhotoDetailedRow {
+  id: string;
+  caption: string | null;
+  contributorPersonId: string;
+  contributorDisplayName: string | null;
+  createdAt: Date;
+  /** exifCapturedAt — the original capture time when EXIF carried one, else null. */
+  capturedAt: Date | null;
+  families: { familyId: string; familyName: string }[];
+  subjects: { personId: string; displayName: string | null }[];
+  people: { personId: string; displayName: string | null }[];
+  places: { placeId: string; name: string }[];
+}
+
+/**
+ * The photos across MANY family albums, enriched + deduped, for the album List view. Mirrors
+ * `listAlbumPhotos`'s membership gating but over a SET of families and with joins collapsed in memory:
+ *
+ *   - The viewer must hold an ACTIVE membership in a family to see its photos. Any `familyIds` the
+ *     viewer is NOT an active member of are silently dropped (never leaked). Anonymous ⇒ [].
+ *   - Each non-deleted photo placed in ANY of those authorized families is returned ONCE (deduped by
+ *     photo id), most-recent first (`createdAt` desc, then id desc).
+ *   - `families` on each row lists only the AUTHORIZED placements (the intersection of the photo's
+ *     placements with `authorizedFamilies`) — so a photo also placed in a family the viewer isn't in
+ *     never reveals that family here.
+ *
+ * Efficiency: NO per-photo round-trips. One query fetches the placement rows for the authorized
+ * families (yielding the photo id set + each photo's authorized placements). Then a fixed number of
+ * GROUPED queries (photos, contributor names, family names, subjects, people, places) filtered by
+ * `IN (photoIds)` are stitched in memory. Total ≈ 7 queries regardless of photo count.
+ */
+export async function listAlbumPhotosDetailed(
+  db: Database,
+  ctx: AuthContext,
+  familyIds: string[],
+): Promise<AlbumPhotoDetailedRow[]> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return [];
+  const viewerFamilies = await activeFamilyIds(db, viewer);
+  // Only families the viewer is an active member of AND asked for (deduped).
+  const authorizedFamilies = [
+    ...new Set(familyIds.filter((id) => viewerFamilies.has(id))),
+  ];
+  if (authorizedFamilies.length === 0) return [];
+
+  // (1) Placement rows for the authorized families, joined to non-deleted photos. Yields the photo id
+  // set AND each photo's authorized placements (family id + name) in one pass.
+  const placementRows = await db
+    .select({
+      photoId: familyPhotoFamilies.photoId,
+      familyId: families.id,
+      familyName: families.name,
+    })
+    .from(familyPhotoFamilies)
+    .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
+    .innerJoin(familyPhotos, eq(familyPhotos.id, familyPhotoFamilies.photoId))
+    .where(
+      and(
+        inArray(familyPhotoFamilies.familyId, authorizedFamilies),
+        isNull(familyPhotos.deletedAt),
+      ),
+    );
+
+  const photoIds = [...new Set(placementRows.map((r) => r.photoId))];
+  if (photoIds.length === 0) return [];
+
+  // Authorized placements per photo (sorted by family name for stable ordering).
+  const familiesByPhoto = new Map<string, { familyId: string; familyName: string }[]>();
+  for (const r of placementRows) {
+    const list = familiesByPhoto.get(r.photoId) ?? [];
+    list.push({ familyId: r.familyId, familyName: r.familyName });
+    familiesByPhoto.set(r.photoId, list);
+  }
+  for (const list of familiesByPhoto.values()) {
+    list.sort((a, b) => a.familyName.localeCompare(b.familyName));
+  }
+
+  // (2) The photos themselves (base fields), most-recent first.
+  const photoRows = await db
+    .select({
+      id: familyPhotos.id,
+      caption: familyPhotos.caption,
+      contributorPersonId: familyPhotos.contributorPersonId,
+      createdAt: familyPhotos.createdAt,
+      capturedAt: familyPhotos.exifCapturedAt,
+    })
+    .from(familyPhotos)
+    .where(inArray(familyPhotos.id, photoIds))
+    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
+
+  // (3) Contributor display names (one grouped lookup over the distinct contributor ids).
+  const contributorIds = [...new Set(photoRows.map((p) => p.contributorPersonId))];
+  const contributorRows = contributorIds.length
+    ? await db
+        .select({ id: persons.id, displayName: persons.displayName })
+        .from(persons)
+        .where(inArray(persons.id, contributorIds))
+    : [];
+  const contributorName = new Map(contributorRows.map((c) => [c.id, c.displayName]));
+
+  // (4)+(5) Subjects + appears-in people, each a single grouped query joined to persons.
+  const personTagsByPhoto = async (
+    table: typeof photoSubjects | typeof photoPeople,
+  ): Promise<Map<string, { personId: string; displayName: string | null }[]>> => {
+    const rows = await db
+      .select({
+        photoId: table.photoId,
+        personId: table.personId,
+        displayName: persons.displayName,
+        createdAt: table.createdAt,
+      })
+      .from(table)
+      .innerJoin(persons, eq(persons.id, table.personId))
+      .where(inArray(table.photoId, photoIds))
+      .orderBy(asc(table.createdAt));
+    const byPhoto = new Map<string, { personId: string; displayName: string | null }[]>();
+    for (const r of rows) {
+      const list = byPhoto.get(r.photoId) ?? [];
+      list.push({ personId: r.personId, displayName: r.displayName });
+      byPhoto.set(r.photoId, list);
+    }
+    return byPhoto;
+  };
+  const [subjectsByPhoto, peopleByPhoto] = await Promise.all([
+    personTagsByPhoto(photoSubjects),
+    personTagsByPhoto(photoPeople),
+  ]);
+
+  // (6) Places — one grouped query joined to `places`.
+  const placeRows = await db
+    .select({
+      photoId: photoPlaces.photoId,
+      placeId: places.id,
+      name: places.name,
+      createdAt: photoPlaces.createdAt,
+    })
+    .from(photoPlaces)
+    .innerJoin(places, eq(places.id, photoPlaces.placeId))
+    .where(inArray(photoPlaces.photoId, photoIds))
+    .orderBy(asc(photoPlaces.createdAt));
+  const placesByPhoto = new Map<string, { placeId: string; name: string }[]>();
+  for (const r of placeRows) {
+    const list = placesByPhoto.get(r.photoId) ?? [];
+    list.push({ placeId: r.placeId, name: r.name });
+    placesByPhoto.set(r.photoId, list);
+  }
+
+  // Stitch. `photoRows` already carries the deduped, most-recent-first ordering.
+  return photoRows.map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    contributorPersonId: p.contributorPersonId,
+    contributorDisplayName: contributorName.get(p.contributorPersonId) ?? null,
+    createdAt: p.createdAt,
+    capturedAt: p.capturedAt,
+    families: familiesByPhoto.get(p.id) ?? [],
+    subjects: subjectsByPhoto.get(p.id) ?? [],
+    people: peopleByPhoto.get(p.id) ?? [],
+    places: placesByPhoto.get(p.id) ?? [],
+  }));
 }
 
 /**

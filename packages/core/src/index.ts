@@ -229,6 +229,7 @@ export {
 export {
   createAlbumPhoto,
   listAlbumPhotos,
+  listAlbumPhotosDetailed,
   authorizeAlbumPhotoRead,
   getAlbumPhotoForViewer,
   setAlbumPhotoCaption,
@@ -248,6 +249,7 @@ export {
   getAlbumPhotoDetail,
   type CreateAlbumPhotoInput,
   type AlbumPhotoView,
+  type AlbumPhotoDetailedRow,
   type PhotoTagPersonView,
   type PhotoPlaceView,
   type TagPhotoPersonInput,

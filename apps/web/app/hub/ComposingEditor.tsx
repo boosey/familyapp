@@ -114,6 +114,14 @@ export interface ComposingEditorProps {
    * Null/absent for an answer, a plain telling, or intake.
    */
   subjectPhotoId?: string | null;
+  /**
+   * Phase C bulk "tell one story about these N photos". The NON-cover selected photo ids, carried to
+   * the photos editor (mounted in the review phase, once the draft exists) which auto-attaches each as
+   * an accompaniment image via the SAME `attachStoryPhotoAction` the manual picker uses. Ids already
+   * attached (notably the cover `subjectPhotoId`) are skipped — no double-attach. Empty for the
+   * ordinary single-photo / plain telling.
+   */
+  extraSubjectPhotoIds?: string[];
   /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
   promptQuestion?: string | null;
   /** The narrator's active families, offered in the share-step multi-family picker (Task 4). Shown
@@ -141,6 +149,7 @@ export function ComposingEditor({
   backTab,
   resumeHref,
   subjectPhotoId = null,
+  extraSubjectPhotoIds = [],
   promptQuestion = null,
   families = [],
   seededFamilyIds = [],
@@ -844,7 +853,7 @@ export function ComposingEditor({
         {/* Photos (ADR-0009 Phase 2) — attach from the owner's album, set a cover, remove, reorder.
             Self-contained: fetches + mutates via its own auth-re-resolving server actions. Off the
             consent ledger, so it lives here in the pre-share review, independent of Share. */}
-        <StoryPhotosEditor storyId={draft.storyId} />
+        <StoryPhotosEditor storyId={draft.storyId} autoAttachPhotoIds={extraSubjectPhotoIds} />
 
         {/* Unified tags/people/families field (spec 2026-07-13 §2). Text + person tokens autosave to
             the draft immediately; a family token here only toggles it into `pickedFamilies` — nothing

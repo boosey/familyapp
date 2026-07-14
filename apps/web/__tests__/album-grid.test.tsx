@@ -28,6 +28,12 @@ const editAlbumCaptionAction = vi.fn(
 const deleteAlbumPhotoAction = vi.fn(
   async (..._args: unknown[]): Promise<{ ok: true }> => ({ ok: true }),
 );
+const bulkSoftDeleteAlbumPhotosAction = vi.fn(
+  async (..._args: unknown[]): Promise<{ deleted: number; failed: number }> => ({
+    deleted: 2,
+    failed: 0,
+  }),
+);
 // The viewer opened from a tile now hosts PhotoTagPanel, which loads its detail via
 // loadPhotoTagPanelAction on mount. Seed a minimal manageable detail so the panel renders without a
 // server round-trip; the rest are present so the "use server" module mock is complete.
@@ -47,6 +53,8 @@ const PANEL_DATA = {
 vi.mock("@/app/hub/album/actions", () => ({
   editAlbumCaptionAction: (...args: unknown[]) => editAlbumCaptionAction(...args),
   deleteAlbumPhotoAction: (...args: unknown[]) => deleteAlbumPhotoAction(...args),
+  bulkSoftDeleteAlbumPhotosAction: (...args: unknown[]) =>
+    bulkSoftDeleteAlbumPhotosAction(...args),
   loadPhotoTagPanelAction: async (..._args: unknown[]) => PANEL_DATA,
   tagPhotoSubjectAction: vi.fn(),
   untagPhotoSubjectAction: vi.fn(),
@@ -224,5 +232,203 @@ describe("AlbumGrid pending import tiles (ADR-0015 · F2)", () => {
     render(<AlbumGrid photos={[MANAGEABLE]} />);
     expect(screen.queryByLabelText(hub.album.importingTile)).toBeNull();
     expect(screen.queryByRole("button", { name: hub.album.retryImportTile })).toBeNull();
+  });
+});
+
+// ---- Phase C: enriched fixtures for filter + selection + List columns --------------------------
+const THIS_YEAR = new Date().getFullYear();
+// Three enriched photos: distinct people, places, capture years, captions.
+const ADA = {
+  id: "ada",
+  caption: "Ada at the lab",
+  canManage: true,
+  contributorName: "Grace",
+  families: [{ id: "fam-1", name: "The Lovelaces" }],
+  subjects: [{ id: "p-ada", name: "Ada" }],
+  people: [],
+  places: [{ id: "pl-london", name: "London" }],
+  capturedAt: `${THIS_YEAR}-06-01T00:00:00.000Z`,
+};
+const BABBAGE = {
+  id: "babbage",
+  caption: "Charles by the engine",
+  canManage: true,
+  contributorName: "Grace",
+  families: [{ id: "fam-1", name: "The Lovelaces" }],
+  subjects: [{ id: "p-charles", name: "Charles" }],
+  people: [{ id: "p-ada", name: "Ada" }],
+  places: [{ id: "pl-paris", name: "Paris" }],
+  capturedAt: `${THIS_YEAR - 3}-06-01T00:00:00.000Z`,
+};
+const OLD = {
+  id: "old",
+  caption: "A very old portrait",
+  canManage: true,
+  contributorName: "Grace",
+  families: [{ id: "fam-2", name: "The Byrons" }],
+  subjects: [],
+  people: [],
+  places: [{ id: "pl-london", name: "London" }],
+  capturedAt: `${THIS_YEAR - 20}-06-01T00:00:00.000Z`,
+};
+const ENRICHED = [ADA, BABBAGE, OLD];
+
+/** Count the rendered photo tiles by their "View …" trigger buttons (Grid view, image trigger). */
+function renderedPhotoIds(): string[] {
+  // Each tile's image trigger + toolbar Edit share the "View …" label; scope to alt text is simpler.
+  return screen
+    .queryAllByRole("img")
+    .map((img) => (img as HTMLImageElement).getAttribute("src") ?? "")
+    .filter((src) => src.startsWith("/api/album-photo/"))
+    .map((src) => src.replace("/api/album-photo/", ""));
+}
+
+describe("AlbumGrid filtering (item 9)", () => {
+  it("filtering by a person narrows the rendered set; clearing restores", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
+
+    // Select Ada in the People filter — only photos with Ada (subject OR appears-in) remain.
+    const people = screen.getByRole("listbox", { name: hub.album.filterPeopleLabel });
+    // jsdom multi-select: set the option selected explicitly, then fire change.
+    const adaOpt = within(people).getByRole("option", { name: "Ada" }) as HTMLOptionElement;
+    adaOpt.selected = true;
+    fireEvent.change(people);
+    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage"]);
+
+    // Clear restores all three.
+    fireEvent.click(screen.getByRole("button", { name: hub.album.filterClear }));
+    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
+  });
+
+  it("filtering by a place narrows to photos in that place", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    const places = screen.getByRole("listbox", { name: hub.album.filterPlacesLabel });
+    const paris = within(places).getByRole("option", { name: "Paris" }) as HTMLOptionElement;
+    paris.selected = true;
+    fireEvent.change(places);
+    expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
+  });
+
+  it("filtering by period (This year) narrows to this-year captures", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    const period = screen.getByRole("combobox", { name: hub.album.filterPeriodLabel });
+    fireEvent.change(period, { target: { value: "thisYear" } });
+    expect(renderedPhotoIds().sort()).toEqual(["ada"]);
+  });
+
+  it("filtering by caption text narrows to matching captions/tags (case-insensitive)", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    const text = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
+    fireEvent.change(text, { target: { value: "engine" } });
+    expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
+  });
+
+  it("shows a no-matches note when the filter excludes every photo", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    const text = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
+    fireEvent.change(text, { target: { value: "zzzznomatch" } });
+    expect(screen.getByText(hub.album.filterNoMatches)).toBeTruthy();
+    expect(renderedPhotoIds()).toEqual([]);
+  });
+});
+
+describe("AlbumGrid multi-select + bulk actions (item 6)", () => {
+  function enterSelectionAndPickTwo() {
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    const checks = screen.getAllByRole("checkbox");
+    // Pick the first two tiles.
+    fireEvent.click(checks[0]!);
+    fireEvent.click(checks[1]!);
+  }
+
+  it("entering selection mode shows a checkbox per tile", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+  });
+
+  it("selecting 2 + Ask pushes the ask multi-URL with both subjectPhotoIds", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    enterSelectionAndPickTwo();
+    fireEvent.click(screen.getByRole("button", { name: hub.album.bulkAsk }));
+    expect(push).toHaveBeenCalledTimes(1);
+    const url = push.mock.calls[0]![0] as string;
+    expect(url).toContain("/hub?tab=ask&");
+    expect(url).toContain("subjectPhotoIds=ada");
+    expect(url).toContain("subjectPhotoIds=babbage");
+  });
+
+  it("selecting 2 + Tell pushes the tell multi-URL (first = cover)", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    enterSelectionAndPickTwo();
+    fireEvent.click(screen.getByRole("button", { name: hub.album.bulkTell }));
+    const url = push.mock.calls[0]![0] as string;
+    expect(url).toContain("/hub/tell?");
+    expect(url).toContain("subjectPhotoIds=ada");
+    expect(url).toContain("subjectPhotoIds=babbage");
+  });
+
+  it("Delete selected (two-tap) calls bulkSoftDeleteAlbumPhotosAction with the ids then refreshes", async () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    enterSelectionAndPickTwo();
+    const del = screen.getByRole("button", { name: hub.album.bulkDelete });
+    fireEvent.click(del); // arm
+    fireEvent.click(screen.getByRole("button", { name: hub.album.bulkDeleteConfirm })); // confirm
+    expect(bulkSoftDeleteAlbumPhotosAction).toHaveBeenCalledTimes(1);
+    const fd = bulkSoftDeleteAlbumPhotosAction.mock.calls[0]![0] as FormData;
+    expect(fd.getAll("photoIds").sort()).toEqual(["ada", "babbage"]);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("suppresses the per-tile hover toolbar while in selection mode", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    // The compact PhotoActionBar group is present out of selection mode…
+    expect(
+      screen.getAllByRole("group", { name: /Actions for/ }).length,
+    ).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    // …and gone once selecting.
+    expect(screen.queryAllByRole("group", { name: /Actions for/ })).toHaveLength(0);
+  });
+});
+
+describe("AlbumListView columns (item 7)", () => {
+  it("shows real uploader / families / tags for an enriched photo", () => {
+    render(<AlbumGrid photos={[BABBAGE]} />);
+    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+    const table = screen.getByRole("table");
+    const rows = within(table).getAllByRole("row");
+    // Header + one body row.
+    const body = rows[1]!;
+    const cells = within(body).getAllByRole("cell");
+    // Photo, Caption, Added by, Families, Tags, Actions.
+    expect(within(body).getByText("Charles by the engine")).toBeTruthy();
+    expect(within(body).getByText("Grace")).toBeTruthy(); // uploader
+    expect(within(body).getByText("The Lovelaces")).toBeTruthy(); // families
+    // Tags = subjects ∪ people ∪ places, comma-joined.
+    expect(within(body).getByText(/Charles, Ada, Paris/)).toBeTruthy();
+    expect(cells.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("shows a selection checkbox column in the List view when selecting", () => {
+    render(<AlbumGrid photos={[BABBAGE]} />);
+    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  });
+
+  // Cold-review regression (Phase C): the List row's live action toolbar must ALSO be suppressed in
+  // selection mode (as the grid tile is), so a tap meant to select can't fire Delete/Ask/Tell.
+  it("suppresses the per-row action toolbar in the List view while selecting", () => {
+    render(<AlbumGrid photos={[BABBAGE]} />);
+    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+    expect(
+      screen.getAllByRole("group", { name: /Actions for/ }).length,
+    ).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    expect(screen.queryAllByRole("group", { name: /Actions for/ })).toHaveLength(0);
   });
 });

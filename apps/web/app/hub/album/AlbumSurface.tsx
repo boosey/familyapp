@@ -20,7 +20,7 @@
 import {
   getStewardPersonId,
   listActiveFamiliesForPerson,
-  listAlbumPhotos,
+  listAlbumPhotosDetailed,
   type AuthContext,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
@@ -69,32 +69,42 @@ export async function AlbumSurface({
   const shownFamilies =
     validScope === "all" ? active : active.filter((f) => f.familyId === validScope);
 
-  // The photos on screen — the union across `shownFamilies`, DEDUPED by photo id (a photo placed in
-  // two of the viewer's families would otherwise appear twice in the "all" union). `canManage` is
-  // #18's visibility hint: the viewer is the photo's CONTRIBUTOR, or the STEWARD of a family it is
-  // shown under. When a photo appears under two shown families we OR the hint across them. This is a
-  // deliberate UI approximation — it never OVER-grants (the delete/caption seam re-checks stewardship
-  // of ANY placed-in family and is authoritative; `canManage` only decides control visibility).
-  const merged = new Map<
-    string,
-    { id: string; caption: string | null; canManage: boolean; createdAt: Date }
-  >();
+  // The photos on screen — ONE detailed read across `shownFamilies`, already DEDUPED by photo id and
+  // sorted most-recent-first by the core seam (which also intersects each row's `families` down to the
+  // authorized placements). Phase C enriches each tile with the contributor name, families, subjects,
+  // people, places, and capture time so the client can filter + fill the List columns without more reads.
+  const shownFamilyIds = shownFamilies.map((f) => f.familyId);
+  const detailed = viewer ? await listAlbumPhotosDetailed(db, ctx, shownFamilyIds) : [];
+
+  // `canManage` is #18's visibility hint: the viewer is the photo's CONTRIBUTOR, or the STEWARD of ANY
+  // family the photo is shown under. Fetch steward ids per shown family (as before) and test membership
+  // against the photo's authorized `families`. A deliberate UI approximation — it never OVER-grants (the
+  // delete/caption seam re-checks stewardship of ANY placed-in family and is authoritative).
+  const stewardByFamily = new Map<string, string | null>();
   for (const fam of shownFamilies) {
-    const stewardId = await getStewardPersonId(db, fam.familyId);
-    const photos = viewer ? await listAlbumPhotos(db, ctx, fam.familyId) : [];
-    for (const p of photos) {
-      const canManage = p.contributorPersonId === viewer || stewardId === viewer;
-      const existing = merged.get(p.id);
-      if (existing) {
-        existing.canManage = existing.canManage || canManage;
-      } else {
-        merged.set(p.id, { id: p.id, caption: p.caption, canManage, createdAt: p.createdAt });
-      }
-    }
+    stewardByFamily.set(fam.familyId, await getStewardPersonId(db, fam.familyId));
   }
-  const gridPhotos = [...merged.values()]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1))
-    .map((p) => ({ id: p.id, caption: p.caption, canManage: p.canManage }));
+  const viewerIsStewardOf = new Set(
+    [...stewardByFamily].filter(([, s]) => s === viewer).map(([fid]) => fid),
+  );
+
+  const unnamed = hub.album.unnamedPerson;
+  const gridPhotos = detailed.map((p) => {
+    const canManage =
+      p.contributorPersonId === viewer ||
+      p.families.some((f) => viewerIsStewardOf.has(f.familyId));
+    return {
+      id: p.id,
+      caption: p.caption,
+      canManage,
+      contributorName: p.contributorDisplayName,
+      families: p.families.map((f) => ({ id: f.familyId, name: f.familyName })),
+      subjects: p.subjects.map((s) => ({ id: s.personId, name: s.displayName ?? unnamed })),
+      people: p.people.map((pp) => ({ id: pp.personId, name: pp.displayName ?? unnamed })),
+      places: p.places.map((pl) => ({ id: pl.placeId, name: pl.name })),
+      capturedAt: (p.capturedAt ?? p.createdAt).toISOString(),
+    };
+  });
 
   // Where an "add photo" lands. A specific-family scope targets that family. In "all" mode the target
   // is ambiguous, so we only offer the uploader when there is exactly ONE family to fall back to;

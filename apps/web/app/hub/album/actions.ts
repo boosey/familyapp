@@ -338,6 +338,61 @@ export async function deleteAlbumPhotoAction(
   }
 }
 
+/** Result of a bulk soft-delete: per-item outcome counts, or a whole-request error. */
+export type AlbumBulkDeleteResult =
+  | { deleted: number; failed: number }
+  | { error: string };
+
+/**
+ * Bulk soft-delete photos (Phase C). Reads repeated `photoIds` entries and calls the SAME audited
+ * `softDeleteAlbumPhoto` seam per id — so each item is independently MANAGE-gated (contributor or
+ * steward). Re-resolves auth server-side; a non-account caller or an empty id set is the ONLY
+ * whole-request error. Otherwise this is PARTIAL-SUCCESS: an item the viewer may delete increments
+ * `deleted`, and an item denied by authz OR that threw increments `failed` — never aborting the batch.
+ * (A plain member's targets therefore come back as `failed`, not an error.) One revalidate at the end
+ * iff anything was actually deleted.
+ */
+export async function bulkSoftDeleteAlbumPhotosAction(
+  formData: FormData,
+): Promise<AlbumBulkDeleteResult> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const photoIds = [
+    ...new Set(
+      formData
+        .getAll("photoIds")
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  ];
+  if (photoIds.length === 0) return { error: hub.album.noPhotosSelected };
+
+  let deleted = 0;
+  let failed = 0;
+  for (const photoId of photoIds) {
+    try {
+      const decision = await softDeleteAlbumPhoto(db, ctx, photoId);
+      if (decision.allowed) {
+        deleted += 1;
+      } else {
+        // A per-item authz denial (not the contributor / not a steward) is a partial failure, NOT a
+        // whole-request error.
+        failed += 1;
+      }
+    } catch {
+      // A DB/seam throw for one id must never abort the batch — count it and move on.
+      failed += 1;
+    }
+  }
+
+  if (deleted > 0) {
+    revalidatePath("/hub");
+    revalidatePath("/hub/album");
+  }
+  return { deleted, failed };
+}
+
 // ---------------------------------------------------------------------------
 // Phase B2 — photo tag management (mirrors the STORY tag actions exactly).
 //

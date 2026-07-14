@@ -43,8 +43,24 @@ export default async function TellPage({
   // composeStoryAction, which re-resolves auth server-side; the core write gate is what enforces the
   // owner can actually see the photo (a crafted id simply fails the ingest, never leaks bytes).
   const params = await searchParams;
-  const subjectPhotoId =
-    typeof params.subjectPhotoId === "string" ? params.subjectPhotoId : null;
+
+  // Phase C bulk deep-link "tell one story about these N photos": the album selection deep-links here
+  // with the repeated `subjectPhotoIds` param (Next.js gives `string | string[] | undefined`). The
+  // FIRST id is the subject/cover (threaded as `subjectPhotoId`, EXACTLY today's single-photo path);
+  // the REST become accompaniment photos, attached once the draft exists via the normal photos-editor
+  // attach flow (no bespoke server path). Legacy single `subjectPhotoId` still works: it collapses to a
+  // one-element list with no extras. The order is de-duped so a repeated id never double-attaches.
+  const idsRaw =
+    typeof params.subjectPhotoIds === "string"
+      ? [params.subjectPhotoIds]
+      : Array.isArray(params.subjectPhotoIds)
+        ? params.subjectPhotoIds.filter((v): v is string => typeof v === "string")
+        : typeof params.subjectPhotoId === "string"
+          ? [params.subjectPhotoId]
+          : [];
+  const subjectPhotoIds = [...new Set(idsRaw.filter((id) => id.length > 0))];
+  const subjectPhotoId = subjectPhotoIds[0] ?? null;
+  const extraSubjectPhotoIds = subjectPhotoIds.slice(1);
   const promptQuestion =
     typeof params.promptQuestion === "string" ? params.promptQuestion : null;
 
@@ -111,6 +127,7 @@ export default async function TellPage({
           ask={null}
           draft={null}
           subjectPhotoId={subjectPhotoId}
+          extraSubjectPhotoIds={extraSubjectPhotoIds}
           promptQuestion={promptQuestion}
           families={tellFamilies}
           seededFamilyIds={seededFamilyIds}

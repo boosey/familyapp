@@ -349,6 +349,10 @@ export const hub = {
       caption ? `Manage “${caption}”` : "Manage photo",
     captionSaveError: "Couldn't save that caption. Please try again.",
     photoDeleteError: "Couldn't remove that photo. Please try again.",
+    // Bulk delete (Phase C): the request carried no photo ids to act on (a client bug / empty
+    // selection). A non-committal, warm nudge — distinct from a per-item authz denial, which is
+    // reported as a `failed` count rather than an error.
+    noPhotosSelected: "No photos selected to remove.",
     // Photo tag management (Phase B2): a non-committal error when a tag write fails — either the
     // viewer wasn't allowed (SEE/MANAGE denied) or the write threw (e.g. an ambiguous place). Mirrors
     // the captionSaveError style: warm, brief, and leaks nothing about why.
@@ -478,6 +482,47 @@ export const hub = {
       }
       return parts.join(" ");
     },
+    // Phase C — search / filter bar above the album. A row of controls that narrow the photos on
+    // screen (client-side, over the photos already loaded): who's in them, where, when, and caption text.
+    filterBarAria: "Filter photos",
+    filterPeopleLabel: "People",
+    filterPlacesLabel: "Places",
+    filterPeoplePlaceholder: "Anyone",
+    filterPlacesPlaceholder: "Anywhere",
+    filterPeriodLabel: "When",
+    filterPeriodAll: "Any time",
+    filterPeriodThisYear: "This year",
+    filterPeriodFiveYears: "Last 5 years",
+    filterPeriodOlder: "Older",
+    filterTextLabel: "Search captions and tags",
+    filterTextPlaceholder: "Search…",
+    filterClear: "Clear filters",
+    // Shown when the active filters exclude every photo (a real album that isn't empty).
+    filterNoMatches: "No photos match those filters.",
+    // Phase C — multi-select + bulk actions. A "Select" toggle enters selection mode (checkboxes on
+    // every tile / row); a sticky action bar appears once anything is picked.
+    selectMode: "Select",
+    selectModeDone: "Done",
+    selectPhotoAria: (caption: string | null) =>
+      caption ? `Select “${caption}”` : "Select photo",
+    bulkBarAria: "Actions for the selected photos",
+    // Live count of how many photos are picked (drives the bulk bar heading).
+    bulkSelectedCount: (n: number) => `${n} ${n === 1 ? "photo" : "photos"} selected`,
+    bulkAsk: "Ask one question about these",
+    bulkTell: "Tell one story about these",
+    bulkDelete: "Delete selected",
+    bulkDeleteConfirm: "Tap again to remove",
+    bulkClear: "Clear",
+    bulkDeleting: "Removing…",
+    // Non-committal note after a bulk delete: some removed, maybe some couldn't be (not the
+    // contributor / not a steward, or a transient error) — mirrors photosPartial's warmth.
+    bulkDeleteResult: (deleted: number, failed: number) =>
+      failed > 0
+        ? `Removed ${deleted} ${deleted === 1 ? "photo" : "photos"}. ${failed} ${
+            failed === 1 ? "photo" : "photos"
+          } couldn't be removed.`
+        : `Removed ${deleted} ${deleted === 1 ? "photo" : "photos"}.`,
+    bulkDeleteError: "Couldn't remove those photos. Please try again.",
   },
   storyDetail: {
     // The "‹" chevron is a sized decorative glyph kept in JSX; this is just the word.

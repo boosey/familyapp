@@ -19,20 +19,37 @@
  * View + size are persisted to localStorage (SSR-guarded: only read/written inside effects on the
  * client), so the choice survives navigation and reload.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { AlbumPhotoViewer } from "./AlbumPhotoViewer";
 import { PhotoActionBar } from "./PhotoActionBar";
 import { AlbumViewControls, THUMB_MIN, THUMB_MAX, type AlbumView } from "./AlbumViewControls";
 import { AlbumListView } from "./AlbumListView";
-import { deleteAlbumPhotoAction } from "./actions";
+import {
+  AlbumFilterBar,
+  EMPTY_FILTER,
+  isFilterActive,
+  type AlbumFilterValue,
+  type AlbumPeriod,
+} from "./AlbumFilterBar";
+import { AlbumBulkBar } from "./AlbumBulkBar";
+import { deleteAlbumPhotoAction, bulkSoftDeleteAlbumPhotosAction } from "./actions";
 import type { PendingTile } from "./import-progress";
 
 export interface AlbumGridPhoto {
   id: string;
   caption: string | null;
   canManage: boolean;
+  // Phase C enrichment — OPTIONAL so existing minimal-photo tests / the board's placeholder path still
+  // typecheck when only {id, caption, canManage} is passed. Absent facets simply never match a filter.
+  contributorName?: string | null;
+  families?: { id: string; name: string }[];
+  subjects?: { id: string; name: string }[];
+  people?: { id: string; name: string }[];
+  places?: { id: string; name: string }[];
+  /** ISO string of capturedAt ?? createdAt (from the detailed read); undefined ⇒ never matches a period. */
+  capturedAt?: string | null;
 }
 
 const VIEW_KEY = "album:view";
@@ -46,6 +63,58 @@ function clampThumb(px: number): number {
 
 function isView(v: string | null): v is AlbumView {
   return v === "grid" || v === "masonry" || v === "list";
+}
+
+/** All person-facet ids on a photo — subjects ∪ appears-in people. */
+function photoPersonIds(p: AlbumGridPhoto): Set<string> {
+  const ids = new Set<string>();
+  for (const s of p.subjects ?? []) ids.add(s.id);
+  for (const pp of p.people ?? []) ids.add(pp.id);
+  return ids;
+}
+
+/** Does a photo's `capturedAt` ISO string fall in the given coarse period? Undefined never matches a
+ *  non-"all" period. Boundaries computed against `now` so the presets stay simple + testable. */
+function matchesPeriod(iso: string | null | undefined, period: AlbumPeriod, now: Date): boolean {
+  if (period === "all") return true;
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  const year = new Date(iso).getFullYear();
+  const thisYear = now.getFullYear();
+  const fiveAgo = thisYear - 5;
+  if (period === "thisYear") return year === thisYear;
+  if (period === "fiveYears") return year >= fiveAgo && year <= thisYear;
+  // "older" — anything strictly before the last-5-years window.
+  return year < fiveAgo;
+}
+
+/** A photo passes when it matches ALL active facets: every selected person id ⊆ its people, every
+ *  selected place id ⊆ its places, its capture time is in the period, and the query (case-insensitive)
+ *  is a substring of its caption OR any tag name (subjects/people/places). */
+function passesFilter(p: AlbumGridPhoto, f: AlbumFilterValue, now: Date): boolean {
+  if (f.personIds.size > 0) {
+    const ids = photoPersonIds(p);
+    for (const id of f.personIds) if (!ids.has(id)) return false;
+  }
+  if (f.placeIds.size > 0) {
+    const ids = new Set((p.places ?? []).map((pl) => pl.id));
+    for (const id of f.placeIds) if (!ids.has(id)) return false;
+  }
+  if (!matchesPeriod(p.capturedAt, f.period, now)) return false;
+  const q = f.text.trim().toLowerCase();
+  if (q !== "") {
+    const haystack = [
+      p.caption ?? "",
+      ...(p.subjects ?? []).map((s) => s.name),
+      ...(p.people ?? []).map((pp) => pp.name),
+      ...(p.places ?? []).map((pl) => pl.name),
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+  return true;
 }
 
 export function AlbumGrid({
@@ -103,6 +172,87 @@ export function AlbumGrid({
     }
   }
 
+  // ---- Phase C: filter state (client-side, over `photos`) ---------------------------------------
+  const [filter, setFilter] = useState<AlbumFilterValue>(EMPTY_FILTER);
+  // `now` is captured once per render for the period boundaries — stable within a render pass.
+  const now = new Date();
+  const filtered = useMemo(
+    () => photos.filter((p) => passesFilter(p, filter, now)),
+    // now is intentionally excluded: it changes every render but its effect (year buckets) is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [photos, filter],
+  );
+
+  // Filter-menu options: the UNION of people (subjects ∪ appears-in) and of places across the CURRENT
+  // photos, deduped by id, sorted by name for a stable menu.
+  const peopleOptions = useMemo(() => {
+    const by = new Map<string, string>();
+    for (const p of photos) {
+      for (const s of p.subjects ?? []) by.set(s.id, s.name);
+      for (const pp of p.people ?? []) by.set(pp.id, pp.name);
+    }
+    return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [photos]);
+  const placeOptions = useMemo(() => {
+    const by = new Map<string, string>();
+    for (const p of photos) for (const pl of p.places ?? []) by.set(pl.id, pl.name);
+    return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [photos]);
+
+  // ---- Phase C: multi-select state --------------------------------------------------------------
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+  function exitSelectMode() {
+    setSelecting(false);
+    setSelected(new Set());
+    setBulkNote(null);
+  }
+
+  const selectedIds = useMemo(() => [...selected], [selected]);
+
+  function bulkAsk() {
+    const qs = selectedIds.map((id) => `subjectPhotoIds=${encodeURIComponent(id)}`).join("&");
+    router.push(`/hub?tab=ask&${qs}`);
+  }
+  function bulkTell() {
+    const qs = selectedIds.map((id) => `subjectPhotoIds=${encodeURIComponent(id)}`).join("&");
+    router.push(`/hub/tell?${qs}`);
+  }
+  async function bulkDelete() {
+    setBulkNote(null);
+    setBulkDeleting(true);
+    try {
+      const fd = new FormData();
+      for (const id of selectedIds) fd.append("photoIds", id);
+      const result = await bulkSoftDeleteAlbumPhotosAction(fd);
+      if ("error" in result) {
+        setBulkNote(result.error);
+        return;
+      }
+      setBulkNote(hub.album.bulkDeleteResult(result.deleted, result.failed));
+      clearSelection();
+      router.refresh();
+    } catch {
+      setBulkNote(hub.album.bulkDeleteError);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   // A transient per-photo delete error (kept minimal so it never blocks the grid). Keyed by photo id.
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -125,12 +275,79 @@ export function AlbumGrid({
 
   return (
     <>
-      <AlbumViewControls
-        view={view}
-        onView={changeView}
-        thumbPx={thumbPx}
-        onThumbPx={changeThumb}
+      {/* Phase C search / filter row — sits ABOVE the view controls, narrows the photos client-side. */}
+      <AlbumFilterBar
+        people={peopleOptions}
+        places={placeOptions}
+        value={filter}
+        onChange={setFilter}
       />
+
+      {/* Controls row: view selector + size slider, plus the Phase-C "Select" toggle. */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <AlbumViewControls
+            view={view}
+            onView={changeView}
+            thumbPx={thumbPx}
+            onThumbPx={changeThumb}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => (selecting ? exitSelectMode() : setSelecting(true))}
+          aria-pressed={selecting}
+          style={{
+            minHeight: 40,
+            padding: "8px 18px",
+            marginBottom: 16,
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            fontWeight: 500,
+            color: selecting ? "var(--text-heading)" : "var(--text-body)",
+            background: selecting ? "var(--surface-sunken)" : "transparent",
+            border: "var(--border-width) solid var(--border-strong)",
+            borderRadius: "var(--radius-pill)",
+            cursor: "pointer",
+          }}
+        >
+          {selecting ? hub.album.selectModeDone : hub.album.selectMode}
+        </button>
+      </div>
+
+      {/* Sticky bulk action bar — only while in selection mode with ≥1 photo picked. */}
+      {selecting && selected.size > 0 ? (
+        <AlbumBulkBar
+          count={selected.size}
+          onAsk={bulkAsk}
+          onTell={bulkTell}
+          onDelete={bulkDelete}
+          onClear={clearSelection}
+          deleting={bulkDeleting}
+        />
+      ) : null}
+
+      {bulkNote ? (
+        <p
+          role="status"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-meta)",
+            margin: "0 0 12px",
+          }}
+        >
+          {bulkNote}
+        </p>
+      ) : null}
 
       {deleteError ? (
         <p
@@ -146,12 +363,28 @@ export function AlbumGrid({
         </p>
       ) : null}
 
-      {view === "list" ? (
+      {/* Active filters excluded everything (but the album isn't actually empty) → a "no matches" note. */}
+      {filtered.length === 0 && photos.length > 0 && isFilterActive(filter) ? (
+        <p
+          role="status"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui)",
+            color: "var(--text-meta)",
+            margin: "0 0 24px",
+          }}
+        >
+          {hub.album.filterNoMatches}
+        </p>
+      ) : view === "list" ? (
         <AlbumListView
-          photos={photos}
+          photos={filtered}
           thumbPx={thumbPx}
           onOpen={setOpenId}
           onDelete={handleDelete}
+          selecting={selecting}
+          selectedIds={selected}
+          onToggleSelected={toggleSelected}
         />
       ) : view === "masonry" ? (
         // Masonry — CSS multi-column so images keep their NATURAL aspect ratio (not forced 1:1). Column
@@ -169,11 +402,14 @@ export function AlbumGrid({
           {pendingTiles.map((tile) => (
             <MasonryPendingTile key={`pending-${tile.tempId}`} tile={tile} onRetry={onRetryTile} />
           ))}
-          {photos.map((photo) => (
+          {filtered.map((photo) => (
             <AlbumTile
               key={photo.id}
               photo={photo}
               masonry
+              selecting={selecting}
+              selected={selected.has(photo.id)}
+              onToggleSelected={() => toggleSelected(photo.id)}
               onOpen={() => setOpenId(photo.id)}
               onDelete={() => handleDelete(photo)}
             />
@@ -197,10 +433,13 @@ export function AlbumGrid({
           {pendingTiles.map((tile) => (
             <PendingImportTile key={`pending-${tile.tempId}`} tile={tile} onRetry={onRetryTile} />
           ))}
-          {photos.map((photo) => (
+          {filtered.map((photo) => (
             <AlbumTile
               key={photo.id}
               photo={photo}
+              selecting={selecting}
+              selected={selected.has(photo.id)}
+              onToggleSelected={() => toggleSelected(photo.id)}
               onOpen={() => setOpenId(photo.id)}
               onDelete={() => handleDelete(photo)}
             />
@@ -392,12 +631,19 @@ function MasonryPendingTile({
 function AlbumTile({
   photo,
   masonry = false,
+  selecting = false,
+  selected = false,
+  onToggleSelected,
   onOpen,
   onDelete,
 }: {
   photo: AlbumGridPhoto;
   /** Masonry layout: natural aspect ratio + break-inside guard (Grid forces a 1:1 box). */
   masonry?: boolean;
+  /** Phase C selection mode: show a checkbox, suppress the hover toolbar. */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
   onOpen: () => void;
   onDelete: () => void;
 }) {
@@ -414,29 +660,63 @@ function AlbumTile({
         ...(masonry ? { breakInside: "avoid" as const } : {}),
       }}
     >
-      {/* Hover/focus mini-toolbar (item 2): the shared compact PhotoActionBar overlaid at the TOP of the
-          thumbnail, revealed on :hover and :focus-within so keyboard users can Tab into it. Pure CSS
-          reveal (opacity + pointer-events) — no JS state to keep it accessible and flicker-free. It
-          sits ABOVE the trigger button, so tapping an action never also fires the tile's open handler. */}
-      <div className="album-tile-toolbar">
-        <PhotoActionBar
-          photo={photo}
-          variant="compact"
-          onEdit={onOpen}
-          onDelete={onDelete}
-        />
-      </div>
-      <style>{
-        ".album-tile-toolbar{position:absolute;top:6px;left:6px;z-index:2;opacity:0;" +
-          "pointer-events:none;transition:opacity 120ms ease}" +
-          "li:hover>.album-tile-toolbar,li:focus-within>.album-tile-toolbar{opacity:1;pointer-events:auto}"
-      }</style>
+      {/* Selection checkbox (Phase C) — overlaid top-left while in selection mode. A real, keyboard-
+          operable checkbox with an accessible label naming the photo. */}
+      {selecting ? (
+        <label
+          style={{
+            position: "absolute",
+            top: 6,
+            left: 6,
+            zIndex: 2,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            borderRadius: "var(--radius-sm)",
+            background: "var(--surface-card)",
+            boxShadow: "var(--shadow-lift)",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelected?.()}
+            aria-label={hub.album.selectPhotoAria(photo.caption)}
+            style={{ width: 18, height: 18, cursor: "pointer", accentColor: "var(--accent)" }}
+          />
+        </label>
+      ) : (
+        <>
+          {/* Hover/focus mini-toolbar (item 2): the shared compact PhotoActionBar overlaid at the TOP of
+              the thumbnail, revealed on :hover and :focus-within so keyboard users can Tab into it. Pure
+              CSS reveal (opacity + pointer-events). SUPPRESSED in selection mode (above) so a stray tap
+              on a per-tile action can't fire on a photo the contributor only meant to select. */}
+          <div className="album-tile-toolbar">
+            <PhotoActionBar
+              photo={photo}
+              variant="compact"
+              onEdit={onOpen}
+              onDelete={onDelete}
+            />
+          </div>
+          <style>{
+            ".album-tile-toolbar{position:absolute;top:6px;left:6px;z-index:2;opacity:0;" +
+              "pointer-events:none;transition:opacity 120ms ease}" +
+              "li:hover>.album-tile-toolbar,li:focus-within>.album-tile-toolbar{opacity:1;pointer-events:auto}"
+          }</style>
+        </>
+      )}
 
-      {/* The whole image is the trigger — a button with an accessible label naming what it opens. */}
+      {/* The whole image is the trigger — a button with an accessible label naming what it opens. In
+          selection mode tapping the image TOGGLES selection (never opens the viewer) so a tap meant to
+          pick a photo can't accidentally leave the grid. */}
       <button
         type="button"
-        onClick={onOpen}
-        aria-label={hub.album.viewPhoto(photo.caption)}
+        onClick={selecting ? () => onToggleSelected?.() : onOpen}
+        aria-label={selecting ? hub.album.selectPhotoAria(photo.caption) : hub.album.viewPhoto(photo.caption)}
         style={{
           padding: 0,
           border: "none",

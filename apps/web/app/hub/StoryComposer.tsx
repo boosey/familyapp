@@ -24,6 +24,13 @@ interface StoryComposerProps {
    * enforces the owner can actually see it. Tell mode only; null/absent for a plain telling or answer.
    */
   subjectPhotoId?: string | null;
+  /**
+   * Phase C bulk "tell one story about these N photos". The NON-cover selected photos: attached to the
+   * new draft as accompaniment images via the normal photos-editor attach flow (the cover is the
+   * `subjectPhotoId` above). Any id equal to the cover is a no-op (the editor dedups against what's
+   * already attached). Empty for the ordinary single-photo / plain telling.
+   */
+  extraSubjectPhotoIds?: string[];
   /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
   promptQuestion?: string | null;
   /** The narrator's active families, offered in the share-step multi-family picker (Task 4). */
@@ -39,6 +46,7 @@ export function StoryComposer({
   ask = null,
   draft,
   subjectPhotoId = null,
+  extraSubjectPhotoIds = [],
   promptQuestion = null,
   families = [],
   seededFamilyIds = [],
@@ -67,6 +75,7 @@ export function StoryComposer({
       backTab={backTab}
       resumeHref={resumeHref}
       subjectPhotoId={subjectPhotoId}
+      extraSubjectPhotoIds={extraSubjectPhotoIds}
       promptQuestion={promptQuestion}
       families={families}
       seededFamilyIds={seededFamilyIds}
