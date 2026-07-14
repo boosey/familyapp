@@ -27,6 +27,16 @@ a direct horizontal line at their own row height.** A partnership reads from **p
 ~half the normal same-row gap apart (`PARTNER_GAP`); their connection is the descent bus below them.
 Siblings connect only *up* through their shared parents' descent bus. There is no partner-link glyph.
 
+## Children affordance placement (seam-hugging)
+The children caret/"+" **hugs the couple's bottom seam** — a fixed offset (`CARET_GAP`) below the card
+bottoms, centered on the couple midpoint. Its position is **identical collapsed vs expanded and
+identical caret vs "+"**; when expanded the descent **U** passes *below and behind* the glyph. The two
+inner-bottom card corners under it are **squared** so the borders run straight beneath the glyph. This
+fixed, per-couple position is load-bearing: it *encodes which couple* a child belongs to, so activating
+a "+" **predetermines both parents** (the other partner is pre-bound), and it extends cleanly to the
+deferred multiple-partners case (each partnership's seam is its own affordance). (Earlier the couple
+case dropped to the U-floor, which floated in empty space when collapsed — the U isn't drawn then.)
+
 ## Caret ownership (the core invariant)
 Every revealed relationship is controlled by **exactly one caret**, owned by whichever endpoint is
 **nearer to the anchor** along the path traveled to reach it. The farther endpoint never shows a

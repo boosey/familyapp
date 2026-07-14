@@ -930,10 +930,15 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         const kids = coupleChildren(id, partnerDrawn ? partner : null);
         const drawnKids = kids.filter((c) => isDrawn(c));
         const busCenterX = partnerDrawn ? (p.x + posOf.get(partner!)!.x) / 2 : p.x;
-        // A COUPLE's children caret sits at the U/riser junction (joinY) — on the bus, not crammed into
-        // the tight gap between the two partner cards. A lone parent has no U, so its caret hugs the
-        // card bottom as before.
-        const childrenCaretY = p.y + NODE_H / 2 + (partnerDrawn ? JOIN_DROP : CARET_GAP);
+        // The children affordance HUGS the couple's bottom seam — the same fixed offset (CARET_GAP) the
+        // parent-caret and the single-parent children-caret already use. Its position is IDENTICAL
+        // whether collapsed or expanded and whether caret or "+": when expanded the descent U passes
+        // BELOW and behind the glyph (the U floor is at joinY = bottom + JOIN_DROP, deeper than this).
+        // Fixing the offset per-couple is what lets a click seed BOTH parents (the couple owns coupleId),
+        // and extends cleanly to multiple partners (each partnership's seam is its own affordance).
+        // (Was `partnerDrawn ? JOIN_DROP : CARET_GAP` — the couple case dropped to the U-floor, which
+        // floated in empty space when collapsed since no U is drawn then. 2026-07-14 regression fix.)
+        const childrenCaretY = p.y + NODE_H / 2 + CARET_GAP;
         // Dedup rule (spec §3): children-caret only if it has children AND none are drawn.
         if (kids.length > 0 && drawnKids.length === 0) {
           affordances.push({

@@ -105,6 +105,8 @@ const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 interface AddTarget {
   anchorPersonId: string;
   relation: AddRelativeRelation;
+  /** For a couple's child add: the OTHER partner, pre-bound so the click predetermines both parents. */
+  coParentPersonId?: string;
 }
 
 export function TreeCanvas({
@@ -137,6 +139,22 @@ export function TreeCanvas({
   );
 
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.personId, n])), [nodes]);
+
+  // Which cards get an inner-bottom corner flattened: both halves of any drawn couple that carries a
+  // children affordance (its seam glyph hugs the seam, so the borders should run straight under it). The
+  // affordance's `ownerId` is the LEFT partner; the other member of `coupleId` is the RIGHT partner.
+  const squareCornerByPerson = useMemo(() => {
+    const m = new Map<string, "bottom-left" | "bottom-right">();
+    for (const a of layout.affordances) {
+      if (a.direction !== "children" || !a.coupleId || !a.coupleId.includes("|")) continue;
+      const [x, y] = a.coupleId.split("|");
+      const leftId = a.ownerId;
+      const rightId = x === leftId ? y! : x!;
+      m.set(leftId, "bottom-right"); // left card → flatten its inner (right) corner
+      m.set(rightId, "bottom-left"); // right card → flatten its inner (left) corner
+    }
+    return m;
+  }, [layout.affordances]);
 
   // The focus's position in layout space. The layout re-normalizes its origin on every expansion (the
   // tightest box starts at 0), so a node's absolute (x,y) shifts by a whole generation-step when kin
@@ -247,8 +265,8 @@ export function TreeCanvas({
   // --- Add-a-relative (modal over the tree, spec 2026-07-14) -------------------------------------
   // The "+" gutter buttons, the per-card ⋮ menu, and the person panel all open ONE Add modal now
   // (/hub/kin is gone). `openAdd` is shared with those child components via TreeAddProvider.
-  const openAdd: OpenAddRelative = useCallback((anchorPersonId, relation) => {
-    setAddTarget({ anchorPersonId, relation });
+  const openAdd: OpenAddRelative = useCallback((anchorPersonId, relation, coParentPersonId) => {
+    setAddTarget({ anchorPersonId, relation, coParentPersonId });
   }, []);
 
   // After a successful add, top the anchor's subtree back up so the new relative appears, then close.
@@ -295,7 +313,14 @@ export function TreeCanvas({
       if (a.kind === "add") {
         const relation: AddRelativeRelation =
           a.direction === "parents" ? "parent" : a.direction === "siblings" ? "sibling" : "child";
-        openAdd(a.ownerId, relation);
+        // A couple's child-"+" predetermines the co-parent: the OTHER member of coupleId (a|b). Single
+        // parents (coupleId is their own id, no "|") and non-child adds carry no co-parent.
+        let coParentPersonId: string | undefined;
+        if (a.direction === "children" && a.coupleId && a.coupleId.includes("|")) {
+          const [x, y] = a.coupleId.split("|");
+          coParentPersonId = x === a.ownerId ? y : x;
+        }
+        openAdd(a.ownerId, relation, coParentPersonId);
         return;
       }
       // caret: expand ⇄ collapse, client-only (spec §7). The reducer enforces the Rule-8 sibling⇄parent
@@ -469,6 +494,7 @@ export function TreeCanvas({
                 <PersonNode
                   node={p.node}
                   onTap={onNodeActivate}
+                  squareCorner={squareCornerByPerson.get(p.personId)}
                   kebab={
                     inert ? undefined : (
                       <KebabMenu
@@ -508,6 +534,7 @@ export function TreeCanvas({
           anchorPersonId={addTarget.anchorPersonId}
           initialRelation={addTarget.relation}
           coParentOptions={partnersOf(addTarget.anchorPersonId)}
+          preselectedCoParentId={addTarget.coParentPersonId}
           onClose={() => setAddTarget(null)}
           onSuccess={() => {
             const anchor = addTarget.anchorPersonId;

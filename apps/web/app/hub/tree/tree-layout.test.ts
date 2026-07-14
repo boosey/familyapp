@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
 
 import {
+  CARET_GAP,
   EMPTY_EXPANSION,
   type ExpansionState,
   NODE_H,
@@ -314,6 +315,57 @@ describe("caret placement & orientation (spec §3)", () => {
     expect(aff(l, "siblings", "man")!.x).toBeLessThan(man.x);
     expect(aff(l, "siblings", "woman")!.side).toBe("right");
     expect(aff(l, "siblings", "woman")!.x).toBeGreaterThan(woman.x);
+  });
+});
+
+describe("couple children affordance hugs the bottom seam (2026-07-14 regression)", () => {
+  // Regression for the reported bug: the couple's child caret/"+" used to drop to the U-floor
+  // (JOIN_DROP ≈ 27px), which floated in empty space when collapsed because no U is drawn then. It now
+  // hugs the seam at CARET_GAP — a FIXED offset relative to the cards, identical collapsed vs expanded
+  // and identical caret vs "+", so the position also encodes the couple for a predetermined-parents add.
+
+  it('a childless couple\'s "+" hugs the seam at CARET_GAP, centered between the partners', () => {
+    const nodes = [node("man", { sex: "male" }), node("woman", { sex: "female" })];
+    const edges = [partneredWith("man", "woman")];
+    const l = computeTreeLayout(input({ focusPersonId: "man", nodes, edges }));
+    const man = placedFor(l, "man");
+    const woman = placedFor(l, "woman");
+    const a = aff(l, "children", "man")!; // ownerId is the LEFT (male) anchor
+    expect(a.kind).toBe("add"); // no children yet
+    expect(a.y).toBeCloseTo(man.y + NODE_H / 2 + CARET_GAP, 5); // seam offset, not JOIN_DROP
+    expect(a.x).toBeCloseTo((man.x + woman.x) / 2, 5);
+    // Carries the couple key (a|b) so the canvas can square the inner corners AND pre-bind the co-parent.
+    expect(a.coupleId).toBe(coupleKey("man", "woman"));
+    expect(a.coupleId!.includes("|")).toBe(true);
+  });
+
+  it("the couple children caret is at the SAME position collapsed as expanded", () => {
+    const nodes = [node("man", { sex: "male" }), node("woman", { sex: "female" }), node("kid")];
+    const edges = [partneredWith("man", "woman"), parentOf("man", "kid"), parentOf("woman", "kid")];
+    const ck = coupleKey("man", "woman");
+    const expanded = computeTreeLayout(input({ focusPersonId: "man", nodes, edges }));
+    const collapsed = computeTreeLayout(
+      input({ focusPersonId: "man", nodes, edges, expansion: expansion({ collapsedChildren: new Set([ck]) }) }),
+    );
+    const ea = aff(expanded, "children", "man")!;
+    const ca = aff(collapsed, "children", "man")!;
+    expect(ea.expanded).toBe(true); // child drawn by default
+    expect(ca.expanded).toBe(false); // pruned
+    // Position (x AND y) is byte-identical between the two states — the whole point of the fix.
+    const man = placedFor(expanded, "man");
+    expect(ea.y).toBeCloseTo(man.y + NODE_H / 2 + CARET_GAP, 5);
+    expect(ca.y).toBeCloseTo(ea.y, 5);
+    expect(ca.x).toBeCloseTo(ea.x, 5);
+  });
+
+  it("a single parent's children affordance also hugs the seam (unchanged rule, now shared)", () => {
+    const l = computeTreeLayout(input({ focusPersonId: "solo", nodes: [node("solo")] }));
+    const solo = placedFor(l, "solo");
+    const a = aff(l, "children", "solo")!;
+    expect(a.y).toBeCloseTo(solo.y + NODE_H / 2 + CARET_GAP, 5);
+    // A lone parent keys to their own id (no "|") → no co-parent to pre-bind, no corners to square.
+    expect(a.coupleId).toBe(coupleKey("solo"));
+    expect(a.coupleId!.includes("|")).toBe(false);
   });
 });
 
@@ -858,8 +910,8 @@ describe("multi-child bar reaches the riser even when collision shifts the block
   });
 });
 
-describe("children caret placement (couple → U/riser junction; lone parent → card bottom)", () => {
-  it("a couple's children caret sits at the U/riser junction (joinY), on the bus", () => {
+describe("children caret placement (couple AND lone parent → hug the bottom seam)", () => {
+  it("a couple's children caret hugs the seam and sits ON TOP OF the U, not on its floor", () => {
     const nodes = [node("a", { sex: "male" }), node("b", { sex: "female" }), node("k1"), node("k2")];
     const edges = [
       partneredWith("a", "b"),
@@ -872,21 +924,21 @@ describe("children caret placement (couple → U/riser junction; lone parent →
     const a = placedFor(l, "a");
     const b = placedFor(l, "b");
     const caret = aff(l, "children", "a")!;
-    // Dropped well below the card bottom (onto the bus) — not crammed against the two card bottoms.
-    expect(caret.y - (a.y + NODE_H / 2)).toBeGreaterThan(15);
-    // Coincides with the U's horizontal (joinY) and the couple midpoint.
-    const uPath = l.connectors.find((c) => threeSegShape(c.d) === "U")!;
-    expect(caret.y).toBeCloseTo(segmentsOf(uPath.d)[1]!.y1, 5);
+    // Hugs the seam (CARET_GAP below the card bottoms), centered on the couple midpoint.
+    expect(caret.y - (a.y + NODE_H / 2)).toBeCloseTo(CARET_GAP, 5);
     expect(caret.x).toBeCloseTo((a.x + b.x) / 2, 5);
+    // Sits ABOVE the U's horizontal floor (joinY) — the U passes below and behind it when expanded.
+    const uPath = l.connectors.find((c) => threeSegShape(c.d) === "U")!;
+    expect(caret.y).toBeLessThan(segmentsOf(uPath.d)[1]!.y1);
   });
 
-  it("a lone parent's children caret still hugs the card bottom (no U to sit on)", () => {
+  it("a lone parent's children caret hugs the seam too (same shared rule)", () => {
     const nodes = [node("a"), node("kid")];
     const edges = [parentOf("a", "kid")];
     const l = computeTreeLayout(input({ focusPersonId: "a", nodes, edges }));
     const a = placedFor(l, "a");
     const caret = aff(l, "children", "a")!;
-    expect(caret.y - (a.y + NODE_H / 2)).toBeLessThan(15);
+    expect(caret.y - (a.y + NODE_H / 2)).toBeCloseTo(CARET_GAP, 5);
   });
 });
 

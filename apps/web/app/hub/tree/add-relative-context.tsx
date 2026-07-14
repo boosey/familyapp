@@ -11,7 +11,12 @@
 import { createContext, useContext } from "react";
 import type { AddRelativeRelation } from "@chronicle/core";
 
-export type OpenAddRelative = (anchorPersonId: string, relation: AddRelativeRelation) => void;
+export type OpenAddRelative = (
+  anchorPersonId: string,
+  relation: AddRelativeRelation,
+  /** For a couple's child add: the other partner, pre-bound so the click predetermines both parents. */
+  coParentPersonId?: string,
+) => void;
 
 const TreeAddContext = createContext<OpenAddRelative | null>(null);
 

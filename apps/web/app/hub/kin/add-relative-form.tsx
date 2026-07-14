@@ -22,6 +22,7 @@ export function AddRelativeForm({
   anchorPersonId,
   initialRelation,
   coParentOptions,
+  preselectedCoParentId,
   onSuccess,
 }: {
   familyId: string;
@@ -32,6 +33,9 @@ export function AddRelativeForm({
   /** The anchor's partners (issue: adding a child only linked one parent, not their partner too).
    *  Non-empty => the "Other parent" picker shows for relation=child. */
   coParentOptions?: { id: string; name: string }[];
+  /** When the add came from a couple's seam "+", the click predetermined the co-parent — preselect it
+   *  (falling back to the first partner if it isn't among the options). */
+  preselectedCoParentId?: string;
   /** Called after a successful add (no error). The tree modal uses it to close + refetch the anchor. */
   onSuccess?: () => void;
 }) {
@@ -44,6 +48,11 @@ export function AddRelativeForm({
   // be controlled so the field appears/disappears live as the user changes it.
   const [relation, setRelation] = useState<AddRelativeRelation>(initialRelation ?? "parent");
   const partners = coParentOptions ?? [];
+  // The co-parent the click predetermined, when it's a real partner; else default to the first partner.
+  const defaultCoParentId =
+    preselectedCoParentId && partners.some((p) => p.id === preselectedCoParentId)
+      ? preselectedCoParentId
+      : partners[0]?.id;
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -86,7 +95,7 @@ export function AddRelativeForm({
       {relation === "child" && partners.length > 0 ? (
         <label className="kin-form-label">
           {hub.kin.otherParentLabel}
-          <select name="coParentPersonId" className="kin-field" defaultValue={partners[0]!.id}>
+          <select name="coParentPersonId" className="kin-field" defaultValue={defaultCoParentId}>
             <option value="">{hub.kin.otherParentNone}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>

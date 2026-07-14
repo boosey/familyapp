@@ -113,9 +113,16 @@ export interface PersonNodeProps {
    * isolated from the card's tap target. Suppressed by the canvas for anonymous bridge nodes.
    */
   kebab?: React.ReactNode;
+  /**
+   * When this card is one half of a drawn couple that carries a children affordance, the canvas flattens
+   * the card's INNER-bottom corner so the couple's seam glyph (which hugs the seam) nests cleanly and the
+   * card borders run straight under it. `"bottom-right"` for the LEFT partner, `"bottom-left"` for the
+   * RIGHT partner; undefined leaves all corners rounded.
+   */
+  squareCorner?: "bottom-left" | "bottom-right";
 }
 
-export function PersonNode({ node, onTap, kebab }: PersonNodeProps) {
+export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps) {
   const anon = isAnonymousBridge(node);
   const name = displayNameFor(node);
   const dates = datesLineFor(node);
@@ -127,6 +134,16 @@ export function PersonNode({ node, onTap, kebab }: PersonNodeProps) {
     : "var(--border-width) solid var(--border)";
 
   const sexColor = sexBarColor(node);
+
+  // Flatten one inner-bottom corner when this card is a couple half hosting a seam affordance. Order:
+  // top-left top-right bottom-right bottom-left.
+  const r = "var(--radius-lg)";
+  const borderRadius =
+    squareCorner === "bottom-right"
+      ? `${r} ${r} 0px ${r}`
+      : squareCorner === "bottom-left"
+        ? `${r} ${r} ${r} 0px`
+        : r;
 
   return (
     <div style={{ position: "relative", width: NODE_W, height: NODE_H }}>
@@ -157,7 +174,7 @@ export function PersonNode({ node, onTap, kebab }: PersonNodeProps) {
           padding: "22px 12px 14px",
           textAlign: "center",
           cursor: "pointer",
-          borderRadius: "var(--radius-lg)",
+          borderRadius,
           border,
           background: "var(--surface-card)",
           font: "inherit",

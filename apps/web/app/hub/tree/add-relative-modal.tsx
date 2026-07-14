@@ -16,6 +16,8 @@ export interface AddRelativeModalProps {
   initialRelation: AddRelativeRelation;
   /** The anchor's partners — feeds the "Other parent" picker for relation=child. */
   coParentOptions: { id: string; name: string }[];
+  /** Pre-selects the "Other parent" when the add came from a couple's seam "+" (predetermined parents). */
+  preselectedCoParentId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -25,6 +27,7 @@ export function AddRelativeModal({
   anchorPersonId,
   initialRelation,
   coParentOptions,
+  preselectedCoParentId,
   onClose,
   onSuccess,
 }: AddRelativeModalProps) {
@@ -104,6 +107,7 @@ export function AddRelativeModal({
           anchorPersonId={anchorPersonId}
           initialRelation={initialRelation}
           coParentOptions={coParentOptions}
+          preselectedCoParentId={preselectedCoParentId}
           onSuccess={onSuccess}
         />
       </div>
