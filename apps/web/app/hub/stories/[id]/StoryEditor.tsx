@@ -11,6 +11,7 @@ import { hub } from "@/app/_copy";
 import { TagInput } from "@/app/hub/TagInput";
 import { StoryPhotosEditor } from "@/app/hub/StoryPhotosEditor";
 import type { TagSuggestions, TagToken } from "@/app/hub/tag-input-types";
+import { tokenKey } from "@/app/hub/tag-input-types";
 import {
   editStoryDetailsAction,
   editStoryProseAction,
@@ -56,6 +57,16 @@ export function StoryEditor(props: StoryEditorProps) {
       ...families.map((f): TagToken => ({ kind: "family", familyId: f.id, name: f.name })),
     ],
     [tags, people, families],
+  );
+
+  // A story shared with exactly ONE family can't have that last family removed here — dropping it
+  // would silently un-share the story. The chip stays (no ✕); with two or more, any is removable.
+  const nonRemovableTokenKeys = useMemo(
+    () =>
+      families.length === 1
+        ? new Set([tokenKey({ kind: "family", familyId: families[0]!.id, name: families[0]!.name })])
+        : new Set<string>(),
+    [families],
   );
 
   const run = (
@@ -140,6 +151,8 @@ export function StoryEditor(props: StoryEditorProps) {
     if (token.kind === "text") {
       saveTags(tags.filter((t) => t !== token.value));
     } else if (token.kind === "family") {
+      // Never remove the last family (belt-and-suspenders — TagInput already hides its ✕).
+      if (families.length <= 1) return;
       if (!confirm(hub.tagInput.confirmRevoke(token.name))) return;
       saveFamilies(families.filter((f) => f.id !== token.familyId));
     } else {
@@ -193,7 +206,14 @@ export function StoryEditor(props: StoryEditorProps) {
       <div style={{ display: "grid", gap: 6 }}>
         <span style={fieldLabel}>{hub.tagInput.label}</span>
         <p style={helpText}>{hub.tagInput.help}</p>
-        <TagInput tokens={tokens} suggestions={suggestions} onAdd={onAdd} onRemove={onRemove} disabled={pending} />
+        <TagInput
+          tokens={tokens}
+          suggestions={suggestions}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          disabled={pending}
+          nonRemovableTokenKeys={nonRemovableTokenKeys}
+        />
       </div>
 
       <label style={fieldLabel}>
@@ -216,14 +236,14 @@ export function StoryEditor(props: StoryEditorProps) {
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
         <KindredButton
           type="button"
-          label="Done"
+          label="Cancel"
           variant="ghost"
           disabled={pending}
           onClick={() => onClose({ title, tags, prose, targetFamilies: families })}
         />
         <KindredButton
           type="button"
-          label={pending ? "Saving…" : "Save title & story"}
+          label={pending ? "Saving…" : "Save"}
           disabled={pending}
           onClick={saveTitleAndProse}
         />

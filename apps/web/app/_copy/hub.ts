@@ -552,6 +552,26 @@ export const hub = {
     remove: "Remove",
     moveUp: "Move earlier",
     moveDown: "Move later",
+    // Compact toolstrip icon glyphs (item 5) + their accessible labels.
+    coverIcon: "☆",
+    moveUpIcon: "↑",
+    moveDownIcon: "↓",
+    removeIcon: "✕",
+    // Add-photo entry points (item 3): two buttons replace the always-on inline album grid.
+    addFromAlbumButton: "Add from album",
+    addFromGoogleButton: "Add from Google",
+    // "Add from album" modal (existing-photo picker + device upload).
+    pickModalTitle: "Add photos",
+    pickModalClose: "Done",
+    uploadFromDevice: "Upload from device",
+    choosePlacementAlbums: "Add these photos to",
+    uploading: "Uploading…",
+    importing: "Importing…",
+    // Google connect/import (reuses album copy verbs).
+    googleConnect: "Connect Google Photos",
+    googlePopupBlocked: "Please allow pop-ups to pick from Google Photos, then try again.",
+    googlePickerTimedOut: "The Google Photos picker timed out. Please try again.",
+    addFailed: "Couldn't add those photos. Please try again.",
     // Accessible labels naming the specific photo.
     attachAria: (caption: string | null) =>
       caption ? `Add “${caption}” to this story` : "Add this photo to the story",

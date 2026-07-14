@@ -29,7 +29,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("calls onClose with the current edited values (title/tags/prose/targetFamilies) when Done is clicked", async () => {
+it("calls onClose with the current edited values (title/tags/prose/targetFamilies) when Cancel is clicked", async () => {
   const onClose = vi.fn();
 
   render(
@@ -48,11 +48,11 @@ it("calls onClose with the current edited values (title/tags/prose/targetFamilie
   const titleInput = document.querySelector('input[type="text"]') as HTMLInputElement;
   fireEvent.change(titleInput, { target: { value: "New Title" } });
 
-  // Click the "Done" button specifically by its text.
-  const doneButton = Array.from(document.querySelectorAll("button")).find(
-    (b) => b.textContent === "Done",
+  // Click the "Cancel" button specifically by its text (it lifts the current values via onClose).
+  const cancelButton = Array.from(document.querySelectorAll("button")).find(
+    (b) => b.textContent === "Cancel",
   ) as HTMLButtonElement;
-  fireEvent.click(doneButton);
+  fireEvent.click(cancelButton);
 
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   const arg = onClose.mock.calls[0]![0];

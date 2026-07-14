@@ -10,7 +10,14 @@ import { hub } from "@/app/_copy";
 import type { TagInputProps, TagToken } from "./tag-input-types";
 import { tokenKey } from "./tag-input-types";
 
-export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: TagInputProps) {
+export function TagInput({
+  tokens,
+  suggestions,
+  onAdd,
+  onRemove,
+  disabled,
+  nonRemovableTokenKeys,
+}: TagInputProps) {
   const [query, setQuery] = useState("");
   const [dismissed, setDismissed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,17 +92,19 @@ export function TagInput({ tokens, suggestions, onAdd, onRemove, disabled }: Tag
               <span title={t.kind === "family" ? hub.tagInput.familyChipTitle : undefined}>
                 {t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : t.name}
               </span>
-              <button
-                type="button"
-                aria-label={`${hub.tagInput.remove} ${
-                  t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : t.name
-                }`}
-                onClick={() => onRemove(t)}
-                disabled={disabled}
-                style={chipRemove}
-              >
-                ✕
-              </button>
+              {nonRemovableTokenKeys?.has(tokenKey(t)) ? null : (
+                <button
+                  type="button"
+                  aria-label={`${hub.tagInput.remove} ${
+                    t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : t.name
+                  }`}
+                  onClick={() => onRemove(t)}
+                  disabled={disabled}
+                  style={chipRemove}
+                >
+                  ✕
+                </button>
+              )}
             </li>
           ))}
         </ul>

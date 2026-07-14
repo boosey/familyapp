@@ -30,6 +30,10 @@ const loadStoryPhotoEditorAction = vi.fn(async (..._a: unknown[]) => ({
   ],
   album: [] as { photoId: string; caption: string | null }[],
   nudge: null,
+  families: [] as { id: string; name: string }[],
+  googleConfigured: false,
+  googleConnected: false,
+  googleEmail: null,
 }));
 const attachStoryPhotoAction = vi.fn(async (_fd: FormData) => ({ ok: true as const }));
 
