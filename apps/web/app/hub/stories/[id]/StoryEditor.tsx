@@ -165,6 +165,9 @@ export function StoryEditor(props: StoryEditorProps) {
     }
   };
 
+  // Save persists title + prose (tags/people/families already wrote through on each edit), then
+  // closes the editor back to the read-only view — but only if the save succeeded. On error the
+  // surface stays open so the person can retry without losing their edits.
   const saveTitleAndProse = () => {
     if (!title.trim()) {
       setTitleError("Title can't be empty.");
@@ -178,13 +181,24 @@ export function StoryEditor(props: StoryEditorProps) {
     const fdP = new FormData();
     fdP.set("storyId", storyId);
     fdP.set("prose", prose);
-    run(async () => {
-      const d = await editStoryDetailsAction(fdD);
-      if (d && "error" in d && d.error) return d;
-      const p = await editStoryProseAction(fdP);
-      if (p && "error" in p && p.error) return p;
-      setSavedTitle(title);
-      return p;
+    startTransition(async () => {
+      try {
+        const d = await editStoryDetailsAction(fdD);
+        if (d && "error" in d && d.error) {
+          setError(d.error);
+          return;
+        }
+        const p = await editStoryProseAction(fdP);
+        if (p && "error" in p && p.error) {
+          setError(p.error);
+          return;
+        }
+        setError(null);
+        setSavedTitle(title);
+        onClose({ title, tags, prose, targetFamilies: families });
+      } catch {
+        setError("Something went wrong. Please try again.");
+      }
     });
   };
 

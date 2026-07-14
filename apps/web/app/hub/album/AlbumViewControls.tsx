@@ -40,9 +40,9 @@ export function AlbumViewControls({
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        justifyContent: "space-between",
+        justifyContent: "flex-end",
         gap: 16,
-        margin: "0 0 16px",
+        margin: 0,
       }}
     >
       {/* Segmented Grid / Masonry / List. A radiogroup: arrow keys move between options, and the

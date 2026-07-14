@@ -11,7 +11,7 @@
  * /hub/stories/[id] route (restyled separately). Reading size is owned by the hub header's
  * KindredFontScale — not duplicated here.
  */
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub, common } from "@/app/_copy";
@@ -43,6 +43,15 @@ type Mode = "feed" | "timeline" | "search";
 
 const MODES: Mode[] = ["feed", "timeline", "search"];
 
+/** Feed layout (Feed mode only): today's single-column stacked cards, or a masonry of cards. */
+type FeedView = "column" | "masonry";
+
+const FEED_VIEW_KEY = "hub:feedView";
+
+function isFeedView(v: string | null): v is FeedView {
+  return v === "column" || v === "masonry";
+}
+
 export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName, scope }: StoryBrowseProps) {
   const searchParams = useSearchParams();
 
@@ -57,6 +66,27 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
   // Timeline: default "Whole family" (all in-scope stories by era); toggle to "Just {viewer}".
   const [wholeFamily, setWholeFamily] = useState(true);
   const [query, setQuery] = useState("");
+
+  // Feed layout (Feed mode only). Start at the SSR-safe default ("column" — today's layout) and
+  // hydrate the persisted choice in a client-only effect, so the choice survives navigation/reload
+  // without a hydration mismatch.
+  const [feedView, setFeedView] = useState<FeedView>("column");
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FEED_VIEW_KEY);
+      if (isFeedView(stored)) setFeedView(stored);
+    } catch {
+      /* localStorage unavailable — keep the default. */
+    }
+  }, []);
+  function changeFeedView(v: FeedView) {
+    setFeedView(v);
+    try {
+      window.localStorage.setItem(FEED_VIEW_KEY, v);
+    } catch {
+      /* ignore persistence failure */
+    }
+  }
 
   // Family-scope narrowing over the authorized pool. "all" keeps everything; a family id keeps only
   // stories targeted to that family (a story tagged to N of the viewer's families matches each one).
@@ -93,11 +123,30 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
             </button>
           ))}
         </div>
+
+        {/* Feed layout toggle — right-justified on the same row as the mode pills. Only shown in Feed
+            mode (Timeline and Search own their own layouts; Column/Masonry only describe the card feed). */}
+        {mode === "feed" ? (
+          <div style={segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
+            {(["column", "masonry"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={feedView === v}
+                onClick={() => changeFeedView(v)}
+                style={modePill(feedView === v)}
+              >
+                {v === "column" ? hub.browse.viewColumn : hub.browse.viewMasonry}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div style={{ marginTop: 24 }}>
         {mode === "feed" ? (
-          <Feed items={scoped} scope={scope} viewerFamilies={viewerFamilies} href={href} />
+          <Feed items={scoped} scope={scope} viewerFamilies={viewerFamilies} href={href} view={feedView} />
         ) : null}
         {mode === "timeline" ? (
           <Timeline
@@ -123,11 +172,13 @@ function Feed({
   scope,
   viewerFamilies,
   href,
+  view,
 }: {
   items: StoryItem[];
   scope: string;
   viewerFamilies: ViewerFamily[];
   href: (item: StoryItem) => string;
+  view: FeedView;
 }) {
   if (items.length === 0) {
     const scopeName =
@@ -147,8 +198,20 @@ function Feed({
     );
   }
 
+  // Masonry — CSS multi-column of vertical cards, each kept whole across columns; column width sets
+  // how many columns fit. Column view is today's single stacked column of wide horizontal cards.
+  if (view === "masonry") {
+    return (
+      <div style={{ columnWidth: 320, columnGap: 18 }} data-view="masonry">
+        {items.map((item) => (
+          <FeedCard key={item.id} item={item} href={href(item)} masonry />
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }} data-view="column">
       {items.map((item) => (
         <FeedCard key={item.id} item={item} href={href(item)} />
       ))}
@@ -156,13 +219,13 @@ function Feed({
   );
 }
 
-function FeedCard({ item, href }: { item: StoryItem; href: string }) {
+function FeedCard({ item, href, masonry = false }: { item: StoryItem; href: string; masonry?: boolean }) {
   // The non-cover accompaniment photos: everything in the ordered photo set except the cover (which
   // already shows big on the left). Filtering by id — not by position — is robust even if the cover
   // isn't the first element, and yields [] for a text-only or cover-only story.
   const nonCoverPhotoIds = item.photoIds.filter((id) => id !== item.coverPhotoId);
   return (
-    <Link href={href} style={feedCardStyle}>
+    <Link href={href} style={masonry ? feedCardMasonry : feedCardStyle}>
       {item.isNew ? (
         <span style={newBadge}>
           <span style={newDot} aria-hidden="true" />
@@ -172,14 +235,15 @@ function FeedCard({ item, href }: { item: StoryItem; href: string }) {
 
       {/* Cover accompaniment (ADR-0009): the story's cover photo, served by the audited byte route.
           A story with no attached image renders NOTHING here — a text-only card is first-class, so
-          there is no placeholder. */}
+          there is no placeholder. In masonry the cover sits on top full-width (natural aspect, so
+          card heights vary); in column it's a fixed square on the left. */}
       {item.coverPhotoId ? (
         // eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth
         // route (/api/album-photo/[photoId]), not a static asset; next/image would proxy/optimize it.
         <img
           src={`/api/album-photo/${item.coverPhotoId}`}
           alt=""
-          style={coverImage}
+          style={masonry ? coverImageMasonry : coverImage}
         />
       ) : null}
 
@@ -476,6 +540,35 @@ const feedCardStyle: CSSProperties = {
   padding: 22,
   boxShadow: "var(--shadow-card)",
   position: "relative",
+};
+
+const feedCardMasonry: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  width: "100%",
+  textAlign: "left",
+  textDecoration: "none",
+  cursor: "pointer",
+  background: "var(--surface-card)",
+  border: "var(--border-width) solid var(--border)",
+  borderRadius: "var(--radius-lg)",
+  padding: 18,
+  boxShadow: "var(--shadow-card)",
+  position: "relative",
+  // Keep a card whole across columns, and space cards down the column.
+  breakInside: "avoid",
+  marginBottom: 18,
+};
+
+const coverImageMasonry: CSSProperties = {
+  width: "100%",
+  height: "auto",
+  maxHeight: 320,
+  objectFit: "cover",
+  borderRadius: "var(--radius-md)",
+  background: "var(--surface-sunken)",
+  display: "block",
 };
 
 const newBadge: CSSProperties = {

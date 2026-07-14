@@ -173,6 +173,10 @@ export const hub = {
     modeFeed: "Feed",
     modeTimeline: "Timeline",
     modeSearch: "Search",
+    // Feed layout toggle (Feed mode only) — single-column cards vs a masonry of cards.
+    viewSelectorAria: "Choose feed layout",
+    viewColumn: "Column",
+    viewMasonry: "Masonry",
     // Family-scope filter
     scopeAll: "All families",
     // Feed empty state (scope-aware). scopeName: "your families" or "the {family} family".

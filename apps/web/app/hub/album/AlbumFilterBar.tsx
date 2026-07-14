@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * AlbumFilterBar (Phase C · item 9) — the search / filter row above the album's view controls. It
- * narrows the photos ON SCREEN client-side (over the photos already loaded by the surface): who is in
- * them (subjects ∪ people), where (places), when (a coarse capture-time preset), and a caption/tag text
- * search. Purely presentational — `AlbumGrid` owns the `AlbumFilterValue` state AND does the filtering;
- * this component only renders the current value and reports changes.
+ * AlbumFilterBar (Phase C · item 9 · album layout 2026-07-14) — the album's search / filter controls,
+ * laid out as TWO rows: (1) small tag-size People / Places toggle CHIPS on their own row above (only
+ * rendered when the current photos carry those facets), and (2) a consolidated controls row whose LEFT
+ * holds When · Search · Clear and whose RIGHT holds the `rightSlot` (the view selector + size slider +
+ * Select toggle, passed in by `AlbumGrid`). It narrows the photos ON SCREEN client-side (over the photos
+ * already loaded by the surface). Purely presentational — `AlbumGrid` owns the `AlbumFilterValue` state
+ * AND does the filtering; this component only renders the current value and reports changes.
  *
- * The People / Places options are the UNION of the facet across the current photos, deduped by id, so
- * the menus only ever offer values that could actually match something. Each is a native multi-select
- * (keyboard-operable, elder-friendly, no custom popover). The period is a native <select>; the text is a
- * search input. A single "Clear filters" button resets everything.
+ * The People / Places chip options are the UNION of the facet across the current photos, deduped by id,
+ * so the chips only ever offer values that could actually match something. Each chip is a real
+ * `aria-pressed` toggle button (keyboard-operable, elder-friendly). The period is a native <select>; the
+ * text is a search input. A single "Clear filters" button resets everything.
  */
 import { hub } from "@/app/_copy";
 
@@ -48,17 +50,12 @@ const PERIODS: ReadonlyArray<{ value: AlbumPeriod; label: string }> = [
   { value: "older", label: hub.album.filterPeriodOlder },
 ];
 
-function selectedValues(el: HTMLSelectElement): Set<string> {
-  const out = new Set<string>();
-  for (const opt of Array.from(el.selectedOptions)) out.add(opt.value);
-  return out;
-}
-
 export function AlbumFilterBar({
   people,
   places,
   value,
   onChange,
+  rightSlot,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -66,6 +63,8 @@ export function AlbumFilterBar({
   places: { id: string; name: string }[];
   value: AlbumFilterValue;
   onChange: (next: AlbumFilterValue) => void;
+  /** Right-justified controls that share the consolidated row (view selector + slider + Select). */
+  rightSlot?: React.ReactNode;
 }) {
   const fieldLabel: React.CSSProperties = {
     display: "flex",
@@ -86,108 +85,171 @@ export function AlbumFilterBar({
     background: "var(--surface-card)",
   };
 
+  // Toggle one id in a facet Set without mutating the current value (immutably rebuild the Set).
+  const toggleIn = (set: Set<string>, id: string): Set<string> => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  };
+
+  const hasFacetChips = people.length > 0 || places.length > 0;
+
   return (
     <div
       role="group"
       aria-label={hub.album.filterBarAria}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "flex-end",
-        gap: 12,
-        margin: "0 0 16px",
-      }}
+      style={{ display: "flex", flexDirection: "column", gap: 12, margin: "0 0 16px" }}
     >
-      {/* People multi-select — only rendered when at least one photo carries a person. */}
-      {people.length > 0 ? (
-        <label style={fieldLabel}>
-          {hub.album.filterPeopleLabel}
-          <select
-            multiple
-            aria-label={hub.album.filterPeopleLabel}
-            value={[...value.personIds]}
-            onChange={(e) => onChange({ ...value, personIds: selectedValues(e.currentTarget) })}
-            style={{ ...control, minWidth: 160, minHeight: 72 }}
-          >
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      {/* Row 1 — small tag-size People / Places toggle chips (only when the photos carry those facets).
+          Kept compact so the facets never dominate the controls area. */}
+      {hasFacetChips ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
+          {people.length > 0 ? (
+            <FacetChips
+              label={hub.album.filterPeopleLabel}
+              options={people}
+              selected={value.personIds}
+              onToggle={(id) => onChange({ ...value, personIds: toggleIn(value.personIds, id) })}
+            />
+          ) : null}
+          {places.length > 0 ? (
+            <FacetChips
+              label={hub.album.filterPlacesLabel}
+              options={places}
+              selected={value.placeIds}
+              onToggle={(id) => onChange({ ...value, placeIds: toggleIn(value.placeIds, id) })}
+            />
+          ) : null}
+        </div>
       ) : null}
 
-      {/* Places multi-select — only when a photo carries a place. */}
-      {places.length > 0 ? (
-        <label style={fieldLabel}>
-          {hub.album.filterPlacesLabel}
-          <select
-            multiple
-            aria-label={hub.album.filterPlacesLabel}
-            value={[...value.placeIds]}
-            onChange={(e) => onChange({ ...value, placeIds: selectedValues(e.currentTarget) })}
-            style={{ ...control, minWidth: 160, minHeight: 72 }}
-          >
-            {places.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+      {/* Row 2 — When · Search · Clear (left) share ONE row with the view controls (right, rightSlot). */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, minWidth: 0 }}>
+          {/* Capture-time preset. */}
+          <label style={fieldLabel}>
+            {hub.album.filterPeriodLabel}
+            <select
+              aria-label={hub.album.filterPeriodLabel}
+              value={value.period}
+              onChange={(e) => onChange({ ...value, period: e.currentTarget.value as AlbumPeriod })}
+              style={{ ...control, minWidth: 140 }}
+            >
+              {PERIODS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {/* Capture-time preset. */}
-      <label style={fieldLabel}>
-        {hub.album.filterPeriodLabel}
-        <select
-          aria-label={hub.album.filterPeriodLabel}
-          value={value.period}
-          onChange={(e) => onChange({ ...value, period: e.currentTarget.value as AlbumPeriod })}
-          style={{ ...control, minWidth: 140 }}
-        >
-          {PERIODS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          {/* Caption / tag text search. */}
+          <label style={fieldLabel}>
+            {hub.album.filterTextLabel}
+            <input
+              type="search"
+              aria-label={hub.album.filterTextLabel}
+              placeholder={hub.album.filterTextPlaceholder}
+              value={value.text}
+              onChange={(e) => onChange({ ...value, text: e.currentTarget.value })}
+              style={{ ...control, minWidth: 180 }}
+            />
+          </label>
 
-      {/* Caption / tag text search. */}
-      <label style={fieldLabel}>
-        {hub.album.filterTextLabel}
-        <input
-          type="search"
-          aria-label={hub.album.filterTextLabel}
-          placeholder={hub.album.filterTextPlaceholder}
-          value={value.text}
-          onChange={(e) => onChange({ ...value, text: e.currentTarget.value })}
-          style={{ ...control, minWidth: 180 }}
-        />
-      </label>
+          {isFilterActive(value) ? (
+            <button
+              type="button"
+              onClick={() => onChange(EMPTY_FILTER)}
+              style={{
+                minHeight: 40,
+                padding: "8px 16px",
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                fontWeight: 500,
+                color: "var(--text-body)",
+                background: "transparent",
+                border: "var(--border-width) solid var(--border-strong)",
+                borderRadius: "var(--radius-pill)",
+                cursor: "pointer",
+              }}
+            >
+              {hub.album.filterClear}
+            </button>
+          ) : null}
+        </div>
 
-      {isFilterActive(value) ? (
-        <button
-          type="button"
-          onClick={() => onChange(EMPTY_FILTER)}
-          style={{
-            minHeight: 40,
-            padding: "8px 16px",
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            fontWeight: 500,
-            color: "var(--text-body)",
-            background: "transparent",
-            border: "var(--border-width) solid var(--border-strong)",
-            borderRadius: "var(--radius-pill)",
-            cursor: "pointer",
-          }}
-        >
-          {hub.album.filterClear}
-        </button>
-      ) : null}
+        {rightSlot ? (
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            {rightSlot}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** A small tag-size chip group for one facet (People or Places). Each chip is an `aria-pressed` toggle. */
+function FacetChips({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: { id: string; name: string }[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-ui-sm)",
+          color: "var(--text-meta)",
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map((o) => {
+          const on = selected.has(o.id);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onToggle(o.id)}
+              style={{
+                padding: "4px 12px",
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-label)",
+                fontWeight: 500,
+                color: on ? "var(--accent-strong)" : "var(--text-muted)",
+                background: on ? "var(--accent-soft)" : "transparent",
+                border: `1.5px solid ${on ? "var(--accent)" : "var(--border-strong)"}`,
+                borderRadius: "var(--radius-pill)",
+                cursor: "pointer",
+              }}
+            >
+              {o.name}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
