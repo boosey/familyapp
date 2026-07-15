@@ -328,6 +328,13 @@ export const families = pgTable("families", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   /**
+   * Optional brief label set by the family's Steward (ADR-0021 "Short name (Family)"), shown wherever
+   * the formal `name` would crowd the layout (the hub header, the filter chips). Nullable, no backfill:
+   * existing families keep null and fall back to the formal name. A future per-viewer override is a
+   * SEPARATE account-level preference — this is only the steward-set label.
+   */
+  shortName: text("short_name"),
+  /**
    * Optional free-text description of the family ("the Espositos from Naples, bakers for three
    * generations"). Feeds the natural-language/keyword family search. Only consulted for families
    * that have opted into discovery.

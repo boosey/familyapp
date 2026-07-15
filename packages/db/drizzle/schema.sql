@@ -90,6 +90,7 @@ CREATE TABLE "erasure_audit" (
 CREATE TABLE "families" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"short_name" text,
 	"description" text,
 	"discoverable" boolean DEFAULT false NOT NULL,
 	"creator_person_id" uuid NOT NULL,

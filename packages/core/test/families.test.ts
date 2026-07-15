@@ -61,6 +61,32 @@ describe("createFamily", () => {
     expect(fam?.description).toBe("Bakers from Naples");
     expect(fam?.discoverable).toBe(true);
   });
+
+  it("persists a trimmed shortName (ADR-0021)", async () => {
+    const p = await makePerson(db, "P");
+    const { familyId } = await createFamily(db, {
+      name: "The Boudreaux family",
+      shortName: "  Boudreaux  ",
+      creatorPersonId: p.id,
+    });
+    expect((await getFamily(db, familyId))?.shortName).toBe("Boudreaux");
+  });
+
+  it("stores null shortName when blank or omitted", async () => {
+    const p = await makePerson(db, "P");
+    const blank = await createFamily(db, {
+      name: "Blank",
+      shortName: "   ",
+      creatorPersonId: p.id,
+    });
+    expect((await getFamily(db, blank.familyId))?.shortName).toBeNull();
+
+    const omitted = await createFamily(db, {
+      name: "Omitted",
+      creatorPersonId: p.id,
+    });
+    expect((await getFamily(db, omitted.familyId))?.shortName).toBeNull();
+  });
 });
 
 describe("getFamily", () => {
