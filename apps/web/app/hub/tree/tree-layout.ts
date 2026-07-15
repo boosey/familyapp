@@ -515,7 +515,14 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       const flattenDedup = (units: string[][]): string[] => {
         const seen = new Set<string>();
         const out: string[] = [];
-        for (const u of units) for (const id of u) if (!seen.has(id)) (seen.add(id), out.push(id));
+        for (const u of units) {
+          for (const id of u) {
+            if (!seen.has(id)) {
+              seen.add(id);
+              out.push(id);
+            }
+          }
+        }
         return out;
       };
       const unitsOldestFirst = sibsOldestFirst.map(sibUnit);
