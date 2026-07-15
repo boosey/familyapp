@@ -35,10 +35,10 @@ export default async function StoryDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string | string[]; scope?: string | string[] }>;
+  searchParams: Promise<{ from?: string | string[]; families?: string | string[] }>;
 }) {
   const { id } = await params;
-  const { from, scope } = await searchParams;
+  const { from, families } = await searchParams;
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -66,18 +66,20 @@ export default async function StoryDetailPage({
 
   const backParams = new URLSearchParams({ tab: "stories" });
   const fromMode = first(from);
-  const backScope = first(scope);
+  // Preserve the raw `?families=` browse filter (ADR-0021) on the back-link so returning to the hub
+  // keeps the viewer's family selection.
+  const backFamilies = first(families);
   if (fromMode) backParams.set("mode", fromMode);
-  if (backScope) backParams.set("scope", backScope);
+  if (backFamilies) backParams.set("families", backFamilies);
   const backHref = `/hub?${backParams.toString()}`;
 
   // "View in family tree" — the Family hub tab (Tree view), focused on this story's narrator via
-  // `?anchor=`, scoped to a family the author is in (first story target family, else the back-scope,
-  // else the viewer's first family). The tab re-validates `anchor` against the family's visible edges
-  // and degrades safely (falls back to the viewer's self-root) on a bad pairing.
-  const treeScope = targets[0]?.id ?? backScope ?? viewerFamilies[0]?.id;
-  const authorTreeHref = treeScope
-    ? `/hub?tab=family&scope=${treeScope}&anchor=${story.ownerPersonId}`
+  // `?anchor=`, scoped to a family the author is in (first story target family, else the viewer's
+  // first family; the tree is single-select, ADR-0021). The tab re-validates `anchor` against the
+  // family's visible edges and degrades safely (falls back to the viewer's self-root) on a bad pairing.
+  const treeFamilyId = targets[0]?.id ?? viewerFamilies[0]?.id;
+  const authorTreeHref = treeFamilyId
+    ? `/hub?tab=family&families=${treeFamilyId}&anchor=${story.ownerPersonId}`
     : null;
 
   // Reactions state

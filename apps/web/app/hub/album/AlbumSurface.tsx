@@ -7,11 +7,11 @@
  * uploader. The page chrome (`<main>`, the container, the back-link, the `<h1>`) belongs to each
  * mount point.
  *
- * Family scope is the hub's SINGLE `?scope=` selector now (Increment 4A) — the album no longer owns
- * its own `?family=` switcher. `scope` is "all" (the deduped union of photos across ALL the viewer's
- * active families) or a family id (only that family's photos). It is re-validated here against the
- * viewer's OWN active families (defense in depth), falling back to "all" — a client-submitted scope
- * is never trusted.
+ * Family scope is the hub's shared `?families=` browse FILTER now (ADR-0021) — the album no longer owns
+ * its own `?family=` switcher, and the old single-select `?scope=` is retired. The raw param is parsed
+ * against the viewer's OWN active families (defense in depth — unknown/crafted ids are dropped, absent
+ * = all, an explicit `none` = the empty set): a client-submitted filter is never trusted. Multi-select
+ * on the album — the chip bar (self-hidden for <2 families) narrows which families' photos show.
  *
  * All reads go through the album front door: `listActiveFamiliesForPerson` (the viewer's OWN active
  * families), `listAlbumPhotos` (enforces active membership, called per shown family), and
@@ -25,6 +25,8 @@ import {
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import { hub } from "@/app/_copy";
+import { parseFamilyFilter, selectedIdList, deriveSingleScope } from "@/lib/family-filter";
+import { FamilyChips } from "../FamilyChips";
 import { AlbumUploader } from "./AlbumUploader";
 import { AlbumGrid } from "./AlbumGrid";
 import { AlbumBoard } from "./AlbumBoard";
@@ -35,14 +37,14 @@ import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection"
 export async function AlbumSurface({
   db,
   ctx,
-  scope,
+  familiesParam,
   googlePhotosOauthConnected = false,
   googlePhotosOauthError = null,
 }: {
   db: Database;
   ctx: AuthContext;
-  /** The hub's single family scope: "all" (union across the viewer's families) or a family id. */
-  scope: string;
+  /** The raw `?families=` browse-filter value (absent = all, `none` = empty, else a csv of ids). */
+  familiesParam: string | string[] | undefined;
   /** OAuth callback landed with `?googlePhotos=connected` (hub album tab only). */
   googlePhotosOauthConnected?: boolean;
   /** OAuth callback error code from `?googlePhotosError=` (hub album tab only). */
@@ -61,13 +63,13 @@ export async function AlbumSurface({
       ? await getActiveGooglePhotosConnection(db, viewer)
       : null;
 
-  // Re-validate the hub scope against the viewer's OWN active families (a client-crafted `?scope=`
-  // is never trusted); an unrecognized value falls back to "all". The families to show are ALL of
-  // them in "all" mode, else the single selected family.
-  const validScope =
-    scope !== "all" && active.some((f) => f.familyId === scope) ? scope : "all";
-  const shownFamilies =
-    validScope === "all" ? active : active.filter((f) => f.familyId === validScope);
+  // Parse the shared `?families=` browse filter against the viewer's OWN active families (a
+  // client-crafted value is never trusted — unknown ids drop, absent = all, `none` = the empty set).
+  // The families to show are the concrete selected ids; the empty-set (`none`) shows nothing.
+  const activeIds = active.map((f) => f.familyId);
+  const filter = parseFamilyFilter(familiesParam, activeIds);
+  const selectedIds = selectedIdList(filter, activeIds);
+  const shownFamilies = active.filter((f) => selectedIds.includes(f.familyId));
 
   // The photos on screen — ONE detailed read across `shownFamilies`, already DEDUPED by photo id and
   // sorted most-recent-first by the core seam (which also intersects each row's `families` down to the
@@ -106,50 +108,93 @@ export async function AlbumSurface({
     };
   });
 
-  // Where an "add photo" lands. A specific-family scope targets that family. In "all" mode the target
-  // is ambiguous, so we only offer the uploader when there is exactly ONE family to fall back to;
-  // with multiple families in "all" the uploader is withheld (pick a family from the hub selector to
-  // add). `null` ⇒ no uploader shown.
+  // Where an "add photo" lands (KEEP the old semantics, adapted to the filter): a single selected
+  // family targets that family. With 0 or >1 selected among multiple families the target is ambiguous,
+  // so we only fall back to a sole family; otherwise `null` ⇒ no uploader shown (exactly the old "all
+  // with multiple families" case). The `uploaderScope` seed handed to AlbumUploader collapses the
+  // filter to a single scope for its own seeding logic (unchanged).
   const uploadTargetFamilyId =
-    validScope !== "all"
-      ? validScope
+    selectedIds.length === 1
+      ? selectedIds[0]!
       : active.length === 1
         ? active[0]!.familyId
         : null;
+  const uploaderScope = deriveSingleScope(filter);
 
   // File upload needs an unambiguous target family. Google Photos connect is account-level and
-  // import still uses the family picker — show the uploader chrome when either path applies.
+  // import still uses the family picker — show the uploader chrome when either path applies. An
+  // explicit empty selection (`none`) withholds the uploader entirely (nothing is being browsed).
   const showUploader =
-    active.length > 0 && (uploadTargetFamilyId !== null || googleConfigured);
+    filter.kind !== "none" &&
+    active.length > 0 &&
+    (uploadTargetFamilyId !== null || googleConfigured);
+
+  // The shared browse-filter chip bar sits ABOVE the grid/uploader on every path — but only for a
+  // viewer with ≥2 families (one family has nothing to filter). Gating the MOUNT here (rather than
+  // relying on FamilyChips' own self-hide) keeps the client widget's next/navigation hooks out of the
+  // server render for the 0/1-family case (e.g. a pending-only viewer under renderToStaticMarkup).
+  const chips =
+    active.length >= 2 ? (
+      <FamilyChips
+        families={active.map((f) => ({ id: f.familyId, name: f.familyName }))}
+        selected={filter.kind === "all" ? "all" : selectedIds}
+      />
+    ) : null;
+
+  // Explicit empty selection: an honest empty state (ADR-0021) — no grid, no uploader — rather than a
+  // silent "show all". The chip bar stays so the viewer can turn a family back on.
+  if (filter.kind === "none") {
+    return (
+      <>
+        {chips}
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui)",
+            color: "var(--text-meta)",
+            margin: 0,
+          }}
+        >
+          {hub.album.noFamiliesSelected}
+        </p>
+      </>
+    );
+  }
 
   // ADR-0015 · F2 (flag-gated, dark in prod): when the in-grid per-item import progress feature is on
   // AND the uploader is shown, hand the whole uploader+grid to the client `AlbumBoard`, which owns the
-  // per-item pool + placeholder tiles. The flag-off path below is byte-for-byte unchanged.
+  // per-item pool + placeholder tiles. `viewedFamilyIds` drives its reconciliation; `uploaderScope`
+  // seeds its AlbumUploader.
   if (isAlbumImportProgressEnabled() && showUploader) {
     return (
-      <AlbumBoard
-        families={active}
-        currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
-        scope={validScope}
-        showFileUpload={uploadTargetFamilyId !== null}
-        googlePhotosConfigured={googleConfigured}
-        googlePhotosConnected={googleConn !== null}
-        googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
-        googlePhotosOauthConnected={googlePhotosOauthConnected}
-        googlePhotosOauthError={googlePhotosOauthError}
-        photos={gridPhotos}
-      />
+      <>
+        {chips}
+        <AlbumBoard
+          families={active}
+          currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
+          viewedFamilyIds={selectedIds}
+          uploaderScope={uploaderScope}
+          showFileUpload={uploadTargetFamilyId !== null}
+          googlePhotosConfigured={googleConfigured}
+          googlePhotosConnected={googleConn !== null}
+          googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+          googlePhotosOauthConnected={googlePhotosOauthConnected}
+          googlePhotosOauthError={googlePhotosOauthError}
+          photos={gridPhotos}
+        />
+      </>
     );
   }
 
   return (
     <>
+      {chips}
       {showUploader ? (
         <div style={{ margin: "0 0 24px" }}>
           <AlbumUploader
             families={active}
             currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
-            scope={validScope}
+            scope={uploaderScope}
             showFileUpload={uploadTargetFamilyId !== null}
             googlePhotosConfigured={googleConfigured}
             googlePhotosConnected={googleConn !== null}

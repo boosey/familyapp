@@ -52,7 +52,7 @@ describe("pending-only hub — Album tab", () => {
     const viewer = await makePerson(db, "Newcomer");
     const ctx: AuthContext = { kind: "account", personId: viewer };
 
-    const html = renderToStaticMarkup(await AlbumSurface({ db, ctx, scope: "all" }));
+    const html = renderToStaticMarkup(await AlbumSurface({ db, ctx, familiesParam: undefined }));
 
     expect(html).toContain(PENDING_FRAGMENT);
     expect(html).not.toContain(hub.album.empty);

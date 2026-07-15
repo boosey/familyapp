@@ -97,7 +97,8 @@ function renderBoard(props?: Partial<React.ComponentProps<typeof AlbumBoard>>) {
     <AlbumBoard
       families={[FAM_A]}
       currentFamilyId={FAM_A.familyId}
-      scope={null}
+      viewedFamilyIds={[FAM_A.familyId]}
+      uploaderScope="all"
       showFileUpload
       googlePhotosConfigured={false}
       googlePhotosConnected={false}
@@ -453,7 +454,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A]}
         currentFamilyId={FAM_A.familyId}
-        scope={null}
+        viewedFamilyIds={[FAM_A.familyId]}
+        uploaderScope="all"
         showFileUpload
         googlePhotosConfigured={false}
         googlePhotosConnected={false}
@@ -472,7 +474,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A]}
         currentFamilyId={FAM_A.familyId}
-        scope={null}
+        viewedFamilyIds={[FAM_A.familyId]}
+        uploaderScope="all"
         showFileUpload
         googlePhotosConfigured={false}
         googlePhotosConnected={false}
@@ -498,7 +501,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A, FAM_B]}
         currentFamilyId={FAM_A.familyId}
-        scope={FAM_A.familyId}
+        viewedFamilyIds={[FAM_A.familyId]}
+        uploaderScope={FAM_A.familyId}
         showFileUpload
         googlePhotosConfigured={false}
         googlePhotosConnected={false}

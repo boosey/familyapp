@@ -26,15 +26,15 @@ export const hub = {
     menuSettings: "Settings",
     menuSwitchUser: "Switch user",
     menuLogOut: "Log out",
+    // Account-menu family actions (ADR-0021): moved off the retired scope pill. Universal — they work
+    // for no-family and single-family viewers, who never see a family-filter chip bar.
+    menuCreateFamily: "Create a family",
+    menuFindFamily: "Find a family to join",
     sectionsAria: "Hub sections",
     unreadAria: (badge: number) => `${badge} unread`,
-    // Hub scope selector — the `[ All ▾ ]` pill that scopes the hub to All or one family.
-    scopeAria: "Choose which family to view",
-    scopeAll: "All",
-    scopeNoFamily: "No family yet",
-    scopePending: (familyName: string) => `${familyName} — Pending ⏳`,
-    scopeCreateFamily: "+ Create a family",
-    scopeFindFamily: "🔍 Find a family to join",
+    // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
+    // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.
+    familyFilterAria: "Filter by family",
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
@@ -324,6 +324,9 @@ export const hub = {
     backToAlbum: "← Back to album",
     title: "Family album",
     empty: "No photos yet. Add the first one above.",
+    // Family filter (ADR-0021): every chip is toggled OFF (an explicit empty selection) — an honest
+    // empty state rather than a silent "show all". No grid, no uploader until a family is turned on.
+    noFamiliesSelected: "No families selected — turn one on above to see its photos.",
     // "Add a photo" reads singular but the input accepts many at once (#16 multi-select) — the OS
     // picker copy already signals multi-select, so the label stays warm and simple.
     addLabel: "Add a photo",

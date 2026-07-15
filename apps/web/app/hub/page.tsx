@@ -14,7 +14,6 @@ import {
   listDecidedJoinRequestsForSteward,
   listOutstandingDrafts,
   listActiveFamiliesForPerson,
-  listJoinRequestsByRequester,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -29,7 +28,7 @@ import {
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
-import { HubScopeSelector } from "./HubScopeSelector";
+import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
 import { AlbumSurface } from "./album/AlbumSurface";
@@ -50,7 +49,7 @@ export default async function HubPage({
 }: {
   searchParams: Promise<{
     tab?: string;
-    scope?: string;
+    families?: string | string[];
     googlePhotos?: string;
     googlePhotosError?: string;
     subjectPhotoIds?: string | string[];
@@ -87,7 +86,7 @@ export default async function HubPage({
   /* ── Data ───────────────────────────────────────────────────────────────── */
   const {
     tab: tabParam,
-    scope: scopeParam,
+    families: familiesParam,
     googlePhotos: googlePhotosParam,
     googlePhotosError: googlePhotosErrorParam,
     subjectPhotoIds: subjectPhotoIdsParam,
@@ -115,16 +114,21 @@ export default async function HubPage({
   const validTabs = new Set(["stories", "album", "questions", "ask", "asks", "family", "invite", "requests"]);
   const activeTab = validTabs.has(tabParam ?? "") ? (tabParam as string) : "stories";
 
-  // Hub scope: the single server-read `?scope=` param (default "all"), validated against the viewer's
-  // OWN active families — a client-submitted scope is never trusted. `pendingRequests` are the
-  // viewer's own still-pending join requests, shown as muted rows in the selector. Both are read here
-  // (distinct from the steward-side `listPendingJoinRequestsForSteward` used for the Requests tab).
+  // Family filter (ADR-0021): parse the shared `?families=` browse param against the viewer's OWN
+  // active families (a client-crafted value is never trusted — unknown ids drop, absent = all, `none`
+  // = the empty set). The browse surfaces multi-select; the tabs not yet multi-aware derive a single
+  // `scope` from it, byte-for-byte the old behaviour. The RAW families value (normalized to a single
+  // string | null) is threaded to HubTabsNav so a tab switch preserves the filter.
   const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
-  const pendingJoinRequests = (await listJoinRequestsByRequester(db, ctx.personId)).filter(
-    (r) => r.status === "pending",
-  );
-  const scope =
-    scopeParam && activeFamilies.some((f) => f.familyId === scopeParam) ? scopeParam : "all";
+  const activeIds = activeFamilies.map((f) => f.familyId);
+  const filter = parseFamilyFilter(familiesParam, activeIds);
+  const scope = deriveSingleScope(filter);
+  const familiesRaw =
+    familiesParam === undefined
+      ? null
+      : Array.isArray(familiesParam)
+        ? familiesParam.join(",")
+        : familiesParam;
 
   // Family tab (visual tree + relatives list, folded in from the old /hub/tree + /hub/kin routes).
   // Resolve a concrete family — the hub scope when it names one, else the viewer's first active family
@@ -250,31 +254,6 @@ export default async function HubPage({
           padding: "0 clamp(16px, 4vw, 32px)",
         }}
       >
-        {/* Scope selector — floated top-right, just before the global account avatar
-            (<AccountMenuMount>: fixed top:20 right:20, 48px). It lives in the hub (not the root
-            layout) because it needs the viewer's scope/tab/families/pending data, which the
-            server-only global mount does not have. Offset tracks the avatar geometry. */}
-        <div
-          style={{
-            position: "fixed",
-            top: 20,
-            right: 80 /* 20 (avatar right margin) + 48 (avatar) + 12 gap */,
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            zIndex: 50,
-          }}
-        >
-          <HubScopeSelector
-            scope={scope}
-            tab={activeTab}
-            families={activeFamilies}
-            pending={pendingJoinRequests.map((r) => ({
-              familyName: r.familyName,
-              stewardName: r.stewardName,
-            }))}
-          />
-        </div>
         {/* Header */}
         <header
           style={{
@@ -315,7 +294,7 @@ export default async function HubPage({
 
           {/* Tabs row */}
           <div style={{ marginBottom: -1 /* overlap the border */ }}>
-            <HubTabsNav tabs={tabs} active={activeTab} scope={scope} />
+            <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
           </div>
         </header>
 
@@ -340,7 +319,7 @@ export default async function HubPage({
             <AlbumSurface
               db={db}
               ctx={ctx}
-              scope={scope}
+              familiesParam={familiesParam}
               googlePhotosOauthConnected={googlePhotosOauthConnected}
               googlePhotosOauthError={googlePhotosOauthError}
             />

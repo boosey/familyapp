@@ -6,7 +6,7 @@
  *   2. KebabMenu shows the Invite… item ONLY for `invitable`, and it calls the invite context handler
  *      (the SAME handler the sheet uses).
  *   3. From TreeCanvas, inviting deep-links to the EXISTING invite flow pre-targeted at this
- *      person + family (`/hub?tab=invite&scope=<familyId>&inviteeName=<name>`) — no new invite logic;
+ *      person + family (`/hub?tab=invite&families=<familyId>&inviteeName=<name>`) — no new invite logic;
  *      the target flow's form still posts to `createInvitation`.
  */
 import { afterEach, expect, it, vi } from "vitest";
@@ -183,6 +183,6 @@ it("inviting from the tree deep-links to the existing invite flow, pre-targeted 
   const parsed = new URL(url, "https://example.test");
   expect(parsed.pathname).toBe("/hub");
   expect(parsed.searchParams.get("tab")).toBe("invite"); // the EXISTING invite flow
-  expect(parsed.searchParams.get("scope")).toBe("FAM-1"); // family pre-targeted
+  expect(parsed.searchParams.get("families")).toBe("FAM-1"); // family pre-targeted
   expect(parsed.searchParams.get("inviteeName")).toBe("Elena Ricci"); // name pre-filled
 });
