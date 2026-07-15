@@ -143,8 +143,12 @@ export {
   createFamily,
   getFamily,
   setFamilyDiscovery,
+  updateFamily,
+  listFamiliesStewardedBy,
   type CreateFamilyInput,
   type CreateFamilyResult,
+  type UpdateFamilyInput,
+  type StewardedFamilyView,
 } from "./families";
 export {
   addMembership,
