@@ -4,9 +4,7 @@ import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
 import { AccountMenuMount } from "./_kindred/AccountMenuMount";
-import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "../lib/constants";
-import { FONT_SIZE_STORAGE_KEY } from "./_kindred/font-scale-constants";
-import { THEME_STORAGE_KEY, DEFAULT_THEME_ID, THEME_IDS } from "./_kindred/theme-constants";
+import { ALL_PREFERENCES, buildPrePaintScript } from "./_kindred/preferences/registry";
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
@@ -75,13 +73,10 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`} suppressHydrationWarning>
       <head>
-        {/* Apply the persisted reading-size step BEFORE first paint to avoid a flash/reflow.
-            Reads the same constants as KindredFontScale — single source of truth. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var S=${JSON.stringify(FONT_SIZE_STEPS_PT)};var i=+localStorage.getItem(${JSON.stringify(FONT_SIZE_STORAGE_KEY)});if(!(Number.isInteger(i)&&i>=0&&i<S.length))i=${DEFAULT_FONT_SIZE_INDEX};document.documentElement.style.fontSize=S[i]+'pt';var T=${JSON.stringify(THEME_IDS)};var th=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(T.indexOf(th)<0)th=${JSON.stringify(DEFAULT_THEME_ID)};document.documentElement.dataset.theme=th;}catch(e){}})()`,
-          }}
-        />
+        {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
+            flash/reflow. Generated from the preference registry — the single source of truth shared
+            with KindredFontScale / KindredThemePicker (ADR-0020). Adding a preference needs no edit here. */}
+        <script dangerouslySetInnerHTML={{ __html: buildPrePaintScript(ALL_PREFERENCES) }} />
       </head>
       {inner}
     </html>
