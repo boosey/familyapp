@@ -97,6 +97,7 @@ function renderBoard(props?: Partial<React.ComponentProps<typeof AlbumBoard>>) {
     <AlbumBoard
       families={[FAM_A]}
       currentFamilyId={FAM_A.familyId}
+      defaultSelected={[FAM_A.familyId]}
       viewedFamilyIds={[FAM_A.familyId]}
       uploaderScope="all"
       showFileUpload
@@ -454,6 +455,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A]}
         currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_A.familyId]}
         viewedFamilyIds={[FAM_A.familyId]}
         uploaderScope="all"
         showFileUpload
@@ -474,6 +476,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A]}
         currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_A.familyId]}
         viewedFamilyIds={[FAM_A.familyId]}
         uploaderScope="all"
         showFileUpload
@@ -501,6 +504,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       <AlbumBoard
         families={[FAM_A, FAM_B]}
         currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_A.familyId]}
         viewedFamilyIds={[FAM_A.familyId]}
         uploaderScope={FAM_A.familyId}
         showFileUpload
@@ -524,6 +528,42 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     );
     expect(screen.queryByRole("img", { name: PHOTO_ALT })).toBeNull();
     // Sanity: the action really did receive ONLY the out-of-scope family id.
+    const fd = uploadOneAlbumPhotoAction.mock.calls[0]![0] as FormData;
+    expect(fd.getAll("familyIds")).toEqual([FAM_B.familyId]);
+  });
+
+  // ADR-0021 (review finding — coverage gap): the board is the F2 mount point the ADR names
+  // explicitly, so assert the "ambiguous ⇒ deliberate pick" contract AT the board boundary, not just
+  // inside AlbumUploader. With >1 family and an EMPTY designator default (the ambiguous all/none case),
+  // the "Add to album" button must be disabled until the contributor picks — a photo never silently
+  // fans out to every family through the board path.
+  it("ambiguous (empty defaultSelected, >1 family): Add is disabled until a deliberate pick", async () => {
+    render(
+      <AlbumBoard
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[]}
+        viewedFamilyIds={[FAM_A.familyId, FAM_B.familyId]}
+        uploaderScope="all"
+        showFileUpload
+        googlePhotosConfigured={false}
+        googlePhotosConnected={false}
+        googlePhotosEmail={null}
+        googlePhotosOauthConnected={false}
+        googlePhotosOauthError={null}
+        photos={[]}
+      />,
+    );
+    // Nothing pre-selected → the add button is disabled (no default fan-out).
+    const addButton = screen.getByRole("button", { name: hub.album.addButton });
+    expect((addButton as HTMLButtonElement).disabled).toBe(true);
+
+    // A deliberate pick of ONE family enables it, and an upload targets ONLY that family.
+    fireEvent.click(screen.getByRole("checkbox", { name: FAM_B.familyName }));
+    expect((addButton as HTMLButtonElement).disabled).toBe(false);
+    chooseFiles(["deliberate.png"]);
+
+    await waitFor(() => expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(1));
     const fd = uploadOneAlbumPhotoAction.mock.calls[0]![0] as FormData;
     expect(fd.getAll("familyIds")).toEqual([FAM_B.familyId]);
   });

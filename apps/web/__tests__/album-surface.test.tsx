@@ -38,16 +38,19 @@ vi.mock("@/app/hub/album/AlbumGrid", () => ({
 vi.mock("@/app/hub/album/AlbumBoard", () => ({
   AlbumBoard: ({
     currentFamilyId,
+    defaultSelected,
     showFileUpload,
     photos,
   }: {
     currentFamilyId: string;
+    defaultSelected?: string[];
     showFileUpload?: boolean;
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
   }) => (
     <div
       data-testid="album-board"
       data-current-family={currentFamilyId}
+      data-default-selected={(defaultSelected ?? []).join(",")}
       data-show-file-upload={String(showFileUpload ?? true)}
     >
       {photos.map((p) => (
@@ -68,12 +71,14 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
   AlbumUploader: ({
     families,
     currentFamilyId,
+    defaultSelected,
     showFileUpload,
     googlePhotosConfigured,
     googlePhotosConnected,
   }: {
     families: Array<{ familyId: string; familyName: string }>;
     currentFamilyId: string;
+    defaultSelected?: string[];
     showFileUpload?: boolean;
     googlePhotosConfigured?: boolean;
     googlePhotosConnected?: boolean;
@@ -81,6 +86,7 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
     <div
       data-testid="album-uploader"
       data-current-family={currentFamilyId}
+      data-default-selected={(defaultSelected ?? []).join(",")}
       data-show-file-upload={String(showFileUpload ?? true)}
       data-google-configured={String(!!googlePhotosConfigured)}
       data-google-connected={String(!!googlePhotosConnected)}
@@ -226,9 +232,13 @@ describe("AlbumSurface", () => {
     // The grid received the placed photo (its audited bytes route appears via the grid stub)...
     expect(html).toContain(`/api/album-photo/${photoId}`);
     expect(html).toContain(`data-photo-id="${photoId}"`);
-    // ...and the uploader is mounted, targeting the sole family (unambiguous even in "all").
+    // ...and the uploader is mounted, targeting the sole family (unambiguous even in "all"): the
+    // designator pre-selects that lone family so upload proceeds with no extra picking.
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain(`data-current-family="${famA}"`);
+    expect(html).toContain(`data-default-selected="${famA}"`);
+    // The file-add button is always available now (decoupled from the filter).
+    expect(html).toContain('data-show-file-upload="true"');
     // A one-family viewer has nothing to filter → no chip bar.
     expect(html).not.toContain('data-testid="family-chips"');
   });
@@ -252,8 +262,12 @@ describe("AlbumSurface", () => {
     // Deduped: the both-families photo's tile appears once, not twice.
     const occurrences = html.split(`data-photo-id="${photoAB}"`).length - 1;
     expect(occurrences).toBe(1);
-    // With multiple families all selected (absent = all), the uploader target is ambiguous → withheld.
-    expect(html).not.toContain('data-testid="album-uploader"');
+    // ADR-0021: the uploader is ALWAYS present (decoupled from the filter). With multiple families all
+    // selected (absent = all) the target is AMBIGUOUS → the designator pre-selects NOTHING, forcing a
+    // deliberate pick (a photo never silently fans out to all families).
+    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain('data-default-selected=""');
+    expect(html).toContain('data-show-file-upload="true"');
     // The chip bar is shown with every chip ON.
     expect(html).toContain('data-testid="family-chips"');
     expect(html).toContain('data-selected="all"');
@@ -275,6 +289,8 @@ describe("AlbumSurface", () => {
     expect(html).toContain(`data-photo-id="${photoB}"`);
     expect(html).not.toContain(`data-photo-id="${photoA}"`);
     expect(html).toContain(`data-current-family="${famB}"`);
+    // The filter names exactly one family → unambiguous, so the designator pre-selects famB.
+    expect(html).toContain(`data-default-selected="${famB}"`);
     // A single-family selection out of two → chip bar present, only famB ON.
     expect(html).toContain(`data-selected="${famB}"`);
   });
@@ -298,13 +314,15 @@ describe("AlbumSurface", () => {
     expect(html).toContain(`data-photo-id="${photoA}"`);
     expect(html).toContain(`data-photo-id="${photoC}"`);
     expect(html).not.toContain(`data-photo-id="${photoB}"`);
-    // Two selected among three → uploader target ambiguous → withheld.
-    expect(html).not.toContain('data-testid="album-uploader"');
+    // Two selected among three → the uploader is still present (ADR-0021) but the target is AMBIGUOUS
+    // → the designator pre-selects nothing (a deliberate pick is forced).
+    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain('data-default-selected=""');
     // Chip bar reflects the A+C subset (active-set order).
     expect(html).toContain(`data-selected="${famA},${famC}"`);
   });
 
-  it("none (all chips off) shows the explicit empty state — no grid, no uploader", async () => {
+  it("none (all chips off) shows the explicit empty grid state but STILL shows the uploader (ADR-0021)", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -315,10 +333,14 @@ describe("AlbumSurface", () => {
 
     const html = await render(db, account(viewer), "none");
 
-    // The honest empty state (ADR-0021) — not a silent "show all".
+    // The honest empty state for the GRID (ADR-0021) — not a silent "show all".
     expect(html).toContain(hub.album.noFamiliesSelected);
     expect(html).not.toContain('data-testid="album-grid"');
-    expect(html).not.toContain('data-testid="album-uploader"');
+    // The add/import flow is DECOUPLED from the filter: the uploader shows even in the all-off case.
+    // The target is ambiguous (>1 family, filter names none) → the designator pre-selects nothing.
+    expect(html).toContain('data-testid="album-uploader"');
+    expect(html).toContain('data-default-selected=""');
+    expect(html).toContain('data-show-file-upload="true"');
     // The chip bar stays so a family can be turned back on; all chips OFF.
     expect(html).toContain('data-testid="family-chips"');
     expect(html).toContain('data-selected=""');
@@ -373,7 +395,7 @@ describe("AlbumSurface", () => {
     expect(html).not.toContain('data-testid="album-grid"');
   });
 
-  it("shows Google Photos chrome without file upload when all families are selected and Google is configured", async () => {
+  it("shows Google Photos chrome AND the file-add button when all families are selected and Google is configured", async () => {
     isGooglePhotosConfigured.mockReturnValue(true);
     getActiveGooglePhotosConnection.mockResolvedValue({
       personId: "viewer",
@@ -393,8 +415,59 @@ describe("AlbumSurface", () => {
     const html = await render(db, account(viewer), undefined);
 
     expect(html).toContain('data-testid="album-uploader"');
-    expect(html).toContain('data-show-file-upload="false"');
+    // ADR-0021: the file-add button is always available now (the designator, not a hidden button,
+    // resolves the ambiguous target). The target is still ambiguous here → empty default selection.
+    expect(html).toContain('data-show-file-upload="true"');
+    expect(html).toContain('data-default-selected=""');
     expect(html).toContain('data-google-configured="true"');
     expect(html).toContain('data-google-connected="true"');
+  });
+
+  // ADR-0021 regression: the uploader is shown REGARDLESS of filter state for a viewer with ≥1 family.
+  // Sweep the three filter shapes (all-on / all-off / single) and assert the uploader is always mounted
+  // with the file-add button available — the add/import flow is decoupled from the browse filter.
+  it("shows the uploader regardless of filter state (all-on, all-off/none) for a ≥1-family viewer", async () => {
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
+    await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+
+    // absent = all-on (ambiguous target)
+    const all = await render(db, account(viewer), undefined);
+    expect(all).toContain('data-testid="album-uploader"');
+    expect(all).toContain('data-show-file-upload="true"');
+    expect(all).toContain('data-default-selected=""');
+
+    // none = all-off (uploader still present, ambiguous target)
+    const none = await render(db, account(viewer), "none");
+    expect(none).toContain('data-testid="album-uploader"');
+    expect(none).toContain('data-show-file-upload="true"');
+    expect(none).toContain('data-default-selected=""');
+
+    // a single family named (unambiguous → that family pre-selected)
+    const one = await render(db, account(viewer), famA);
+    expect(one).toContain('data-testid="album-uploader"');
+    expect(one).toContain('data-show-file-upload="true"');
+    expect(one).toContain(`data-default-selected="${famA}"`);
+  });
+
+  // ADR-0021 regression (board path): the flag-ON AlbumBoard is likewise ALWAYS mounted for a ≥1-family
+  // viewer, threading the same designator default (empty when ambiguous) and always-on file upload.
+  it("flag ON: mounts AlbumBoard with an ambiguous (empty) designator default when the filter is all-on", async () => {
+    isAlbumImportProgressEnabled.mockReturnValue(true);
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
+    await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+
+    const html = await render(db, account(viewer), undefined);
+
+    expect(html).toContain('data-testid="album-board"');
+    expect(html).toContain('data-default-selected=""');
+    expect(html).toContain('data-show-file-upload="true"');
   });
 });

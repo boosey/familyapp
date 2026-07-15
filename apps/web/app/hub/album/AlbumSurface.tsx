@@ -108,26 +108,31 @@ export async function AlbumSurface({
     };
   });
 
-  // Where an "add photo" lands (KEEP the old semantics, adapted to the filter): a single selected
-  // family targets that family. With 0 or >1 selected among multiple families the target is ambiguous,
-  // so we only fall back to a sole family; otherwise `null` ⇒ no uploader shown (exactly the old "all
-  // with multiple families" case). The `uploaderScope` seed handed to AlbumUploader collapses the
-  // filter to a single scope for its own seeding logic (unchanged).
-  const uploadTargetFamilyId =
+  // The Family DESIGNATOR (ADR-0021) — the add/import flow's OWN target, DECOUPLED from the browse
+  // filter. It is seeded from the filter but never written back. The seed rule lives in ONE place here:
+  //   - the viewer has exactly one active family, OR the filter names exactly one → that sole family is
+  //     pre-selected (unambiguous, no friction);
+  //   - otherwise (viewer has >1 family and the filter is `all`/`none`/a multi subset) → the target is
+  //     AMBIGUOUS: pre-select NOTHING and force a deliberate pick. A photo never silently fans out.
+  const soleTargetFamilyId =
     selectedIds.length === 1
       ? selectedIds[0]!
       : active.length === 1
         ? active[0]!.familyId
         : null;
+  const defaultSelectedFamilyIds = soleTargetFamilyId !== null ? [soleTargetFamilyId] : [];
+  // `currentFamilyId` still feeds AlbumUploader's legacy seeding math (and is a sensible non-null
+  // fallback); the AMBIGUOUS case must NOT pre-select it — `defaultSelected` (above) governs that.
+  const currentFamilyId = selectedIds[0] ?? active[0]?.familyId ?? "";
   const uploaderScope = deriveSingleScope(filter);
 
-  // File upload needs an unambiguous target family. Google Photos connect is account-level and
-  // import still uses the family picker — show the uploader chrome when either path applies. An
-  // explicit empty selection (`none`) withholds the uploader entirely (nothing is being browsed).
-  const showUploader =
-    filter.kind !== "none" &&
-    active.length > 0 &&
-    (uploadTargetFamilyId !== null || googleConfigured);
+  // The uploader is ALWAYS present for a viewer with ≥1 family (ADR-0021) — the add/import flow is
+  // decoupled from the browse filter, so it shows even in the all-off (`none`) and all-on (`all`)
+  // cases. Ambiguity is resolved by the designator (a deliberate pick), NOT by hiding the uploader.
+  const showUploader = active.length > 0;
+  // The file-add button is always available now; the designator (not a hidden button) resolves the
+  // target. Kept as a prop so AlbumUploader/AlbumBoard's shape is unchanged.
+  const showFileUpload = true;
 
   // The shared browse-filter chip bar sits ABOVE the grid/uploader on every path — but only for a
   // viewer with ≥2 families (one family has nothing to filter). Gating the MOUNT here (rather than
@@ -141,12 +146,34 @@ export async function AlbumSurface({
       />
     ) : null;
 
-  // Explicit empty selection: an honest empty state (ADR-0021) — no grid, no uploader — rather than a
-  // silent "show all". The chip bar stays so the viewer can turn a family back on.
+  // The shared uploader element — the add/import flow, ALWAYS present for a viewer with ≥1 family
+  // (ADR-0021). Rendered here once so BOTH the all-off (`none`) branch below and the main return can
+  // mount the same designator-seeded control (the filter and the designator are separate state).
+  const uploaderElement = showUploader ? (
+    <div style={{ margin: "0 0 24px" }}>
+      <AlbumUploader
+        families={active}
+        currentFamilyId={currentFamilyId}
+        scope={uploaderScope}
+        defaultSelected={defaultSelectedFamilyIds}
+        showFileUpload={showFileUpload}
+        googlePhotosConfigured={googleConfigured}
+        googlePhotosConnected={googleConn !== null}
+        googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+        googlePhotosOauthConnected={googlePhotosOauthConnected}
+        googlePhotosOauthError={googlePhotosOauthError}
+      />
+    </div>
+  ) : null;
+
+  // Explicit empty selection (`none`): an honest empty state for the GRID (ADR-0021) — not a silent
+  // "show all". The uploader still shows (decoupled from the filter), sitting ABOVE the "no families
+  // selected" note; the chip bar stays so the viewer can turn a family back on.
   if (filter.kind === "none") {
     return (
       <>
         {chips}
+        {uploaderElement}
         <p
           style={{
             fontFamily: "var(--font-ui)",
@@ -171,10 +198,11 @@ export async function AlbumSurface({
         {chips}
         <AlbumBoard
           families={active}
-          currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
+          currentFamilyId={currentFamilyId}
+          defaultSelected={defaultSelectedFamilyIds}
           viewedFamilyIds={selectedIds}
           uploaderScope={uploaderScope}
-          showFileUpload={uploadTargetFamilyId !== null}
+          showFileUpload={showFileUpload}
           googlePhotosConfigured={googleConfigured}
           googlePhotosConnected={googleConn !== null}
           googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
@@ -189,21 +217,7 @@ export async function AlbumSurface({
   return (
     <>
       {chips}
-      {showUploader ? (
-        <div style={{ margin: "0 0 24px" }}>
-          <AlbumUploader
-            families={active}
-            currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
-            scope={uploaderScope}
-            showFileUpload={uploadTargetFamilyId !== null}
-            googlePhotosConfigured={googleConfigured}
-            googlePhotosConnected={googleConn !== null}
-            googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
-            googlePhotosOauthConnected={googlePhotosOauthConnected}
-            googlePhotosOauthError={googlePhotosOauthError}
-          />
-        </div>
-      ) : null}
+      {uploaderElement}
 
       {gridPhotos.length === 0 ? (
         <p
