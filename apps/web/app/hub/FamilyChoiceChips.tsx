@@ -8,8 +8,9 @@ import { familyChipStyle } from "./family-chip-style";
  * shared toggle-chips (replacing the pre-ADR two-checkbox `FamilyPicker`). Controlled: the parent owns
  * the `selected` set and toggles on click. It is deliberately router-free (imports NO next/navigation)
  * — choosing WHO content is shared with must never touch the shared `?families=` browse filter, and
- * staying router-free keeps every caller (album uploader, photo tagging, story compose/edit) renderable
- * without a router context, mirroring `FamilyDesignator`.
+ * staying router-free keeps every caller renderable without a router context. It backs both the
+ * placement/audience surfaces (album uploader, photo tagging, story compose/edit) and, via
+ * `FamilyDesignatorChips`, the single-select action designators (ask/invite).
  *
  * Single- vs multi-select is the CALLER's concern (it owns `selected`/`onToggle`): a multi-select
  * surface toggles ids in/out of the set; a single-select surface can collapse the set to one on toggle.
