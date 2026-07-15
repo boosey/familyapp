@@ -35,6 +35,9 @@ export const hub = {
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
     // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.
     familyFilterAria: "Filter by family",
+    // Family designator (ADR-0021) — the same chip bar in single-select action mode (Asks, Requests):
+    // it picks which family you act on / view, SEEDED from the filter but never written back to the URL.
+    familyDesignatorAria: "Choose a family",
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",

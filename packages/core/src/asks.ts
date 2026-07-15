@@ -308,6 +308,15 @@ export async function markAskAnswered(
 export interface AskerOwnAsk {
   ask: Ask;
   targetSpokenName: string;
+  /**
+   * The family ids this ask is linked to via the OPEN `ask_families` join (ADR-0010), in no
+   * particular order. Always present — an ask with no family context carries `[]`. The hub's Asks
+   * "Family designator" (ADR-0021) filters the already-authorized list by these ids client-side.
+   * NOTE: this list is UNAFFECTED by the `opts.familyId` scope — even when the query is narrowed to
+   * one family, each returned ask reports ALL of its family links, so a multi-family ask is labeled
+   * completely and the designator can reason about it without a refetch.
+   */
+  familyIds: string[];
 }
 
 export async function listAsksByAsker(
@@ -322,26 +331,47 @@ export async function listAsksByAsker(
   // OPEN `ask_families` join (ADR-0010). An ask can carry several family rows, but filtering the join
   // to ONE family id yields at most one matching row per ask (composite PK (ask_id, family_id)), so
   // the result is already distinct by ask id — no extra dedup needed.
+  let baseRows: { ask: Ask; targetSpokenName: string | null }[];
   if (opts.familyId) {
-    const rows = await db
+    baseRows = await db
       .select({ ask: asks, targetSpokenName: persons.spokenName })
       .from(asks)
       .innerJoin(persons, eq(persons.id, asks.targetPersonId))
       .innerJoin(askFamilies, eq(askFamilies.askId, asks.id))
       .where(and(eq(asks.askerPersonId, asker), eq(askFamilies.familyId, opts.familyId)))
       .orderBy(desc(asks.createdAt));
-    // spokenName is nullable in schema (ADR-0016 placeholder mentions) but an ask always targets a
-    // named narrator, so it is never null here; `?? ""` is a compiler guard, not a real fallback.
-    return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName ?? "" }));
+  } else {
+    baseRows = await db
+      .select({ ask: asks, targetSpokenName: persons.spokenName })
+      .from(asks)
+      .innerJoin(persons, eq(persons.id, asks.targetPersonId))
+      .where(eq(asks.askerPersonId, asker))
+      .orderBy(desc(asks.createdAt));
   }
 
-  const rows = await db
-    .select({ ask: asks, targetSpokenName: persons.spokenName })
-    .from(asks)
-    .innerJoin(persons, eq(persons.id, asks.targetPersonId))
-    .where(eq(asks.askerPersonId, asker))
-    .orderBy(desc(asks.createdAt));
-  return rows.map((r) => ({ ask: r.ask, targetSpokenName: r.targetSpokenName ?? "" }));
+  // Attach EVERY family link per ask (independent of any `opts.familyId` narrowing above) via one
+  // grouped read of the OPEN `ask_families` join. Family-less asks simply have no rows here → `[]`.
+  const askIds = baseRows.map((r) => r.ask.id);
+  const familyIdsByAsk = new Map<string, string[]>();
+  if (askIds.length > 0) {
+    const famRows = await db
+      .select({ askId: askFamilies.askId, familyId: askFamilies.familyId })
+      .from(askFamilies)
+      .where(inArray(askFamilies.askId, askIds));
+    for (const row of famRows) {
+      const list = familyIdsByAsk.get(row.askId);
+      if (list) list.push(row.familyId);
+      else familyIdsByAsk.set(row.askId, [row.familyId]);
+    }
+  }
+
+  // spokenName is nullable in schema (ADR-0016 placeholder mentions) but an ask always targets a
+  // named narrator, so it is never null here; `?? ""` is a compiler guard, not a real fallback.
+  return baseRows.map((r) => ({
+    ask: r.ask,
+    targetSpokenName: r.targetSpokenName ?? "",
+    familyIds: familyIdsByAsk.get(r.ask.id) ?? [],
+  }));
 }
 
 export async function listPendingAsksForNarrator(
