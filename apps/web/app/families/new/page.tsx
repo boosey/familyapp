@@ -21,12 +21,14 @@ async function create(formData: FormData): Promise<void> {
   if (ctx.kind !== "account") redirect("/sign-in");
 
   const name = String(formData.get("name") ?? "").trim();
+  const shortName = String(formData.get("shortName") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const discoverable = formData.get("discoverable") === "on";
   if (!name) redirect("/families/new?error=name");
 
   await createFamily(db, {
     name,
+    shortName: shortName || undefined,
     description: description || undefined,
     discoverable,
     creatorPersonId: ctx.personId,

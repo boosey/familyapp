@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { families } from "@/app/_copy";
+import { suggestShortName } from "@/lib/suggest-short-name";
 
 export function CreateFamilyForm({
   action,
@@ -15,6 +16,8 @@ export function CreateFamilyForm({
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [shortName, setShortName] = useState("");
+  const [shortNameDirty, setShortNameDirty] = useState(false);
   const empty = name.trim().length === 0;
 
   return (
@@ -26,11 +29,42 @@ export function CreateFamilyForm({
           type="text"
           required
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setName(v);
+            if (!shortNameDirty) setShortName(suggestShortName(v));
+          }}
           className="kin-field"
           placeholder={families.new.namePlaceholder}
           style={{ textAlign: "center" }}
         />
+      </label>
+      <label className="kin-form-label">
+        {families.new.shortNameLabel}{" "}
+        <span style={{ fontWeight: 400 }}>{families.new.shortNameOptional}</span>
+        <input
+          name="shortName"
+          type="text"
+          value={shortName}
+          onChange={(e) => {
+            setShortName(e.target.value);
+            setShortNameDirty(true);
+          }}
+          className="kin-field"
+          placeholder={families.new.shortNamePlaceholder}
+          style={{ textAlign: "center" }}
+        />
+        <span
+          style={{
+            display: "block",
+            fontWeight: 400,
+            fontSize: "var(--text-label)",
+            color: "var(--text-muted)",
+            marginTop: 2,
+          }}
+        >
+          {families.new.shortNameHint}
+        </span>
       </label>
       <label className="kin-form-label">
         {families.new.descLabel}{" "}

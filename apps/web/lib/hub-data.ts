@@ -32,6 +32,7 @@ async function viewerFamilyIds(
     .select({
       id: families.id,
       name: families.name,
+      shortName: families.shortName,
       description: families.description,
       discoverable: families.discoverable,
       creatorPersonId: families.creatorPersonId,

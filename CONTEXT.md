@@ -161,6 +161,12 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   later re-defined as identity-linked (a conscious change, not the current model — see ADR-0020).
 - **Spoken name** — the name the interviewer speaks aloud when addressing this Person. Defaults to
   the first word of display name; editable on Profile independently of display name.
+- **Short name (Family)** — an optional brief label for a Family, set by its **Steward**, shown wherever
+  the formal name would crowd the layout (the hub header, the filter chips). Defaults from the formal
+  name by a simple heuristic ("The Boudreaux family" → "Boudreaux") and is freely editable; falls back
+  to the formal name when unset. A **per-viewer override** — for someone who belongs to two similarly
+  named Families and needs to tell them apart — is a *separate*, future, account-level preference living
+  where a Person manages their memberships; it is **not** the Steward's short name.
 
 ## Narrative & consent
 - **Surfaced-into (family targeting)** — the set of Families a Story is shared into (many-to-many).

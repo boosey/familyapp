@@ -194,7 +194,7 @@ export default async function HubPage({
   /* ── Derived display values ─────────────────────────────────────────────── */
   // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
   // joined for now — the multi-family display is a separate design question, deliberately deferred.
-  const familyNames = [...new Set(feed.map((s) => s.family.name))];
+  const familyNames = [...new Set(feed.map((s) => s.family.shortName ?? s.family.name))];
   const familyName = familyNames.length ? familyNames.join(" · ") : hub.shell.chronicle;
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
