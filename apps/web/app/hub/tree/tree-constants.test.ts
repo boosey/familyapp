@@ -57,10 +57,11 @@ describe("affordance/card overlap is derived, not hand-tuned", () => {
     expect(overlapPx / AFFORDANCE_SIZE_PX).toBeCloseTo(CARET_OVERLAP_FRACTION, 10);
   });
 
-  it("preserves the documented values (22px glyph, 25% bite → 5.5px gap)", () => {
-    expect(AFFORDANCE_SIZE_PX).toBe(22);
-    expect(CARET_OVERLAP_FRACTION).toBe(0.25);
-    expect(CARET_GAP).toBe(5.5);
+  it("preserves the documented values (30px glyph, 35% bite → 4.5px gap)", () => {
+    expect(AFFORDANCE_SIZE_PX).toBe(30);
+    expect(CARET_OVERLAP_FRACTION).toBe(0.35);
+    // 30·(0.5−0.35) = 4.5 in exact math; float gives 4.5000…01, so compare with tolerance.
+    expect(CARET_GAP).toBeCloseTo(4.5, 10);
   });
 });
 

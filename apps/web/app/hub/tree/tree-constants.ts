@@ -55,7 +55,7 @@ export const CARET_OVERLAP_FRACTION = 0.35;
  * the overlap can never silently disagree with the rendered button size:
  *   overlap_px   = AFFORDANCE_SIZE_PX/2 − CARET_GAP           (glyph radius minus the outward gap)
  *   overlap_frac = overlap_px / AFFORDANCE_SIZE_PX
- * ⇒ CARET_GAP = AFFORDANCE_SIZE_PX · (0.5 − CARET_OVERLAP_FRACTION).  (22 · 0.25 = 5.5)
+ * ⇒ CARET_GAP = AFFORDANCE_SIZE_PX · (0.5 − CARET_OVERLAP_FRACTION).  (30 · 0.15 = 4.5)
  */
 export const CARET_GAP = AFFORDANCE_SIZE_PX * (0.5 - CARET_OVERLAP_FRACTION);
 /** Half-size of a caret/"+" glyph, reserved as padding so a side/edge affordance never clips. */
