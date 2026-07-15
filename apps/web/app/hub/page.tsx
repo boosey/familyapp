@@ -349,6 +349,17 @@ export default async function HubPage({
                 tree={familyTabData.tree}
                 kin={familyTabData.kin}
                 initialView={familyInitialView}
+                // Family filter chips (ADR-0021 §Tree, #48). Gate the chip data on >=2 families — the
+                // same rule AlbumSurface uses — so the client widget's next/navigation hooks stay out
+                // of the server render for a 0/1-family viewer. The single ON chip is the resolved
+                // scope (`familyTabFamilyId`); arriving with several selected already collapsed to the
+                // first one server-side via `deriveSingleScope`.
+                families={
+                  activeFamilies.length >= 2
+                    ? activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))
+                    : []
+                }
+                scopeId={familyTabFamilyId ?? undefined}
               />
             ) : (
               <div
