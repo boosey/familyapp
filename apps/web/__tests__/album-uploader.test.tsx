@@ -284,6 +284,83 @@ describe("AlbumUploader multi-family picker", () => {
     expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
   });
 
+  // ADR-0021 designator: `defaultSelected` (computed by the surface) is the single source of the seed.
+  // A sole/single family pre-selects it so upload proceeds with no extra picking (add button enabled).
+  it("seeds the designator from defaultSelected (sole family pre-selected, add enabled)", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    // A concrete target ⇒ the add button is enabled (upload can proceed).
+    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+  });
+
+  // ADR-0021 designator: an AMBIGUOUS target (viewer has >1 family, filter names none) arrives as an
+  // EMPTY `defaultSelected` → NOTHING is pre-selected and the add button is DISABLED until a deliberate
+  // pick. A photo never silently fans out to all families.
+  it("defaults to NO selection (add disabled) when defaultSelected is empty (ambiguous target)", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[]}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    // A deliberate pick enables it.
+    fireEvent.click(screen.getByLabelText(FAM_A.familyName));
+    expect(add.disabled).toBe(false);
+  });
+
+  // ADR-0021: `defaultSelected` supersedes `scope` (the surface owns the sole/ambiguous rule). An empty
+  // default forces a pick even if a concrete scope is also passed.
+  it("defaultSelected (empty) overrides a concrete scope — the designator rule wins", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        scope={FAM_A.familyId}
+        defaultSelected={[]}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+  });
+
+  // ADR-0021: a filter change is a same-route soft navigation (no remount) — a new `defaultSelected`
+  // re-seeds the designator WITHOUT the uploader ever writing back to `?families=`.
+  it("re-seeds when defaultSelected changes (no remount, no write-back)", () => {
+    const { rerender } = render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_A.familyId]}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
+
+    rerender(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+      />,
+    );
+    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    // The uploader never navigates (no write-back to the browse filter).
+    expect(replace).not.toHaveBeenCalled();
+  });
+
   // A scope change is a same-route soft navigation (no remount) — the default must re-seed to the new
   // scope, just like a currentFamilyId change does. The prevKey folds BOTH signals.
   it("re-seeds when the scope prop changes (no remount)", () => {
@@ -614,6 +691,64 @@ describe("AlbumUploader Google Photos", () => {
     expect(pollGooglePhotosImportAction).toHaveBeenCalledWith("sess-1");
     expect(refresh).toHaveBeenCalled();
     openSpy.mockRestore();
+  });
+
+  // ADR-0021: the Google import path applies the SAME family DESIGNATOR selection as file upload. With
+  // a multi-family viewer the picker's `defaultSelected` seed is threaded into the completed import's
+  // `familyIds` (server re-validates), proving the designator governs both add paths identically.
+  it("threads the designator selection into the Google import familyIds", async () => {
+    const popup = { closed: false, close: vi.fn(), opener: window as unknown };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    pollGooglePhotosImportAction.mockResolvedValueOnce({ ok: true, mediaItemsSet: true });
+    completeGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      added: 1,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    const formData = completeGooglePhotosImportAction.mock.calls[0]![0] as FormData;
+    // Only the designator's family (FAM_B) rides along — not the current-album FAM_A.
+    expect(formData.getAll("familyIds")).toEqual([FAM_B.familyId]);
+    openSpy.mockRestore();
+  });
+
+  // ADR-0021: an AMBIGUOUS Google import (empty designator, >1 family) is blocked at the button — the
+  // Import button is disabled until a deliberate pick, so no import fans out to all families.
+  it("disables the Google import button when the designator is empty (ambiguous, >1 family)", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    const importBtn = screen.getByRole("button", {
+      name: hub.album.googlePhotosImport,
+    }) as HTMLButtonElement;
+    expect(importBtn.disabled).toBe(true);
   });
 
   it("opens a photos.google.com pickerUri (the real user-facing host)", async () => {

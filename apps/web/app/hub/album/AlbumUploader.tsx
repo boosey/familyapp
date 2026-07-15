@@ -68,6 +68,7 @@ export function AlbumUploader({
   families,
   currentFamilyId,
   scope = null,
+  defaultSelected,
   showFileUpload = true,
   googlePhotosConfigured = false,
   googlePhotosConnected = false,
@@ -83,8 +84,18 @@ export function AlbumUploader({
    * The single scope seed ("all" | a family id) collapsed from the shared `?families=` browse filter
    * (ADR-0021). When it names a concrete family the viewer is in, the default selection follows it
    * (consistency with the ask picker); otherwise ("all" or absent) it falls back to the current album.
+   * Superseded by `defaultSelected` when the caller supplies one — the surface owns the sole/ambiguous
+   * designator rule (ADR-0021) so it lives in ONE place; `scope` is the legacy seed path.
    */
   scope?: string | null;
+  /**
+   * The Family DESIGNATOR's initial selection (ADR-0021), computed by the surface: the sole/single
+   * family pre-selected when unambiguous, or the EMPTY array when ambiguous (viewer has >1 family and
+   * the filter names neither one — a photo must not silently fan out). When provided it is the single
+   * source of the seed (and its re-seed key); when omitted the legacy `scope`/`currentFamilyId` seed
+   * applies (kept so existing callers/tests are unchanged).
+   */
+  defaultSelected?: string[];
   /** When false, hide the OS file-upload button (multi-family "all" scope). Google import may still show. */
   showFileUpload?: boolean;
   /** When false (default), no Google Photos chrome — file upload only. */
@@ -136,7 +147,15 @@ export function AlbumUploader({
   // (never "all"). A concrete non-"all" family scope wins; "all" defers to the current album.
   const showPicker = families.length > 1 && (showFileUpload || googlePhotosConfigured);
   const familyIds = families.map((f) => f.familyId);
-  const seed = () => {
+  // The seed follows the DESIGNATOR rule when the surface supplies `defaultSelected` (ADR-0021: the
+  // sole/single family pre-selected, or the EMPTY set when ambiguous — a photo never silently fans out
+  // to all families). Only its ids the viewer is actually in survive (defense in depth). Absent, the
+  // legacy scope/currentFamily seed applies (unchanged for existing callers/tests).
+  const seed = (): Set<string> => {
+    if (defaultSelected !== undefined) {
+      const allowed = new Set(familyIds);
+      return new Set(defaultSelected.filter((id) => allowed.has(id)));
+    }
     if (scope && scope !== "all") {
       const s = seedComposeFamilies(scope, familyIds);
       if (s.size > 0) return s;
@@ -144,15 +163,19 @@ export function AlbumUploader({
     return new Set([currentFamilyId]);
   };
   const [selected, setSelected] = useState<Set<string>>(seed);
-  // The family switcher (and a scope change) is a same-route soft navigation, so this component is
-  // NOT remounted — only its props change. Re-seed the picker whenever EITHER the scope or the
-  // current-context family changes (the "adjust state during render on a prop change" pattern), so
-  // the default always tracks the current signal. An in-progress selection is left untouched while
-  // both stay the same (the key comparison guards that).
-  const [prevKey, setPrevKey] = useState(`${scope ?? ""}|${currentFamilyId}`);
-  const key = `${scope ?? ""}|${currentFamilyId}`;
-  if (prevKey !== key) {
-    setPrevKey(key);
+  // The family switcher (a filter/scope change) is a same-route soft navigation, so this component is
+  // NOT remounted — only its props change. Re-seed the picker whenever the seed SIGNAL changes (the
+  // "adjust state during render on a prop change" pattern), so the default always tracks the current
+  // filter WITHOUT the designator ever writing back to `?families=`. When `defaultSelected` drives the
+  // seed, key on it; otherwise key on scope+currentFamily. An in-progress selection is left untouched
+  // while the signal is unchanged (the key comparison guards that).
+  const seedKey =
+    defaultSelected !== undefined
+      ? `sel|${[...defaultSelected].sort().join(",")}`
+      : `${scope ?? ""}|${currentFamilyId}`;
+  const [prevKey, setPrevKey] = useState(seedKey);
+  if (prevKey !== seedKey) {
+    setPrevKey(seedKey);
     setSelected(seed());
   }
 
@@ -460,6 +483,8 @@ export function AlbumUploader({
             selected={selected}
             onToggle={toggle}
             disabled={busy}
+            required
+            requiredMessage={hub.actions.noAlbumChosen}
           />
         </fieldset>
       ) : null}
