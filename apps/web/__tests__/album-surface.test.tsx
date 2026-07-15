@@ -3,9 +3,10 @@
  * deep-link route and the hub's 'Album' tab. It is an async server component: invoke it as a function,
  * render its element to static markup, and assert the grid / uploader it composed.
  *
- * Family scope is the hub's SINGLE `?scope=` selector now — the album no longer renders its own
- * `?family=` switcher. `scope` is "all" (the deduped union across the viewer's active families) or a
- * family id. The two client children (AlbumGrid, AlbumUploader) are stubbed to echo the props
+ * Family scope is the shared `?families=` browse FILTER now (ADR-0021) — the album no longer renders
+ * its own `?family=` switcher, and the old single-select `?scope=` is retired. `familiesParam` is the
+ * raw value (absent = all, `none` = the empty set, else a csv of family ids). The two client children
+ * (AlbumGrid, AlbumUploader) plus FamilyChips are stubbed to echo the props
  * AlbumSurface computed — this both sidesteps their `useRouter`/`useTransition` client hooks under a
  * server render AND lets us assert the derived values (photo ids, canManage, families,
  * currentFamilyId) directly.
@@ -93,6 +94,30 @@ vi.mock("@/app/hub/album/AlbumUploader", () => ({
   ),
 }));
 
+// FamilyChips is a client widget (next/navigation hooks). Stub it to echo which chips are ON so we
+// can assert the chip bar renders for ≥2 families and reflects the derived selection.
+vi.mock("@/app/hub/FamilyChips", () => ({
+  FamilyChips: ({
+    families,
+    selected,
+  }: {
+    families: Array<{ id: string; name: string }>;
+    selected: string[] | "all";
+  }) =>
+    families.length < 2 ? null : (
+      <div
+        data-testid="family-chips"
+        data-selected={selected === "all" ? "all" : selected.join(",")}
+      >
+        {families.map((f) => (
+          <span key={f.id} data-chip-family={f.id}>
+            {f.name}
+          </span>
+        ))}
+      </div>
+    ),
+}));
+
 const isGooglePhotosConfigured = vi.fn(() => false);
 type GoogleConn = {
   personId: string;
@@ -156,8 +181,12 @@ async function placePhoto(
   return photo.id;
 }
 
-async function render(db: Database, ctx: AuthContext, scope: string): Promise<string> {
-  const el = await AlbumSurface({ db, ctx, scope });
+async function render(
+  db: Database,
+  ctx: AuthContext,
+  familiesParam: string | string[] | undefined,
+): Promise<string> {
+  const el = await AlbumSurface({ db, ctx, familiesParam });
   return renderToStaticMarkup(el);
 }
 
@@ -169,7 +198,7 @@ describe("AlbumSurface", () => {
     isAlbumImportProgressEnabled.mockReturnValue(false);
   });
 
-  it("renders NO internal family switcher — the hub selector owns family scope now", async () => {
+  it("renders NO internal family switcher — the shared ?families= filter owns family scope now", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -177,10 +206,12 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     await addMember(db, viewer, famB);
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     // The retired switcher's aria-labelled nav is gone entirely.
     expect(html).not.toContain(hub.album.switcherAria);
+    // ...but the shared browse-filter chip bar IS present (viewer has 2 families).
+    expect(html).toContain('data-testid="family-chips"');
   });
 
   it("shows a placed photo's tile and the uploader when the viewer has a sole family", async () => {
@@ -190,7 +221,7 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     const photoId = await placePhoto(db, viewer, [famA], "family-photos/surface-1");
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     // The grid received the placed photo (its audited bytes route appears via the grid stub)...
     expect(html).toContain(`/api/album-photo/${photoId}`);
@@ -198,9 +229,11 @@ describe("AlbumSurface", () => {
     // ...and the uploader is mounted, targeting the sole family (unambiguous even in "all").
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain(`data-current-family="${famA}"`);
+    // A one-family viewer has nothing to filter → no chip bar.
+    expect(html).not.toContain('data-testid="family-chips"');
   });
 
-  it("scope=all shows the DEDUPED union of photos across ALL the viewer's families", async () => {
+  it("absent families param shows the DEDUPED union of photos across ALL the viewer's families", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -212,18 +245,21 @@ describe("AlbumSurface", () => {
     // A photo placed in BOTH families — it must appear exactly ONCE in the union.
     const photoAB = await placePhoto(db, viewer, [famA, famB], "family-photos/surface-ab");
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     expect(html).toContain(`data-photo-id="${photoA}"`);
     expect(html).toContain(`data-photo-id="${photoB}"`);
     // Deduped: the both-families photo's tile appears once, not twice.
     const occurrences = html.split(`data-photo-id="${photoAB}"`).length - 1;
     expect(occurrences).toBe(1);
-    // With multiple families and no specific scope, the uploader target is ambiguous → withheld.
+    // With multiple families all selected (absent = all), the uploader target is ambiguous → withheld.
     expect(html).not.toContain('data-testid="album-uploader"');
+    // The chip bar is shown with every chip ON.
+    expect(html).toContain('data-testid="family-chips"');
+    expect(html).toContain('data-selected="all"');
   });
 
-  it("scope=<familyId> shows ONLY that family's photos and targets the uploader there", async () => {
+  it("a single-family ?families= shows ONLY that family's photos and targets the uploader there", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -235,20 +271,67 @@ describe("AlbumSurface", () => {
 
     const html = await render(db, account(viewer), famB);
 
-    // famB is the scope, so ONLY famB's photo is on screen; the uploader defaults to famB.
+    // famB is the selected family, so ONLY famB's photo is on screen; the uploader defaults to famB.
     expect(html).toContain(`data-photo-id="${photoB}"`);
     expect(html).not.toContain(`data-photo-id="${photoA}"`);
     expect(html).toContain(`data-current-family="${famB}"`);
+    // A single-family selection out of two → chip bar present, only famB ON.
+    expect(html).toContain(`data-selected="${famB}"`);
   });
 
-  it("falls back to 'all' when given a scope the viewer is not a member of", async () => {
+  it("narrows to a multi-family subset (some) and shows exactly those families' photos", async () => {
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
+    const famC = await makeFamily(db, "Rossi", viewer);
+    await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+    await addMember(db, viewer, famC);
+    const photoA = await placePhoto(db, viewer, [famA], "family-photos/surface-a");
+    const photoB = await placePhoto(db, viewer, [famB], "family-photos/surface-b");
+    const photoC = await placePhoto(db, viewer, [famC], "family-photos/surface-c");
+
+    // Select A + C (a strict subset of three) — B's photo must be excluded.
+    const html = await render(db, account(viewer), `${famA},${famC}`);
+
+    expect(html).toContain(`data-photo-id="${photoA}"`);
+    expect(html).toContain(`data-photo-id="${photoC}"`);
+    expect(html).not.toContain(`data-photo-id="${photoB}"`);
+    // Two selected among three → uploader target ambiguous → withheld.
+    expect(html).not.toContain('data-testid="album-uploader"');
+    // Chip bar reflects the A+C subset (active-set order).
+    expect(html).toContain(`data-selected="${famA},${famC}"`);
+  });
+
+  it("none (all chips off) shows the explicit empty state — no grid, no uploader", async () => {
+    const db = await createTestDatabase();
+    const viewer = await makePerson(db, "Rosa");
+    const famA = await makeFamily(db, "Esposito", viewer);
+    const famB = await makeFamily(db, "Marino", viewer);
+    await addMember(db, viewer, famA);
+    await addMember(db, viewer, famB);
+    await placePhoto(db, viewer, [famA], "family-photos/surface-a");
+
+    const html = await render(db, account(viewer), "none");
+
+    // The honest empty state (ADR-0021) — not a silent "show all".
+    expect(html).toContain(hub.album.noFamiliesSelected);
+    expect(html).not.toContain('data-testid="album-grid"');
+    expect(html).not.toContain('data-testid="album-uploader"');
+    // The chip bar stays so a family can be turned back on; all chips OFF.
+    expect(html).toContain('data-testid="family-chips"');
+    expect(html).toContain('data-selected=""');
+  });
+
+  it("falls back to 'all' when given a families value the viewer is not a member of", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
     await addMember(db, viewer, famA);
     const photoA = await placePhoto(db, viewer, [famA], "family-photos/surface-a");
 
-    // A family the viewer is NOT a member of — a spoofed scope must not select it; fall back to "all".
+    // A family the viewer is NOT a member of — a spoofed value must not select it; fall back to "all".
     const html = await render(db, account(viewer), "not-a-family-of-mine");
 
     expect(html).toContain(`data-photo-id="${photoA}"`);
@@ -263,7 +346,7 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     await placePhoto(db, viewer, [famA], "family-photos/surface-off");
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain('data-testid="album-grid"');
@@ -280,7 +363,7 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     const photoId = await placePhoto(db, viewer, [famA], "family-photos/surface-on");
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     expect(html).toContain('data-testid="album-board"');
     expect(html).toContain(`data-current-family="${famA}"`);
@@ -290,7 +373,7 @@ describe("AlbumSurface", () => {
     expect(html).not.toContain('data-testid="album-grid"');
   });
 
-  it("shows Google Photos chrome without file upload when scope=all and Google is configured", async () => {
+  it("shows Google Photos chrome without file upload when all families are selected and Google is configured", async () => {
     isGooglePhotosConfigured.mockReturnValue(true);
     getActiveGooglePhotosConnection.mockResolvedValue({
       personId: "viewer",
@@ -307,7 +390,7 @@ describe("AlbumSurface", () => {
     await addMember(db, viewer, famA);
     await addMember(db, viewer, famB);
 
-    const html = await render(db, account(viewer), "all");
+    const html = await render(db, account(viewer), undefined);
 
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain('data-show-file-upload="false"');

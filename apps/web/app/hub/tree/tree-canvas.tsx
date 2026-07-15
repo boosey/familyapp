@@ -386,13 +386,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // --- Invite (Slice D, #6) ----------------------------------------------------------------------
   // ONE handler backing BOTH entry points (the details-sheet button and the kebab item). It opens the
   // EXISTING invite flow (`/hub?tab=invite`) pre-targeted at this person + family — no new invite logic:
-  //   - `scope=<familyId>` makes that family the deliberate, pre-selected target (InviteTab already
-  //     honors `scope`), AND
+  //   - `families=<familyId>` makes that family the deliberate, pre-selected target (the hub collapses
+  //     the browse filter to the single scope InviteTab honors, ADR-0021), AND
   //   - `inviteeName=<displayName>` pre-fills the member-invite name field.
   // The invited person's displayName seeds the name; the form still posts to `createInvitation`.
   const onInvite = useCallback(
     (node: TreeNode) => {
-      const params = new URLSearchParams({ tab: "invite", scope: familyId });
+      const params = new URLSearchParams({ tab: "invite", families: familyId });
       const name = node.displayName?.trim();
       if (name) params.set("inviteeName", name);
       navigate(`/hub?${params.toString()}`);

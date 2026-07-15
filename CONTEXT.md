@@ -161,6 +161,25 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   later re-defined as identity-linked (a conscious change, not the current model — see ADR-0020).
 - **Spoken name** — the name the interviewer speaks aloud when addressing this Person. Defaults to
   the first word of display name; editable on Profile independently of display name.
+- **Family filter** — on a **browse** surface (the album, story browse, the tree), the viewer's
+  selection of which of their Families' content is shown. **Multi-select** on the album and stories,
+  **single-select** on the tree (until multi-family trees exist). It only **narrows what is displayed**
+  — it never grants access nor targets a write. A viewer in a single Family has nothing to filter, so
+  it does not appear. Distinct from the domain sense of *family-scoped* (which is about authorization,
+  not display). Not to be confused with **Surfaced-into** (a Story's targeting), which is a property of
+  the content, not of the viewer's current view.
+- **Family designator** — on an **action** flow (inviting, asking, viewing join requests, adding
+  photos), the Family the action **operates on**: a single Family for invite/ask/requests, one-or-more
+  for adding photos. It is **seeded from** the current **Family filter** but held **separately** —
+  changing the designator picks who you act on and does **not** alter what the viewer is browsing. The
+  same visual control renders a **Family filter** or a **Family designator** depending on the surface;
+  the distinction is the behaviour behind it, not the widget.
+- **Short name (Family)** — an optional brief label for a Family, set by its **Steward**, shown wherever
+  the formal name would crowd the layout (the hub header, the filter chips). Defaults from the formal
+  name by a simple heuristic ("The Boudreaux family" → "Boudreaux") and is freely editable; falls back
+  to the formal name when unset. A **per-viewer override** — for someone who belongs to two similarly
+  named Families and needs to tell them apart — is a *separate*, future, account-level preference living
+  where a Person manages their memberships; it is **not** the Steward's short name.
 
 ## Narrative & consent
 - **Surfaced-into (family targeting)** — the set of Families a Story is shared into (many-to-many).

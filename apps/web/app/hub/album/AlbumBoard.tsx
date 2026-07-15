@@ -60,7 +60,10 @@ function nextTempId(): string {
 export function AlbumBoard(props: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
-  scope: string | null;
+  /** The concrete family ids whose photos populate this grid (ADR-0021 filter selection). */
+  viewedFamilyIds: string[];
+  /** The single scope seed forwarded to AlbumUploader (collapsed from the browse filter). */
+  uploaderScope: string;
   showFileUpload: boolean;
   googlePhotosConfigured: boolean;
   googlePhotosConnected: boolean;
@@ -115,15 +118,12 @@ export function AlbumBoard(props: {
     setEntries((prev) => prev.filter((e) => e.tempId !== tempId));
   }, []);
 
-  // The families whose photos actually populate this grid (`props.photos`): the single scoped family,
-  // or ALL active families in "all" scope. Only a photo landing in one of these will ever reappear in
-  // a refreshed `props.photos` — so only an in-scope import can be reconciled.
+  // The families whose photos actually populate this grid (`props.photos`) — the concrete browse-filter
+  // selection (ADR-0021). Only a photo landing in one of these will ever reappear in a refreshed
+  // `props.photos`, so only an in-scope import can be reconciled.
   const viewedFamilyIds = useMemo(
-    () =>
-      props.scope && props.scope !== "all"
-        ? new Set([props.scope])
-        : new Set(props.families.map((f) => f.familyId)),
-    [props.scope, props.families],
+    () => new Set(props.viewedFamilyIds),
+    [props.viewedFamilyIds],
   );
 
   // Settle a successful import. When the target intersects the viewed scope (a solo contributor sends
@@ -318,7 +318,7 @@ export function AlbumBoard(props: {
       <AlbumUploader
         families={props.families}
         currentFamilyId={props.currentFamilyId}
-        scope={props.scope}
+        scope={props.uploaderScope}
         showFileUpload={props.showFileUpload}
         googlePhotosConfigured={props.googlePhotosConfigured}
         googlePhotosConnected={props.googlePhotosConnected}

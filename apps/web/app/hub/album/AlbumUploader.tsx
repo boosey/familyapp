@@ -80,9 +80,9 @@ export function AlbumUploader({
   families: AlbumFamilyOption[];
   currentFamilyId: string;
   /**
-   * The hub's `?scope=` signal ("all" | a family id). When it names a concrete family the viewer is
-   * in, the default selection follows it (consistency with the ask picker); otherwise ("all" or
-   * absent) the default falls back to the current album on screen.
+   * The single scope seed ("all" | a family id) collapsed from the shared `?families=` browse filter
+   * (ADR-0021). When it names a concrete family the viewer is in, the default selection follows it
+   * (consistency with the ask picker); otherwise ("all" or absent) it falls back to the current album.
    */
   scope?: string | null;
   /** When false, hide the OS file-upload button (multi-family "all" scope). Google import may still show. */

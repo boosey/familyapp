@@ -44,6 +44,10 @@ export async function AccountMenuMount() {
     { key: "profile", label: hub.shell.menuProfile, href: "/hub/profile" },
     { key: "settings", label: hub.shell.menuSettings, href: "/hub/settings" },
     { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
+    // Family actions — moved off the retired hub scope pill (ADR-0021). Universal: they work for a
+    // no-family or single-family viewer, who never see a family-filter chip bar.
+    { key: "create-family", label: hub.shell.menuCreateFamily, href: "/families/new" },
+    { key: "find-family", label: hub.shell.menuFindFamily, href: "/families/find" },
     { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
 
