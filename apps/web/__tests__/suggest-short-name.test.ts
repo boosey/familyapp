@@ -11,6 +11,10 @@ describe("suggestShortName (ADR-0021 deterministic heuristic)", () => {
     ["Van Der Berg family", "Van Der Berg"],
     ["The Bélangér family", "Bélangér"], // accented surname — Unicode-aware name-shaped test
     ["Ñoño clan", "Ñoño"], // non-ASCII leading capital
+    ["The O'Connor family", "O'Connor"], // apostrophe + uppercase → genuine surname
+    ["D'Angelo family", "D'Angelo"],
+    ["O'Brien-Smith clan", "O'Brien-Smith"], // apostrophe + hyphen combined
+    ["Dad's clan", "Dad's clan"], // unchanged — possessive (apostrophe + lowercase) not name-shaped
     ["The family", "The family"], // unchanged — stripping leaves a non-name-shaped "family"
     ["the boudreaux family", "the boudreaux family"], // unchanged — lowercase core
     ["", ""],
