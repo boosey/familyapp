@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { FamilyPicker } from "./FamilyPicker";
+import { FamilyChoiceChips } from "./FamilyChoiceChips";
 import { prepareAlbumPhoto } from "./album/prepare-photo";
 import {
   PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
@@ -549,8 +549,8 @@ export function StoryPhotosEditor({
             {families.length > 1 ? (
               <fieldset style={placementFieldset}>
                 <legend style={placementLegend}>{hub.storyImages.choosePlacementAlbums}</legend>
-                <FamilyPicker
-                  families={families.map((f) => ({ familyId: f.id, familyName: f.name }))}
+                <FamilyChoiceChips
+                  families={families}
                   selected={placement}
                   onToggle={togglePlacement}
                   disabled={busy}

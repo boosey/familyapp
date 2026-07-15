@@ -41,7 +41,7 @@ export interface FamilyTabProps {
    * The server gates the MOUNT on `families.length >= 2`, so this only carries chips when a chip bar is
    * warranted; a 0/1-family viewer receives `undefined`/`[]` and no chip bar renders.
    */
-  families?: { id: string; name: string }[];
+  families?: { id: string; name: string; shortName?: string | null }[];
   /**
    * The single resolved scope id the tree is currently rendering (page's `familyTabFamilyId`). Passed
    * as the single-select ON chip. Arriving with SEVERAL families selected already resolves to the

@@ -28,7 +28,7 @@ import {
 } from "@/lib/invite-flash";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { FamilyDesignator } from "../FamilyDesignator";
+import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
 
@@ -207,7 +207,7 @@ export async function InviteTab({
   inviteeName,
 }: {
   /** ALL the viewer's active families — the designator's option set (ADR-0021, #49). */
-  families: { id: string; name: string }[];
+  families: { id: string; name: string; shortName?: string | null }[];
   /** The current browse filter the designator SEEDS from (never written back). */
   filter: FamilyFilter;
   inviteeName?: string;
@@ -369,12 +369,11 @@ export async function InviteTab({
               placeholder={hub.invite.relationshipPlaceholder}
             />
           </label>
-          <FamilyDesignator
+          <FamilyDesignatorChips
             families={designatorFamilies}
             seeded={seededFamily}
             name="familyId"
             label={hub.invite.familyLabel}
-            placeholder={hub.invite.familyChoosePlaceholder}
             requiredMessage={hub.invite.familyRequired}
           />
           <KindredButton type="submit" label={hub.invite.createInviteLink} />
@@ -400,12 +399,11 @@ export async function InviteTab({
               ))}
             </select>
           </label>
-          <FamilyDesignator
+          <FamilyDesignatorChips
             families={designatorFamilies}
             seeded={seededFamily}
             name="familyId"
             label={hub.invite.familyLabel}
-            placeholder={hub.invite.familyChoosePlaceholder}
             requiredMessage={hub.invite.familyRequired}
           />
           <KindredButton type="submit" label={hub.invite.createLink} />

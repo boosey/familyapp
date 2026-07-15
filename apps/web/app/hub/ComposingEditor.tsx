@@ -50,7 +50,7 @@ import { clog } from "@/lib/clog";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
 import { StoryPhotosEditor } from "./StoryPhotosEditor";
-import { FamilyPicker } from "./FamilyPicker";
+import { FamilyChoiceChips } from "./FamilyChoiceChips";
 import { TagInput } from "./TagInput";
 import { loadTagSuggestionsAction } from "./tag-suggestions-actions";
 import type { TagSuggestions, TagToken } from "./tag-input-types";
@@ -126,7 +126,7 @@ export interface ComposingEditorProps {
   promptQuestion?: string | null;
   /** The narrator's active families, offered in the share-step multi-family picker (Task 4). Shown
    * only for a multi-family author (length > 1) on the family/branch tiers. */
-  families?: { familyId: string; familyName: string }[];
+  families?: { familyId: string; familyName: string; familyShortName?: string | null }[];
   /** Family ids pre-checked in the picker, seeded from the hub scope (or ask ∩ active for answers). */
   seededFamilyIds?: string[];
   /** True when the narrator must explicitly pick ≥1 family (ambiguous "all"-with-several). */
@@ -659,8 +659,8 @@ export function ComposingEditor({
   const handleShare = async () => {
     setActionError(null);
     setOp("share");
-    // The review Share is a button (not a native form submit), so the FamilyPicker's hidden
-    // required-input can't backstop us — guard the ambiguous empty selection here before posting.
+    // The review Share is a button (not a native form submit) and the family chips carry no native
+    // required-input — guard the ambiguous empty selection here before posting.
     if (showFamilyPicker && familyChoiceRequired && pickedFamilies.size === 0) {
       setActionError(hub.answer.whichFamiliesRequired);
       setOp(null);
@@ -911,13 +911,15 @@ export function ComposingEditor({
                 {hub.answer.whichFamiliesHelp}
               </p>
             ) : null}
-            <FamilyPicker
-              families={families}
+            <FamilyChoiceChips
+              families={families.map((f) => ({
+                id: f.familyId,
+                name: f.familyName,
+                shortName: f.familyShortName,
+              }))}
               selected={pickedFamilies}
               onToggle={toggleFamily}
               disabled={isRemoving}
-              required={familyChoiceRequired}
-              requiredMessage={hub.answer.whichFamiliesRequired}
             />
           </fieldset>
         ) : null}

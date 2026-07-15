@@ -11,7 +11,7 @@ import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { AskPhotoPicker } from "./AskPhotoPicker";
-import { FamilyDesignator } from "../FamilyDesignator";
+import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
 import { seedDesignatorFamily, resolveDesignatorFamily } from "@/lib/family-designator";
 import type { FamilyFilter } from "@/lib/family-filter";
 
@@ -57,7 +57,7 @@ export async function AskTab({
   initialSubjectPhotoIds = [],
 }: {
   /** ALL the asker's active families — the designator's option set (ADR-0021, #49). */
-  families: { id: string; name: string }[];
+  families: { id: string; name: string; shortName?: string | null }[];
   /** The current browse filter the designator SEEDS from (never written back). */
   filter: FamilyFilter;
   initialSubjectPhotoIds?: string[];
@@ -186,12 +186,11 @@ export async function AskTab({
           />
         </label>
         {showFamilyPicker ? (
-          <FamilyDesignator
+          <FamilyDesignatorChips
             families={designatorFamilies}
             seeded={seededFamily}
             name="familyId"
             label={hub.ask.familiesLabel}
-            placeholder={hub.ask.familiesPlaceholder}
             requiredMessage={hub.ask.familiesRequired}
           />
         ) : null}

@@ -517,8 +517,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
       />,
     );
     // Retarget: deselect A, select B — the photo will land ONLY in B, never in this A-scoped grid.
-    fireEvent.click(screen.getByRole("checkbox", { name: FAM_A.familyName }));
-    fireEvent.click(screen.getByRole("checkbox", { name: FAM_B.familyName }));
+    fireEvent.click(screen.getByRole("button", { name: FAM_A.familyName }));
+    fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
     chooseFiles(["x.png"]);
 
     await waitFor(() => expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(1));
@@ -559,7 +559,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     expect((addButton as HTMLButtonElement).disabled).toBe(true);
 
     // A deliberate pick of ONE family enables it, and an upload targets ONLY that family.
-    fireEvent.click(screen.getByRole("checkbox", { name: FAM_B.familyName }));
+    fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
     expect((addButton as HTMLButtonElement).disabled).toBe(false);
     chooseFiles(["deliberate.png"]);
 

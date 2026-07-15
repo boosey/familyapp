@@ -1,10 +1,10 @@
 /**
  * Server-side guard for an invitation's single-family target (feat/family-scope-selector review,
- * Finding 2). An invitation belongs to exactly one family. The Invite tab's client `<select>` forces
- * an explicit choice — a disabled placeholder is prepended when the inviter belongs to >1 family, so
- * the browser can't silently auto-select the first (arbitrary) family — but a crafted POST can still
- * omit `familyId`. This pure resolver is the backstop, mirroring `resolveComposeFamilies` for the Ask
- * compose surface: it decides which family id reaches the write path, or refuses.
+ * Finding 2). An invitation belongs to exactly one family. The Invite tab's client family designator
+ * (single-select chips) forces an explicit choice — no family is pre-selected when the inviter belongs
+ * to >1 family, so the browser can't silently auto-select an arbitrary one — but a crafted POST can
+ * still omit `familyId`. This pure resolver is the backstop, mirroring `resolveComposeFamilies` for the
+ * Ask compose surface: it decides which family id reaches the write path, or refuses.
  *
  * Membership in the chosen family is NOT re-checked here — createInvitation / createLinkSession own
  * that gate transactionally. This only settles the AMBIGUITY: an inviter in several families must pick

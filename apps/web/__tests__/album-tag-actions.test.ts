@@ -321,7 +321,9 @@ describe("loadPhotoTagPanelAction", () => {
     expect(panel.detail.families.map((f) => f.familyId)).toEqual([familyId]);
 
     // Families suggestion = the viewer's active families.
-    expect(panel.suggestions.families).toEqual([{ id: familyId, name: "Esposito" }]);
+    expect(panel.suggestions.families).toEqual([
+      { id: familyId, name: "Esposito", shortName: null },
+    ]);
     // Places suggestion = the union across placement families (the one we just created).
     expect(panel.suggestions.places.map((p) => p.name)).toEqual(["The Old House"]);
     // People suggestion is present (shape check — kin union, deduped).

@@ -33,7 +33,7 @@ import {
 import { prepareAlbumPhoto } from "./prepare-photo";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { FamilyPicker } from "../FamilyPicker";
+import { FamilyChoiceChips } from "../FamilyChoiceChips";
 import { ManageConnectionsMenu } from "./ManageConnectionsMenu";
 import { seedComposeFamilies } from "@/lib/compose-scope";
 import {
@@ -45,6 +45,8 @@ import {
 export interface AlbumFamilyOption {
   familyId: string;
   familyName: string;
+  /** Steward-set brief label (ADR-0021); the placement chips show it in place of `familyName`. */
+  familyShortName?: string | null;
 }
 
 
@@ -478,13 +480,15 @@ export function AlbumUploader({
           >
             {hub.album.chooseAlbums}
           </legend>
-          <FamilyPicker
-            families={families}
+          <FamilyChoiceChips
+            families={families.map((f) => ({
+              id: f.familyId,
+              name: f.familyName,
+              shortName: f.familyShortName,
+            }))}
             selected={selected}
             onToggle={toggle}
             disabled={busy}
-            required
-            requiredMessage={hub.actions.noAlbumChosen}
           />
         </fieldset>
       ) : null}

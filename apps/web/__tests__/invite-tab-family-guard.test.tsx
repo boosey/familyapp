@@ -6,9 +6,10 @@
  *   the shared `hub.shell.pendingEmpty` copy, mirroring StoriesTab/AlbumSurface/AsksTab, and never
  *   throws on zero families.
  *
- * Finding 2: in "all" scope with >1 family, the family select must carry a disabled placeholder so the
- *   browser can't silently auto-select the first (arbitrary) family — `required` then forces an
- *   explicit pick. With a single family (or a scoped default) no placeholder is needed.
+ * Finding 2: in "all" scope with >1 family, the family designator (now aria-pressed chips) must NOT
+ *   pre-select any family — its hidden `required` input stays empty so an empty submit is blocked and no
+ *   arbitrary family is silently chosen. With a single family (or a scoped default) exactly one chip is
+ *   pre-selected and its id is posted.
  *
  * InviteTab is an async server component reading `@/lib/runtime` + `next/headers`; both are mocked. The
  * membership/candidate reads run for real against PGlite.
@@ -37,7 +38,6 @@ import { families, memberships, persons } from "@chronicle/db/schema";
 import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { InviteTab } from "@/app/hub/tabs/InviteTab";
 import { parseFamilyFilter } from "@/lib/family-filter";
-import { hub } from "@/app/_copy";
 
 // renderToStaticMarkup HTML-escapes apostrophes, so match the distinctive leading fragment.
 const PENDING_FRAGMENT = "Nothing here yet";
@@ -88,7 +88,7 @@ describe("InviteTab — pending-only viewer (Finding 1)", () => {
 });
 
 describe("InviteTab — all-scope ambiguity guard (Finding 2)", () => {
-  it("prepends a disabled placeholder so no family is pre-selected in 'all' with >1 family", async () => {
+  it("pre-selects NO family (empty required designator) in 'all' with >1 family", async () => {
     runtimeDb = await createTestDatabase();
     const viewer = await makePerson(runtimeDb, "Rosa");
     const famA = await makeFamily(runtimeDb, "Esposito", viewer);
@@ -99,15 +99,17 @@ describe("InviteTab — all-scope ambiguity guard (Finding 2)", () => {
 
     const html = await render("all");
 
-    // The placeholder copy is present and rendered as a disabled empty-value option.
-    expect(html).toContain(hub.invite.familyChoosePlaceholder);
-    expect(html).toMatch(/<option value="" disabled[^>]*>/);
-    // Both selects (member + narrator invite) are present.
-    const familySelects = html.split('name="familyId"').length - 1;
-    expect(familySelects).toBe(2);
+    // No chip is pre-selected — the browser can't silently target an arbitrary family.
+    expect(html).not.toMatch(/aria-pressed="true"/);
+    // Both forms (member + narrator invite) carry the hidden required familyId input, and both are
+    // empty so an empty submit is blocked.
+    const familyInputs = html.split('name="familyId"').length - 1;
+    expect(familyInputs).toBe(2);
+    // The hidden family input is required and empty (an empty submit is blocked).
+    expect(html).toMatch(/required[^>]*name="familyId"[^>]*value=""/);
   });
 
-  it("does NOT add a placeholder when the viewer has a single family (unambiguous)", async () => {
+  it("pre-selects the lone family (chip ON, id posted) for a single-family viewer", async () => {
     runtimeDb = await createTestDatabase();
     const viewer = await makePerson(runtimeDb, "Rosa");
     const famA = await makeFamily(runtimeDb, "Esposito", viewer);
@@ -116,11 +118,12 @@ describe("InviteTab — all-scope ambiguity guard (Finding 2)", () => {
 
     const html = await render("all");
 
-    expect(html).not.toContain(hub.invite.familyChoosePlaceholder);
-    expect(html).not.toMatch(/<option value="" disabled[^>]*>/);
+    // The lone family is auto-resolved: its chip is ON and its id posts.
+    expect(html).toMatch(/aria-pressed="true"/);
+    expect(html).toContain(`value="${famA}"`);
   });
 
-  it("does NOT add a placeholder when a valid family scope supplies a deliberate default", async () => {
+  it("pre-selects the scoped family when a valid family scope supplies a deliberate default", async () => {
     runtimeDb = await createTestDatabase();
     const viewer = await makePerson(runtimeDb, "Rosa");
     const famA = await makeFamily(runtimeDb, "Esposito", viewer);
@@ -131,6 +134,8 @@ describe("InviteTab — all-scope ambiguity guard (Finding 2)", () => {
 
     const html = await render(famB);
 
-    expect(html).not.toContain(hub.invite.familyChoosePlaceholder);
+    // The scoped family (famB) seeds the designator: a chip is ON and famB's id posts.
+    expect(html).toMatch(/aria-pressed="true"/);
+    expect(html).toContain(`value="${famB}"`);
   });
 });

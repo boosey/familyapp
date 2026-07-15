@@ -27,7 +27,7 @@ export interface RequestRow {
 }
 
 interface RequestsDesignatorProps {
-  families: { id: string; name: string }[];
+  families: { id: string; name: string; shortName?: string | null }[];
   /** Seed from the current `?families=` filter: a family id, or "all" (no single family selected). */
   seedFamilyId: string;
   pending: RequestRow[];

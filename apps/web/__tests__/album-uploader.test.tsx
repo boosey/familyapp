@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
  * AlbumUploader — the multi-family placement picker (#16) + the button-opens-picker upload flow.
- *  1. In >=2 families: one checkbox per family; ONLY the current-context family is checked by
+ *  1. In >=2 families: one chip per family; ONLY the current-context family is ON by
  *     default (the default is the album on screen, never "all").
- *  2. Solo (one family): no checkboxes render — the server defaults to the sole family.
- *  3. Deselecting the last checked album disables the "Add to album" button (>=1 must stay selected).
+ *  2. Solo (one family): no placement chips render — the server defaults to the sole family.
+ *  3. Deselecting the last ON album disables the "Add to album" button (>=1 must stay selected).
  *  4. Choosing files in the (hidden) input IS the upload — there is no separate submit step.
  * Mocks next/navigation and the server-action module (a "use server" file that pulls db at import).
  */
@@ -50,22 +50,25 @@ afterEach(() => {
 const FAM_A = { familyId: "aaaaaaaa-0000-0000-0000-000000000000", familyName: "Esposito" };
 const FAM_B = { familyId: "bbbbbbbb-0000-0000-0000-000000000000", familyName: "Marino" };
 
+/** The placement is now aria-pressed chips (ADR-0021 · FamilyChoiceChips), not checkboxes: the chip
+ *  for a family is a button whose accessible name is the family name; ON = aria-pressed="true". */
+const chip = (name: string): HTMLElement => screen.getByRole("button", { name });
+const isOn = (name: string): boolean => chip(name).getAttribute("aria-pressed") === "true";
+
 describe("AlbumUploader multi-family picker", () => {
   it("checks ONLY the current-context family by default (not all)", () => {
     render(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_B.familyId} />,
     );
-    const a = screen.getByLabelText(FAM_A.familyName) as HTMLInputElement;
-    const b = screen.getByLabelText(FAM_B.familyName) as HTMLInputElement;
-    expect(b.checked).toBe(true);
-    expect(a.checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
   });
 
   it("renders NO checkboxes for a solo-family contributor", () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: FAM_A.familyName })).toBeNull();
   });
 
   it("disables the add button when the only checked album is deselected", () => {
@@ -75,9 +78,8 @@ describe("AlbumUploader multi-family picker", () => {
     const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
     // With the current album checked by default, the button is enabled...
     expect(add.disabled).toBe(false);
-    // ...deselecting the sole checked album disables it (>=1 must stay selected).
-    const a = screen.getByLabelText(FAM_A.familyName) as HTMLInputElement;
-    fireEvent.click(a);
+    // ...deselecting the sole ON album disables it (>=1 must stay selected).
+    fireEvent.click(chip(FAM_A.familyName));
     expect(add.disabled).toBe(true);
   });
 
@@ -157,7 +159,7 @@ describe("AlbumUploader multi-family picker", () => {
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
     );
     // Add the second album to the default (current) selection, then choose a file.
-    fireEvent.click(screen.getByLabelText(FAM_B.familyName));
+    fireEvent.click(chip(FAM_B.familyName));
     const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1] } });
@@ -244,15 +246,15 @@ describe("AlbumUploader multi-family picker", () => {
     const { rerender } = render(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
     );
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_A.familyName)).toBe(true);
+    expect(isOn(FAM_B.familyName)).toBe(false);
 
     // Same component instance, new context family (mirrors the switcher's prop-only change).
     rerender(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_B.familyId} />,
     );
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
   });
 
   // Consistency with the ask picker (Task 3): a concrete non-"all" hub scope seeds the default even
@@ -266,8 +268,8 @@ describe("AlbumUploader multi-family picker", () => {
         scope={FAM_A.familyId}
       />,
     );
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_A.familyName)).toBe(true);
+    expect(isOn(FAM_B.familyName)).toBe(false);
   });
 
   // scope="all" is ambiguous, so the current-album context still wins (behavior unchanged from before
@@ -280,8 +282,8 @@ describe("AlbumUploader multi-family picker", () => {
         scope="all"
       />,
     );
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
   });
 
   // ADR-0021 designator: `defaultSelected` (computed by the surface) is the single source of the seed.
@@ -294,8 +296,8 @@ describe("AlbumUploader multi-family picker", () => {
         defaultSelected={[FAM_B.familyId]}
       />,
     );
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
     // A concrete target ⇒ the add button is enabled (upload can proceed).
     const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
     expect(add.disabled).toBe(false);
@@ -312,12 +314,12 @@ describe("AlbumUploader multi-family picker", () => {
         defaultSelected={[]}
       />,
     );
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_A.familyName)).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(false);
     const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
     // A deliberate pick enables it.
-    fireEvent.click(screen.getByLabelText(FAM_A.familyName));
+    fireEvent.click(chip(FAM_A.familyName));
     expect(add.disabled).toBe(false);
   });
 
@@ -332,8 +334,8 @@ describe("AlbumUploader multi-family picker", () => {
         defaultSelected={[]}
       />,
     );
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_A.familyName)).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(false);
   });
 
   // ADR-0021: a filter change is a same-route soft navigation (no remount) — a new `defaultSelected`
@@ -346,7 +348,7 @@ describe("AlbumUploader multi-family picker", () => {
         defaultSelected={[FAM_A.familyId]}
       />,
     );
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(true);
 
     rerender(
       <AlbumUploader
@@ -355,8 +357,8 @@ describe("AlbumUploader multi-family picker", () => {
         defaultSelected={[FAM_B.familyId]}
       />,
     );
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
     // The uploader never navigates (no write-back to the browse filter).
     expect(replace).not.toHaveBeenCalled();
   });
@@ -372,8 +374,8 @@ describe("AlbumUploader multi-family picker", () => {
       />,
     );
     // "all" → current album (FAM_A) is the default.
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_A.familyName)).toBe(true);
+    expect(isOn(FAM_B.familyName)).toBe(false);
 
     // Scope narrows to FAM_B while the mount stays; the default follows.
     rerender(
@@ -383,8 +385,8 @@ describe("AlbumUploader multi-family picker", () => {
         scope={FAM_B.familyId}
       />,
     );
-    expect((screen.getByLabelText(FAM_B.familyName) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(FAM_A.familyName) as HTMLInputElement).checked).toBe(false);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(isOn(FAM_A.familyName)).toBe(false);
   });
 });
 

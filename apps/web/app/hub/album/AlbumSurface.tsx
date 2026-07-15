@@ -141,7 +141,11 @@ export async function AlbumSurface({
   // Two flavors of the same bar: `chips` is standalone (its own trailing margin) for the empty-state
   // paths where no AlbumGrid mounts; `chipsInline` drops that margin so it bottom-aligns with the
   // sibling When/Search controls when it rides INSIDE AlbumGrid's consolidated control row (#52).
-  const chipFamilies = active.map((f) => ({ id: f.familyId, name: f.familyName }));
+  const chipFamilies = active.map((f) => ({
+    id: f.familyId,
+    name: f.familyName,
+    shortName: f.familyShortName,
+  }));
   const chipSelected = filter.kind === "all" ? ("all" as const) : selectedIds;
   const chips =
     active.length >= 2 ? (
