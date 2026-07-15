@@ -49,8 +49,11 @@ export function FamilyChips({ families, selected }: FamilyChipsProps) {
     if (value === null) params.delete(FAMILIES_PARAM);
     else params.set(FAMILIES_PARAM, value);
 
+    // `usePathname()` can be null during SSR/static generation; fall back to the hub so a truthy
+    // query string never produces a literal "null?..." route.
+    const base = pathname ?? "/hub";
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : (pathname ?? "/hub"));
+    router.push(qs ? `${base}?${qs}` : base);
   }
 
   const rowStyle: CSSProperties = {

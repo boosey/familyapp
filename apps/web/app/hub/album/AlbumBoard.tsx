@@ -121,9 +121,13 @@ export function AlbumBoard(props: {
   // The families whose photos actually populate this grid (`props.photos`) — the concrete browse-filter
   // selection (ADR-0021). Only a photo landing in one of these will ever reappear in a refreshed
   // `props.photos`, so only an in-scope import can be reconciled.
+  // `props.viewedFamilyIds` is a fresh array every parent render; depend on a stable primitive key so
+  // the memo (and the callbacks that dep on it) only recompute when the selection actually changes.
+  const viewedKey = props.viewedFamilyIds.join(",");
   const viewedFamilyIds = useMemo(
     () => new Set(props.viewedFamilyIds),
-    [props.viewedFamilyIds],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- viewedKey is the stable form of props.viewedFamilyIds
+    [viewedKey],
   );
 
   // Settle a successful import. When the target intersects the viewed scope (a solo contributor sends

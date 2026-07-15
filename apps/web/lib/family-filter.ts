@@ -33,12 +33,14 @@ export type FamilyFilter =
  *       * else                                  → { kind: "some", ids }
  */
 export function parseFamilyFilter(
-  raw: string | string[] | undefined,
+  raw: string | string[] | null | undefined,
   activeFamilyIds: string[],
 ): FamilyFilter {
-  // Normalize a repeated param to a single csv string; absent → all.
+  // Normalize a repeated param to a single csv string; absent (undefined/null/"") → all. A `null`
+  // can arrive from cleared query state or a mock, so guard it explicitly — otherwise `.split` below
+  // would throw at this trust choke point.
   const joined = Array.isArray(raw) ? raw.join(",") : raw;
-  if (joined === undefined || joined === "") return { kind: "all" };
+  if (joined === undefined || joined === null || joined === "") return { kind: "all" };
   if (joined === FAMILIES_NONE) return { kind: "none" };
 
   // Restrict to the viewer's OWN active families, deduped, in active-set order (a crafted/unknown id

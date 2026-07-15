@@ -26,6 +26,13 @@ describe("parseFamilyFilter", () => {
     expect(parseFamilyFilter("", ACTIVE)).toEqual({ kind: "all" });
   });
 
+  // Regression (PR #55 Gemini review): a `null` from cleared query state / a mock must be treated as
+  // absent, not crash on `.split`.
+  it("null (cleared query state) → all, never throws", () => {
+    expect(() => parseFamilyFilter(null, ACTIVE)).not.toThrow();
+    expect(parseFamilyFilter(null, ACTIVE)).toEqual({ kind: "all" });
+  });
+
   it("the 'none' sentinel → none", () => {
     expect(parseFamilyFilter(FAMILIES_NONE, ACTIVE)).toEqual({ kind: "none" });
   });
