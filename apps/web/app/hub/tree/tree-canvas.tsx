@@ -41,7 +41,18 @@ import {
   type Affordance,
   type ExpansionState,
 } from "./tree-layout";
-import { NODE_H, NODE_W, PersonNode, isAnonymousBridge } from "./person-node";
+import { PersonNode, isAnonymousBridge } from "./person-node";
+import {
+  AFFORDANCE_SIZE_PX,
+  DRAG_SLOP_PX,
+  FIT_MARGIN,
+  FIT_MAX_SCALE,
+  NODE_H,
+  NODE_W,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
+} from "./tree-constants";
 import { PersonPanel } from "./person-panel";
 import { KebabMenu } from "./kebab-menu";
 import { mergeEdges, mergeNodes } from "./merge";
@@ -88,17 +99,7 @@ function adjacencyCounts(edges: readonly ResolvedKinshipEdge[]): Map<string, Adj
   return m;
 }
 
-/** How far (px) a pointer may move between down and up and still count as a tap, not a drag. */
-const DRAG_SLOP = 6;
-
-/** Zoom bounds + step. `Fit` computes its own scale within these; the +/− buttons step by ZOOM_STEP. */
-const ZOOM_MIN = 0.3;
-const ZOOM_MAX = 2.5;
-const ZOOM_STEP = 1.2;
-/** Leave a little breathing room around the tree when fitting the whole thing to the viewport. */
-const FIT_MARGIN = 0.9;
-/** Don't zoom a tiny tree in past this when fitting (a lone node shouldn't fill the screen). */
-const FIT_MAX_SCALE = 1.2;
+// Drag/zoom/fit knobs live in ./tree-constants (imported above).
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 
@@ -361,7 +362,7 @@ export function TreeCanvas({
   const onNodePointerMove = (id: string, e: React.PointerEvent) => {
     const t = tapRef.current;
     if (!t || t.id !== id) return;
-    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > DRAG_SLOP) didDragRef.current = true;
+    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > DRAG_SLOP_PX) didDragRef.current = true;
   };
   const onNodePointerUp = (_id: string, e: React.PointerEvent) => {
     e.stopPropagation();
@@ -617,7 +618,7 @@ function AffordanceButton({
   onActivate: (a: Affordance) => void;
 }) {
   const label = affordanceLabel(aff);
-  const size = 22;
+  const size = AFFORDANCE_SIZE_PX;
 
   // Vertical carets (parents/children): down = expanded, up = collapsed (spec §3).
   const down =

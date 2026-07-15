@@ -301,7 +301,8 @@ export const hub = {
     photoUploadFailed: "Could not add your photo. Please try again.",
     photoUploadFailedDetail: (detail: string) =>
       `Could not add your photo (${detail}). Please try again.`,
-    tooManyPhotos: "That's too many photos at once. Please add up to 30 at a time.",
+    tooManyPhotos: (max: number) =>
+      `That's too many photos at once. Please add up to ${max} at a time.`,
     photoTooLarge:
       "That photo is too large to upload here. Try a smaller image, or import it from Google Photos.",
     photoHeicUnsupported:
@@ -536,6 +537,15 @@ export const hub = {
     byline: (narrator: string, recordedAt: string) =>
       `Told by ${narrator} · Recorded ${recordedAt}`,
     noProse: "No prose yet — the original recording above is the whole story for now.",
+    // Title/tags editor (StoryEditor) save/cancel controls.
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    // Owner action (⋮) menu on the opened story.
+    optionsLabel: "Story options",
+    optionsMenuLabel: "Story options menu",
+    // Fallback error for the title/tags editor save path.
+    genericError: "Something went wrong. Please try again.",
   },
 
   // ADR-0009 Phase 2 — story accompaniment photos: the read-only gallery on the opened story and the

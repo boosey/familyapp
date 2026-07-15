@@ -12,6 +12,8 @@
  * per-item download+create, matching file upload's exact-N placeholder UX.
  */
 
+import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
+
 /**
  * A placeholder tile shown at the TOP of the album grid while its photo is being imported. This is the
  * ONLY per-item shape the grid needs — the retry work item (a File or a Google handle) is held by the
@@ -73,10 +75,10 @@ export type ImportOnePhotoResult = { ok: true; photoId: string } | { error: stri
 /**
  * The most photos the client will send to the per-item pool in one batch. Still enforced client-side as
  * a UX/resource guard (ADR-0015): the per-item action re-resolves auth and re-validates family
- * membership server-side, so the cap is NOT a security boundary. Kept in sync with the server's
- * `MAX_BATCH_FILES`.
+ * membership server-side, so the cap is NOT a security boundary. Single source of truth:
+ * PHOTO_BATCH_MAX_FILES (the same value the server action enforces).
  */
-export const MAX_IMPORT_BATCH = 30;
+export const MAX_IMPORT_BATCH = PHOTO_BATCH_MAX_FILES;
 
 /** How many per-item imports run concurrently through the pool (ADR-0015 caps the burst). */
 export const IMPORT_POOL_CONCURRENCY = 3;

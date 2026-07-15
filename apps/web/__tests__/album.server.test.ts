@@ -43,6 +43,7 @@ import {
 } from "@/app/hub/album/actions";
 import { GET as albumPhotoGet } from "@/app/api/album-photo/[photoId]/route";
 import { hub } from "@/app/_copy";
+import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
 
 const account = (personId: string): AuthContext => ({ kind: "account", personId });
 
@@ -400,7 +401,7 @@ describe("uploadAlbumPhotoAction", () => {
     }
 
     const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ error: hub.actions.tooManyPhotos });
+    expect(result).toEqual({ error: hub.actions.tooManyPhotos(PHOTO_BATCH_MAX_FILES) });
     expect(runtimeStorage.size).toBe(0);
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toEqual([]);

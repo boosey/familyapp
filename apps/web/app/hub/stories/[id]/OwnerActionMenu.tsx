@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { deleteStoryAction } from "./actions";
+import { hub } from "@/app/_copy";
 
 export interface OwnerActionMenuProps {
   storyId: string;
@@ -153,7 +154,7 @@ export function OwnerActionMenu({
     <div ref={containerRef} style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        aria-label="Story options"
+        aria-label={hub.storyDetail.optionsLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
@@ -193,7 +194,7 @@ export function OwnerActionMenu({
       </button>
 
       {open && !disabled && (
-        <div style={dropdownStyle} role="menu" aria-label="Story options menu">
+        <div style={dropdownStyle} role="menu" aria-label={hub.storyDetail.optionsMenuLabel}>
           {!confirmDelete ? (
             <>
               <button
