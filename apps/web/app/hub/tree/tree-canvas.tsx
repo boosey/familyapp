@@ -199,7 +199,9 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const toppedUp = useRef<Set<string>>(new Set());
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number; panning: boolean } | null>(
+    null,
+  );
   // Double-tap detection: a card records its down; on up (if it wasn't a drag) we compare against the
   // last completed tap on the SAME card. `didDragRef` marks that a card-started pointer became a pan.
   const tapRef = useRef<{ id: string; x: number; y: number } | null>(null);
@@ -471,17 +473,29 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // that starts on a card still pans the canvas (its pointerdown BUBBLES to the viewport, which sets
   // `dragRef`). Carets & the kebab keep their own stopPropagation, so they are never swallowed by a pan.
   const onPointerDown = (e: React.PointerEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    // Record the gesture origin but do NOT capture the pointer yet. Capturing on pointerdown routes
+    // every later pointer event (incl. pointerup) to the viewport, so cards never see their own
+    // pointerup — which silently breaks double-tap detection on real browsers (jsdom dispatches
+    // events directly to a node, so tests wouldn't catch it). We defer capture until an actual pan.
+    dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, panning: false };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    setPan(() => ({ x: d.panX + (e.clientX - d.startX), y: d.panY + (e.clientY - d.startY) }));
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    // Below the slop the gesture may still be a tap/double-tap, which must reach the card handlers —
+    // so only once movement crosses DRAG_SLOP_PX do we commit to a pan and capture the pointer.
+    if (!d.panning && Math.hypot(dx, dy) > DRAG_SLOP_PX) {
+      d.panning = true;
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+    if (d.panning) setPan(() => ({ x: d.panX + dx, y: d.panY + dy }));
   };
   const onPointerUp = (e: React.PointerEvent) => {
+    const d = dragRef.current;
     dragRef.current = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (d?.panning) (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   };
 
   // --- Card tap / double-tap → read-only details sheet (§2, display half of #4) ------------------
@@ -658,6 +672,10 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
 
       {detailsNode && details && (
         <PersonDetails
+          // Key on the person so switching cards (double-click another while the sheet is open)
+          // remounts the sheet + its edit form with fresh state, instead of leaking the previous
+          // person's in-progress edits (displayName/birthYear/sex/…) onto the new one.
+          key={detailsNode.personId}
           node={detailsNode}
           relationToViewer={viewerRelation.get(detailsNode.personId) ?? null}
           familyId={familyId}

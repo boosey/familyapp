@@ -133,6 +133,63 @@ it("#5 — an UNKNOWN card that is NOT editable stays read-only (no form, no Edi
   expect(screen.queryByTestId("tree-person-edit-form")).toBeNull();
 });
 
+it("remounts with fresh edit state when the keyed person changes (regression: Gemini #1 state pollution)", async () => {
+  // The canvas renders <PersonDetails key={node.personId}>. Double-clicking a DIFFERENT card while the
+  // sheet is open must discard the previous person's in-progress edits, not save them onto the new one.
+  // This reproduces the canvas's keying: enter edit, type a stale value, switch the person in the same
+  // slot. With the key the subtree remounts (editing resets, stale value gone); without it, the stale
+  // edit-form state would leak onto the new person — which is exactly the bug.
+  function Host({ personId, name }: { personId: string; name: string }) {
+    return (
+      <PersonDetails
+        key={personId}
+        node={node({ personId, displayName: name, birthYear: 1950 })}
+        relationToViewer={null}
+        familyId="F"
+        onClose={() => {}}
+        checkEditable={editableYes}
+        saveEdit={saveOk}
+      />
+    );
+  }
+  const { rerender } = render(<Host personId="p1" name="Alice" />);
+  fireEvent.click(await screen.findByTestId("tree-details-edit"));
+  const nameInput = () => screen.getByTestId("tree-edit-name") as HTMLInputElement;
+  fireEvent.change(nameInput(), { target: { value: "STALE EDIT" } });
+  expect(nameInput().value).toBe("STALE EDIT");
+
+  // Switch to a different person in the same slot — the key change remounts with fresh state.
+  rerender(<Host personId="p2" name="Bob" />);
+  await waitFor(() => expect(screen.getByTestId("tree-person-details").textContent).toContain("Bob"));
+  // The stale in-progress edit is gone (fresh mount is read-only for the new person).
+  expect(screen.queryByDisplayValue("STALE EDIT")).toBeNull();
+});
+
+it("rejects an invalid year of death instead of silently clearing it (regression: Gemini #3)", async () => {
+  // A typo in the death-year field must NOT be coerced NaN→null and saved (which would quietly wipe
+  // an existing year of death). It must surface a validation error and write nothing.
+  const saveEdit = vi.fn(async (): Promise<SavePersonEditResult> => ({ ok: true }));
+  render(
+    <PersonDetails
+      node={node({ personId: "p1", displayName: "Grandpa", lifeStatus: "deceased", deathYear: 1990 })}
+      relationToViewer={null}
+      familyId="F"
+      onClose={() => {}}
+      checkEditable={editableYes}
+      saveEdit={saveEdit}
+    />,
+  );
+  fireEvent.click(await screen.findByTestId("tree-details-edit"));
+  // A non-integer year is the reachable invalid case for a numeric field (parsedYear → NaN); a number
+  // input coerces free-text like "19x0" to "" on its own, so we exercise the NaN path with "19.5".
+  fireEvent.change(screen.getByTestId("tree-edit-death-year"), { target: { value: "19.5" } });
+  fireEvent.click(screen.getByTestId("tree-edit-save"));
+
+  const err = await screen.findByTestId("tree-edit-error");
+  expect(err.textContent).toBe(hub.tree.editErrorDeathDate);
+  expect(saveEdit).not.toHaveBeenCalled();
+});
+
 it("surfaces an inline error when the server rejects the save (not-allowed)", async () => {
   const saveEdit = async (): Promise<SavePersonEditResult> => ({ ok: false, error: "not-allowed" });
   render(

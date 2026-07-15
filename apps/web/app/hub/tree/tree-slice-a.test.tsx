@@ -134,6 +134,36 @@ it("two quick taps on the same card open the details sheet (double-tap path)", a
   expect(screen.getByTestId("tree-person-details")).toBeTruthy();
 });
 
+it("does NOT capture the pointer on a tap, only once a drag crosses the slop (regression: Gemini #2)", async () => {
+  // Capturing the pointer on pointerdown routes every later pointer event (incl. pointerup) to the
+  // viewport, so cards never see their own pointerup — silently breaking double-tap on real browsers
+  // (jsdom dispatches directly to a node, so it can't observe the routing; we assert the mechanism).
+  const proto = HTMLElement.prototype as unknown as { setPointerCapture?: (id: number) => void };
+  const orig = proto.setPointerCapture;
+  const captureSpy = vi.fn();
+  proto.setPointerCapture = captureSpy;
+  try {
+    render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={selfWithChild()} fetchSubtree={vi.fn(noFetch)} />);
+    const cardPos = screen.getByTestId("tree-node-pos-marco");
+    // A tap (sub-slop move) must NOT capture — the pointerup has to reach the card for double-tap.
+    await act(async () => {
+      fireEvent.pointerDown(cardPos, { clientX: 5, clientY: 5, pointerId: 1 });
+      fireEvent.pointerMove(cardPos, { clientX: 7, clientY: 6, pointerId: 1 }); // hypot ≈ 2.2 < DRAG_SLOP_PX
+      fireEvent.pointerUp(cardPos, { clientX: 7, clientY: 6, pointerId: 1 });
+    });
+    expect(captureSpy).not.toHaveBeenCalled();
+    // A real pan (move past the slop) DOES capture so the drag tracks smoothly.
+    await act(async () => {
+      fireEvent.pointerDown(cardPos, { clientX: 5, clientY: 5, pointerId: 2 });
+      fireEvent.pointerMove(cardPos, { clientX: 60, clientY: 60, pointerId: 2 });
+      fireEvent.pointerUp(cardPos, { clientX: 60, clientY: 60, pointerId: 2 });
+    });
+    expect(captureSpy).toHaveBeenCalled();
+  } finally {
+    proto.setPointerCapture = orig;
+  }
+});
+
 // ---- 3. Re-focus keeps the camera put -----------------------------------------------------------
 it("re-focus via the kebab holds the newly-focused card's screen position (camera still) and keeps scale", async () => {
   const fetchSubtree = vi.fn(noFetch);

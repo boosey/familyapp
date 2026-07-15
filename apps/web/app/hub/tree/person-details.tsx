@@ -344,7 +344,13 @@ function PersonEditForm({
     };
     if (lifeStatus === "deceased") {
       const dy = parsedYear(deathYear);
-      patch.deathYear = Number.isNaN(dy) ? null : dy;
+      // Reject an invalid year instead of silently coercing NaN → null, which would quietly clear an
+      // existing year of death on a typo (matches the birthYear validation above).
+      if (Number.isNaN(dy)) {
+        setError(hub.tree.editErrorDeathDate);
+        return;
+      }
+      patch.deathYear = dy;
     }
 
     setSaving(true);

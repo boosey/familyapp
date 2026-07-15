@@ -841,6 +841,7 @@ export const hub = {
     editErrorNotAllowed: "You do not have permission to edit this person.",
     editErrorName: "Please enter a name.",
     editErrorBirthDate: "That birth date is not valid.",
+    editErrorDeathDate: "That year of death is not valid.",
     // Per-card KebabMenu labels.
     // The ⋮ menu's Focus action — re-roots the tree on this card (relation chips + ring recompute).
     kebabFocus: "Focus here",
