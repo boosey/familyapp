@@ -32,6 +32,13 @@ describe("coerce — int-index (reading size)", () => {
     expect(coerce(fontDef, "")).toBe(1);
   });
 
+  it("treats a whitespace-only value as absent — NOT index 0 (Number(' ') === 0)", () => {
+    // Regression: without trimming, `Number(" ")` is 0 and would validate as int-index 0.
+    expect(coerce(fontDef, "   ")).toBe(1);
+    // A padded valid index is still accepted (trimmed before Number()).
+    expect(coerce(fontDef, " 3 ")).toBe(3);
+  });
+
   it("rejects out-of-range and non-integer values → default", () => {
     expect(coerce(fontDef, "5")).toBe(1); // length is 5 → valid indices 0..4
     expect(coerce(fontDef, "-1")).toBe(1);

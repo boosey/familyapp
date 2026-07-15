@@ -38,6 +38,15 @@ export function FamilyDesignator({
   requiredMessage: string;
 }) {
   const [value, setValue] = useState<string>(seeded ?? "");
+  // A filter change is a same-route soft navigation, so this component is NOT remounted — only its
+  // `seeded` prop changes. Re-seed the selection whenever `seeded` changes (the "adjust state during
+  // render on a prop change" pattern, matching AlbumUploader) so the picker tracks the current filter
+  // seed; without this, React keeps the stale mounted-once value and the dropdown ignores the new seed.
+  const [prevSeeded, setPrevSeeded] = useState<string | null>(seeded);
+  if (prevSeeded !== seeded) {
+    setPrevSeeded(seeded);
+    setValue(seeded ?? "");
+  }
 
   // Placeholder only in the genuinely ambiguous case: no deliberate seed AND >1 family. With a single
   // family the lone option is unambiguous (auto-selected), so no placeholder is needed.

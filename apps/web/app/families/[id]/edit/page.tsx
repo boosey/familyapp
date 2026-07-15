@@ -29,6 +29,13 @@ export default async function FamilyEditPage({
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
 
+  // Guard a malformed id BEFORE querying: `families.id` is a uuid column, so a non-UUID value would
+  // raise a DB parse error (500). Treat it as "no such family" → the same notFound() a real non-member
+  // gets, so the page stays no existence oracle (matches the tell/[storyId] precedent).
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    notFound();
+  }
+
   const family = await getFamily(db, id);
   // A missing family AND a non-steward both return notFound() — a signed-in non-member gets the same
   // 404 whether the id is nonexistent or simply not theirs, so the page is no existence oracle (matches

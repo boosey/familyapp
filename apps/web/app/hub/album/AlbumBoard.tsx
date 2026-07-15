@@ -76,8 +76,12 @@ export function AlbumBoard(props: {
   googlePhotosOauthConnected: boolean;
   googlePhotosOauthError: string | null;
   photos: AlbumGridPhoto[];
-  /** The shared browse Family filter chips (ADR-0021), forwarded into the grid's control row. */
+  /** The shared browse Family filter chips (ADR-0021), forwarded into the grid's control row (inline,
+   *  no bottom margin — it bottom-aligns with the row's sibling controls). */
   familyChips?: React.ReactNode;
+  /** The STANDALONE variant of the same chips (its own bottom margin) for the empty state, where there
+   *  is no grid control row to host them and the inline (margin-less) variant would crowd the note. */
+  familyChipsStandalone?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -396,9 +400,10 @@ export function AlbumBoard(props: {
         />
       ) : (
         // Empty album (no photos, no in-flight tiles): there's no AlbumGrid to host the browse Family
-        // chips, so render them standalone above the empty note so a ≥2-family viewer can still toggle.
+        // chips, so render the STANDALONE variant (its own bottom margin) above the empty note so a
+        // ≥2-family viewer can still toggle — the inline variant would crowd the note with no spacing.
         <>
-          {props.familyChips}
+          {props.familyChipsStandalone}
           <p
             style={{
               fontFamily: "var(--font-ui)",
