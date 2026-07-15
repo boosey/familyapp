@@ -2490,3 +2490,36 @@ export async function listStoriesAboutPerson(
       desc(stories.id),
     );
 }
+
+/**
+ * "Stories contributed by X" (tree Slice B) — the stories a given Person NARRATED / OWNS
+ * (`stories.ownerPersonId = personId`), SCOPED to the viewer's authorized stories. This mirrors
+ * `listStoriesAboutPerson` EXACTLY, swapping the `story_subjects` EXISTS clause for an ownership
+ * predicate: the `WHERE` is `storyVisibilityPredicate(viewer)` (the SQL form of the authorization
+ * oracle) ANDed with `ownerPersonId = personId`. The ownership filter only NARROWS the authorized
+ * set — a story the viewer cannot already read stays hidden even when this person owns it. Being
+ * the contributor never widens visibility; a viewer only ever sees the subset they were already
+ * entitled to, filtered to this person's contributions.
+ *
+ * Order mirrors `listStoriesAboutPerson`: `COALESCE(approvedAt, createdAt) DESC`, `id DESC` tiebreak.
+ */
+export async function listStoriesNarratedByPerson(
+  db: Database,
+  ctx: AuthContext,
+  personId: string,
+): Promise<Story[]> {
+  const viewer = viewerPersonId(ctx);
+  return db
+    .select()
+    .from(stories)
+    .where(
+      and(
+        storyVisibilityPredicate(viewer),
+        eq(stories.ownerPersonId, personId),
+      ),
+    )
+    .orderBy(
+      sql`COALESCE(${stories.approvedAt}, ${stories.createdAt}) DESC`,
+      desc(stories.id),
+    );
+}

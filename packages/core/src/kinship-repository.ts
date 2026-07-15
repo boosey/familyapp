@@ -18,9 +18,9 @@
  * grandparent / … are DERIVED here (`deriveKin`) by walking those edges — never stored, so a derived
  * fact can't contradict a stored one.
  */
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
-import { families, persons } from "@chronicle/db/schema";
+import { families, memberships, persons } from "@chronicle/db/schema";
 import type {
   Database,
   KinshipEdgeType,
@@ -83,6 +83,54 @@ function edgeKey(e: {
   personBId: string;
 }): string {
   return `${e.edgeType}${SEP}${e.personAId}${SEP}${e.personBId}`;
+}
+
+/**
+ * Can the VIEWER see `personId` at all — the person-visibility gate for any per-person surface
+ * (e.g. `/hub/person/[id]`). This is the SAME reachability the tree renderer enforces: a person is
+ * visible iff the viewer would encounter them in a family they can browse. Concretely:
+ *   - Self is always visible (`viewer === personId`).
+ *   - Otherwise the viewer and the person must share at least ONE family in which BOTH currently hold
+ *     an ACTIVE membership (mirrors `resolveKinshipTree`'s per-family active-membership auth and the
+ *     album's `activeFamilyIds` intersection). No shared active family ⇒ NOT visible.
+ *   - An anonymous viewer sees no one (they hold no memberships).
+ *
+ * It answers ONLY "is this person on a surface the viewer may open" — it grants NO content. It exists
+ * so a per-person page can gate existence + identity (name) disclosure with a viewer-scoped check,
+ * turning a hidden person into `notFound()` (indistinguishable from a nonexistent id — no oracle).
+ * Lives here (kinship's front door) because person reachability is a kinship concern; it touches only
+ * the open `memberships` table, never content.
+ */
+export async function canViewerSeePerson(
+  db: Database,
+  ctx: AuthContext,
+  personId: string,
+): Promise<boolean> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return false;
+  if (viewer === personId) return true;
+  // Do the viewer and the target share a family in which BOTH hold an ACTIVE membership? Fetch the
+  // viewer's active families, then check the target for an active membership in any of them.
+  const viewerFamilies = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(and(eq(memberships.personId, viewer), eq(memberships.status, "active")));
+  if (viewerFamilies.length === 0) return false;
+  const [shared] = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.status, "active"),
+        inArray(
+          memberships.familyId,
+          viewerFamilies.map((r) => r.familyId),
+        ),
+      ),
+    )
+    .limit(1);
+  return shared !== undefined;
 }
 
 /**

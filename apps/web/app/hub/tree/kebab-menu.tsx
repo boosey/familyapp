@@ -20,10 +20,18 @@
  *   - Add partner — only when `partnerCount === 0`
  */
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
 import { useTreeAdd } from "./add-relative-context";
 import { useTreeFocus } from "./focus-context";
+
+/** The three contribution destinations (tree Slice B), placed BEFORE Focus in the menu. */
+const CONTRIBUTION_ITEMS: { section: "stories" | "photos" | "mentions"; label: string; testId: string }[] = [
+  { section: "stories", label: hub.tree.detailsStories, testId: "tree-kebab-stories" },
+  { section: "photos", label: hub.tree.detailsPhotos, testId: "tree-kebab-photos" },
+  { section: "mentions", label: hub.tree.detailsMentions, testId: "tree-kebab-mentions" },
+];
 
 export interface KebabMenuProps {
   node: TreeNode;
@@ -130,7 +138,26 @@ export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMen
             gap: 2,
           }}
         >
-          {/* Focus (re-root) — first item; omitted on the card that is already the focus person. */}
+          {/* Contribution destinations (Slice B) — placed BEFORE Focus: Stories · Photos · Mentions.
+              Rendered as Links (not router.push) so the menu stays mountable without a router context,
+              matching the tree's no-op-context discipline for standalone rendering. */}
+          {CONTRIBUTION_ITEMS.map((it) => (
+            <Link
+              key={it.section}
+              href={`/hub/person/${node.personId}?section=${it.section}`}
+              role="menuitem"
+              data-testid={it.testId}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ ...MENU_ITEM_STYLE, textDecoration: "none" }}
+            >
+              {it.label}
+            </Link>
+          ))}
+          {/* Focus (re-root) — omitted on the card that is already the focus person. */}
           {!isFocus && (
             <button
               type="button"

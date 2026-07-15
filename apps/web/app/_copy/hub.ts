@@ -739,6 +739,25 @@ export const hub = {
     // Generic failure for a governance/hide action.
     govActionFailed: "Couldn't do that. Please try again.",
   },
+  // Tree Slice B — the per-person contributions page (/hub/person/[personId]) with three tabs:
+  // Stories contributed · Photos contributed · Mentions. Deep-linked via ?section=.
+  personPage: {
+    back: "← Back",
+    // Heading uses the person's name; falls back to a neutral label for a nameless person.
+    headingFor: (name: string) => name,
+    headingFallback: "This person",
+    sectionsAria: "Contributions",
+    // Tab labels (reuse the details-sheet link wording so the whole product speaks one language).
+    tabStories: "Stories contributed",
+    tabPhotos: "Photos contributed",
+    tabMentions: "Mentions",
+    // Per-tab empty states.
+    storiesEmpty: "No stories contributed yet.",
+    photosEmpty: "No photos contributed yet.",
+    mentionsEmpty: "Not mentioned in any stories yet.",
+    // Alt text for a contributed photo thumbnail.
+    photoAlt: (caption: string | null) => caption ?? "Contributed photo",
+  },
   // Story-subject tagging (issue #35) — who a story is about.
   subjects: {
     heading: "Who this is about",
@@ -795,12 +814,11 @@ export const hub = {
     // Read-only person details sheet (double-click a card, Slice A). Relation-to-focus chip + "You".
     youLabel: "You",
     detailsClose: "Close",
-    // Navigation links in the details sheet (shared labels with the future kebab items, Slice B).
-    // Only Mentions has a live destination in Slice A; the first two render disabled ("coming soon").
+    // Navigation links in the details sheet + the kebab items (Slice B): all three are live
+    // destinations on the per-person page (/hub/person/[id]?section=stories|photos|mentions).
     detailsStories: "Stories contributed",
     detailsPhotos: "Photos contributed",
     detailsMentions: "Mentions",
-    comingSoon: "Coming soon",
     // Details-sheet EDIT mode (tree Slice C, ADR-0021). Shown only when the server projects `editable`.
     editButton: "Edit",
     editHeading: "Edit details",

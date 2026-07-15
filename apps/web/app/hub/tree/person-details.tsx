@@ -80,7 +80,10 @@ export function PersonDetails({
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
   const rootRef = useRef<HTMLElement | null>(null);
 
-  const mentionsHref = `/hub/about/${node.personId}`;
+  // Slice B: the three contribution links now point at the unified per-person page's sections.
+  const storiesHref = `/hub/person/${node.personId}?section=stories`;
+  const photosHref = `/hub/person/${node.personId}?section=photos`;
+  const mentionsHref = `/hub/person/${node.personId}?section=mentions`;
 
   // Editability is resolved server-side on open (the predicate never ships to the client).
   const [editable, setEditable] = useState(false);
@@ -230,10 +233,17 @@ export function PersonDetails({
           )}
 
           <nav style={{ display: "grid", gap: 8, marginTop: 14 }}>
-            {/* Stories/Photos contributed — destinations arrive in Slice B; disabled + "coming soon". */}
-            <ComingSoonLink label={hub.tree.detailsStories} testId="tree-details-stories" />
-            <ComingSoonLink label={hub.tree.detailsPhotos} testId="tree-details-photos" />
-            {/* Mentions — the one live destination in Slice A. */}
+            {/* Slice B: all three contribution links are live destinations on the per-person page. */}
+            <Link href={storiesHref} style={{ textDecoration: "none" }} data-testid="tree-details-stories">
+              <KindredButton variant="secondary" size="small" fullWidth type="button">
+                {hub.tree.detailsStories}
+              </KindredButton>
+            </Link>
+            <Link href={photosHref} style={{ textDecoration: "none" }} data-testid="tree-details-photos">
+              <KindredButton variant="secondary" size="small" fullWidth type="button">
+                {hub.tree.detailsPhotos}
+              </KindredButton>
+            </Link>
             <Link href={mentionsHref} style={{ textDecoration: "none" }} data-testid="tree-details-mentions">
               <KindredButton variant="secondary" size="small" fullWidth type="button">
                 {hub.tree.detailsMentions}
@@ -464,37 +474,5 @@ function PersonEditForm({
         </KindredButton>
       </div>
     </form>
-  );
-}
-
-/** A disabled nav link with a "coming soon" affordance (a real destination lands in Slice B). */
-function ComingSoonLink({ label, testId }: { label: string; testId: string }) {
-  return (
-    <span
-      data-testid={testId}
-      title={hub.tree.comingSoon}
-      style={{ display: "block", position: "relative" }}
-    >
-      <KindredButton variant="secondary" size="small" fullWidth type="button" disabled>
-        {label}
-      </KindredButton>
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: "50%",
-          right: 12,
-          transform: "translateY(-50%)",
-          fontFamily: "var(--font-ui)",
-          fontSize: "0.62rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-          color: "var(--text-meta)",
-          pointerEvents: "none",
-        }}
-      >
-        {hub.tree.comingSoon}
-      </span>
-    </span>
   );
 }
