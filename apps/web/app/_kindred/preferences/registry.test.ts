@@ -61,6 +61,36 @@ describe("computeApplication", () => {
       value: "archive",
     });
   });
+
+  it("css-var yields the variable name and value, suffixing the unit when present", () => {
+    const unitless: PreferenceDef = {
+      key: "density",
+      storageKey: "kin-density",
+      default: "1",
+      validate: { kind: "enum", values: ["1", "1.15", "1.3"] },
+      apply: { strategy: "css-var", cssVar: "--density" },
+    };
+    const withUnit: PreferenceDef = {
+      key: "gutter",
+      storageKey: "kin-gutter",
+      default: "8",
+      validate: { kind: "enum", values: ["8", "12", "16"] },
+      apply: { strategy: "css-var", cssVar: "--gutter", unit: "px" },
+    };
+    expect(computeApplication(unitless, "1.15")).toEqual({ target: "css-var", name: "--density", value: "1.15" });
+    expect(computeApplication(withUnit, "12")).toEqual({ target: "css-var", name: "--gutter", value: "12px" });
+  });
+
+  it("root-font-size degenerates to 0 (never `undefined`) when steps are empty — matches the script", () => {
+    const empty: PreferenceDef = {
+      key: "x",
+      storageKey: "x",
+      default: 0,
+      validate: { kind: "int-index", length: 1 },
+      apply: { strategy: "root-font-size", steps: [], unit: "pt" },
+    };
+    expect(computeApplication(empty, 0)).toEqual({ target: "root-font-size", value: "0pt" });
+  });
 });
 
 describe("PREFERENCES registry parity with the folded-in constants", () => {
