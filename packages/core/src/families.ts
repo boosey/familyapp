@@ -63,6 +63,76 @@ export async function createFamily(
   });
 }
 
+export interface UpdateFamilyInput {
+  familyId: string;
+  actorPersonId: string;
+  name: string;
+  shortName?: string | null;
+  description?: string | null;
+  discoverable: boolean;
+}
+
+/**
+ * Steward-only edit of a family's mutable metadata (ADR-0021 Edit-a-Family, #54). Families are
+ * mutable metadata — no append-only ledger — so this is a plain UPDATE. Re-checks stewardship
+ * server-side INSIDE the transaction (defence in depth: the route guards too): a non-steward is
+ * rejected with AuthorizationError, a missing family with InvariantViolation. `name` is required
+ * (trimmed, non-empty); `shortName`/`description` are trimmed-or-null (blank clears them).
+ */
+export async function updateFamily(db: Database, input: UpdateFamilyInput): Promise<void> {
+  const name = input.name.trim();
+  if (name.length === 0) {
+    throw new InvariantViolation("family name is required");
+  }
+  await db.transaction(async (tx) => {
+    const [family] = await tx
+      .select({ stewardPersonId: families.stewardPersonId })
+      .from(families)
+      .where(eq(families.id, input.familyId))
+      .limit(1);
+    if (!family) {
+      throw new InvariantViolation(`family not found: ${input.familyId}`);
+    }
+    if (family.stewardPersonId !== input.actorPersonId) {
+      throw new AuthorizationError("only the family steward may edit the family");
+    }
+    await tx
+      .update(families)
+      .set({
+        name,
+        shortName: input.shortName?.trim() || null,
+        description: input.description?.trim() || null,
+        discoverable: input.discoverable,
+      })
+      .where(eq(families.id, input.familyId));
+  });
+}
+
+export interface StewardedFamilyView {
+  familyId: string;
+  name: string;
+  shortName: string | null;
+}
+
+/**
+ * The families for which `personId` is the steward — used to surface the steward-only Edit-a-Family
+ * entry point in the account menu (#54). Sorted by name then id for a stable menu order.
+ */
+export async function listFamiliesStewardedBy(
+  db: Database,
+  personId: string,
+): Promise<StewardedFamilyView[]> {
+  const rows = await db
+    .select({ familyId: families.id, name: families.name, shortName: families.shortName })
+    .from(families)
+    .where(eq(families.stewardPersonId, personId));
+  return rows.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) ||
+      (a.familyId < b.familyId ? -1 : a.familyId > b.familyId ? 1 : 0),
+  );
+}
+
 export async function getFamily(
   db: Database,
   familyId: string,

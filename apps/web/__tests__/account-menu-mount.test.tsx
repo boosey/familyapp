@@ -15,7 +15,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDatabase } from "@chronicle/db";
-import { createAccountWithPerson } from "@chronicle/core";
+import { createAccountWithPerson, createFamily } from "@chronicle/core";
+import { hub } from "@/app/_copy";
 import type { Database } from "@chronicle/db";
 import type { ReactElement } from "react";
 
@@ -81,5 +82,78 @@ describe("AccountMenuMount self-gating", () => {
     expect(props.clerkSignOut).toBe(false);
     expect(props.items.some((i) => i.key === "log-out")).toBe(true);
     expect(props.items.some((i) => i.key === "switch-user")).toBe(true);
+  });
+});
+
+describe("AccountMenuMount steward edit entries", () => {
+  type MenuItem = { key: string; label: string; href?: string };
+
+  async function menuItems(): Promise<MenuItem[]> {
+    const result = (await AccountMenuMount()) as ReactElement;
+    const menu = (result.props as { children: ReactElement }).children;
+    return (menu.props as { items: MenuItem[] }).items;
+  }
+
+  it("renders NO family-settings entry when the account stewards no family", async () => {
+    testDb = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(testDb, {
+      authProviderUserId: "steward-none",
+      email: "steward-none@example.test",
+      displayName: "No Steward",
+    });
+    ctxPersonId = personId;
+
+    const items = await menuItems();
+    expect(items.some((i) => i.key.startsWith("family-settings"))).toBe(false);
+  });
+
+  it("renders a single generic 'family-settings' entry for one stewarded family", async () => {
+    testDb = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(testDb, {
+      authProviderUserId: "steward-one",
+      email: "steward-one@example.test",
+      displayName: "Solo Steward",
+    });
+    ctxPersonId = personId;
+    const { familyId } = await createFamily(testDb, {
+      name: "Esposito",
+      creatorPersonId: personId,
+    });
+
+    const items = await menuItems();
+    const entries = items.filter((i) => i.key.startsWith("family-settings"));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.key).toBe("family-settings");
+    expect(entries[0]!.label).toBe(hub.shell.menuFamilySettings);
+    expect(entries[0]!.href).toBe(`/families/${familyId}/edit`);
+  });
+
+  it("renders one named entry per family when the account stewards two", async () => {
+    testDb = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(testDb, {
+      authProviderUserId: "steward-two",
+      email: "steward-two@example.test",
+      displayName: "Dual Steward",
+    });
+    ctxPersonId = personId;
+    const { familyId: alphaId } = await createFamily(testDb, {
+      name: "Alpha",
+      creatorPersonId: personId,
+    });
+    const { familyId: betaId } = await createFamily(testDb, {
+      name: "Beta",
+      creatorPersonId: personId,
+    });
+
+    const items = await menuItems();
+    const entries = items.filter((i) => i.key.startsWith("family-settings"));
+    expect(entries).toHaveLength(2);
+    // No generic key when there are ≥2 families — each is disambiguated by id.
+    expect(entries.some((i) => i.key === "family-settings")).toBe(false);
+    expect(entries.some((i) => i.key === `family-settings-${alphaId}`)).toBe(true);
+    expect(entries.some((i) => i.key === `family-settings-${betaId}`)).toBe(true);
+    const hrefs = entries.map((i) => i.href);
+    expect(hrefs).toContain(`/families/${alphaId}/edit`);
+    expect(hrefs).toContain(`/families/${betaId}/edit`);
   });
 });

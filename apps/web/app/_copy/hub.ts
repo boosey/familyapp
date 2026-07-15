@@ -30,6 +30,9 @@ export const hub = {
     // for no-family and single-family viewers, who never see a family-filter chip bar.
     menuCreateFamily: "Create a family",
     menuFindFamily: "Find a family to join",
+    // Steward-only Edit-a-Family entry point (#54). Shown once per family the viewer stewards.
+    menuFamilySettings: "Family settings",
+    menuFamilySettingsNamed: (name: string) => `${name} settings`,
     sectionsAria: "Hub sections",
     unreadAria: (badge: number) => `${badge} unread`,
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for

@@ -44,6 +44,14 @@ export const families = {
     discoverableHint: "They can search for it and ask to join. You approve every request.",
     submit: "Create family",
   },
+  edit: {
+    title: "Family settings",
+    intro:
+      "Update how your family appears to everyone in it. You're its steward, so only you can change these.",
+    errorNoName: "Please give your family a name.",
+    submit: "Save changes",
+    back: "Back to hub",
+  },
   start: {
     title: "You're signed in. Whose family is this?",
     intro: "Start a new one, or find a family you already belong to.",
