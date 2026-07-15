@@ -49,6 +49,9 @@ export const hub = {
     tellBlurb: "Something you want to remember — start it whenever it comes to you.",
     resumeHeading: "Finish what you started",
     resume: "Finish",
+    // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
+    // empty state rather than a silent "show all". Mirrors album.noFamiliesSelected for the stories pool.
+    noFamiliesSelected: "No families selected — turn one on above to see their stories.",
   },
   intake: {
     // Banner shown at the top of the hub until the narrator's biographical profile is complete.

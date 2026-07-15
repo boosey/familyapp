@@ -312,7 +312,8 @@ export default async function HubPage({
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}
-              scope={scope}
+              filter={filter}
+              activeFamilies={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
             />
           )}
           {activeTab === "album" && (
