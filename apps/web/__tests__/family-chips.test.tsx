@@ -170,3 +170,55 @@ describe("FamilyChips", () => {
     expect(push).toHaveBeenCalledWith("/hub?families=fam-b%2Cfam-c");
   });
 });
+
+describe("FamilyChips — DESIGNATOR mode (ADR-0021, single-select, no write-back)", () => {
+  it("renders nothing for a one-family viewer (nothing to designate)", () => {
+    const { container } = render(
+      <FamilyChips families={[FAMILIES[0]!]} value="fam-a" onSelect={() => {}} />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("marks exactly the designated chip pressed (single-select)", () => {
+    render(<FamilyChips families={FAMILIES} value="fam-b" onSelect={() => {}} />);
+    expect(screen.getByRole("button", { name: "Esposito" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Marino" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Rossi" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("exposes the group with the family-designator aria label", () => {
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={() => {}} />);
+    expect(screen.getByRole("group", { name: "Choose a family" })).toBeTruthy();
+  });
+
+  // THE load-bearing test: selecting a different family fires onSelect but NEVER writes the URL.
+  it("selecting a different chip calls onSelect and does NOT push to the router (no write-back)", () => {
+    const onSelect = vi.fn();
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(onSelect).toHaveBeenCalledWith("fam-b");
+    // The designator must never touch the browse filter — assert no router.push at all.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("clicking the already-designated chip is a no-op (no onSelect, no push)", () => {
+    const onSelect = vi.fn();
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Esposito" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // Contrast: FILTER mode DOES push — proving the two modes differ and the no-write-back is real.
+  it("CONTRAST: filter mode DOES push on the same interaction", () => {
+    render(<FamilyChips families={FAMILIES} selected="all" />);
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(push).toHaveBeenCalled();
+  });
+});

@@ -14,9 +14,11 @@ import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createLinkSession } from "@chronicle/capture";
 import { createInvitation, listActiveFamiliesForPerson } from "@chronicle/core";
-import { families, memberships, persons } from "@chronicle/db/schema";
+import { memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
+import { seedDesignatorFamily } from "@/lib/family-designator";
+import type { FamilyFilter } from "@/lib/family-filter";
 import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
   INVITE_FLASH_COOKIE,
@@ -26,6 +28,7 @@ import {
 } from "@/lib/invite-flash";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
+import { FamilyDesignator } from "../FamilyDesignator";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
 
@@ -199,9 +202,16 @@ function LinkResult({
 }
 
 export async function InviteTab({
-  scope = "all",
+  families: designatorFamilies,
+  filter,
   inviteeName,
-}: { scope?: string; inviteeName?: string } = {}) {
+}: {
+  /** ALL the viewer's active families — the designator's option set (ADR-0021, #49). */
+  families: { id: string; name: string }[];
+  /** The current browse filter the designator SEEDS from (never written back). */
+  filter: FamilyFilter;
+  inviteeName?: string;
+}) {
   const jar = await cookies();
   const narratorToken = jar.get(INVITE_FLASH_COOKIE)?.value;
   const memberToken = jar.get(MEMBER_INVITE_FLASH_COOKIE)?.value;
@@ -250,19 +260,18 @@ export async function InviteTab({
     );
   }
 
-  const inviterFams = await db
-    .select({ id: families.id, name: families.name })
-    .from(memberships)
-    .innerJoin(families, eq(families.id, memberships.familyId))
-    .where(and(eq(memberships.personId, ctx.personId), eq(memberships.status, "active")));
-  const familyIds = inviterFams.map((f) => f.id);
+  // The DESIGNATOR's option set is the passed `families` prop (the viewer's active families, the
+  // authoritative list); the candidate-PEOPLE query below still reads the DB, but the family set is
+  // driven by the prop so the designator and the pending-empty guard never drift from page.tsx.
+  const familyIds = designatorFamilies.map((f) => f.id);
+  const seededFamily = seedDesignatorFamily(filter, familyIds);
 
   // Pending-only viewer guard (Finding 1). Invite is a member-only affordance — you invite people INTO
   // a family you belong to. A viewer who belongs to no family has nothing to invite into; rendering the
-  // form would produce a broken zero-option `<select name="familyId" required>`. Reaching /hub?tab=invite
-  // directly must instead show the shared pending-only empty copy, mirroring StoriesTab/AsksTab. page.tsx
-  // also hides the tab and gates this dispatch, so this is a robust second line, not the only one.
-  if (inviterFams.length === 0) {
+  // form would produce a broken zero-option family designator. Reaching /hub?tab=invite directly must
+  // instead show the shared pending-only empty copy, mirroring StoriesTab/AsksTab. page.tsx also hides
+  // the tab and gates this dispatch, so this is a robust second line, not the only one.
+  if (designatorFamilies.length === 0) {
     return (
       <div
         style={{
@@ -320,30 +329,6 @@ export async function InviteTab({
     lineHeight: "var(--leading-body)",
   };
 
-  const familyOptions = inviterFams.map((f) => (
-    <option key={f.id} value={f.id}>
-      {f.name}
-    </option>
-  ));
-  // An invitation is single-family. When the hub is scoped to one of the inviter's families, that
-  // family is the pre-selected, deliberate target. In "all" with several families there is NO safe
-  // default — leaving `required` alone lets the browser auto-select the first (arbitrary) family, so
-  // we prepend a disabled placeholder and start with an empty selection to FORCE an explicit pick
-  // (Finding 2). A scope that isn't one of the inviter's families falls back to this same logic.
-  const familyDefault =
-    scope !== "all" && inviterFams.some((f) => f.id === scope) ? scope : undefined;
-  // Show the placeholder only in the genuinely ambiguous case: no deliberate default AND >1 family.
-  // With a single family the lone option is unambiguous, so no placeholder is needed.
-  const showFamilyPlaceholder = !familyDefault && inviterFams.length > 1;
-  // Effective initial selection: the deliberate default, else "" so the disabled placeholder (value="")
-  // is what's selected — which makes `required` block an empty submit.
-  const familySelectDefault = familyDefault ?? "";
-  const familyPlaceholderOption = showFamilyPlaceholder ? (
-    <option value="" disabled>
-      {hub.invite.familyChoosePlaceholder}
-    </option>
-  ) : null;
-
   return (
     <div style={{ maxWidth: 600, display: "grid", gap: 44 }}>
       {/* Member invite */}
@@ -384,13 +369,14 @@ export async function InviteTab({
               placeholder={hub.invite.relationshipPlaceholder}
             />
           </label>
-          <label className="kin-form-label">
-            {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required defaultValue={familySelectDefault}>
-              {familyPlaceholderOption}
-              {familyOptions}
-            </select>
-          </label>
+          <FamilyDesignator
+            families={designatorFamilies}
+            seeded={seededFamily}
+            name="familyId"
+            label={hub.invite.familyLabel}
+            placeholder={hub.invite.familyChoosePlaceholder}
+            requiredMessage={hub.invite.familyRequired}
+          />
           <KindredButton type="submit" label={hub.invite.createInviteLink} />
         </form>
       </section>
@@ -414,13 +400,14 @@ export async function InviteTab({
               ))}
             </select>
           </label>
-          <label className="kin-form-label">
-            {hub.invite.familyLabel}
-            <select name="familyId" className="kin-field" required defaultValue={familySelectDefault}>
-              {familyPlaceholderOption}
-              {familyOptions}
-            </select>
-          </label>
+          <FamilyDesignator
+            families={designatorFamilies}
+            seeded={seededFamily}
+            name="familyId"
+            label={hub.invite.familyLabel}
+            placeholder={hub.invite.familyChoosePlaceholder}
+            requiredMessage={hub.invite.familyRequired}
+          />
           <KindredButton type="submit" label={hub.invite.createLink} />
         </form>
       </section>

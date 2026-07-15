@@ -198,7 +198,9 @@ export default async function HubPage({
   /* ── Derived display values ─────────────────────────────────────────────── */
   // The family name IS the major label now (no "Family Chronicle" wordmark). Multiple families are
   // joined for now — the multi-family display is a separate design question, deliberately deferred.
-  const familyNames = [...new Set(feed.map((s) => s.family.name))];
+  // `||` (not `??`): a blank short name (should never persist — the write path coerces "" → null,
+  // but defend anyway) falls back to the formal name rather than rendering an empty header.
+  const familyNames = [...new Set(feed.map((s) => s.family.shortName || s.family.name))];
   const familyName = familyNames.length ? familyNames.join(" · ") : hub.shell.chronicle;
 
   const viewerName = viewerRow?.spokenName ?? viewerRow?.displayName ?? null;
@@ -310,7 +312,8 @@ export default async function HubPage({
               viewerFamilies={viewerFamilies}
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}
-              scope={scope}
+              filter={filter}
+              activeFamilies={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
             />
           )}
           {activeTab === "album" && (
@@ -324,10 +327,18 @@ export default async function HubPage({
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (
-            <AskTab scope={scope} initialSubjectPhotoIds={subjectPhotoIds} />
+            <AskTab
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              filter={filter}
+              initialSubjectPhotoIds={subjectPhotoIds}
+            />
           )}
           {activeTab === "asks" && (
-            <AsksTab scope={scope} hasFamily={activeFamilies.length > 0} />
+            <AsksTab
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              seedFamilyId={scope}
+              hasFamily={activeFamilies.length > 0}
+            />
           )}
           {activeTab === "family" &&
             (familyTabData ? (
@@ -379,7 +390,8 @@ export default async function HubPage({
           {activeTab === "invite" &&
             (activeFamilies.length > 0 ? (
               <InviteTab
-                scope={scope}
+                families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+                filter={filter}
                 inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
               />
             ) : (
@@ -404,7 +416,12 @@ export default async function HubPage({
                 </p>
               </div>
             ))}
-          {activeTab === "requests" && <RequestsTab scope={scope} />}
+          {activeTab === "requests" && (
+            <RequestsTab
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              seedFamilyId={scope}
+            />
+          )}
         </section>
       </div>
     </main>

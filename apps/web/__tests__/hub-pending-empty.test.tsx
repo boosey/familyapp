@@ -38,7 +38,8 @@ describe("pending-only hub — Stories tab", () => {
         viewerFamilies: [], // member of no family
         viewerName: "You",
         selfDrafts: [],
-        scope: "all",
+        filter: { kind: "all" },
+        activeFamilies: [],
       }),
     );
     expect(html).toContain(PENDING_FRAGMENT);

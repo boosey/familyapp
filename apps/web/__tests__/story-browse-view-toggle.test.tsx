@@ -53,7 +53,8 @@ function renderBrowse() {
       viewerFamilies={[famA]}
       viewerPersonId="p1"
       viewerName="You"
-      scope="all"
+      selectedIds={[famA.id]}
+      allSelected={true}
     />,
   );
 }

@@ -14,6 +14,8 @@ import { insertActiveMembership } from "./memberships";
 
 export interface CreateFamilyInput {
   name: string;
+  /** Optional steward-set brief label (ADR-0021 "Short name (Family)"); falls back to `name` when unset. */
+  shortName?: string;
   description?: string;
   discoverable?: boolean;
   creatorPersonId: string;
@@ -26,7 +28,8 @@ export interface CreateFamilyResult {
 
 /**
  * Create a family atomically: the creator becomes both `creator_person_id` and `steward_person_id`
- * and receives an ACTIVE `steward` membership. Returns the new family + membership ids.
+ * and receives an ACTIVE `steward` membership. Returns the new family + membership ids. An optional
+ * `shortName` (ADR-0021) is persisted trimmed, or null when blank/omitted (falls back to `name`).
  */
 export async function createFamily(
   db: Database,
@@ -42,6 +45,7 @@ export async function createFamily(
       .insert(families)
       .values({
         name,
+        shortName: input.shortName?.trim() || null,
         description: input.description?.trim() || null,
         discoverable: input.discoverable ?? false,
         creatorPersonId: input.creatorPersonId,

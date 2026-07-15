@@ -481,6 +481,64 @@ describe("listAsksByAsker — family scope filter (Increment 4A)", () => {
   });
 });
 
+describe("listAsksByAsker — familyIds projection (ADR-0021 designator)", () => {
+  it("reports ALL family links per ask; a family-less ask carries []", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "A", narrator.id);
+    const famB = await makeFamily(db, "B", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, asker.id, famA.id);
+    await addMembership(db, asker.id, famB.id);
+    const ctx = { kind: "account", personId: asker.id } as const;
+
+    const both = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famA.id, famB.id],
+      questionText: "Q for both",
+    });
+    const single = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famA.id],
+      questionText: "Q for A",
+    });
+    const orphan = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      questionText: "Q for nobody in particular",
+    });
+
+    const all = await listAsksByAsker(db, ctx);
+    const byId = new Map(all.map((m) => [m.ask.id, m.familyIds]));
+    expect(new Set(byId.get(both.id) ?? [])).toEqual(new Set([famA.id, famB.id]));
+    expect(byId.get(single.id)).toEqual([famA.id]);
+    expect(byId.get(orphan.id)).toEqual([]);
+  });
+
+  it("reports the ask's FULL family links even when the query is scoped to one family", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const famA = await makeFamily(db, "A", narrator.id);
+    const famB = await makeFamily(db, "B", narrator.id);
+    await addMembership(db, narrator.id, famA.id);
+    await addMembership(db, narrator.id, famB.id);
+    await addMembership(db, asker.id, famA.id);
+    await addMembership(db, asker.id, famB.id);
+    const ctx = { kind: "account", personId: asker.id } as const;
+
+    const both = await createAsk(db, ctx, {
+      targetPersonId: narrator.id,
+      familyIds: [famA.id, famB.id],
+      questionText: "Q for both",
+    });
+
+    // Scoping to famA still returns the ask labeled with BOTH families — the designator relies on this.
+    const scoped = await listAsksByAsker(db, ctx, { familyId: famA.id });
+    expect(scoped.map((m) => m.ask.id)).toEqual([both.id]);
+    expect(new Set(scoped[0]!.familyIds)).toEqual(new Set([famA.id, famB.id]));
+  });
+});
+
 describe("listPendingAsksForNarrator", () => {
   it("returns queued/routed asks in arrival order, with asker's spoken name", async () => {
     const narrator = await makePerson(db, "Eleanor");

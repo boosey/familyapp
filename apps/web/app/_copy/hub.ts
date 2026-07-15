@@ -35,6 +35,9 @@ export const hub = {
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
     // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.
     familyFilterAria: "Filter by family",
+    // Family designator (ADR-0021) — the same chip bar in single-select action mode (Asks, Requests):
+    // it picks which family you act on / view, SEEDED from the filter but never written back to the URL.
+    familyDesignatorAria: "Choose a family",
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
@@ -49,6 +52,9 @@ export const hub = {
     tellBlurb: "Something you want to remember — start it whenever it comes to you.",
     resumeHeading: "Finish what you started",
     resume: "Finish",
+    // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
+    // empty state rather than a silent "show all". Mirrors album.noFamiliesSelected for the stories pool.
+    noFamiliesSelected: "No families selected — turn one on above to see their stories.",
   },
   intake: {
     // Banner shown at the top of the hub until the narrator's biographical profile is complete.
@@ -86,11 +92,13 @@ export const hub = {
   ask: {
     signedOut: "Sign in to ask a question.",
     heading: "Ask a question",
-    // Family multi-select (Increment 4B, Task 4.4): which family/families this question belongs to.
-    // Shown only when the asker is in >1 family AND the hub scope is "all" (otherwise auto-resolved).
+    // Single-select family designator (ADR-0021, #49): which family this question belongs to. Shown
+    // only when the asker is in >1 family (a single-family asker auto-resolves; see submitAsk).
     familiesLabel: "Which family?",
-    familiesHelp: "Choose at least one family this question belongs to.",
-    familiesRequired: "Choose at least one family before sending.",
+    familiesRequired: "Choose a family before sending.",
+    // Disabled placeholder for the single-select family designator (ADR-0021, #49) when the asker is
+    // in >1 family and the browse filter gives no unambiguous default — forces a deliberate pick.
+    familiesPlaceholder: "Choose a family…",
     intro:
       "Your question goes into the queue. It will be asked next time they sit down to talk — never as an interruption.",
     promptEyebrow: "What would you love to hear?",
@@ -149,6 +157,9 @@ export const hub = {
     // Disabled placeholder for the family <select> when the inviter is in >1 family and the hub scope
     // gives no default — forces an explicit pick so an invite never lands in an arbitrary first family.
     familyChoosePlaceholder: "Choose a family…",
+    // Custom validity message when the family designator (ADR-0021, #49) blocks an empty submit — the
+    // ambiguous >1-family case with no deliberate pick.
+    familyRequired: "Choose a family for this invitation.",
     createInviteLink: "Create invite link",
     narratorHeading: "Invite a narrator to record",
     narratorBody:
