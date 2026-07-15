@@ -10,6 +10,7 @@
  * The chosen view persists to localStorage (SSR-safe: default "tree", hydrated in an effect).
  */
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { KinListEntry, KinshipTreeData } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
@@ -45,6 +46,7 @@ export function FamilyTab({
   initialView = "tree",
 }: FamilyTabProps) {
   const [view, setView] = useState<FamilyView>(initialView);
+  const router = useRouter();
 
   // CAMERA state lifted out of TreeCanvas (§5) so the Fit/−/+ controls can live in the selector row.
   // TreeCanvas keeps `fit()`/`center()` (they need layout bounds + the viewport ref) behind an
@@ -175,6 +177,10 @@ export function FamilyTab({
           onPanChange={(updater) => setPan(updater)}
           scale={scale}
           onScaleChange={(updater) => setScale(updater)}
+          // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
+          // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
+          // its DEFAULT so it stays mountable without a router in unit tests.
+          navigate={(url) => router.push(url)}
         />
       ) : (
         <KinList kin={kin} />

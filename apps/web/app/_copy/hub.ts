@@ -851,6 +851,12 @@ export const hub = {
     kebabAddSibling: "Add sibling",
     kebabAddParent: "Add parent",
     kebabAddPartner: "Add partner",
+    // Slice D (#6) — invite affordance (details sheet + kebab). Shown only for an `invitable` person
+    // (identified, living, no account, no live invitation); `pending` shows the muted note; accepted /
+    // not-applicable show nothing.
+    inviteButton: "Invite to join",
+    kebabInvite: "Invite…",
+    invitePendingNote: "Invitation pending",
     // Per-direction caret aria labels (collapse/expand an already-drawn branch; add via "+").
     collapseParents: "Collapse ancestors",
     expandParents: "Expand ancestors",

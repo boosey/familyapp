@@ -71,6 +71,7 @@ import {
 } from "./tree-constants";
 import { PersonDetails } from "./person-details";
 import { KebabMenu } from "./kebab-menu";
+import { TreeInviteProvider } from "./invite-context";
 import { mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
 import { TreeAddProvider, type OpenAddRelative } from "./add-relative-context";
@@ -101,6 +102,13 @@ export interface TreeCanvasProps {
   onScaleChange?: (updater: (s: number) => number) => void;
   pan?: { x: number; y: number };
   onPanChange?: (updater: (p: { x: number; y: number }) => { x: number; y: number }) => void;
+  /**
+   * Slice D (#6): navigate to a URL (the invite affordance opens the EXISTING invite flow). Defaults to
+   * a full-page nav via `window.location.assign` — matching the tree's router-free discipline (the
+   * canvas mounts standalone in unit tests without a Next router). Overridable so a test can assert the
+   * pre-targeted invite URL without a real navigation.
+   */
+  navigate?: (url: string) => void;
 }
 
 
@@ -153,6 +161,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     onScaleChange,
     pan: panProp,
     onPanChange,
+    navigate = defaultNavigate,
   }: TreeCanvasProps,
   ref,
 ) {
@@ -372,6 +381,23 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     setAddTarget({ anchorPersonId, relation, coParentPersonId });
   }, []);
 
+  // --- Invite (Slice D, #6) ----------------------------------------------------------------------
+  // ONE handler backing BOTH entry points (the details-sheet button and the kebab item). It opens the
+  // EXISTING invite flow (`/hub?tab=invite`) pre-targeted at this person + family — no new invite logic:
+  //   - `scope=<familyId>` makes that family the deliberate, pre-selected target (InviteTab already
+  //     honors `scope`), AND
+  //   - `inviteeName=<displayName>` pre-fills the member-invite name field.
+  // The invited person's displayName seeds the name; the form still posts to `createInvitation`.
+  const onInvite = useCallback(
+    (node: TreeNode) => {
+      const params = new URLSearchParams({ tab: "invite", scope: familyId });
+      const name = node.displayName?.trim();
+      if (name) params.set("inviteeName", name);
+      navigate(`/hub?${params.toString()}`);
+    },
+    [familyId, navigate],
+  );
+
   // After a successful add, top the anchor's subtree back up so the new relative appears, then close.
   const refetchAnchor = useCallback(
     async (anchorId: string) => {
@@ -517,6 +543,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
 
   return (
     <TreeFocusProvider value={onFocus}>
+    <TreeInviteProvider value={onInvite}>
     <TreeAddProvider value={openAdd}>
     <div style={{ position: "relative" }}>
       {/* The Fit/−/+ controls moved OUT of the canvas into FamilyTab's view-selector row (§5). */}
@@ -637,6 +664,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           startInEdit={details.startInEdit}
           onClose={() => setDetails(null)}
           onSaved={(personId) => void refetchAnchor(personId)}
+          onInvite={onInvite}
         />
       )}
 
@@ -657,9 +685,15 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
       )}
     </div>
     </TreeAddProvider>
+    </TreeInviteProvider>
     </TreeFocusProvider>
   );
 });
+
+/** Default full-page navigation for the invite affordance (router-free; see the `navigate` prop). */
+function defaultNavigate(url: string): void {
+  if (typeof window !== "undefined") window.location.assign(url);
+}
 
 /** A thin caret glyph pointing UP by default; rotated to point down. */
 function Caret({ down }: { down: boolean }) {

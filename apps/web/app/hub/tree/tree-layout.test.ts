@@ -32,6 +32,7 @@ function node(id: string, over: Partial<TreeNode> = {}): TreeNode {
     relationToRoot: null,
     hasHiddenParents: false,
     hasHiddenChildren: false,
+    inviteStatus: "not-applicable",
     ...over,
   };
 }

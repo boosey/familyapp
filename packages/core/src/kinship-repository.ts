@@ -20,7 +20,7 @@
  */
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
-import { families, memberships, persons } from "@chronicle/db/schema";
+import { families, invitations, memberships, persons } from "@chronicle/db/schema";
 import type {
   Database,
   KinshipEdgeType,
@@ -424,6 +424,16 @@ export interface TreeNode {
   /** True when parents/children exist in the projection but were not materialized in this window. */
   hasHiddenParents: boolean;
   hasHiddenChildren: boolean;
+  /**
+   * Slice D (#6): whether this person can be invited to create their own Account. Kinship/person
+   * metadata (derived from `persons.accountId`/`identified`/`lifeStatus` + the `invitations` ledger) —
+   * NOT content, so it never widens the Story/Media front door.
+   *   - `accepted`       — already a real user (`accountId != null`).
+   *   - `pending`        — has a LIVE (`pending`, unexpired) invitation.
+   *   - `invitable`      — identified, living, no account, no live invitation.
+   *   - `not-applicable` — bridge/unidentified, deceased, or otherwise not invitable.
+   */
+  inviteStatus: "invitable" | "pending" | "accepted" | "not-applicable";
 }
 
 export interface KinshipTreeData {
@@ -433,6 +443,23 @@ export interface KinshipTreeData {
   nodes: TreeNode[];
   /** parent_of (directed) + partnered_with (normalized) among the materialized nodes + boundary. */
   edges: ResolvedKinshipEdge[];
+}
+
+/**
+ * Slice D (#6): the pure invite-status rule, factored out so the projection and the tests share ONE
+ * source of truth. Order matters — an account-holder is `accepted` even if a stale pending row lingers;
+ * a live invite is `pending`; only then does the identified-living-no-account case become `invitable`.
+ */
+export function inviteStatusFor(p: {
+  accountId: string | null;
+  identified: boolean;
+  lifeStatus: "living" | "deceased";
+  hasLivePendingInvite: boolean;
+}): TreeNode["inviteStatus"] {
+  if (p.accountId !== null) return "accepted";
+  if (p.hasLivePendingInvite) return "pending";
+  if (p.identified && p.lifeStatus === "living") return "invitable";
+  return "not-applicable";
 }
 
 /**
@@ -616,9 +643,39 @@ export async function resolveKinshipTree(
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
             sex: persons.sex,
+            // Slice D (#6): account presence resolves `accepted`; `origin` is read as person metadata
+            // (bridge/mention/self/invitee) — neither is content.
+            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, ids));
+
+  // Slice D (#6): which in-window persons have a LIVE (pending, unexpired) invitation INTO THIS FAMILY.
+  // Id-cheap: we select only the invitee id + expiry for the materialized ids, never the whole
+  // invitations table. Scoped by `familyId` — `persons` rows are global, so a person who is genuinely
+  // invitable in THIS family's tree but has a live pending invite anchored to a DIFFERENT family must
+  // NOT show `pending` here (that would hide a legitimate Invite affordance). `invitations.familyId`
+  // is the required scoping column. `expiresAt === null` is treated as non-expiring (mirrors
+  // `acceptInvitation`'s expiry convention).
+  const pendingInvitedIds = new Set<string>();
+  if (ids.length > 0) {
+    const now = Date.now();
+    const inviteRows = await db
+      .select({ inviteePersonId: invitations.inviteePersonId, expiresAt: invitations.expiresAt })
+      .from(invitations)
+      .where(
+        and(
+          inArray(invitations.inviteePersonId, ids),
+          eq(invitations.familyId, familyId),
+          eq(invitations.status, "pending"),
+        ),
+      );
+    for (const iv of inviteRows) {
+      if (iv.expiresAt === null || iv.expiresAt.getTime() >= now) {
+        pendingInvitedIds.add(iv.inviteePersonId);
+      }
+    }
+  }
 
   const nodes: TreeNode[] = rows.map((r) => ({
     personId: r.id,
@@ -631,6 +688,12 @@ export async function resolveKinshipTree(
     relationToRoot: r.id === rootPersonId ? "self" : (relationOf.get(r.id) ?? null),
     hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
     hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,
+    inviteStatus: inviteStatusFor({
+      accountId: r.accountId,
+      identified: r.identified,
+      lifeStatus: r.lifeStatus,
+      hasLivePendingInvite: pendingInvitedIds.has(r.id),
+    }),
   }));
 
   // Materialized-but-nonexistent ids (only the invalid root, realistically) don't become nodes; drop

@@ -175,6 +175,7 @@ export {
   listMyKin,
   listGovernableKinEdges,
   resolveKinshipTree,
+  inviteStatusFor,
   canViewerSeePerson,
   DEFAULT_TREE_WINDOW,
   type KinshipProjection,

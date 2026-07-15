@@ -57,6 +57,12 @@ export interface PersonDetailsProps {
   onClose: () => void;
   /** Called after a successful save so the canvas can refetch the anchor subtree. */
   onSaved?: (personId: string) => void;
+  /**
+   * Slice D (#6): open the existing invite flow pre-targeted at this person + family. Rendered as an
+   * "Invite" button only when `node.inviteStatus === "invitable"`. The SAME handler backs the kebab's
+   * Invite… item (canvas passes it to both). Absent ⇒ no invite affordance (e.g. a bare test mount).
+   */
+  onInvite?: (node: TreeNode) => void;
   /** Overridable for tests; default to the real server actions. */
   checkEditable?: CheckEditableFn;
   saveEdit?: SaveEditFn;
@@ -69,6 +75,7 @@ export function PersonDetails({
   startInEdit,
   onClose,
   onSaved,
+  onInvite,
   checkEditable = personEditabilityAction,
   saveEdit = savePersonEditAction,
 }: PersonDetailsProps) {
@@ -230,6 +237,36 @@ export function PersonDetails({
                 {hub.tree.editButton}
               </KindredButton>
             </div>
+          )}
+
+          {/* Slice D (#6): invite affordance — a button when invitable, a muted note when pending,
+              nothing for accepted / not-applicable. Clicking opens the EXISTING invite flow
+              pre-targeted at this person + family (canvas wires `onInvite`). */}
+          {onInvite && node.inviteStatus === "invitable" && (
+            <div style={{ marginTop: 12 }}>
+              <KindredButton
+                variant="secondary"
+                size="small"
+                type="button"
+                data-testid="tree-details-invite"
+                onClick={() => onInvite(node)}
+              >
+                {hub.tree.inviteButton}
+              </KindredButton>
+            </div>
+          )}
+          {node.inviteStatus === "pending" && (
+            <p
+              data-testid="tree-details-invite-pending"
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                color: "var(--text-muted)",
+                margin: "12px 0 0",
+              }}
+            >
+              {hub.tree.invitePendingNote}
+            </p>
           )}
 
           <nav style={{ display: "grid", gap: 8, marginTop: 14 }}>

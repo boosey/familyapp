@@ -5,9 +5,14 @@
  * called through TreeCanvas's imperative handle. These tests drive the controls from FamilyTab and read
  * the resulting `scale(...)` out of the pan-layer transform — and assert the LIST view hides them.
  */
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
+// FamilyTab calls useRouter() (Slice D #6: client-side nav for the invite deep-link). This bare mount
+// has no Next app-router provider, so stub next/navigation with a no-op router.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+}));
 import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 
 afterEach(() => {
@@ -27,6 +32,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     hasHiddenParents: false,
     hasHiddenChildren: false,
     sex: "unknown",
+    inviteStatus: over.inviteStatus ?? "not-applicable",
   };
 }
 

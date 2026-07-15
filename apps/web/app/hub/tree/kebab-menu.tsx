@@ -25,6 +25,7 @@ import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
 import { useTreeAdd } from "./add-relative-context";
 import { useTreeFocus } from "./focus-context";
+import { useTreeInvite } from "./invite-context";
 
 /** The three contribution destinations (tree Slice B), placed BEFORE Focus in the menu. */
 const CONTRIBUTION_ITEMS: { section: "stories" | "photos" | "mentions"; label: string; testId: string }[] = [
@@ -52,6 +53,7 @@ interface Item {
 export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMenuProps) {
   const openAdd = useTreeAdd();
   const focusPerson = useTreeFocus();
+  const invitePerson = useTreeInvite();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -172,6 +174,26 @@ export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMen
               style={MENU_ITEM_STYLE}
             >
               {hub.tree.kebabFocus}
+            </button>
+          )}
+          {/* Invite… (Slice D, #6) — placed with the people-actions group, before Add…. Gated by the
+              server-projected eligibility (`inviteStatus === "invitable"`): identified, living, no
+              account, no live invitation. It opens the EXISTING invite flow pre-targeted; the same
+              handler backs the details sheet's Invite button. */}
+          {node.inviteStatus === "invitable" && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="tree-kebab-invite"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                invitePerson(node);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={MENU_ITEM_STYLE}
+            >
+              {hub.tree.kebabInvite}
             </button>
           )}
           {items.map((it) => (
