@@ -5,38 +5,81 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { FAMILIES_PARAM, serializeSelection } from "@/lib/family-filter";
 import { hub } from "@/app/_copy";
 
-interface FamilyChipsProps {
+interface FamilyChipsFilterProps {
   /** The viewer's active families; array order = chip order. */
   families: { id: string; name: string }[];
   /** "all" = every chip ON; [] = none ON; a subset = those ids ON. */
   selected: string[] | "all";
+  /** FILTER mode (default): omit `value`/`onSelect`. Multi-select, writes `?families=`. */
+  value?: undefined;
+  onSelect?: undefined;
 }
 
+interface FamilyChipsDesignatorProps {
+  /** The viewer's active families; array order = chip order. */
+  families: { id: string; name: string }[];
+  /** DESIGNATOR mode: the single currently-designated family id (controlled by the caller). */
+  value: string;
+  /** DESIGNATOR mode: called with the newly-picked family id. Never touches the router/URL. */
+  onSelect: (id: string) => void;
+  selected?: undefined;
+}
+
+type FamilyChipsProps = FamilyChipsFilterProps | FamilyChipsDesignatorProps;
+
 /**
- * FamilyChips — the shared browse-filter chip bar (ADR-0021, FILTER mode).
+ * FamilyChips — the shared family chip bar (ADR-0021). One presentational widget, two modes; the
+ * MODE (not the widget) carries the meaning.
  *
- * A wrapping row of toggle chips, one per active family. A chip is ON when `selected === "all"` OR
- * `selected` includes its id. Clicking a chip expands the current selection to concrete ids, toggles
- * the clicked id, then rewrites the shared `?families=` param via `serializeSelection` (omitting it
- * when the full set is selected — absent = all — and writing the `none` sentinel when the set empties),
- * preserving every other search param (tab, anchor, …).
+ * FILTER mode (default — pass `selected`, omit `value`/`onSelect`): a wrapping row of toggle chips,
+ * one per active family. A chip is ON when `selected === "all"` OR `selected` includes its id.
+ * Clicking a chip expands the current selection to concrete ids, toggles the clicked id, then
+ * rewrites the shared `?families=` param via `serializeSelection` (omitting it when the full set is
+ * selected — absent = all — and writing the `none` sentinel when the set empties), preserving every
+ * other search param (tab, anchor, …). This NARROWS what is browsed.
  *
- * The bar renders NOTHING for a viewer with <2 families — one family has nothing to filter. This is
- * the FILTER surface only; the action-flow "Family designator" is a separate, later slice.
+ * DESIGNATOR mode (pass `value` + `onSelect`): single-select. Exactly one chip is ON (`value`);
+ * clicking a different chip calls `onSelect(id)` and NEVER touches the router/URL — picking who you
+ * act on must not change what you're browsing (ADR-0021 "seeded, never written back"). Clicking the
+ * already-selected chip is a no-op (you can't designate zero). Uses `aria-pressed` on the ON chip.
+ *
+ * The bar renders NOTHING for a viewer with <2 families in EITHER mode — one family has nothing to
+ * filter and nothing to designate (its sole family is auto-used by the caller).
  */
-export function FamilyChips({ families, selected }: FamilyChipsProps) {
+export function FamilyChips(props: FamilyChipsProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // A one-family (or family-less) viewer has nothing to filter — render nothing.
+  const { families } = props;
+  // Discriminate the two modes ONCE, narrowing `props` for the whole body.
+  const designatorProps = props.value !== undefined ? props : null;
+  const filterProps = props.value === undefined ? props : null;
+  const designator = designatorProps !== null;
+
+  // A one-family (or family-less) viewer has nothing to filter or designate — render nothing.
   if (families.length < 2) return null;
 
   const allIds = families.map((f) => f.id);
-  const isOn = (id: string) => selected === "all" || selected.includes(id);
+  const isOn = (id: string) =>
+    designatorProps
+      ? designatorProps.value === id
+      : filterProps!.selected === "all" || filterProps!.selected.includes(id);
+
+  function select(id: string): void {
+    if (!designatorProps) return;
+    // Single-select: re-picking the already-designated chip is a no-op (never designate zero). The
+    // caller owns the state; we NEVER touch the router/URL here — that is the load-bearing
+    // no-write-back guarantee (ADR-0021).
+    if (designatorProps.value === id) return;
+    designatorProps.onSelect(id);
+  }
 
   function toggle(id: string): void {
-    // Expand the current selection to concrete ids, then flip the clicked one.
+    // FILTER mode only (designator mode never calls this). Expand the current selection to concrete
+    // ids, then flip the clicked one.
+    if (!filterProps) return;
+    const selected = filterProps.selected;
     const current = selected === "all" ? [...allIds] : [...selected];
     const next = current.includes(id)
       ? current.filter((x) => x !== id)
@@ -86,7 +129,7 @@ export function FamilyChips({ families, selected }: FamilyChipsProps) {
   return (
     <div
       role="group"
-      aria-label={hub.shell.familyFilterAria}
+      aria-label={designator ? hub.shell.familyDesignatorAria : hub.shell.familyFilterAria}
       style={rowStyle}
     >
       {families.map((f) => {
@@ -97,7 +140,7 @@ export function FamilyChips({ families, selected }: FamilyChipsProps) {
             type="button"
             aria-pressed={on}
             style={chipStyle(on)}
-            onClick={() => toggle(f.id)}
+            onClick={() => (designator ? select(f.id) : toggle(f.id))}
           >
             {f.name}
           </button>
