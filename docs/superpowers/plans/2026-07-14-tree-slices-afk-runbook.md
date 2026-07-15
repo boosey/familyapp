@@ -144,6 +144,24 @@ State the actual command output when claiming green — evidence before assertio
 - Do NOT run `db:migrate` against Neon; migrations apply in the Vercel build at deploy (on merge).
 - If a sub-agent proposes merging or pushing `master`, STOP — that is the human's action.
 
+## Rebase onto master BEFORE building (mandatory first step)
+
+GitHub tests the PR **merge** commit (`master ∪ branch`), not the branch tip. If the branch is stale,
+CI can fail on code you never wrote — e.g. master bumps a constant a Slice-A guard test hard-asserts,
+so CI runs master's new value against the branch's old assertion (`expected 30 to be 22`) even though
+the branch is internally green. **This actually happened on the first run** (master's `ca08681`
+enlarged `AFFORDANCE_SIZE_PX` 22→30 while Slice A asserted 22).
+
+Therefore, as the FIRST action of the run and again right before the PR phase:
+
+1. `git fetch origin master` and `git rebase origin/master` (or merge it in).
+2. Reconcile any conflict, and — critically — re-run the affected **guard tests** so a value master
+   changed is reflected in the branch's assertions, not just the source.
+3. If the rebase rewrote already-pushed history, `git push --force-with-lease` (authorized for THIS
+   branch only; never master).
+
+Do not build a slice against a base that is behind master.
+
 ## Run autonomously through all four slices, then PR
 
 This is an unattended run (the human is AFK). Do **not** stop between slices — build A → C → B → D end
