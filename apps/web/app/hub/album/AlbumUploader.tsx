@@ -172,7 +172,7 @@ export function AlbumUploader({
     // Guard the obvious mistake client-side (fast, friendly) before spending an upload; the server
     // re-checks the same cap and is authoritative.
     if (files.length > MAX_BATCH_FILES) {
-      setError(hub.actions.tooManyPhotos);
+      setError(hub.actions.tooManyPhotos(MAX_BATCH_FILES));
       setNote(null);
       return;
     }

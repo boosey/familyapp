@@ -37,7 +37,9 @@ same way. Guard: `album/photo-batch-cap.test.ts`.
 
 ### P2 — 3 leaky strings
 `StoryEditor` (Cancel/Save/Saving + `genericError`), `KindredProseEditor` aria-label, `OwnerActionMenu`
-options labels — all now route through `_copy` (`hub.storyDetail.*`, `common.proseEditor.ariaLabel`).
+**aria-labels** — all now route through `_copy` (`hub.storyDetail.*`, `common.proseEditor.ariaLabel`). Note
+the visible menu-item text in `OwnerActionMenu` (Edit story / Add photos / Manage sharing / Delete story,
+etc.) remains hardcoded — a scope gap for follow-up, not a regression.
 
 ## Deliberately NOT done (with rationale)
 

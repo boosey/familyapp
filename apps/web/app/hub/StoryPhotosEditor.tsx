@@ -230,7 +230,7 @@ export function StoryPhotosEditor({
   async function onDeviceFilesChosen(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
     if (fileList.length > MAX_BATCH_FILES) {
-      setError(hub.actions.tooManyPhotos);
+      setError(hub.actions.tooManyPhotos(MAX_BATCH_FILES));
       return;
     }
     const targetFamilies = placementIds();

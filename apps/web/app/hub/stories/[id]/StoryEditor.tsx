@@ -83,7 +83,7 @@ export function StoryEditor(props: StoryEditorProps) {
           setError(null);
         }
       } catch {
-        setError(hub.actions.genericError);
+        setError(hub.storyDetail.genericError);
         revert?.();
       }
     });
@@ -197,7 +197,7 @@ export function StoryEditor(props: StoryEditorProps) {
         setSavedTitle(title);
         onClose({ title, tags, prose, targetFamilies: families });
       } catch {
-        setError(hub.actions.genericError);
+        setError(hub.storyDetail.genericError);
       }
     });
   };

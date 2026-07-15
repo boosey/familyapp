@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
+import { hub } from "@/app/_copy";
 // import-progress.ts is the client-safe module; MAX_IMPORT_BATCH must be the shared value, not a copy.
 import { MAX_IMPORT_BATCH } from "./import-progress";
 
@@ -31,5 +32,13 @@ describe("photo batch cap is single-sourced", () => {
     const literalRe = /const\s+(MAX_BATCH_FILES|MAX_IMPORT_BATCH)\s*=\s*\d/;
     const offenders = files.filter((f) => literalRe.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
+  });
+
+  it("the 'too many photos' copy is derived from the cap, not a hardcoded number", () => {
+    // Regression for the reviewer finding: the user-facing sentence must interpolate the cap, so it can
+    // never silently disagree with PHOTO_BATCH_MAX_FILES. The arg-varying assertion proves it isn't a
+    // static string ignoring its parameter.
+    expect(hub.actions.tooManyPhotos(PHOTO_BATCH_MAX_FILES)).toContain(String(PHOTO_BATCH_MAX_FILES));
+    expect(hub.actions.tooManyPhotos(7)).toContain("7");
   });
 });

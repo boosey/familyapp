@@ -120,7 +120,7 @@ export async function uploadAlbumPhotoAction(
   }
   // Server-authoritative batch cap (the client guards too, but is never trusted).
   if (files.length > MAX_BATCH_FILES) {
-    return { error: hub.actions.tooManyPhotos };
+    return { error: hub.actions.tooManyPhotos(MAX_BATCH_FILES) };
   }
 
   // Each file is uploaded INDEPENDENTLY into the same chosen album(s). A per-file storage/db throw
