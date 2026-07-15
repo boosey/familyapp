@@ -133,32 +133,50 @@ State the actual command output when claiming green — evidence before assertio
 
 ## GIT RULES (mandatory — put these verbatim in every sub-agent prompt)
 
-- Work ONLY on `worktree-runtime-knobs`. **Never** checkout, merge to, or push `master`.
-- **Never merge** any branch. **Never push.** Integration to master is a HUMAN action (HITL).
+- Work ONLY on `worktree-runtime-knobs`. **Never** checkout or merge to `master`; never push `master`.
+- **Pushing THIS branch and opening a PR is authorized** (see the PR phase below). Vercel deploys prod
+  only on *merge to master*, which the human does — so a pushed feature branch + PR is safe.
+- **Never merge the PR.** The human merges it in the morning.
 - Commit small, per task, to this branch. Commit **author must be boosey**
-  (`boosey.boudreaux@gmail.com`) or Vercel will reject the eventual deploy.
+  (`boosey.boudreaux@gmail.com`) or Vercel will reject the PR preview / eventual deploy.
 - End every commit message with:
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
-- Do NOT run `db:migrate` against Neon; migrations apply in the Vercel build at deploy (human-gated).
-- If a sub-agent proposes a git action beyond a branch-local commit, STOP and surface it to the human.
+- Do NOT run `db:migrate` against Neon; migrations apply in the Vercel build at deploy (on merge).
+- If a sub-agent proposes merging or pushing `master`, STOP — that is the human's action.
 
-## Human gates (STOP and report; do not proceed autonomously past these)
+## Run autonomously through all four slices, then PR
 
-1. After **Slice A** is green — report for a look before starting the backend slices.
-2. **Slice C ADR (C1)** — optional human sign-off on the edit-authorization policy before writing the
-   write path.
-3. **Any merge to `master` / push / Neon migrate** — always human.
-4. Final: all four slices green → summarize; the human decides merge + deploy.
+This is an unattended run (the human is AFK). Do **not** stop between slices — build A → C → B → D end
+to end, each task through the build/cold-review/verify loop, committing as you go. No intra-run human
+gates (the ADR in C1 is written and committed as part of the run, no sign-off pause).
 
-## Self-contained continuation prompt (paste into a fresh session)
+### PR phase (after all four slices are green)
 
-> You are continuing the Family Chronicle "tree changes" work on the `worktree-runtime-knobs`
-> worktree (do not touch master). Four approved specs live in
-> `docs/superpowers/specs/2026-07-14-tree-slice-{a,b,c,d}-*.md` and the build plan +
-> guardrails are in `docs/superpowers/plans/2026-07-14-tree-slices-afk-runbook.md`. Execute the
-> runbook in order (A → C → B → D), subagent-driven: a fresh coding sub-agent per task writes code +
-> a companion regression test, then a fresh cold `code-reviewer` sub-agent reviews, iterate until
-> clean, then run the verification gates and report their real output. Obey the GIT RULES verbatim
-> (branch-local commits only, author boosey, never merge/push/migrate — those are human gates). Stop
-> and report at each human gate, starting with "Slice A green." Do not re-litigate the approved
-> decisions listed in the runbook.
+1. Run the full verification gates once more on the final tree; confirm real green output.
+2. Push `worktree-runtime-knobs` and open a PR into `master` (`gh pr create`) titled for the tree
+   changes, body summarizing the four slices + linking the specs, and noting the migration (Slice C)
+   applies on merge. Author/commits must be **boosey**.
+3. **Babysit the PR**: watch the checks and the Vercel **preview** build (`gh pr checks`, Vercel
+   preview logs). Fix any build/test/lint/type failures on the branch (same subagent loop), push the
+   fixes, re-check. Iterate until the PR is green. Ignore ONLY the known-pre-existing `/hub/invite`
+   prerender failure if it appears identically to before this work — but confirm it is that exact one,
+   not a regression this work introduced.
+4. When the PR is green, **STOP and report** with the PR URL and a one-paragraph summary. Do **not**
+   merge — the human merges in the morning for a ~3-minute path to a working product.
+
+The ONLY human action left is the morning merge (which triggers the Neon migrate + prod deploy).
+
+## Loop prompt (paste into a fresh session)
+
+Paste the whole block below — it starts with `/loop` so the session self-paces through the build
+until the PR is green.
+
+```
+/loop Continue the Family Chronicle "tree changes" AFK build on the worktree-runtime-knobs worktree (never touch master). Read docs/superpowers/plans/2026-07-14-tree-slices-afk-runbook.md and the four specs it links (docs/superpowers/specs/2026-07-14-tree-slice-{a,b,c,d}-*.md); the approved decisions there are final — do not re-litigate them. Each loop iteration: pick the next incomplete task from the runbook (build order A → C → B → D), spawn a fresh coding sub-agent to write the code + a companion regression test, then a fresh cold code-reviewer sub-agent to adversarially review, iterate until clean, run the verification gates (pnpm -r typecheck/test/lint + web build; for Slice C also db:generate + drift-guard) and only claim green on real output, then commit branch-local as author boosey with the Co-Authored-By trailer. Obey the runbook GIT RULES verbatim. When all four slices are green: run the gates once more, push the branch, open a PR into master with gh (summarize the slices, link the specs, note the Slice C migration applies on merge), then babysit it — watch gh pr checks + the Vercel preview build and fix any failures on the branch until the PR is green (ignore ONLY the known pre-existing /hub/invite prerender failure if it is exactly that and not a regression). Do NOT merge the PR — stop and report the PR URL when it is green. End the loop then.
+```
+
+Notes for the loop:
+- It self-paces (no fixed interval); it ends itself once the PR is green (the loop's task is
+  complete). If a sub-agent stalls, the loop will re-enter and resume from the next incomplete task.
+- The only thing left for you in the morning is to **merge the PR** — that triggers the Neon migrate +
+  prod deploy. ~3 minutes to a working product.
