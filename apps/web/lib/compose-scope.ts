@@ -1,8 +1,9 @@
 /**
  * Compose-time family targeting resolved from the hub scope (Increment 4B, Task 4.4).
  *
- * The hub's single `?scope=` param is "all" or one of the viewer's OWN active family ids (already
- * validated in page.tsx). Content WRITES (an Ask, and — where wired — a story's family target) accept
+ * The single compose scope ("all" | a viewer's OWN active family id) is derived from the shared
+ * `?families=` browse filter (ADR-0021) via deriveSingleScope. Content WRITES (an Ask, and — where
+ * wired — a story's family target) accept
  * one-or-more families: unambiguous cases are auto-resolved, and only the genuinely ambiguous case
  * ("all" with several families) forces an explicit choice. These pure helpers hold that rule so the
  * server action and the UI seeding stay in lockstep and are unit-testable without a request.

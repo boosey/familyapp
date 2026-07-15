@@ -15,6 +15,7 @@ import { getStoryForViewer, listStoryRecordings, listActiveFamiliesForPerson } f
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { seedComposeFamilies, familyChoiceRequired } from "@/lib/compose-scope";
+import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
 import { hub } from "@/app/_copy";
 import { StoryComposer } from "../../StoryComposer";
 import type { DraftInfo } from "../../StoryComposer";
@@ -91,13 +92,13 @@ export default async function TellResumePage({
     takes,
   };
 
-  // Share-step multi-family picker (Task 4), seeded from `?scope=` (usually ABSENT on a resume →
-  // "all"). For a multi-family author "all" means the picker shows unchecked and a pick is REQUIRED
-  // before Share — the correct fail-safe. Validated against the author's OWN active families.
-  const scopeRaw = typeof sp.scope === "string" ? sp.scope : "all";
+  // Share-step multi-family picker (Task 4), seeded from the shared `?families=` browse filter
+  // (ADR-0021, usually ABSENT on a resume → "all"). For a multi-family author "all" means the picker
+  // shows unchecked and a pick is REQUIRED before Share — the correct fail-safe. Collapsed to a single
+  // scope and validated against the author's OWN active families.
   const tellFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
   const tellFamilyIds = tellFamilies.map((f) => f.familyId);
-  const scope = scopeRaw === "all" || tellFamilyIds.includes(scopeRaw) ? scopeRaw : "all";
+  const scope = deriveSingleScope(parseFamilyFilter(sp.families, tellFamilyIds));
   const seededFamilyIds = [...seedComposeFamilies(scope, tellFamilyIds)];
   const tellChoiceRequired = familyChoiceRequired(scope, tellFamilyIds);
 
