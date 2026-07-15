@@ -18,7 +18,8 @@ const baseProps = {
   storyPhotos: new Map<string, string[]>(),
   viewerFamilies: [],
   viewerName: "You",
-  scope: "all",
+  filter: { kind: "all" } as const,
+  activeFamilies: [],
 };
 
 afterEach(() => {
