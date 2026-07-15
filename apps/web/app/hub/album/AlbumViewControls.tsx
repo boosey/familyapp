@@ -18,8 +18,8 @@ export const THUMB_MIN = 96;
 export const THUMB_MAX = 260;
 
 const VIEWS: ReadonlyArray<{ value: AlbumView; label: string }> = [
-  { value: "grid", label: hub.album.viewGrid },
   { value: "masonry", label: hub.album.viewMasonry },
+  { value: "grid", label: hub.album.viewGrid },
   { value: "list", label: hub.album.viewList },
 ];
 

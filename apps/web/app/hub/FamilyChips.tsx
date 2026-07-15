@@ -17,6 +17,12 @@ interface FamilyChipsFilterProps {
    * (false) keeps the album's multi-select toggle/expand behaviour byte-for-byte.
    */
   singleSelect?: boolean;
+  /**
+   * Inline mode drops the standalone bottom margin so the bar can share a flex row with sibling
+   * controls (the album's consolidated control row, ADR-0021 · #52). Standalone (default) keeps the
+   * trailing space before the next block on the stories/tree browse surfaces.
+   */
+  inline?: boolean;
   /** FILTER mode (default): omit `value`/`onSelect`. Multi-select, writes `?families=`. */
   value?: undefined;
   onSelect?: undefined;
@@ -69,6 +75,8 @@ export function FamilyChips(props: FamilyChipsProps) {
   const designatorProps = props.value !== undefined ? props : null;
   const filterProps = props.value === undefined ? props : null;
   const designator = designatorProps !== null;
+  // Inline layout is a FILTER-mode-only concern (the album's consolidated control row, #52).
+  const inline = filterProps?.inline ?? false;
 
   // A one-family (or family-less) viewer has nothing to filter or designate — render nothing.
   if (families.length < 2) return null;
@@ -128,7 +136,9 @@ export function FamilyChips(props: FamilyChipsProps) {
     display: "flex",
     flexWrap: "wrap",
     gap: 8,
-    margin: "0 0 20px",
+    // Standalone: trailing space before the next block. Inline (consolidated album row): no margin so
+    // the chips bottom-align with the sibling When/Search controls (ADR-0021 · #52).
+    margin: inline ? 0 : "0 0 20px",
   };
 
   const chipStyle = (on: boolean): CSSProperties => ({

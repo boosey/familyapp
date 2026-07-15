@@ -76,6 +76,8 @@ export function AlbumBoard(props: {
   googlePhotosOauthConnected: boolean;
   googlePhotosOauthError: string | null;
   photos: AlbumGridPhoto[];
+  /** The shared browse Family filter chips (ADR-0021), forwarded into the grid's control row. */
+  familyChips?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -390,18 +392,24 @@ export function AlbumBoard(props: {
           photos={props.photos}
           pendingTiles={tiles}
           onRetryTile={retry}
+          familyChips={props.familyChips}
         />
       ) : (
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui)",
-            color: "var(--text-meta)",
-            margin: 0,
-          }}
-        >
-          {hub.album.empty}
-        </p>
+        // Empty album (no photos, no in-flight tiles): there's no AlbumGrid to host the browse Family
+        // chips, so render them standalone above the empty note so a ≥2-family viewer can still toggle.
+        <>
+          {props.familyChips}
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui)",
+              color: "var(--text-meta)",
+              margin: 0,
+            }}
+          >
+            {hub.album.empty}
+          </p>
+        </>
       )}
     </div>
   );

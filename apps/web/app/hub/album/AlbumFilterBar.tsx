@@ -4,8 +4,10 @@
  * AlbumFilterBar (Phase C · item 9 · album layout 2026-07-14) — the album's search / filter controls,
  * laid out as TWO rows: (1) small tag-size People / Places toggle CHIPS on their own row above (only
  * rendered when the current photos carry those facets), and (2) a consolidated controls row whose LEFT
- * holds When · Search · Clear and whose RIGHT holds the `rightSlot` (the view selector + size slider +
- * Select toggle, passed in by `AlbumGrid`). It narrows the photos ON SCREEN client-side (over the photos
+ * holds the shared browse Family filter chips (ADR-0021) + When · Search · Clear and whose RIGHT holds
+ * the `rightSlot` (the view selector + size slider + Select toggle, passed in by `AlbumGrid`) — all in
+ * one `flexWrap` row so they wrap together on narrow viewports without horizontal page scroll. It
+ * narrows the photos ON SCREEN client-side (over the photos
  * already loaded by the surface). Purely presentational — `AlbumGrid` owns the `AlbumFilterValue` state
  * AND does the filtering; this component only renders the current value and reports changes.
  *
@@ -56,6 +58,7 @@ export function AlbumFilterBar({
   value,
   onChange,
   rightSlot,
+  familyChips,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -65,6 +68,9 @@ export function AlbumFilterBar({
   onChange: (next: AlbumFilterValue) => void;
   /** Right-justified controls that share the consolidated row (view selector + slider + Select). */
   rightSlot?: React.ReactNode;
+  /** The shared browse Family filter chips (ADR-0021), sharing the consolidated control row on the
+   *  LEFT alongside When · Search so view/size/Select + chips all wrap together on narrow viewports. */
+  familyChips?: React.ReactNode;
 }) {
   const fieldLabel: React.CSSProperties = {
     display: "flex",
@@ -135,6 +141,15 @@ export function AlbumFilterBar({
         }}
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, minWidth: 0 }}>
+          {/* Shared browse Family filter chips (ADR-0021) — laid out inline in the consolidated row.
+              FamilyChips carries its own bottom margin (shared with the stories/tree surfaces); the
+              wrapper is a plain flex box so the chips sit alongside When · Search and wrap with them. */}
+          {familyChips ? (
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", minWidth: 0 }}>
+              {familyChips}
+            </div>
+          ) : null}
+
           {/* Capture-time preset. */}
           <label style={fieldLabel}>
             {hub.album.filterPeriodLabel}
