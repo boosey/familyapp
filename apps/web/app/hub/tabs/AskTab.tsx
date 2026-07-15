@@ -11,12 +11,9 @@ import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { KindredButton, KindredPromptCard } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { AskPhotoPicker } from "./AskPhotoPicker";
-import { AskFamilyPicker } from "./AskFamilyPicker";
-import {
-  familyChoiceRequired,
-  resolveComposeFamilies,
-  seedComposeFamilies,
-} from "@/lib/compose-scope";
+import { FamilyDesignator } from "../FamilyDesignator";
+import { seedDesignatorFamily, resolveDesignatorFamily } from "@/lib/family-designator";
+import type { FamilyFilter } from "@/lib/family-filter";
 
 async function submitAsk(formData: FormData): Promise<void> {
   "use server";
@@ -25,17 +22,19 @@ async function submitAsk(formData: FormData): Promise<void> {
   if (ctx.kind !== "account") throw new Error("must be signed in");
   const targetPersonId = String(formData.get("targetPersonId") ?? "");
   const questionText = String(formData.get("questionText") ?? "");
-  // Family target set (Increment 4B, Task 4.4). The chosen ids arrive from the multi-select (or none,
-  // when the asker has a single family and no picker was shown). `resolveComposeFamilies` re-reads the
-  // asker's OWN active families server-side, auto-resolves the unambiguous cases, and THROWS when the
-  // asker has >1 family and picked none — the server-side guard mirroring the client `required`.
-  const chosenFamilyIds = formData
-    .getAll("familyIds")
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  // Family designator (ADR-0021, #49). An ask targets a SINGLE family. The chosen id arrives from the
+  // single-select designator (or empty, when the asker has one family and no picker was shown).
+  // `resolveDesignatorFamily` re-reads the asker's OWN active families server-side, auto-resolves the
+  // lone-family case, returns null for a 0-family (pending-only) asker, and THROWS only when the asker
+  // has >1 family and picked none — the server-side guard mirroring the client `required`.
   const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map(
     (f) => f.familyId,
   );
-  const familyIds = resolveComposeFamilies(chosenFamilyIds, activeFamilyIds);
+  // null ⇒ a 0-active-family asker (pending-only, admitted to the hub with no member-only gate) —
+  // submit a familyless ask, exactly as the pre-#49 `resolveComposeFamilies([], []) → []` did. A
+  // non-null id is wrapped in a one-element array; the ">1 family, none picked" case still throws.
+  const familyId = resolveDesignatorFamily(String(formData.get("familyId") ?? ""), activeFamilyIds);
+  const familyIds = familyId ? [familyId] : [];
   // ADR-0009 Phase 3: optional subject photos the ask is ABOUT. Identity is re-resolved above; the
   // photo ids are untrusted client input, but `createAsk` re-runs the album-access gate per id inside
   // its write transaction (a photo the asker can't see rejects the whole ask), so passing them
@@ -53,9 +52,16 @@ async function submitAsk(formData: FormData): Promise<void> {
 }
 
 export async function AskTab({
-  scope = "all",
+  families: designatorFamilies,
+  filter,
   initialSubjectPhotoIds = [],
-}: { scope?: string; initialSubjectPhotoIds?: string[] } = {}) {
+}: {
+  /** ALL the asker's active families — the designator's option set (ADR-0021, #49). */
+  families: { id: string; name: string }[];
+  /** The current browse filter the designator SEEDS from (never written back). */
+  filter: FamilyFilter;
+  initialSubjectPhotoIds?: string[];
+}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
@@ -73,15 +79,15 @@ export async function AskTab({
     );
   }
 
-  // The asker's active families — both the candidate-person filter AND the compose family multi-select
-  // (with names) draw from this single read.
-  const viewerFams = await listActiveFamiliesForPerson(db, ctx.personId);
-  const familyIds = viewerFams.map((r) => r.familyId);
-  // Seed the family multi-select from the hub scope; only shown (and only `required`) when the asker
-  // is in >1 family — a single-family asker is auto-resolved in `submitAsk`.
-  const showFamilyPicker = viewerFams.length > 1;
-  const seededFamilyIds = [...seedComposeFamilies(scope, familyIds)];
-  const familyChoiceIsRequired = familyChoiceRequired(scope, familyIds);
+  // The asker's active families come from the passed `families` prop (the authoritative active list);
+  // the candidate-person / invitee reads below filter by these ids. Both the designator's option set
+  // and the pending-empty behaviour stay in lockstep with page.tsx (no drift from a second read).
+  const familyIds = designatorFamilies.map((f) => f.id);
+  // The single-select designator is shown (and only `required`) when the asker is in >1 family — a
+  // single-family asker is auto-resolved in `submitAsk`. Seeded from the browse filter, never writing
+  // it back (ADR-0021, #49).
+  const showFamilyPicker = designatorFamilies.length > 1;
+  const seededFamily = seedDesignatorFamily(filter, familyIds);
   const rawCandidates = familyIds.length
     ? await db
         .select({ id: persons.id, displayName: persons.displayName })
@@ -180,10 +186,13 @@ export async function AskTab({
           />
         </label>
         {showFamilyPicker ? (
-          <AskFamilyPicker
-            families={viewerFams}
-            seeded={seededFamilyIds}
-            required={familyChoiceIsRequired}
+          <FamilyDesignator
+            families={designatorFamilies}
+            seeded={seededFamily}
+            name="familyId"
+            label={hub.ask.familiesLabel}
+            placeholder={hub.ask.familiesPlaceholder}
+            requiredMessage={hub.ask.familiesRequired}
           />
         ) : null}
         <AskPhotoPicker initialSelectedPhotoIds={initialSubjectPhotoIds} />

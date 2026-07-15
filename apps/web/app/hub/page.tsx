@@ -327,7 +327,11 @@ export default async function HubPage({
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (
-            <AskTab scope={scope} initialSubjectPhotoIds={subjectPhotoIds} />
+            <AskTab
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              filter={filter}
+              initialSubjectPhotoIds={subjectPhotoIds}
+            />
           )}
           {activeTab === "asks" && (
             <AsksTab
@@ -375,7 +379,8 @@ export default async function HubPage({
           {activeTab === "invite" &&
             (activeFamilies.length > 0 ? (
               <InviteTab
-                scope={scope}
+                families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+                filter={filter}
                 inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
               />
             ) : (

@@ -92,11 +92,13 @@ export const hub = {
   ask: {
     signedOut: "Sign in to ask a question.",
     heading: "Ask a question",
-    // Family multi-select (Increment 4B, Task 4.4): which family/families this question belongs to.
-    // Shown only when the asker is in >1 family AND the hub scope is "all" (otherwise auto-resolved).
+    // Single-select family designator (ADR-0021, #49): which family this question belongs to. Shown
+    // only when the asker is in >1 family (a single-family asker auto-resolves; see submitAsk).
     familiesLabel: "Which family?",
-    familiesHelp: "Choose at least one family this question belongs to.",
-    familiesRequired: "Choose at least one family before sending.",
+    familiesRequired: "Choose a family before sending.",
+    // Disabled placeholder for the single-select family designator (ADR-0021, #49) when the asker is
+    // in >1 family and the browse filter gives no unambiguous default — forces a deliberate pick.
+    familiesPlaceholder: "Choose a family…",
     intro:
       "Your question goes into the queue. It will be asked next time they sit down to talk — never as an interruption.",
     promptEyebrow: "What would you love to hear?",
@@ -155,6 +157,9 @@ export const hub = {
     // Disabled placeholder for the family <select> when the inviter is in >1 family and the hub scope
     // gives no default — forces an explicit pick so an invite never lands in an arbitrary first family.
     familyChoosePlaceholder: "Choose a family…",
+    // Custom validity message when the family designator (ADR-0021, #49) blocks an empty submit — the
+    // ambiguous >1-family case with no deliberate pick.
+    familyRequired: "Choose a family for this invitation.",
     createInviteLink: "Create invite link",
     narratorHeading: "Invite a narrator to record",
     narratorBody:

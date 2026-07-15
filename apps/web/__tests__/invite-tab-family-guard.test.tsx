@@ -34,7 +34,9 @@ vi.mock("@/lib/runtime", () => ({
 
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { families, memberships, persons } from "@chronicle/db/schema";
+import { listActiveFamiliesForPerson } from "@chronicle/core";
 import { InviteTab } from "@/app/hub/tabs/InviteTab";
+import { parseFamilyFilter } from "@/lib/family-filter";
 import { hub } from "@/app/_copy";
 
 // renderToStaticMarkup HTML-escapes apostrophes, so match the distinctive leading fragment.
@@ -57,8 +59,18 @@ async function addMember(db: Database, personId: string, familyId: string): Prom
   await db.insert(memberships).values({ personId, familyId, status: "active" });
 }
 
+// Build the tab's real props from the current auth context, translating the legacy `scope` argument
+// into the new (families + filter) shape: "all" → no `?families=` filter; a family id → a `?families=`
+// filter naming that one family. The designator seeds from the filter, exactly as page.tsx does.
 async function render(scope: string): Promise<string> {
-  return renderToStaticMarkup(await InviteTab({ scope }));
+  const activeFamilies =
+    authCtx.kind === "account" && authCtx.personId
+      ? await listActiveFamiliesForPerson(runtimeDb, authCtx.personId)
+      : [];
+  const families = activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }));
+  const activeIds = activeFamilies.map((f) => f.familyId);
+  const filter = parseFamilyFilter(scope === "all" ? undefined : scope, activeIds);
+  return renderToStaticMarkup(await InviteTab({ families, filter }));
 }
 
 describe("InviteTab — pending-only viewer (Finding 1)", () => {
