@@ -46,6 +46,14 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   discardAnswerAction: vi.fn(),
 }));
 
+// ComposingEditor loads tag typeahead via loadTagSuggestionsAction (a "use server" module that boots
+// getRuntime()/db) in an effect the moment a story id exists — which happens once composeStoryAction
+// resolves here. Mock it so the test doesn't boot the real dev runtime (an unmocked getRuntime() boot
+// is a slow, variable floating promise that can stall the test to the vitest 5s timeout).
+vi.mock("@/app/hub/tag-suggestions-actions", () => ({
+  loadTagSuggestionsAction: vi.fn(async () => ({ people: [], families: [], tags: [] })),
+}));
+
 class FakeMediaRecorder {
   static isTypeSupported() {
     return true;

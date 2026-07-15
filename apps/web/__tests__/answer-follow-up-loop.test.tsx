@@ -77,6 +77,15 @@ vi.mock("@/app/hub/answer/[askId]/actions", () => ({
   polishAnswerProseAction: vi.fn(),
 }));
 
+// ComposingEditor loads tag typeahead via loadTagSuggestionsAction (a "use server" module that pulls
+// getRuntime()/db) in an effect the moment a story id exists — which happens right after the
+// follow_up/append step here. Mock it so this test doesn't boot the real dev runtime (an unmocked
+// getRuntime() boot is a slow, variable floating promise that intermittently stalls the test to the
+// vitest 5s timeout).
+vi.mock("@/app/hub/tag-suggestions-actions", () => ({
+  loadTagSuggestionsAction: vi.fn(async () => ({ people: [], families: [], tags: [] })),
+}));
+
 // The review phase mounts StoryPhotosEditor (a "use server" module that pulls getRuntime()/db).
 // Mock it to an empty editor so this test doesn't boot the real dev runtime.
 vi.mock("@/app/hub/answer/[askId]/photo-actions", () => ({
