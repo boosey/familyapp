@@ -44,12 +44,12 @@ export const GEN_V_GAP = 78;
 // ---------------------------------------------------------------------------
 
 /** Rendered diameter (px) of a gutter caret/"+" button (AffordanceButton in tree-canvas.tsx). */
-export const AFFORDANCE_SIZE_PX = 22;
+export const AFFORDANCE_SIZE_PX = 30;
 /**
  * How much of the affordance glyph overlaps the card, as a fraction of the glyph's own size.
  * 0.25 → a quarter of the glyph sits over the card edge. THIS is the knob to change the "bite".
  */
-export const CARET_OVERLAP_FRACTION = 0.25;
+export const CARET_OVERLAP_FRACTION = 0.35;
 /**
  * Distance (px) from the card edge to a gutter caret/"+" CENTER. DERIVED from the two knobs above so
  * the overlap can never silently disagree with the rendered button size:
