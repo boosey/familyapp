@@ -14,16 +14,22 @@
  * The DB reads (active families, album photos, steward) run for real against PGlite, mirroring the
  * album.server.test.ts seed helpers.
  */
+import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/app/hub/album/AlbumGrid", () => ({
+  // The browse Family chips now ride INSIDE AlbumGrid's consolidated control row (issue #52), passed
+  // via `familyChips`. Echo that node so the surface's chip wiring stays assertable through the stub.
   AlbumGrid: ({
     photos,
+    familyChips,
   }: {
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
+    familyChips?: ReactNode;
   }) => (
     <div data-testid="album-grid">
+      {familyChips}
       {photos.map((p) => (
         <div key={p.id} data-photo-id={p.id} data-can-manage={String(p.canManage)}>
           {`/api/album-photo/${p.id}`}
@@ -40,16 +46,19 @@ vi.mock("@/app/hub/album/AlbumBoard", () => ({
     currentFamilyId,
     showFileUpload,
     photos,
+    familyChips,
   }: {
     currentFamilyId: string;
     showFileUpload?: boolean;
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
+    familyChips?: ReactNode;
   }) => (
     <div
       data-testid="album-board"
       data-current-family={currentFamilyId}
       data-show-file-upload={String(showFileUpload ?? true)}
     >
+      {familyChips}
       {photos.map((p) => (
         <div key={p.id} data-board-photo-id={p.id}>
           {`/api/album-photo/${p.id}`}

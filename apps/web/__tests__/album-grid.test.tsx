@@ -81,8 +81,9 @@ const READ_ONLY = { id: "photo-2", caption: "Grandpa at the shore", canManage: f
 describe("AlbumGrid tiles open the photo viewer", () => {
   it("renders each tile as a 'View …' trigger button (image is the trigger)", () => {
     render(<AlbumGrid photos={[MANAGEABLE, READ_ONLY]} />);
-    // Two tiles + the List-view thumbnails don't render here (default Grid). Each tile's IMAGE trigger
-    // uses the "View …" label; the compact toolbar's Edit control does too, so scope to the tile's img.
+    // The tile trigger buttons render in BOTH grid and masonry (default is now Masonry); only the List
+    // view swaps to table rows. Each tile's IMAGE trigger uses the "View …" label; the compact toolbar's
+    // Edit control does too, so scope to the tile's img.
     expect(screen.getAllByRole("button", { name: /^view photo$/i }).length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getAllByRole("button", { name: /view .*grandpa at the shore/i }).length,
@@ -174,14 +175,42 @@ describe("AlbumGrid view selector + size slider (items 7 + 8)", () => {
     }
   });
 
-  it("switching to Masonry changes the layout container (data-view=masonry, no grid)", () => {
+  it("switching to Grid changes the layout container (data-view=grid, no masonry)", () => {
     const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
-    // Default is Grid.
-    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
-    expect(container.querySelector('ul[data-view="masonry"]')).toBeNull();
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewMasonry }));
+    // Default is now Masonry.
     expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
     expect(container.querySelector('ul[data-view="grid"]')).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewGrid }));
+    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
+    expect(container.querySelector('ul[data-view="masonry"]')).toBeNull();
+  });
+
+  it("defaults to Masonry for a fresh viewer with no stored preference", () => {
+    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
+    expect(
+      screen.getByRole("radio", { name: hub.album.viewMasonry }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
+  });
+
+  it("a stored album:view of 'grid' still wins over the Masonry default", () => {
+    window.localStorage.setItem("album:view", "grid");
+    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
+    expect(
+      screen.getByRole("radio", { name: hub.album.viewGrid }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
+  });
+
+  it("renders the passed familyChips inside the consolidated filter/control row", () => {
+    render(
+      <AlbumGrid
+        photos={[MANAGEABLE]}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+      />,
+    );
+    const group = screen.getByRole("group", { name: hub.album.filterBarAria });
+    expect(within(group).getByTestId("fam-chips")).toBeTruthy();
   });
 
   it("persists the chosen view to localStorage and restores it on remount", () => {

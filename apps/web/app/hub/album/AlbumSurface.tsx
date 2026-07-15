@@ -133,12 +133,18 @@ export async function AlbumSurface({
   // viewer with ≥2 families (one family has nothing to filter). Gating the MOUNT here (rather than
   // relying on FamilyChips' own self-hide) keeps the client widget's next/navigation hooks out of the
   // server render for the 0/1-family case (e.g. a pending-only viewer under renderToStaticMarkup).
+  // Two flavors of the same bar: `chips` is standalone (its own trailing margin) for the empty-state
+  // paths where no AlbumGrid mounts; `chipsInline` drops that margin so it bottom-aligns with the
+  // sibling When/Search controls when it rides INSIDE AlbumGrid's consolidated control row (#52).
+  const chipFamilies = active.map((f) => ({ id: f.familyId, name: f.familyName }));
+  const chipSelected = filter.kind === "all" ? ("all" as const) : selectedIds;
   const chips =
     active.length >= 2 ? (
-      <FamilyChips
-        families={active.map((f) => ({ id: f.familyId, name: f.familyName }))}
-        selected={filter.kind === "all" ? "all" : selectedIds}
-      />
+      <FamilyChips families={chipFamilies} selected={chipSelected} />
+    ) : null;
+  const chipsInline =
+    active.length >= 2 ? (
+      <FamilyChips families={chipFamilies} selected={chipSelected} inline />
     ) : null;
 
   // Explicit empty selection: an honest empty state (ADR-0021) — no grid, no uploader — rather than a
@@ -167,28 +173,29 @@ export async function AlbumSurface({
   // seeds its AlbumUploader.
   if (isAlbumImportProgressEnabled() && showUploader) {
     return (
-      <>
-        {chips}
-        <AlbumBoard
-          families={active}
-          currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
-          viewedFamilyIds={selectedIds}
-          uploaderScope={uploaderScope}
-          showFileUpload={uploadTargetFamilyId !== null}
-          googlePhotosConfigured={googleConfigured}
-          googlePhotosConnected={googleConn !== null}
-          googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
-          googlePhotosOauthConnected={googlePhotosOauthConnected}
-          googlePhotosOauthError={googlePhotosOauthError}
-          photos={gridPhotos}
-        />
-      </>
+      <AlbumBoard
+        families={active}
+        currentFamilyId={uploadTargetFamilyId ?? active[0]!.familyId}
+        viewedFamilyIds={selectedIds}
+        uploaderScope={uploaderScope}
+        showFileUpload={uploadTargetFamilyId !== null}
+        googlePhotosConfigured={googleConfigured}
+        googlePhotosConnected={googleConn !== null}
+        googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+        googlePhotosOauthConnected={googlePhotosOauthConnected}
+        googlePhotosOauthError={googlePhotosOauthError}
+        photos={gridPhotos}
+        familyChips={chipsInline}
+      />
     );
   }
 
   return (
     <>
-      {chips}
+      {/* The browse Family chips ride INSIDE AlbumGrid's control row when there are photos to show; on
+          the empty-album path (a `<p>`, no AlbumGrid) they render standalone below so a ≥2-family viewer
+          can still toggle families. */}
+      {gridPhotos.length === 0 ? chips : null}
       {showUploader ? (
         <div style={{ margin: "0 0 24px" }}>
           <AlbumUploader
@@ -219,7 +226,7 @@ export async function AlbumSurface({
           {active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
         </p>
       ) : (
-        <AlbumGrid photos={gridPhotos} />
+        <AlbumGrid photos={gridPhotos} familyChips={chipsInline} />
       )}
     </>
   );

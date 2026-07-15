@@ -121,6 +121,7 @@ export function AlbumGrid({
   photos,
   pendingTiles = [],
   onRetryTile,
+  familyChips,
 }: {
   photos: AlbumGridPhoto[];
   /** ADR-0015 · F2 — in-flight/failed placeholder tiles rendered BEFORE the real photos. Default []
@@ -128,6 +129,8 @@ export function AlbumGrid({
   pendingTiles?: PendingTile[];
   /** Called with a failed tile's `tempId` when its retry affordance is tapped. */
   onRetryTile?: (tempId: string) => void;
+  /** The shared browse Family filter chips (ADR-0021), consolidated into the one control row. */
+  familyChips?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -136,9 +139,9 @@ export function AlbumGrid({
   const [openId, setOpenId] = useState<string | null>(null);
   const openPhoto = photos.find((p) => p.id === openId) ?? null;
 
-  // Layout + thumbnail-size state. Start at the SSR-safe defaults (Grid / 140px) — never touch
+  // Layout + thumbnail-size state. Start at the SSR-safe defaults (Masonry / 140px) — never touch
   // localStorage during render — then hydrate the stored choice in a client-only effect below.
-  const [view, setView] = useState<AlbumView>("grid");
+  const [view, setView] = useState<AlbumView>("masonry");
   const [thumbPx, setThumbPx] = useState<number>(DEFAULT_THUMB);
 
   // Hydrate persisted choices on mount (client only). Guarded in a try/catch: a locked-down or
@@ -304,6 +307,7 @@ export function AlbumGrid({
         places={placeOptions}
         value={filter}
         onChange={setFilter}
+        familyChips={familyChips}
         rightSlot={
           <>
             <AlbumViewControls
