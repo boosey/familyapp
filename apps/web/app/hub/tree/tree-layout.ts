@@ -7,13 +7,15 @@
 // exist in that direction, or a "+" when none do. The focus only seeds the initial framing and initial
 // expansion — it is not selectable, not re-rootable, carries no visual marker.
 //
-// This module imports TYPES ONLY — no DB, no React — so it is safe on server or client and trivial to
-// unit-test. Do not add runtime dependencies here.
+// This module imports TYPES ONLY from @chronicle/core — no DB, no React — plus the dependency-free
+// sibling `tree-constants` for its geometry primitives, so it stays safe on server or client and
+// trivial to unit-test. Do not add DB/React runtime dependencies here.
 //
 // NOTE: named `tree-layout.ts` (not `layout.ts`) because `layout.*` is a reserved Next.js App Router
 // file convention.
 
 import type { KinshipTreeData, ResolvedKinshipEdge, TreeNode } from "@chronicle/core";
+import { CARET_GAP, CARET_HALF, CROSS_H_GAP, GEN_V_GAP, NODE_H, NODE_W, PARTNER_GAP } from "./tree-constants";
 
 // ---------------------------------------------------------------------------
 // Expansion state
@@ -143,11 +145,10 @@ export interface LayoutInput {
 // (incl. gutter affordances) starts at (0,0).
 // ---------------------------------------------------------------------------
 
-export const NODE_W = 150; // card width (px)
-export const NODE_H = 168; // card height (px) — avatar · name · dates, uniform
-const CROSS_H_GAP = 26; // horizontal gap between stacked same-generation cards
-const PARTNER_GAP = 7; // tight gap inside a partnership (adjacent) — partners sit ~half as far apart
-const GEN_V_GAP = 78; // vertical gap between generation rows (room for gutter carets + bus)
+// Geometry primitives (NODE_W/H, gaps, CARET_GAP/CARET_HALF) live in ./tree-constants — the single
+// source of truth shared with the card renderer. Re-exported here so this module's public surface (used
+// by tree-canvas.tsx and tree-layout.test.ts) is unchanged.
+export { CARET_GAP, NODE_H, NODE_W };
 
 const CROSS_STEP = NODE_W + CROSS_H_GAP; // center-to-center step for non-partner neighbors
 const PARTNER_STEP = NODE_W + PARTNER_GAP; // center-to-center step inside a partnership
@@ -156,14 +157,6 @@ const GEN_STEP = NODE_H + GEN_V_GAP; // center-to-center vertical step between r
  *  children caret is placed HERE (the U/riser junction) rather than crammed against the card bottoms. */
 const JOIN_DROP = GEN_V_GAP * 0.35;
 
-/**
- * Distance from the card edge to a gutter caret/"+" CENTER (px). Set so the 22px glyph rendered by the
- * canvas OVERLAPS the card by ~25%: with radius 11, a center 5.5px outside the edge leaves 5.5px (25% of
- * the 22px glyph) sitting over the card. Keep in sync with the button `size` in tree-canvas.tsx.
- */
-export const CARET_GAP = 5.5;
-/** Half-size of a caret/"+" glyph, reserved as padding so a side/edge affordance never clips. */
-const CARET_HALF = 12;
 /** Side padding reserved so a left-side sibling caret stays within bounds. */
 const SIDE_PAD = CARET_GAP + CARET_HALF;
 /** Extra headroom above the top row so ancestor-gutter affordances stay within bounds. */
@@ -522,7 +515,14 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       const flattenDedup = (units: string[][]): string[] => {
         const seen = new Set<string>();
         const out: string[] = [];
-        for (const u of units) for (const id of u) if (!seen.has(id)) (seen.add(id), out.push(id));
+        for (const u of units) {
+          for (const id of u) {
+            if (!seen.has(id)) {
+              seen.add(id);
+              out.push(id);
+            }
+          }
+        }
         return out;
       };
       const unitsOldestFirst = sibsOldestFirst.map(sibUnit);

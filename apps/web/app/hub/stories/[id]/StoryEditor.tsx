@@ -83,7 +83,7 @@ export function StoryEditor(props: StoryEditorProps) {
           setError(null);
         }
       } catch {
-        setError("Something went wrong. Please try again.");
+        setError(hub.storyDetail.genericError);
         revert?.();
       }
     });
@@ -197,7 +197,7 @@ export function StoryEditor(props: StoryEditorProps) {
         setSavedTitle(title);
         onClose({ title, tags, prose, targetFamilies: families });
       } catch {
-        setError("Something went wrong. Please try again.");
+        setError(hub.storyDetail.genericError);
       }
     });
   };
@@ -250,14 +250,14 @@ export function StoryEditor(props: StoryEditorProps) {
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
         <KindredButton
           type="button"
-          label="Cancel"
+          label={hub.storyDetail.cancel}
           variant="ghost"
           disabled={pending}
           onClick={() => onClose({ title, tags, prose, targetFamilies: families })}
         />
         <KindredButton
           type="button"
-          label={pending ? "Saving…" : "Save"}
+          label={pending ? hub.storyDetail.saving : hub.storyDetail.save}
           disabled={pending}
           onClick={saveTitleAndProse}
         />

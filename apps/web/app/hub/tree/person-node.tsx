@@ -17,9 +17,17 @@
  */
 import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
-
-export const NODE_W = 150;
-export const NODE_H = 168;
+import {
+  AVATAR_SIZE_PX,
+  KEBAB_INSET_PX,
+  MONOGRAM_HUE_MODULO,
+  MONOGRAM_LIGHTNESS_PCT,
+  MONOGRAM_SATURATION_PCT,
+  NAME_LINE_CLAMP,
+  NODE_H,
+  NODE_W,
+  SEX_BAR_HEIGHT_PX,
+} from "./tree-constants";
 
 /** Full relation label set (mirrors /hub/kin's) — used for the anonymous-bridge sublabel. */
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
@@ -88,8 +96,8 @@ export function monogramColor(personId: string): string {
   for (let i = 0; i < personId.length; i++) {
     h = (h * 31 + personId.charCodeAt(i)) & 0xffffffff;
   }
-  const hue = Math.abs(h) % 360;
-  return `hsl(${hue} 45% 42%)`;
+  const hue = Math.abs(h) % MONOGRAM_HUE_MODULO;
+  return `hsl(${hue} ${MONOGRAM_SATURATION_PCT}% ${MONOGRAM_LIGHTNESS_PCT}%)`;
 }
 
 /** The top-edge sex accent color, or null for `unknown`/bridge (no strip). */
@@ -149,7 +157,7 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
     <div style={{ position: "relative", width: NODE_W, height: NODE_H }}>
       {kebab && (
         <span
-          style={{ position: "absolute", top: 4, right: 4, zIndex: 2 }}
+          style={{ position: "absolute", top: KEBAB_INSET_PX, right: KEBAB_INSET_PX, zIndex: 2 }}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         >
@@ -190,7 +198,7 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
               top: 0,
               left: 0,
               right: 0,
-              height: 6,
+              height: SEX_BAR_HEIGHT_PX,
               background: sexColor,
               pointerEvents: "none",
             }}
@@ -206,8 +214,8 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
             data-testid={`tree-node-photo-${node.personId}`}
             style={{
               flex: "0 0 auto",
-              width: 52,
-              height: 52,
+              width: AVATAR_SIZE_PX,
+              height: AVATAR_SIZE_PX,
               borderRadius: "50%",
               objectFit: "cover",
             }}
@@ -218,8 +226,8 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
             data-testid={`tree-node-monogram-${node.personId}`}
             style={{
               flex: "0 0 auto",
-              width: 52,
-              height: 52,
+              width: AVATAR_SIZE_PX,
+              height: AVATAR_SIZE_PX,
               borderRadius: "50%",
               display: "flex",
               alignItems: "center",
@@ -243,7 +251,7 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
               fontStyle: anon ? "italic" : "normal",
               color: anon ? "var(--text-muted)" : "var(--text-body)",
               display: "-webkit-box",
-              WebkitLineClamp: 2,
+              WebkitLineClamp: NAME_LINE_CLAMP,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
             }}

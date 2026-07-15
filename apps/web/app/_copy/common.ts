@@ -38,6 +38,7 @@ export const common = {
     polishError: "Couldn't polish that just now — your words are unchanged.",
     undo: "Undo",
     redo: "Redo",
+    ariaLabel: "Your story, in your words",
   },
 
   storyCard: {

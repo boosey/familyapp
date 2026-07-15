@@ -7,10 +7,6 @@ export const DEFAULT_THEME_ID: ThemeId = "heirloom";
 
 export const THEME_STORAGE_KEY = "kin-theme";
 
-export function isThemeId(value: string): value is ThemeId {
-  return (THEME_IDS as readonly string[]).includes(value);
-}
-
-export function applyTheme(theme: ThemeId): void {
-  document.documentElement.dataset.theme = theme;
-}
+// Validation (was `isThemeId`) and application (was `applyTheme`) now live in the preference
+// registry — see preferences/registry.ts (`enum` validator) and preferences/client.ts (`data-attr`
+// applier). Kept here: the ids, the type, the default, and the storage key the registry references.

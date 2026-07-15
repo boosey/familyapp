@@ -34,6 +34,7 @@ import {
   type AlbumPhotoDetailView,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 import type { ImportOnePhotoResult } from "./import-progress";
@@ -59,9 +60,9 @@ const MAX_CAPTION_LENGTH = 500;
 /**
  * The most photos one batch may carry. A server-authoritative cap (the client guards too, but the
  * client is never trusted): it bounds per-request work/memory and rejects an abusive "thousands of
- * tiny files" submission before we touch storage. Kept in sync with the client's limit.
+ * tiny files" submission before we touch storage. Single source of truth: PHOTO_BATCH_MAX_FILES.
  */
-const MAX_BATCH_FILES = 30;
+const MAX_BATCH_FILES = PHOTO_BATCH_MAX_FILES;
 
 /** Safe, short error token for the UI — never include secrets or full stack traces. */
 function sanitizeStorageErrorDetail(err: unknown): string {
@@ -119,7 +120,7 @@ export async function uploadAlbumPhotoAction(
   }
   // Server-authoritative batch cap (the client guards too, but is never trusted).
   if (files.length > MAX_BATCH_FILES) {
-    return { error: hub.actions.tooManyPhotos };
+    return { error: hub.actions.tooManyPhotos(MAX_BATCH_FILES) };
   }
 
   // Each file is uploaded INDEPENDENTLY into the same chosen album(s). A per-file storage/db throw

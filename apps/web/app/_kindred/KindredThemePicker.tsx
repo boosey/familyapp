@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import {
-  THEME_IDS,
-  THEME_STORAGE_KEY,
-  DEFAULT_THEME_ID,
-  applyTheme,
-  isThemeId,
-  type ThemeId,
-} from "./theme-constants";
+import { THEME_IDS, type ThemeId } from "./theme-constants";
 import { hub } from "@/app/_copy";
+import { PREFERENCES } from "./preferences/registry";
+import { readPreference, setPreference, applyPreference } from "./preferences/client";
+
+const pref = PREFERENCES.theme;
 
 const SWATCH: Record<ThemeId, { page: string; accent: string }> = {
   heirloom: { page: "#F4ECE0", accent: "#BD5B3D" },
@@ -18,19 +15,17 @@ const SWATCH: Record<ThemeId, { page: string; accent: string }> = {
 };
 
 export function KindredThemePicker() {
-  const [active, setActive] = useState<ThemeId>(DEFAULT_THEME_ID);
+  const [active, setActive] = useState<ThemeId>(pref.default);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const theme = stored && isThemeId(stored) ? stored : DEFAULT_THEME_ID;
+    const theme = readPreference(pref) as ThemeId;
     setActive(theme);
-    applyTheme(theme);
+    applyPreference(pref, theme);
   }, []);
 
   function choose(theme: ThemeId): void {
     setActive(theme);
-    applyTheme(theme);
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    setPreference(pref, theme);
   }
 
   return (

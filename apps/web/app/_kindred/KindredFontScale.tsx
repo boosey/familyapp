@@ -8,42 +8,34 @@
  * it survives navigation and reloads. Point sizes live in `font-scale-constants.ts`.
  */
 import { useEffect, useState, type CSSProperties } from "react";
-import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "@/lib/constants";
-import { FONT_SIZE_STORAGE_KEY } from "./font-scale-constants";
 import { common } from "@/app/_copy";
+import { PREFERENCES } from "./preferences/registry";
+import { readPreference, setPreference, applyPreference } from "./preferences/client";
 
 /** Glyph size (px) shown inside each cell so the row reads small → large. Presentational only —
  *  fixed px so the control itself never resizes when it changes the page scale.
  *  Deliberately a *compressed* range (not the real point sizes): the A's only need to hint at the
  *  progression, not literally render at the size they represent — that made the control sprawl. */
 const GLYPH_PX = [13, 15, 17, 19, 21];
-
-function applyStep(idx: number): void {
-  document.documentElement.style.fontSize = `${FONT_SIZE_STEPS_PT[idx]}pt`;
-}
+const pref = PREFERENCES.readingSize;
 
 export function KindredFontScale() {
-  const [active, setActive] = useState(DEFAULT_FONT_SIZE_INDEX);
+  const [active, setActive] = useState<number>(pref.default);
 
   useEffect(() => {
-    const stored = Number(window.localStorage.getItem(FONT_SIZE_STORAGE_KEY));
-    const idx =
-      Number.isInteger(stored) && stored >= 0 && stored < FONT_SIZE_STEPS_PT.length
-        ? stored
-        : DEFAULT_FONT_SIZE_INDEX;
+    const idx = readPreference(pref) as number;
     setActive(idx);
-    applyStep(idx);
+    applyPreference(pref, idx);
   }, []);
 
   function choose(idx: number): void {
     setActive(idx);
-    applyStep(idx);
-    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(idx));
+    setPreference(pref, idx);
   }
 
   return (
     <div role="group" aria-label={common.fontScale.control} style={groupStyle}>
-      {FONT_SIZE_STEPS_PT.map((_, idx) => {
+      {pref.apply.steps.map((_, idx) => {
         const on = idx === active;
         return (
           <button

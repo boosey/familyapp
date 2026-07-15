@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { useProseHistory, type ProseHistory } from "@/lib/use-prose-history";
+import { common } from "@/app/_copy";
 
 /**
  * Multiline prose editor in Kindred chrome. Prefilled with the AI-polished prose (L2); the narrator
@@ -147,7 +148,7 @@ export function KindredProseEditor({
         onBlur={() => setFocused(false)}
         disabled={busy}
         rows={12}
-        aria-label="Your story, in your words"
+        aria-label={common.proseEditor.ariaLabel}
         aria-busy={polishing}
         style={{
           width: "100%",

@@ -229,7 +229,7 @@ export function AlbumBoard(props: {
       let batch = files;
       if (batch.length > MAX_IMPORT_BATCH) {
         batch = batch.slice(0, MAX_IMPORT_BATCH);
-        setNote(hub.actions.tooManyPhotos);
+        setNote(hub.actions.tooManyPhotos(MAX_IMPORT_BATCH));
       }
       if (batch.length === 0) return;
 
@@ -264,7 +264,7 @@ export function AlbumBoard(props: {
       let items = listed.items;
       if (items.length > MAX_IMPORT_BATCH) {
         items = items.slice(0, MAX_IMPORT_BATCH);
-        setNote(hub.actions.tooManyPhotos);
+        setNote(hub.actions.tooManyPhotos(MAX_IMPORT_BATCH));
       }
       const created: Entry[] = items.map((handle) => ({
         tempId: nextTempId(),

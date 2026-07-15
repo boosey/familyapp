@@ -36,18 +36,17 @@ import { hub } from "@/app/_copy";
 import { FamilyPicker } from "../FamilyPicker";
 import { ManageConnectionsMenu } from "./ManageConnectionsMenu";
 import { seedComposeFamilies } from "@/lib/compose-scope";
+import {
+  PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
+  PHOTO_PICKER_POLL_INTERVAL_MS as PICKER_POLL_INTERVAL_MS,
+  PHOTO_PICKER_POLL_TIMEOUT_MS as PICKER_POLL_TIMEOUT_MS,
+} from "@/lib/constants";
 
 export interface AlbumFamilyOption {
   familyId: string;
   familyName: string;
 }
 
-/** Most photos per batch — kept in sync with the server's MAX_BATCH_FILES (the server is authoritative). */
-const MAX_BATCH_FILES = 30;
-
-/** Fallback poll timing when Google omits pollingConfig on the session. */
-const PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
-const PICKER_POLL_INTERVAL_MS = 2000;
 
 /** Map OAuth callback error codes to user-facing copy. */
 function oauthErrorMessage(code: string): string {
@@ -173,7 +172,7 @@ export function AlbumUploader({
     // Guard the obvious mistake client-side (fast, friendly) before spending an upload; the server
     // re-checks the same cap and is authoritative.
     if (files.length > MAX_BATCH_FILES) {
-      setError(hub.actions.tooManyPhotos);
+      setError(hub.actions.tooManyPhotos(MAX_BATCH_FILES));
       setNote(null);
       return;
     }
