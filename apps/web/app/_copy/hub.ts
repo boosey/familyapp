@@ -739,6 +739,25 @@ export const hub = {
     // Generic failure for a governance/hide action.
     govActionFailed: "Couldn't do that. Please try again.",
   },
+  // Tree Slice B — the per-person contributions page (/hub/person/[personId]) with three tabs:
+  // Stories contributed · Photos contributed · Mentions. Deep-linked via ?section=.
+  personPage: {
+    back: "← Back",
+    // Heading uses the person's name; falls back to a neutral label for a nameless person.
+    headingFor: (name: string) => name,
+    headingFallback: "This person",
+    sectionsAria: "Contributions",
+    // Tab labels (reuse the details-sheet link wording so the whole product speaks one language).
+    tabStories: "Stories contributed",
+    tabPhotos: "Photos contributed",
+    tabMentions: "Mentions",
+    // Per-tab empty states.
+    storiesEmpty: "No stories contributed yet.",
+    photosEmpty: "No photos contributed yet.",
+    mentionsEmpty: "Not mentioned in any stories yet.",
+    // Alt text for a contributed photo thumbnail.
+    photoAlt: (caption: string | null) => caption ?? "Contributed photo",
+  },
   // Story-subject tagging (issue #35) — who a story is about.
   subjects: {
     heading: "Who this is about",
@@ -789,18 +808,43 @@ export const hub = {
     pan: "Drag to pan",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
-    // Add-a-relative modal (opened from the tree's +, kebab, and person panel).
+    // Add-a-relative modal (opened from the tree's + and kebab).
     addRelativeHeading: "Add a relative",
     addRelativeClose: "Close",
-    // Tap detail panel — read-only actions.
-    panelStories: "Stories about them",
-    panelAddParent: "Add parent",
-    panelAddChild: "Add child",
-    panelAddSibling: "Add sibling",
-    panelManageKin: "Manage kin",
-    // Panel add-partner link (relation=partner).
-    addPartner: "Add partner",
+    // Read-only person details sheet (double-click a card, Slice A). Relation-to-focus chip + "You".
+    youLabel: "You",
+    detailsClose: "Close",
+    // Navigation links in the details sheet + the kebab items (Slice B): all three are live
+    // destinations on the per-person page (/hub/person/[id]?section=stories|photos|mentions).
+    detailsStories: "Stories contributed",
+    detailsPhotos: "Photos contributed",
+    detailsMentions: "Mentions",
+    // Details-sheet EDIT mode (tree Slice C, ADR-0021). Shown only when the server projects `editable`.
+    editButton: "Edit",
+    editHeading: "Edit details",
+    editName: "Name",
+    editNamePlaceholder: "Full name",
+    editBirthYear: "Birth year",
+    editSex: "Sex",
+    editSexUnknown: "Unknown",
+    editSexFemale: "Female",
+    editSexMale: "Male",
+    editLifeStatus: "Life status",
+    editLifeStatusLiving: "Living",
+    editLifeStatusDeceased: "Deceased",
+    editDeathYear: "Year of death",
+    editSave: "Save",
+    editCancel: "Cancel",
+    editSaving: "Saving…",
+    // Errors surfaced inline in the edit form.
+    editErrorGeneric: "Could not save changes. Please try again.",
+    editErrorNotAllowed: "You do not have permission to edit this person.",
+    editErrorName: "Please enter a name.",
+    editErrorBirthDate: "That birth date is not valid.",
+    editErrorDeathDate: "That year of death is not valid.",
     // Per-card KebabMenu labels.
+    // The ⋮ menu's Focus action — re-roots the tree on this card (relation chips + ring recompute).
+    kebabFocus: "Focus here",
     // Neutral label for the ⋮ trigger itself (the menu holds several add actions, so it must not be
     // labeled as any single one).
     moreActions: "Add a relative",
@@ -808,6 +852,12 @@ export const hub = {
     kebabAddSibling: "Add sibling",
     kebabAddParent: "Add parent",
     kebabAddPartner: "Add partner",
+    // Slice D (#6) — invite affordance (details sheet + kebab). Shown only for an `invitable` person
+    // (identified, living, no account, no live invitation); `pending` shows the muted note; accepted /
+    // not-applicable show nothing.
+    inviteButton: "Invite to join",
+    kebabInvite: "Invite…",
+    invitePendingNote: "Invitation pending",
     // Per-direction caret aria labels (collapse/expand an already-drawn branch; add via "+").
     collapseParents: "Collapse ancestors",
     expandParents: "Expand ancestors",

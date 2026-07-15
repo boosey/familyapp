@@ -93,6 +93,9 @@ export async function createInvitation(
         // off (`reapUnacceptedInvitees`) — it is what makes an abandoned invite reapable while a
         // `mention` (deceased ancestor / structural bridge) is not.
         origin: "invitee",
+        // ADR-0021: the inviter created this provisional Person — record it as immutable
+        // `createdByPersonId` provenance (backs the `creator` arm of `canEditPerson`).
+        createdByPersonId: input.inviterPersonId,
         accountId: null,
       })
       .returning({ id: persons.id });

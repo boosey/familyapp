@@ -557,6 +557,21 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   display gate was built — no answer-story renders its originating question in any feed, so that
   concern was found MOOT.
 
+## Who may edit a Person record (tree Slice C, 2026-07-15)
+
+- **Cross-person identity editing is gated by ONE predicate (`canEditPerson`), never scattered.** The
+  details sheet's new **Edit** affordance is the first cross-person write. A viewer may edit a Person's
+  identity fields (`displayName`, birth/death dates, `sex`, `lifeStatus`; `spokenName` self-only) when
+  ANY of: **self**, **creator** (new immutable `persons.createdByPersonId` provenance, set on every
+  mint — `addRelative` relatives + bridges, invitee mint), **steward** of a family the person actively
+  belongs to, or **deceased → any active family member** (collaborative ancestor maintenance). A
+  *living, non-self* person is editable only by steward/creator; anonymous/non-member never. The UI gate
+  (a server-projected `editable` flag) and the write choke point (`updatePersonIdentityAsEditor`, which
+  re-checks `canEditPerson` and throws `AuthorizationError`) share the same predicate so they can't
+  diverge. No new ledger (identity edits aren't kinship assertions); a per-field audit ledger is a noted
+  follow-up. Full rationale + accepted deceased-carve-out risk in
+  `docs/adr/0021-who-may-edit-a-person-record.md`.
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the

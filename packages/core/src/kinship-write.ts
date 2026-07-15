@@ -116,6 +116,12 @@ async function insertMentionPerson(
     deathYear?: number | null;
     /** ADR-0016 tree renderer. Omitted => `"unknown"` — a bridge/placeholder's sex is always unknown. */
     sex?: PersonSex;
+    /**
+     * ADR-0021: the acting viewer who minted this Person — recorded as immutable `createdByPersonId`
+     * provenance so they later satisfy the `creator` arm of `canEditPerson`. Every mention/bridge is
+     * minted inside an authorized `addRelative` call, so a creator is always known here.
+     */
+    createdByPersonId: string;
   },
 ): Promise<string> {
   const identified = opts.displayName !== null;
@@ -137,6 +143,7 @@ async function insertMentionPerson(
       deathYear: deceased ? (opts.deathYear ?? null) : null,
       accountId: null,
       sex: opts.sex ?? "unknown",
+      createdByPersonId: opts.createdByPersonId,
     })
     .returning({ id: persons.id });
   return row!.id;
@@ -341,6 +348,7 @@ export async function addRelative(
       deathDate: input.deathDate ?? null,
       deathYear: input.deathYear ?? null,
       sex: input.sex ?? "unknown",
+      createdByPersonId: me,
     });
 
     const edgeIds: string[] = [];
@@ -372,7 +380,7 @@ export async function addRelative(
           }
         } else {
           // No parent yet: mint one anonymous bridge parent B, then B->anchor and R->B.
-          const bridge = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+          const bridge = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
           bridgePersonIds.push(bridge);
           edgeIds.push(await insertParentOf(tx, familyId, me, bridge, anchor, nature));
           edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, bridge, nature));
@@ -393,8 +401,8 @@ export async function addRelative(
         const couple = [...parents];
         if (couple.length === 0) {
           // 0 recorded parents → mint TWO placeholders, partner them, both parent_of anchor.
-          const b1 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
-          const b2 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+          const b1 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
+          const b2 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
           bridgePersonIds.push(b1, b2);
           edgeIds.push(await insertPartneredWith(tx, familyId, me, b1, b2));
           edgeIds.push(await insertParentOf(tx, familyId, me, b1, anchor, SIBLING_NATURE));
@@ -415,7 +423,7 @@ export async function addRelative(
             couple.push(r);
           } else {
             // P has no partner → mint ghost Q, partner(P,Q), Q is a new parent_of anchor.
-            const q = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living" });
+            const q = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
             bridgePersonIds.push(q);
             edgeIds.push(await insertPartneredWith(tx, familyId, me, p, q));
             edgeIds.push(await insertParentOf(tx, familyId, me, q, anchor, SIBLING_NATURE));

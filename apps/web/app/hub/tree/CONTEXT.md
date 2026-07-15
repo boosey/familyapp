@@ -3,10 +3,39 @@
 Glossary for the visual family-tree renderer. Terms only — no implementation. See the build
 contract in `docs/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md` and ADR-0016/0017.
 
+## Focus person vs. Camera (the "focus" split — Slice A, 2026-07-14)
+Two unrelated things were both called "focus"; Slice A splits them so they can never be confused:
+
+- **Focus person** — the *relation root*. Every relation chip (relation-to-focus) and the sex focus
+  ring are computed against them. It is **selectable and re-rootable** now: the **only** thing that
+  changes it is the per-card kebab **Focus** action. Clicking, tapping, or double-clicking a card
+  **never** re-roots. On re-focus the tree refetches (server re-root), chips + ring recompute, and a
+  **pan delta** holds the newly-focused card at its on-screen position (the camera does not move).
+  Field name: `focusPersonId`.
+- **Camera** — pan + zoom only. Its layout anchor is `cameraAnchor` and the centering fn is
+  `centerCamera` (renamed from `focusPos` / `centerOnFocus`). Centered on the focus person **once** at
+  first mount; after that it never moves automatically — not on expand/collapse, and not on re-focus.
+  The Fit/−/+ controls live in FamilyTab's view-selector row (pan/scale are lifted there; TreeCanvas
+  exposes `fit()` via an imperative handle).
+
 ## Anchor
-The fixed person the tree is centered on (spec calls it the "focus person"). Seeds the initial
-framing and initial expansion only; not selectable, not re-rootable, carries no visual marker.
-"Anchor" and "focus" are the same thing; prefer **anchor** in interaction rules.
+Legacy term for the focus person. Unlike the earlier design, the anchor is now **re-rootable** (via
+the kebab Focus action) and **carries a visual marker** — a solid ring in the focus person's sex color
+(`--sex-male`/`--sex-female`, or `--border-strong` when sex is unknown; width `--tree-focus-ring-width`).
+The ring moves with the focus person on re-focus. Prefer **focus person** / **camera** (above) in new
+interaction rules.
+
+## Relation chip
+A small chip on every card showing its **relation to the focus person** (`relationToRoot`, mapped via
+`hub.kin.relationLabel`). The focus person's own card is **blank** (`relationToRoot === "self"`). The
+**viewer's** own card always reads **"You"** (over-riding blank/relation). Anonymous bridges carry no
+chip (their relation is already in the name line).
+
+## Details sheet
+A **read-only** floating card opened by a **double-click / double-tap** on a card (single tap is a
+no-op — the old PersonPanel is gone). Shows name/dates, relation-to-**viewer**, and three nav links
+(Stories contributed · Photos contributed · Mentions). Only Mentions is live in Slice A; the other two
+are disabled ("coming soon", built in Slice B). Editing is Slice C. Dismiss via × / Escape / outside-click.
 
 ## Caret
 A per-direction expand/collapse control in a card's outer gutter: **parents ↑, siblings ↔,

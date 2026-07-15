@@ -198,7 +198,10 @@ function LinkResult({
   );
 }
 
-export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
+export async function InviteTab({
+  scope = "all",
+  inviteeName,
+}: { scope?: string; inviteeName?: string } = {}) {
   const jar = await cookies();
   const narratorToken = jar.get(INVITE_FLASH_COOKIE)?.value;
   const memberToken = jar.get(MEMBER_INVITE_FLASH_COOKIE)?.value;
@@ -358,6 +361,9 @@ export async function InviteTab({ scope = "all" }: { scope?: string } = {}) {
               required
               className="kin-field"
               placeholder={hub.invite.namePlaceholder}
+              // Slice D (#6): pre-filled when the tree's Invite affordance deep-links here with a
+              // person's name (`?inviteeName=`). Still editable; the form posts to createInvitation.
+              defaultValue={inviteeName?.trim() || undefined}
             />
           </label>
           <label className="kin-form-label">

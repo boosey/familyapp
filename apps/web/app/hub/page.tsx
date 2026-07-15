@@ -58,6 +58,9 @@ export default async function HubPage({
     // deep-links straight to the relatives List view.
     anchor?: string;
     view?: string;
+    // Invite tab: `?inviteeName=` pre-fills the member-invite name field (Slice D #6 — the tree's
+    // Invite affordance deep-links here pre-targeted at a person + family via `scope`).
+    inviteeName?: string;
   }>;
 }) {
   const { db, auth } = await getRuntime();
@@ -90,6 +93,7 @@ export default async function HubPage({
     subjectPhotoIds: subjectPhotoIdsParam,
     anchor: anchorParam,
     view: viewParam,
+    inviteeName: inviteeNameParam,
   } = await searchParams;
   // ADR-0009: `?subjectPhotoIds=<uuid>` may repeat, so Next hands us `string | string[] | undefined`.
   // Normalize to a de-duped string[] to pre-select those photos in the ask picker (`/hub?tab=ask&…`).
@@ -384,7 +388,10 @@ export default async function HubPage({
               (InviteTab self-guards too, but this keeps the broken form off the page entirely). */}
           {activeTab === "invite" &&
             (activeFamilies.length > 0 ? (
-              <InviteTab scope={scope} />
+              <InviteTab
+                scope={scope}
+                inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
+              />
             ) : (
               <div
                 style={{

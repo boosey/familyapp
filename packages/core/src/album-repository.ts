@@ -388,6 +388,100 @@ export async function listAlbumPhotosDetailed(
   }));
 }
 
+/** A photo as shown on the person page's "Photos contributed" grid — thumbnail/metadata refs only. */
+export interface AlbumPhotoCard {
+  id: string;
+  caption: string | null;
+  contributorPersonId: string;
+  createdAt: Date;
+  /** exifCapturedAt — the original capture time when EXIF carried one, else null. */
+  capturedAt: Date | null;
+  /** The AUTHORIZED album placements (families the viewer is also an active member of). Never leaks. */
+  families: { familyId: string; familyName: string }[];
+}
+
+/**
+ * "Photos contributed by X" (tree Slice B) — the album photos this Person CONTRIBUTED
+ * (`family_photos.contributorPersonId = personId`), SCOPED to the viewer's authorized albums. This
+ * reuses the exact album read model as `listAlbumPhotosDetailed`: a photo is returned ONLY if it is
+ * placed in a family the VIEWER holds an ACTIVE membership in. The contributor filter only NARROWS —
+ * it NEVER grants: a photo the contributor placed solely in a family the viewer isn't in never
+ * appears, and there is deliberately NO contributor-bypass here (unlike the reference/manage paths,
+ * where a contributor may always touch their own artifact — this is a READ surface for a THIRD-party
+ * viewer, so it is membership-gated end to end). An anonymous viewer (no memberships) gets []. Media
+ * bytes stay behind the storage seam — only thumbnail/metadata refs are returned.
+ *
+ * Efficiency: one placement query (photo id set ∩ authorized families + authorized placements),
+ * then one grouped query for the photo base fields. `families` on each row is the intersection of
+ * the photo's placements with the viewer's authorized families — never a leak of a family the viewer
+ * isn't in. Deduped by photo id, most-recent first (`createdAt` desc, then id desc).
+ */
+export async function listPhotosContributedByPerson(
+  db: Database,
+  ctx: AuthContext,
+  personId: string,
+): Promise<AlbumPhotoCard[]> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return [];
+  const viewerFamilies = await activeFamilyIds(db, viewer);
+  if (viewerFamilies.size === 0) return [];
+  const authorizedFamilies = [...viewerFamilies];
+
+  // (1) Placement rows: the CONTRIBUTOR's non-deleted photos placed in a family the VIEWER may see.
+  // Yields the authorized photo id set AND each photo's authorized (viewer-visible) placements.
+  const placementRows = await db
+    .select({
+      photoId: familyPhotoFamilies.photoId,
+      familyId: families.id,
+      familyName: families.name,
+    })
+    .from(familyPhotoFamilies)
+    .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
+    .innerJoin(familyPhotos, eq(familyPhotos.id, familyPhotoFamilies.photoId))
+    .where(
+      and(
+        inArray(familyPhotoFamilies.familyId, authorizedFamilies),
+        eq(familyPhotos.contributorPersonId, personId),
+        isNull(familyPhotos.deletedAt),
+      ),
+    );
+
+  const photoIds = [...new Set(placementRows.map((r) => r.photoId))];
+  if (photoIds.length === 0) return [];
+
+  const familiesByPhoto = new Map<string, { familyId: string; familyName: string }[]>();
+  for (const r of placementRows) {
+    const list = familiesByPhoto.get(r.photoId) ?? [];
+    list.push({ familyId: r.familyId, familyName: r.familyName });
+    familiesByPhoto.set(r.photoId, list);
+  }
+  for (const list of familiesByPhoto.values()) {
+    list.sort((a, b) => a.familyName.localeCompare(b.familyName));
+  }
+
+  // (2) The photos themselves (base fields), most-recent first.
+  const photoRows = await db
+    .select({
+      id: familyPhotos.id,
+      caption: familyPhotos.caption,
+      contributorPersonId: familyPhotos.contributorPersonId,
+      createdAt: familyPhotos.createdAt,
+      capturedAt: familyPhotos.exifCapturedAt,
+    })
+    .from(familyPhotos)
+    .where(inArray(familyPhotos.id, photoIds))
+    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
+
+  return photoRows.map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    contributorPersonId: p.contributorPersonId,
+    createdAt: p.createdAt,
+    capturedAt: p.capturedAt,
+    families: familiesByPhoto.get(p.id) ?? [],
+  }));
+}
+
 /**
  * The single album-read decision, given an already-fetched photo (or its absence). Photo-byte
  * visibility (ADR-0009 §Authorization) is the UNION of two arms — mirroring `decideMediaRead`

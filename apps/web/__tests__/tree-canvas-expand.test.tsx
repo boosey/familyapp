@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * TreeCanvas interaction (ego-centric redesign, spec §1–§8):
- *   - a NAME click opens the read-only panel, with NO fetch and NO re-root;
- *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never selects;
+ * TreeCanvas interaction (tree Slice A, spec §1–§8):
+ *   - a single tap/click on a card is a NO-OP (the panel is gone); a DOUBLE-click opens the read-only
+ *     details sheet — with NO fetch and NO re-root;
+ *   - a drag (pointer moved beyond the tap threshold) is NOT a tap and never opens details;
  *   - a caret EXPANDS a collapsed branch and COLLAPSES a drawn one — client only, no fetch;
  *   - a "+" affordance (no kin in that direction) opens the Add-a-relative modal (over the tree);
  *   - an anonymous bridge card is inert (no kebab).
@@ -40,6 +41,7 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     hasHiddenParents: over.hasHiddenParents ?? false,
     hasHiddenChildren: over.hasHiddenChildren ?? false,
     sex: over.sex ?? "unknown",
+    inviteStatus: over.inviteStatus ?? "not-applicable",
   };
 }
 
@@ -69,40 +71,41 @@ const initialData: KinshipTreeData = {
 
 const noFetch = async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" });
 
-it("a name click opens the read-only panel without any fetch or re-root", async () => {
+it("a single tap on a card is a no-op — no details sheet, no fetch, no re-root", async () => {
   const fetchSubtree = vi.fn(noFetch);
   render(
     <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={fetchSubtree} />,
   );
-  await tap(screen.getByTestId("tree-node-marco"));
-  expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
-  // No re-root machinery: the panel has no "center tree here" trigger.
-  expect(screen.queryByTestId("tree-panel-recenter")).toBeNull();
+  await tap(screen.getByTestId("tree-node-pos-marco"));
+  expect(screen.queryByTestId("tree-person-details")).toBeNull();
+  expect(fetchSubtree).not.toHaveBeenCalled();
 });
 
-it("keyboard/native click on a node opens the panel (a11y)", async () => {
+it("native double-click on a node opens the read-only details sheet (a11y / mouse path)", async () => {
   render(
     <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={vi.fn(noFetch)} />,
   );
-  expect(screen.queryByTestId("tree-person-panel")).toBeNull();
+  expect(screen.queryByTestId("tree-person-details")).toBeNull();
   await act(async () => {
-    fireEvent.click(screen.getByTestId("tree-node-marco"));
+    fireEvent.doubleClick(screen.getByTestId("tree-node-pos-marco"));
   });
-  expect(screen.getByTestId("tree-person-panel")).toBeTruthy();
+  expect(screen.getByTestId("tree-person-details")).toBeTruthy();
+  // Read-only: no re-root / center control lives on the sheet.
+  expect(screen.queryByTestId("tree-details-recenter")).toBeNull();
 });
 
-it("a drag on a node does not select it", async () => {
+it("a drag on a node does not open details (it pans instead)", async () => {
   render(
     <TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={initialData} fetchSubtree={vi.fn(noFetch)} />,
   );
-  const nodeEl = screen.getByTestId("tree-node-marco");
+  const nodeEl = screen.getByTestId("tree-node-pos-marco");
   await act(async () => {
     fireEvent.pointerDown(nodeEl, { clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerMove(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
     fireEvent.pointerUp(nodeEl, { clientX: 40, clientY: 0, pointerId: 1 });
-    fireEvent.click(nodeEl, { clientX: 40, clientY: 0 });
+    fireEvent.doubleClick(nodeEl, { clientX: 40, clientY: 0 });
   });
-  expect(screen.queryByTestId("tree-person-panel")).toBeNull();
+  expect(screen.queryByTestId("tree-person-details")).toBeNull();
 });
 
 it("a children caret collapses the drawn branch (client only, no fetch) and re-expands it", async () => {

@@ -6,18 +6,33 @@
  * instance is removed. The trigger is BORDERLESS (the carets/"+" carry the 1px border; the kebab does
  * not).
  *
- * Every item opens the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
- * `node.personId` with the chosen relation. It writes nothing itself — the modal's form does. Items are
- * GATED by the loaded adjacency counts so we never offer an impossible add (a person already has ≤2
- * parents; at most one partner in v1):
+ * The FIRST item is **Focus** (tree Slice A #2) — it re-roots the tree on this card (via
+ * TreeFocusProvider's `onFocus`), recomputing relation chips + the focus ring without moving the
+ * camera. It is OMITTED on the card that is already the focus person. (Slice B will insert Stories
+ * contributed / Photos contributed / Mentions above Focus.)
+ *
+ * The remaining items open the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
+ * `node.personId` with the chosen relation. They write nothing themselves — the modal's form does.
+ * Items are GATED by the loaded adjacency counts so we never offer an impossible add (a person already
+ * has ≤2 parents; at most one partner in v1):
  *   - Add child / Add sibling — always
  *   - Add parent — only when `parentCount < 2`
  *   - Add partner — only when `partnerCount === 0`
  */
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
 import { useTreeAdd } from "./add-relative-context";
+import { useTreeFocus } from "./focus-context";
+import { useTreeInvite } from "./invite-context";
+
+/** The three contribution destinations (tree Slice B), placed BEFORE Focus in the menu. */
+const CONTRIBUTION_ITEMS: { section: "stories" | "photos" | "mentions"; label: string; testId: string }[] = [
+  { section: "stories", label: hub.tree.detailsStories, testId: "tree-kebab-stories" },
+  { section: "photos", label: hub.tree.detailsPhotos, testId: "tree-kebab-photos" },
+  { section: "mentions", label: hub.tree.detailsMentions, testId: "tree-kebab-mentions" },
+];
 
 export interface KebabMenuProps {
   node: TreeNode;
@@ -25,6 +40,8 @@ export interface KebabMenuProps {
   parentCount: number;
   /** Loaded `partnered_with` edges touching this node. Gates "Add partner" (=== 0). */
   partnerCount: number;
+  /** True when this card is already the focus person — the Focus item is then omitted. */
+  isFocus?: boolean;
 }
 
 interface Item {
@@ -33,8 +50,10 @@ interface Item {
   testId: string;
 }
 
-export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
+export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMenuProps) {
   const openAdd = useTreeAdd();
+  const focusPerson = useTreeFocus();
+  const invitePerson = useTreeInvite();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -121,6 +140,62 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
             gap: 2,
           }}
         >
+          {/* Contribution destinations (Slice B) — placed BEFORE Focus: Stories · Photos · Mentions.
+              Rendered as Links (not router.push) so the menu stays mountable without a router context,
+              matching the tree's no-op-context discipline for standalone rendering. */}
+          {CONTRIBUTION_ITEMS.map((it) => (
+            <Link
+              key={it.section}
+              href={`/hub/person/${node.personId}?section=${it.section}`}
+              role="menuitem"
+              data-testid={it.testId}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ ...MENU_ITEM_STYLE, textDecoration: "none" }}
+            >
+              {it.label}
+            </Link>
+          ))}
+          {/* Focus (re-root) — omitted on the card that is already the focus person. */}
+          {!isFocus && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="tree-kebab-focus"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                focusPerson(node.personId);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={MENU_ITEM_STYLE}
+            >
+              {hub.tree.kebabFocus}
+            </button>
+          )}
+          {/* Invite… (Slice D, #6) — placed with the people-actions group, before Add…. Gated by the
+              server-projected eligibility (`inviteStatus === "invitable"`): identified, living, no
+              account, no live invitation. It opens the EXISTING invite flow pre-targeted; the same
+              handler backs the details sheet's Invite button. */}
+          {node.inviteStatus === "invitable" && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="tree-kebab-invite"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                invitePerson(node);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={MENU_ITEM_STYLE}
+            >
+              {hub.tree.kebabInvite}
+            </button>
+          )}
           {items.map((it) => (
             <button
               key={it.relation}
@@ -133,19 +208,7 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
                 openAdd(node.personId, it.relation);
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                padding: "8px 10px",
-                borderRadius: "var(--radius-sm)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                color: "var(--text-body)",
-              }}
+              style={MENU_ITEM_STYLE}
             >
               {it.label}
             </button>
@@ -155,3 +218,17 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
     </div>
   );
 }
+
+const MENU_ITEM_STYLE: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  padding: "8px 10px",
+  borderRadius: "var(--radius-sm)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-ui-sm)",
+  color: "var(--text-body)",
+};

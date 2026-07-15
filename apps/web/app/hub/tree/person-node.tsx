@@ -1,17 +1,24 @@
 "use client";
 /**
- * PersonNode — one uniform card in the ego-centric visual family tree (spec §2).
+ * PersonNode — one card in the ego-centric visual family tree (spec §2; tree Slice A #8/#9).
  *
- * Top-to-bottom: Avatar · Name · Dates. Every card is uniform — no relation line, no "You" label, no
- * focus/root distinction. The four visual facts:
+ * Top-to-bottom: Avatar · Name · Dates · relation chip. The visual facts:
  *   - Avatar — the person's photo/image if present; else a deterministic colored monogram (hash of
  *     `personId`, stable across renders); else `?`.
- *   - Name — the click target that opens the read-only detail panel. Identified-but-nameless → a
- *     fallback ("Unknown relative").
+ *   - Name — the tap target (single tap is a no-op now; a double-tap opens the read-only details
+ *     sheet, handled by the canvas). Identified-but-nameless → a fallback ("Unknown relative").
  *   - Dates — dob–dod, dates only. Deceased `1948–1998`; living `1948–`; degrades gracefully.
- *   - Sex bar — kept: the top-edge accent colored by sex.
+ *   - Sex bar — the top-edge accent colored by sex.
+ *   - Relation chip (Slice A #9) — this card's RELATION TO THE FOCUS PERSON (`relationToRoot`, the
+ *     tree is focus-rooted), mapped via `hub.kin.relationLabel`. The focus person's own card is BLANK
+ *     (`relationToRoot === "self"`). The VIEWER's own card always reads "You" (takes precedence over
+ *     blank/relation). Anonymous bridges get NO chip (their relation is already in the name line).
+ *     (This reverses the earlier "no relation line" rule.)
+ *   - Focus ring (Slice A #8) — when `focus` is set, a solid ring around the card in the person's sex
+ *     color (`--sex-male`/`--sex-female`), or `--border-strong` when sex is unknown. Width from the
+ *     `--tree-focus-ring-width` token. The ring moves with the focus person on re-focus.
  *   - Anonymous bridge (`identified === false`) — dashed border, `?` avatar, italic "Unknown
- *     <relation>", no dates. INERT (carets/kebab suppressed by the canvas/layout, not here).
+ *     <relation>", no dates, no chip. INERT (carets/kebab suppressed by the canvas/layout, not here).
  *
  * This component draws ONLY the card; carets/"+" and the descent bus are drawn by TreeCanvas.
  */
@@ -107,6 +114,31 @@ function sexBarColor(node: TreeNode): string | null {
   return null;
 }
 
+/**
+ * The focus ring color (Slice A #8): the person's sex color, or the neutral `--border-strong` when
+ * sex is unknown. Always a concrete color (unlike the sex BAR, which draws nothing for unknown).
+ */
+export function focusRingColor(node: TreeNode): string {
+  if (node.sex === "male") return "var(--sex-male)";
+  if (node.sex === "female") return "var(--sex-female)";
+  return "var(--border-strong)";
+}
+
+/**
+ * The relation chip text for a card (Slice A #9), or null for no chip. Precedence:
+ *   1. anonymous bridge → no chip (relation is already in the name line);
+ *   2. the viewer's own card → "You" (over-rides blank/relation);
+ *   3. the focus person's own card (`relationToRoot === "self"`) → blank;
+ *   4. otherwise → relation-to-focus (`relationToRoot`) via `hub.kin.relationLabel`.
+ */
+export function relationChipFor(node: TreeNode, isViewer: boolean): string | null {
+  if (isAnonymousBridge(node)) return null;
+  if (isViewer) return hub.tree.youLabel;
+  const rel = node.relationToRoot;
+  if (rel == null || rel === "self") return null;
+  return RELATION_LABEL[rel];
+}
+
 /** A photo/image URL for the person, if the model carries one. `TreeNode` has no image field in v1. */
 function photoUrlFor(node: TreeNode): string | null {
   const url = (node as { imageUrl?: string | null }).imageUrl;
@@ -128,20 +160,30 @@ export interface PersonNodeProps {
    * RIGHT partner; undefined leaves all corners rounded.
    */
   squareCorner?: "bottom-left" | "bottom-right";
+  /** True for the FOCUS person's card (Slice A #8) — draws the sex-colored focus ring. */
+  focus?: boolean;
+  /** True for the VIEWER's own card (Slice A #9) — its relation chip reads "You". */
+  isViewer?: boolean;
 }
 
-export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps) {
+export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }: PersonNodeProps) {
   const anon = isAnonymousBridge(node);
   const name = displayNameFor(node);
   const dates = datesLineFor(node);
   const initial = monogramFor(node);
   const photo = photoUrlFor(node);
+  const chip = relationChipFor(node, isViewer ?? false);
 
   const border = anon
     ? "var(--border-width) dashed var(--border-strong)"
     : "var(--border-width) solid var(--border)";
 
   const sexColor = sexBarColor(node);
+  // Solid ring in the sex color (neutral when unknown), drawn as an outer box-shadow so it never
+  // affects layout. Only on the focus person's card (Slice A #8).
+  const focusRing = focus
+    ? `0 0 0 var(--tree-focus-ring-width) ${focusRingColor(node)}`
+    : undefined;
 
   // Flatten one inner-bottom corner when this card is a couple half hosting a seam affordance. Order:
   // top-left top-right bottom-right bottom-left.
@@ -170,6 +212,7 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
         aria-label={name}
         data-testid={`tree-node-${node.personId}`}
         data-anon={anon ? "true" : undefined}
+        data-focus={focus ? "true" : undefined}
         style={{
           boxSizing: "border-box",
           position: "relative",
@@ -185,6 +228,7 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
           borderRadius,
           border,
           background: "var(--surface-card)",
+          boxShadow: focusRing,
           font: "inherit",
           overflow: "hidden",
         }}
@@ -270,6 +314,29 @@ export function PersonNode({ node, onTap, kebab, squareCorner }: PersonNodeProps
               }}
             >
               {dates}
+            </span>
+          )}
+          {chip && (
+            <span
+              data-testid={`tree-node-chip-${node.personId}`}
+              style={{
+                marginTop: 2,
+                alignSelf: "center",
+                padding: "1px 8px",
+                borderRadius: "var(--radius-pill)",
+                background: "var(--surface-sunken)",
+                fontFamily: "var(--font-ui)",
+                fontSize: "0.66rem",
+                fontWeight: 600,
+                letterSpacing: "0.02em",
+                color: "var(--text-meta)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              }}
+            >
+              {chip}
             </span>
           )}
         </span>

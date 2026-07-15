@@ -1,0 +1,2 @@
+ALTER TABLE "persons" ADD COLUMN "created_by_person_id" uuid;--> statement-breakpoint
+ALTER TABLE "persons" ADD CONSTRAINT "persons_created_by_person_id_persons_id_fk" FOREIGN KEY ("created_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
