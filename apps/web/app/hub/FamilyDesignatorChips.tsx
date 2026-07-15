@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FamilyChoiceChips } from "./FamilyChoiceChips";
 
 /**
@@ -49,6 +49,16 @@ export function FamilyDesignatorChips({
   const effective = value || (families.length === 1 ? (families[0]?.id ?? "") : "");
   const selected = new Set(effective ? [effective] : []);
 
+  // Keep the hidden input's custom validity in lockstep with the selection. The chips drive `effective`
+  // PROGRAMMATICALLY, so no input/change event fires on the input — an event-driven clear (onInput)
+  // would leave the field stuck invalid after a first blocked submit even once a family is picked. A
+  // deterministic effect on `effective` blocks an empty submit with `requiredMessage` and clears the
+  // moment a family is chosen.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(effective ? "" : requiredMessage);
+  }, [effective, requiredMessage]);
+
   return (
     <div className="kin-form-label">
       <span>{label}</span>
@@ -61,10 +71,12 @@ export function FamilyDesignatorChips({
       {/*
         Visually-hidden, focusable input that carries the chosen id into the native form submit AND
         enforces `required`. A `type="hidden"` input is barred from constraint validation, so this is a
-        positioned text input driven entirely by the chips (never user-typed): empty ⇒ `required` blocks
-        the submit with `requiredMessage`; a chosen id ⇒ valid, and the id posts under `name`.
+        positioned text input driven entirely by the chips (never user-typed): empty ⇒ the effect above
+        marks it invalid so the submit is blocked with `requiredMessage`; a chosen id ⇒ valid, and the
+        id posts under `name`.
       */}
       <input
+        ref={inputRef}
         type="text"
         name={name}
         tabIndex={-1}
@@ -72,8 +84,6 @@ export function FamilyDesignatorChips({
         required
         value={effective}
         onChange={() => {}}
-        onInvalid={(e) => (e.currentTarget as HTMLInputElement).setCustomValidity(requiredMessage)}
-        onInput={(e) => (e.currentTarget as HTMLInputElement).setCustomValidity("")}
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
       />
     </div>

@@ -12,11 +12,23 @@
  *  - A single family auto-resolves to its lone id even with a null seed (unambiguous).
  *  - Picking a chip updates the posted value and, being router-free, never navigates.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FamilyDesignatorChips } from "@/app/hub/FamilyDesignatorChips";
 
-afterEach(cleanup);
+// The component imports NO next/navigation; mock it with a push spy so any accidental navigation would
+// be observable — the ADR-0021 no-write-back guarantee is that picking a designator NEVER navigates.
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/hub",
+  useSearchParams: () => new URLSearchParams(""),
+}));
+
+afterEach(() => {
+  cleanup();
+  push.mockClear();
+});
 
 const FAMILIES = [
   { id: "fam-a", name: "Esposito" },
@@ -90,5 +102,27 @@ describe("FamilyDesignatorChips — single-select, no write-back", () => {
     // Single-select: exactly one chip stays ON.
     expect(pressed("Rossi")).toBe(true);
     expect(pressed("Esposito")).toBe(false);
+  });
+
+  it("never navigates when a chip is picked (ADR-0021 no write-back)", () => {
+    render(<FamilyDesignatorChips families={FAMILIES} seeded="fam-a" {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // Regression: the hidden required input is driven programmatically by the chips, so an event-driven
+  // clear would leave it stuck invalid after a first blocked submit. The deterministic effect must
+  // clear the required block the moment a family is picked, so the form becomes submittable.
+  it("clears the required block once a family is picked (no stuck-invalid regression)", () => {
+    const { container } = render(
+      <FamilyDesignatorChips families={FAMILIES} seeded={null} {...baseProps} />,
+    );
+    const input = hiddenInput(container);
+    // Ambiguous start: empty + required ⇒ the form submit is blocked.
+    expect(input.checkValidity()).toBe(false);
+    // Picking a family clears the block, even though no input/change event fires on the input.
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(input.checkValidity()).toBe(true);
+    expect(input.value).toBe("fam-b");
   });
 });

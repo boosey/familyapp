@@ -48,7 +48,9 @@ export function FamilyChoiceChips({
   };
 
   return (
-    <div role="group" aria-label={ariaLabel} style={rowStyle}>
+    // Only take the group role when we have a name for it — an unlabelled group role is noise to a
+    // screen reader, and these chips usually sit inside a <fieldset> whose <legend> already groups them.
+    <div role={ariaLabel ? "group" : undefined} aria-label={ariaLabel} style={rowStyle}>
       {families.map((f) => {
         const on = selected.has(f.id);
         return (

@@ -67,6 +67,28 @@ it("calls onToggle with the family id when a chip is clicked", () => {
   expect(onToggle).toHaveBeenCalledWith("b");
 });
 
+it("omits the group role when unlabelled and adds it when an ariaLabel is given", () => {
+  const { rerender } = render(
+    <FamilyChoiceChips
+      families={[{ id: "a", name: "Alpha" }]}
+      selected={new Set()}
+      onToggle={() => {}}
+    />,
+  );
+  // No ariaLabel → no bare/unlabelled group role (the chips usually sit in a labelled <fieldset>).
+  expect(screen.queryByRole("group")).toBeNull();
+
+  rerender(
+    <FamilyChoiceChips
+      families={[{ id: "a", name: "Alpha" }]}
+      selected={new Set()}
+      onToggle={() => {}}
+      ariaLabel="Share with families"
+    />,
+  );
+  expect(screen.getByRole("group", { name: "Share with families" })).toBeTruthy();
+});
+
 it("disables every chip when disabled", () => {
   render(
     <FamilyChoiceChips
