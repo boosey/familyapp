@@ -1,16 +1,19 @@
 // @vitest-environment jsdom
 /**
- * TreeCanvas zoom + Fit (2026-07-14). The tree became a hub tab and gained real zoom: the "Fit" button
- * now ZOOMS the whole loaded tree to the viewport (the old Fit only recentred the focus at 1×), and
- * +/− buttons step the zoom about the focus. We read the pan-layer's `scale(...)` out of its transform.
+ * Fit / − / + controls now live in FamilyTab's view-selector row (tree Slice A §5), not inside
+ * TreeCanvas. pan/scale are lifted to FamilyTab and passed to TreeCanvas as controlled props; Fit is
+ * called through TreeCanvas's imperative handle. These tests drive the controls from FamilyTab and read
+ * the resulting `scale(...)` out of the pan-layer transform — and assert the LIST view hides them.
  */
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
-import type { FetchSubtreeResult } from "@/app/hub/tree/actions";
-import { TreeCanvas } from "@/app/hub/tree/tree-canvas";
+import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -49,7 +52,11 @@ const data: KinshipTreeData = {
   ],
 };
 
-const noFetch = async (): Promise<FetchSubtreeResult> => ({ ok: false, error: "failed" });
+function renderTab() {
+  return render(
+    <FamilyTab familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} tree={data} kin={[]} />,
+  );
+}
 
 function scaleOf(): number {
   const layer = screen.getByTestId("tree-pan-layer");
@@ -58,15 +65,24 @@ function scaleOf(): number {
   return parseFloat(m[1]!);
 }
 
-it("renders Fit + zoom-in + zoom-out controls", () => {
-  render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={data} fetchSubtree={vi.fn(noFetch)} />);
+it("renders Fit + zoom-in + zoom-out controls in the selector row (tree view)", () => {
+  renderTab();
+  expect(screen.getByTestId("tree-controls")).toBeTruthy();
   expect(screen.getByTestId("tree-fit")).toBeTruthy();
   expect(screen.getByTestId("tree-zoom-in")).toBeTruthy();
   expect(screen.getByTestId("tree-zoom-out")).toBeTruthy();
 });
 
-it("starts at 1× and zoom-in / zoom-out change the scale", async () => {
-  render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={data} fetchSubtree={vi.fn(noFetch)} />);
+it("the list view hides the tree controls", async () => {
+  renderTab();
+  expect(screen.getByTestId("tree-controls")).toBeTruthy();
+  await act(async () => screen.getByRole("radio", { name: /list/i }).click());
+  expect(screen.queryByTestId("tree-controls")).toBeNull();
+  expect(screen.queryByTestId("tree-fit")).toBeNull();
+});
+
+it("the row controls DRIVE the canvas: zoom in/out change the scale", async () => {
+  renderTab();
   expect(scaleOf()).toBeCloseTo(1, 5);
 
   await act(async () => screen.getByTestId("tree-zoom-in").click());
@@ -77,9 +93,8 @@ it("starts at 1× and zoom-in / zoom-out change the scale", async () => {
   expect(scaleOf()).toBeLessThan(zoomed);
 });
 
-it("Fit sets a finite zoom-to-fit scale (not a no-op recenter)", async () => {
-  render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={data} fetchSubtree={vi.fn(noFetch)} />);
-  // Zoom in first so Fit visibly changes the scale back to a fitted value.
+it("Fit (via the imperative handle) sets a finite zoom-to-fit scale", async () => {
+  renderTab();
   await act(async () => screen.getByTestId("tree-zoom-in").click());
   await act(async () => screen.getByTestId("tree-zoom-in").click());
   const before = scaleOf();

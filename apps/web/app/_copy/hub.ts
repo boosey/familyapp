@@ -789,18 +789,21 @@ export const hub = {
     pan: "Drag to pan",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
-    // Add-a-relative modal (opened from the tree's +, kebab, and person panel).
+    // Add-a-relative modal (opened from the tree's + and kebab).
     addRelativeHeading: "Add a relative",
     addRelativeClose: "Close",
-    // Tap detail panel — read-only actions.
-    panelStories: "Stories about them",
-    panelAddParent: "Add parent",
-    panelAddChild: "Add child",
-    panelAddSibling: "Add sibling",
-    panelManageKin: "Manage kin",
-    // Panel add-partner link (relation=partner).
-    addPartner: "Add partner",
+    // Read-only person details sheet (double-click a card, Slice A). Relation-to-focus chip + "You".
+    youLabel: "You",
+    detailsClose: "Close",
+    // Navigation links in the details sheet (shared labels with the future kebab items, Slice B).
+    // Only Mentions has a live destination in Slice A; the first two render disabled ("coming soon").
+    detailsStories: "Stories contributed",
+    detailsPhotos: "Photos contributed",
+    detailsMentions: "Mentions",
+    comingSoon: "Coming soon",
     // Per-card KebabMenu labels.
+    // The ⋮ menu's Focus action — re-roots the tree on this card (relation chips + ring recompute).
+    kebabFocus: "Focus here",
     // Neutral label for the ⋮ trigger itself (the menu holds several add actions, so it must not be
     // labeled as any single one).
     moreActions: "Add a relative",

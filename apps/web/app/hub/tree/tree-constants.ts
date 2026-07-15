@@ -67,6 +67,13 @@ export const CARET_HALF = 12;
 
 /** How far (px) a pointer may move between down and up and still count as a tap, not a drag. */
 export const DRAG_SLOP_PX = 6;
+/**
+ * Max time (ms) between two taps on the SAME card for them to register as a double-tap/double-click,
+ * which opens the read-only details sheet (tree Slice A, display half of #4). A drag between the two
+ * taps (either exceeding DRAG_SLOP_PX) cancels the double-tap. This is an event-handler timing knob
+ * (compared against event timeStamps), never a layout/render value — determinism discipline holds.
+ */
+export const DOUBLE_TAP_MS = 300;
 /** Minimum zoom scale. */
 export const ZOOM_MIN = 0.3;
 /** Maximum zoom scale. */

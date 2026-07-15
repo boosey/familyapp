@@ -13,6 +13,8 @@ import {
   AFFORDANCE_SIZE_PX,
   CARET_GAP,
   CARET_OVERLAP_FRACTION,
+  DOUBLE_TAP_MS,
+  DRAG_SLOP_PX,
   NODE_H,
   NODE_W,
 } from "./tree-constants";
@@ -59,5 +61,16 @@ describe("affordance/card overlap is derived, not hand-tuned", () => {
     expect(AFFORDANCE_SIZE_PX).toBe(22);
     expect(CARET_OVERLAP_FRACTION).toBe(0.25);
     expect(CARET_GAP).toBe(5.5);
+  });
+});
+
+describe("gesture timing knobs (tree Slice A)", () => {
+  it("DOUBLE_TAP_MS is a sane positive window, comfortably larger than a single tap", () => {
+    expect(DOUBLE_TAP_MS).toBe(300);
+    expect(DOUBLE_TAP_MS).toBeGreaterThan(0);
+  });
+
+  it("DRAG_SLOP_PX stays the tap/drag threshold", () => {
+    expect(DRAG_SLOP_PX).toBe(6);
   });
 });

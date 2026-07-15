@@ -6,10 +6,15 @@
  * instance is removed. The trigger is BORDERLESS (the carets/"+" carry the 1px border; the kebab does
  * not).
  *
- * Every item opens the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
- * `node.personId` with the chosen relation. It writes nothing itself — the modal's form does. Items are
- * GATED by the loaded adjacency counts so we never offer an impossible add (a person already has ≤2
- * parents; at most one partner in v1):
+ * The FIRST item is **Focus** (tree Slice A #2) — it re-roots the tree on this card (via
+ * TreeFocusProvider's `onFocus`), recomputing relation chips + the focus ring without moving the
+ * camera. It is OMITTED on the card that is already the focus person. (Slice B will insert Stories
+ * contributed / Photos contributed / Mentions above Focus.)
+ *
+ * The remaining items open the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
+ * `node.personId` with the chosen relation. They write nothing themselves — the modal's form does.
+ * Items are GATED by the loaded adjacency counts so we never offer an impossible add (a person already
+ * has ≤2 parents; at most one partner in v1):
  *   - Add child / Add sibling — always
  *   - Add parent — only when `parentCount < 2`
  *   - Add partner — only when `partnerCount === 0`
@@ -18,6 +23,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
 import { useTreeAdd } from "./add-relative-context";
+import { useTreeFocus } from "./focus-context";
 
 export interface KebabMenuProps {
   node: TreeNode;
@@ -25,6 +31,8 @@ export interface KebabMenuProps {
   parentCount: number;
   /** Loaded `partnered_with` edges touching this node. Gates "Add partner" (=== 0). */
   partnerCount: number;
+  /** True when this card is already the focus person — the Focus item is then omitted. */
+  isFocus?: boolean;
 }
 
 interface Item {
@@ -33,8 +41,9 @@ interface Item {
   testId: string;
 }
 
-export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
+export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMenuProps) {
   const openAdd = useTreeAdd();
+  const focusPerson = useTreeFocus();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -121,6 +130,23 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
             gap: 2,
           }}
         >
+          {/* Focus (re-root) — first item; omitted on the card that is already the focus person. */}
+          {!isFocus && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="tree-kebab-focus"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                focusPerson(node.personId);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={MENU_ITEM_STYLE}
+            >
+              {hub.tree.kebabFocus}
+            </button>
+          )}
           {items.map((it) => (
             <button
               key={it.relation}
@@ -133,19 +159,7 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
                 openAdd(node.personId, it.relation);
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                padding: "8px 10px",
-                borderRadius: "var(--radius-sm)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                color: "var(--text-body)",
-              }}
+              style={MENU_ITEM_STYLE}
             >
               {it.label}
             </button>
@@ -155,3 +169,17 @@ export function KebabMenu({ node, parentCount, partnerCount }: KebabMenuProps) {
     </div>
   );
 }
+
+const MENU_ITEM_STYLE: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  padding: "8px 10px",
+  borderRadius: "var(--radius-sm)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-ui-sm)",
+  color: "var(--text-body)",
+};
