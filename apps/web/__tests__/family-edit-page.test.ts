@@ -81,6 +81,18 @@ describe("FamilyEditPage guard", () => {
     expect(lastRedirect).toBe("/sign-in");
   });
 
+  it("returns notFound() for a malformed (non-UUID) id — before any DB query", async () => {
+    testDb = await createTestDatabase();
+    ctxPersonId = await seedSteward("malformed");
+
+    await expect(
+      FamilyEditPage({ params: Promise.resolve({ id: "not-a-uuid" }), searchParams: noError }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(notFoundCalled).toBe(true);
+    // Same 404 as a missing family — no existence oracle, and no 500 from a uuid parse error.
+    expect(lastRedirect).toBeUndefined();
+  });
+
   it("returns notFound() for a missing family", async () => {
     testDb = await createTestDatabase();
     ctxPersonId = await seedSteward("missing");
@@ -206,6 +218,15 @@ describe("updateFamilyAction", () => {
     ctxPersonId = await seedSteward("action-noid");
 
     const fd = formData({ name: "Whatever" });
+    await expect(updateFamilyAction(fd)).rejects.toThrow("NEXT_REDIRECT");
+    expect(lastRedirect).toBe("/hub");
+  });
+
+  it("redirects /hub for a malformed (non-UUID) familyId — before any DB write", async () => {
+    testDb = await createTestDatabase();
+    ctxPersonId = await seedSteward("action-badid");
+
+    const fd = formData({ familyId: "tampered", name: "Whatever" });
     await expect(updateFamilyAction(fd)).rejects.toThrow("NEXT_REDIRECT");
     expect(lastRedirect).toBe("/hub");
   });

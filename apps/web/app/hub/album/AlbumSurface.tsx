@@ -216,6 +216,7 @@ export async function AlbumSurface({
         googlePhotosOauthError={googlePhotosOauthError}
         photos={gridPhotos}
         familyChips={chipsInline}
+        familyChipsStandalone={chips}
       />
     );
   }

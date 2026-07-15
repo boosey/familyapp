@@ -45,14 +45,18 @@ export interface PreferenceDef {
  * declared default for the missing-key case.
  */
 export function coerce(def: PreferenceDef, raw: string | null): string | number {
-  if (raw === null || raw === "") return def.default;
+  if (raw === null) return def.default;
+  // Trim first: a whitespace-only value would otherwise slip past the empty check, and `Number(" ")`
+  // is `0`, which would validate as int-index 0 and silently defeat the declared default.
+  const trimmed = raw.trim();
+  if (trimmed === "") return def.default;
   const v = def.validate;
   if (v.kind === "int-index") {
-    const n = Number(raw);
+    const n = Number(trimmed);
     return Number.isInteger(n) && n >= 0 && n < v.length ? n : def.default;
   }
   // enum
-  return v.values.includes(raw) ? raw : def.default;
+  return v.values.includes(trimmed) ? trimmed : def.default;
 }
 
 /**
@@ -110,5 +114,5 @@ export const ALL_PREFERENCES: readonly PreferenceDef[] = Object.values(PREFERENC
  */
 export function buildPrePaintScript(defs: readonly PreferenceDef[]): string {
   const data = JSON.stringify(defs);
-  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else{val=v.values.indexOf(raw)>=0?raw:d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
+  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);if(raw!==null)raw=raw.trim();var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else{val=v.values.indexOf(raw)>=0?raw:d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
 }

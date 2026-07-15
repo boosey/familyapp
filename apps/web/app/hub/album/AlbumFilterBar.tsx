@@ -142,8 +142,8 @@ export function AlbumFilterBar({
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, minWidth: 0 }}>
           {/* Shared browse Family filter chips (ADR-0021) — laid out inline in the consolidated row.
-              FamilyChips carries its own bottom margin (shared with the stories/tree surfaces); the
-              wrapper is a plain flex box so the chips sit alongside When · Search and wrap with them. */}
+              FamilyChips DROPS its bottom margin via the `inline` prop so the chips bottom-align with
+              When · Search; the wrapper is a plain flex box so they sit alongside and wrap with them. */}
           {familyChips ? (
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", minWidth: 0 }}>
               {familyChips}

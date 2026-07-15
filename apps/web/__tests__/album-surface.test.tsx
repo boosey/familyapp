@@ -48,12 +48,14 @@ vi.mock("@/app/hub/album/AlbumBoard", () => ({
     showFileUpload,
     photos,
     familyChips,
+    familyChipsStandalone,
   }: {
     currentFamilyId: string;
     defaultSelected?: string[];
     showFileUpload?: boolean;
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
     familyChips?: ReactNode;
+    familyChipsStandalone?: ReactNode;
   }) => (
     <div
       data-testid="album-board"
@@ -62,6 +64,7 @@ vi.mock("@/app/hub/album/AlbumBoard", () => ({
       data-show-file-upload={String(showFileUpload ?? true)}
     >
       {familyChips}
+      {familyChipsStandalone}
       {photos.map((p) => (
         <div key={p.id} data-board-photo-id={p.id}>
           {`/api/album-photo/${p.id}`}

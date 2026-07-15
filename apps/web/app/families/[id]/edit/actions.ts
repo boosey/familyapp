@@ -18,7 +18,11 @@ export async function updateFamilyAction(formData: FormData): Promise<void> {
   const shortName = String(formData.get("shortName") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const discoverable = formData.get("discoverable") === "on";
-  if (!familyId) redirect("/hub");
+  // Guard a missing/malformed familyId (a tampered hidden field) BEFORE it reaches a uuid column and
+  // raises a DB parse error (500); an invalid id can't name a family the actor stewards → /hub.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(familyId)) {
+    redirect("/hub");
+  }
   if (!name) redirect(`/families/${familyId}/edit?error=name`);
 
   try {

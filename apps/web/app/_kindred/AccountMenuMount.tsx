@@ -56,7 +56,9 @@ export async function AccountMenuMount() {
         ]
       : stewarded.map((f) => ({
           key: `family-settings-${f.familyId}`,
-          label: hub.shell.menuFamilySettingsNamed(f.shortName ?? f.name),
+          // `||` (not `??`): a blank short name ("" — should never persist, the write path coerces
+          // "" → null, but defend anyway) falls back to the formal name, not a " settings" label.
+          label: hub.shell.menuFamilySettingsNamed(f.shortName || f.name),
           href: `/families/${f.familyId}/edit`,
         }));
 
