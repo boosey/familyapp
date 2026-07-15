@@ -272,6 +272,16 @@ export const persons = pgTable(
      * Postgres unique indexes permit many NULLs, so the many login-less Persons coexist freely.
      */
     accountId: uuid("account_id").references(() => accounts.id),
+    /**
+     * ADR-0021 (person editing): the Person who CREATED this record. Nullable — null for every
+     * pre-existing row ("single schema, no backfills") and for a `self` account that mints itself;
+     * set explicitly on every mention/invitee/bridge mint (kinship-write.ts, invitations.ts) to the
+     * acting viewer. IMMUTABLE provenance (like `origin`): never edited after insert. Backs the
+     * `creator` arm of `canEditPerson`. Self-FK to persons.
+     */
+    createdByPersonId: uuid("created_by_person_id").references(
+      (): AnyPgColumn => persons.id,
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -801,6 +801,28 @@ export const hub = {
     detailsPhotos: "Photos contributed",
     detailsMentions: "Mentions",
     comingSoon: "Coming soon",
+    // Details-sheet EDIT mode (tree Slice C, ADR-0021). Shown only when the server projects `editable`.
+    editButton: "Edit",
+    editHeading: "Edit details",
+    editName: "Name",
+    editNamePlaceholder: "Full name",
+    editBirthYear: "Birth year",
+    editSex: "Sex",
+    editSexUnknown: "Unknown",
+    editSexFemale: "Female",
+    editSexMale: "Male",
+    editLifeStatus: "Life status",
+    editLifeStatusLiving: "Living",
+    editLifeStatusDeceased: "Deceased",
+    editDeathYear: "Year of death",
+    editSave: "Save",
+    editCancel: "Cancel",
+    editSaving: "Saving…",
+    // Errors surfaced inline in the edit form.
+    editErrorGeneric: "Could not save changes. Please try again.",
+    editErrorNotAllowed: "You do not have permission to edit this person.",
+    editErrorName: "Please enter a name.",
+    editErrorBirthDate: "That birth date is not valid.",
     // Per-card KebabMenu labels.
     // The ⋮ menu's Focus action — re-roots the tree on this card (relation chips + ring recompute).
     kebabFocus: "Focus here",

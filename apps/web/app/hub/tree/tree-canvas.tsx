@@ -179,7 +179,10 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     [onScaleChange],
   );
 
-  const [details, setDetails] = useState<string | null>(null);
+  // The open details sheet, or null. `startInEdit` (#5) requests the sheet open directly in edit mode
+  // for an UNKNOWN card (unidentified / nameless); the sheet only honors it when the server says the
+  // viewer may edit — otherwise it falls back to the read-only view.
+  const [details, setDetails] = useState<{ id: string; startInEdit: boolean } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
 
   // Track which frontier centers we've already background-fetched, so top-up never re-fetches the same
@@ -486,7 +489,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     const last = lastTapRef.current;
     if (last && last.id === id && now - last.t <= DOUBLE_TAP_MS) {
       lastTapRef.current = null;
-      setDetails(id);
+      openDetails(id);
     } else {
       lastTapRef.current = { id, t: now };
     }
@@ -498,10 +501,19 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
       lastWasDragRef.current = false;
       return;
     }
-    setDetails(id);
+    openDetails(id);
   };
 
-  const detailsNode = details ? (nodeById.get(details) ?? null) : null;
+  // Open the details sheet for `id`. #5: an UNKNOWN card (no usable name — an anonymous bridge OR an
+  // identified-but-nameless person) requests edit mode up front; the sheet gates that on the
+  // server-projected `editable` flag.
+  const openDetails = (id: string) => {
+    const n = nodeById.get(id);
+    const nameless = !n || n.displayName == null || n.displayName.trim().length === 0;
+    setDetails({ id, startInEdit: nameless });
+  };
+
+  const detailsNode = details ? (nodeById.get(details.id) ?? null) : null;
 
   return (
     <TreeFocusProvider value={onFocus}>
@@ -617,11 +629,14 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
         </div>
       </div>
 
-      {detailsNode && (
+      {detailsNode && details && (
         <PersonDetails
           node={detailsNode}
           relationToViewer={viewerRelation.get(detailsNode.personId) ?? null}
+          familyId={familyId}
+          startInEdit={details.startInEdit}
           onClose={() => setDetails(null)}
+          onSaved={(personId) => void refetchAnchor(personId)}
         />
       )}
 

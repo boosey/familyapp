@@ -64,6 +64,7 @@ async function familyMembers(db: Database, familyId: string): Promise<Person[]> 
       origin: persons.origin,
       identified: persons.identified,
       accountId: persons.accountId,
+      createdByPersonId: persons.createdByPersonId,
       createdAt: persons.createdAt,
       updatedAt: persons.updatedAt,
     })

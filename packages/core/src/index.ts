@@ -127,8 +127,15 @@ export {
   updatePersonDisplayName,
   updatePersonSpokenName,
   updatePersonBirthDate,
+  updatePersonBirthYear,
   updatePersonSex,
+  updatePersonLifeStatus,
+  canEditPerson,
+  updatePersonIdentityAsEditor,
   type UpdatePersonIdentityInput,
+  type EditPersonReason,
+  type EditPersonDecision,
+  type EditPersonPatch,
 } from "./person-identity";
 export { updateBiographicalAnchor } from "./person-anchors";
 export {
