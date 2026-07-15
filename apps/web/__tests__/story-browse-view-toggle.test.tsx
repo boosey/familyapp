@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Story tab feed layout toggle — a right-justified Column / Masonry control on the same row as the
- * Feed/Timeline/Search mode pills. "Column" is today's single stacked column of wide cards; "Masonry"
- * lays the same cards out as a CSS multi-column. The toggle is Feed-only (Timeline/Search own their
- * layouts) and its choice persists to localStorage.
+ * Story tab feed layout toggle — a right-justified Masonry / Column control on the same row as the
+ * Feed/Timeline/Search mode pills. "Masonry" lays the cards out as a CSS multi-column (the new-viewer
+ * default, listed first per ADR-0021); "Column" is a single stacked column of wide cards. The toggle
+ * is Feed-only (Timeline/Search own their layouts) and its choice persists to localStorage — a stored
+ * preference still wins over the default.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -53,29 +54,41 @@ function renderBrowse() {
       viewerFamilies={[famA]}
       viewerPersonId="p1"
       viewerName="You"
-      scope="all"
+      selectedIds={[famA.id]}
+      allSelected={true}
     />,
   );
 }
 
 describe("StoryBrowse — Column/Masonry feed view toggle", () => {
-  it("defaults to Column and renders a column-layout feed", () => {
+  it("defaults to Masonry for a new viewer and renders a masonry-layout feed (ADR-0021)", () => {
     const { container } = renderBrowse();
     const group = screen.getByRole("radiogroup", { name: hub.browse.viewSelectorAria });
+    const masonry = screen.getByRole("radio", { name: hub.browse.viewMasonry });
     const column = screen.getByRole("radio", { name: hub.browse.viewColumn });
     expect(group).toBeTruthy();
-    expect(column.getAttribute("aria-checked")).toBe("true");
-    expect(container.querySelector('[data-view="column"]')).toBeTruthy();
-    expect(container.querySelector('[data-view="masonry"]')).toBeNull();
-  });
-
-  it("switching to Masonry swaps the feed container to the masonry layout", () => {
-    const { container } = renderBrowse();
-    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewMasonry }));
+    expect(masonry.getAttribute("aria-checked")).toBe("true");
+    expect(column.getAttribute("aria-checked")).toBe("false");
     expect(container.querySelector('[data-view="masonry"]')).toBeTruthy();
     expect(container.querySelector('[data-view="column"]')).toBeNull();
+  });
+
+  it("lists the layout toggle Masonry first, then Column (ADR-0021 order)", () => {
+    renderBrowse();
+    const group = screen.getByRole("radiogroup", { name: hub.browse.viewSelectorAria });
+    const labels = Array.from(group.querySelectorAll('[role="radio"]')).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(labels).toEqual([hub.browse.viewMasonry, hub.browse.viewColumn]);
+  });
+
+  it("switching to Column swaps the feed container to the column layout", () => {
+    const { container } = renderBrowse();
+    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewColumn }));
+    expect(container.querySelector('[data-view="column"]')).toBeTruthy();
+    expect(container.querySelector('[data-view="masonry"]')).toBeNull();
     // …and the choice is persisted for next time.
-    expect(window.localStorage.getItem("hub:feedView")).toBe("masonry");
+    expect(window.localStorage.getItem("hub:feedView")).toBe("column");
   });
 
   it("hides the layout toggle outside Feed mode (Timeline / Search own their layouts)", () => {
@@ -89,23 +102,24 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 
-  it("renders the Tell-a-story CTA as the FIRST item of the feed (Column and Masonry)", () => {
+  it("renders the Tell-a-story CTA as the FIRST item of the feed (Masonry and Column)", () => {
     const { container } = renderBrowse();
-    // Column: the feed container's first link is the /hub/tell CTA, ahead of the story cards.
-    const col = container.querySelector('[data-view="column"]')!;
-    expect(col.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
-
-    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewMasonry }));
+    // Masonry (default): the feed container's first link is the /hub/tell CTA, ahead of the cards.
     const mas = container.querySelector('[data-view="masonry"]')!;
     expect(mas.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
+
+    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewColumn }));
+    const col = container.querySelector('[data-view="column"]')!;
+    expect(col.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
   });
 
-  it("restores a persisted Masonry choice on mount", () => {
-    window.localStorage.setItem("hub:feedView", "masonry");
+  it("restores a persisted Column choice on mount (stored preference beats the Masonry default)", () => {
+    window.localStorage.setItem("hub:feedView", "column");
     const { container } = renderBrowse();
-    expect(container.querySelector('[data-view="masonry"]')).toBeTruthy();
+    expect(container.querySelector('[data-view="column"]')).toBeTruthy();
+    expect(container.querySelector('[data-view="masonry"]')).toBeNull();
     expect(
-      screen.getByRole("radio", { name: hub.browse.viewMasonry }).getAttribute("aria-checked"),
+      screen.getByRole("radio", { name: hub.browse.viewColumn }).getAttribute("aria-checked"),
     ).toBe("true");
   });
 });

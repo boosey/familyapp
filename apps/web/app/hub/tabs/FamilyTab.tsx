@@ -16,6 +16,7 @@ import { hub } from "@/app/_copy";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
+import { FamilyChips } from "../FamilyChips";
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 
@@ -35,6 +36,19 @@ export interface FamilyTabProps {
   kin: KinListEntry[];
   /** When the tab was opened with `?view=list` (e.g. a deep link), start on the List view. */
   initialView?: FamilyView;
+  /**
+   * The viewer's active families (chip data for the shared `?families=` filter, ADR-0021 §Tree #48).
+   * The server gates the MOUNT on `families.length >= 2`, so this only carries chips when a chip bar is
+   * warranted; a 0/1-family viewer receives `undefined`/`[]` and no chip bar renders.
+   */
+  families?: { id: string; name: string }[];
+  /**
+   * The single resolved scope id the tree is currently rendering (page's `familyTabFamilyId`). Passed
+   * as the single-select ON chip. Arriving with SEVERAL families selected already resolves to the
+   * first one server-side (`deriveSingleScope` → ids[0], collapsed into `familyTabFamilyId`), so the
+   * chip bar just reflects `[scopeId]` — no client-side "first of set" logic needed here.
+   */
+  scopeId?: string;
 }
 
 export function FamilyTab({
@@ -44,6 +58,8 @@ export function FamilyTab({
   tree,
   kin,
   initialView = "tree",
+  families = [],
+  scopeId,
 }: FamilyTabProps) {
   const [view, setView] = useState<FamilyView>(initialView);
   const router = useRouter();
@@ -77,6 +93,14 @@ export function FamilyTab({
 
   return (
     <div>
+      {/* Family filter chip bar (ADR-0021 §Tree, #48) — single-select: tapping a chip COLLAPSES the
+          shared ?families= set to just that family and the tree re-renders it. Sits ABOVE the Tree|List
+          selector so it's visible in the tree view (it also shows in list view — acceptable). The ON
+          chip reflects the server-resolved single scope; FamilyChips self-hides for <2 families, and
+          the server only passes chips when >=2 anyway. `scopeId` may be undefined during a transient
+          render — fall back to the concrete `familyId` the tree is showing. */}
+      <FamilyChips singleSelect families={families} selected={[scopeId ?? familyId]} />
+
       {/* Selector row: Tree | List on the LEFT; Fit / − / + on the RIGHT (tree view only, §5). */}
       <div
         style={{

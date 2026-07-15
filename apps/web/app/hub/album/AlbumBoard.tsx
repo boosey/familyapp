@@ -60,6 +60,11 @@ function nextTempId(): string {
 export function AlbumBoard(props: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
+  /**
+   * The Family DESIGNATOR's initial selection (ADR-0021), forwarded verbatim to AlbumUploader: the
+   * sole family pre-selected, or EMPTY when the target is ambiguous (a deliberate pick is forced).
+   */
+  defaultSelected: string[];
   /** The concrete family ids whose photos populate this grid (ADR-0021 filter selection). */
   viewedFamilyIds: string[];
   /** The single scope seed forwarded to AlbumUploader (collapsed from the browse filter). */
@@ -325,6 +330,7 @@ export function AlbumBoard(props: {
         families={props.families}
         currentFamilyId={props.currentFamilyId}
         scope={props.uploaderScope}
+        defaultSelected={props.defaultSelected}
         showFileUpload={props.showFileUpload}
         googlePhotosConfigured={props.googlePhotosConfigured}
         googlePhotosConnected={props.googlePhotosConnected}

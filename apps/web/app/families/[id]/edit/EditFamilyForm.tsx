@@ -1,27 +1,43 @@
 "use client";
 /**
- * Client form for /families/new. Client-only so the "Create family" button can stay disabled until
- * the family name is non-empty (design: primary disabled until non-empty). The create logic itself
- * stays on the server — the server action is passed in as `action` and this component never touches
- * the DB. Description + "let relatives find this family" (ADR-0001) are preserved.
+ * Client form for /families/[id]/edit (steward-only Edit-a-Family, #54). Mirrors CreateFamilyForm:
+ * client-only so the "Save changes" button stays disabled until the family name is non-empty, and so
+ * the short-name field can live-suggest from the name. The update logic stays on the server — the
+ * server action is passed in as `action` and this component never touches the DB. A hidden `familyId`
+ * field carries the id the action re-checks stewardship against.
  */
 import { useState } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { families } from "@/app/_copy";
 import { suggestShortName } from "@/lib/suggest-short-name";
 
-export function CreateFamilyForm({
+export function EditFamilyForm({
   action,
+  familyId,
+  initialName,
+  initialShortName,
+  initialDescription,
+  initialDiscoverable,
 }: {
   action: (formData: FormData) => void | Promise<void>;
+  familyId: string;
+  initialName: string;
+  initialShortName: string;
+  initialDescription: string;
+  initialDiscoverable: boolean;
 }) {
-  const [name, setName] = useState("");
-  const [shortName, setShortName] = useState("");
-  const [shortNameDirty, setShortNameDirty] = useState(false);
+  const [name, setName] = useState(initialName);
+  const [shortName, setShortName] = useState(initialShortName);
+  // Live-suggest tracks EDITS to the formal name (mirrors the create form): a family without a short
+  // name starts with an empty field and only fills as the steward changes the name, so an unrelated
+  // save never persists a short name the steward never chose. An existing short name seeds the field
+  // and starts dirty, so editing the name never clobbers it.
+  const [shortNameDirty, setShortNameDirty] = useState(initialShortName.trim().length > 0);
   const empty = name.trim().length === 0;
 
   return (
     <form action={action} style={{ display: "grid", gap: 20 }}>
+      <input type="hidden" name="familyId" value={familyId} />
       <label className="kin-form-label">
         {families.new.nameLabel}
         <input
@@ -73,6 +89,7 @@ export function CreateFamilyForm({
           name="description"
           className="kin-field"
           placeholder={families.new.descPlaceholder}
+          defaultValue={initialDescription}
           style={{ minHeight: 96 }}
         />
       </label>
@@ -90,6 +107,7 @@ export function CreateFamilyForm({
         <input
           name="discoverable"
           type="checkbox"
+          defaultChecked={initialDiscoverable}
           style={{ width: 22, height: 22, marginTop: 2, accentColor: "var(--accent)" }}
         />
         <span>
@@ -108,7 +126,7 @@ export function CreateFamilyForm({
       </label>
       <KindredButton
         type="submit"
-        label={families.new.submit}
+        label={families.edit.submit}
         fullWidth
         size="large"
         disabled={empty}

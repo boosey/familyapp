@@ -1,49 +1,40 @@
 /**
- * /families/new — steward create flow (ask #1). The creator becomes the family steward (core's
- * createFamily inserts the steward membership atomically). The "let relatives find this family"
- * toggle maps to families.discoverable, which gates whether the family surfaces in /families/find.
+ * /families/[id]/edit — steward-only Edit-a-Family surface (ADR-0021 Edit-a-Family, #54). Only the
+ * family's steward may open or submit this screen: the page guards on load (a missing family AND a
+ * non-steward both → notFound(), so a non-member can't probe which family UUIDs exist — no existence
+ * oracle, matching the /hub/person/[personId] `canViewerSeePerson` precedent), and the server action
+ * (`updateFamilyAction`) re-checks stewardship via core's updateFamily (defence in depth against a
+ * tampered hidden familyId — AuthorizationError/InvariantViolation → /hub).
  */
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
-import { createFamily } from "@chronicle/core";
+import { getFamily } from "@chronicle/core";
 import { families } from "@/app/_copy";
-import { resolvePostAuthRoute } from "@/lib/post-auth-route";
-import { CreateFamilyForm } from "./CreateFamilyForm";
+import { EditFamilyForm } from "./EditFamilyForm";
+import { updateFamilyAction } from "./actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function create(formData: FormData): Promise<void> {
-  "use server";
+export default async function FamilyEditPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { id } = await params;
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
 
-  const name = String(formData.get("name") ?? "").trim();
-  const shortName = String(formData.get("shortName") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const discoverable = formData.get("discoverable") === "on";
-  if (!name) redirect("/families/new?error=name");
+  const family = await getFamily(db, id);
+  // A missing family AND a non-steward both return notFound() — a signed-in non-member gets the same
+  // 404 whether the id is nonexistent or simply not theirs, so the page is no existence oracle (matches
+  // the /hub/person/[personId] `canViewerSeePerson` precedent).
+  if (!family || family.stewardPersonId !== ctx.personId) notFound();
 
-  await createFamily(db, {
-    name,
-    shortName: shortName || undefined,
-    description: description || undefined,
-    discoverable,
-    creatorPersonId: ctx.personId,
-  });
-  redirect(await resolvePostAuthRoute(db, ctx.personId));
-}
-
-export default async function FamiliesNewPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { auth } = await getRuntime();
-  const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") redirect("/sign-in");
   const { error } = await searchParams;
 
   return (
@@ -69,7 +60,7 @@ export default async function FamiliesNewPage({
         }}
       >
         <Link
-          href="/families/start"
+          href="/hub"
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-label)",
@@ -77,7 +68,7 @@ export default async function FamiliesNewPage({
             color: "var(--text-meta)",
           }}
         >
-          ‹ Back
+          ‹ {families.edit.back}
         </Link>
         <h1
           style={{
@@ -89,7 +80,7 @@ export default async function FamiliesNewPage({
             lineHeight: "var(--leading-tight)",
           }}
         >
-          {families.new.title}
+          {families.edit.title}
         </h1>
         <p
           style={{
@@ -100,7 +91,7 @@ export default async function FamiliesNewPage({
             lineHeight: "var(--leading-body)",
           }}
         >
-          {families.new.intro}
+          {families.edit.intro}
         </p>
 
         {error === "name" ? (
@@ -117,11 +108,18 @@ export default async function FamiliesNewPage({
               margin: "0 0 20px",
             }}
           >
-            {families.new.errorNoName}
+            {families.edit.errorNoName}
           </p>
         ) : null}
 
-        <CreateFamilyForm action={create} />
+        <EditFamilyForm
+          action={updateFamilyAction}
+          familyId={id}
+          initialName={family.name}
+          initialShortName={family.shortName ?? ""}
+          initialDescription={family.description ?? ""}
+          initialDiscoverable={family.discoverable}
+        />
       </div>
     </main>
   );

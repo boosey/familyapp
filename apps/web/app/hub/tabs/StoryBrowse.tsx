@@ -33,11 +33,17 @@ interface StoryBrowseProps {
   /** The viewer's display name — labels the Timeline "Just {viewer}" toggle and heading. */
   viewerName: string;
   /**
-   * The hub's single family scope — "all" (show the whole deduped pool) or a family id (show only
-   * stories targeted to that family). CONTROLLED by the hub header selector: this surface no longer
-   * owns a family-scope control of its own; it just filters the pool by whatever the hub selected.
+   * The selected family ids for the shared `?families=` multi-select browse filter (ADR-0021, #47).
+   * A story is shown when ANY of its families is in this set. CONTROLLED by the chip bar (a server
+   * navigation) mounted by StoriesTab; this surface no longer owns a family-scope control. The empty
+   * selection (`none`) never reaches here — StoriesTab short-circuits it to an empty state upstream.
    */
-  scope: string;
+  selectedIds: string[];
+  /**
+   * Whether the filter is "all" (every active family selected) — show the whole deduped pool without
+   * narrowing. Distinct from `selectedIds` naming every id, and drives the Feed empty-state copy.
+   */
+  allSelected: boolean;
 }
 
 type Mode = "feed" | "timeline" | "search";
@@ -53,12 +59,12 @@ function isFeedView(v: string | null): v is FeedView {
   return v === "column" || v === "masonry";
 }
 
-export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName, scope }: StoryBrowseProps) {
+export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName, selectedIds, allSelected }: StoryBrowseProps) {
   const searchParams = useSearchParams();
 
   // Initial mode comes from the URL (?mode=) so the Read view's Back can restore it; thereafter it is
-  // local state for instant, no-server-roundtrip switching. Family scope is NOT local — it is the
-  // controlled `scope` prop, driven by the hub header selector (a server navigation).
+  // local state for instant, no-server-roundtrip switching. Family filter is NOT local — it is the
+  // controlled `selectedIds`/`allSelected` props, driven by the chip bar (a server navigation).
   const initialMode: Mode = MODES.includes(searchParams.get("mode") as Mode)
     ? (searchParams.get("mode") as Mode)
     : "feed";
@@ -68,10 +74,11 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
   const [wholeFamily, setWholeFamily] = useState(true);
   const [query, setQuery] = useState("");
 
-  // Feed layout (Feed mode only). Start at the SSR-safe default ("column" — today's layout) and
-  // hydrate the persisted choice in a client-only effect, so the choice survives navigation/reload
-  // without a hydration mismatch.
-  const [feedView, setFeedView] = useState<FeedView>("column");
+  // Feed layout (Feed mode only). Start at the SSR-safe default ("masonry" — the new-viewer default
+  // per ADR-0021) and hydrate the persisted choice in a client-only effect, so a stored preference
+  // still wins and the choice survives navigation/reload without a hydration mismatch (the SSR default
+  // and the client's first render agree; the effect only *overrides* when localStorage has a value).
+  const [feedView, setFeedView] = useState<FeedView>("masonry");
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(FEED_VIEW_KEY);
@@ -89,14 +96,17 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
     }
   }
 
-  // Family-scope narrowing over the authorized pool. "all" keeps everything; a family id keeps only
-  // stories targeted to that family (a story tagged to N of the viewer's families matches each one).
+  // Multi-select family narrowing over the authorized pool (ADR-0021, #47). "all" keeps everything;
+  // otherwise a story is kept when ANY of its families is in the selected set (a story tagged to N of
+  // the viewer's families matches whenever at least one of those N is selected). The selected set is
+  // membership-tested via a Set for O(1) lookups.
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const scoped = useMemo(
     () =>
-      scope === "all"
+      allSelected
         ? items
-        : items.filter((it) => it.families.some((f) => f.id === scope)),
-    [items, scope],
+        : items.filter((it) => it.families.some((f) => selectedSet.has(f.id))),
+    [items, allSelected, selectedSet],
   );
 
   const href = (item: StoryItem) => `${item.href}?from=${mode}`;
@@ -129,7 +139,7 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
             mode (Timeline and Search own their own layouts; Column/Masonry only describe the card feed). */}
         {mode === "feed" ? (
           <div style={segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
-            {(["column", "masonry"] as const).map((v) => (
+            {(["masonry", "column"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -147,7 +157,14 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
 
       <div style={{ marginTop: 24 }}>
         {mode === "feed" ? (
-          <Feed items={scoped} scope={scope} viewerFamilies={viewerFamilies} href={href} view={feedView} />
+          <Feed
+            items={scoped}
+            allSelected={allSelected}
+            selectedIds={selectedIds}
+            viewerFamilies={viewerFamilies}
+            href={href}
+            view={feedView}
+          />
         ) : null}
         {mode === "timeline" ? (
           <Timeline
@@ -170,24 +187,29 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
 /* ── Feed ─────────────────────────────────────────────────────────────────────── */
 function Feed({
   items,
-  scope,
+  allSelected,
+  selectedIds,
   viewerFamilies,
   href,
   view,
 }: {
   items: StoryItem[];
-  scope: string;
+  allSelected: boolean;
+  selectedIds: string[];
   viewerFamilies: ViewerFamily[];
   href: (item: StoryItem) => string;
   view: FeedView;
 }) {
   // The "Tell a story" CTA leads the feed as its first item (both layouts) and the empty state below.
   if (items.length === 0) {
+    // Multi-select empty-state copy (ADR-0021, #47): all families selected → "your families"; a single
+    // family selected → "the {family} family"; a multi-family subset falls back to the generic "your
+    // families" (naming several families inline is deferred — reuses the existing copy keys).
     const scopeName =
-      scope === "all"
+      allSelected || selectedIds.length !== 1
         ? hub.browse.scopeNameAll
         : hub.browse.scopeNameFamily(
-            viewerFamilies.find((f) => f.id === scope)?.name ?? "",
+            viewerFamilies.find((f) => f.id === selectedIds[0])?.name ?? "",
           );
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

@@ -8,10 +8,14 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
-// FamilyTab calls useRouter() (Slice D #6: client-side nav for the invite deep-link). This bare mount
-// has no Next app-router provider, so stub next/navigation with a no-op router.
+// FamilyTab calls useRouter() (Slice D #6: client-side nav) and now mounts <FamilyChips>, which calls
+// usePathname()/useSearchParams() unconditionally (React hooks run before its <2-family self-hide).
+// This bare mount has no Next app-router provider, so stub the whole surface. These tests pass no
+// `families`, so FamilyChips self-hides after the hooks return — no chip bar is rendered.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/hub",
+  useSearchParams: () => new URLSearchParams(""),
 }));
 import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 

@@ -1,0 +1,1 @@
+ALTER TABLE "families" ADD COLUMN "short_name" text;

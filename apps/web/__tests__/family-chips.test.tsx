@@ -112,4 +112,113 @@ describe("FamilyChips", () => {
     render(<FamilyChips families={FAMILIES} selected="all" />);
     expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
   });
+
+  // ── Single-select mode (ADR-0021 §Tree, #48): the tree shows exactly ONE family. ──────────────
+  describe("single-select mode (tree)", () => {
+    it("marks only the single selected chip pressed", () => {
+      render(<FamilyChips singleSelect families={FAMILIES} selected={["fam-b"]} />);
+      expect(screen.getByRole("button", { name: "Esposito" }).getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+      expect(screen.getByRole("button", { name: "Marino" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      expect(screen.getByRole("button", { name: "Rossi" }).getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+    });
+
+    it("clicking a NON-selected chip COLLAPSES the set to just that family", () => {
+      // fam-b is the current scope; clicking fam-c collapses to ?families=fam-c (NOT a-c expand).
+      render(<FamilyChips singleSelect families={FAMILIES} selected={["fam-b"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Rossi" }));
+      expect(push).toHaveBeenCalledWith("/hub?families=fam-c");
+    });
+
+    it("preserves other search params (tab, anchor) on collapse", () => {
+      currentSearch = "tab=family&anchor=p9&view=tree";
+      render(<FamilyChips singleSelect families={FAMILIES} selected={["fam-a"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Rossi" }));
+      const url = push.mock.calls[0]![0] as string;
+      const parsed = new URL(url, "https://example.test");
+      expect(parsed.searchParams.get("tab")).toBe("family");
+      expect(parsed.searchParams.get("anchor")).toBe("p9");
+      expect(parsed.searchParams.get("view")).toBe("tree");
+      expect(parsed.searchParams.get("families")).toBe("fam-c");
+    });
+
+    it("clicking the already-selected chip re-collapses to itself (no expand)", () => {
+      render(<FamilyChips singleSelect families={FAMILIES} selected={["fam-b"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+      expect(push).toHaveBeenCalledWith("/hub?families=fam-b");
+    });
+
+    it("self-hides for <2 families in single-select mode too", () => {
+      const { container } = render(
+        <FamilyChips singleSelect families={[FAMILIES[0]!]} selected={["fam-a"]} />,
+      );
+      expect(container.firstChild).toBeNull();
+    });
+  });
+
+  // ── Multi-select regression: default mode still TOGGLES/expands (not collapses). ──────────────
+  it("default (multi-select) mode still EXPANDS/toggles, not collapses", () => {
+    // From a single-family selection, clicking another chip in default mode EXPANDS the set
+    // (fam-b + fam-c), it does NOT collapse to just the clicked one.
+    render(<FamilyChips families={FAMILIES} selected={["fam-b"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rossi" }));
+    expect(push).toHaveBeenCalledWith("/hub?families=fam-b%2Cfam-c");
+  });
+});
+
+describe("FamilyChips — DESIGNATOR mode (ADR-0021, single-select, no write-back)", () => {
+  it("renders nothing for a one-family viewer (nothing to designate)", () => {
+    const { container } = render(
+      <FamilyChips families={[FAMILIES[0]!]} value="fam-a" onSelect={() => {}} />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("marks exactly the designated chip pressed (single-select)", () => {
+    render(<FamilyChips families={FAMILIES} value="fam-b" onSelect={() => {}} />);
+    expect(screen.getByRole("button", { name: "Esposito" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Marino" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Rossi" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("exposes the group with the family-designator aria label", () => {
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={() => {}} />);
+    expect(screen.getByRole("group", { name: "Choose a family" })).toBeTruthy();
+  });
+
+  // THE load-bearing test: selecting a different family fires onSelect but NEVER writes the URL.
+  it("selecting a different chip calls onSelect and does NOT push to the router (no write-back)", () => {
+    const onSelect = vi.fn();
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(onSelect).toHaveBeenCalledWith("fam-b");
+    // The designator must never touch the browse filter — assert no router.push at all.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("clicking the already-designated chip is a no-op (no onSelect, no push)", () => {
+    const onSelect = vi.fn();
+    render(<FamilyChips families={FAMILIES} value="fam-a" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Esposito" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // Contrast: FILTER mode DOES push — proving the two modes differ and the no-write-back is real.
+  it("CONTRAST: filter mode DOES push on the same interaction", () => {
+    render(<FamilyChips families={FAMILIES} selected="all" />);
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(push).toHaveBeenCalled();
+  });
 });

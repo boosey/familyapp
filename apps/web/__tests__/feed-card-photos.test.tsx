@@ -46,7 +46,8 @@ function renderFeed(items: StoryItem[]) {
       viewerFamilies={[]}
       viewerPersonId="p1"
       viewerName="You"
-      scope="all"
+      selectedIds={[]}
+      allSelected={true}
     />,
   );
 }
