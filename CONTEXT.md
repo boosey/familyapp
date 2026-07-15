@@ -153,6 +153,12 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   (Heirloom / Archive / Hearth). Light / dark / system appearance is deferred until dark tokens
   exist. Device-local preferences, not identity (Profile) and not account actions (sign out stays
   in the account menu).
+- **App preference** — a **device-local** choice a Person makes for how the app looks or reads,
+  surfaced on **Settings** (today: reading size and color palette). A deliberately small, opt-in set —
+  a UI value becomes an app preference only when it is promoted to one; the vast majority of UI values
+  are fixed at build time and are not preferences. Distinct from **Profile** (identity) and from account
+  actions. Because it is device-local, a preference does not follow a Person across devices unless it is
+  later re-defined as identity-linked (a conscious change, not the current model — see ADR-0020).
 - **Spoken name** — the name the interviewer speaks aloud when addressing this Person. Defaults to
   the first word of display name; editable on Profile independently of display name.
 
