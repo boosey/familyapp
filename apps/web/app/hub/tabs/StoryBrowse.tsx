@@ -74,10 +74,11 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
   const [wholeFamily, setWholeFamily] = useState(true);
   const [query, setQuery] = useState("");
 
-  // Feed layout (Feed mode only). Start at the SSR-safe default ("column" — today's layout) and
-  // hydrate the persisted choice in a client-only effect, so the choice survives navigation/reload
-  // without a hydration mismatch.
-  const [feedView, setFeedView] = useState<FeedView>("column");
+  // Feed layout (Feed mode only). Start at the SSR-safe default ("masonry" — the new-viewer default
+  // per ADR-0021) and hydrate the persisted choice in a client-only effect, so a stored preference
+  // still wins and the choice survives navigation/reload without a hydration mismatch (the SSR default
+  // and the client's first render agree; the effect only *overrides* when localStorage has a value).
+  const [feedView, setFeedView] = useState<FeedView>("masonry");
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(FEED_VIEW_KEY);
@@ -138,7 +139,7 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
             mode (Timeline and Search own their own layouts; Column/Masonry only describe the card feed). */}
         {mode === "feed" ? (
           <div style={segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
-            {(["column", "masonry"] as const).map((v) => (
+            {(["masonry", "column"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
