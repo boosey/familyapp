@@ -49,7 +49,7 @@ export async function RequestsTab({
   families = [],
   seedFamilyId = "all",
 }: {
-  families?: { id: string; name: string }[];
+  families?: { id: string; name: string; shortName?: string | null }[];
   seedFamilyId?: string;
 } = {}) {
   const { db, auth } = await getRuntime();

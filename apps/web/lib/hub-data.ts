@@ -21,6 +21,9 @@ export interface MemberWithStories {
 export interface ViewerFamilyRef {
   id: string;
   name: string;
+  /** Steward-set brief label (ADR-0021), rendered by the chip UIs in place of `name` when set. Null
+   *  when unset — chips fall back to `name`. */
+  shortName?: string | null;
 }
 
 /** Set of family ids the viewer holds an ACTIVE membership in. */
@@ -131,7 +134,7 @@ export async function loadViewerFamilies(
 ): Promise<ViewerFamilyRef[]> {
   if (ctx.kind !== "account") return [];
   const fams = await viewerFamilyIds(db, ctx.personId);
-  return fams.map((f) => ({ id: f.id, name: f.name }));
+  return fams.map((f) => ({ id: f.id, name: f.name, shortName: f.shortName }));
 }
 
 /**

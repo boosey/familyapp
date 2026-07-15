@@ -7,8 +7,21 @@
  * Mocks the server actions module (a "use server" file that pulls getRuntime()/db at import time).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StoryComposer, type DraftInfo } from "@/app/hub/StoryComposer";
+
+/**
+ * The multi-family placement is aria-pressed chips (ADR-0021 · FamilyChoiceChips), not checkboxes.
+ * The chips live inside the picker fieldset (legend "Which families should see this"); a family's chip
+ * is ON when aria-pressed="true". Scoped to the fieldset so the chip labels don't collide with the same
+ * family name appearing as a TagInput suggestion button.
+ */
+function pickerChips(): HTMLElement[] {
+  const legend = screen.getByText(/which families should see this/i);
+  const fieldset = legend.closest("fieldset") as HTMLElement;
+  return within(fieldset).getAllByRole("button");
+}
+const chipOn = (chip: HTMLElement): boolean => chip.getAttribute("aria-pressed") === "true";
 
 const refresh = vi.fn();
 const push = vi.fn();
@@ -220,8 +233,8 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
       />,
     );
     expect(screen.queryByText(pickerText)).toBeNull();
-    // No family checkboxes either (the tier radios are type=radio, not checkbox).
-    expect(screen.queryAllByRole("checkbox").length).toBe(0);
+    // No family placement chip either (the sole family is auto-resolved, nothing to pick).
+    expect(screen.queryByRole("button", { name: "Boudreaux" })).toBeNull();
   });
 
   it("SHOWS the picker for a multi-family author on the default family tier", () => {
@@ -235,11 +248,11 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
       />,
     );
     expect(screen.getByText(pickerText)).toBeTruthy();
-    // One checkbox per family; the seeded family is pre-checked.
-    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(boxes.length).toBe(2);
-    expect(boxes[0]!.checked).toBe(true);
-    expect(boxes[1]!.checked).toBe(false);
+    // One chip per family; the seeded family is pre-selected (ON).
+    const chips = pickerChips();
+    expect(chips.length).toBe(2);
+    expect(chipOn(chips[0]!)).toBe(true);
+    expect(chipOn(chips[1]!)).toBe(false);
   });
 
   it("HIDES the picker on the public tier (no per-family target)", () => {
@@ -293,7 +306,7 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
       />,
     );
     // Pick a family, then Share proceeds to the action (which carries the chosen id).
-    fireEvent.click(screen.getAllByRole("checkbox")[0]!);
+    fireEvent.click(pickerChips()[0]!);
     fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
     await waitFor(() => expect(shareAnswerAction).toHaveBeenCalledOnce());
     const form = shareAnswerAction.mock.calls[0]![0] as FormData;
@@ -335,20 +348,25 @@ describe("StoryComposer unified TagInput in compose review (Task 7)", () => {
       />,
     );
 
-    // fam-a starts checked (seeded); fam-b starts unchecked.
-    const boxesBefore = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(boxesBefore[0]!.checked).toBe(true);
-    expect(boxesBefore[1]!.checked).toBe(false);
+    // fam-a starts ON (seeded); fam-b starts OFF.
+    const chipsBefore = pickerChips();
+    expect(chipOn(chipsBefore[0]!)).toBe(true);
+    expect(chipOn(chipsBefore[1]!)).toBe(false);
 
-    // Open the TagInput and add fam-b as a family token.
+    // Open the TagInput and add fam-b as a family token. Scope the suggestion to the TagInput
+    // dropdown group — its family name collides with the placement chip of the same name.
     const tagField = screen.getByLabelText(/tags & people/i);
     fireEvent.change(tagField, { target: { value: "Carney" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Carney" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Carney" }));
+    await waitFor(() => {
+      const dropdown = screen.getByRole("group", { name: /tags & people/i });
+      expect(within(dropdown).getByRole("button", { name: "Carney" })).toBeTruthy();
+    });
+    const dropdown = screen.getByRole("group", { name: /tags & people/i });
+    fireEvent.click(within(dropdown).getByRole("button", { name: "Carney" }));
 
-    // fam-b is now pre-selected in the SAME FamilyPicker the Share step reads from.
-    const boxesAfter = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(boxesAfter[1]!.checked).toBe(true);
+    // fam-b is now pre-selected in the SAME placement chips the Share step reads from.
+    const chipsAfter = pickerChips();
+    expect(chipOn(chipsAfter[1]!)).toBe(true);
     // A remove chip for it now exists in the TagInput too (proves it round-tripped into composeTokens).
     expect(screen.getByRole("button", { name: /remove carney/i })).toBeTruthy();
     // Nothing is shared by adding the tag — no retarget/share action fired, no confirm prompt.
@@ -358,8 +376,8 @@ describe("StoryComposer unified TagInput in compose review (Task 7)", () => {
     // Removing it toggles fam-b back off, again with no confirm (nothing was ever shared).
     const removeButtons = screen.getAllByRole("button", { name: /remove carney/i });
     fireEvent.click(removeButtons[0]!);
-    const boxesRemoved = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(boxesRemoved[1]!.checked).toBe(false);
+    const chipsRemoved = pickerChips();
+    expect(chipOn(chipsRemoved[1]!)).toBe(false);
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 });

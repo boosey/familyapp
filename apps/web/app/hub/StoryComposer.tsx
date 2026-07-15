@@ -34,7 +34,7 @@ interface StoryComposerProps {
   /** ADR-0009 Phase 3: the caption-derived prompt shown for a tell-a-photo telling (and stored). */
   promptQuestion?: string | null;
   /** The narrator's active families, offered in the share-step multi-family picker (Task 4). */
-  families?: { familyId: string; familyName: string }[];
+  families?: { familyId: string; familyName: string; familyShortName?: string | null }[];
   /** Family ids pre-checked in the picker, seeded from the hub scope (or ask ∩ active for answers). */
   seededFamilyIds?: string[];
   /** True when the narrator must explicitly pick ≥1 family (ambiguous "all"-with-several). */

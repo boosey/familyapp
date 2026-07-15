@@ -8,7 +8,7 @@ import { LikeButton } from "./LikeButton";
 import { OwnerActionMenu } from "./OwnerActionMenu";
 import { StoryReadBody } from "./StoryReadBody";
 import { StoryEditor } from "./StoryEditor";
-import { FamilyPicker } from "../../FamilyPicker";
+import { FamilyChoiceChips } from "../../FamilyChoiceChips";
 import { hub } from "@/app/_copy";
 import type { FavoriteState, LikeState } from "@chronicle/core";
 import type { TagSuggestions } from "@/app/hub/tag-input-types";
@@ -27,7 +27,7 @@ export interface StoryDetailClientProps {
   eraLabelStr: string;
   recordingMediaId: string | null;
   // Sharing targets
-  viewerFamilies: Array<{ id: string; name: string }>;
+  viewerFamilies: Array<{ id: string; name: string; shortName?: string | null }>;
   initialTargetFamilies: Array<{ id: string; name: string }>;
   // Reactions
   favoriteState: FavoriteState;
@@ -369,8 +369,8 @@ export function StoryDetailClient({
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-muted)", margin: "0 0 8px" }}>
               Select which family archives this story should appear in.
             </p>
-            <FamilyPicker
-              families={viewerFamilies.map((f) => ({ familyId: f.id, familyName: f.name }))}
+            <FamilyChoiceChips
+              families={viewerFamilies}
               selected={editSelectedFamilies}
               onToggle={toggleFamilySelection}
             />

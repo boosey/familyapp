@@ -614,7 +614,7 @@ export type PhotoTagPanel = {
   detail: AlbumPhotoDetailView;
   suggestions: {
     people: { personId: string; displayName: string }[];
-    families: { id: string; name: string }[];
+    families: { id: string; name: string; shortName?: string | null }[];
     places: { placeId: string; name: string }[];
   };
 };
@@ -655,7 +655,11 @@ export async function loadPhotoTagPanelAction(
     detail,
     suggestions: {
       people: [...peopleById].map(([personId, displayName]) => ({ personId, displayName })),
-      families: families.map((f) => ({ id: f.familyId, name: f.familyName })),
+      families: families.map((f) => ({
+        id: f.familyId,
+        name: f.familyName,
+        shortName: f.familyShortName,
+      })),
       places: [...placesById].map(([placeId, name]) => ({ placeId, name })),
     },
   };

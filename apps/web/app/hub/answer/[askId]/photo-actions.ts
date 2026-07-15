@@ -51,6 +51,8 @@ export interface EditorAlbumPhoto {
 export interface EditorPlacementFamily {
   id: string;
   name: string;
+  /** Steward-set brief label (ADR-0021); the placement chips show it in place of `name` when set. */
+  shortName?: string | null;
 }
 
 export type StoryPhotoEditorData =
@@ -169,6 +171,7 @@ export async function loadStoryPhotoEditorAction(
     const placementFamilies: EditorPlacementFamily[] = families.map((f) => ({
       id: f.familyId,
       name: f.familyName,
+      shortName: f.familyShortName,
     }));
     const googleConfigured = isGooglePhotosConfigured();
     const googleConn = googleConfigured

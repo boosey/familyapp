@@ -216,8 +216,8 @@ describe("PhotoTagPanel", () => {
 
   it("toggles a family via retargetPhotoFamiliesAction", async () => {
     render(<PhotoTagPanel photoId="photo-1" initial={clone()} />);
-    // Add a third family (currently unchecked).
-    fireEvent.click(screen.getByLabelText(/the shelleys/i));
+    // Add a third family (currently off).
+    fireEvent.click(screen.getByRole("button", { name: /the shelleys/i }));
     await vi.waitFor(() => expect(retargetPhotoFamiliesAction).toHaveBeenCalledTimes(1));
     const fd = retargetPhotoFamiliesAction.mock.calls[0]![0];
     expect(fd.getAll("familyIds").sort()).toEqual(["fam-1", "fam-2", "fam-3"]);
@@ -227,8 +227,8 @@ describe("PhotoTagPanel", () => {
     const one = clone();
     one.detail.families = [{ familyId: "fam-1", familyName: "The Lovelaces" }];
     render(<PhotoTagPanel photoId="photo-1" initial={one} />);
-    // Uncheck the only checked family.
-    fireEvent.click(screen.getByLabelText(/the lovelaces/i));
+    // Turn off the only ON family.
+    fireEvent.click(screen.getByRole("button", { name: /the lovelaces/i }));
     expect(retargetPhotoFamiliesAction).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/at least one family album/i);
   });
@@ -240,11 +240,11 @@ describe("PhotoTagPanel", () => {
     // Chips still render (tags viewable).
     expect(screen.getByText("Grandpa Joe")).toBeTruthy();
     expect(screen.getByText("Lake Como")).toBeTruthy();
-    // No typeahead inputs, no remove buttons, no family checkboxes.
+    // No typeahead inputs, no remove buttons, no interactive family placement chips.
     expect(screen.queryByPlaceholderText(/add a person/i)).toBeNull();
     expect(screen.queryByPlaceholderText(/add a place/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /remove grandpa joe/i })).toBeNull();
-    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /the lovelaces/i })).toBeNull();
     // The placement families show as static text.
     const placement = screen.getByText("Which family albums").parentElement as HTMLElement;
     expect(within(placement).getByText("The Lovelaces")).toBeTruthy();

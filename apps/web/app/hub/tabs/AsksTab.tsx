@@ -17,7 +17,7 @@ export async function AsksTab({
   seedFamilyId = "all",
   hasFamily = true,
 }: {
-  families?: { id: string; name: string }[];
+  families?: { id: string; name: string; shortName?: string | null }[];
   seedFamilyId?: string;
   hasFamily?: boolean;
 } = {}) {

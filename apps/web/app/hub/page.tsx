@@ -313,7 +313,7 @@ export default async function HubPage({
               viewerName={viewerDisplayName}
               selfDrafts={selfDrafts}
               filter={filter}
-              activeFamilies={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              activeFamilies={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
             />
           )}
           {activeTab === "album" && (
@@ -328,14 +328,14 @@ export default async function HubPage({
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (
             <AskTab
-              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
               filter={filter}
               initialSubjectPhotoIds={subjectPhotoIds}
             />
           )}
           {activeTab === "asks" && (
             <AsksTab
-              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
               seedFamilyId={scope}
               hasFamily={activeFamilies.length > 0}
             />
@@ -356,7 +356,7 @@ export default async function HubPage({
                 // first one server-side via `deriveSingleScope`.
                 families={
                   activeFamilies.length >= 2
-                    ? activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))
+                    ? activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))
                     : []
                 }
                 scopeId={familyTabFamilyId ?? undefined}
@@ -390,7 +390,7 @@ export default async function HubPage({
           {activeTab === "invite" &&
             (activeFamilies.length > 0 ? (
               <InviteTab
-                families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+                families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
                 filter={filter}
                 inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
               />
@@ -418,7 +418,7 @@ export default async function HubPage({
             ))}
           {activeTab === "requests" && (
             <RequestsTab
-              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName }))}
+              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
               seedFamilyId={scope}
             />
           )}

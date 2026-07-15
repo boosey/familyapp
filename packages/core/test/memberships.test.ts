@@ -120,8 +120,8 @@ describe("listActiveFamiliesForPerson", () => {
 
     const active = await listActiveFamiliesForPerson(db, p.id);
     expect(active).toEqual([
-      { familyId: alpha.id, familyName: "Alpha" },
-      { familyId: zulu.id, familyName: "Zulu" },
+      { familyId: alpha.id, familyName: "Alpha", familyShortName: null },
+      { familyId: zulu.id, familyName: "Zulu", familyShortName: null },
     ]);
   });
 

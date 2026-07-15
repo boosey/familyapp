@@ -111,6 +111,9 @@ export async function getStewardPersonId(
 export interface ActiveFamilyView {
   familyId: string;
   familyName: string;
+  /** The steward-set brief label (ADR-0021), shown in the chip UIs where the formal name crowds the
+   *  layout. Null when unset — callers fall back to `familyName`. */
+  familyShortName: string | null;
 }
 
 /**
@@ -123,7 +126,11 @@ export async function listActiveFamiliesForPerson(
   personId: string,
 ): Promise<ActiveFamilyView[]> {
   const rows = await db
-    .select({ familyId: memberships.familyId, familyName: families.name })
+    .select({
+      familyId: memberships.familyId,
+      familyName: families.name,
+      familyShortName: families.shortName,
+    })
     .from(memberships)
     .innerJoin(families, eq(families.id, memberships.familyId))
     .where(

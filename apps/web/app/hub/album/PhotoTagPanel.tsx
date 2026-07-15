@@ -5,7 +5,7 @@
  *   - Subjects  → who the photo is ABOUT   (Person tags, subject variant)
  *   - People    → who APPEARS in it        (Person tags, appears-in variant)
  *   - Places    → where                    (Place tags)
- *   - Family    → which album(s) it lives in (a PLACEMENT, not a tag → FamilyPicker)
+ *   - Family    → which album(s) it lives in (a PLACEMENT, not a tag → FamilyChoiceChips)
  *
  * The panel loads its own detail+suggestions (via `loadPhotoTagPanelAction`) unless `initial` is
  * supplied, and renders for ALL viewers — tags are viewable. ALL editing self-gates on
@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
-import { FamilyPicker } from "@/app/hub/FamilyPicker";
+import { FamilyChoiceChips } from "@/app/hub/FamilyChoiceChips";
 import { PhotoTagField, type PhotoTagFieldChip } from "./PhotoTagField";
 import {
   loadPhotoTagPanelAction,
@@ -362,8 +362,8 @@ export function PhotoTagPanel({
         </span>
         <p style={metaStyle}>{hub.album.familyPlacementHelp}</p>
         {s.canManage ? (
-          <FamilyPicker
-            families={sugg.families.map((f) => ({ familyId: f.id, familyName: f.name }))}
+          <FamilyChoiceChips
+            families={sugg.families}
             selected={selectedFamilies}
             onToggle={(id) => void toggleFamily(id)}
           />

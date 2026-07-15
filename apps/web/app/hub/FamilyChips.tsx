@@ -3,11 +3,28 @@
 import { type CSSProperties } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { FAMILIES_PARAM, serializeSelection } from "@/lib/family-filter";
+import { familyChipStyle } from "./family-chip-style";
 import { hub } from "@/app/_copy";
+
+/**
+ * A family as a chip renders. `shortName` (ADR-0021) is the steward-set brief label shown in place of
+ * the formal `name` when set — chips live where the full name crowds the layout. Optional/nullable so
+ * callers without a short name simply fall back to `name`.
+ */
+interface ChipFamily {
+  id: string;
+  name: string;
+  shortName?: string | null;
+}
+
+/** The label a chip shows: the steward's short name when present, else the formal name. */
+function chipLabel(f: ChipFamily): string {
+  return f.shortName || f.name;
+}
 
 interface FamilyChipsFilterProps {
   /** The viewer's active families; array order = chip order. */
-  families: { id: string; name: string }[];
+  families: ChipFamily[];
   /** "all" = every chip ON; [] = none ON; a subset = those ids ON. */
   selected: string[] | "all";
   /**
@@ -30,7 +47,7 @@ interface FamilyChipsFilterProps {
 
 interface FamilyChipsDesignatorProps {
   /** The viewer's active families; array order = chip order. */
-  families: { id: string; name: string }[];
+  families: ChipFamily[];
   /** DESIGNATOR mode: the single currently-designated family id (controlled by the caller). */
   value: string;
   /** DESIGNATOR mode: called with the newly-picked family id. Never touches the router/URL. */
@@ -141,26 +158,6 @@ export function FamilyChips(props: FamilyChipsProps) {
     margin: inline ? 0 : "0 0 20px",
   };
 
-  const chipStyle = (on: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    height: 36,
-    padding: "0 14px",
-    borderRadius: "var(--radius-pill)",
-    border: on
-      ? "var(--border-width) solid var(--accent)"
-      : "var(--border-width) solid var(--border-strong)",
-    background: on ? "var(--accent-soft)" : "var(--surface-sunken)",
-    color: on ? "var(--accent)" : "var(--text-muted)",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: on ? 600 : 500,
-    cursor: "pointer",
-    outline: "none",
-    transition: "background var(--dur-fade) var(--ease-quiet)",
-  });
-
   return (
     <div
       role="group"
@@ -174,10 +171,10 @@ export function FamilyChips(props: FamilyChipsProps) {
             key={f.id}
             type="button"
             aria-pressed={on}
-            style={chipStyle(on)}
+            style={familyChipStyle(on)}
             onClick={() => (designator ? select(f.id) : onFilterChip(f.id))}
           >
-            {f.name}
+            {chipLabel(f)}
           </button>
         );
       })}
