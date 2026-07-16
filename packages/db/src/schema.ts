@@ -788,8 +788,13 @@ export const asks = pgTable(
      * can reference the story the question sprang from. Distinct from `storyId` (the ANSWER story,
      * set on approval): `sourceStoryId` is the PROMPTING story, set at ask-creation and never changed.
      * Nullable — most asks (cold questions, photo-subject asks) have no source story.
+     *
+     * ON DELETE SET NULL: a follow-up is a legitimate standalone ask that just loses its origin when
+     * the source story is erased/discarded. The FK is the primary guard so ANY story-delete path
+     * (eraseStory, discardDraftStory, or a future one) can never FK-fail on this link; the repos ALSO
+     * null it explicitly for symmetry with `story_id` and intent, but they no longer NEED to.
      */
-    sourceStoryId: uuid("source_story_id").references(() => stories.id),
+    sourceStoryId: uuid("source_story_id").references(() => stories.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
