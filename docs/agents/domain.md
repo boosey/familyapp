@@ -5,10 +5,10 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root — the domain glossary and language for Family Chronicle.
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in (0001–0014 today).
+- **`docs/adr/`** — read ADRs that touch the area you're about to work in (0001–0021 today).
 - **`docs/DECISIONS.md`** — narrative rationale for non-obvious stack/architecture choices; complements the ADRs.
 
-This is a **single-context** repo: one root `CONTEXT.md`, no `CONTEXT-MAP.md`. If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates and extends them lazily when terms or decisions actually get resolved.
+This is a **single-context** repo: one root `CONTEXT.md`, no `CONTEXT-MAP.md`. If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates and extends them lazily when terms or decisions actually get resolved.
 
 ## File structure
 
