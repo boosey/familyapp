@@ -299,7 +299,8 @@ export async function askFollowUpAction(formData: FormData): Promise<ActionResul
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
-  if (viewerPersonId(ctx) === null) {
+  const viewerId = viewerPersonId(ctx);
+  if (viewerId === null) {
     return { error: hub.actions.notSignedIn };
   }
 
