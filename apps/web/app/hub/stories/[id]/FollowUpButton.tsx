@@ -57,13 +57,19 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
     fd.append("questionText", question);
 
     startTransition(async () => {
-      const res = await askFollowUpAction(fd);
-      if (res?.error) {
-        setError(res.error);
-      } else {
-        setSent(true);
-        setOpen(false);
-        setQuestion("");
+      try {
+        const res = await askFollowUpAction(fd);
+        if (res?.error) {
+          setError(res.error);
+        } else {
+          setSent(true);
+          setOpen(false);
+          setQuestion("");
+        }
+      } catch {
+        // A rejected server action (network failure, unhandled server error) would otherwise leave
+        // the transition resolved but the form stuck with no feedback. Surface a retry-able error.
+        setError(hub.followUp.failed);
       }
     });
   };
@@ -149,10 +155,13 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={hub.followUp.placeholder}
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={error ? "follow-up-error" : undefined}
         />
       </label>
       {error && (
         <p
+          id="follow-up-error"
           data-testid="follow-up-error"
           style={{
             fontFamily: "var(--font-ui)",
