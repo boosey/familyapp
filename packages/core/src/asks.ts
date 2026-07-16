@@ -181,7 +181,7 @@ export async function createAsk(
   // through the single front door (`getStoryForViewer` applies the full state + consent-ledger gate),
   // so a follow-up can never be posed on — and can never leak the existence of — a story the asker
   // could not already read. A missing/unreadable story rejects the whole ask before any row is written.
-  if (input.sourceStoryId !== undefined) {
+  if (input.sourceStoryId) {
     const source = await getStoryForViewer(db, ctx, input.sourceStoryId);
     if (source === null) {
       throw new AuthorizationError(
