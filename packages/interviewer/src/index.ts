@@ -90,3 +90,27 @@ export {
   createLlmFollowUpEvaluator,
   parseCandidates,
 } from "./follow-up-evaluator";
+
+// Gap-driven follow-up (issue #80).
+export {
+  extractGaps,
+  parseGaps,
+  gapsToFollowUpCandidates,
+  type Gap,
+  type GapKind,
+  type GapDetectionInput,
+  type GapDetectionResult,
+} from "./gap-detection";
+export { createGapFollowUpEvaluator } from "./gap-evaluator";
+export {
+  resolveGapPrompt,
+  CURRENT_GAP_DETECTION_VERSION,
+  type PromptPurpose,
+  type PromptVendor,
+  type ResolvedPrompt,
+} from "./prompts/gap-prompts";
+export {
+  GAP_DETECTION_MAX_GAPS,
+  GAP_DETECTION_MIN_ANSWER_WORDS,
+  GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE,
+} from "./constants";
