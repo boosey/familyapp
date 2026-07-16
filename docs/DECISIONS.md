@@ -26,6 +26,22 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
 - **Clerk identities are provisioned just-in-time, not by webhook.** A new Clerk user becomes an
   Account + Person at the `/auth/callback` landing (name pulled from Clerk), idempotently. Full
   rationale + rejected webhook in `docs/adr/0005-clerk-identities-are-provisioned-just-in-time.md`.
+- **Clerk `user.updated` / `user.deleted` DO sync back via a webhook — creation stays JIT (issue #10).**
+  JIT covers creation, but a rename or account deletion in Clerk otherwise leaves a stale row. The
+  `POST /api/webhooks/clerk` route verifies the svix signature (`verifyWebhook` against
+  `CLERK_WEBHOOK_SIGNING_SECRET` — the one vendor touch, isolated in the web adapter) and hands a
+  narrow, snake-case event slice to the pure PGlite-tested `applyClerkWebhookEvent` dispatcher.
+  `user.updated` → `reconcileAccountProfile` (updates the Account mirror + the controlled Person's
+  `displayName`/email; the provider is source-of-truth for a self-account's name — but `spokenName`
+  is user-owned and never clobbered, and a blank incoming field is a leave-untouched no-op).
+  **`user.deleted` policy = SOFT-delete**: flip `accounts.active = false` and PRESERVE the Person and
+  all its expressive content. A login deletion must never erase family stories other members depend on;
+  owner-initiated content erasure is the SEPARATE, explicit ADR-0008 path. The severance is enforced on
+  the READ side: `auth-clerk.ts`'s login resolution (`resolvePersonRow`, and the magic-link
+  `resolveAuthProviderUserId`) filters `accounts.active = true`, so a deactivated account whose Clerk
+  session outlives the deletion event resolves to `anonymous` — the flag is a real login gate, not inert. All handlers are declaratively
+  idempotent (set-to-value / deactivate), so a Clerk retry or replayed event is a harmless no-op — no
+  event-id ledger needed. Unhandled event types return 2xx (Clerk stops retrying).
 - **The domain magic-link is implemented under Clerk via sign-in tokens (`ticket`), not Clerk's
   email-magic-link strategy.** See the "Clerk implementation" section of ADR-0003.
 - **`establishAccountSession` returns a discriminated result, not `void` — the seam stays on
