@@ -111,6 +111,16 @@ function chooseFiles(names: string[]) {
   fireEvent.change(fileInput, { target: { files: names.map(makeFile) } });
 }
 
+/** #93 — open the consolidated "Add Photos ▾" dropdown so its menuitems become clickable. */
+function openAddMenu() {
+  fireEvent.click(screen.getByRole("button", { name: hub.album.addPhotosMenu }));
+}
+/** Open the menu then click the "Import from Google Photos" menuitem (connected sources only). */
+function clickGoogleImport() {
+  openAddMenu();
+  fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+}
+
 /** A promise you can resolve/reject from the test to control an action's timing. */
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -343,7 +353,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(listGooglePhotosImportAction).toHaveBeenCalledTimes(1),
@@ -367,7 +377,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     listGooglePhotosImportAction.mockResolvedValueOnce({ error: "list failed" });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/list failed/i),
@@ -387,7 +397,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toMatch(/no photos|videos|nothing/i),
@@ -547,13 +557,17 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         photos={[]}
       />,
     );
-    // Nothing pre-selected → the add button is disabled (no default fan-out).
-    const addButton = screen.getByRole("button", { name: hub.album.addButton });
-    expect((addButton as HTMLButtonElement).disabled).toBe(true);
+    // Nothing pre-selected → the device-add menuitem (#93, inside the Add Photos menu) is disabled
+    // (no default fan-out). Re-query it after each render since the menu re-renders on selection.
+    const deviceItem = () =>
+      screen.getByRole("menuitem", { name: hub.album.addFromDevice }) as HTMLButtonElement;
+    openAddMenu();
+    expect(deviceItem().disabled).toBe(true);
 
-    // A deliberate pick of ONE family enables it, and an upload targets ONLY that family.
+    // A deliberate pick of ONE family enables it, and an upload targets ONLY that family. Clicking a
+    // chip (a click, not a pointerdown) leaves the menu open.
     fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
-    expect((addButton as HTMLButtonElement).disabled).toBe(false);
+    expect(deviceItem().disabled).toBe(false);
     chooseFiles(["deliberate.png"]);
 
     await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));

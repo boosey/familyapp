@@ -76,8 +76,9 @@ const chip = (name: string): HTMLElement => screen.getByRole("button", { name })
 const isOn = (name: string): boolean => chip(name).getAttribute("aria-pressed") === "true";
 
 /** #93 — open the single "Add Photos ▾" dropdown so its menuitems become queryable. */
-const openAddMenu = (): void =>
+const openAddMenu = (): void => {
   fireEvent.click(screen.getByRole("button", { name: hub.album.addPhotosMenu }));
+};
 /** The device-add menuitem inside the open Add Photos menu. */
 const deviceItem = (): HTMLButtonElement =>
   screen.getByRole("menuitem", { name: hub.album.addFromDevice }) as HTMLButtonElement;

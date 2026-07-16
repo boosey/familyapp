@@ -362,7 +362,6 @@ export const hub = {
     // "Add a photo" reads singular but the input accepts many at once (#16 multi-select) — the OS
     // picker copy already signals multi-select, so the label stays warm and simple.
     addLabel: "Add a photo",
-    addButton: "Add to album",
     // Multi-upload batch summary: some files landed, some didn't. Shown as a gentle inline note (not
     // an error) after a partial-success batch, so the contributor knows exactly what got through.
     photosPartial: (added: number, failed: number) =>
@@ -471,12 +470,8 @@ export const hub = {
     // point (#93): the device picker, Google connect/import, and — below a divider — Manage connections.
     addPhotosMenu: "Add Photos",
     // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
-    // is available. Distinct from `addButton`, which was the old standalone control's label.
+    // is available (#93 — replaced the old standalone "Add to album" button).
     addFromDevice: "Add from your device",
-    // Trigger for the right-aligned "Manage connections ▾" dropdown that holds the Disconnect
-    // action(s) once a source is connected. Structured for future sources (Google is the only one now).
-    // (#93 folds this into the Add Photos menu below a divider — the label stays for the section head.)
-    manageConnections: "Manage connections",
     // Brief pending state on the Disconnect menu item while the connection is being torn down.
     googlePhotosDisconnecting: "Disconnecting…",
     // Generic menu header shown above the Disconnect item when the account email is unknown.
