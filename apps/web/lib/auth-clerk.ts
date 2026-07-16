@@ -20,7 +20,7 @@
  * Clerk's `auth()` is injectable so the unit tests need no Clerk install and never hit network.
  */
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { accounts, persons } from "@chronicle/db/schema";
 import type { AuthContext } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
@@ -42,7 +42,10 @@ export interface ClerkAuthProviderOptions {
 
 /**
  * Resolve a Person to their Account's Clerk userId (`accounts.authProviderUserId`), or null. Inner
- * join: a value comes back ONLY if the Person has an Account (mirrors the join in auth-mock.ts).
+ * join: a value comes back ONLY if the Person has an ACTIVE Account (mirrors the join in auth-mock.ts).
+ * The `active` filter mirrors `resolvePersonRow`: a soft-deleted account (Clerk `user.deleted`, issue
+ * #10) must not be able to establish a magic-link session either — it resolves to null, and the caller
+ * `establishAccountSession` then declines to mint a sign-in ticket.
  * Exported for unit testing.
  */
 export async function resolveAuthProviderUserId(
@@ -53,7 +56,7 @@ export async function resolveAuthProviderUserId(
     .select({ authProviderUserId: accounts.authProviderUserId })
     .from(persons)
     .innerJoin(accounts, eq(accounts.id, persons.accountId))
-    .where(eq(persons.id, personId))
+    .where(and(eq(persons.id, personId), eq(accounts.active, true)))
     .limit(1);
   return row?.authProviderUserId ?? null;
 }
@@ -80,11 +83,17 @@ async function resolvePersonRow(
     try {
       // Single inner join: a row only comes back if BOTH the Account exists for this Clerk userId
       // AND a Person points at that Account. An orphan resolves to null → anonymous upstream.
+      //
+      // `accounts.active` is the load-bearing filter for the Clerk `user.deleted` webhook (issue #10):
+      // that webhook SOFT-deletes by flipping `active = false` (it never erases the Person/content).
+      // A Clerk session can outlive the deletion event (deletion and JWT invalidation are not
+      // synchronous), so THIS is the chokepoint that actually severs the login — a deactivated account
+      // resolves to null → anonymous, exactly like a missing account.
       const [row] = await db
         .select({ personId: persons.id })
         .from(accounts)
         .innerJoin(persons, eq(persons.accountId, accounts.id))
-        .where(eq(accounts.authProviderUserId, userId))
+        .where(and(eq(accounts.authProviderUserId, userId), eq(accounts.active, true)))
         .limit(1);
       return row ?? null;
     } catch (err) {

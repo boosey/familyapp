@@ -47,6 +47,12 @@ export default async function StoryDetailPage({
 
   const isOwner = ctx.kind === "account" && ctx.personId === story.ownerPersonId;
 
+  // "Ask a follow-up" (#77) is offered to a signed-in NON-owner viewer. Since a non-owner only reaches
+  // this page when the story is shared+approved (getStoryForViewer's front-door gate), the affordance
+  // is implicitly scoped to published stories. `createAsk` re-checks co-membership + source-story SEE,
+  // so this flag is a display gate only, not the authorization boundary.
+  const canAskFollowUp = ctx.kind === "account" && !isOwner;
+
   // Mark seen
   if (ctx.kind === "account") {
     await markStorySeen(db, story.id, ctx.personId);
@@ -101,6 +107,8 @@ export default async function StoryDetailPage({
       <StoryDetailClient
         storyId={story.id}
         isOwner={isOwner}
+        narratorPersonId={story.ownerPersonId}
+        canAskFollowUp={canAskFollowUp}
         initialTitle={story.title ?? ""}
         initialTags={story.tags ?? []}
         initialProse={story.prose ?? ""}

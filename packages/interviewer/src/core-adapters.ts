@@ -63,6 +63,7 @@ export function createCoreAskSource(db: Database): AskSource {
         askId: r.ask.id,
         askerName: r.askerSpokenName,
         questionText: r.ask.questionText,
+        sourceStoryId: r.ask.sourceStoryId,
       }));
     },
     async markRouted(askId: string): Promise<void> {

@@ -7,10 +7,16 @@
  * or "schema field renamed", not "my mock looks plausible").
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
 import { accounts, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
-import { createClerkAuthProvider, type ClerkAuthFn } from "../lib/auth-clerk";
+import { deactivateAccountByAuthProviderUserId } from "@chronicle/core";
+import {
+  createClerkAuthProvider,
+  resolveAuthProviderUserId,
+  type ClerkAuthFn,
+} from "../lib/auth-clerk";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { config as middlewareConfig } from "../middleware";
 
@@ -112,6 +118,39 @@ describe("createClerkAuthProvider", () => {
     await expect(provider.getCurrentAuthContext()).resolves.toEqual({
       kind: "anonymous",
     });
+  });
+
+  it("locks out a SOFT-DELETED account (Clerk user.deleted, issue #10): active=false → anonymous", async () => {
+    // The `user.deleted` webhook flips accounts.active=false but preserves the Person. A Clerk session
+    // can outlive that event, so getCurrentAuthContext MUST treat the deactivated account as logged out
+    // — otherwise the soft-delete is inert and a deleted user keeps full account access.
+    const db = await createTestDatabase();
+    const { personId } = await seedPersonWithAccount(db, "clerk_deleted");
+    const auth: ClerkAuthFn = async () => ({ userId: "clerk_deleted" });
+    const provider = createClerkAuthProvider(db, { auth });
+
+    // While active, the account resolves normally.
+    await expect(provider.getCurrentAuthContext()).resolves.toEqual({
+      kind: "account",
+      personId,
+    });
+
+    // After the webhook soft-delete, the same live Clerk session resolves to anonymous.
+    await deactivateAccountByAuthProviderUserId(db, "clerk_deleted");
+    await expect(provider.getCurrentAuthContext()).resolves.toEqual({
+      kind: "anonymous",
+    });
+
+    // Defense in depth: the magic-link path also refuses a deactivated account (no ticket minted).
+    expect(await resolveAuthProviderUserId(db, personId)).toBeNull();
+
+    // The Person row itself is preserved — only the login was severed.
+    const [person] = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.id, personId))
+      .limit(1);
+    expect(person?.id).toBe(personId);
   });
 
   it("degrades to anonymous on Clerk error (never throws)", async () => {

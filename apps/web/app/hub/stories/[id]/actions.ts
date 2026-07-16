@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRuntime } from "@/lib/runtime";
 import {
+  createAsk,
   eraseStory,
   editStoryDetails,
   retargetStoryFamilies,
@@ -18,6 +19,7 @@ import {
 } from "@chronicle/core";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
 import { hub } from "@/app/_copy";
+import { FOLLOW_UP_QUESTION_MAX_CHARS } from "@/lib/constants";
 
 export type ActionResult = { error: string } | undefined;
 
@@ -281,6 +283,67 @@ export async function untagStorySubjectAction(formData: FormData): Promise<Actio
   }
 
   revalidatePath(`/hub/stories/${storyId}`);
+}
+
+/**
+ * Ask a follow-up question on an already-published story (#77). Routes into the EXISTING ask queue
+ * via `createAsk`, stamping `sourceStoryId` so the ask is linked to the story it sprang from and
+ * surfaces in the narrator's next session through existing routing. `createAsk` re-runs the full
+ * front-door gate: the asker must SEE the source story AND share an active family/invitation with the
+ * narrator — so this action re-implements no authorization, it only resolves identity and delegates.
+ * `targetPersonId` (the narrator) is untrusted client input; `createAsk`'s co-membership check is the
+ * authority, so a forged target cannot route a question to a stranger.
+ */
+export async function askFollowUpAction(formData: FormData): Promise<ActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+
+  const viewerId = viewerPersonId(ctx);
+  if (viewerId === null) {
+    return { error: hub.actions.notSignedIn };
+  }
+
+  const sourceStoryId = formData.get("storyId");
+  const targetPersonId = formData.get("targetPersonId");
+  const questionText = formData.get("questionText");
+  if (
+    typeof sourceStoryId !== "string" ||
+    !sourceStoryId ||
+    typeof targetPersonId !== "string" ||
+    !targetPersonId ||
+    typeof questionText !== "string" ||
+    !questionText.trim()
+  ) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  // Length cap (#77 S2): a follow-up is a single human question, not an essay. Enforced on the trimmed
+  // text (the same value createAsk stores) so a spammy paste is rejected with the mapped copy.
+  if (questionText.trim().length > FOLLOW_UP_QUESTION_MAX_CHARS) {
+    return { error: hub.followUp.failed };
+  }
+
+  plog("story", "askFollowUp: received", { person: viewerPersonId(ctx), story: sourceStoryId });
+
+  try {
+    await createAsk(db, ctx, {
+      targetPersonId,
+      questionText,
+      sourceStoryId,
+    });
+    plog("story", "askFollowUp: success", { story: sourceStoryId });
+  } catch (err) {
+    // The real error (e.g. AuthorizationError wording) is logged server-side; the client gets a
+    // single generic message so internal authorization phrasing is never surfaced verbatim.
+    plogError("story", "askFollowUp: error", {
+      story: sourceStoryId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: hub.followUp.failed };
+  }
+
+  revalidatePath(`/hub/stories/${sourceStoryId}`);
 }
 
 export async function setStoryLikeAction(

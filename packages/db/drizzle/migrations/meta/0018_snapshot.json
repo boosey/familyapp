@@ -1,6 +1,6 @@
 {
-  "id": "2027cdae-cb97-4f61-bddb-41d65d152df8",
-  "prevId": "a4d3c595-71a7-499f-a809-8c07e3d5c1e4",
+  "id": "0bb16d1a-38de-4089-a722-140acb3262e1",
+  "prevId": "dcfb1af7-4aa5-45eb-bea2-9344eec9f000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -463,7 +463,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -3595,6 +3595,25 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "processing_error": {
+          "name": "processing_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processing_failed_at": {
+          "name": "processing_failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processing_attempt": {
+          "name": "processing_attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "approved_at": {
           "name": "approved_at",
