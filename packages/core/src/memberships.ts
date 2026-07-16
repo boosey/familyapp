@@ -76,7 +76,7 @@ export async function addMembership(
  * matches the same active row and is a no-op success — never an error.
  */
 export async function designateNarrator(
-  db: Database,
+  db: Pick<Database, "update">,
   input: { personId: string; familyId: string },
 ): Promise<void> {
   const updated = await db

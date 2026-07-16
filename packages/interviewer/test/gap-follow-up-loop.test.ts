@@ -214,6 +214,57 @@ describe("gap-driven follow-up in the controlled loop", () => {
     expect((await session.nextTurn()).intent.kind).toBe("wind_down");
   });
 
+  it("drops a stale queued gap on a LATER thin answer instead of resurfacing it (state hygiene)", async () => {
+    // Regression (issue #80): a gap queued on turn N is only ever consumed by the very next prompt.
+    // If a higher-priority intent (intake/ask) preempts the follow_up slot, `recordTurnCompleted`
+    // does NOT clear the queue — and a subsequent thin answer skips detection, so without clearing at
+    // the top of `recordResponse` the stale, out-of-context gap would suddenly surface a turn later.
+    const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
+    const session = await createInterviewSession(makeDeps(evaluator), { narratorPersonId: NARRATOR });
+
+    await session.nextTurn();
+    await session.recordResponse(LONG_ANSWER); // gap queued, but NOT served this turn
+    expect(session.getState().pendingGapFollowUp).not.toBeNull();
+
+    // The next answer is short — below the detection floor, so detection is skipped. The stale gap
+    // must be dropped at the start of this turn, not left to fire on the following prompt.
+    await session.recordResponse("Yes.");
+    expect(evaluator.calls).toHaveLength(1); // no new detection ran on the thin answer
+    expect(session.getState().pendingGapFollowUp).toBeNull();
+  });
+
+  it("skips gap detection on a structured intake answer (no LLM call spent, nothing queued)", async () => {
+    // Intake answers (hometown, occupation, …) are structured, not free narrative — running the gap
+    // detector on them wastes an LLM call and any gap it found would be preempted by the remaining
+    // intake queue anyway. Detection must be skipped entirely while an intake key is pending.
+    const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
+    const deps = makeDeps(evaluator);
+    // Replace the fully-populated anchors with an empty profile so turn 0 is an intake question.
+    const anchorSource = new InMemoryAnchorSource();
+    anchorSource.set({
+      personId: NARRATOR,
+      spokenName: "Eleanor",
+      birthYear: 1942,
+      profile: {
+        hometown: null,
+        siblingContext: null,
+        currentLocation: null,
+        occupationSummary: null,
+        hasChildren: null,
+        hasGrandchildren: null,
+      },
+    });
+    deps.anchorSource = anchorSource;
+    const session = await createInterviewSession(deps, { narratorPersonId: NARRATOR });
+
+    const t0 = await session.nextTurn();
+    expect(t0.intent.kind).toBe("intake");
+    // A long, gap-rich intake answer — but because it answers an intake question, no detection runs.
+    await session.recordResponse(LONG_ANSWER);
+    expect(evaluator.calls).toHaveLength(0);
+    expect(session.getState().pendingGapFollowUp).toBeNull();
+  });
+
   it("with NO evaluator configured, the loop keeps its original reflection-only behavior", async () => {
     const session = await createInterviewSession(makeDeps(), { narratorPersonId: NARRATOR });
     await session.nextTurn();

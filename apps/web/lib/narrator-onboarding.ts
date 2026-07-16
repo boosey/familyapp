@@ -48,7 +48,7 @@ export async function designateAndCreateNarratorLink(
     }
     // (2) Designate — promotes the narrator's active membership to role=narrator (idempotent; throws
     //     AuthorizationError if the narrator is not an active member, rolling back the transaction).
-    await designateNarrator(tx as unknown as Database, {
+    await designateNarrator(tx, {
       personId: input.narratorPersonId,
       familyId: input.familyId,
     });
