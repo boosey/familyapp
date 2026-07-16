@@ -65,6 +65,7 @@ import { createHash } from "node:crypto";
 import { Inngest, type InngestFunction } from "inngest";
 import type {
   EnqueuedJob,
+  JobFailureHandler,
   JobHandler,
   JobName,
   JobPayload,
@@ -136,9 +137,32 @@ export function createInngestJobQueue(
       return id;
     },
 
-    register(name: JobName, handler: JobHandler): void {
+    register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void {
+      // `onFailure` (issue #11) fires AFTER Inngest exhausts the function's retries — the durable-
+      // queue analogue of a terminal failure. We translate the vendor's `{ error, event }` back into
+      // our vendor-neutral (payload, JobFailureInfo) so the orchestrator's handler stays SDK-free.
+      const config = {
+        id: functionId(name),
+        ...(onFailure
+          ? {
+              onFailure: async ({ event, error }: InngestFailureArgs) => {
+                // Belt-and-suspenders: a terminal-failure recorder should be side-effect-only, but we
+                // must never let it throw INSIDE Inngest's onFailure hook (that would destabilize the
+                // vendor callback). Swallow — the handler owns its own logging.
+                try {
+                  await onFailure(originalPayload(event), {
+                    message: String(error?.message ?? "unknown error"),
+                    ...(error?.name ? { name: String(error.name) } : {}),
+                  });
+                } catch {
+                  // Intentionally ignored — see above.
+                }
+              },
+            }
+          : {}),
+      };
       const fn = client.createFunction(
-        { id: functionId(name) },
+        config,
         { event: eventName(name) },
         async ({ event }: { event: { data: unknown } }) => {
           await handler(event.data as JobPayload);
@@ -164,6 +188,36 @@ export function createInngestJobQueue(
       return [];
     },
   };
+}
+
+/**
+ * Shape we read off Inngest's `onFailure` context. Deliberately minimal + structural so we don't
+ * couple to the SDK's full failure-context type: we only need the original event's `data` and the
+ * error summary. Kept loose (`unknown` inner) because we defensively normalize in `originalPayload`.
+ */
+interface InngestFailureArgs {
+  event: { data?: unknown };
+  error?: { message?: unknown; name?: unknown };
+}
+
+/**
+ * Recover the ORIGINAL `JobPayload` from an `onFailure` event. In the current JS SDK the `event`
+ * passed to `onFailure` IS the original triggering event, so `event.data` is the payload. Older
+ * shapes nested it under the `inngest/function.failed` wrapper at `event.data.event.data`; we accept
+ * either so a minor SDK bump can't silently strand the storyId (which would drop the failure signal).
+ */
+function originalPayload(event: { data?: unknown }): JobPayload {
+  const data = event.data;
+  if (data && typeof data === "object" && "storyId" in data) {
+    return data as JobPayload;
+  }
+  const nested = (data as { event?: { data?: unknown } } | undefined)?.event?.data;
+  if (nested && typeof nested === "object" && "storyId" in nested) {
+    return nested as JobPayload;
+  }
+  // Last resort: hand back whatever we have cast to the contract; the core marker is a no-op on a
+  // missing/blank storyId rather than a crash, so we degrade to "no signal" not "throw in onFailure".
+  return (data ?? {}) as JobPayload;
 }
 
 /** `transcribe` -> `chronicle/transcribe`. */

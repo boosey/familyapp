@@ -16,7 +16,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { InMemoryMediaStorage } from "@chronicle/storage";
-import { persistRecordingAndCreateDraft } from "@chronicle/core";
+import { markStoryProcessingFailed, persistRecordingAndCreateDraft } from "@chronicle/core";
 import { persons } from "@chronicle/db/schema";
 import { seedInto } from "../lib/dev-seed";
 import { mapStoryStateToStatus } from "../lib/answer-status";
@@ -48,6 +48,7 @@ let eleanor: string;
 let token: string;
 let pendingStoryId: string; // seeded pending_approval story owned by Eleanor
 let eleanorDraftId: string;
+let eleanorFailedDraftId: string; // a draft whose pipeline terminally failed (issue #11)
 let strangerDraftId: string;
 
 beforeAll(async () => {
@@ -59,6 +60,9 @@ beforeAll(async () => {
 
   eleanorDraftId = await makeDraft(runtimeDb, eleanor);
 
+  eleanorFailedDraftId = await makeDraft(runtimeDb, eleanor);
+  await markStoryProcessingFailed(runtimeDb, eleanorFailedDraftId, "render_story: retries exhausted");
+
   // A stranger with no family co-membership with Eleanor — owns a private draft Eleanor cannot read.
   const [stranger] = await runtimeDb
     .insert(persons)
@@ -69,10 +73,20 @@ beforeAll(async () => {
 
 describe("mapStoryStateToStatus", () => {
   it("maps draft → processing and every rendered state → ready", () => {
-    expect(mapStoryStateToStatus("draft")).toBe("processing");
-    expect(mapStoryStateToStatus("pending_approval")).toBe("ready");
-    expect(mapStoryStateToStatus("approved")).toBe("ready");
-    expect(mapStoryStateToStatus("shared")).toBe("ready");
+    expect(mapStoryStateToStatus({ state: "draft", processingFailedAt: null })).toBe("processing");
+    expect(mapStoryStateToStatus({ state: "pending_approval", processingFailedAt: null })).toBe("ready");
+    expect(mapStoryStateToStatus({ state: "approved", processingFailedAt: null })).toBe("ready");
+    expect(mapStoryStateToStatus({ state: "shared", processingFailedAt: null })).toBe("ready");
+  });
+
+  it("maps a draft with a failure marker → failed (issue #11)", () => {
+    expect(mapStoryStateToStatus({ state: "draft", processingFailedAt: new Date() })).toBe("failed");
+  });
+
+  it("ignores a stale failure marker once the story has rendered (non-draft → ready)", () => {
+    expect(mapStoryStateToStatus({ state: "pending_approval", processingFailedAt: new Date() })).toBe(
+      "ready",
+    );
   });
 });
 
@@ -90,6 +104,18 @@ describe("GET /api/capture/status (link-session token)", () => {
       ok: true,
       status: "processing",
       storyId: eleanorDraftId,
+    });
+  });
+
+  it("returns failed for the token's terminally-failed draft (issue #11)", async () => {
+    const res = await statusGET(
+      statusReq(`token=${encodeURIComponent(token)}&storyId=${eleanorFailedDraftId}`),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      status: "failed",
+      storyId: eleanorFailedDraftId,
     });
   });
 

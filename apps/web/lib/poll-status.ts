@@ -12,6 +12,9 @@
  *
  * Outcomes:
  *   - "ready"   — a poll observed the `ready` status.
+ *   - "failed"  — a poll observed the `failed` status (issue #11): a durable-job stage exhausted its
+ *                 retries. Terminal — the loop returns immediately instead of waiting out the cap, so
+ *                 the caller can surface a retry affordance right away.
  *   - "timeout" — the cap elapsed without ever seeing `ready` (the caller shows a soft "taking
  *                 longer than usual" message; the recording is safe, it's just slow or stuck).
  *   - "aborted" — the caller's AbortSignal fired (e.g. the component unmounted). The caller should
@@ -25,7 +28,7 @@ import type { AnswerStatus } from "./answer-status";
 export const DEFAULT_POLL_INTERVAL_MS = 2500;
 export const DEFAULT_POLL_TIMEOUT_MS = 180_000; // ~3 minutes
 
-export type PollOutcome = "ready" | "timeout" | "aborted";
+export type PollOutcome = "ready" | "failed" | "timeout" | "aborted";
 
 export interface PollUntilReadyOptions {
   /** One status probe. May throw/reject — treated as a transient miss. */
@@ -66,6 +69,7 @@ export async function pollUntilReady(opts: PollUntilReadyOptions): Promise<PollO
     try {
       const status = await opts.getStatus();
       if (status === "ready") return "ready";
+      if (status === "failed") return "failed"; // terminal — stop polling, let the caller offer retry
     } catch {
       // Transient miss — keep polling until the cap.
     }

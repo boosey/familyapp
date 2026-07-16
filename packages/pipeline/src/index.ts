@@ -15,6 +15,8 @@ export type {
   JobPayload,
   EnqueuedJob,
   JobHandler,
+  JobFailureInfo,
+  JobFailureHandler,
   JobQueue,
   PhotoUnderstandingInput,
   PhotoUnderstandingResult,

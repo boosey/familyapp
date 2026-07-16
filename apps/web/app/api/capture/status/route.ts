@@ -50,7 +50,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   return NextResponse.json({
     ok: true,
-    status: mapStoryStateToStatus(story.state),
+    status: mapStoryStateToStatus(story),
     storyId: story.id,
   });
 }

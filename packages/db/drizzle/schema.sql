@@ -354,6 +354,9 @@ CREATE TABLE "stories" (
 	"ask_id" uuid,
 	"originating_family_id" uuid,
 	"subject_photo_id" uuid,
+	"processing_error" text,
+	"processing_failed_at" timestamp with time zone,
+	"processing_attempt" integer DEFAULT 0 NOT NULL,
 	"approved_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

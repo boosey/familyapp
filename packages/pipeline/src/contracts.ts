@@ -131,6 +131,13 @@ export type JobName = "transcribe" | "render_story";
 export interface JobPayload {
   /** All Phase-1 pipeline jobs target a single Story. */
   storyId: string;
+  /**
+   * Retry generation (issue #11). OMITTED for the initial run so its dedupe id is unchanged from
+   * history; SET (≥1) on a narrator-initiated retry so the durable queue's send-side dedupe (which
+   * hashes the payload) sees a distinct event and actually re-fires the stage. The orchestrator
+   * carries it verbatim through internal stage cascades. Handlers ignore it — it is a queue concern.
+   */
+  attempt?: number;
 }
 
 export interface EnqueuedJob {
@@ -143,14 +150,35 @@ export interface EnqueuedJob {
 
 export type JobHandler = (payload: JobPayload) => Promise<void>;
 
+/** Vendor-neutral shape of a terminal failure — never leaks the queue vendor's error object. */
+export interface JobFailureInfo {
+  message: string;
+  name?: string;
+}
+
+/**
+ * Called when a stage has TERMINALLY failed — the durable queue exhausted its retries (issue #11).
+ * Receives the original payload (so it can act on the storyId) and a vendor-neutral error summary.
+ * MUST be idempotent and must not throw for a routine failure; its job is to record the signal.
+ */
+export type JobFailureHandler = (
+  payload: JobPayload,
+  error: JobFailureInfo,
+) => Promise<void>;
+
 export interface JobQueue {
   /**
    * Enqueue a stage. Returns the job id. Implementations may dedupe by (name, payload) — the
    * in-process impl below does, so re-enqueuing the same job is a no-op while a prior is pending.
    */
   enqueue(name: JobName, payload: JobPayload): Promise<string>;
-  /** Register a handler for a stage. Calling twice for the same stage replaces the handler. */
-  register(name: JobName, handler: JobHandler): void;
+  /**
+   * Register a handler for a stage. Calling twice for the same stage replaces the handler.
+   * `onFailure` (optional) runs when the stage terminally fails after the queue exhausts retries —
+   * the durable (Inngest) impl wires it to the vendor's native failure hook; the in-process impl,
+   * which has no retries, invokes it the first (and only) time a handler throws.
+   */
+  register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void;
   /** Drain all pending jobs (running handlers). Returns when the queue is empty. */
   drain(): Promise<void>;
   /** Inspect pending jobs — for tests, retry inspection, and observability. */

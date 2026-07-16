@@ -8,19 +8,23 @@
  * (hub account-auth + link-session token) feed it the result of a @chronicle/core front-door read
  * (`getStoryForViewer`) — they NEVER touch the `stories` table directly.
  *
- *   - `processing` — the story is still `draft` (the pipeline has not finished rendering prose).
+ *   - `processing` — the story is still `draft` and the pipeline is (as far as the DB knows) running.
  *   - `ready`      — the story reached `pending_approval` (or beyond): prose is populated and the
  *                    review/approve surface can render.
+ *   - `failed`     — the story is still `draft` BUT a durable-job stage exhausted its retries and
+ *                    stamped a failure signal (`processingFailedAt`, issue #11). The UI can now tell
+ *                    "permanently failed" from "still slow" and offer a retry instead of spinning.
  *
  * Any non-draft state maps to `ready`: once a story leaves `draft` it has been rendered, so the
- * reviewer should stop polling. (A `draft` that never advances — e.g. an Inngest stage that
- * exhausted its retries — leaves no DB error signal, so the UI cannot distinguish "failed" from
- * "slow"; the poll callers cap their wait and show a soft message rather than spinning forever.)
+ * reviewer should stop polling (a stale failure marker is ignored — the render clearly succeeded).
  */
-import type { StoryState } from "@chronicle/db";
+import type { Story } from "@chronicle/db";
 
-export type AnswerStatus = "processing" | "ready";
+export type AnswerStatus = "processing" | "ready" | "failed";
 
-export function mapStoryStateToStatus(state: StoryState): AnswerStatus {
-  return state === "draft" ? "processing" : "ready";
+export function mapStoryStateToStatus(
+  story: Pick<Story, "state" | "processingFailedAt">,
+): AnswerStatus {
+  if (story.state !== "draft") return "ready";
+  return story.processingFailedAt !== null ? "failed" : "processing";
 }

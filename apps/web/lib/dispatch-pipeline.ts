@@ -32,23 +32,27 @@ export interface DispatchPipelineDeps {
   inngestPipeline?: Pipeline;
 }
 
-export type DispatchPipeline = (storyId: string) => Promise<void>;
+/**
+ * `attempt` (issue #11) is the retry generation: omit it for the initial capture dispatch; pass the
+ * bumped value from `beginStoryRetry` on a narrator retry so the durable queue re-fires the stage.
+ */
+export type DispatchPipeline = (storyId: string, attempt?: number) => Promise<void>;
 
 export function makeDispatchPipeline(deps: DispatchPipelineDeps): DispatchPipeline {
-  return async (storyId: string): Promise<void> => {
+  return async (storyId: string, attempt?: number): Promise<void> => {
     // Correlates under the caller's log context (e.g. /api/capture's `beginLogContext`) so this line
     // shares that run's cid. Names which of the two honest branches this dispatch took.
     if (deps.inngestConfigured && deps.inngestPipeline) {
       // Durable path: enqueue the first stage and return. Inngest drives the rest.
-      plog("pipeline", "dispatch: durable enqueue (Inngest drives stages)", { story: storyId });
-      await deps.inngestPipeline.start(storyId);
+      plog("pipeline", "dispatch: durable enqueue (Inngest drives stages)", { story: storyId, attempt: attempt ?? 0 });
+      await deps.inngestPipeline.start(storyId, attempt);
       return;
     }
     // Synchronous dev/CI path: fresh pipeline, start, and drain in-request.
-    plog("pipeline", "dispatch: synchronous drain (in-request)", { story: storyId });
+    plog("pipeline", "dispatch: synchronous drain (in-request)", { story: storyId, attempt: attempt ?? 0 });
     const drainTimer = startTimer();
     const pipeline = deps.newPipeline();
-    await pipeline.start(storyId);
+    await pipeline.start(storyId, attempt);
     await pipeline.runToCompletion();
     plog("pipeline", "dispatch: synchronous drain complete", { story: storyId, ms: drainTimer() });
   };

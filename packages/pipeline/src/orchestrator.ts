@@ -26,11 +26,17 @@
  *   - No vendor SDK is imported anywhere in this package; vendors are reached only through the
  *     interfaces in contracts.ts.
  */
-import { appendProseRevision, transitionStoryState, updateDerivedFields } from "@chronicle/core";
+import {
+  appendProseRevision,
+  markStoryProcessingFailed,
+  transitionStoryState,
+  updateDerivedFields,
+} from "@chronicle/core";
 import { getStoryAndRecordingForPipeline } from "@chronicle/core/pipeline";
 import type { Database } from "@chronicle/db";
 import type { MediaStorage } from "@chronicle/storage";
 import type {
+  JobFailureInfo,
   JobName,
   JobPayload,
   JobQueue,
@@ -60,8 +66,12 @@ export interface PipelineDeps {
 }
 
 export interface Pipeline {
-  /** Start the pipeline for a Story (enqueues the first stage). */
-  start(storyId: string): Promise<void>;
+  /**
+   * Start the pipeline for a Story (enqueues the first stage). `attempt` (issue #11) is the retry
+   * generation: omit it for the initial run; pass the bumped value from `beginStoryRetry` on a
+   * narrator-initiated retry so the durable queue's payload-dedupe re-fires the stage.
+   */
+  start(storyId: string, attempt?: number): Promise<void>;
   /** Drain the queue (run all enqueued stages to completion). */
   runToCompletion(): Promise<void>;
   /** Direct stage entrypoints, exposed for tests that want to drive stages explicitly. */
@@ -74,6 +84,38 @@ export interface Pipeline {
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const transformer = deps.workingCopyTransformer ?? createDefaultWorkingCopyTransformer();
   const queue = deps.jobQueue ?? new InProcessJobQueue();
+
+  // Carry the retry generation (issue #11) verbatim through internal cascades. `attempt` is only
+  // present on a retried run; when omitted the payload — and therefore its dedupe id — is identical
+  // to the initial run, so the normal path's queue behavior is unchanged.
+  const withAttempt = (storyId: string, attempt: number | undefined): JobPayload =>
+    attempt === undefined ? { storyId } : { storyId, attempt };
+
+  // Terminal-failure handler shared by both stages: a stage that exhausted the durable queue's
+  // retries lands here (issue #11). Stamp a DB signal so the viewer-scoped status read can report
+  // `failed` instead of an indefinite `processing`. Must not throw — it is the last-resort recorder.
+  const onStageFailure = (stage: JobName) => async (
+    payload: JobPayload,
+    error: JobFailureInfo,
+  ): Promise<void> => {
+    plog("pipeline", `${stage}: TERMINAL failure → marking story failed`, {
+      story: payload.storyId,
+      attempt: payload.attempt ?? 0,
+      error: error.message,
+    });
+    // Never throw: this is the last-resort recorder. If even the DB write to record the failure
+    // fails (transient outage), swallow + log rather than propagating into the queue's failure hook
+    // — a throw here in prod would crash Inngest's onFailure callback and leave NO signal at all,
+    // silently reverting to the exact "stuck in draft forever" bug this handler exists to prevent.
+    try {
+      await markStoryProcessingFailed(deps.db, payload.storyId, `${stage}: ${error.message}`);
+    } catch (markErr) {
+      plog("pipeline", `${stage}: FAILED to record terminal-failure signal`, {
+        story: payload.storyId,
+        error: markErr instanceof Error ? markErr.message : String(markErr),
+      });
+    }
+  };
 
   const runTranscribeStage = async (payload: JobPayload): Promise<void> => {
     const done = startTimer();
@@ -92,7 +134,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         story: view.storyId,
         ms: done(),
       });
-      await queue.enqueue("render_story", { storyId: view.storyId });
+      await queue.enqueue("render_story", withAttempt(view.storyId, payload.attempt));
       return;
     }
     // Idempotency gate: if a transcript is already present, the stage has run. Skip the
@@ -104,7 +146,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         transcriptChars: view.transcript.length,
         ms: done(),
       });
-      await queue.enqueue("render_story", { storyId: view.storyId });
+      await queue.enqueue("render_story", withAttempt(view.storyId, payload.attempt));
       return;
     }
 
@@ -208,7 +250,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     // Cascade to the next stage. enqueue dedupes by (name, storyId) while pending, so re-runs
     // of this stage do not pile up duplicate render_story jobs.
-    await queue.enqueue("render_story", { storyId: view.storyId });
+    await queue.enqueue("render_story", withAttempt(view.storyId, payload.attempt));
   };
 
   const runRenderStoryStage = async (payload: JobPayload): Promise<void> => {
@@ -227,7 +269,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         story: view.storyId,
         ms: done(),
       });
-      await queue.enqueue("transcribe", { storyId: view.storyId });
+      await queue.enqueue("transcribe", withAttempt(view.storyId, payload.attempt));
       return;
     }
     // Idempotency gate: if prose is already populated AND the story has already reached
@@ -296,20 +338,24 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
   };
 
-  queue.register("transcribe", runTranscribeStage);
-  queue.register("render_story", runRenderStoryStage);
+  queue.register("transcribe", runTranscribeStage, onStageFailure("transcribe"));
+  queue.register("render_story", runRenderStoryStage, onStageFailure("render_story"));
 
   return {
     queue,
     runTranscribeStage,
     runRenderStoryStage,
-    async start(storyId: string) {
+    async start(storyId: string, attempt?: number) {
       // ADR-0007: a text story has no audio — route it straight to render_story, skipping
       // transcribe. A voice story (or a story that vanished) starts at transcribe as before.
       const view = await getStoryAndRecordingForPipeline(deps.db, storyId);
       const firstStage: JobName = view?.kind === "text" ? "render_story" : "transcribe";
-      plog("pipeline", `start → enqueue ${firstStage}`, { story: storyId, kind: view?.kind });
-      await queue.enqueue(firstStage, { storyId });
+      plog("pipeline", `start → enqueue ${firstStage}`, {
+        story: storyId,
+        kind: view?.kind,
+        attempt: attempt ?? 0,
+      });
+      await queue.enqueue(firstStage, withAttempt(storyId, attempt));
     },
     async runToCompletion() {
       const done = startTimer();
