@@ -73,6 +73,7 @@ export async function applyClerkWebhookEvent(
 ): Promise<ClerkWebhookOutcome> {
   if (evt.type === "user.updated") {
     const data = evt.data as ClerkUserJson;
+    if (!data?.id) return { type: evt.type, action: "ignored" };
     // Reuse the JIT-provisioning name rule, but only PASS a name when the provider actually sent one
     // (first/last present) — `clerkDisplayName` falls back to email/"Family member", which we must not
     // write over a good in-app-edited Person name. The core reconciler treats blank as leave-untouched.
