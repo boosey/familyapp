@@ -64,6 +64,13 @@ export interface PendingAsk {
   askerName: string;
   questionText: string;
   /**
+   * The published Story this ask is a FOLLOW-UP on (#77), or null for a cold ask. Lets the turn
+   * loop frame the question with its origin ("about the story you told, Sofia was wondering…") and
+   * lets the session deep-link back to the source. It is only the story ID — the interviewer already
+   * has audited access to the narrator's own story metadata via the `MemorySource` if it needs a title.
+   */
+  sourceStoryId?: string | null;
+  /**
    * Priority hint (higher = sooner). The turn loop sorts by this then by FIFO, so a future
    * adapter can boost (e.g. a recent ask from a young grandchild) without UI changes.
    */

@@ -782,6 +782,14 @@ export const asks = pgTable(
     status: askStatusEnum("status").notNull().default("queued"),
     /** The resulting Story once answered. */
     storyId: uuid("story_id").references(() => stories.id),
+    /**
+     * The already-published Story this ask is a FOLLOW-UP on (#77). Present when a family member,
+     * reading a shared story, poses a further question tied to it — so the narrator's next session
+     * can reference the story the question sprang from. Distinct from `storyId` (the ANSWER story,
+     * set on approval): `sourceStoryId` is the PROMPTING story, set at ask-creation and never changed.
+     * Nullable — most asks (cold questions, photo-subject asks) have no source story.
+     */
+    sourceStoryId: uuid("source_story_id").references(() => stories.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

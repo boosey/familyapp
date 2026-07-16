@@ -58,6 +58,7 @@ CREATE TABLE "asks" (
 	"recording_media_id" uuid,
 	"status" "ask_status" DEFAULT 'queued' NOT NULL,
 	"story_id" uuid,
+	"source_story_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"routed_at" timestamp with time zone,
 	"answered_at" timestamp with time zone,
@@ -437,6 +438,7 @@ ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN K
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "asks" ADD CONSTRAINT "asks_source_story_id_stories_id_fk" FOREIGN KEY ("source_story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_media_id_media_id_fk" FOREIGN KEY ("approval_audio_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
