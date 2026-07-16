@@ -184,7 +184,7 @@ export async function createInterviewSession(
     }
 
     pendingIntakeKey = null;
-    if (!key) return;
+    if (!key || state.distressed || state.offRampRequested) return;
     const question = INTAKE_QUESTIONS.find((q) => q.key === key);
     if (!question) return;
     try {
