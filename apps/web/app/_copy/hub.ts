@@ -305,14 +305,21 @@ export const hub = {
     removeFailed: "Could not remove the recording. Please try again.",
     noFamily: "Join or start a family before adding photos.",
     noAlbumChosen: "Choose at least one album for this photo.",
-    photoEmpty: "No photo was selected. Please choose an image.",
     photoUploadFailed: "Could not add your photo. Please try again.",
     photoUploadFailedDetail: (detail: string) =>
       `Could not add your photo (${detail}). Please try again.`,
+    // issue #20 — the client declared a non-image (or unsupported image) content type when requesting a
+    // direct-upload target. The server validates the type BEFORE presigning, so this is rejected up front.
+    photoTypeUnsupported:
+      "That file type can't be added to the album. Please choose a JPEG, PNG, GIF, or WebP image.",
+    // issue #20 — the upload ticket that binds a storage key to the person who minted it was missing,
+    // expired, tampered, or for a different person/key. A non-committal error; the client just retries.
+    uploadTicketInvalid: "That upload expired. Please try adding the photo again.",
+    // issue #20 — record was called for a key with no stored object (the browser PUT never landed, or
+    // it was already recorded). Never record a phantom key; the client re-uploads.
+    uploadObjectMissing: "That photo didn't finish uploading. Please try again.",
     tooManyPhotos: (max: number) =>
       `That's too many photos at once. Please add up to ${max} at a time.`,
-    photoTooLarge:
-      "That photo is too large to upload here. Try a smaller image, or import it from Google Photos.",
     photoHeicUnsupported:
       "This device format (HEIC) can't be uploaded directly. Export as JPEG, or import it from Google Photos.",
     photoEncodeFailed:

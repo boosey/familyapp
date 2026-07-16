@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 /**
- * AlbumBoard (ADR-0015 · F2) — the client wrapper that owns per-item import state and drives import
- * through a bounded concurrency pool. It hands the uploader an `onImportFiles` / `onImportGoogle`
- * delegate, creates one placeholder tile per photo, and calls the PER-ITEM server actions
- * (`uploadOneAlbumPhotoAction` / `importOneGooglePhotoAction`) once per photo. A per-item failure
- * marks ONLY that tile failed (tap-to-retry); the pool never runs more than IMPORT_POOL_CONCURRENCY
- * at once; a live "X of N" reflects completions.
+ * AlbumBoard (ADR-0015 · F2 · issue #20) — the client wrapper that owns per-item import state and
+ * drives import through a bounded concurrency pool. It hands the uploader an `onImportFiles` /
+ * `onImportGoogle` delegate, creates one placeholder tile per photo, and runs ONE per-item import per
+ * photo: file uploads go through the direct-to-storage helper `uploadPhotoDirect(file, familyIds)`
+ * (issue #20 — bytes straight to storage, then record), Google imports through
+ * `importOneGooglePhotoAction`. A per-item failure marks ONLY that tile failed (tap-to-retry); the
+ * pool never runs more than IMPORT_POOL_CONCURRENCY at once; a live "X of N" reflects completions.
  *
- * Mocks next/navigation, the two server-action modules, and prepare-photo (mirrors album-uploader).
+ * Mocks next/navigation, direct-upload, the google-photos-actions module, and prepare-photo.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -21,30 +22,23 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, replace }),
 }));
 
-// The per-item actions now return the created photo's id (ADR-0015 optimistic tile). A monotonic
-// counter gives each success a distinct id so loaded tiles render distinct <img> bytes.
+// The per-item import returns the created photo's id (ADR-0015 optimistic tile). A monotonic counter
+// gives each success a distinct id so loaded tiles render distinct <img> bytes.
 let photoSeq = 0;
 const okPhoto = (): { ok: true; photoId: string } => ({
   ok: true,
   photoId: `photo-${(photoSeq += 1)}`,
 });
 
-const uploadOneAlbumPhotoAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ ok: true; photoId: string } | { error: string }> =>
-    okPhoto(),
+// issue #20 — the board's file-upload path calls uploadPhotoDirect(file, familyIds) (request target →
+// PUT bytes → record). The tests drive its result directly; args are [file, familyIds].
+const uploadPhotoDirect = vi.fn(
+  async (
+    ..._args: unknown[]
+  ): Promise<{ ok: true; photoId: string } | { error: string }> => okPhoto(),
 );
-const uploadAlbumPhotoAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ ok: true; added: number; failed: number }> => ({
-    ok: true,
-    added: 1,
-    failed: 0,
-  }),
-);
-vi.mock("@/app/hub/album/actions", () => ({
-  uploadOneAlbumPhotoAction: (...args: unknown[]) => uploadOneAlbumPhotoAction(...args),
-  uploadAlbumPhotoAction: (...args: unknown[]) => uploadAlbumPhotoAction(...args),
-  editAlbumCaptionAction: vi.fn(async () => ({ ok: true })),
-  deleteAlbumPhotoAction: vi.fn(async () => ({ ok: true })),
+vi.mock("@/app/hub/album/direct-upload", () => ({
+  uploadPhotoDirect: (...args: unknown[]) => uploadPhotoDirect(...args),
 }));
 
 const listGooglePhotosImportAction = vi.fn();
@@ -80,7 +74,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   // reset default impls (clearAllMocks wipes impls set via mockResolvedValueOnce but not the base fn)
-  uploadOneAlbumPhotoAction.mockImplementation(async () => okPhoto());
+  uploadPhotoDirect.mockImplementation(async () => okPhoto());
   importOneGooglePhotoAction.mockImplementation(async () => okPhoto());
   prepareAlbumPhoto.mockImplementation(async (file: File) => ({ ok: true, file }));
 });
@@ -134,7 +128,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     chooseFiles(["p1.png", "p2.png", "p3.png"]);
 
     await waitFor(() =>
-      expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(3),
+      expect(uploadPhotoDirect).toHaveBeenCalledTimes(3),
     );
     // Each success removes its tile → no importing tiles left, and refresh fired.
     await waitFor(() =>
@@ -142,8 +136,8 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     );
     expect(refresh).toHaveBeenCalled();
     // Each call carried the file as a `photo` entry.
-    const fd = uploadOneAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    expect(fd.getAll("photo")).toHaveLength(1);
+    // The first arg is the single prepared File; the second is the chosen familyIds.
+    expect(uploadPhotoDirect.mock.calls[0]![0]).toBeInstanceOf(File);
   });
 
   it("prepares each file per-item; a prepare failure marks ONLY that tile failed", async () => {
@@ -157,7 +151,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
 
     // The two good ones upload; the bad one never reaches the action.
     await waitFor(() =>
-      expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(2),
+      expect(uploadPhotoDirect).toHaveBeenCalledTimes(2),
     );
     // Exactly one failed tile with a retry affordance survives.
     await waitFor(() =>
@@ -167,8 +161,8 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
   });
 
   it("a per-item action { error } marks ONLY that tile failed; others still land", async () => {
-    uploadOneAlbumPhotoAction.mockImplementation(async (...args: unknown[]) => {
-      const name = ((args[0] as FormData).getAll("photo")[0] as File).name;
+    uploadPhotoDirect.mockImplementation(async (...args: unknown[]) => {
+      const name = (args[0] as File).name;
       return name === "boom.png" ? { error: "nope" } : okPhoto();
     });
     renderBoard();
@@ -177,12 +171,12 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: hub.album.retryImportTile })).toHaveLength(1),
     );
-    expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(3);
+    expect(uploadPhotoDirect).toHaveBeenCalledTimes(3);
   });
 
   it("a thrown/rejected per-item action marks the tile failed without crashing the pool", async () => {
-    uploadOneAlbumPhotoAction.mockImplementation(async (...args: unknown[]) => {
-      const name = ((args[0] as FormData).getAll("photo")[0] as File).name;
+    uploadPhotoDirect.mockImplementation(async (...args: unknown[]) => {
+      const name = (args[0] as File).name;
       if (name === "throw.png") throw new Error("network");
       return okPhoto();
     });
@@ -192,13 +186,13 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: hub.album.retryImportTile })).toHaveLength(1),
     );
-    expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(3);
+    expect(uploadPhotoDirect).toHaveBeenCalledTimes(3);
   });
 
   it("tapping retry re-invokes the action for just that item and clears the failed state on success", async () => {
     let failFirst = true;
-    uploadOneAlbumPhotoAction.mockImplementation(async (...args: unknown[]) => {
-      const name = ((args[0] as FormData).getAll("photo")[0] as File).name;
+    uploadPhotoDirect.mockImplementation(async (...args: unknown[]) => {
+      const name = (args[0] as File).name;
       if (name === "retry.png" && failFirst) {
         failFirst = false;
         return { error: "first time fails" };
@@ -218,7 +212,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     await waitFor(() =>
       expect(screen.queryByLabelText(hub.album.importingTile)).toBeNull(),
     );
-    expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(2);
+    expect(uploadPhotoDirect).toHaveBeenCalledTimes(2);
   });
 
   it("never runs more than IMPORT_POOL_CONCURRENCY per-item actions concurrently", async () => {
@@ -232,7 +226,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     let inFlight = 0;
     let maxInFlight = 0;
     let started = 0;
-    uploadOneAlbumPhotoAction.mockImplementation(async () => {
+    uploadPhotoDirect.mockImplementation(async () => {
       const idx = started++;
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
@@ -255,7 +249,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
 
     // Drain the rest.
     for (const g of gates) g.resolve({ ok: true });
-    await waitFor(() => expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(5));
   });
 
   // Regression (review finding): starting a SECOND batch while the first is still draining must
@@ -263,7 +257,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
   // push `completed` past the new (smaller) total ("3 of 2"), or freeze the counter mid-run.
   it("accumulates 'X of N' when a second batch starts before the first finishes (no reset)", async () => {
     const shared = deferred<void>();
-    uploadOneAlbumPhotoAction.mockImplementation(async () => {
+    uploadPhotoDirect.mockImplementation(async () => {
       await shared.promise;
       return okPhoto();
     });
@@ -281,7 +275,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
     // Release everything → all four land and the progress line clears (no impossible fraction).
     shared.resolve();
     await waitFor(() =>
-      expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(4),
+      expect(uploadPhotoDirect).toHaveBeenCalledTimes(4),
     );
     await waitFor(() =>
       expect(screen.queryByText(/adding .* of .*/i)).toBeNull(),
@@ -291,7 +285,7 @@ describe("AlbumBoard file upload (exact-N per-item pool)", () => {
   it("shows a live 'X of N' while importing and reflects completions", async () => {
     const gate = deferred<{ ok: true }>();
     let calls = 0;
-    uploadOneAlbumPhotoAction.mockImplementation(async () => {
+    uploadPhotoDirect.mockImplementation(async () => {
       calls += 1;
       // Hold the LAST call open so a progress line is still on screen mid-run.
       if (calls === 2) {
@@ -414,7 +408,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
   it("a completed tile shows its real photo immediately — WITHOUT a server refresh delivering it", async () => {
     // props.photos stays [] the whole time: the photo must appear from the action's returned id, not
     // from a refresh. Before the fix, nothing would render here (the tile was just removed).
-    uploadOneAlbumPhotoAction.mockResolvedValue({ ok: true, photoId: "opt-1" });
+    uploadPhotoDirect.mockResolvedValue({ ok: true, photoId: "opt-1" });
     renderBoard({ photos: [] });
     chooseFiles(["a.png"]);
 
@@ -428,8 +422,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
   it("finished tiles reveal their photos incrementally while others still import (not all-at-once)", async () => {
     const slow = deferred<{ ok: true; photoId: string }>();
     let fast = 0;
-    uploadOneAlbumPhotoAction.mockImplementation(async (...args: unknown[]) => {
-      const name = ((args[0] as FormData).getAll("photo")[0] as File).name;
+    uploadPhotoDirect.mockImplementation(async (...args: unknown[]) => {
+      const name = (args[0] as File).name;
       if (name === "slow.png") return slow.promise;
       return { ok: true, photoId: `fast-${(fast += 1)}` };
     });
@@ -450,7 +444,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
   });
 
   it("drops the optimistic placeholder once a refresh delivers the same photo (no duplicate tile)", async () => {
-    uploadOneAlbumPhotoAction.mockResolvedValue({ ok: true, photoId: "dup-1" });
+    uploadPhotoDirect.mockResolvedValue({ ok: true, photoId: "dup-1" });
     const view = render(
       <AlbumBoard
         families={[FAM_A]}
@@ -498,7 +492,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
   // viewed scope, that photo NEVER enters this grid — so an unconditional optimistic tile would be
   // stuck forever. The board must drop it (pre-optimistic behavior) for an out-of-scope target.
   it("does NOT leave a stuck tile when the upload targets a family outside the viewed scope", async () => {
-    uploadOneAlbumPhotoAction.mockResolvedValue({ ok: true, photoId: "out-of-scope-1" });
+    uploadPhotoDirect.mockResolvedValue({ ok: true, photoId: "out-of-scope-1" });
     // Viewing Family A only; the multi-family picker is shown (2 families) seeded to A.
     render(
       <AlbumBoard
@@ -521,15 +515,14 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
     chooseFiles(["x.png"]);
 
-    await waitFor(() => expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
     // The tile is dropped on success — no stuck optimistic photo, no lingering spinner.
     await waitFor(() =>
       expect(screen.queryByLabelText(hub.album.importingTile)).toBeNull(),
     );
     expect(screen.queryByRole("img", { name: PHOTO_ALT })).toBeNull();
     // Sanity: the action really did receive ONLY the out-of-scope family id.
-    const fd = uploadOneAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    expect(fd.getAll("familyIds")).toEqual([FAM_B.familyId]);
+    expect(uploadPhotoDirect.mock.calls[0]![1]).toEqual([FAM_B.familyId]);
   });
 
   // ADR-0021 (review finding — coverage gap): the board is the F2 mount point the ADR names
@@ -563,8 +556,7 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     expect((addButton as HTMLButtonElement).disabled).toBe(false);
     chooseFiles(["deliberate.png"]);
 
-    await waitFor(() => expect(uploadOneAlbumPhotoAction).toHaveBeenCalledTimes(1));
-    const fd = uploadOneAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    expect(fd.getAll("familyIds")).toEqual([FAM_B.familyId]);
+    await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
+    expect(uploadPhotoDirect.mock.calls[0]![1]).toEqual([FAM_B.familyId]);
   });
 });

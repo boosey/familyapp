@@ -1,17 +1,26 @@
 "use server";
 
 /**
- * Album upload server action (ADR-0009 · #15). Like every hub action, it re-resolves auth on the
- * server — the contributor's identity is NEVER trusted from the client; only the file bytes come in
- * via FormData. The bytes are written to object storage FIRST (write-once `family-photos/<uuid>`
- * key), then `createAlbumPhoto` records the row + album membership. Photos are NOT `media` — no
- * media row, not under the immutability trigger (ADR-0009).
+ * Album upload server actions (ADR-0009 · #15 · issue #20 direct-to-storage).
  *
- * #16: the target album set is the contributor's PICKER choice, re-validated on the server against
- * their OWN active memberships — a client-submitted family id is never trusted, so any family they
- * are not an active member of is dropped (they are always an active member of every album they place
- * into). A solo-family contributor sees no picker; the sole family is used. #17 populates EXIF
- * (capture-date + GPS) at import — read from the SAME bytes below, never failing the upload.
+ * Photo bytes NO LONGER transit a Server Action — they go browser → object storage directly, so the
+ * two body caps that used to 413 realistic phone photos (Next's Server-Action limit and Vercel's
+ * unraisable ~4.5 MB request-body cap) are gone. The server only ever handles METADATA, in two steps:
+ *
+ *   1. `requestAlbumUploadAction({ contentType })` — re-resolve auth (identity is NEVER trusted from
+ *      the client), require ≥1 active family, validate the client-declared `contentType` is an
+ *      allowed image type, mint a fresh `family-photos/<uuid>` key, produce a direct-upload target
+ *      from the active MediaStorage adapter (presigned PUT on R2 / dev-receiver URL locally), and mint
+ *      a short-lived HMAC ticket binding `{ key, personId, exp }`.
+ *   2. Client PUTs the bytes straight to the target.
+ *   3. `recordAlbumPhotoAction({ key, familyIds, ticket })` — re-resolve auth, VERIFY the ticket (HMAC
+ *      ok, unexpired, minter === caller, key matches), re-validate `familyIds` against the caller's
+ *      OWN active memberships (unchanged posture — a spoofed/foreign family id is dropped), confirm the
+ *      object EXISTS (never record a phantom key), read the JUST-STORED bytes and extract EXIF
+ *      server-side (unchanged trust model), then `createAlbumPhoto`.
+ *
+ * The family re-validation and the "bytes are read/EXIF'd server-side from what STORAGE holds" trust
+ * model are preserved exactly from the old body-transit actions.
  */
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -33,23 +42,12 @@ import {
   viewerPersonId,
   type AlbumPhotoDetailView,
 } from "@chronicle/core";
+import { isAllowedImageContentType, type UploadTarget } from "@chronicle/storage";
 import { getRuntime } from "@/lib/runtime";
-import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
+import { createUploadTicket, verifyUploadTicket } from "@/lib/upload-ticket";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 import type { ImportOnePhotoResult } from "./import-progress";
-
-/**
- * Batch upload summary. A single submit can carry MANY files (the multi-select picker, #16): each
- * selected file becomes its own album photo placed into the SAME chosen album(s). `added`/`failed`
- * count the per-file outcomes so the client can distinguish a full success from a partial one.
- *   - 0 valid files          → `{ error: photoEmpty }`
- *   - every file threw       → `{ error: photoUploadFailed }` (added === 0, failed > 0)
- *   - otherwise              → `{ ok: true, added, failed }` (failed may be 0)
- */
-export type AlbumUploadResult =
-  | { ok: true; added: number; failed: number }
-  | { error: string };
 
 /** Result of a caption edit / delete: success, or a user-facing error string. */
 export type AlbumManageResult = { ok: true } | { error: string };
@@ -57,12 +55,8 @@ export type AlbumManageResult = { ok: true } | { error: string };
 /** The longest caption we accept (it doubles as alt text — a label, not prose). */
 const MAX_CAPTION_LENGTH = 500;
 
-/**
- * The most photos one batch may carry. A server-authoritative cap (the client guards too, but the
- * client is never trusted): it bounds per-request work/memory and rejects an abusive "thousands of
- * tiny files" submission before we touch storage. Single source of truth: PHOTO_BATCH_MAX_FILES.
- */
-const MAX_BATCH_FILES = PHOTO_BATCH_MAX_FILES;
+/** The storage keyspace album photos live in (issue #20 — mint + validate against this prefix). */
+const ALBUM_PHOTO_KEY_PREFIX = "family-photos/";
 
 /** Safe, short error token for the UI — never include secrets or full stack traces. */
 function sanitizeStorageErrorDetail(err: unknown): string {
@@ -76,183 +70,129 @@ function sanitizeStorageErrorDetail(err: unknown): string {
   return safe || "error";
 }
 
-export async function uploadAlbumPhotoAction(
-  formData: FormData,
-): Promise<AlbumUploadResult> {
-  // [DIAG] Temporary tracing for the album-upload "Not signed in" investigation. runtimeMs exposes a
-  // cold start (the "long delay"); ctx.kind reveals whether auth degraded to anonymous. Remove once
-  // understood. Pairs with the [DIAG auth-clerk] line that names WHICH anonymous branch fired.
-  const tStart = Date.now();
-  const { db, storage, auth } = await getRuntime();
-  const tRuntime = Date.now();
-  const ctx = await auth.getCurrentAuthContext();
-  console.info(
-    `[DIAG album/upload] ctx.kind=${ctx.kind} runtimeMs=${tRuntime - tStart} authMs=${Date.now() - tRuntime}`,
-  );
-  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
-
-  // Resolve the target album set from the client's picker choice, re-validated against the
-  // contributor's OWN active memberships — client-submitted ids are NEVER trusted.
-  const active = await listActiveFamiliesForPerson(db, ctx.personId);
+/**
+ * Resolve the target album set from the client's picker choice, re-validated against the caller's OWN
+ * active memberships (client-submitted ids are NEVER trusted). Returns the resolved ids, or an error
+ * token — the EXACT posture the old body-transit actions used, factored out so `requestAlbumUpload`
+ * and `recordAlbumPhoto` share one implementation.
+ */
+function resolveTargetFamilies(
+  submitted: string[],
+  active: { familyId: string }[],
+): { familyIds: string[] } | { error: string } {
   if (active.length === 0) return { error: hub.actions.noFamily };
   const allowed = new Set(active.map((f) => f.familyId));
-  const submitted = formData
-    .getAll("familyIds")
-    .filter((v): v is string => typeof v === "string");
   const chosen = [...new Set(submitted.filter((id) => allowed.has(id)))];
-  let familyIds: string[];
-  if (chosen.length > 0) {
-    familyIds = chosen;
-  } else if (allowed.size === 1) {
-    familyIds = [active[0]!.familyId]; // solo contributor: no picker rendered → sole family
-  } else {
-    return { error: hub.actions.noAlbumChosen }; // multi-family with no valid selection
-  }
-
-  // Multi-select (#16): a `multiple` file input yields repeated `photo` entries, so read ALL of
-  // them. Keep only real, non-empty Blobs — a browser may append an empty phantom entry, and a
-  // stray non-file field must never be treated as an image.
-  const files = formData
-    .getAll("photo")
-    .filter((v): v is File => v instanceof Blob && v.size > 0);
-  if (files.length === 0) {
-    return { error: hub.actions.photoEmpty };
-  }
-  // Server-authoritative batch cap (the client guards too, but is never trusted).
-  if (files.length > MAX_BATCH_FILES) {
-    return { error: hub.actions.tooManyPhotos(MAX_BATCH_FILES) };
-  }
-
-  // Each file is uploaded INDEPENDENTLY into the same chosen album(s). A per-file storage/db throw
-  // increments `failed` and moves on — one bad file never aborts the batch (so a 10-photo upload
-  // with one corrupt file still lands the other nine).
-  let added = 0;
-  let failed = 0;
-  let lastFailureDetail: string | null = null;
-  for (const photo of files) {
-    const bytes = new Uint8Array(await photo.arrayBuffer());
-    const contentType = photo.type || "application/octet-stream";
-    const storageKey = `family-photos/${randomUUID()}`;
-
-    // #17: read capture-date + GPS from the SAME bytes (no second round-trip). The helper never
-    // throws, but keep the extraction OUTSIDE the storage/db try and belt-and-suspenders it anyway,
-    // so even a hypothetical future throw yields null EXIF + a successful upload for this file —
-    // never a failed upload on EXIF alone.
-    let exif: PhotoExif = { capturedAt: null, gps: null };
-    try {
-      exif = await extractPhotoExif(bytes);
-    } catch {
-      /* never fail the upload on EXIF */
-    }
-
-    try {
-      await storage.put({ key: storageKey, bytes, contentType });
-      await createAlbumPhoto(db, {
-        contributorPersonId: ctx.personId,
-        familyIds,
-        source: "upload",
-        storageKey,
-        caption: null,
-        exifCapturedAt: exif.capturedAt,
-        exifGps: exif.gps,
-      });
-      added += 1;
-    } catch (err) {
-      failed += 1;
-      lastFailureDetail = sanitizeStorageErrorDetail(err);
-      if (failed === 1) {
-        console.error(
-          `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    }
-  }
-
-  // Revalidate once for the whole batch, only if at least one photo actually landed.
-  // Album is mounted at BOTH /hub?tab=album and /hub/album — refresh both.
-  if (added > 0) {
-    revalidatePath("/hub");
-    revalidatePath("/hub/album");
-  }
-  // The whole batch failed (nothing valid landed) → a single upload error, mirroring the single-file
-  // behavior. Otherwise it's a success, with `failed` telling the client whether to nudge about the
-  // ones that didn't make it.
-  if (added === 0) {
-    if (lastFailureDetail) {
-      return { error: hub.actions.photoUploadFailedDetail(lastFailureDetail) };
-    }
-    return { error: hub.actions.photoUploadFailed };
-  }
-  return { ok: true, added, failed };
+  if (chosen.length > 0) return { familyIds: chosen };
+  if (allowed.size === 1) return { familyIds: [active[0]!.familyId] }; // solo → sole family
+  return { error: hub.actions.noAlbumChosen }; // multi-family with no valid selection
 }
 
 /**
- * Per-item sibling of `uploadAlbumPhotoAction` (ADR-0015 · F2). The client drives import as ONE call
- * per photo through a bounded concurrency pool so each placeholder tile resolves — or fails with a
- * tap-to-retry — independently. Mirrors the batch action's guards EXACTLY but for a single file:
- * re-resolves auth server-side (identity is NEVER trusted from the client), re-validates the target
- * family set against the contributor's OWN active memberships, then EXIF + storage.put + createAlbumPhoto.
- * The 30-item cap moves to the client (a UX/resource guard, not a security boundary — ADR-0015).
+ * Step 1 — mint a direct-to-storage upload target + HMAC ticket for ONE photo (issue #20). Re-resolves
+ * auth, requires ≥1 active family, and validates the declared image content type BEFORE presigning (so
+ * a presigned target — which binds Content-Type — can only ever exist for an allowed image type). The
+ * key is server-minted and fresh; the client never chooses it.
  */
-export async function uploadOneAlbumPhotoAction(
-  formData: FormData,
-): Promise<ImportOnePhotoResult> {
-  // [DIAG] Same tracing as the batch action — this per-item path MULTIPLIES the Clerk auth() surface
-  // (N calls instead of 1), so the "Not signed in" investigation needs it here too. Remove once solved.
-  const tStart = Date.now();
+export type RequestAlbumUploadResult =
+  | { ok: true; key: string; upload: UploadTarget; ticket: string }
+  | { error: string };
+
+export async function requestAlbumUploadAction(input: {
+  contentType: string;
+}): Promise<RequestAlbumUploadResult> {
   const { db, storage, auth } = await getRuntime();
-  const tRuntime = Date.now();
   const ctx = await auth.getCurrentAuthContext();
-  console.info(
-    `[DIAG album/upload] ctx.kind=${ctx.kind} runtimeMs=${tRuntime - tStart} authMs=${Date.now() - tRuntime}`,
-  );
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
-  // Re-validate the target album set against the contributor's OWN active memberships — identical
-  // rules to the batch action; client-submitted ids are NEVER trusted.
+  // Require ≥1 active family up front (matches the old action's noFamily guard) — no point minting a
+  // target the caller could never `record` into.
   const active = await listActiveFamiliesForPerson(db, ctx.personId);
   if (active.length === 0) return { error: hub.actions.noFamily };
-  const allowed = new Set(active.map((f) => f.familyId));
+
+  const contentType = (input.contentType || "").trim();
+  if (!isAllowedImageContentType(contentType)) {
+    return { error: hub.actions.photoTypeUnsupported };
+  }
+
+  const key = `${ALBUM_PHOTO_KEY_PREFIX}${randomUUID()}`;
+  let upload: UploadTarget;
+  try {
+    upload = await storage.createUploadTarget({ key, contentType });
+  } catch (err) {
+    console.error(
+      `[album/upload] createUploadTarget failed for ${key} (${contentType}):`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return { error: hub.actions.photoUploadFailedDetail(sanitizeStorageErrorDetail(err)) };
+  }
+  const ticket = createUploadTicket({ key, personId: ctx.personId });
+  return { ok: true, key, upload, ticket };
+}
+
+/**
+ * Step 3 — record the album row for a photo the client has ALREADY PUT into storage (issue #20). The
+ * bytes never come through here. Security gates, in order:
+ *   - re-resolve auth (identity never trusted from the client);
+ *   - VERIFY the HMAC ticket: server-minted + unexpired, minter === caller, and the ticket's key
+ *     equals the submitted key — so `record` can't be driven with a forged or foreign key;
+ *   - the key must be in the `family-photos/` keyspace;
+ *   - re-validate `familyIds` against the caller's OWN active memberships (spoofed/foreign dropped);
+ *   - the object must EXIST in storage (never record a phantom key);
+ *   - EXIF is read from the STORED bytes server-side (unchanged trust model) and never fails the record.
+ */
+export async function recordAlbumPhotoAction(
+  formData: FormData,
+): Promise<ImportOnePhotoResult> {
+  const { db, storage, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  const key = formData.get("key");
+  const ticket = formData.get("ticket");
+  if (typeof key !== "string" || !key || typeof ticket !== "string" || !ticket) {
+    return { error: hub.actions.invalidInput };
+  }
+
+  // Ticket must be valid, unexpired, minted by THIS caller, and bound to THIS key.
+  const verified = verifyUploadTicket(ticket);
+  if (!verified || verified.personId !== ctx.personId || verified.key !== key) {
+    return { error: hub.actions.uploadTicketInvalid };
+  }
+  // Defense in depth: the key must be in the album keyspace (the mint prefixes it, the ticket binds
+  // it, but never trust a single check on a write surface of the front door).
+  if (!key.startsWith(ALBUM_PHOTO_KEY_PREFIX)) {
+    return { error: hub.actions.uploadTicketInvalid };
+  }
+
+  const active = await listActiveFamiliesForPerson(db, ctx.personId);
   const submitted = formData
     .getAll("familyIds")
     .filter((v): v is string => typeof v === "string");
-  const chosen = [...new Set(submitted.filter((id) => allowed.has(id)))];
-  let familyIds: string[];
-  if (chosen.length > 0) {
-    familyIds = chosen;
-  } else if (allowed.size === 1) {
-    familyIds = [active[0]!.familyId];
-  } else {
-    return { error: hub.actions.noAlbumChosen };
-  }
+  const resolved = resolveTargetFamilies(submitted, active);
+  if ("error" in resolved) return { error: resolved.error };
+  const { familyIds } = resolved;
 
-  // Exactly one file: the first real, non-empty Blob among the `photo` entries.
-  const photo = formData
-    .getAll("photo")
-    .find((v): v is File => v instanceof Blob && v.size > 0);
-  if (!photo) return { error: hub.actions.photoEmpty };
+  // Read the JUST-STORED bytes: this both CONFIRMS the object exists (never record a phantom key) and
+  // gives us the authoritative bytes to EXIF server-side — the same trust model as before, just from
+  // storage instead of the request body.
+  const bytes = await storage.getBytes(key);
+  if (!bytes) return { error: hub.actions.uploadObjectMissing };
 
-  const bytes = new Uint8Array(await photo.arrayBuffer());
-  const contentType = photo.type || "application/octet-stream";
-  const storageKey = `family-photos/${randomUUID()}`;
-
-  // #17: read EXIF from the SAME bytes; never fail the upload on EXIF alone.
   let exif: PhotoExif = { capturedAt: null, gps: null };
   try {
     exif = await extractPhotoExif(bytes);
   } catch {
-    /* never fail the upload on EXIF */
+    /* never fail the record on EXIF */
   }
 
   let photoId: string;
   try {
-    await storage.put({ key: storageKey, bytes, contentType });
     const photo = await createAlbumPhoto(db, {
       contributorPersonId: ctx.personId,
       familyIds,
       source: "upload",
-      storageKey,
+      storageKey: key,
       caption: null,
       exifCapturedAt: exif.capturedAt,
       exifGps: exif.gps,
@@ -260,16 +200,23 @@ export async function uploadOneAlbumPhotoAction(
     photoId = photo.id;
   } catch (err) {
     console.error(
-      `[album/upload] storage/create failed for ${storageKey} (${contentType}, ${bytes.byteLength} bytes):`,
+      `[album/upload] record failed for ${key}:`,
       err instanceof Error ? err.message : String(err),
     );
+    // The object is already in storage but no row references it. A retry mints a FRESH key, so this
+    // one would leak as a write-once orphan forever. Best-effort delete it (swallow any failure —
+    // a leaked blob is harmless; a failed cleanup must not mask the real create error).
+    try {
+      await storage.delete(key);
+    } catch {
+      /* best-effort orphan cleanup */
+    }
     return { error: hub.actions.photoUploadFailedDetail(sanitizeStorageErrorDetail(err)) };
   }
 
   revalidatePath("/hub");
   revalidatePath("/hub/album");
-  // Return the new id so the board renders this tile's real bytes optimistically (ADR-0015): the
-  // placeholder swaps straight to the photo instead of blanking until the server refresh lands.
+  // Return the new id so the board renders this tile's real bytes optimistically (ADR-0015).
   return { ok: true, photoId };
 }
 
@@ -306,7 +253,7 @@ export async function editAlbumCaptionAction(
     return { ok: true };
   } catch {
     // An unexpected DB/seam throw becomes a friendly inline error instead of an unhandled
-    // rejection in the client transition (mirrors uploadAlbumPhotoAction's photoUploadFailed guard).
+    // rejection in the client transition (mirrors the record action's photoUploadFailed guard).
     return { error: hub.album.captionSaveError };
   }
 }

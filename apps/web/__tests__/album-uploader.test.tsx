@@ -19,15 +19,19 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, replace }),
 }));
 
-const uploadAlbumPhotoAction = vi.fn(
-  async (..._args: unknown[]): Promise<{ ok: true; added: number; failed: number }> => ({
+// issue #20 — the uploader's legacy (non-board) path uploads each file directly to storage via
+// uploadPhotoDirect(file, familyIds) (request target → PUT → record). Default: success.
+let photoSeq = 0;
+const uploadPhotoDirect = vi.fn(
+  async (
+    ..._args: unknown[]
+  ): Promise<{ ok: true; photoId: string } | { error: string }> => ({
     ok: true,
-    added: 1,
-    failed: 0,
+    photoId: `photo-${(photoSeq += 1)}`,
   }),
 );
-vi.mock("@/app/hub/album/actions", () => ({
-  uploadAlbumPhotoAction: (...args: unknown[]) => uploadAlbumPhotoAction(...args),
+vi.mock("@/app/hub/album/direct-upload", () => ({
+  uploadPhotoDirect: (...args: unknown[]) => uploadPhotoDirect(...args),
 }));
 
 const startGooglePhotosImportAction = vi.fn();
@@ -104,10 +108,9 @@ describe("AlbumUploader multi-family picker", () => {
     expect(fileInput.multiple).toBe(true);
   });
 
-  // #16 multi-select: selecting several files sends ALL of them to the action as repeated `photo`
-  // FormData entries (each becomes its own album photo, same chosen album[s]). Choosing files IS the
-  // upload — no separate submit step.
-  it("submits every selected file as a separate `photo` entry", async () => {
+  // #16 multi-select · issue #20: selecting several files uploads EACH ONE directly to storage — one
+  // uploadPhotoDirect call per file. Choosing files IS the upload — no separate submit step.
+  it("uploads every selected file directly (one call per file)", async () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
@@ -117,12 +120,10 @@ describe("AlbumUploader multi-family picker", () => {
     const f3 = new File([new Uint8Array([7, 8, 9])], "p3.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1, f2, f3] } });
 
-    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
-    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    const photos = formData.getAll("photo");
-    expect(photos).toHaveLength(3);
-    expect((photos[0] as File).name).toBe("p1.png");
-    expect((photos[2] as File).name).toBe("p3.png");
+    await vi.waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(3));
+    // Each call carries the prepared File as its first arg.
+    expect((uploadPhotoDirect.mock.calls[0]![0] as File).name).toBe("p1.png");
+    expect((uploadPhotoDirect.mock.calls[2]![0] as File).name).toBe("p3.png");
   });
 
   // ADR-0015 · F2 board mode: when `onImportFiles` is provided, the uploader HANDS OFF import
@@ -147,14 +148,13 @@ describe("AlbumUploader multi-family picker", () => {
     expect((files as File[]).map((f) => f.name)).toEqual(["p1.png", "p2.png"]);
     // Default selection is the current-context family, handed to the board.
     expect(familyIds).toEqual([FAM_A.familyId]);
-    // The batched action is NOT called in board mode.
-    expect(uploadAlbumPhotoAction).not.toHaveBeenCalled();
+    // The direct-upload path is NOT taken in board mode (the board owns import).
+    expect(uploadPhotoDirect).not.toHaveBeenCalled();
   });
 
-  // Regression: the multi-family picker's checked albums must ride along in the payload. The upload
-  // now builds FormData explicitly (rather than serializing a <form>), so the selected `familyIds`
-  // come from the picker state, not from the DOM. Checking a second album sends BOTH.
-  it("sends the checked albums as `familyIds` entries (multi-family)", async () => {
+  // Regression · issue #20: the multi-family picker's checked albums ride along as the second arg to
+  // each direct upload (the server re-validates). Checking a second album sends BOTH.
+  it("sends the checked albums as familyIds (multi-family)", async () => {
     render(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
     );
@@ -164,16 +164,15 @@ describe("AlbumUploader multi-family picker", () => {
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1] } });
 
-    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
-    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    expect(new Set(formData.getAll("familyIds"))).toEqual(
+    await vi.waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
+    expect(new Set(uploadPhotoDirect.mock.calls[0]![1] as string[])).toEqual(
       new Set([FAM_A.familyId, FAM_B.familyId]),
     );
   });
 
-  // Regression: a solo-family contributor sends NO `familyIds` — the server defaults to the sole
-  // family. (No picker is shown, so nothing to serialize.)
-  it("sends NO `familyIds` for a solo-family contributor", async () => {
+  // Regression · issue #20: a solo-family contributor sends NO familyIds — the server defaults to the
+  // sole family. (No picker is shown, so nothing to select.)
+  it("sends NO familyIds for a solo-family contributor", async () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
@@ -181,20 +180,23 @@ describe("AlbumUploader multi-family picker", () => {
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [f1] } });
 
-    await vi.waitFor(() => expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1));
-    const formData = uploadAlbumPhotoAction.mock.calls[0]![0] as FormData;
-    expect(formData.getAll("familyIds")).toHaveLength(0);
+    await vi.waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
+    expect(uploadPhotoDirect.mock.calls[0]![1]).toEqual([]);
   });
 
   // A partial-success batch (some files failed) surfaces a gentle status note, NOT an error alert.
   it("shows a soft note (not an error) after a partial-success batch", async () => {
-    uploadAlbumPhotoAction.mockResolvedValueOnce({ ok: true, added: 2, failed: 1 });
+    // Two files: the first lands, the second fails → a partial success note.
+    uploadPhotoDirect
+      .mockResolvedValueOnce({ ok: true, photoId: "ok-1" })
+      .mockResolvedValueOnce({ error: "nope" });
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
     const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
     const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
-    fireEvent.change(fileInput, { target: { files: [f1] } });
+    const f2 = new File([new Uint8Array([2])], "p2.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [f1, f2] } });
 
     await vi.waitFor(() =>
       expect(screen.getByRole("status").textContent).toMatch(/couldn't be added/i),
@@ -202,11 +204,10 @@ describe("AlbumUploader multi-family picker", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  // Regression (review finding): the action can REJECT (e.g. the request body exceeds the Server
-  // Action / platform size limit) rather than return an { error } shape. That rejection must surface a
-  // clear message, not be swallowed by the transition so the upload silently does nothing.
-  it("surfaces an error when the upload action throws (does not fail silently)", async () => {
-    uploadAlbumPhotoAction.mockRejectedValueOnce(new Error("Body exceeded 1 MB limit"));
+  // Regression · issue #20: when EVERY file fails to upload (nothing landed), surface a clear upload
+  // error rather than silently doing nothing.
+  it("surfaces an error when every file fails to upload", async () => {
+    uploadPhotoDirect.mockResolvedValue({ error: "boom" });
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
@@ -215,14 +216,14 @@ describe("AlbumUploader multi-family picker", () => {
     fireEvent.change(fileInput, { target: { files: [f1] } });
 
     await vi.waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toMatch(/too large/i),
+      expect(screen.getByRole("alert").textContent).toMatch(/couldn't add/i),
     );
-    expect(uploadAlbumPhotoAction).toHaveBeenCalledTimes(1);
+    expect(uploadPhotoDirect).toHaveBeenCalledTimes(1);
   });
 
   // Regression (review finding): a batch over the per-batch cap is rejected client-side with a
-  // friendly message and never spends an upload (the server enforces the same cap authoritatively).
-  it("rejects an over-cap batch client-side without calling the action", async () => {
+  // friendly message and never spends an upload (the count cap is a UX guard — ADR-0015).
+  it("rejects an over-cap batch client-side without uploading", async () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
@@ -236,7 +237,7 @@ describe("AlbumUploader multi-family picker", () => {
     await vi.waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/too many/i),
     );
-    expect(uploadAlbumPhotoAction).not.toHaveBeenCalled();
+    expect(uploadPhotoDirect).not.toHaveBeenCalled();
   });
 
   // Regression: the family switcher is a same-route soft navigation, so this client component is

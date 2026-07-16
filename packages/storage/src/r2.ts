@@ -23,8 +23,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { BuildMiddleware, MetadataBearer } from "@smithy/types";
 import {
   ObjectAlreadyExistsError,
+  UPLOAD_TARGET_EXPIRY_SECONDS,
+  type CreateUploadTargetInput,
   type MediaStorage,
   type PutObjectInput,
+  type UploadTarget,
 } from "./index";
 
 export interface R2Config {
@@ -40,6 +43,14 @@ export interface R2Config {
   publicBaseUrl?: string;
   /** Presigned GET URL expiry in seconds. Default: 3600 (1 hour). */
   presignExpirySeconds?: number;
+  /**
+   * Whether `createUploadTarget` presigns the write-once `IfNoneMatch: "*"` precondition (issue #20).
+   * Default TRUE (atomic write-once at the server). This is an ESCAPE HATCH: if a live R2 bucket ever
+   * rejects the presigned conditional-write, set this false to fall back to relying on the fresh-UUID
+   * key alone — recoverable via env (`R2_PRESIGN_CONDITIONAL_WRITE=0`) with NO redeploy. When false,
+   * neither `If-None-Match` nor its signed-header entry are included.
+   */
+  presignConditionalWrite?: boolean;
   /** For tests: inject a pre-built S3 client. */
   client?: S3Client;
 }
@@ -105,12 +116,14 @@ export class R2MediaStorage implements MediaStorage {
   private readonly bucket: string;
   private readonly publicBaseUrl: string | undefined;
   private readonly presignExpirySeconds: number;
+  private readonly presignConditionalWrite: boolean;
 
   constructor(config: R2Config) {
     this.bucket = config.bucket;
     this.publicBaseUrl = config.publicBaseUrl;
     this.presignExpirySeconds =
       config.presignExpirySeconds ?? DEFAULT_PRESIGN_EXPIRY_SECONDS;
+    this.presignConditionalWrite = config.presignConditionalWrite ?? true;
     if (config.client) {
       this.client = config.client;
     } else {
@@ -180,6 +193,47 @@ export class R2MediaStorage implements MediaStorage {
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn: this.presignExpirySeconds },
     );
+  }
+
+  /**
+   * Mint a presigned PUT the browser uploads DIRECTLY to R2 (issue #20). The presign binds:
+   *   - the exact `Key` (the server-minted, fresh key — the client cannot upload elsewhere),
+   *   - `ContentType` (so the stored object's type matches what was validated + presigned), and
+   *   - `IfNoneMatch: "*"` — an ATOMIC write-once precondition (R2 supports it), so a client cannot
+   *     overwrite an existing object even at this key. These become signed request headers, so the
+   *     PUT is rejected (403 SignatureDoesNotMatch) if the client changes any of them.
+   * Short expiry (UPLOAD_TARGET_EXPIRY_SECONDS) limits replay of a leaked URL.
+   */
+  async createUploadTarget({
+    key,
+    contentType,
+    expirySeconds,
+  }: CreateUploadTargetInput): Promise<UploadTarget> {
+    const expiresIn = expirySeconds ?? UPLOAD_TARGET_EXPIRY_SECONDS;
+    const conditional = this.presignConditionalWrite;
+    const signableHeaders = new Set(
+      conditional ? ["content-type", "if-none-match"] : ["content-type"],
+    );
+    const url = await getSignedUrl(
+      this.client,
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+        // Escape hatch: omit the write-once precondition entirely when conditional-write is off.
+        ...(conditional ? { IfNoneMatch: "*" } : {}),
+      }),
+      { expiresIn, signableHeaders },
+    );
+    // The client MUST replay these exact headers — they were folded into the signature above.
+    return {
+      method: "PUT",
+      url,
+      headers: {
+        "Content-Type": contentType,
+        ...(conditional ? { "If-None-Match": "*" } : {}),
+      },
+    };
   }
 
   /**
