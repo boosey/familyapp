@@ -98,7 +98,7 @@ export async function applyClerkWebhookEvent(
   if (evt.type === "user.deleted") {
     const data = evt.data as ClerkDeletedJson;
     // Defensive: a malformed deleted-event without an id can do nothing but be ignored.
-    if (!data.id) return { type: evt.type, action: "ignored" };
+    if (!data?.id) return { type: evt.type, action: "ignored" };
     const result = await deactivateAccountByAuthProviderUserId(db, data.id);
     return { type: evt.type, action: "deactivated", matched: result.matched };
   }
