@@ -11,7 +11,7 @@ import { hub } from "@/app/_copy";
 import { TagInput } from "@/app/hub/TagInput";
 import { StoryPhotosEditor } from "@/app/hub/StoryPhotosEditor";
 import type { TagSuggestions, TagToken } from "@/app/hub/tag-input-types";
-import { tokenKey } from "@/app/hub/tag-input-types";
+import { tokenKey, familyTokenLabel } from "@/app/hub/tag-input-types";
 import {
   editStoryDetailsAction,
   editStoryProseAction,
@@ -20,15 +20,19 @@ import {
   retargetStoryFamiliesAction,
 } from "./actions";
 
+/** A family this story is (or will be) shared with. `shortName` (ADR-0021) is the chip's display
+ *  label when set; `name` is the formal fallback. */
+export type TargetFamily = { id: string; name: string; shortName?: string | null };
+
 export interface StoryEditorProps {
   storyId: string;
   initialTitle: string;
   initialTags: string[];
   initialProse: string;
   initialPersonSubjects: { personId: string; displayName: string }[];
-  initialTargetFamilies: { id: string; name: string }[];
+  initialTargetFamilies: TargetFamily[];
   suggestions: TagSuggestions;
-  onClose: (next: { title: string; tags: string[]; prose: string; targetFamilies: { id: string; name: string }[] }) => void;
+  onClose: (next: { title: string; tags: string[]; prose: string; targetFamilies: TargetFamily[] }) => void;
   /** When true, StoryPhotosEditor scrolls into view on mount (kebab "Add Photos"). */
   focusPhotos?: boolean;
 }
@@ -54,7 +58,7 @@ export function StoryEditor(props: StoryEditorProps) {
     () => [
       ...tags.map((value): TagToken => ({ kind: "text", value })),
       ...people.map((p): TagToken => ({ kind: "person", personId: p.personId, displayName: p.displayName })),
-      ...families.map((f): TagToken => ({ kind: "family", familyId: f.id, name: f.name })),
+      ...families.map((f): TagToken => ({ kind: "family", familyId: f.id, name: f.name, shortName: f.shortName })),
     ],
     [tags, people, families],
   );
@@ -98,7 +102,7 @@ export function StoryEditor(props: StoryEditorProps) {
     run(() => editStoryDetailsAction(fd), () => setTags(prev));
   };
 
-  const saveFamilies = (nextFamilies: { id: string; name: string }[]) => {
+  const saveFamilies = (nextFamilies: TargetFamily[]) => {
     const prev = families;
     setFamilies(nextFamilies);
     const fd = new FormData();
@@ -111,7 +115,7 @@ export function StoryEditor(props: StoryEditorProps) {
     if (token.kind === "text") {
       saveTags([...tags, token.value]);
     } else if (token.kind === "family") {
-      saveFamilies([...families, { id: token.familyId, name: token.name }]);
+      saveFamilies([...families, { id: token.familyId, name: token.name, shortName: token.shortName }]);
     } else if (token.personId) {
       const prev = people;
       const fd = new FormData();
@@ -153,7 +157,7 @@ export function StoryEditor(props: StoryEditorProps) {
     } else if (token.kind === "family") {
       // Never remove the last family (belt-and-suspenders — TagInput already hides its ✕).
       if (families.length <= 1) return;
-      if (!confirm(hub.tagInput.confirmRevoke(token.name))) return;
+      if (!confirm(hub.tagInput.confirmRevoke(familyTokenLabel(token)))) return;
       saveFamilies(families.filter((f) => f.id !== token.familyId));
     } else {
       const prev = people;

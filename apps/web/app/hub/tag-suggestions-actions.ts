@@ -42,7 +42,11 @@ export async function loadTagSuggestionsAction(
 
   return {
     people: [...peopleById].map(([personId, displayName]) => ({ personId, displayName })),
-    families: families.map((f) => ({ id: f.familyId, name: f.familyName })),
+    families: families.map((f) => ({
+      id: f.familyId,
+      name: f.familyName,
+      shortName: f.familyShortName,
+    })),
     tags,
   };
 }

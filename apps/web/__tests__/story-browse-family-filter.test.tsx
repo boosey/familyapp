@@ -95,6 +95,25 @@ function typeSearch(q: string) {
   fireEvent.change(screen.getByRole("textbox"), { target: { value: q } });
 }
 
+describe("StoryBrowse — family tag labels", () => {
+  it("a story card's family tag shows the steward-set short name in place of the formal name (ADR-0021)", () => {
+    const shortFam: ViewerFamily = { id: "fam-s", name: "The Esposito Family", shortName: "Espositos" };
+    const item = makeItem({ id: "s-short", title: "Story short", families: [shortFam], eraYear: 1962 });
+    render(
+      <StoryBrowse
+        items={[item]}
+        viewerFamilies={[shortFam]}
+        viewerPersonId="p1"
+        viewerName="You"
+        selectedIds={[shortFam.id]}
+        allSelected
+      />,
+    );
+    expect(screen.getByText("Espositos")).toBeTruthy();
+    expect(screen.queryByText("The Esposito Family")).toBeNull();
+  });
+});
+
 describe("StoryBrowse — multi-select family narrowing (Feed)", () => {
   it("all selected shows every story (A+B, A-only, B-only)", () => {
     renderBrowse([famA.id, famB.id], true);

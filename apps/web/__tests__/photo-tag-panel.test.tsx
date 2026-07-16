@@ -225,12 +225,24 @@ describe("PhotoTagPanel", () => {
 
   it("blocks removing the LAST family: shows lastFamilyLocked and does NOT retarget", async () => {
     const one = clone();
-    one.detail.families = [{ familyId: "fam-1", familyName: "The Lovelaces" }];
+    one.detail.families = [{ familyId: "fam-1", familyName: "The Lovelaces", familyShortName: null }];
     render(<PhotoTagPanel photoId="photo-1" initial={one} />);
     // Turn off the only ON family.
     fireEvent.click(screen.getByRole("button", { name: /the lovelaces/i }));
     expect(retargetPhotoFamiliesAction).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/at least one family album/i);
+  });
+
+  it("renders a family's steward-set short name in place of the formal name (ADR-0021)", () => {
+    const short = clone();
+    short.detail.canManage = false; // read-only path renders families as static text
+    short.detail.families = [
+      { familyId: "fam-1", familyName: "The Lovelace Family", familyShortName: "Lovelaces" },
+    ];
+    render(<PhotoTagPanel photoId="photo-1" initial={short} />);
+    const placement = screen.getByText("Which family albums").parentElement as HTMLElement;
+    expect(within(placement).getByText("Lovelaces")).toBeTruthy();
+    expect(within(placement).queryByText("The Lovelace Family")).toBeNull();
   });
 
   it("a non-manager sees read-only chips and NO inputs", () => {

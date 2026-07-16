@@ -254,7 +254,12 @@ export function ComposingEditor({
       ...draftPeople.map((p): TagToken => ({ kind: "person", personId: p.personId, displayName: p.displayName })),
       ...families
         .filter((f) => pickedFamilies.has(f.familyId))
-        .map((f): TagToken => ({ kind: "family", familyId: f.familyId, name: f.familyName })),
+        .map((f): TagToken => ({
+          kind: "family",
+          familyId: f.familyId,
+          name: f.familyName,
+          shortName: f.familyShortName,
+        })),
     ],
     [draftTags, draftPeople, families, pickedFamilies],
   );

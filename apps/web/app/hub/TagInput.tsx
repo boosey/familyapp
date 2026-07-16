@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
 import type { TagInputProps, TagToken } from "./tag-input-types";
-import { tokenKey } from "./tag-input-types";
+import { tokenKey, familyTokenLabel } from "./tag-input-types";
 
 export function TagInput({
   tokens,
@@ -39,7 +39,12 @@ export function TagInput({
     () =>
       q
         ? suggestions.families
-            .filter((f) => f.name.toLowerCase().includes(ql))
+            // Match the label the user sees (short name) as well as the formal name.
+            .filter(
+              (f) =>
+                f.name.toLowerCase().includes(ql) ||
+                (f.shortName?.toLowerCase().includes(ql) ?? false),
+            )
             .filter((f) => !has.has(`family:${f.id}`))
         : [],
     [q, ql, suggestions.families, has],
@@ -90,13 +95,13 @@ export function TagInput({
           {tokens.map((t) => (
             <li key={tokenKey(t)} style={t.kind === "family" ? familyChip : chip}>
               <span title={t.kind === "family" ? hub.tagInput.familyChipTitle : undefined}>
-                {t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : t.name}
+                {t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)}
               </span>
               {nonRemovableTokenKeys?.has(tokenKey(t)) ? null : (
                 <button
                   type="button"
                   aria-label={`${hub.tagInput.remove} ${
-                    t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : t.name
+                    t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)
                   }`}
                   onClick={() => onRemove(t)}
                   disabled={disabled}
@@ -141,9 +146,9 @@ export function TagInput({
               type="button"
               disabled={disabled}
               style={option}
-              onClick={() => add({ kind: "family", familyId: f.id, name: f.name })}
+              onClick={() => add({ kind: "family", familyId: f.id, name: f.name, shortName: f.shortName })}
             >
-              {f.name}
+              {familyTokenLabel(f)}
             </button>
           ))}
 

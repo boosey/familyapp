@@ -9,6 +9,7 @@
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { familyPhotos } from "@chronicle/db/content";
+import { families } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -62,7 +63,9 @@ describe("listAlbumPhotosDetailed", () => {
     expect(row.id).toBe(photo.id);
     expect(row.contributorPersonId).toBe(rosa.id);
     expect(row.contributorDisplayName).toBe("Rosa");
-    expect(row.families).toEqual([{ familyId: fam.id, familyName: "Esposito" }]);
+    expect(row.families).toEqual([
+      { familyId: fam.id, familyName: "Esposito", familyShortName: null },
+    ]);
     expect(row.subjects.map((s) => s.personId)).toEqual([rosa.id]);
     expect(row.subjects[0]!.displayName).toBe("Rosa");
     expect(row.people.map((p) => p.personId)).toEqual([sal.id]);
@@ -124,7 +127,21 @@ describe("listAlbumPhotosDetailed", () => {
     const rows = await listAlbumPhotosDetailed(db, account(rosa.id), [famA.id, famB.id]);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.id).toBe(photo.id);
-    expect(rows[0]!.families).toEqual([{ familyId: famA.id, familyName: "Esposito" }]);
+    expect(rows[0]!.families).toEqual([
+      { familyId: famA.id, familyName: "Esposito", familyShortName: null },
+    ]);
+  });
+
+  it("surfaces a family's steward-set short name on each placement (ADR-0021)", async () => {
+    const rosa = await makePerson(db, "Rosa");
+    const fam = await makeFamilyWithMember("The Esposito Family", rosa.id);
+    await db.update(families).set({ shortName: "Espositos" }).where(eq(families.id, fam.id));
+    await photoIn([fam.id], rosa.id, "k/short");
+
+    const rows = await listAlbumPhotosDetailed(db, account(rosa.id), [fam.id]);
+    expect(rows[0]!.families).toEqual([
+      { familyId: fam.id, familyName: "The Esposito Family", familyShortName: "Espositos" },
+    ]);
   });
 
   it("excludes soft-deleted photos", async () => {

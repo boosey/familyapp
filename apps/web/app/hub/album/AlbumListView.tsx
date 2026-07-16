@@ -97,7 +97,7 @@ export function AlbumListView({
         </thead>
         <tbody>
           {photos.map((photo) => {
-            const families = (photo.families ?? []).map((f) => f.name);
+            const families = (photo.families ?? []).map((f) => f.shortName || f.name);
             const tags = tagNames(photo);
             const selected = selectedIds?.has(photo.id) ?? false;
             return (

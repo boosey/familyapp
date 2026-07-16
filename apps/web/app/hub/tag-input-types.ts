@@ -9,12 +9,24 @@
 export type TagToken =
   | { kind: "text"; value: string }
   | { kind: "person"; personId: string | null; displayName: string } // null id ⇒ mint on submit
-  | { kind: "family"; familyId: string; name: string };
+  // `shortName` (steward-set brief label, ADR-0021) is the chip's DISPLAY label when set; `name`
+  // (the formal family name) is retained as the fallback. Neither is persisted — the write path uses
+  // `familyId` — so they carry display text only.
+  | { kind: "family"; familyId: string; name: string; shortName?: string | null };
 
 export interface TagSuggestions {
   people: { personId: string; displayName: string }[];
-  families: { id: string; name: string }[];
+  /** `shortName` (ADR-0021) is shown in the typeahead/chip in place of `name` when set. */
+  families: { id: string; name: string; shortName?: string | null }[];
   tags: string[];
+}
+
+/** The label a family tag shows: the steward-set short name when present, else the formal name. */
+export function familyTokenLabel(t: {
+  name: string;
+  shortName?: string | null;
+}): string {
+  return t.shortName || t.name;
 }
 
 export interface TagInputProps {

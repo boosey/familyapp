@@ -44,7 +44,8 @@ export interface AlbumGridPhoto {
   // Phase C enrichment — OPTIONAL so existing minimal-photo tests / the board's placeholder path still
   // typecheck when only {id, caption, canManage} is passed. Absent facets simply never match a filter.
   contributorName?: string | null;
-  families?: { id: string; name: string }[];
+  /** `shortName` (ADR-0021) is the family tag's display label when set; `name` is the fallback. */
+  families?: { id: string; name: string; shortName?: string | null }[];
   subjects?: { id: string; name: string }[];
   people?: { id: string; name: string }[];
   places?: { id: string; name: string }[];

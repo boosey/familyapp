@@ -26,7 +26,12 @@ async function fixture() {
   // A SECOND family the same story is also targeted to — but the viewer is NOT a member of it.
   const [carney] = await db
     .insert(families)
-    .values({ name: "Carney", creatorPersonId: narrator, stewardPersonId: narrator })
+    .values({
+      name: "Carney",
+      shortName: "Carneys",
+      creatorPersonId: narrator,
+      stewardPersonId: narrator,
+    })
     .returning();
   await db
     .insert(storyFamilies)
@@ -51,6 +56,13 @@ describe("loadStoryFamilyTargets — intersects targets with the viewer's famili
     const map = await loadStoryFamilyTargets(db, [storyId], [boudreaux, carney]);
     const ids = (map.get(storyId) ?? []).map((f) => f.id).sort();
     expect(ids).toEqual([boudreaux, carney].sort());
+  });
+
+  it("carries each family's steward-set short name through for the tag label (ADR-0021)", async () => {
+    const { db, storyId, boudreaux, carney } = await fixture();
+    const map = await loadStoryFamilyTargets(db, [storyId], [boudreaux, carney]);
+    const carneyRef = (map.get(storyId) ?? []).find((f) => f.id === carney);
+    expect(carneyRef?.shortName).toBe("Carneys");
   });
 
   it("returns an empty map for degenerate inputs (no story ids / no viewer families)", async () => {
