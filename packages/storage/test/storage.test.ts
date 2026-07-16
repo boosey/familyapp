@@ -9,6 +9,8 @@ import {
   type MediaStorage,
 } from "../src/index";
 
+const DEV_UPLOAD_BASE = "http://localhost:3000/api/media-upload";
+
 function runContract(name: string, make: () => MediaStorage) {
   describe(name, () => {
     it("stores and retrieves bytes", async () => {
@@ -52,15 +54,32 @@ function runContract(name: string, make: () => MediaStorage) {
       });
       expect(typeof (await s.getUrl("x.webm"))).toBe("string");
     });
+
+    // issue #20 — the dev adapters can't presign, so createUploadTarget points at the injected dev
+    // receiver base (`uploadBaseUrl`) with the key encoded as a single path segment + the content type.
+    it("createUploadTarget points at the dev receiver base with the encoded key + content type", async () => {
+      const s = make();
+      const target = await s.createUploadTarget({
+        key: "family-photos/abc-123",
+        contentType: "image/jpeg",
+      });
+      expect(target.method).toBe("PUT");
+      expect(target.url).toBe(`${DEV_UPLOAD_BASE}/family-photos%2Fabc-123`);
+      expect(target.headers).toEqual({ "Content-Type": "image/jpeg" });
+    });
   });
 }
 
-runContract("InMemoryMediaStorage", () => new InMemoryMediaStorage());
+runContract(
+  "InMemoryMediaStorage",
+  () => new InMemoryMediaStorage({ uploadBaseUrl: DEV_UPLOAD_BASE }),
+);
 runContract(
   "FilesystemMediaStorage",
   () =>
     new FilesystemMediaStorage({
       baseDir: mkdtempSync(join(tmpdir(), "chronicle-store-")),
+      uploadBaseUrl: DEV_UPLOAD_BASE,
     }),
 );
 

@@ -86,10 +86,33 @@ function present(v: string | undefined): boolean {
   return typeof v === "string" && v.trim() !== "";
 }
 
-/** True on Vercel or any host wired to durable Postgres — filesystem media is dev-only. */
-function isDurableDeploy(env: StorageEnv): boolean {
+/** True when an env flag is an explicit OFF value ("0"/"false"/"no", case-insensitive). Anything else
+ *  (including unset) is treated as ON by the callers that default features to enabled. */
+function isFalsey(v: string | undefined): boolean {
+  const t = (v ?? "").trim().toLowerCase();
+  return t === "0" || t === "false" || t === "no";
+}
+
+/**
+ * True on Vercel or any host wired to durable Postgres — filesystem media is dev-only. Exported so
+ * the dev-only media-upload receiver route (issue #20) 404s in any durable deploy (R2 presign URLs
+ * point at R2, never at that route, so it exists only to exercise the prod shape under `next dev`).
+ *
+ * NOTE: this (and the dev-receiver 404 guard) assumes every durable host sets DATABASE_URL or VERCEL.
+ * A Postgres-less self-host is already unsupported by `selectMediaStorage` (it throws without R2), so
+ * there is no realistic durable environment where both are unset and the receiver would wrongly serve.
+ */
+export function isDurableDeploy(env: StorageEnv = process.env): boolean {
   return present(env.DATABASE_URL) || present(env.VERCEL);
 }
+
+/**
+ * The base URL the dev MediaStorage adapters mint direct-upload targets against (issue #20). RELATIVE
+ * on purpose: the browser resolves it against the current page origin, so no request-time origin
+ * resolution is needed in the pure `selectMediaStorage`. Only ever used by the dev (filesystem /
+ * in-memory) adapters — R2 presigns point at R2 directly.
+ */
+const DEV_UPLOAD_BASE_URL = "/api/media-upload";
 
 /**
  * PURE env→MediaStorage decision, extracted from `build()` so it can be unit-tested without
@@ -108,14 +131,21 @@ function isDurableDeploy(env: StorageEnv): boolean {
  * "Present" means non-blank: a whitespace-only value (e.g. "   ") does NOT count, so it can't
  * sneak a garbage accountId/bucket into the R2 client that would only fail at first network call.
  *
- * CRITICAL — single front door (see CLAUDE.md): the ONLY byte surface is the audited
- * /api/media/[id] route, which runs core authorization then calls `storage.getBytes(key)`.
- * `getUrl` is never called in apps/web. We construct R2MediaStorage WITHOUT a `publicBaseUrl`, so
- * the only URL it could ever produce is a presigned (signed, expiring) one — and even that is
- * never produced, because nothing here calls getUrl. (Filesystem sets publicBaseUrl only to
- * satisfy the MediaStorage interface; that "/media" string is NOT a real route — there is no
- * /media handler, only /api/media/[id] — so if getUrl were ever called it would return a path
- * that does NOT go through the audited route. The safety rests on getUrl being unused.)
+ * CRITICAL — single front door (see CLAUDE.md): the only byte-READ surface is the audited
+ * /api/media/[id] (+ /api/album-photo/[id]) route, which runs core authorization then calls
+ * `storage.getBytes(key)`. `getUrl` is never called in apps/web. We construct R2MediaStorage WITHOUT
+ * a `publicBaseUrl`, so the only URL it could ever produce is a presigned (signed, expiring) one —
+ * and even that is never produced, because nothing here calls getUrl. (Filesystem sets publicBaseUrl
+ * only to satisfy the MediaStorage interface; that "/media" string is NOT a real route — there is no
+ * /media handler, only /api/media/[id] — so if getUrl were ever called it would return a path that
+ * does NOT go through the audited route. The safety rests on getUrl being unused.)
+ *
+ * issue #20 adds a byte-WRITE surface that is deliberately NOT a read bypass: `createUploadTarget`
+ * mints a presigned PUT (R2) / dev-receiver URL scoped to ONE server-minted, write-once `family-photos/`
+ * key. It grants no read and cannot overwrite (If-None-Match / exists check), and the album row is only
+ * created AFTER the server re-validates auth + an HMAC key→minter ticket + family membership (see
+ * app/hub/album/actions.ts). The dev adapters get `uploadBaseUrl` so their targets point at the
+ * dev-only receiver route (which 404s in any durable deploy).
  */
 export function selectMediaStorage(env: StorageEnv): MediaStorage {
   const presentCount = R2_ENV_VARS.filter((name) => present(env[name])).length;
@@ -135,6 +165,10 @@ export function selectMediaStorage(env: StorageEnv): MediaStorage {
       secretAccessKey: env.R2_SECRET_ACCESS_KEY!.trim(),
       bucket: env.R2_BUCKET!.trim(),
       // publicBaseUrl intentionally omitted — do NOT set it; see the note above.
+      // issue #20 escape hatch: R2_PRESIGN_CONDITIONAL_WRITE="0"/"false" disables the presigned
+      // If-None-Match write-once precondition (falls back to the fresh-UUID key) WITHOUT a redeploy,
+      // in case a live R2 bucket ever rejects the conditional presign. Default: ON (conditional write).
+      presignConditionalWrite: !isFalsey(env.R2_PRESIGN_CONDITIONAL_WRITE),
     });
   }
 
@@ -148,6 +182,8 @@ export function selectMediaStorage(env: StorageEnv): MediaStorage {
   return new FilesystemMediaStorage({
     baseDir: anchor(env.CHRONICLE_MEDIA_DIR ?? "./.media"),
     publicBaseUrl: "/media",
+    // issue #20 — direct album uploads route through the dev receiver in `next dev`.
+    uploadBaseUrl: DEV_UPLOAD_BASE_URL,
   });
 }
 

@@ -1,20 +1,22 @@
 /**
  * Client-side photo prep before album upload.
  *
- * Vercel serverless request bodies are capped around ~4.5 MB. Phone photos are often larger, so
- * we downscale/re-encode oversized images to JPEG in the browser before the Server Action runs.
- * HEIC/HEIF usually cannot be decoded by canvas — those fail with a clear message.
+ * issue #20: bytes now go DIRECTLY to object storage, so Vercel's ~4.5 MB serverless body cap no
+ * longer applies and there is no hard per-file SIZE limit. We still downscale/re-encode LARGE images
+ * to JPEG in the browser — purely a bandwidth/UX courtesy (a full-res phone photo is many MB) — but a
+ * photo that stays large after downscale is NO LONGER rejected; it just uploads as-is.
+ * HEIC/HEIF usually cannot be decoded by canvas — those still fail with a clear message.
  */
 
-/** Stay under Vercel's ~4.5 MB body limit after FormData overhead. */
-export const MAX_UPLOAD_BYTES = Math.floor(3.5 * 1024 * 1024);
+/** Above this, downscale for bandwidth (NOT a hard limit — issue #20 removed the transport cap). */
+export const DOWNSCALE_THRESHOLD_BYTES = Math.floor(3.5 * 1024 * 1024);
 
 const MAX_EDGE_PX = 2048;
 const JPEG_QUALITY = 0.85;
 
 export type PreparePhotoResult =
   | { ok: true; file: File }
-  | { ok: false; error: "too_large" | "heic_unsupported" | "encode_failed" };
+  | { ok: false; error: "heic_unsupported" | "encode_failed" };
 
 function isHeic(file: File): boolean {
   const type = file.type.toLowerCase();
@@ -24,19 +26,21 @@ function isHeic(file: File): boolean {
 }
 
 /**
- * Return a File small enough for the album Server Action, or a typed failure.
- * Already-small non-HEIC images are returned unchanged.
+ * Return a File ready for direct upload, or a typed failure. Already-small non-HEIC images (and any
+ * non-image, which the server rejects by content type) are returned unchanged; a LARGE image is
+ * downscaled/re-encoded to JPEG for bandwidth. Post-downscale size is no longer a rejection reason
+ * (issue #20 removed the transport cap) — if canvas can't decode it (e.g. HEIC), that's the only
+ * failure.
  */
 export async function prepareAlbumPhoto(file: File): Promise<PreparePhotoResult> {
   if (isHeic(file)) {
     return { ok: false, error: "heic_unsupported" };
   }
   if (!file.type.startsWith("image/")) {
-    // Let the server reject non-images; don't invent a new client gate.
-    if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "too_large" };
+    // Let the server reject non-images (it validates content type before minting a target).
     return { ok: true, file };
   }
-  if (file.size <= MAX_UPLOAD_BYTES) {
+  if (file.size <= DOWNSCALE_THRESHOLD_BYTES) {
     return { ok: true, file };
   }
 
@@ -60,7 +64,6 @@ export async function prepareAlbumPhoto(file: File): Promise<PreparePhotoResult>
       canvas.toBlob((b) => resolve(b), "image/jpeg", JPEG_QUALITY);
     });
     if (!blob) return { ok: false, error: "encode_failed" };
-    if (blob.size > MAX_UPLOAD_BYTES) return { ok: false, error: "too_large" };
 
     const base = file.name.replace(/\.[^.]+$/, "") || "photo";
     return {

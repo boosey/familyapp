@@ -305,6 +305,11 @@ describe("ingestRecording (capture path)", () => {
       getBytes: async () => null,
       exists: async () => false,
       getUrl: async (k: string) => `nowhere://${k}`,
+      createUploadTarget: async ({ key, contentType }) => ({
+        method: "PUT" as const,
+        url: `nowhere://${key}`,
+        headers: { "Content-Type": contentType },
+      }),
       delete: async () => {},
     };
 

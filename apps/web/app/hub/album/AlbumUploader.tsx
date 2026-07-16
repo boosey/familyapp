@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * Album upload control (ADR-0009 · #15 · #16). A single "Add to album" button that opens the OS file
- * picker directly (the file input itself is hidden — no visible "choose files" control) and uploads
- * the chosen files the moment the picker closes. It calls the `uploadAlbumPhotoAction` server action
- * (which re-resolves auth and re-validates the target albums server-side — the client passes only the
- * files + its picker choice). On success it refreshes the server component so the new tiles appear; on
- * failure it surfaces the action's error string. The control sits ABOVE the album grid.
+ * Album upload control (ADR-0009 · #15 · #16 · issue #20). A single "Add to album" button that opens
+ * the OS file picker directly (the file input itself is hidden — no visible "choose files" control)
+ * and uploads the chosen files the moment the picker closes. issue #20: each file is uploaded DIRECTLY
+ * to object storage (request a server-minted target → PUT the bytes → record the row), so the bytes
+ * never transit a Server Action / Vercel's ~4.5 MB request-body cap. The server still re-resolves auth
+ * and re-validates the target albums on `record` — the client passes only its picker choice + the
+ * server-issued ticket. On success it refreshes the server component so the new tiles appear.
+ *
+ * (When the F2 board mount is active, this component instead DELEGATES import to `AlbumBoard` via
+ * `onImportFiles` — the per-item pool + placeholder tiles — and never runs this self-driving path.)
  *
  * Multi-select (#16): the hidden file input carries `multiple`, so the OS picker lets the contributor
- * choose MANY photos at once. Each selected file is appended as its own `photo` entry on the FormData,
- * which the action reads via `getAll("photo")` — each becomes its own album photo placed into the SAME
- * chosen album(s). The action returns a batch summary (`added`/`failed`); a partial success (some files
- * failed) surfaces a gentle inline note rather than an error.
+ * choose MANY photos at once. Each selected file becomes its own album photo placed into the SAME
+ * chosen album(s). A partial success (some files failed) surfaces a gentle inline note rather than an
+ * error.
  *
  * #16 — multi-family placement: a contributor in >=2 families sees a checkbox per family and chooses
  * which albums receive the batch BEFORE opening the picker. The default pre-selection is the album
@@ -23,7 +26,6 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { pickerUriForWeb } from "@chronicle/photos-google/picker";
-import { uploadAlbumPhotoAction } from "./actions";
 import {
   completeGooglePhotosImportAction,
   disconnectGooglePhotosAction,
@@ -31,6 +33,7 @@ import {
   startGooglePhotosImportAction,
 } from "./google-photos-actions";
 import { prepareAlbumPhoto } from "./prepare-photo";
+import { uploadPhotoDirect } from "./direct-upload";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "../FamilyChoiceChips";
@@ -213,58 +216,47 @@ export function AlbumUploader({
       return;
     }
     const selectedFiles = Array.from(files);
+    // issue #20 — direct-to-storage: this legacy (non-board) path uploads each file straight to object
+    // storage (request target → PUT bytes → record row) instead of POSTing bytes through a Server
+    // Action. The chosen albums (a solo contributor sends none; the server defaults to their sole
+    // family) ride along on each per-file `record`. Each file is independent — one failure never aborts
+    // the batch — and a partial success surfaces a soft note, matching the previous batch behavior.
+    const chosenFamilies = showPicker ? [...selected] : [];
     startTransition(async () => {
-      // Downscale oversized phone photos so they fit under Vercel's ~4.5 MB request body limit.
-      const prepared: File[] = [];
+      let added = 0;
+      let failed = 0;
+      let hardError: string | null = null;
       for (const file of selectedFiles) {
-        const result = await prepareAlbumPhoto(file);
-        if (!result.ok) {
-          setError(
-            result.error === "heic_unsupported"
+        const prep = await prepareAlbumPhoto(file);
+        if (!prep.ok) {
+          // A prepare failure (HEIC or a canvas encode failure — issue #20 removed the size cap) is a
+          // hard, up-front error for this path: there is no per-tile retry here, so name it and stop.
+          hardError =
+            prep.error === "heic_unsupported"
               ? hub.actions.photoHeicUnsupported
-              : result.error === "too_large"
-                ? hub.actions.photoTooLarge
-                : hub.actions.photoEncodeFailed,
-          );
-          setNote(null);
-          return;
+              : hub.actions.photoEncodeFailed;
+          break;
         }
-        prepared.push(result.file);
+        // uploadPhotoDirect never throws — a network/server failure comes back as { error }.
+        const result = await uploadPhotoDirect(prep.file, chosenFamilies);
+        if ("error" in result) failed += 1;
+        else added += 1;
       }
 
-      // Build the payload explicitly: one `photo` entry per file (the action reads getAll("photo")),
-      // plus the chosen albums when the multi-family picker is shown (a solo contributor sends none and
-      // the server defaults to their sole family).
-      const formData = new FormData();
-      for (const file of prepared) formData.append("photo", file);
-      if (showPicker) {
-        for (const familyId of selected) formData.append("familyIds", familyId);
+      if (hardError) {
+        setError(hardError);
+        setNote(null);
+        return;
       }
-      // The action can REJECT (throw) rather than return an error shape — most notably when the
-      // request body exceeds the Server Action / platform size limit. Without this catch that
-      // rejection is swallowed by the transition and the upload silently does nothing; surface a
-      // clear, actionable message instead.
-      let result;
-      try {
-        result = await uploadAlbumPhotoAction(formData);
-      } catch {
+      if (added === 0) {
         setError(hub.album.uploadError);
         setNote(null);
         return;
       }
-      if ("error" in result) {
-        setError(result.error);
-        setNote(null);
-        return;
-      }
       setError(null);
-      // A partial success (batch had ≥1 failure) is not an error — surface a soft note so the
+      // A partial success (some files failed) is not an error — surface a soft note so the
       // contributor knows exactly what landed and can retry the rest.
-      setNote(
-        result.failed > 0
-          ? hub.album.photosPartial(result.added, result.failed)
-          : null,
-      );
+      setNote(failed > 0 ? hub.album.photosPartial(added, failed) : null);
       setSelected(seed());
       router.refresh();
     });

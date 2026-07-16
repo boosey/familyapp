@@ -21,13 +21,16 @@ import { R2MediaStorage, r2ClientConfig } from "../src/r2";
 
 const s3Mock = mockClient(S3Client);
 
-function makeStorage(opts?: { publicBaseUrl?: string }) {
+function makeStorage(opts?: { publicBaseUrl?: string; presignConditionalWrite?: boolean }) {
   return new R2MediaStorage({
     accountId: "acct",
     accessKeyId: "AKIA_TEST",
     secretAccessKey: "secret",
     bucket: "chronicle-media",
     ...(opts?.publicBaseUrl ? { publicBaseUrl: opts.publicBaseUrl } : {}),
+    ...(opts?.presignConditionalWrite === undefined
+      ? {}
+      : { presignConditionalWrite: opts.presignConditionalWrite }),
     // Real client wired with test creds; aws-sdk-client-mock intercepts at the S3Client level
     // regardless of which instance sends commands.
     client: new S3Client({
@@ -164,5 +167,67 @@ describe("R2MediaStorage", () => {
   it("getUrl returns the public URL when publicBaseUrl is explicitly configured", async () => {
     const storage = makeStorage({ publicBaseUrl: "https://media.example" });
     expect(await storage.getUrl("a/b.webm")).toBe("https://media.example/a/b.webm");
+  });
+
+  // issue #20 — direct-to-storage upload. The presigned PUT binds the key + content type + write-once
+  // precondition, and the returned headers are exactly what the client must replay.
+  it("createUploadTarget presigns a PUT bound to the key, content type, and If-None-Match: '*'", async () => {
+    const storage = makeStorage();
+    const target = await storage.createUploadTarget({
+      key: "family-photos/abc-123",
+      contentType: "image/jpeg",
+    });
+
+    expect(target.method).toBe("PUT");
+    // A presigned S3 URL at THIS bucket's R2 endpoint, carrying a signature + short expiry.
+    expect(target.url).toMatch(/^https:\/\/[a-z-]+\.acct\.r2\.cloudflarestorage\.com\//);
+    // The key is a real path (S3 does not percent-encode the slash in the object key).
+    expect(target.url).toContain("/family-photos/abc-123?");
+    expect(target.url).toContain("X-Amz-Signature=");
+    expect(target.url).toContain("X-Amz-Expires=600");
+    // The content-type + write-once precondition are folded into the signature (SignedHeaders).
+    expect(target.url.toLowerCase()).toContain("content-type");
+    expect(target.url.toLowerCase()).toContain("if-none-match");
+    // The client must replay exactly these headers.
+    expect(target.headers).toEqual({
+      "Content-Type": "image/jpeg",
+      "If-None-Match": "*",
+    });
+  });
+
+  it("createUploadTarget honors an explicit expirySeconds", async () => {
+    const storage = makeStorage();
+    const target = await storage.createUploadTarget({
+      key: "family-photos/x",
+      contentType: "image/png",
+      expirySeconds: 30,
+    });
+    expect(target.url).toContain("X-Amz-Expires=30");
+  });
+
+  // issue #20 escape hatch: with presignConditionalWrite=false, the write-once precondition is dropped
+  // entirely — neither the header nor its signed-header entry appears (recoverable via env, no redeploy).
+  it("createUploadTarget OMITS If-None-Match when presignConditionalWrite is false", async () => {
+    const storage = makeStorage({ presignConditionalWrite: false });
+    const target = await storage.createUploadTarget({
+      key: "family-photos/x",
+      contentType: "image/jpeg",
+    });
+    // Content type is still bound...
+    expect(target.headers).toEqual({ "Content-Type": "image/jpeg" });
+    expect(target.url.toLowerCase()).toContain("content-type");
+    // ...but the write-once precondition is gone from both the headers and the signature.
+    expect(target.headers["If-None-Match"]).toBeUndefined();
+    expect(target.url.toLowerCase()).not.toContain("if-none-match");
+  });
+
+  it("createUploadTarget INCLUDES If-None-Match by default (conditional write ON)", async () => {
+    const storage = makeStorage(); // default
+    const target = await storage.createUploadTarget({
+      key: "family-photos/x",
+      contentType: "image/jpeg",
+    });
+    expect(target.headers["If-None-Match"]).toBe("*");
+    expect(target.url.toLowerCase()).toContain("if-none-match");
   });
 });

@@ -12,9 +12,11 @@
  *     attach) AND upload new photos from the device (which land in the album and attach in one step).
  *   • "Add from Google" imports from Google Photos (into the owner's album, exactly as the album page
  *     does) and auto-attaches every imported photo to this story.
- * Both device upload and Google import reuse the album's existing per-item server actions
- * (`uploadOneAlbumPhotoAction` / `importOneGooglePhotoAction`) — each returns the new photo id, which
- * we then hand to `attachStoryPhotoAction`. No new album/import code paths are opened here.
+ * Both device upload and Google import reuse the album's existing per-item flows: device upload goes
+ * through the album's direct-to-storage helper (`uploadPhotoDirect`, issue #20 — bytes go straight to
+ * object storage, not through a Server Action), and Google import uses `importOneGooglePhotoAction`.
+ * Each yields the new photo id, which we then hand to `attachStoryPhotoAction`. No new album/import
+ * code paths are opened here.
  *
  * Self-contained: it fetches its own data via `loadStoryPhotoEditorAction(storyId)` on mount and
  * re-fetches after each mutation. Every mutation re-resolves auth + re-verifies draft ownership
@@ -31,7 +33,7 @@ import {
   PHOTO_PICKER_POLL_TIMEOUT_MS as PICKER_POLL_TIMEOUT_MS,
 } from "@/lib/constants";
 import { pickerUriForWeb } from "@chronicle/photos-google/picker";
-import { uploadOneAlbumPhotoAction } from "./album/actions";
+import { uploadPhotoDirect } from "./album/direct-upload";
 import {
   startGooglePhotosImportAction,
   pollGooglePhotosImportAction,
@@ -243,22 +245,12 @@ export function StoryPhotosEditor({
           setError(
             prepared.error === "heic_unsupported"
               ? hub.actions.photoHeicUnsupported
-              : prepared.error === "too_large"
-                ? hub.actions.photoTooLarge
-                : hub.actions.photoEncodeFailed,
+              : hub.actions.photoEncodeFailed,
           );
           continue;
         }
-        const up = new FormData();
-        up.append("photo", prepared.file);
-        for (const id of targetFamilies) up.append("familyIds", id);
-        let uploaded;
-        try {
-          uploaded = await uploadOneAlbumPhotoAction(up);
-        } catch {
-          setError(hub.storyImages.addFailed);
-          continue;
-        }
+        // issue #20 — direct-to-storage: request a target, PUT the bytes, record the row.
+        const uploaded = await uploadPhotoDirect(prepared.file, targetFamilies);
         if ("error" in uploaded) {
           setError(uploaded.error);
           continue;

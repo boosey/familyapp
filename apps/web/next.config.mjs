@@ -28,17 +28,12 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/**": ["../../packages/db/drizzle/*.sql"],
   },
-  // Photo uploads (the Family album) POST their bytes through a Server Action, which Next caps at a
-  // 1 MB request body by DEFAULT — far under a single phone photo (2–8 MB), let alone the multi-select
-  // batch. Raise the cap so realistic uploads reach the action instead of being rejected at the RPC
-  // transport before any of our code runs. NOTE: this is the FRAMEWORK cap; the hosting platform
-  // (Vercel serverless functions) enforces its own ~4.5 MB request-body limit, so very large batches
-  // still need the direct-to-storage (presigned-upload) path — tracked as a follow-up (ADR-0009).
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "12mb",
-    },
-  },
+  // No Server-Action bodySizeLimit override (issue #20): album photo bytes NO LONGER transit a Server
+  // Action. The browser uploads each photo DIRECTLY to object storage via a server-minted presigned
+  // PUT (production R2) / a dev receiver route (local `next dev`); the server only ever handles
+  // metadata (request a target, then record the row). This sidesteps Vercel's ~4.5 MB serverless
+  // request-body cap — which no config can raise — so realistic multi-MB phone photos and batches land
+  // instead of 413ing. See docs/superpowers/plans/2026-07-16-issue-20-direct-storage-upload.md.
   // PGlite ships a wasm asset and uses Node APIs; keep server externals happy in dev.
   // The R2 media adapter (@chronicle/storage's r2.ts) pulls the AWS S3 SDK; it is server-only
   // (the media route is `runtime = "nodejs"`). Externalize it so Next doesn't try to bundle the

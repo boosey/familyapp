@@ -23,12 +23,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlbumUploader, type AlbumFamilyOption } from "./AlbumUploader";
 import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
-import { uploadOneAlbumPhotoAction } from "./actions";
 import {
   importOneGooglePhotoAction,
   listGooglePhotosImportAction,
 } from "./google-photos-actions";
 import { prepareAlbumPhoto } from "./prepare-photo";
+import { uploadPhotoDirect } from "./direct-upload";
 import {
   IMPORT_POOL_CONCURRENCY,
   MAX_IMPORT_BATCH,
@@ -168,10 +168,8 @@ export function AlbumBoard(props: {
             setStatus(tempId, "failed");
             return;
           }
-          const fd = new FormData();
-          fd.append("photo", prepared.file);
-          for (const id of work.familyIds) fd.append("familyIds", id);
-          const result = await uploadOneAlbumPhotoAction(fd);
+          // issue #20 — direct-to-storage: request a target, PUT the bytes to storage, then record.
+          const result = await uploadPhotoDirect(prepared.file, work.familyIds);
           if ("error" in result) {
             setStatus(tempId, "failed");
             return;

@@ -1,8 +1,10 @@
 /**
- * Server-side integration tests for the album surface (ADR-0009 · #15):
- *   - `uploadAlbumPhotoAction` — happy path (bytes land in storage, row + album membership written,
- *     resolves the target family from the CONTRIBUTOR's own active memberships), plus the
- *     not-signed-in and no-family guards.
+ * Server-side integration tests for the album surface (ADR-0009 · #15 · issue #20 direct-to-storage):
+ *   - `requestAlbumUploadAction` + `recordAlbumPhotoAction` — the two-step direct-upload flow. The
+ *     browser PUT is SIMULATED by calling `storage.put(key, …)` between the two actions. Covers the
+ *     happy path (row + album membership written, target family resolved from the CONTRIBUTOR's own
+ *     active memberships, EXIF read from the STORED bytes) plus the security guards (unauth, non-image
+ *     type, no-family, bad/expired/foreign ticket, phantom key).
  *   - the `/api/album-photo/[photoId]` bytes route — ALLOW (200 + bytes) for a family member, DENY
  *     (404, no leak) for a stranger and for anonymous.
  *
@@ -36,14 +38,15 @@ import {
 } from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import {
-  uploadAlbumPhotoAction,
-  uploadOneAlbumPhotoAction,
+  requestAlbumUploadAction,
+  recordAlbumPhotoAction,
   editAlbumCaptionAction,
   deleteAlbumPhotoAction,
 } from "@/app/hub/album/actions";
 import { GET as albumPhotoGet } from "@/app/api/album-photo/[photoId]/route";
+import { createUploadTicket } from "@/lib/upload-ticket";
+import type { ImportOnePhotoResult } from "@/app/hub/album/import-progress";
 import { hub } from "@/app/_copy";
-import { PHOTO_BATCH_MAX_FILES } from "@/lib/constants";
 
 const account = (personId: string): AuthContext => ({ kind: "account", personId });
 
@@ -81,82 +84,137 @@ const JPEG_WITH_EXIF = new Uint8Array(
   ),
 );
 
-function photoForm(bytes: Uint8Array, type = "image/png"): FormData {
-  const fd = new FormData();
-  fd.append("photo", new Blob([bytes as BlobPart], { type }), "photo.png");
-  return fd;
-}
-
-function photoFormWithFamilies(
-  bytes: Uint8Array,
-  familyIds: string[],
-  type = "image/png",
-): FormData {
-  const fd = photoForm(bytes, type);
-  for (const id of familyIds) fd.append("familyIds", id);
-  return fd;
-}
-
 beforeEach(async () => {
   runtimeDb = await createTestDatabase();
   runtimeStorage = new InMemoryMediaStorage();
   authCtx = { kind: "anonymous" };
 });
 
-describe("uploadAlbumPhotoAction", () => {
-  it("stores the bytes, writes the row + album membership, resolves the contributor's family", async () => {
+/**
+ * Drive the whole issue-#20 direct-upload flow end-to-end for ONE photo, SIMULATING the browser PUT
+ * with a `storage.put` between request and record. Returns the record result plus the key, so callers
+ * can assert on the created row / stored bytes.
+ */
+async function uploadOnePhoto(
+  bytes: Uint8Array,
+  opts: { familyIds?: string[]; contentType?: string } = {},
+): Promise<{ result: ImportOnePhotoResult; key: string }> {
+  const contentType = opts.contentType ?? "image/png";
+  const requested = await requestAlbumUploadAction({ contentType });
+  if ("error" in requested) throw new Error(`request failed: ${requested.error}`);
+  // Browser PUT (simulated): the bytes land at the server-minted key.
+  await runtimeStorage.put({ key: requested.key, bytes, contentType });
+  const fd = new FormData();
+  fd.append("key", requested.key);
+  fd.append("ticket", requested.ticket);
+  for (const id of opts.familyIds ?? []) fd.append("familyIds", id);
+  const result = await recordAlbumPhotoAction(fd);
+  return { result, key: requested.key };
+}
+
+/** A record FormData for a key that has ALREADY been PUT (or not) — with a valid ticket for `person`. */
+function recordForm(
+  key: string,
+  ticket: string,
+  familyIds: string[] = [],
+): FormData {
+  const fd = new FormData();
+  fd.append("key", key);
+  fd.append("ticket", ticket);
+  for (const id of familyIds) fd.append("familyIds", id);
+  return fd;
+}
+
+describe("requestAlbumUploadAction (issue #20 — step 1: mint target + ticket)", () => {
+  it("returns a key, upload target, and ticket for a signed-in family member", async () => {
     const contributor = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", contributor);
     await addMember(contributor, familyId);
     authCtx = account(contributor);
 
-    const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    // One file in → one photo added, none failed (batch summary shape).
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
-
-    // The photo is visible in the contributor's family album...
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toHaveLength(1);
-    const key = album[0]!.storageKey;
-    expect(key.startsWith("family-photos/")).toBe(true);
-    expect(album[0]!.source).toBe("upload");
-    // ...and its bytes are in storage under that write-once key.
-    expect(await runtimeStorage.getBytes(key)).toEqual(PNG_BYTES);
-    expect(runtimeStorage.size).toBe(1);
+    const res = await requestAlbumUploadAction({ contentType: "image/jpeg" });
+    if ("error" in res) throw new Error(res.error);
+    expect(res.key.startsWith("family-photos/")).toBe(true);
+    expect(res.upload.method).toBe("PUT");
+    expect(typeof res.upload.url).toBe("string");
+    // The declared content type is bound into the target headers.
+    expect(res.upload.headers["Content-Type"]).toBe("image/jpeg");
+    expect(typeof res.ticket).toBe("string");
+    // No bytes were written yet — request only mints; the browser PUTs next.
+    expect(runtimeStorage.size).toBe(0);
   });
 
-  it("rejects an unauthenticated caller and writes nothing", async () => {
+  it("rejects an unauthenticated caller", async () => {
     authCtx = { kind: "anonymous" };
-    const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    expect(result).toEqual({ error: "Not signed in." });
-    expect(runtimeStorage.size).toBe(0);
+    const res = await requestAlbumUploadAction({ contentType: "image/png" });
+    expect(res).toEqual({ error: hub.actions.notSignedIn });
   });
 
   it("rejects a signed-in caller with no family", async () => {
     const orphan = await makePerson("Orphan");
     authCtx = account(orphan);
-    const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    expect("error" in result).toBe(true);
-    expect(runtimeStorage.size).toBe(0);
+    const res = await requestAlbumUploadAction({ contentType: "image/png" });
+    expect(res).toEqual({ error: hub.actions.noFamily });
   });
 
-  it("populates exif capture-date + gps from an uploaded photo that carries EXIF (#17)", async () => {
+  it("rejects a non-image content type BEFORE minting a target", async () => {
     const contributor = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", contributor);
     await addMember(contributor, familyId);
     authCtx = account(contributor);
 
-    const result = await uploadAlbumPhotoAction(photoForm(JPEG_WITH_EXIF, "image/jpeg"));
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
+    const res = await requestAlbumUploadAction({ contentType: "application/pdf" });
+    expect(res).toEqual({ error: hub.actions.photoTypeUnsupported });
+  });
+});
 
-    // exifCapturedAt is surfaced on the grid view; the tz-naive EXIF stamp is stored as a
-    // deterministic UTC instant (host-TZ-independent), so pin the absolute ISO value.
+describe("recordAlbumPhotoAction (issue #20 — step 3: record the stored photo)", () => {
+  it("records the row + album membership from bytes already in storage", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const { result, key } = await uploadOnePhoto(PNG_BYTES, { familyIds: [familyId] });
+
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toHaveLength(1);
+    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
+    expect(album[0]!.storageKey).toBe(key);
+    expect(album[0]!.source).toBe("upload");
+    expect(await runtimeStorage.getBytes(key)).toEqual(PNG_BYTES);
+    // Exactly one object — the browser PUT (simulated) is the only write.
+    expect(runtimeStorage.size).toBe(1);
+  });
+
+  it("resolves the sole family for a solo contributor with no selection", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const { result } = await uploadOnePhoto(PNG_BYTES);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toHaveLength(1);
+    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
+  });
+
+  it("populates exif capture-date + gps from the STORED bytes (#17)", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const { result } = await uploadOnePhoto(JPEG_WITH_EXIF, {
+      familyIds: [familyId],
+      contentType: "image/jpeg",
+    });
+    expect("ok" in result && result.ok).toBe(true);
+
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     const captured = album[0]!.exifCapturedAt;
     expect(captured).toBeInstanceOf(Date);
     expect(captured!.toISOString()).toBe("2015-06-15T14:30:00.000Z");
-
-    // exifGps is NOT on the grid view — read it through the audited full-row seam.
     const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), album[0]!.id);
     expect(full!.exifGps).not.toBeNull();
     expect(full!.exifGps!.lat).toBeCloseTo(37.808333, 5);
@@ -169,298 +227,139 @@ describe("uploadAlbumPhotoAction", () => {
     await addMember(contributor, familyId);
     authCtx = account(contributor);
 
-    const result = await uploadAlbumPhotoAction(photoForm(PNG_BYTES));
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
-
+    await uploadOnePhoto(PNG_BYTES, { familyIds: [familyId] });
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album[0]!.exifCapturedAt).toBeNull();
     const full = await getAlbumPhotoForViewer(runtimeDb, account(contributor), album[0]!.id);
     expect(full!.exifGps).toBeNull();
   });
 
-  it("rejects an empty file", async () => {
+  it("rejects an unauthenticated caller and writes no row", async () => {
+    // Mint a valid ticket as a real person, then try to RECORD while anonymous.
     const contributor = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", contributor);
     await addMember(contributor, familyId);
-    authCtx = account(contributor);
+    const key = "family-photos/anon-test";
+    const ticket = createUploadTicket({ key, personId: contributor });
+    await runtimeStorage.put({ key, bytes: PNG_BYTES, contentType: "image/png" });
 
-    const result = await uploadAlbumPhotoAction(photoForm(new Uint8Array([])));
-    expect("error" in result).toBe(true);
-    expect(runtimeStorage.size).toBe(0);
-  });
-
-  // #16 — multi-family placement: the target set is the client's picker choice, re-validated on the
-  // server against the CONTRIBUTOR's own active memberships. A family they didn't pick can't see it;
-  // a family they don't belong to is dropped.
-  it("places a photo in BOTH families the contributor selects", async () => {
-    const contributor = await makePerson("Rosa");
-    const famA = await makeFamily("Esposito", contributor);
-    const famB = await makeFamily("Marino", contributor);
-    await addMember(contributor, famA);
-    await addMember(contributor, famB);
-    authCtx = account(contributor);
-
-    const result = await uploadAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famA, famB]),
-    );
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
-
-    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
-    // The SAME single photo lands in both chosen albums.
-    expect(albumA).toHaveLength(1);
-    expect(albumB.map((p) => p.id)).toEqual([albumA[0]!.id]);
-    // One upload → one storage object, regardless of how many albums it is placed in.
-    expect(runtimeStorage.size).toBe(1);
-  });
-
-  it("a family the contributor did NOT select cannot see the photo, even though the contributor belongs to it", async () => {
-    const contributor = await makePerson("Rosa");
-    const bMember = await makePerson("Sal");
-    const famA = await makeFamily("Esposito", contributor);
-    const famB = await makeFamily("Marino", contributor);
-    await addMember(contributor, famA);
-    await addMember(contributor, famB);
-    await addMember(bMember, famB);
-    authCtx = account(contributor);
-
-    // Contributor is in A and B but selects ONLY A.
-    const result = await uploadAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famA]),
-    );
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
-
-    // Visible in A...
-    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    expect(albumA).toHaveLength(1);
-    const photoId = albumA[0]!.id;
-    // ...but NOT in B, for the contributor or a co-member of B.
-    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
-    expect(albumB).toEqual([]);
-    const asBMember = await getAlbumPhotoForViewer(
-      runtimeDb,
-      account(bMember),
-      photoId,
-    );
-    expect(asBMember).toBeNull();
-  });
-
-  it("drops a spoofed family id the contributor is NOT a member of", async () => {
-    const contributor = await makePerson("Rosa");
-    const outsider = await makePerson("Vito");
-    const famA = await makeFamily("Esposito", contributor);
-    const famX = await makeFamily("Corleone", outsider);
-    await addMember(contributor, famA);
-    await addMember(outsider, famX);
-    authCtx = account(contributor);
-
-    // Contributor is only in A but tries to also place into X (not theirs).
-    const result = await uploadAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famA, famX]),
-    );
-    expect(result).toEqual({ ok: true, added: 1, failed: 0 });
-
-    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    expect(albumA).toHaveLength(1);
-    // X's own member does not see the spoofed placement — it was never written.
-    const albumX = await listAlbumPhotos(runtimeDb, account(outsider), famX);
-    expect(albumX).toEqual([]);
-    expect(runtimeStorage.size).toBe(1);
-  });
-
-  it("rejects a submission of ONLY foreign family ids (nothing valid to place into)", async () => {
-    const contributor = await makePerson("Rosa");
-    const outsider = await makePerson("Vito");
-    const famA = await makeFamily("Esposito", contributor);
-    const famB = await makeFamily("Marino", contributor);
-    const famX = await makeFamily("Corleone", outsider);
-    await addMember(contributor, famA);
-    await addMember(contributor, famB);
-    await addMember(outsider, famX);
-    authCtx = account(contributor);
-
-    // Multi-family contributor submits only a family they don't belong to.
-    const result = await uploadAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famX]),
-    );
-    expect(result).toEqual({ error: hub.actions.noAlbumChosen });
-    expect(runtimeStorage.size).toBe(0);
-  });
-
-  // #16 multi-select: one submit can carry MANY files (repeated `photo` FormData entries). Each
-  // becomes its own album photo placed into the SAME chosen album(s).
-  it("creates a separate photo for EVERY file, all into the chosen families", async () => {
-    const contributor = await makePerson("Rosa");
-    const famA = await makeFamily("Esposito", contributor);
-    const famB = await makeFamily("Marino", contributor);
-    await addMember(contributor, famA);
-    await addMember(contributor, famB);
-    authCtx = account(contributor);
-
-    // Three distinct files → three photos, each landing in both chosen albums.
-    const fd = new FormData();
-    fd.append("photo", new Blob([new Uint8Array([1, 1, 1]) as BlobPart], { type: "image/png" }), "a.png");
-    fd.append("photo", new Blob([new Uint8Array([2, 2, 2]) as BlobPart], { type: "image/png" }), "b.png");
-    fd.append("photo", new Blob([new Uint8Array([3, 3, 3]) as BlobPart], { type: "image/png" }), "c.png");
-    fd.append("familyIds", famA);
-    fd.append("familyIds", famB);
-
-    const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ ok: true, added: 3, failed: 0 });
-
-    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
-    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
-    expect(albumA).toHaveLength(3);
-    // Same three photos in both albums (order-independent).
-    expect(new Set(albumB.map((p) => p.id))).toEqual(new Set(albumA.map((p) => p.id)));
-    // Three files → three distinct storage objects.
-    expect(runtimeStorage.size).toBe(3);
-  });
-
-  // A per-file storage/db throw increments `failed` and does NOT abort the batch: the other files
-  // still land, and the action returns a batch summary (not an error).
-  it("returns a partial summary when one file fails but others succeed", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    // Make the SECOND storage write throw, leaving the first and third to succeed.
-    const realPut = runtimeStorage.put.bind(runtimeStorage);
-    let call = 0;
-    vi.spyOn(runtimeStorage, "put").mockImplementation(async (obj) => {
-      call += 1;
-      if (call === 2) throw new Error("storage boom");
-      return realPut(obj);
-    });
-
-    const fd = new FormData();
-    fd.append("photo", new Blob([new Uint8Array([1]) as BlobPart], { type: "image/png" }), "a.png");
-    fd.append("photo", new Blob([new Uint8Array([2]) as BlobPart], { type: "image/png" }), "b.png");
-    fd.append("photo", new Blob([new Uint8Array([3]) as BlobPart], { type: "image/png" }), "c.png");
-
-    const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ ok: true, added: 2, failed: 1 });
-
-    // Two photos landed (the failed one wrote nothing); each successful file has its own object.
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toHaveLength(2);
-    expect(runtimeStorage.size).toBe(2);
-  });
-
-  // Whole batch fails (every file throws) → a single upload error, mirroring the single-file case.
-  it("returns the upload-failed error when EVERY file fails", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    vi.spyOn(runtimeStorage, "put").mockRejectedValue(new Error("storage boom"));
-
-    const fd = new FormData();
-    fd.append("photo", new Blob([new Uint8Array([1]) as BlobPart], { type: "image/png" }), "a.png");
-    fd.append("photo", new Blob([new Uint8Array([2]) as BlobPart], { type: "image/png" }), "b.png");
-
-    const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({
-      error: hub.actions.photoUploadFailedDetail("storageboom"),
-    });
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toEqual([]);
-  });
-
-  // Zero VALID files (only empty-size blobs) → the photoEmpty guard, nothing written.
-  it("returns photoEmpty when no file has any bytes", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    const fd = new FormData();
-    fd.append("photo", new Blob([new Uint8Array([]) as BlobPart], { type: "image/png" }), "empty1.png");
-    fd.append("photo", new Blob([new Uint8Array([]) as BlobPart], { type: "image/png" }), "empty2.png");
-
-    const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ error: hub.actions.photoEmpty });
-    expect(runtimeStorage.size).toBe(0);
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toEqual([]);
-  });
-
-  // Regression (review finding): the server enforces the per-batch cap authoritatively (the client
-  // guards too, but is never trusted). An over-cap batch is rejected before anything touches storage.
-  it("rejects a batch over the per-batch cap and writes nothing", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    const fd = new FormData();
-    for (let i = 0; i < 31; i += 1) {
-      fd.append("photo", new Blob([new Uint8Array([i + 1]) as BlobPart], { type: "image/png" }), `p${i}.png`);
-    }
-
-    const result = await uploadAlbumPhotoAction(fd);
-    expect(result).toEqual({ error: hub.actions.tooManyPhotos(PHOTO_BATCH_MAX_FILES) });
-    expect(runtimeStorage.size).toBe(0);
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toEqual([]);
-  });
-});
-
-// ADR-0015 · F2 — the per-item sibling of the batch upload. One file per call so the client can
-// drive a bounded concurrency pool and resolve each placeholder tile independently. Mirrors the
-// batch action's guards EXACTLY, but for exactly one file, returning ImportOnePhotoResult.
-describe("uploadOneAlbumPhotoAction", () => {
-  it("lands exactly one upload photo in the chosen family", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    const result = await uploadOneAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [familyId]),
-    );
-
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toHaveLength(1);
-    // The returned photoId is the ACTUAL persisted row id — the board renders that tile optimistically.
-    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
-    expect(album[0]!.source).toBe("upload");
-    expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG_BYTES);
-    expect(runtimeStorage.size).toBe(1);
-  });
-
-  it("resolves the sole family for a solo contributor with no selection", async () => {
-    const contributor = await makePerson("Rosa");
-    const familyId = await makeFamily("Esposito", contributor);
-    await addMember(contributor, familyId);
-    authCtx = account(contributor);
-
-    const result = await uploadOneAlbumPhotoAction(photoForm(PNG_BYTES));
-    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
-    expect(album).toHaveLength(1);
-    expect(result).toEqual({ ok: true, photoId: album[0]!.id });
-  });
-
-  it("rejects an unauthenticated caller and writes nothing", async () => {
     authCtx = { kind: "anonymous" };
-    const result = await uploadOneAlbumPhotoAction(photoForm(PNG_BYTES));
+    const result = await recordAlbumPhotoAction(recordForm(key, ticket, [familyId]));
     expect(result).toEqual({ error: hub.actions.notSignedIn });
-    expect(runtimeStorage.size).toBe(0);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
   });
 
-  it("returns photoEmpty when the file has no bytes", async () => {
+  it("rejects a FOREIGN ticket (minted for another person) — cannot record with someone else's key", async () => {
+    const contributor = await makePerson("Rosa");
+    const attacker = await makePerson("Vito");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    await addMember(attacker, await makeFamily("Corleone", attacker));
+
+    const key = "family-photos/foreign-test";
+    // Ticket minted for the contributor...
+    const foreignTicket = createUploadTicket({ key, personId: contributor });
+    await runtimeStorage.put({ key, bytes: PNG_BYTES, contentType: "image/png" });
+
+    // ...but the ATTACKER tries to record with it.
+    authCtx = account(attacker);
+    const result = await recordAlbumPhotoAction(recordForm(key, foreignTicket));
+    expect(result).toEqual({ error: hub.actions.uploadTicketInvalid });
+  });
+
+  it("rejects a ticket whose bound key does NOT match the submitted key", async () => {
     const contributor = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", contributor);
     await addMember(contributor, familyId);
     authCtx = account(contributor);
 
-    const result = await uploadOneAlbumPhotoAction(photoForm(new Uint8Array([])));
-    expect(result).toEqual({ error: hub.actions.photoEmpty });
-    expect(runtimeStorage.size).toBe(0);
+    const realKey = "family-photos/real";
+    const otherKey = "family-photos/other";
+    const ticketForOther = createUploadTicket({ key: otherKey, personId: contributor });
+    await runtimeStorage.put({ key: realKey, bytes: PNG_BYTES, contentType: "image/png" });
+
+    // Submit realKey but a ticket bound to otherKey → rejected.
+    const result = await recordAlbumPhotoAction(recordForm(realKey, ticketForOther, [familyId]));
+    expect(result).toEqual({ error: hub.actions.uploadTicketInvalid });
   });
 
+  it("rejects an EXPIRED ticket", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const key = "family-photos/expired";
+    // Mint a ticket that was already expired when created (ttl 0, minted 10 min ago).
+    const expired = createUploadTicket(
+      { key, personId: contributor, ttlSeconds: 0 },
+      Date.now() - 10 * 60 * 1000,
+    );
+    await runtimeStorage.put({ key, bytes: PNG_BYTES, contentType: "image/png" });
+
+    const result = await recordAlbumPhotoAction(recordForm(key, expired, [familyId]));
+    expect(result).toEqual({ error: hub.actions.uploadTicketInvalid });
+  });
+
+  it("rejects a TAMPERED ticket", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const key = "family-photos/tampered";
+    const good = createUploadTicket({ key, personId: contributor });
+    const tampered = `${good}x`; // flip the signature
+    await runtimeStorage.put({ key, bytes: PNG_BYTES, contentType: "image/png" });
+
+    const result = await recordAlbumPhotoAction(recordForm(key, tampered, [familyId]));
+    expect(result).toEqual({ error: hub.actions.uploadTicketInvalid });
+  });
+
+  it("rejects a PHANTOM key — no object in storage (never record a phantom)", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    // Valid ticket, but the browser PUT never happened → exists === false.
+    const key = "family-photos/never-uploaded";
+    const ticket = createUploadTicket({ key, personId: contributor });
+    const result = await recordAlbumPhotoAction(recordForm(key, ticket, [familyId]));
+    expect(result).toEqual({ error: hub.actions.uploadObjectMissing });
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(album).toEqual([]);
+  });
+
+  it("rejects a key OUTSIDE the family-photos/ keyspace even with a valid ticket", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const key = "rec/evil.webm"; // an audio-recording keyspace, not an album photo
+    const ticket = createUploadTicket({ key, personId: contributor });
+    await runtimeStorage.put({ key, bytes: PNG_BYTES, contentType: "image/png" });
+
+    const result = await recordAlbumPhotoAction(recordForm(key, ticket, [familyId]));
+    expect(result).toEqual({ error: hub.actions.uploadTicketInvalid });
+  });
+
+  it("returns invalidInput when key or ticket is missing", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const fd = new FormData();
+    fd.append("familyIds", familyId);
+    const result = await recordAlbumPhotoAction(fd);
+    expect(result).toEqual({ error: hub.actions.invalidInput });
+  });
+
+  // Family re-validation posture preserved: a spoofed family the caller isn't in is dropped; a
+  // solo-owner falls back to their sole family.
   it("drops a spoofed family id and falls back to the sole owned family", async () => {
     const contributor = await makePerson("Rosa");
     const outsider = await makePerson("Vito");
@@ -470,10 +369,7 @@ describe("uploadOneAlbumPhotoAction", () => {
     await addMember(outsider, famX);
     authCtx = account(contributor);
 
-    // Submits only a foreign family id; with a single owned family it falls back to it.
-    const result = await uploadOneAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famX]),
-    );
+    const { result } = await uploadOnePhoto(PNG_BYTES, { familyIds: [famX] });
     const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
     expect(albumA).toHaveLength(1);
     expect(result).toEqual({ ok: true, photoId: albumA[0]!.id });
@@ -481,7 +377,7 @@ describe("uploadOneAlbumPhotoAction", () => {
     expect(albumX).toEqual([]);
   });
 
-  it("errors when a multi-family contributor submits only a foreign family id", async () => {
+  it("errors when a multi-family contributor submits ONLY a foreign family id", async () => {
     const contributor = await makePerson("Rosa");
     const outsider = await makePerson("Vito");
     const famA = await makeFamily("Esposito", contributor);
@@ -492,31 +388,102 @@ describe("uploadOneAlbumPhotoAction", () => {
     await addMember(outsider, famX);
     authCtx = account(contributor);
 
-    const result = await uploadOneAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [famX]),
-    );
+    const { result } = await uploadOnePhoto(PNG_BYTES, { familyIds: [famX] });
     expect(result).toEqual({ error: hub.actions.noAlbumChosen });
-    expect(runtimeStorage.size).toBe(0);
   });
 
-  it("returns the upload-failed detail error when storage throws", async () => {
+  it("places a photo into BOTH selected families (one object, two album placements)", async () => {
+    const contributor = await makePerson("Rosa");
+    const famA = await makeFamily("Esposito", contributor);
+    const famB = await makeFamily("Marino", contributor);
+    await addMember(contributor, famA);
+    await addMember(contributor, famB);
+    authCtx = account(contributor);
+
+    const { result } = await uploadOnePhoto(PNG_BYTES, { familyIds: [famA, famB] });
+    expect("ok" in result && result.ok).toBe(true);
+
+    const albumA = await listAlbumPhotos(runtimeDb, account(contributor), famA);
+    const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
+    expect(albumA).toHaveLength(1);
+    expect(albumB.map((p) => p.id)).toEqual([albumA[0]!.id]);
+    expect(runtimeStorage.size).toBe(1);
+  });
+});
+
+// Regression (issue #20 core behavior change): bytes NEVER transit the record action, and record
+// refuses a key it can't prove was minted for this caller.
+describe("issue #20 direct-upload regression: no bytes in record, no phantom keys", () => {
+  it("recordAlbumPhotoAction carries NO photo bytes — it only names a key the browser already PUT", async () => {
     const contributor = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", contributor);
     await addMember(contributor, familyId);
     authCtx = account(contributor);
 
-    vi.spyOn(runtimeStorage, "put").mockRejectedValue(new Error("storage boom"));
+    const requested = await requestAlbumUploadAction({ contentType: "image/png" });
+    if ("error" in requested) throw new Error(requested.error);
 
-    const result = await uploadOneAlbumPhotoAction(
-      photoFormWithFamilies(PNG_BYTES, [familyId]),
+    // The record FormData carries ONLY metadata (key, ticket, familyIds) — never a `photo` blob.
+    const fd = recordForm(requested.key, requested.ticket, [familyId]);
+    expect(fd.getAll("photo")).toEqual([]);
+    expect(fd.get("key")).toBe(requested.key);
+
+    // Simulate the browser PUT, then record: the photo lands, sourced from STORAGE bytes.
+    await runtimeStorage.put({ key: requested.key, bytes: PNG_BYTES, contentType: "image/png" });
+    const result = await recordAlbumPhotoAction(fd);
+    expect("ok" in result && result.ok).toBe(true);
+    const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
+    expect(await runtimeStorage.getBytes(album[0]!.storageKey)).toEqual(PNG_BYTES);
+  });
+
+  it("refuses to record when the object was never PUT (phantom), leaving nothing behind", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const requested = await requestAlbumUploadAction({ contentType: "image/png" });
+    if ("error" in requested) throw new Error(requested.error);
+    // Skip the browser PUT entirely → record must refuse.
+    const result = await recordAlbumPhotoAction(
+      recordForm(requested.key, requested.ticket, [familyId]),
     );
-    expect(result).toEqual({
-      error: hub.actions.photoUploadFailedDetail("storageboom"),
-    });
+    expect(result).toEqual({ error: hub.actions.uploadObjectMissing });
+    expect(runtimeStorage.size).toBe(0);
     const album = await listAlbumPhotos(runtimeDb, account(contributor), familyId);
     expect(album).toEqual([]);
   });
+
+  // Orphan cleanup: if createAlbumPhoto throws AFTER the object exists, the stored (write-once) blob
+  // is best-effort deleted so a retry (fresh key) doesn't accumulate orphans.
+  it("deletes the stored object when createAlbumPhoto throws (no write-once orphan)", async () => {
+    const contributor = await makePerson("Rosa");
+    const familyId = await makeFamily("Esposito", contributor);
+    await addMember(contributor, familyId);
+    authCtx = account(contributor);
+
+    const requested = await requestAlbumUploadAction({ contentType: "image/png" });
+    if ("error" in requested) throw new Error(requested.error);
+    // Browser PUT lands the object...
+    await runtimeStorage.put({ key: requested.key, bytes: PNG_BYTES, contentType: "image/png" });
+    expect(runtimeStorage.size).toBe(1);
+    const deleteSpy = vi.spyOn(runtimeStorage, "delete");
+
+    // ...but the row write throws.
+    vi.spyOn(runtimeStorage, "getBytes").mockResolvedValueOnce(PNG_BYTES);
+    const err = new Error("db down");
+    vi.spyOn(await import("@chronicle/core"), "createAlbumPhoto").mockRejectedValueOnce(err);
+
+    const result = await recordAlbumPhotoAction(
+      recordForm(requested.key, requested.ticket, [familyId]),
+    );
+    expect("error" in result).toBe(true);
+    // The orphaned object was cleaned up.
+    expect(deleteSpy).toHaveBeenCalledWith(requested.key);
+    expect(runtimeStorage.size).toBe(0);
+  });
 });
+
 
 describe("/api/album-photo/[photoId] bytes route", () => {
   async function seedPhoto(): Promise<{

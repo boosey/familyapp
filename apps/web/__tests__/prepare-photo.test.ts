@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { MAX_UPLOAD_BYTES, prepareAlbumPhoto } from "@/app/hub/album/prepare-photo";
+import { DOWNSCALE_THRESHOLD_BYTES, prepareAlbumPhoto } from "@/app/hub/album/prepare-photo";
 
 describe("prepareAlbumPhoto", () => {
   it("passes through small JPEG files unchanged", async () => {
@@ -19,18 +19,17 @@ describe("prepareAlbumPhoto", () => {
     });
   });
 
-  it("rejects oversized non-image blobs", async () => {
-    const file = new File([new Uint8Array(MAX_UPLOAD_BYTES + 1)], "x.bin", {
+  // issue #20 — bytes go direct to storage, so there is no transport size cap: an oversized non-image
+  // is passed through unchanged (the server rejects it by content type when minting a target).
+  it("passes through oversized non-image blobs (no client size cap — issue #20)", async () => {
+    const file = new File([new Uint8Array(DOWNSCALE_THRESHOLD_BYTES + 1)], "x.bin", {
       type: "application/octet-stream",
     });
-    await expect(prepareAlbumPhoto(file)).resolves.toEqual({
-      ok: false,
-      error: "too_large",
-    });
+    await expect(prepareAlbumPhoto(file)).resolves.toEqual({ ok: true, file });
   });
 
   it("downscales an oversized image via canvas when createImageBitmap is available", async () => {
-    const big = new File([new Uint8Array(MAX_UPLOAD_BYTES + 1000)], "big.png", {
+    const big = new File([new Uint8Array(DOWNSCALE_THRESHOLD_BYTES + 1000)], "big.png", {
       type: "image/png",
     });
     const close = vi.fn();
