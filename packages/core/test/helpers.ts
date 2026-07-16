@@ -89,6 +89,11 @@ export async function makeStory(
     /** The originating family context (ADR-0010) — what a link-session capture stamps on the draft. */
     originatingFamilyId?: string;
     askId?: string;
+    /** Derived receipt-experience content (subordinate to the audio). Optional; null when omitted. */
+    transcript?: string;
+    prose?: string;
+    summary?: string;
+    title?: string;
   },
 ) {
   const recording = await makeRecording(db, opts.ownerPersonId);
@@ -102,6 +107,10 @@ export async function makeStory(
         audienceTier: opts.audienceTier ?? "private",
         originatingFamilyId: opts.originatingFamilyId ?? null,
         askId: opts.askId ?? null,
+        transcript: opts.transcript ?? null,
+        prose: opts.prose ?? null,
+        summary: opts.summary ?? null,
+        title: opts.title ?? null,
       })
       .returning();
     // Seed take-0 so the story satisfies the ADR-0014 kind⇔recording biconditional (Task 3).
