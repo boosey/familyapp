@@ -372,7 +372,6 @@ export const hub = {
     // for one request, or the connection dropped). Distinct from a per-file failure inside a batch.
     uploadError:
       "Couldn't add those photos. They may be too large — try adding fewer, or smaller, photos.",
-    chooseAlbums: "Which albums?",
     switcherAria: "Choose which family album to view",
     photoAlt: (caption: string | null) => caption ?? "Family photo",
     // #18 — per-photo management controls (contributor or steward).
@@ -472,6 +471,19 @@ export const hub = {
     // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
     // is available (#93 — replaced the old standalone "Add to album" button).
     addFromDevice: "Add from your device",
+    // #94 — files-first destination modal. After files are chosen (device) or the Google picker
+    // returns, a >1-family viewer picks WHICH family album(s) receive the batch here (moved off the
+    // standing toolbar fieldset). A solo-family viewer never sees this — the sole family auto-resolves.
+    // Count-aware title for the device path (the chosen-file count is known up front); the Google
+    // import path uses the count-agnostic fallback below (the returned count isn't known until the
+    // picker completes, after this modal).
+    destinationTitle: (count: number) =>
+      `Add ${count === 1 ? "this photo" : `these ${count} photos`} to…`,
+    destinationTitleGeneric: "Add these photos to…",
+    // The confirm control; disabled until ≥1 family is chosen (the sole home of the no-fan-out rule).
+    destinationAdd: "Add",
+    // The dismiss control — discards the pending selection; nothing has been uploaded yet.
+    destinationCancel: "Cancel",
     // Brief pending state on the Disconnect menu item while the connection is being torn down.
     googlePhotosDisconnecting: "Disconnecting…",
     // Generic menu header shown above the Disconnect item when the account email is unknown.

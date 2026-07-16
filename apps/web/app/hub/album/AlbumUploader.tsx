@@ -17,11 +17,14 @@
  * chosen album(s). A partial success (some files failed) surfaces a gentle inline note rather than an
  * error.
  *
- * #16 — multi-family placement: a contributor in >=2 families sees a checkbox per family and chooses
- * which albums receive the batch BEFORE opening the picker. The default pre-selection is the album
- * currently on screen (`currentFamilyId`), pre-checked but deselectable; at least one must stay
- * selected (the button is disabled otherwise). A solo-family contributor sees NO checkboxes — the
- * server defaults to the sole family (behavior unchanged).
+ * #94 — files-first destination: the family destination designator moved OFF the standing toolbar (the
+ * retired "Which albums?" fieldset) and INTO the add/import action, as a modal. Choosing files (device)
+ * or completing the Google picker (import) STASHES the pending payload and opens `AlbumDestinationModal`
+ * — the SOLE home of the no-silent-fan-out rule (Add disabled until ≥1 family is chosen). Add fires the
+ * upload/import against the chosen destination; Cancel discards it with zero storage writes. The modal
+ * appears only for a >1-family viewer: a solo-family contributor sees NO modal and the add/import
+ * proceeds straight through with no familyIds (the server auto-selects the sole family, unchanged).
+ * The modal's destination Set is seeded from the filter-aware designator seed (`defaultSelected`).
  */
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -35,8 +38,8 @@ import {
 import { prepareAlbumPhoto } from "./prepare-photo";
 import { uploadPhotoDirect } from "./direct-upload";
 import { hub } from "@/app/_copy";
-import { FamilyChoiceChips } from "../FamilyChoiceChips";
 import { AddPhotosMenu } from "./AddPhotosMenu";
+import { AlbumDestinationModal } from "./AlbumDestinationModal";
 import { seedComposeFamilies } from "@/lib/compose-scope";
 import {
   PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
@@ -50,6 +53,15 @@ export interface AlbumFamilyOption {
   /** Steward-set brief label (ADR-0021); the placement chips show it in place of `familyName`. */
   familyShortName?: string | null;
 }
+
+/**
+ * The payload a >1-family add/import stashes while the #94 destination modal is open. The bytes are NOT
+ * yet stored — `upload` holds the chosen Files (direct-to-storage fires on Add); `google` holds the
+ * ready picker session (the completion action fires on Add). Cancel drops this untouched.
+ */
+type PendingDestination =
+  | { kind: "upload"; files: File[] }
+  | { kind: "google"; sessionId: string };
 
 
 /** Map OAuth callback error codes to user-facing copy. */
@@ -119,12 +131,19 @@ export function AlbumUploader({
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The Add Photos trigger — the destination modal restores focus here when it closes (#94), since the
+  // menuitem that opened it has unmounted with the dropdown.
+  const addMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [pending, startTransition] = useTransition();
   const [googlePending, setGooglePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A gentle, non-error note after a partial-success batch (some files landed, some didn't).
   const [note, setNote] = useState<string | null>(null);
   const oauthFlashHandled = useRef(false);
+  // #94 — the files-first destination modal's stashed payload. `null` = no modal. Set when files are
+  // chosen (device) or the Google picker completes (import) AND the viewer has >1 family; the modal's
+  // Add fires the corresponding upload/import against the chosen destination, and Cancel discards it.
+  const [pendingDestination, setPendingDestination] = useState<PendingDestination | null>(null);
 
   // Surface OAuth callback flash once, then strip the query params so a refresh doesn't repeat it.
   useEffect(() => {
@@ -192,8 +211,10 @@ export function AlbumUploader({
     });
   }
 
-  // Upload the files the OS picker just handed back. Triggered by the hidden input's change event —
-  // there is no separate submit step; choosing files IS the upload.
+  // The OS picker just handed files back. #94: choosing files is the START of the add — a >1-family
+  // viewer must first pick a destination (the modal), while a solo-family viewer proceeds straight
+  // through (no modal, no familyIds — the server auto-selects the sole family). We only guard the cap
+  // here; the actual upload/board-handoff runs in `runUpload` once the destination is settled.
   function onFilesChosen(files: FileList | null) {
     if (!files || files.length === 0) return;
     // Guard the obvious mistake client-side (fast, friendly) before spending an upload; the server
@@ -203,24 +224,39 @@ export function AlbumUploader({
       setNote(null);
       return;
     }
-    // F2 board mode (ADR-0015): hand execution to the board — it prepares each file per-item (so one
-    // prepare failure doesn't abort the batch) and drives the per-item pool. We keep only the client
-    // cap check above; no prepare, no batched action, no transition here.
-    if (onImportFiles) {
-      const chosen = showPicker ? [...selected] : [];
+    const chosen = Array.from(files);
+    if (showPicker) {
+      // Multi-family: stash the files and open the destination modal. Re-seed the selection from the
+      // filter-aware designator seed so the modal opens at the current default (not a stale set).
       setError(null);
       setNote(null);
-      onImportFiles(Array.from(files), chosen);
+      setSelected(seed());
+      setPendingDestination({ kind: "upload", files: chosen });
+      return;
+    }
+    // Solo-family: no destination to pick — proceed with no familyIds (the server defaults to the
+    // sole family, unchanged).
+    runUpload(chosen, []);
+  }
+
+  // Run the actual per-file upload (or hand off to the board) against a settled destination. Called
+  // directly for a solo-family viewer, or from the destination modal's Add for a >1-family viewer.
+  function runUpload(selectedFiles: File[], chosenFamilies: string[]) {
+    // F2 board mode (ADR-0015): hand execution to the board — it prepares each file per-item (so one
+    // prepare failure doesn't abort the batch) and drives the per-item pool. No prepare, no batched
+    // action, no transition here.
+    if (onImportFiles) {
+      setError(null);
+      setNote(null);
+      onImportFiles(selectedFiles, chosenFamilies);
       setSelected(seed());
       return;
     }
-    const selectedFiles = Array.from(files);
     // issue #20 — direct-to-storage: this legacy (non-board) path uploads each file straight to object
     // storage (request target → PUT bytes → record row) instead of POSTing bytes through a Server
     // Action. The chosen albums (a solo contributor sends none; the server defaults to their sole
     // family) ride along on each per-file `record`. Each file is independent — one failure never aborts
     // the batch — and a partial success surfaces a soft note, matching the previous batch behavior.
-    const chosenFamilies = showPicker ? [...selected] : [];
     startTransition(async () => {
       let added = 0;
       let failed = 0;
@@ -276,11 +312,13 @@ export function AlbumUploader({
     input.click();
   }
 
-  // >=1 album must stay selected when the picker is shown, and never while an upload is in flight.
+  // #94 — the no-fan-out gate moved OFF the menu items and INTO the destination modal (Add is disabled
+  // there until ≥1 family is chosen). The menu items are now only disabled while an add is in flight;
+  // an empty selection no longer blocks opening the picker, because choosing files/importing is what
+  // OPENS the destination modal in the first place.
   const busy = pending || googlePending;
-  const addDisabled = busy || (showPicker && selected.size === 0);
-  const importDisabled =
-    busy || (families.length > 1 && selected.size === 0);
+  const addDisabled = busy;
+  const importDisabled = busy;
 
   async function runGoogleImport() {
     setError(null);
@@ -355,22 +393,46 @@ export function AlbumUploader({
         return;
       }
 
-      // F2 board mode (ADR-0015): the picker is ready — hand the session off to the board, which
-      // runs the list-first step + per-item pool and owns the progress display. Clear our own
-      // pending/note so the board's tiles are the single source of progress truth.
-      if (onImportGoogle) {
-        const chosen = showPicker ? [...selected] : [];
+      // #94 — the picker is ready. A >1-family viewer must now pick a destination (the modal) before
+      // anything imports; stash the ready session and open it. A solo-family viewer proceeds straight
+      // through with no familyIds (the server defaults to the sole family).
+      if (showPicker) {
+        setError(null);
         setNote(null);
         setGooglePending(false);
-        onImportGoogle(started.sessionId, chosen);
+        setSelected(seed());
+        setPendingDestination({ kind: "google", sessionId: started.sessionId });
+        return;
+      }
+      await runGoogleComplete(started.sessionId, []);
+    } catch {
+      setError(hub.album.googlePhotosImportFailed);
+      setNote(null);
+    } finally {
+      setGooglePending(false);
+    }
+  }
+
+  // Complete a ready Google import against a settled destination — the board handoff (F2) or the
+  // batched completion action. Called directly for a solo-family viewer (from `runGoogleImport`) or
+  // from the destination modal's Add for a >1-family viewer. Its own try/catch keeps a modal-driven
+  // completion (which runs OUTSIDE runGoogleImport's try) from surfacing as an unhandled rejection.
+  async function runGoogleComplete(sessionId: string, chosenFamilies: string[]) {
+    try {
+      // F2 board mode (ADR-0015): hand the session off to the board, which runs the list-first step +
+      // per-item pool and owns the progress display. Clear our own pending/note so the board's tiles
+      // are the single source of progress truth.
+      if (onImportGoogle) {
+        setNote(null);
+        setGooglePending(false);
+        onImportGoogle(sessionId, chosenFamilies);
         return;
       }
 
+      setGooglePending(true);
       const formData = new FormData();
-      formData.append("sessionId", started.sessionId);
-      if (showPicker) {
-        for (const familyId of selected) formData.append("familyIds", familyId);
-      }
+      formData.append("sessionId", sessionId);
+      for (const familyId of chosenFamilies) formData.append("familyIds", familyId);
       const completed = await completeGooglePhotosImportAction(formData);
       if ("error" in completed) {
         setError(completed.error);
@@ -397,6 +459,25 @@ export function AlbumUploader({
     } finally {
       setGooglePending(false);
     }
+  }
+
+  // The destination modal's Add: run the stashed payload against the chosen destination, then close.
+  function onDestinationAdd() {
+    const payload = pendingDestination;
+    if (!payload) return;
+    const chosenFamilies = [...selected];
+    setPendingDestination(null);
+    if (payload.kind === "upload") {
+      runUpload(payload.files, chosenFamilies);
+    } else {
+      void runGoogleComplete(payload.sessionId, chosenFamilies);
+    }
+  }
+
+  // The destination modal's Cancel (also Escape / backdrop): drop the stashed payload untouched —
+  // nothing has been stored (upload/import fires only on Add), so there is zero cleanup.
+  function onDestinationCancel() {
+    setPendingDestination(null);
   }
 
   function onDisconnect() {
@@ -454,40 +535,25 @@ export function AlbumUploader({
         </label>
       ) : null}
 
-      {showPicker ? (
-        <fieldset
-          style={{
-            border: "var(--border-width) solid var(--border)",
-            borderRadius: 8,
-            padding: "12px 14px",
-            margin: 0,
-            maxWidth: 360,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
-          <legend
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              color: "var(--text-meta)",
-              padding: "0 6px",
-            }}
-          >
-            {hub.album.chooseAlbums}
-          </legend>
-          <FamilyChoiceChips
-            families={families.map((f) => ({
-              id: f.familyId,
-              name: f.familyName,
-              shortName: f.familyShortName,
-            }))}
-            selected={selected}
-            onToggle={toggle}
-            disabled={busy}
-          />
-        </fieldset>
+      {/* #94 — the destination modal replaces the standing "Which albums?" fieldset. It renders only
+          for a >1-family viewer once a payload is stashed (files chosen / picker completed); a
+          solo-family viewer never opens it. The title is count-aware for the device path (chosen-file
+          count) and count-agnostic for Google import (the returned count isn't known until after the
+          picker, which completes only on Add). Cancel/Escape/backdrop discard the payload untouched. */}
+      {pendingDestination ? (
+        <AlbumDestinationModal
+          families={families}
+          selected={selected}
+          onToggle={toggle}
+          title={
+            pendingDestination.kind === "upload"
+              ? hub.album.destinationTitle(pendingDestination.files.length)
+              : hub.album.destinationTitleGeneric
+          }
+          onAdd={onDestinationAdd}
+          onCancel={onDestinationCancel}
+          restoreFocusRef={addMenuTriggerRef}
+        />
       ) : null}
 
       {/*
@@ -502,6 +568,7 @@ export function AlbumUploader({
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <AddPhotosMenu
             label={hub.album.addPhotosMenu}
+            triggerRef={addMenuTriggerRef}
             device={
               showFileUpload
                 ? {

@@ -22,6 +22,9 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 export interface AddPhotosMenuProps {
   /** Trigger label + aria-label (e.g. "Add Photos"). */
   label: string;
+  /** Ref to the trigger button, so a caller (the #94 destination modal) can restore focus to it when
+   *  the modal it opened via a menuitem closes — the menuitem itself has unmounted by then. */
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
   /** "Add from your device" item — opens the OS file picker. Omit to hide (no device upload). */
   device?: {
     label: string;
@@ -45,7 +48,7 @@ export interface AddPhotosMenuProps {
   };
 }
 
-export function AddPhotosMenu({ label, device, google, manage }: AddPhotosMenuProps) {
+export function AddPhotosMenu({ label, triggerRef, device, google, manage }: AddPhotosMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +158,7 @@ export function AddPhotosMenu({ label, device, google, manage }: AddPhotosMenuPr
       style={{ position: "relative", display: "inline-block", marginLeft: "auto" }}
     >
       <button
+        ref={triggerRef}
         type="button"
         aria-label={label}
         aria-haspopup="menu"
