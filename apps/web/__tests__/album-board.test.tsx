@@ -111,6 +111,16 @@ function chooseFiles(names: string[]) {
   fireEvent.change(fileInput, { target: { files: names.map(makeFile) } });
 }
 
+/** #93 — open the consolidated "Add Photos ▾" dropdown so its menuitems become clickable. */
+function openAddMenu() {
+  fireEvent.click(screen.getByRole("button", { name: hub.album.addPhotosMenu }));
+}
+/** Open the menu then click the "Import from Google Photos" menuitem (connected sources only). */
+function clickGoogleImport() {
+  openAddMenu();
+  fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+}
+
 /** A promise you can resolve/reject from the test to control an action's timing. */
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -343,7 +353,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(listGooglePhotosImportAction).toHaveBeenCalledTimes(1),
@@ -367,7 +377,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     listGooglePhotosImportAction.mockResolvedValueOnce({ error: "list failed" });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/list failed/i),
@@ -387,7 +397,7 @@ describe("AlbumBoard Google import (list-first, exact-N)", () => {
     });
 
     renderBoard(googleProps);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    clickGoogleImport();
 
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toMatch(/no photos|videos|nothing/i),
@@ -510,10 +520,12 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         photos={[]}
       />,
     );
-    // Retarget: deselect A, select B — the photo will land ONLY in B, never in this A-scoped grid.
+    // #94: choosing files opens the destination modal (2 families). Retarget there: deselect A, select
+    // B — the photo lands ONLY in B, never in this A-scoped grid. Then Add.
+    chooseFiles(["x.png"]);
     fireEvent.click(screen.getByRole("button", { name: FAM_A.familyName }));
     fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
-    chooseFiles(["x.png"]);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.destinationAdd }));
 
     await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
     // The tile is dropped on success — no stuck optimistic photo, no lingering spinner.
@@ -525,12 +537,12 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     expect(uploadPhotoDirect.mock.calls[0]![1]).toEqual([FAM_B.familyId]);
   });
 
-  // ADR-0021 (review finding — coverage gap): the board is the F2 mount point the ADR names
+  // ADR-0021 · #94 (review finding — coverage gap): the board is the F2 mount point the ADR names
   // explicitly, so assert the "ambiguous ⇒ deliberate pick" contract AT the board boundary, not just
   // inside AlbumUploader. With >1 family and an EMPTY designator default (the ambiguous all/none case),
-  // the "Add to album" button must be disabled until the contributor picks — a photo never silently
+  // the destination modal's Add must be disabled until the contributor picks — a photo never silently
   // fans out to every family through the board path.
-  it("ambiguous (empty defaultSelected, >1 family): Add is disabled until a deliberate pick", async () => {
+  it("ambiguous (empty defaultSelected, >1 family): modal Add is disabled until a deliberate pick", async () => {
     render(
       <AlbumBoard
         families={[FAM_A, FAM_B]}
@@ -547,14 +559,23 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         photos={[]}
       />,
     );
-    // Nothing pre-selected → the add button is disabled (no default fan-out).
-    const addButton = screen.getByRole("button", { name: hub.album.addButton });
-    expect((addButton as HTMLButtonElement).disabled).toBe(true);
-
-    // A deliberate pick of ONE family enables it, and an upload targets ONLY that family.
-    fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
-    expect((addButton as HTMLButtonElement).disabled).toBe(false);
+    // #94: the device-add menuitem is NOT gated by the designator — choosing files OPENS the modal.
+    openAddMenu();
+    expect(
+      (screen.getByRole("menuitem", { name: hub.album.addFromDevice }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.addFromDevice }));
     chooseFiles(["deliberate.png"]);
+
+    // The modal opens blank → Add disabled (no default fan-out).
+    const addBtn = () =>
+      screen.getByRole("button", { name: hub.album.destinationAdd }) as HTMLButtonElement;
+    expect(addBtn().disabled).toBe(true);
+
+    // A deliberate pick of ONE family enables Add, and an upload targets ONLY that family.
+    fireEvent.click(screen.getByRole("button", { name: FAM_B.familyName }));
+    expect(addBtn().disabled).toBe(false);
+    fireEvent.click(addBtn());
 
     await waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
     expect(uploadPhotoDirect.mock.calls[0]![1]).toEqual([FAM_B.familyId]);
