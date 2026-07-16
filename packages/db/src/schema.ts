@@ -823,6 +823,10 @@ export const asks = pgTable(
   (t) => [
     index("asks_target_idx").on(t.targetPersonId),
     index("asks_status_idx").on(t.status),
+    // Follow-up (#77) delete-path lookups and the ON DELETE SET NULL FK cascade filter `asks` by
+    // `source_story_id`; without this index they full-scan. Shipped after the column (migrations
+    // 0016/0017 added the column + FK but not the index — a Gemini HIGH finding).
+    index("asks_source_story_idx").on(t.sourceStoryId),
   ],
 );
 

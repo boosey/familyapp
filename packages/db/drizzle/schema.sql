@@ -529,6 +529,7 @@ CREATE INDEX "ask_families_family_idx" ON "ask_families" USING btree ("family_id
 CREATE INDEX "ask_subject_photos_photo_idx" ON "ask_subject_photos" USING btree ("photo_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
+CREATE INDEX "asks_source_story_idx" ON "asks" USING btree ("source_story_id");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
 CREATE INDEX "consent_story_idx" ON "consent_records" USING btree ("story_id");
 CREATE INDEX "family_photo_families_family_idx" ON "family_photo_families" USING btree ("family_id");
