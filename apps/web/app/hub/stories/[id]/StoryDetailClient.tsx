@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { retargetStoryFamiliesAction } from "./actions";
 import { FavoriteButton } from "./FavoriteButton";
+import { FollowUpButton } from "./FollowUpButton";
 import { LikeButton } from "./LikeButton";
 import { OwnerActionMenu } from "./OwnerActionMenu";
 import { StoryReadBody } from "./StoryReadBody";
@@ -16,6 +17,11 @@ import type { TagSuggestions } from "@/app/hub/tag-input-types";
 export interface StoryDetailClientProps {
   storyId: string;
   isOwner: boolean;
+  // The narrator (story owner) — the target of a follow-up question (#77).
+  narratorPersonId: string;
+  // Whether the "Ask a follow-up" affordance is offered: a signed-in NON-owner viewer of a shared
+  // story. The owner asking themselves is nonsensical; anonymous viewers cannot create asks.
+  canAskFollowUp: boolean;
   initialTitle: string;
   initialTags: string[];
   initialProse: string;
@@ -48,6 +54,8 @@ export interface StoryDetailClientProps {
 export function StoryDetailClient({
   storyId,
   isOwner,
+  narratorPersonId,
+  canAskFollowUp,
   initialTitle,
   initialTags,
   initialProse,
@@ -417,6 +425,13 @@ export function StoryDetailClient({
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 28, flexWrap: "wrap" }}>
           <FavoriteButton storyId={storyId} initialState={favoriteState} canFavorite={canReact} />
           <LikeButton storyId={storyId} initialState={likeState} canLike={canReact} />
+          {canAskFollowUp && (
+            <FollowUpButton
+              storyId={storyId}
+              targetPersonId={narratorPersonId}
+              narratorName={narratorName}
+            />
+          )}
         </div>
       )}
 

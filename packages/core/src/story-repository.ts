@@ -1065,6 +1065,14 @@ export async function discardDraftStory(
     await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
     await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
     await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
+    // Detach any FOLLOW-UP asks sourced from this draft (#77). The owner can self-ask a follow-up on
+    // their OWN draft (createAsk has no owner-exclusion), so this link can exist here too. The FK is
+    // ON DELETE SET NULL (schema.ts), so this is belt-and-suspenders — kept for symmetry with the
+    // `storyId` null-out above and with eraseStory, and to keep intent explicit at the delete site.
+    await tx
+      .update(asks)
+      .set({ sourceStoryId: null })
+      .where(eq(asks.sourceStoryId, input.storyId));
 
     // 7. Then delete in STORY-FIRST order (see JSDoc above for the FK + trigger rationale): the
     //    story references the media (story is the CHILD of media there), so the story goes first,

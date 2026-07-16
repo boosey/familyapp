@@ -23,6 +23,7 @@ import {
   voiceCaptions,
 } from "@chronicle/db/schema";
 import { eraseAsk, eraseStory, eraseVoiceCaption } from "../src/erasure-repository";
+import { createAsk } from "../src/asks";
 
 let db: Database;
 beforeEach(async () => {
@@ -83,6 +84,48 @@ describe("eraseStory — owner erasure of a consented, shared story", () => {
     expect(audit[0]!.reason).toBe("owner_erasure");
     expect(audit[0]!.itemType).toBe("story");
     expect(audit[0]!.actorPersonId).toBe(owner.id);
+  });
+});
+
+describe("eraseStory — a follow-up ask sourced from the story (#77) does NOT block erasure", () => {
+  // Regression for B1: `asks.source_story_id` is ON DELETE no action, so once ANYONE poses a
+  // follow-up on a published story, erasing that story FK-fails and rolls back the WHOLE erasure —
+  // making the story permanently un-erasable — UNLESS eraseStory nulls the source link first. This
+  // seeds the FULL fixture (co-member asker + a real createAsk-created follow-up), erases, and asserts
+  // the erasure succeeds AND the follow-up ask survives as a standalone with sourceStoryId nulled.
+  it("erases the source story and leaves the follow-up ask standing with a null source link", async () => {
+    const owner = await makePerson("Eleanor");
+    const family = await makeFamily(owner.id);
+    // A co-member who can SEE the shared story and pose a follow-up (createAsk's front door passes).
+    const cousin = await makePerson("Sofia");
+    await db.insert(memberships).values({ personId: cousin.id, familyId: family.id, status: "active" });
+    const { story } = await makeSharedStory(owner.id, family.id);
+
+    const followUp = await createAsk(
+      db,
+      { kind: "account", personId: cousin.id },
+      {
+        targetPersonId: owner.id,
+        questionText: "What happened to the house after that summer?",
+        sourceStoryId: story.id,
+      },
+    );
+    // Precondition: the ask really points at the story we're about to erase.
+    expect(followUp.sourceStoryId).toBe(story.id);
+
+    const result = await eraseStory(db, { kind: "account", personId: owner.id }, { storyId: story.id });
+
+    // The erasure is NOT rolled back by the source-story FK.
+    expect(result.allowed).toBe(true);
+    if (!result.allowed) return;
+    expect(await db.select().from(stories).where(eq(stories.id, story.id))).toHaveLength(0);
+
+    // The follow-up ask is a legitimate standalone question — it survives, with its origin nulled out.
+    const [survivor] = await db.select().from(asks).where(eq(asks.id, followUp.id));
+    expect(survivor).toBeDefined();
+    expect(survivor!.sourceStoryId).toBeNull();
+    // Its answer link (story_id) was never set on this ask, so it stays null too — no crossover.
+    expect(survivor!.storyId).toBeNull();
   });
 });
 

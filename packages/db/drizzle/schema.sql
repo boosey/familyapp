@@ -58,6 +58,7 @@ CREATE TABLE "asks" (
 	"recording_media_id" uuid,
 	"status" "ask_status" DEFAULT 'queued' NOT NULL,
 	"story_id" uuid,
+	"source_story_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"routed_at" timestamp with time zone,
 	"answered_at" timestamp with time zone,
@@ -437,6 +438,7 @@ ALTER TABLE "asks" ADD CONSTRAINT "asks_asker_person_id_persons_id_fk" FOREIGN K
 ALTER TABLE "asks" ADD CONSTRAINT "asks_target_person_id_persons_id_fk" FOREIGN KEY ("target_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_recording_media_id_media_id_fk" FOREIGN KEY ("recording_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "asks" ADD CONSTRAINT "asks_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "asks" ADD CONSTRAINT "asks_source_story_id_stories_id_fk" FOREIGN KEY ("source_story_id") REFERENCES "public"."stories"("id") ON DELETE set null ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_story_id_stories_id_fk" FOREIGN KEY ("story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "consent_records" ADD CONSTRAINT "consent_records_approval_audio_media_id_media_id_fk" FOREIGN KEY ("approval_audio_media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
@@ -524,6 +526,7 @@ CREATE INDEX "ask_families_family_idx" ON "ask_families" USING btree ("family_id
 CREATE INDEX "ask_subject_photos_photo_idx" ON "ask_subject_photos" USING btree ("photo_id");
 CREATE INDEX "asks_target_idx" ON "asks" USING btree ("target_person_id");
 CREATE INDEX "asks_status_idx" ON "asks" USING btree ("status");
+CREATE INDEX "asks_source_story_idx" ON "asks" USING btree ("source_story_id");
 CREATE INDEX "consent_person_idx" ON "consent_records" USING btree ("person_id");
 CREATE INDEX "consent_story_idx" ON "consent_records" USING btree ("story_id");
 CREATE INDEX "family_photo_families_family_idx" ON "family_photo_families" USING btree ("family_id");

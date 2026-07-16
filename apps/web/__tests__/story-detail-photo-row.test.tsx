@@ -19,6 +19,7 @@ vi.mock("@/app/hub/stories/[id]/actions", () => ({
 }));
 vi.mock("@/app/hub/stories/[id]/FavoriteButton", () => ({ FavoriteButton: () => null }));
 vi.mock("@/app/hub/stories/[id]/LikeButton", () => ({ LikeButton: () => null }));
+vi.mock("@/app/hub/stories/[id]/FollowUpButton", () => ({ FollowUpButton: () => null }));
 vi.mock("@/app/hub/stories/[id]/OwnerActionMenu", () => ({ OwnerActionMenu: () => null }));
 vi.mock("@/app/hub/stories/[id]/StoryEditor", () => ({ StoryEditor: () => null }));
 // StoryReadBody is intentionally NOT mocked — it renders the prose, our anchor for "the row is ABOVE
@@ -38,6 +39,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
   return {
     storyId: "story-1",
     isOwner: false,
+    narratorPersonId: "narrator-1",
+    canAskFollowUp: false,
     initialTitle: "A Sunday",
     initialTags: [],
     initialProse: "THE_PROSE_MARKER",

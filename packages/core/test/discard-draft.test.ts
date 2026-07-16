@@ -14,6 +14,7 @@ import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveAndShareStory,
+  createAsk,
   createTextDraft,
   discardDraftStory,
   InvariantViolation,
@@ -27,7 +28,7 @@ import {
   targetStoryToFamily,
 } from "./helpers";
 import { media, stories } from "@chronicle/db/content";
-import { consentRecords, storyFamilies } from "@chronicle/db/schema";
+import { asks, consentRecords, storyFamilies } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 
 let db: Database;
@@ -74,6 +75,50 @@ describe("discardDraftStory — happy path", () => {
       .from(media)
       .where(eq(media.id, recording.id));
     expect(mediaRows).toHaveLength(0);
+  });
+});
+
+describe("discardDraftStory — a follow-up ask sourced from the draft (#77) does NOT block discard", () => {
+  // Regression for B2 (twin of B1 on the discard path): `asks.source_story_id` referencing a draft
+  // must not FK-fail the discard. The owner CAN self-ask a follow-up on their OWN draft — createAsk
+  // has no owner-exclusion, its co-membership gate passes for a self-target, and getStoryForViewer
+  // returns the draft (owner-sees-own-in-any-state). Full fixtures: owner + active family + a real
+  // createAsk follow-up sourced at the draft. Discard must SUCCEED and the ask survive with a null
+  // source link (ON DELETE SET NULL + the explicit null-out in discardDraftStory).
+  it("discards the source draft and leaves the follow-up ask standing with a null source link", async () => {
+    const narrator = await makePerson(db, "Eleanor");
+    // createAsk's co-membership gate needs the asker+target to share an ACTIVE family; a self-ask
+    // shares all of the owner's families, so one active membership suffices.
+    const family = await makeFamily(db, "Boudreaux", narrator.id);
+    await addMembership(db, narrator.id, family.id);
+    const { story: draft } = await makeDraft(narrator.id);
+
+    const followUp = await createAsk(
+      db,
+      { kind: "account", personId: narrator.id },
+      {
+        targetPersonId: narrator.id,
+        questionText: "Note to self: add the part about the dog.",
+        sourceStoryId: draft.id,
+      },
+    );
+    expect(followUp.sourceStoryId).toBe(draft.id);
+
+    const result = await discardDraftStory(db, {
+      storyId: draft.id,
+      narratorPersonId: narrator.id,
+    });
+    expect(result.storageKeys).toHaveLength(1);
+
+    // The draft is gone — the discard was NOT rolled back by the source-story FK.
+    expect(
+      await db.select({ id: stories.id }).from(stories).where(eq(stories.id, draft.id)),
+    ).toHaveLength(0);
+
+    // The follow-up ask survives as a standalone with its origin nulled out.
+    const [survivor] = await db.select().from(asks).where(eq(asks.id, followUp.id));
+    expect(survivor).toBeDefined();
+    expect(survivor!.sourceStoryId).toBeNull();
   });
 });
 

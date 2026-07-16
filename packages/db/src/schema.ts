@@ -782,6 +782,19 @@ export const asks = pgTable(
     status: askStatusEnum("status").notNull().default("queued"),
     /** The resulting Story once answered. */
     storyId: uuid("story_id").references(() => stories.id),
+    /**
+     * The already-published Story this ask is a FOLLOW-UP on (#77). Present when a family member,
+     * reading a shared story, poses a further question tied to it — so the narrator's next session
+     * can reference the story the question sprang from. Distinct from `storyId` (the ANSWER story,
+     * set on approval): `sourceStoryId` is the PROMPTING story, set at ask-creation and never changed.
+     * Nullable — most asks (cold questions, photo-subject asks) have no source story.
+     *
+     * ON DELETE SET NULL: a follow-up is a legitimate standalone ask that just loses its origin when
+     * the source story is erased/discarded. The FK is the primary guard so ANY story-delete path
+     * (eraseStory, discardDraftStory, or a future one) can never FK-fail on this link; the repos ALSO
+     * null it explicitly for symmetry with `story_id` and intent, but they no longer NEED to.
+     */
+    sourceStoryId: uuid("source_story_id").references(() => stories.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -794,6 +807,10 @@ export const asks = pgTable(
   (t) => [
     index("asks_target_idx").on(t.targetPersonId),
     index("asks_status_idx").on(t.status),
+    // Follow-up asks (#77) look up / null out `source_story_id` on every story-delete path
+    // (eraseStory, discardDraftStory) and the ON DELETE SET NULL FK does the same under the hood.
+    // Without this index those become full scans of `asks` as the table grows.
+    index("asks_source_story_idx").on(t.sourceStoryId),
   ],
 );
 

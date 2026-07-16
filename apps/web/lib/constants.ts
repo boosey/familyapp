@@ -25,6 +25,13 @@ export const DEFAULT_FONT_SIZE_INDEX = 1;
  */
 export const PHOTO_BATCH_MAX_FILES = 30;
 
+/**
+ * Max characters accepted for a follow-up question on a published story (#77). The action enforces
+ * this after trim; over-length is rejected with the mapped `hub.followUp.failed` copy. A generous cap
+ * — a follow-up is a single human question, not an essay.
+ */
+export const FOLLOW_UP_QUESTION_MAX_CHARS = 1000;
+
 /** Google Photos picker polling: overall timeout before giving up (ms). */
 export const PHOTO_PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
