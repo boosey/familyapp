@@ -221,6 +221,10 @@ export async function createInterviewSession(
         evaluation,
         policy,
         answerWordCount,
+        // Phase 1 has no persisted per-thread concept for the interviewer loop's gap follow-ups, so
+        // both cap args are fed the SAME session counter. Effect: whichever of maxFollowUpsPerThread
+        // / maxFollowUpsPerSession is smaller binds (with defaults 2/4, the thread cap binds). This
+        // collapse is deliberate — mirrors the answer-surface's inert-session-cap note in actions.ts.
         followUpsAskedInThread: state.gapFollowUpsAskedInSession,
         followUpsAskedInSession: state.gapFollowUpsAskedInSession,
         distressed: state.distressed,
