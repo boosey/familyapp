@@ -164,13 +164,25 @@ export async function createInterviewSession(
   async function recordResponse(utterance: string): Promise<void> {
     ingestNarratorUtterance(state, utterance);
 
+    // Drop any gap follow-up left queued from a prior turn before we (maybe) queue a fresh one. If a
+    // higher-priority intent (intake/ask) preempted the follow_up slot last turn, `recordTurnCompleted`
+    // never cleared the queue — left alone it would resurface later, stale and out of context, on a
+    // subsequent thin answer that skips detection. Clearing here bounds a queued gap to the very next
+    // prompt (issue #80).
+    state.pendingGapFollowUp = null;
+
     // Gap-driven follow-up detection (issue #80). Runs BEFORE intake extraction so a gap follow-up
     // can be queued for the next turn. Deliberately after `ingestNarratorUtterance` so distress /
     // off-ramp flags are already set and can short-circuit detection. Best-effort: any failure
     // leaves the loop in its reflection-only behavior — a broken detector never blocks the session.
-    await detectAndQueueGapFollowUp(utterance);
-
+    // Skipped for structured intake answers: the field-extraction questions (hometown, occupation…)
+    // are not free narrative, and any gap they'd surface is preempted by the remaining intake queue —
+    // so we don't spend an LLM call on them.
     const key = pendingIntakeKey;
+    if (key === null) {
+      await detectAndQueueGapFollowUp(utterance);
+    }
+
     pendingIntakeKey = null;
     if (!key) return;
     const question = INTAKE_QUESTIONS.find((q) => q.key === key);

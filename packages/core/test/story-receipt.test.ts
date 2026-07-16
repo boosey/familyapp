@@ -92,6 +92,7 @@ describe("story receipt — the authorized family member fully experiences a new
     expect(received!.prose).toBe(PROSE);
     expect(received!.transcript).toBe(TRANSCRIPT);
     expect(received!.title).toBe(TITLE);
+    expect(received!.summary).toBe(SUMMARY);
   });
 
   it("plays the original-voice audio (media front door returns the bytes-bearing recording)", async () => {
