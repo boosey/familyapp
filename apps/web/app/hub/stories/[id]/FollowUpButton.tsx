@@ -3,6 +3,7 @@
 import { useState, useTransition, type CSSProperties } from "react";
 import { askFollowUpAction } from "./actions";
 import { hub } from "@/app/_copy";
+import { FOLLOW_UP_QUESTION_MAX_CHARS } from "@/lib/constants";
 
 export interface FollowUpButtonProps {
   /** The published story the follow-up is about (stamped onto the ask's `source_story_id`). */
@@ -144,6 +145,7 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
           name="questionText"
           className="kin-field"
           rows={4}
+          maxLength={FOLLOW_UP_QUESTION_MAX_CHARS}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={hub.followUp.placeholder}
