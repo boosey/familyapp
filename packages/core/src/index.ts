@@ -152,6 +152,7 @@ export {
 } from "./families";
 export {
   addMembership,
+  designateNarrator,
   listActiveMembershipsForPerson,
   listActiveFamiliesForPerson,
   isActiveMember,

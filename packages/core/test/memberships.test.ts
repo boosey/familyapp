@@ -5,8 +5,10 @@
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  AuthorizationError,
   InvariantViolation,
   addMembership,
+  designateNarrator,
   getStewardPersonId,
   isActiveMember,
   listActiveFamiliesForPerson,
@@ -57,6 +59,62 @@ describe("addMembership", () => {
     const rejoin = await addMembership(db, { personId: p.id, familyId: fam.id });
     expect(rejoin.membershipId).not.toBe(membershipId);
     expect(await isActiveMember(db, p.id, fam.id)).toBe(true);
+  });
+});
+
+describe("designateNarrator", () => {
+  it("promotes an existing active member's role to narrator", async () => {
+    const p = await makePerson(db, "P");
+    const steward = await makePerson(db, "S");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: p.id, familyId: fam.id }); // defaults to member
+
+    await designateNarrator(db, { personId: p.id, familyId: fam.id });
+
+    const members = await listMembersOfFamily(db, fam.id);
+    expect(members.find((m) => m.personId === p.id)?.role).toBe("narrator");
+    // Still exactly one active membership — designation edits the role, never adds a row.
+    const active = await listActiveMembershipsForPerson(db, p.id);
+    expect(active).toHaveLength(1);
+  });
+
+  it("is idempotent — designating an already-narrator member is a no-op success", async () => {
+    const p = await makePerson(db, "P");
+    const steward = await makePerson(db, "S");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: p.id, familyId: fam.id, role: "narrator" });
+
+    await expect(
+      designateNarrator(db, { personId: p.id, familyId: fam.id }),
+    ).resolves.toBeUndefined();
+
+    const members = await listMembersOfFamily(db, fam.id);
+    expect(members.find((m) => m.personId === p.id)?.role).toBe("narrator");
+    const active = await listActiveMembershipsForPerson(db, p.id);
+    expect(active).toHaveLength(1);
+  });
+
+  it("rejects designating a person who has no active membership in the family", async () => {
+    const p = await makePerson(db, "P");
+    const steward = await makePerson(db, "S");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    // p is NOT a member of fam.
+    await expect(
+      designateNarrator(db, { personId: p.id, familyId: fam.id }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("does not resurrect an ENDED membership (an ended member is not designable)", async () => {
+    const p = await makePerson(db, "P");
+    const steward = await makePerson(db, "S");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    const { membershipId } = await addMembership(db, { personId: p.id, familyId: fam.id });
+    await endMembership(db, membershipId);
+
+    await expect(
+      designateNarrator(db, { personId: p.id, familyId: fam.id }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await isActiveMember(db, p.id, fam.id)).toBe(false);
   });
 });
 
