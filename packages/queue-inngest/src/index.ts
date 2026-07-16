@@ -206,8 +206,8 @@ interface InngestFailureArgs {
  * shapes nested it under the `inngest/function.failed` wrapper at `event.data.event.data`; we accept
  * either so a minor SDK bump can't silently strand the storyId (which would drop the failure signal).
  */
-function originalPayload(event: { data?: unknown }): JobPayload {
-  const data = event.data;
+function originalPayload(event?: { data?: unknown } | null): JobPayload {
+  const data = event?.data;
   if (data && typeof data === "object" && "storyId" in data) {
     return data as JobPayload;
   }
