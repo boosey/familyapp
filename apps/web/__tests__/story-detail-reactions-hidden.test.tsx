@@ -21,6 +21,7 @@ vi.mock("@/app/hub/stories/[id]/FavoriteButton", () => ({
 vi.mock("@/app/hub/stories/[id]/LikeButton", () => ({
   LikeButton: () => <div data-testid="like" />,
 }));
+vi.mock("@/app/hub/stories/[id]/FollowUpButton", () => ({ FollowUpButton: () => null }));
 // Expose the "edit story" entry point without the real menu chrome.
 vi.mock("@/app/hub/stories/[id]/OwnerActionMenu", () => ({
   OwnerActionMenu: ({ onEditStory }: { onEditStory: () => void }) => (
@@ -38,6 +39,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
   return {
     storyId: "story-1",
     isOwner: true,
+    narratorPersonId: "narrator-1",
+    canAskFollowUp: false,
     initialTitle: "A Sunday",
     initialTags: [],
     initialProse: "PROSE",

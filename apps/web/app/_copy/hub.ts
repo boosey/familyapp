@@ -119,6 +119,23 @@ export const hub = {
     removePhotoAria: (caption: string | null) =>
       caption ? `Remove “${caption}” from this question` : "Remove this photo from the question",
   },
+  // Follow-up question on an already-published story (#77). The affordance lives on the story detail;
+  // submitting routes into the existing ask queue linked to the story, surfacing in the narrator's
+  // next session.
+  followUp: {
+    open: "Ask a follow-up",
+    heading: (narratorName: string) => `Ask ${narratorName} a follow-up`,
+    intro:
+      "Your question goes into the queue, tied to this story. It'll be asked next time they sit down to talk.",
+    label: "Your follow-up question",
+    placeholder: "e.g. What happened to the house after that summer?",
+    submit: "Send to the queue",
+    cancel: "Cancel",
+    sending: "Sending…",
+    sent: "Sent. It's in the queue for their next session.",
+    empty: "Write a question first.",
+    failed: "Couldn't send that question. Try again.",
+  },
   asks: {
     signedOut: "Sign in to see your asks.",
     title: "Your asks",
