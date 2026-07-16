@@ -12,10 +12,10 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { createLinkSession } from "@chronicle/capture";
 import { createInvitation, listActiveFamiliesForPerson } from "@chronicle/core";
 import { memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
+import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
 import type { FamilyFilter } from "@/lib/family-filter";
@@ -57,12 +57,13 @@ async function createInvite(formData: FormData): Promise<void> {
   const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
   const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
 
-  // The membership gate (inviter AND narrator must be active members of this family) is enforced
-  // inside createLinkSession — the domain owns it, transactionally. We don't re-check here.
-  const { token } = await createLinkSession(db, {
-    personId: narratorId,
+  // Designate the chosen member as this family's narrator AND mint the login-free capture link, in one
+  // atomic step (issue #79). The membership gate (inviter AND narrator must be active members of this
+  // family) is enforced transactionally inside the helper — the domain owns it. We don't re-check here.
+  const { token } = await designateAndCreateNarratorLink(db, {
+    inviterPersonId: ctx.personId,
+    narratorPersonId: narratorId,
     familyId,
-    invitedByPersonId: ctx.personId,
   });
   const jar = await cookies();
   jar.set(INVITE_FLASH_COOKIE, token, {

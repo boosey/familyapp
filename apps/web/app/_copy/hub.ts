@@ -131,9 +131,9 @@ export const hub = {
   },
   invite: {
     personalLinkOnce: "Personal link — shown once",
-    narratorReadyTitle: "Link is ready",
+    narratorReadyTitle: "Their link is ready",
     narratorReadyBlurb:
-      "Send this to your narrator however you usually talk — text or email. Tapping it opens their recording page directly. There is no password.",
+      "Send this to them however you usually talk — a text or an email. Tapping it opens a gentle voice session where they can simply start telling their stories. No password, no sign-up, nothing to install.",
     fingerprintNote:
       "For safety we keep only a fingerprint — you won't see this link again. Save it now if you need to send it later; switching tabs or refreshing will clear it.",
     memberReadyTitle: "Invitation link is ready",
@@ -158,11 +158,11 @@ export const hub = {
     // ambiguous >1-family case with no deliberate pick.
     familyRequired: "Choose a family for this invitation.",
     createInviteLink: "Create invite link",
-    narratorHeading: "Invite a narrator to record",
+    narratorHeading: "Set up someone to record",
     narratorBody:
-      "Creates a personal link that opens the narrator's recording page. No login, no account — the link is the identity.",
-    narratorLabel: "Narrator",
-    createLink: "Create link",
+      "Choose a family member and we'll create their own private link. Opening it starts a gentle voice session — they just tap and talk, with no login, account, or app to set up. You hand them the link; they do the rest whenever they're ready.",
+    narratorLabel: "Who's telling the stories?",
+    createLink: "Create their link",
   },
   requests: {
     signedOut: "Sign in to review join requests.",

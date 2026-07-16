@@ -10,7 +10,7 @@
 import { and, eq } from "drizzle-orm";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import type { Database, Membership, MembershipRole } from "@chronicle/db";
-import { InvariantViolation } from "./errors";
+import { AuthorizationError, InvariantViolation } from "./errors";
 
 /**
  * A handle that is either the pooled client or an open transaction. The membership insert is reused
@@ -62,6 +62,39 @@ export async function addMembership(
   input: { personId: string; familyId: string; role?: MembershipRole },
 ): Promise<{ membershipId: string }> {
   return insertActiveMembership(db, input);
+}
+
+/**
+ * Designate an EXISTING active member as the family's narrator by setting their active membership's
+ * role to `narrator` (issue #79 — a relative sets a narrator up before handing off the capture link).
+ *
+ * Narrow on purpose: it edits the role of the ONE active (person, family) membership — never inserts a
+ * row, never resurrects an ENDED/PAUSED one, never mints a Person (creating a brand-new person is
+ * `addRelative`'s job, deliberately out of scope here). A person with no active membership in the
+ * family cannot be made its narrator → `AuthorizationError` (mirrors createLinkSession's gate: you may
+ * only designate someone who already belongs). Idempotent: designating an already-narrator member
+ * matches the same active row and is a no-op success — never an error.
+ */
+export async function designateNarrator(
+  db: Database,
+  input: { personId: string; familyId: string },
+): Promise<void> {
+  const updated = await db
+    .update(memberships)
+    .set({ role: "narrator" })
+    .where(
+      and(
+        eq(memberships.personId, input.personId),
+        eq(memberships.familyId, input.familyId),
+        eq(memberships.status, "active"),
+      ),
+    )
+    .returning({ id: memberships.id });
+  if (updated.length === 0) {
+    throw new AuthorizationError(
+      "cannot designate a narrator: the person has no active membership in this family",
+    );
+  }
 }
 
 export async function listActiveMembershipsForPerson(
