@@ -32,6 +32,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(storyId)) {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
+
   const rt = await getRuntime();
   const { db } = rt;
 
