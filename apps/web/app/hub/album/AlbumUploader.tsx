@@ -34,10 +34,9 @@ import {
 } from "./google-photos-actions";
 import { prepareAlbumPhoto } from "./prepare-photo";
 import { uploadPhotoDirect } from "./direct-upload";
-import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "../FamilyChoiceChips";
-import { ManageConnectionsMenu } from "./ManageConnectionsMenu";
+import { AddPhotosMenu } from "./AddPhotosMenu";
 import { seedComposeFamilies } from "@/lib/compose-scope";
 import {
   PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
@@ -492,72 +491,56 @@ export function AlbumUploader({
       ) : null}
 
       {/*
-        Outer row does NOT wrap: the left group (Add / Connect / Import) may wrap among itself, but
-        the "Manage connections ▾" menu stays pinned to the right on the top line (marginLeft:auto
-        inside the menu + flexShrink:0 here) rather than dropping below on narrow viewports.
+        #93 — the album's SINGLE right-justified entry point. Every add affordance that used to sit
+        inline (device picker, Google connect/import) plus the Manage-connections Disconnect row now
+        lives inside one "Add Photos ▾" dropdown, pinned to the right (marginLeft:auto inside the menu).
+        The menu renders only when there is ≥1 add action available; each item is gated exactly as
+        before (`showFileUpload`, `googlePhotosConfigured`, `googlePhotosConnected`) and every action
+        behaves identically — this is pure consolidation.
       */}
-      <div style={{ display: "flex", flexWrap: "nowrap", gap: 8, alignItems: "center" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", minWidth: 0 }}>
-          {showFileUpload ? (
-            <KindredButton
-              type="button"
-              variant="primary"
-              size="small"
-              disabled={addDisabled}
-              onClick={openPicker}
-              style={{ alignSelf: "flex-start" }}
-            >
-              {hub.album.addButton}
-            </KindredButton>
-          ) : null}
-
-          {googlePhotosConfigured && !googlePhotosConnected ? (
-            <a
-              href="/api/google-photos/connect"
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                fontWeight: 600,
-                color: "var(--accent)",
-                textDecoration: "none",
-                padding: "10px 4px",
-              }}
-            >
-              {hub.album.googlePhotosConnect}
-            </a>
-          ) : null}
-
-          {googlePhotosConfigured && googlePhotosConnected ? (
-            <KindredButton
-              type="button"
-              variant="secondary"
-              size="small"
-              disabled={importDisabled}
-              onClick={() => void runGoogleImport()}
-            >
-              {hub.album.googlePhotosImport}
-            </KindredButton>
-          ) : null}
+      {showFileUpload || googlePhotosConfigured ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <AddPhotosMenu
+            label={hub.album.addPhotosMenu}
+            device={
+              showFileUpload
+                ? {
+                    label: hub.album.addFromDevice,
+                    disabled: addDisabled,
+                    onSelect: openPicker,
+                  }
+                : undefined
+            }
+            google={
+              googlePhotosConfigured
+                ? googlePhotosConnected
+                  ? {
+                      kind: "import",
+                      label: hub.album.googlePhotosImport,
+                      disabled: importDisabled,
+                      onSelect: () => void runGoogleImport(),
+                    }
+                  : {
+                      kind: "connect",
+                      label: hub.album.googlePhotosConnect,
+                      href: "/api/google-photos/connect",
+                    }
+                : undefined
+            }
+            manage={
+              googlePhotosConfigured && googlePhotosConnected
+                ? {
+                    header: googlePhotosEmail ?? hub.album.googlePhotosSourceName,
+                    disconnectLabel: hub.album.googlePhotosDisconnect,
+                    pendingLabel: hub.album.googlePhotosDisconnecting,
+                    onDisconnect,
+                    pending: busy,
+                  }
+                : undefined
+            }
+          />
         </div>
-
-        {googlePhotosConfigured && googlePhotosConnected ? (
-          <div style={{ flexShrink: 0, marginLeft: "auto" }}>
-            <ManageConnectionsMenu
-              label={hub.album.manageConnections}
-              connections={[
-                {
-                  id: "google-photos",
-                  header: googlePhotosEmail ?? hub.album.googlePhotosSourceName,
-                  disconnectLabel: hub.album.googlePhotosDisconnect,
-                  pendingLabel: hub.album.googlePhotosDisconnecting,
-                  onDisconnect,
-                  pending: busy,
-                },
-              ]}
-            />
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {error ? (
         <p

@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 /**
- * AlbumUploader — the multi-family placement picker (#16) + the button-opens-picker upload flow.
+ * AlbumUploader — the multi-family placement picker (#16) + the button-opens-picker upload flow,
+ * now driven through the consolidated "Add Photos ▾" dropdown (#93).
  *  1. In >=2 families: one chip per family; ONLY the current-context family is ON by
  *     default (the default is the album on screen, never "all").
  *  2. Solo (one family): no placement chips render — the server defaults to the sole family.
- *  3. Deselecting the last ON album disables the "Add to album" button (>=1 must stay selected).
+ *  3. Deselecting the last ON album disables the "Add from your device" menuitem (>=1 must stay
+ *     selected).
  *  4. Choosing files in the (hidden) input IS the upload — there is no separate submit step.
+ *  5. #93 — device add / Google connect / Google import / Disconnect all live inside ONE right-
+ *     justified "Add Photos" menu; opening the menu is the first step for each.
  * Mocks next/navigation and the server-action module (a "use server" file that pulls db at import).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -71,6 +75,13 @@ const FAM_B = { familyId: "bbbbbbbb-0000-0000-0000-000000000000", familyName: "M
 const chip = (name: string): HTMLElement => screen.getByRole("button", { name });
 const isOn = (name: string): boolean => chip(name).getAttribute("aria-pressed") === "true";
 
+/** #93 — open the single "Add Photos ▾" dropdown so its menuitems become queryable. */
+const openAddMenu = (): void =>
+  fireEvent.click(screen.getByRole("button", { name: hub.album.addPhotosMenu }));
+/** The device-add menuitem inside the open Add Photos menu. */
+const deviceItem = (): HTMLButtonElement =>
+  screen.getByRole("menuitem", { name: hub.album.addFromDevice }) as HTMLButtonElement;
+
 describe("AlbumUploader multi-family picker", () => {
   it("checks ONLY the current-context family by default (not all)", () => {
     render(
@@ -87,27 +98,28 @@ describe("AlbumUploader multi-family picker", () => {
     expect(screen.queryByRole("button", { name: FAM_A.familyName })).toBeNull();
   });
 
-  it("disables the add button when the only checked album is deselected", () => {
+  it("disables the device-add menuitem when the only checked album is deselected", () => {
     render(
       <AlbumUploader families={[FAM_A, FAM_B]} currentFamilyId={FAM_A.familyId} />,
     );
-    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
-    // With the current album checked by default, the button is enabled...
-    expect(add.disabled).toBe(false);
+    openAddMenu();
+    // With the current album checked by default, the device-add item is enabled...
+    expect(deviceItem().disabled).toBe(false);
     // ...deselecting the sole ON album disables it (>=1 must stay selected).
     fireEvent.click(chip(FAM_A.familyName));
-    expect(add.disabled).toBe(true);
+    expect(deviceItem().disabled).toBe(true);
   });
 
-  // The visible "Add to album" button opens the hidden OS file picker — it does NOT show a native
-  // "choose files" control. Clicking it programmatically clicks the (hidden) file input.
-  it("opens the file picker when the add button is clicked", () => {
+  // #93: the "Add from your device" menuitem opens the hidden OS file picker — it does NOT show a
+  // native "choose files" control. Selecting it programmatically clicks the (hidden) file input.
+  it("opens the file picker when the device-add menuitem is selected", () => {
     render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
     const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
     const clicked = vi.spyOn(fileInput, "click");
-    fireEvent.click(screen.getByRole("button", { name: /add to album/i }));
+    openAddMenu();
+    fireEvent.click(deviceItem());
     expect(clicked).toHaveBeenCalledTimes(1);
   });
 
@@ -140,8 +152,8 @@ describe("AlbumUploader multi-family picker", () => {
 
   // ADR-0015 · F2 board mode: when `onImportFiles` is provided, the uploader HANDS OFF import
   // execution to the board (per-item pool) instead of running the batched action. Choosing files calls
-  // the delegate with the chosen files + familyIds and does NOT call uploadAlbumPhotoAction.
-  it("delegates to onImportFiles (board mode) instead of calling the batched action", async () => {
+  // the delegate with the chosen files + familyIds and does NOT call uploadPhotoDirect.
+  it("delegates to onImportFiles (board mode) instead of calling the direct upload", async () => {
     const onImportFiles = vi.fn();
     render(
       <AlbumUploader
@@ -330,8 +342,8 @@ describe("AlbumUploader multi-family picker", () => {
   });
 
   // ADR-0021 designator: `defaultSelected` (computed by the surface) is the single source of the seed.
-  // A sole/single family pre-selects it so upload proceeds with no extra picking (add button enabled).
-  it("seeds the designator from defaultSelected (sole family pre-selected, add enabled)", () => {
+  // A sole/single family pre-selects it so upload proceeds with no extra picking (device-add enabled).
+  it("seeds the designator from defaultSelected (sole family pre-selected, device-add enabled)", () => {
     render(
       <AlbumUploader
         families={[FAM_A, FAM_B]}
@@ -341,15 +353,15 @@ describe("AlbumUploader multi-family picker", () => {
     );
     expect(isOn(FAM_B.familyName)).toBe(true);
     expect(isOn(FAM_A.familyName)).toBe(false);
-    // A concrete target ⇒ the add button is enabled (upload can proceed).
-    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
-    expect(add.disabled).toBe(false);
+    // A concrete target ⇒ the device-add menuitem is enabled (upload can proceed).
+    openAddMenu();
+    expect(deviceItem().disabled).toBe(false);
   });
 
   // ADR-0021 designator: an AMBIGUOUS target (viewer has >1 family, filter names none) arrives as an
-  // EMPTY `defaultSelected` → NOTHING is pre-selected and the add button is DISABLED until a deliberate
-  // pick. A photo never silently fans out to all families.
-  it("defaults to NO selection (add disabled) when defaultSelected is empty (ambiguous target)", () => {
+  // EMPTY `defaultSelected` → NOTHING is pre-selected and the device-add item is DISABLED until a
+  // deliberate pick. A photo never silently fans out to all families.
+  it("defaults to NO selection (device-add disabled) when defaultSelected is empty (ambiguous target)", () => {
     render(
       <AlbumUploader
         families={[FAM_A, FAM_B]}
@@ -359,11 +371,11 @@ describe("AlbumUploader multi-family picker", () => {
     );
     expect(isOn(FAM_A.familyName)).toBe(false);
     expect(isOn(FAM_B.familyName)).toBe(false);
-    const add = screen.getByRole("button", { name: /add to album/i }) as HTMLButtonElement;
-    expect(add.disabled).toBe(true);
+    openAddMenu();
+    expect(deviceItem().disabled).toBe(true);
     // A deliberate pick enables it.
     fireEvent.click(chip(FAM_A.familyName));
-    expect(add.disabled).toBe(false);
+    expect(deviceItem().disabled).toBe(false);
   });
 
   // ADR-0021: `defaultSelected` supersedes `scope` (the surface owns the sole/ambiguous rule). An empty
@@ -433,105 +445,98 @@ describe("AlbumUploader multi-family picker", () => {
   });
 });
 
-describe("AlbumUploader Google Photos", () => {
-  it("shows Connect when configured but not connected", () => {
+describe("AlbumUploader Add Photos menu (#93)", () => {
+  // The single trigger is right-justified — its wrapper uses justify-content:flex-end and the menu
+  // root itself carries marginLeft:auto (mirrors the old right-pinned Manage-connections slot).
+  it("renders one right-justified Add Photos trigger", () => {
     render(
-      <AlbumUploader
-        families={[FAM_A]}
-        currentFamilyId={FAM_A.familyId}
-        googlePhotosConfigured
-      />,
-    );
-    const connect = screen.getByRole("link", { name: hub.album.googlePhotosConnect });
-    expect(connect.getAttribute("href")).toBe("/api/google-photos/connect");
-    expect(screen.queryByRole("button", { name: hub.album.googlePhotosImport })).toBeNull();
-  });
-
-  // The inline Disconnect button and the standalone email status line are GONE — Disconnect now lives
-  // inside a right-aligned "Manage connections ▾" dropdown, and the email is a header inside that menu.
-  it("shows Import and a Manage connections trigger (no inline Disconnect / email) when connected", () => {
-    render(
-      <AlbumUploader
-        families={[FAM_A]}
-        currentFamilyId={FAM_A.familyId}
-        googlePhotosConfigured
-        googlePhotosConnected
-        googlePhotosEmail="user@gmail.com"
-      />,
-    );
-    expect(screen.getByRole("button", { name: hub.album.googlePhotosImport })).toBeTruthy();
-    // The trigger is visible...
-    expect(screen.getByRole("button", { name: hub.album.manageConnections })).toBeTruthy();
-    // ...but the raw Disconnect item and the email are hidden until the menu opens.
-    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosDisconnect })).toBeNull();
-    expect(screen.queryByText("user@gmail.com")).toBeNull();
-  });
-
-  // Layout regression (Phase A · 1): the "Manage connections ▾" trigger must sit on the SAME row as
-  // the primary buttons (Import) and be pinned to the right — it must NOT wrap onto its own line on
-  // narrow viewports. We assert on DOM structure: the Import button and the menu trigger share a
-  // single non-wrapping outer row; the menu lives in a right-pinned slot (marginLeft:auto) whose
-  // parent is the SAME row that contains Import's group.
-  it("pins the Manage connections trigger to the right on the SAME row as Import (no wrap)", () => {
-    render(
-      <AlbumUploader
-        families={[FAM_A]}
-        currentFamilyId={FAM_A.familyId}
-        googlePhotosConfigured
-        googlePhotosConnected
-        googlePhotosEmail="user@gmail.com"
-      />,
-    );
-    const importBtn = screen.getByRole("button", { name: hub.album.googlePhotosImport });
-    const trigger = screen.getByRole("button", { name: hub.album.manageConnections });
-
-    // The menu's right-pinned slot: marginLeft:auto + flexShrink:0 on the wrapper around the menu.
-    // ManageConnectionsMenu's own root also carries marginLeft:auto; the slot is its parent.
-    const menuRoot = trigger.parentElement as HTMLElement; // ManageConnectionsMenu container
-    const rightSlot = menuRoot.parentElement as HTMLElement; // the flexShrink:0 slot we added
-    expect(rightSlot.style.marginLeft).toBe("auto");
-    expect(rightSlot.style.flexShrink).toBe("0");
-
-    // The outer row is the slot's parent — it must NOT wrap (menu can't drop below).
-    const outerRow = rightSlot.parentElement as HTMLElement;
-    expect(outerRow.style.display).toBe("flex");
-    expect(outerRow.style.flexWrap).toBe("nowrap");
-
-    // Import lives in the left group, whose parent is the SAME outer row: same line as the menu.
-    const leftGroup = importBtn.parentElement as HTMLElement;
-    expect(leftGroup.parentElement).toBe(outerRow);
-  });
-
-  it("renders the Manage connections trigger only when connected", () => {
-    // Unconfigured: no trigger.
-    const { rerender } = render(
       <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
     );
-    expect(screen.queryByRole("button", { name: hub.album.manageConnections })).toBeNull();
-
-    // Configured but NOT connected: still no trigger (the inline Connect link owns that state).
-    rerender(
-      <AlbumUploader
-        families={[FAM_A]}
-        currentFamilyId={FAM_A.familyId}
-        googlePhotosConfigured
-      />,
-    );
-    expect(screen.queryByRole("button", { name: hub.album.manageConnections })).toBeNull();
-
-    // Connected: the trigger appears.
-    rerender(
-      <AlbumUploader
-        families={[FAM_A]}
-        currentFamilyId={FAM_A.familyId}
-        googlePhotosConfigured
-        googlePhotosConnected
-      />,
-    );
-    expect(screen.getByRole("button", { name: hub.album.manageConnections })).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: hub.album.addPhotosMenu });
+    // The menu root (trigger's parent) is pinned right...
+    const menuRoot = trigger.parentElement as HTMLElement;
+    expect(menuRoot.style.marginLeft).toBe("auto");
+    // ...inside a flex-end row.
+    const row = menuRoot.parentElement as HTMLElement;
+    expect(row.style.display).toBe("flex");
+    expect(row.style.justifyContent).toBe("flex-end");
   });
 
-  it("opens a menu with the email header and a Disconnect item", () => {
+  // The menu holds only what's available: with device upload only, a single "Add from your device"
+  // menuitem — and NO Google/Disconnect rows.
+  it("shows only the device-add item when Google is not configured", () => {
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    expect(screen.queryByRole("menu")).toBeNull();
+    openAddMenu();
+    expect(screen.getByRole("menuitem", { name: hub.album.addFromDevice })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosConnect })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosImport })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosDisconnect })).toBeNull();
+  });
+
+  // When there are NO add actions at all (no device upload AND no Google configured) the menu does
+  // not render — there is nothing to add.
+  it("does not render the menu when there are no add actions", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        showFileUpload={false}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: hub.album.addPhotosMenu })).toBeNull();
+  });
+
+  it("closes the menu on Escape and on click-outside", () => {
+    render(
+      <div>
+        <div data-testid="outside">outside</div>
+        <AlbumUploader
+          families={[FAM_A]}
+          currentFamilyId={FAM_A.familyId}
+          googlePhotosConfigured
+          googlePhotosConnected
+        />
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: hub.album.addPhotosMenu });
+
+    // Escape closes.
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    // Click-outside closes.
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+    fireEvent.pointerDown(screen.getByTestId("outside"));
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
+describe("AlbumUploader Google Photos", () => {
+  it("shows Connect inside the menu when configured but not connected", () => {
+    render(
+      <AlbumUploader
+        families={[FAM_A]}
+        currentFamilyId={FAM_A.familyId}
+        googlePhotosConfigured
+      />,
+    );
+    openAddMenu();
+    const connect = screen.getByRole("menuitem", { name: hub.album.googlePhotosConnect });
+    expect(connect.getAttribute("href")).toBe("/api/google-photos/connect");
+    // Not connected ⇒ no Import, no Disconnect.
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosImport })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosDisconnect })).toBeNull();
+  });
+
+  // #93: when connected, the menu holds Import + (below a divider) the email header and a Disconnect
+  // item. Connect is gone (already connected).
+  it("shows Import, the email header, and Disconnect inside the menu when connected", () => {
     render(
       <AlbumUploader
         families={[FAM_A]}
@@ -541,14 +546,18 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosEmail="user@gmail.com"
       />,
     );
-    expect(screen.queryByRole("menu")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
-    expect(screen.getByRole("menu")).toBeTruthy();
-    // Email is the header inside the open menu.
+    // Closed: nothing but the trigger is visible.
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosImport })).toBeNull();
+    expect(screen.queryByText("user@gmail.com")).toBeNull();
+
+    openAddMenu();
+    expect(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport })).toBeTruthy();
     expect(screen.getByText("user@gmail.com")).toBeTruthy();
     expect(
       screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
     ).toBeTruthy();
+    // Connect is not shown when already connected.
+    expect(screen.queryByRole("menuitem", { name: hub.album.googlePhotosConnect })).toBeNull();
   });
 
   it("shows a generic source header inside the menu when email is null", () => {
@@ -560,7 +569,7 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    openAddMenu();
     expect(screen.getByText(hub.album.googlePhotosSourceName)).toBeTruthy();
   });
 
@@ -575,7 +584,7 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosEmail="user@gmail.com"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    openAddMenu();
     fireEvent.click(
       screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
     );
@@ -598,7 +607,7 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosEmail="user@gmail.com"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    openAddMenu();
     fireEvent.click(
       screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
     );
@@ -623,7 +632,7 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosEmail="user@gmail.com"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.manageConnections }));
+    openAddMenu();
     fireEvent.click(
       screen.getByRole("menuitem", { name: hub.album.googlePhotosDisconnect }),
     );
@@ -636,34 +645,7 @@ describe("AlbumUploader Google Photos", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("closes the Manage connections menu on Escape and on click-outside", () => {
-    render(
-      <div>
-        <div data-testid="outside">outside</div>
-        <AlbumUploader
-          families={[FAM_A]}
-          currentFamilyId={FAM_A.familyId}
-          googlePhotosConfigured
-          googlePhotosConnected
-        />
-      </div>,
-    );
-    const trigger = screen.getByRole("button", { name: hub.album.manageConnections });
-
-    // Escape closes.
-    fireEvent.click(trigger);
-    expect(screen.getByRole("menu")).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menu")).toBeNull();
-
-    // Click-outside closes.
-    fireEvent.click(trigger);
-    expect(screen.getByRole("menu")).toBeTruthy();
-    fireEvent.pointerDown(screen.getByTestId("outside"));
-    expect(screen.queryByRole("menu")).toBeNull();
-  });
-
-  it("hides file upload but keeps Google chrome when showFileUpload is false", () => {
+  it("hides file upload but keeps the Connect item when showFileUpload is false", () => {
     render(
       <AlbumUploader
         families={[FAM_A, FAM_B]}
@@ -672,8 +654,11 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConfigured
       />,
     );
-    expect(screen.queryByRole("button", { name: hub.album.addButton })).toBeNull();
-    expect(screen.getByRole("link", { name: hub.album.googlePhotosConnect })).toBeTruthy();
+    openAddMenu();
+    // No device-add item (upload hidden)...
+    expect(screen.queryByRole("menuitem", { name: hub.album.addFromDevice })).toBeNull();
+    // ...but the Google Connect item is still there.
+    expect(screen.getByRole("menuitem", { name: hub.album.googlePhotosConnect })).toBeTruthy();
   });
 
   it("surfaces OAuth connected flash and strips query params", async () => {
@@ -722,7 +707,8 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
 
     await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
     expect(openSpy).toHaveBeenCalledTimes(1);
@@ -769,7 +755,8 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
 
     await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
     const formData = completeGooglePhotosImportAction.mock.calls[0]![0] as FormData;
@@ -778,9 +765,9 @@ describe("AlbumUploader Google Photos", () => {
     openSpy.mockRestore();
   });
 
-  // ADR-0021: an AMBIGUOUS Google import (empty designator, >1 family) is blocked at the button — the
-  // Import button is disabled until a deliberate pick, so no import fans out to all families.
-  it("disables the Google import button when the designator is empty (ambiguous, >1 family)", () => {
+  // ADR-0021: an AMBIGUOUS Google import (empty designator, >1 family) is blocked at the item — the
+  // Import menuitem is disabled until a deliberate pick, so no import fans out to all families.
+  it("disables the Google import item when the designator is empty (ambiguous, >1 family)", () => {
     render(
       <AlbumUploader
         families={[FAM_A, FAM_B]}
@@ -790,10 +777,11 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    const importBtn = screen.getByRole("button", {
+    openAddMenu();
+    const importItem = screen.getByRole("menuitem", {
       name: hub.album.googlePhotosImport,
     }) as HTMLButtonElement;
-    expect(importBtn.disabled).toBe(true);
+    expect(importItem.disabled).toBe(true);
   });
 
   it("opens a photos.google.com pickerUri (the real user-facing host)", async () => {
@@ -823,7 +811,8 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
 
     await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
     expect(String(openSpy.mock.calls[0]![0])).toBe(
@@ -850,7 +839,8 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
 
     await vi.waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/couldn't import/i),
@@ -878,7 +868,8 @@ describe("AlbumUploader Google Photos", () => {
         googlePhotosConnected
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.album.googlePhotosImport }));
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
 
     await vi.waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/blocked/i),

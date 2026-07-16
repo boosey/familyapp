@@ -467,8 +467,15 @@ export const hub = {
     googlePhotosConnect: "Connect Google Photos",
     googlePhotosImport: "Import from Google Photos",
     googlePhotosDisconnect: "Disconnect Google Photos",
+    // Trigger for the right-justified "Add Photos ▾" dropdown that consolidates every album entry
+    // point (#93): the device picker, Google connect/import, and — below a divider — Manage connections.
+    addPhotosMenu: "Add Photos",
+    // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
+    // is available. Distinct from `addButton`, which was the old standalone control's label.
+    addFromDevice: "Add from your device",
     // Trigger for the right-aligned "Manage connections ▾" dropdown that holds the Disconnect
     // action(s) once a source is connected. Structured for future sources (Google is the only one now).
+    // (#93 folds this into the Add Photos menu below a divider — the label stays for the section head.)
     manageConnections: "Manage connections",
     // Brief pending state on the Disconnect menu item while the connection is being torn down.
     googlePhotosDisconnecting: "Disconnecting…",
