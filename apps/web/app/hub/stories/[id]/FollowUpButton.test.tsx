@@ -49,6 +49,8 @@ it("associates the error with the textarea via aria-invalid + aria-describedby",
 
   const err = await screen.findByTestId("follow-up-error");
   expect(err.id).toBe("follow-up-error");
+  // role="alert" so screen readers announce the error the moment it appears (Gemini #92).
+  expect(err.getAttribute("role")).toBe("alert");
   const textarea = screen.getByPlaceholderText(hub.followUp.placeholder);
   expect(textarea.getAttribute("aria-invalid")).toBe("true");
   expect(textarea.getAttribute("aria-describedby")).toBe("follow-up-error");

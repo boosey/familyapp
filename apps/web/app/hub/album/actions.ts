@@ -105,6 +105,12 @@ export async function requestAlbumUploadAction(input: {
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
+  // Server Actions can be invoked by a malformed/malicious client with a missing or non-string
+  // argument; guard before we dereference `input.contentType`.
+  if (!input || typeof input.contentType !== "string") {
+    return { error: hub.actions.invalidInput };
+  }
+
   // Require ≥1 active family up front (matches the old action's noFamily guard) — no point minting a
   // target the caller could never `record` into.
   const active = await listActiveFamiliesForPerson(db, ctx.personId);
@@ -147,6 +153,12 @@ export async function recordAlbumPhotoAction(
   const { db, storage, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
+
+  // Guard against a malformed invocation before touching `formData.get` (a client could POST a
+  // non-FormData argument).
+  if (!formData || typeof formData.get !== "function") {
+    return { error: hub.actions.invalidInput };
+  }
 
   const key = formData.get("key");
   const ticket = formData.get("ticket");

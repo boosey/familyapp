@@ -34,6 +34,18 @@ vi.mock("@/app/hub/album/direct-upload", () => ({
   uploadPhotoDirect: (...args: unknown[]) => uploadPhotoDirect(...args),
 }));
 
+// prepare-photo runs client-side (HEIC/resize/encode) before each direct upload. Default: pass the
+// file straight through; individual tests override to force a hard prepare failure mid-batch.
+const prepareAlbumPhoto = vi.fn(
+  async (file: File): Promise<{ ok: true; file: File } | { ok: false; error: string }> => ({
+    ok: true,
+    file,
+  }),
+);
+vi.mock("@/app/hub/album/prepare-photo", () => ({
+  prepareAlbumPhoto: (file: File) => prepareAlbumPhoto(file),
+}));
+
 const startGooglePhotosImportAction = vi.fn();
 const pollGooglePhotosImportAction = vi.fn();
 const completeGooglePhotosImportAction = vi.fn();
@@ -219,6 +231,36 @@ describe("AlbumUploader multi-family picker", () => {
       expect(screen.getByRole("alert").textContent).toMatch(/couldn't add/i),
     );
     expect(uploadPhotoDirect).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression (Gemini #89): a HARD prepare failure mid-batch (e.g. the 2nd file is HEIC) must not
+  // strand the files that already landed. Before the fix the loop returned early on `hardError`
+  // WITHOUT `router.refresh()`, so the successfully-uploaded first file stayed invisible until a
+  // manual reload. The error is still surfaced, but the router must refresh (added > 0).
+  it("refreshes after a hard failure when some files already uploaded (added > 0)", async () => {
+    // File 1 prepares + uploads fine; file 2 is a hard prepare failure (HEIC) → breaks the loop.
+    prepareAlbumPhoto
+      .mockResolvedValueOnce({ ok: true, file: new File([new Uint8Array([1])], "p1.png") })
+      .mockResolvedValueOnce({ ok: false, error: "heic_unsupported" });
+    // Pin a successful upload for the one file that gets through (a prior test leaves a persistent
+    // { error } impl on uploadPhotoDirect that clearAllMocks does not reset).
+    uploadPhotoDirect.mockResolvedValueOnce({ ok: true, photoId: "landed-1" });
+    render(
+      <AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />,
+    );
+    const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
+    const f1 = new File([new Uint8Array([1])], "p1.png", { type: "image/png" });
+    const f2 = new File([new Uint8Array([2])], "p2.heic", { type: "image/heic" });
+    fireEvent.change(fileInput, { target: { files: [f1, f2] } });
+
+    // The one file that made it through is uploaded...
+    await vi.waitFor(() => expect(uploadPhotoDirect).toHaveBeenCalledTimes(1));
+    // ...the hard error is surfaced...
+    await vi.waitFor(() =>
+      expect(screen.getByRole("alert").textContent?.length).toBeGreaterThan(0),
+    );
+    // ...and CRUCIALLY the router refreshes so the landed photo appears (the bug: it did not).
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   // Regression (review finding): a batch over the per-batch cap is rejected client-side with a

@@ -246,6 +246,12 @@ export function AlbumUploader({
       if (hardError) {
         setError(hardError);
         setNote(null);
+        // Files uploaded before the hard failure already landed — reflect them (and clear the
+        // consumed selection) instead of leaving them invisible until a manual reload.
+        if (added > 0) {
+          setSelected(seed());
+          router.refresh();
+        }
         return;
       }
       if (added === 0) {
