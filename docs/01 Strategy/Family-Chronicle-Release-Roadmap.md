@@ -2,6 +2,8 @@
 
 *Companion to the North Star Vision, Personas, Journey Map, Engagement Engine, and Consent & Estate Framework. This turns the north star into buildable releases. It is the one piece the vision explicitly deferred ("release sequencing — collaborative phased roadmap work to be done in a future session"). Strategy: **wedge-first, risk-retiring** — ship the sharpest wedge fastest to validate the core loop, then layer enrichment, engagement, and ethics-gated features in dependency order.*
 
+> **For "what do we build first, right now?"** this roadmap sequences the whole north star by phase; the live, stage-specific build order is in **`Family-Chronicle-Prioritized-Backlog.md`** — the output of running the gated two-layer prioritization method (**ADR-0022**) over the full candidate backlog for the current **adoption/validation** objective. It refines this roadmap's early-phase sequencing; where the two disagree on "what's next," the Prioritized Backlog wins for the current stage.
+
 ---
 
 ## How to read this roadmap
