@@ -27,9 +27,13 @@ import { UPLOAD_TARGET_EXPIRY_SECONDS } from "@chronicle/storage";
 const DEV_FALLBACK_SECRET = "chronicle-dev-album-upload-ticket-secret";
 
 function ticketSigningKey(): Buffer {
-  const secret = process.env.ALBUM_UPLOAD_TICKET_SECRET?.trim() || DEV_FALLBACK_SECRET;
+  const secret = process.env.ALBUM_UPLOAD_TICKET_SECRET?.trim();
+  if (!secret && (process.env.DATABASE_URL || process.env.VERCEL)) {
+    throw new Error("ALBUM_UPLOAD_TICKET_SECRET must be set in production");
+  }
+  const activeSecret = secret || DEV_FALLBACK_SECRET;
   // Derive a stable key from the secret string with a fixed label (same shape as the OAuth-state util).
-  return createHmac("sha256", "chronicle-album-upload-ticket").update(secret).digest();
+  return createHmac("sha256", "chronicle-album-upload-ticket").update(activeSecret).digest();
 }
 
 function sign(payload: string): string {
