@@ -93,3 +93,119 @@ export async function findPersonIdByAuthProviderUserId(
     .limit(1);
   return row?.personId ?? null;
 }
+
+export interface ReconcileAccountProfileInput {
+  /** Opaque id from the auth provider — the row to reconcile (never changes; it is the join key). */
+  authProviderUserId: string;
+  /** New primary email. `undefined`/empty leaves the stored email untouched (never blanks it). */
+  email?: string | null;
+  /**
+   * New identity name (e.g. from a Clerk `user.updated`). `undefined`/empty leaves the stored name
+   * untouched — a Name-required provider can still momentarily emit a blank, and we must not overwrite
+   * a good in-app-edited name with nothing.
+   */
+  displayName?: string | null;
+}
+
+export interface ReconcileAccountResult {
+  /** false when no Account carries this provider id (e.g. an update for a never-provisioned user). */
+  matched: boolean;
+  /** The controlled Person id, present only when `matched`. */
+  personId?: string;
+}
+
+/**
+ * Reconcile a provider-side profile change (the `user.updated` webhook path) back onto the DB so a
+ * rename in the auth provider does not leave a stale row. Updates the Account mirror (`email`,
+ * `displayName`) AND the controlled Person's `displayName` — the user-facing identity name the app
+ * reads everywhere. The provider is treated as the source of truth for a self-account's profile name.
+ *
+ * Deliberately does NOT touch `persons.spokenName`: that is a user-owned field (customized at
+ * onboarding, e.g. spoken "Bob" for display "Robert") and must survive an unrelated email/name change.
+ *
+ * Idempotent by construction (declarative set-to-value), so a webhook replay or retry is a no-op —
+ * no event-id ledger is needed. No match → `{ matched: false }` (event for a user we never provisioned,
+ * or a soft-deleted account whose provider id was retired — see `deactivateAccountByAuthProviderUserId`).
+ */
+export async function reconcileAccountProfile(
+  db: Database,
+  input: ReconcileAccountProfileInput,
+): Promise<ReconcileAccountResult> {
+  const email = input.email?.trim();
+  const displayName = input.displayName?.trim();
+
+  return db.transaction(async (tx) => {
+    const [account] = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.authProviderUserId, input.authProviderUserId))
+      .limit(1);
+    if (!account) return { matched: false };
+
+    const accountPatch: { email?: string; displayName?: string; updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+    if (email && email.length > 0) accountPatch.email = email;
+    if (displayName && displayName.length > 0) accountPatch.displayName = displayName;
+    await tx.update(accounts).set(accountPatch).where(eq(accounts.id, account.id));
+
+    // Propagate the name to the controlled Person (the identity the app renders). Only the Person
+    // that this Account controls — matched via the single `persons.account_id` FK.
+    if (displayName && displayName.length > 0) {
+      await tx
+        .update(persons)
+        .set({ displayName, updatedAt: new Date() })
+        .where(eq(persons.accountId, account.id));
+    }
+
+    const [person] = await tx
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.accountId, account.id))
+      .limit(1);
+    return { matched: true, personId: person?.id };
+  });
+}
+
+export interface DeactivateAccountResult {
+  /** false when no Account carries this provider id (nothing to deactivate). */
+  matched: boolean;
+  /** The controlled Person id (preserved — only the login is severed), present only when `matched`. */
+  personId?: string;
+}
+
+/**
+ * Sever the login for a provider-side account deletion (the `user.deleted` webhook path). Policy
+ * (documented in the issue #10 acceptance criteria): SOFT-delete. We flip `accounts.active = false`
+ * and preserve the Person and ALL its expressive content — a login deletion must never erase family
+ * stories that other members may depend on. Owner-initiated content erasure is the SEPARATE, explicit
+ * ADR-0008 path; this webhook only detaches the credential.
+ *
+ * Idempotent: deactivating an already-inactive account is a harmless no-op, so a webhook replay/retry
+ * is safe. No match → `{ matched: false }`.
+ */
+export async function deactivateAccountByAuthProviderUserId(
+  db: Database,
+  authProviderUserId: string,
+): Promise<DeactivateAccountResult> {
+  return db.transaction(async (tx) => {
+    const [account] = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.authProviderUserId, authProviderUserId))
+      .limit(1);
+    if (!account) return { matched: false };
+
+    await tx
+      .update(accounts)
+      .set({ active: false, updatedAt: new Date() })
+      .where(eq(accounts.id, account.id));
+
+    const [person] = await tx
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.accountId, account.id))
+      .limit(1);
+    return { matched: true, personId: person?.id };
+  });
+}

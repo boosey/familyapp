@@ -116,8 +116,13 @@ export {
 export {
   createAccountWithPerson,
   findPersonIdByAuthProviderUserId,
+  reconcileAccountProfile,
+  deactivateAccountByAuthProviderUserId,
   type SignUpAccountInput,
   type AccountWithPerson,
+  type ReconcileAccountProfileInput,
+  type ReconcileAccountResult,
+  type DeactivateAccountResult,
 } from "./accounts";
 export {
   completeOnboarding,
