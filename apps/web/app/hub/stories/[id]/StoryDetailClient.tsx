@@ -28,7 +28,7 @@ export interface StoryDetailClientProps {
   recordingMediaId: string | null;
   // Sharing targets
   viewerFamilies: Array<{ id: string; name: string; shortName?: string | null }>;
-  initialTargetFamilies: Array<{ id: string; name: string }>;
+  initialTargetFamilies: Array<{ id: string; name: string; shortName?: string | null }>;
   // Reactions
   favoriteState: FavoriteState;
   likeState: LikeState;
@@ -325,7 +325,7 @@ export function StoryDetailClient({
                     padding: "5px 13px",
                   }}
                 >
-                  {fam.name}
+                  {fam.shortName || fam.name}
                 </span>
               ))}
             </div>

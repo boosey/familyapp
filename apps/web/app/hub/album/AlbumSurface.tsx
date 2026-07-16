@@ -100,7 +100,7 @@ export async function AlbumSurface({
       caption: p.caption,
       canManage,
       contributorName: p.contributorDisplayName,
-      families: p.families.map((f) => ({ id: f.familyId, name: f.familyName })),
+      families: p.families.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName })),
       subjects: p.subjects.map((s) => ({ id: s.personId, name: s.displayName ?? unnamed })),
       people: p.people.map((pp) => ({ id: pp.personId, name: pp.displayName ?? unnamed })),
       places: p.places.map((pl) => ({ id: pl.placeId, name: pl.name })),

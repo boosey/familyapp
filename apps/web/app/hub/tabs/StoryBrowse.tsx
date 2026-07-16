@@ -302,7 +302,7 @@ function FeedCard({ item, href, masonry = false }: { item: StoryItem; href: stri
           ))}
           {item.families.map((f) => (
             <span key={f.id} style={familyTagPill}>
-              {f.name}
+              {f.shortName || f.name}
             </span>
           ))}
         </div>

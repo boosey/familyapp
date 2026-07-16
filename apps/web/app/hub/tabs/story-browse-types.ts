@@ -12,8 +12,8 @@
 export interface ViewerFamily {
   id: string;
   name: string;
-  /** Steward-set brief label (ADR-0021), rendered by the filter chips in place of `name` when set.
-   *  Optional/nullable — the story-card family labels (which reuse this shape) keep the formal name. */
+  /** Steward-set brief label (ADR-0021), rendered in place of `name` when set — by the filter chips
+   *  AND by the story-card family tags (which reuse this shape). Optional/nullable; falls back to `name`. */
   shortName?: string | null;
 }
 

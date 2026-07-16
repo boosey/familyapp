@@ -39,7 +39,8 @@ import {
 } from "./actions";
 
 type Suggestions = PhotoTagPanelData["suggestions"];
-type FamilyChip = { familyId: string; familyName: string };
+// `familyShortName` (ADR-0021) is the chip's display label when set; `familyName` is the fallback.
+type FamilyChip = { familyId: string; familyName: string; familyShortName?: string | null };
 
 // Monotonic, per-call unique placeholder id for an optimistic chip whose add is still in flight. Must
 // NOT be derived from the tag label: two rapid adds of the same new name would otherwise collide on a
@@ -77,7 +78,11 @@ function toState(detail: PhotoTagPanelData["detail"]): PanelState {
       label: r.displayName ?? hub.album.unnamedPerson,
     })),
     places: detail.places.map((r) => ({ id: r.placeId, label: r.name })),
-    families: detail.families.map((f) => ({ familyId: f.familyId, familyName: f.familyName })),
+    families: detail.families.map((f) => ({
+      familyId: f.familyId,
+      familyName: f.familyName,
+      familyShortName: f.familyShortName,
+    })),
   };
 }
 
@@ -285,7 +290,7 @@ export function PhotoTagPanel({
     }
     const nextFamilies: FamilyChip[] = sugg.families
       .filter((f) => next.has(f.id))
-      .map((f) => ({ familyId: f.id, familyName: f.name }));
+      .map((f) => ({ familyId: f.id, familyName: f.name, familyShortName: f.shortName }));
     const prev = s.families;
     setState((cur) => (cur ? { ...cur, families: nextFamilies } : cur));
     setError(null);
@@ -382,7 +387,7 @@ export function PhotoTagPanel({
             }}
           >
             {s.families.map((f) => (
-              <li key={f.familyId}>{f.familyName}</li>
+              <li key={f.familyId}>{f.familyShortName || f.familyName}</li>
             ))}
           </ul>
         )}

@@ -234,7 +234,7 @@ export interface AlbumPhotoDetailedRow {
   createdAt: Date;
   /** exifCapturedAt — the original capture time when EXIF carried one, else null. */
   capturedAt: Date | null;
-  families: { familyId: string; familyName: string }[];
+  families: { familyId: string; familyName: string; familyShortName: string | null }[];
   subjects: { personId: string; displayName: string | null }[];
   people: { personId: string; displayName: string | null }[];
   places: { placeId: string; name: string }[];
@@ -278,6 +278,7 @@ export async function listAlbumPhotosDetailed(
       photoId: familyPhotoFamilies.photoId,
       familyId: families.id,
       familyName: families.name,
+      familyShortName: families.shortName,
     })
     .from(familyPhotoFamilies)
     .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
@@ -293,10 +294,13 @@ export async function listAlbumPhotosDetailed(
   if (photoIds.length === 0) return [];
 
   // Authorized placements per photo (sorted by family name for stable ordering).
-  const familiesByPhoto = new Map<string, { familyId: string; familyName: string }[]>();
+  const familiesByPhoto = new Map<
+    string,
+    { familyId: string; familyName: string; familyShortName: string | null }[]
+  >();
   for (const r of placementRows) {
     const list = familiesByPhoto.get(r.photoId) ?? [];
-    list.push({ familyId: r.familyId, familyName: r.familyName });
+    list.push({ familyId: r.familyId, familyName: r.familyName, familyShortName: r.familyShortName });
     familiesByPhoto.set(r.photoId, list);
   }
   for (const list of familiesByPhoto.values()) {
@@ -1179,7 +1183,7 @@ export async function retargetPhotoFamilies(
 export interface AlbumPhotoDetailView extends AlbumPhotoView {
   contributorDisplayName: string | null;
   /** The families the photo is placed in (its album placements). */
-  families: { familyId: string; familyName: string }[];
+  families: { familyId: string; familyName: string; familyShortName: string | null }[];
   subjects: PhotoTagPersonView[];
   people: PhotoTagPersonView[];
   places: PhotoPlaceView[];
@@ -1213,7 +1217,7 @@ export async function getAlbumPhotoDetail(
     .limit(1);
 
   const familyRows = await db
-    .select({ familyId: families.id, familyName: families.name })
+    .select({ familyId: families.id, familyName: families.name, familyShortName: families.shortName })
     .from(familyPhotoFamilies)
     .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
     .where(eq(familyPhotoFamilies.photoId, photoId))

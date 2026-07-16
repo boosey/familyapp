@@ -72,6 +72,38 @@ it("removing a family chip fires onRemove with the family token", () => {
   expect(onRemove).toHaveBeenCalledWith(tokens[0]);
 });
 
+it("a family with a short name shows it in the dropdown AND carries it into the token (ADR-0021)", () => {
+  const onAdd = vi.fn();
+  const withShort: TagSuggestions = {
+    ...suggestions,
+    families: [{ id: "f1", name: "The Boudreaux Family", shortName: "Boudreaux" }],
+  };
+  const { getByPlaceholderText, getByText, queryByText } = render(
+    <TagInput tokens={[]} suggestions={withShort} onAdd={onAdd} onRemove={vi.fn()} />,
+  );
+  fireEvent.change(getByPlaceholderText(/add a tag or name/i), { target: { value: "Boud" } });
+  // The option shows the SHORT name, not the formal one.
+  expect(queryByText("The Boudreaux Family")).toBeNull();
+  fireEvent.click(getByText("Boudreaux"));
+  expect(onAdd).toHaveBeenCalledWith<[TagToken]>({
+    kind: "family",
+    familyId: "f1",
+    name: "The Boudreaux Family",
+    shortName: "Boudreaux",
+  });
+});
+
+it("a family chip renders the steward's short name in place of the formal name", () => {
+  const tokens: TagToken[] = [
+    { kind: "family", familyId: "f1", name: "The Boudreaux Family", shortName: "Boudreaux" },
+  ];
+  const { getByText, queryByText } = render(
+    <TagInput tokens={tokens} suggestions={suggestions} onAdd={vi.fn()} onRemove={vi.fn()} />,
+  );
+  expect(getByText("Boudreaux")).toBeTruthy();
+  expect(queryByText("The Boudreaux Family")).toBeNull();
+});
+
 it("disabled prevents a dropdown suggestion click from firing onAdd", () => {
   const onAdd = vi.fn();
   const { getByPlaceholderText, getByText } = render(

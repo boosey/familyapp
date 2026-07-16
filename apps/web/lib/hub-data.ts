@@ -157,6 +157,7 @@ export async function loadStoryFamilyTargets(
       storyId: storyFamilies.storyId,
       familyId: families.id,
       familyName: families.name,
+      familyShortName: families.shortName,
     })
     .from(storyFamilies)
     .innerJoin(families, eq(families.id, storyFamilies.familyId))
@@ -167,9 +168,10 @@ export async function loadStoryFamilyTargets(
       ),
     );
   for (const r of rows) {
+    const ref = { id: r.familyId, name: r.familyName, shortName: r.familyShortName };
     const arr = map.get(r.storyId);
-    if (arr) arr.push({ id: r.familyId, name: r.familyName });
-    else map.set(r.storyId, [{ id: r.familyId, name: r.familyName }]);
+    if (arr) arr.push(ref);
+    else map.set(r.storyId, [ref]);
   }
   return map;
 }
