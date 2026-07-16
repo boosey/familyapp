@@ -10,11 +10,12 @@
  * surface (Phase 1: a thin web page) drives pacing; this module is the brain it consults.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
-import type { BiographicalProfile } from "@chronicle/db";
+import type { BiographicalProfile, FollowUpPolicy, FollowUpType } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
   BiographicalAnchors,
+  FollowUpEvaluator,
   MemorySource,
   PriorStoryMemory,
   Voice,
@@ -22,6 +23,7 @@ import type {
 } from "./contracts";
 import {
   createSessionState,
+  decideFollowUp,
   ingestNarratorUtterance,
   pickNextIntent,
   primeCoveredCategoriesFromPrior,
@@ -29,10 +31,16 @@ import {
   type PromptIntent,
   type SessionState,
 } from "./behavior";
-import { MEMORY_LOOKBACK_COUNT } from "./constants";
+import {
+  GAP_DETECTION_MIN_ANSWER_WORDS,
+  MEMORY_LOOKBACK_COUNT,
+  RAPPORT_THRESHOLD_TURNS,
+} from "./constants";
 import { phraseIntent } from "./phraser";
 import { extractIntakeAnswer } from "./intake-extraction";
 import { INTAKE_QUESTIONS } from "./questions/intake";
+import { resolveFollowUpPolicy } from "./follow-up-policy";
+import type { GapKind } from "./gap-detection";
 
 export interface InterviewerDeps {
   languageModel: LanguageModel;
@@ -40,9 +48,34 @@ export interface InterviewerDeps {
   askSource: AskSource;
   memorySource: MemorySource;
   anchorSource: AnchorSource;
+  /**
+   * Optional gap-driven follow-up evaluator (issue #80). When present, `recordResponse` runs a thin
+   * gap-detection pass over the narrator's answer, disposes the candidates through `decideFollowUp`
+   * (so every behavior gate applies), and queues the winner for the next `follow_up` slot. Prod
+   * injects `createGapFollowUpEvaluator(languageModel)`; omit it to keep the loop's original
+   * reflection-only follow-up behavior (feature lands dark by default).
+   */
+  followUpEvaluator?: FollowUpEvaluator;
+  /** Optional policy override for gap follow-ups; defaults to `resolveFollowUpPolicy({enabled:true})`. */
+  followUpPolicy?: Partial<FollowUpPolicy>;
   /** Optional fixed voice id, so the persona is the same every session (a dignity requirement). */
   voiceId?: string;
 }
+
+/**
+ * Best-effort reverse map FollowUpType → GapKind, used ONLY to give the phraser a phrasing angle for
+ * a queued gap follow-up. The forward map (gap-detection.ts) is many-to-one — spatial/causal/identity
+ * all become `factual` — so this reverse is lossy by construction. That is acceptable: `gapKind` is a
+ * hint the phraser uses to shade an OPEN question, never a fact it asserts, and the threadSeed carries
+ * the real content. `factual` reverses to `identity` (the most neutral "what/which" angle).
+ */
+const FOLLOW_UP_TYPE_TO_GAP_KIND: Record<FollowUpType, GapKind> = {
+  temporal: "temporal",
+  relational: "relational",
+  factual: "identity",
+  sensory: "identity",
+  emotional: "identity",
+};
 
 export interface InterviewSessionOptions {
   narratorPersonId: string;
@@ -94,6 +127,10 @@ export async function createInterviewSession(
   // knows which extraction to run. Cleared after every response (intake or not).
   let pendingIntakeKey: keyof BiographicalProfile | null = null;
 
+  // The question the last served turn actually spoke — the prompt context gap detection reads so it
+  // knows what the narrator was answering. Null until the first turn is served.
+  let lastSpokenText: string | null = null;
+
   async function nextTurn(): Promise<Turn> {
     const intent = pickNextIntent({ state, pendingAsks, priorStories, anchors, targetAskId: opts.targetAskId });
     if (intent.kind === "intake") pendingIntakeKey = intent.questionKey;
@@ -107,6 +144,7 @@ export async function createInterviewSession(
       text: phrased.spokenText,
       ...(deps.voiceId !== undefined ? { voiceId: deps.voiceId } : {}),
     });
+    lastSpokenText = phrased.spokenText;
     recordTurnCompleted(state, intent);
     // Close the relay's first half: notify the source that this Ask has been routed (queued
     // → routed). The DB adapter flips the row so the asker's hub view stops showing
@@ -125,6 +163,13 @@ export async function createInterviewSession(
 
   async function recordResponse(utterance: string): Promise<void> {
     ingestNarratorUtterance(state, utterance);
+
+    // Gap-driven follow-up detection (issue #80). Runs BEFORE intake extraction so a gap follow-up
+    // can be queued for the next turn. Deliberately after `ingestNarratorUtterance` so distress /
+    // off-ramp flags are already set and can short-circuit detection. Best-effort: any failure
+    // leaves the loop in its reflection-only behavior — a broken detector never blocks the session.
+    await detectAndQueueGapFollowUp(utterance);
+
     const key = pendingIntakeKey;
     pendingIntakeKey = null;
     if (!key) return;
@@ -140,6 +185,59 @@ export async function createInterviewSession(
       // the question is re-asked next session (askedIntakeKeys only guards within this session).
       // eslint-disable-next-line no-console
       console.warn("intake extraction failed (key=%s):", key, e);
+    }
+  }
+
+  /**
+   * The gap-detection → dispose → queue step. Thin and heavily gated:
+   *   - no evaluator configured                         → skip (reflection-only mode).
+   *   - distress / off-ramp on this utterance           → skip (a gap NEVER pushes into pain; the
+   *                                                        picker would wind_down anyway, but we
+   *                                                        also refuse to SPEND an LLM call).
+   *   - answer below GAP_DETECTION_MIN_ANSWER_WORDS      → skip (too thin to have real gaps).
+   * Then `decideFollowUp` applies the remaining gates (rapport, anti-repeat, confidence, caps,
+   * per-candidate vetoes). A selected candidate is queued as `pendingGapFollowUp`; nothing selected
+   * leaves the queue empty and the loop reflects/asks as before.
+   */
+  async function detectAndQueueGapFollowUp(utterance: string): Promise<void> {
+    const evaluator = deps.followUpEvaluator;
+    if (!evaluator) return;
+    if (state.distressed || state.offRampRequested) return;
+    const answerWordCount = utterance.trim().split(/\s+/).filter(Boolean).length;
+    if (answerWordCount < GAP_DETECTION_MIN_ANSWER_WORDS) return;
+
+    const policy = resolveFollowUpPolicy({ enabled: true, ...deps.followUpPolicy });
+    try {
+      const evaluation = await evaluator.evaluate({
+        answerTranscript: utterance,
+        // What the narrator was answering. Empty string is fine — the detector reads the answer.
+        promptText: lastSpokenText ?? "",
+        alreadyAskedSeeds: state.askedGapSeeds,
+        coveredCategories: [...state.coveredCategories],
+        followUpsAskedInThread: state.gapFollowUpsAskedInSession,
+        rapportEstablished: state.turnCount >= RAPPORT_THRESHOLD_TURNS,
+      });
+      const decision = decideFollowUp({
+        evaluation,
+        policy,
+        answerWordCount,
+        followUpsAskedInThread: state.gapFollowUpsAskedInSession,
+        followUpsAskedInSession: state.gapFollowUpsAskedInSession,
+        distressed: state.distressed,
+        offRampRequested: state.offRampRequested,
+        rapportEstablished: state.turnCount >= RAPPORT_THRESHOLD_TURNS,
+        alreadyAskedSeeds: state.askedGapSeeds,
+      });
+      if (decision.selected) {
+        state.pendingGapFollowUp = {
+          candidate: decision.selected,
+          gapKind: FOLLOW_UP_TYPE_TO_GAP_KIND[decision.selected.type],
+        };
+      }
+    } catch (e) {
+      // Gap detection is best-effort — a failure or timeout must never break the session.
+      // eslint-disable-next-line no-console
+      console.warn("gap-detection follow-up failed (narrator=%s):", state.narratorPersonId, e);
     }
   }
 

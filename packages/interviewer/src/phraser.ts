@@ -124,6 +124,15 @@ Ask this in your warm voice (re-render naturally — do NOT read verbatim, keep 
 """${intent.questionText}"""
 Curious and warm, never clinical or form-like. Never yes/no.`;
     case "follow_up":
+      if (intent.origin === "gap") {
+        // Gap-driven follow-up (issue #80): the seed names a SPECIFIC missing fact the narrator
+        // did not supply. Still ONE warm question, still non-leading — we ask about the gap, we do
+        // NOT assert the missing fact exists. The gapKind hints the angle (when/who/where/why/what).
+        return `Type: FOLLOW-UP that gently fills in a detail the narrator did not mention.
+The missing detail to ask about (a ${intent.gapKind ?? "factual"} gap — do NOT assume the answer,
+just invite it): """${intent.threadSeed}"""
+Ask ONE short, open-ended question that draws out this detail. Reflect their own words where you can.`;
+      }
       return `Type: FOLLOW-UP on what the narrator just said.
 The narrator's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):
 """${intent.threadSeed}"""`;

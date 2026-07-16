@@ -572,6 +572,36 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   follow-up. Full rationale + accepted deceased-carve-out risk in
   `docs/adr/0021-who-may-edit-a-person-record.md`.
 
+## Gap-driven follow-up + first prompt-as-data realization (issue #80, 2026-07-16)
+
+- **The interviewer's follow-ups are now gap-driven, WITHIN the controlled loop (not open chat).**
+  After a narrator answers, a THIN extraction pass (`interviewer/gap-detection.ts`) names at most a
+  few missing/ambiguous facts (`temporal | relational | spatial | causal | identity`) as short
+  seeds. It PROPOSES only — it decides nothing about flow, exactly like `follow-up-evaluator.ts`.
+- **Composes with the existing follow-up machinery instead of a parallel path.** Each gap maps to
+  the existing `FollowUpCandidate` shape (`gapsToFollowUpCandidates`), so the ALREADY-built gate
+  stack in `decideFollowUp` (thin-answer floor, distress/off-ramp short-circuit, rapport gate,
+  anti-repeat, confidence floor, per-thread/session caps, emotional-door veto) disposes of gap
+  follow-ups with ZERO duplicated policy. A `createGapFollowUpEvaluator(llm)` implements the same
+  `FollowUpEvaluator` seam the answer-surface already consumes.
+- **Slots at the SAME priority as the existing follow_up intent.** We EXTENDED the `follow_up`
+  `PromptIntent` with `origin: "reflection" | "gap"` (+ `gapKind`) rather than adding a sibling
+  intent kind. Rationale: a sibling kind would duplicate the slot-5 priority logic in
+  `pickNextIntent` AND the phraser's follow_up rendering block; extending reuses both, and the
+  controlled-loop ordering + one-question-at-a-time rule are preserved unchanged. The turn loop
+  runs detection in `recordResponse` (gated: skipped on distress/off-ramp, and below a word floor),
+  disposes via `decideFollowUp`, and QUEUES the winner as `state.pendingGapFollowUp`; the picker
+  emits it at the follow_up slot on the next turn. A gap can therefore NEVER push into pain — slot 0
+  returns `wind_down` on distress/off-ramp before the queued gap is ever reached.
+- **This is the FIRST realization of the deferred "prompts are data" target design above.** Per
+  that section's contract/wording split: the OUTPUT CONTRACT (the JSON shape + the `GapKind` enum +
+  the defensive parser) stays in code (`gap-detection.ts`); the WORDING lives in a small versioned
+  data module (`interviewer/prompts/gap-prompts.ts`) keyed `purpose → vendor → version`, resolved
+  at runtime by `resolveGapPrompt({vendor, version})`. We deliberately did NOT build heavy
+  runtime-registry infra — a typed const store is the right scope for one prompt. The gap follow-up
+  is PHRASED by the existing (already-versioned) `phraser.ts`, so it introduces no second new
+  prompt. When the next prompt or a real vendor variant lands, this module is the seam to grow.
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
