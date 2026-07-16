@@ -6,6 +6,24 @@
 
 ---
 
+## How to re-run this
+
+This backlog is one **pass** of the reusable method (ADR-0022). It goes stale as the product moves; re-run it when a trigger below fires. Vocabulary: *the method* = the machinery (ADR-0022); *a pass* = one application of it for a stated objective; *the knob* = the Layer-2 weight vector that encodes the objective.
+
+**Triggers to re-run** (largest re-run first):
+1. **The stage / objective changed.** This pass assumed *no families exist yet* (objective = adoption/validation), which is why moat and retention were parked. Once the core loop is validated, the objective shifts — to **retention**, then **differentiation/moat**. A differentiation pass *restores* the two dimensions cut here (strategic-moat-fit, reach) and raises effort's weight. Same machinery, new knob. → **full re-run.**
+2. **A parking-lot trigger fired.** Every parked item names a revisit condition ("after ~3 families," "when capability X ships," "at the institution stage"). When one fires, that item re-enters contention. → **light re-run** — re-score the newly-eligible items against the current front, not the whole corpus.
+3. **New candidates arrived.** A batch of new ideas → add them to the corpus and gate + score only the additions.
+4. **Shipped state moved.** The dependency gate is "shipped = on `origin/master`," so after a few merges, re-gate — previously blocked items may now be eligible.
+
+**Two levels of re-run:**
+- **Re-run the *pass* (common).** Do **not** redo the Wayfinder map — it existed to *decide* the method and is closed. Just re-apply ADR-0022: pick the objective (set the weight vector), refresh the corpus (new ideas + re-check shipped status), run the two layers, produce a new sequenced backlog. One focused session.
+- **Re-decide the *method* (rare).** Only if the machinery itself is wrong (a gate misfires, a formula needs changing). *That* is a fresh `/wayfinder` effort — you're deciding, not applying.
+
+**Not automated (yet).** Wiring this into the triage-label flow was deliberately out of scope until the method proves out on more than one batch. Today a re-run = point an agent at ADR-0022 and say *"run a prioritization pass for objective X."* If you find yourself re-running often, that frequency is the signal to build a skill for it.
+
+---
+
 ## The headline
 
 The method took a **26-epic wishlist** (18 new ideas ∪ Roadmap Phases 2–6+ ∪ open issues ∪ agent-proposed) and collapsed it to **9 eligible core-loop bets + a triggered parking lot**. That collapse *is* the value: at a validation stage, most of the backlog optimizes retention, moat, scale, or engagement-depth whose worth isn't yet legible — so it's deferred with an explicit trigger, not argued about.
