@@ -38,6 +38,8 @@ export {
   createTextDraft,
   updateDerivedFields,
   transitionStoryState,
+  markStoryProcessingFailed,
+  beginStoryRetry,
   listNarratorMemoryForInterviewer,
   approveAndShareStory,
   applyTranscriptCorrection,

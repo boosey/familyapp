@@ -18,7 +18,7 @@
  * user-facing read; surfacing content to a viewer still goes through @chronicle/core's
  * authorization function. This stays inside the audited allowlist on purpose.
  */
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   media,
   proseRevisions,
@@ -54,6 +54,7 @@ import type {
 } from "@chronicle/db";
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
+import { PROCESSING_ERROR_MAX_CHARS } from "./constants";
 import {
   type AuthContext,
   getStoryForViewer,
@@ -309,6 +310,63 @@ export async function transitionStoryState(
     .where(eq(stories.id, storyId))
     .returning();
   return row!;
+}
+
+/**
+ * Record a TERMINAL pipeline failure on a Story (issue #11). A durable-job stage (transcribe /
+ * render_story) that exhausts its retries calls this from its `onFailure` handler so the story
+ * carries a DB signal (`processingFailedAt` present) instead of sitting in `draft` forever with no
+ * way to tell "slow" from "dead". The lifecycle `state` is deliberately UNTOUCHED — a failed render
+ * is still a `draft`; failure is a processing-status marker, not a lifecycle state.
+ *
+ * Idempotent and no-op-safe: if the story was erased between the run and the failure callback, the
+ * UPDATE simply matches zero rows. `reason` is truncated so a giant vendor error can't bloat the row.
+ */
+export async function markStoryProcessingFailed(
+  db: Database,
+  storyId: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .update(stories)
+    .set({
+      processingError: reason.slice(0, PROCESSING_ERROR_MAX_CHARS),
+      processingFailedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(stories.id, storyId));
+}
+
+/**
+ * Begin a narrator-initiated retry of a failed Story's pipeline (issue #11). Clears the failure
+ * marker (so the viewer-scoped status read flips back to `processing`) and bumps `processingAttempt`
+ * IN ONE ATOMIC UPDATE, returning the NEW attempt number. The caller carries that number into the
+ * re-dispatched job as `attempt` — it is the dedupe-bust token that lets the durable queue actually
+ * re-fire the stage (an unchanged payload would be collapsed by Inngest's 24h send-side dedupe).
+ *
+ * This is a compare-and-swap: the UPDATE is gated on `processing_failed_at IS NOT NULL`, so it only
+ * fires for a story that is CURRENTLY in the failed state. That makes it safe against a double-submit
+ * race — two concurrent retries of the same failed story both read "failed", but only the FIRST
+ * UPDATE matches a row and gets an attempt back; the loser matches zero rows and gets `null`, so it
+ * does not dispatch a second (paid) pipeline run. Returns `null` for that loser AND for a story that
+ * was erased or already recovered between the caller's read and here — all of which mean "nothing to
+ * retry now".
+ */
+export async function beginStoryRetry(
+  db: Database,
+  storyId: string,
+): Promise<number | null> {
+  const [row] = await db
+    .update(stories)
+    .set({
+      processingError: null,
+      processingFailedAt: null,
+      processingAttempt: sql`${stories.processingAttempt} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(stories.id, storyId), isNotNull(stories.processingFailedAt)))
+    .returning({ attempt: stories.processingAttempt });
+  return row ? row.attempt : null;
 }
 
 /**

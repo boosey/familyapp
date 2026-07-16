@@ -34,6 +34,25 @@ describe("pollUntilReady", () => {
     expect(getStatus).toHaveBeenCalledTimes(3);
   });
 
+  it("resolves 'failed' immediately when a probe reports failed (issue #11), without waiting out the cap", async () => {
+    const getStatus = vi.fn(async () => "failed" as const);
+    const outcome = await pollUntilReady({ getStatus, intervalMs: 2500, timeoutMs: 180_000 });
+    expect(outcome).toBe("failed");
+    expect(getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps polling through 'processing' and resolves 'failed' the moment the pipeline gives up", async () => {
+    vi.useFakeTimers();
+    const getStatus = vi
+      .fn<() => Promise<"processing" | "ready" | "failed">>()
+      .mockResolvedValueOnce("processing")
+      .mockResolvedValueOnce("failed");
+    const p = pollUntilReady({ getStatus, intervalMs: 2500, timeoutMs: 180_000 });
+    await vi.advanceTimersByTimeAsync(2500);
+    await expect(p).resolves.toBe("failed");
+    expect(getStatus).toHaveBeenCalledTimes(2);
+  });
+
   it("resolves 'timeout' when the cap elapses without ever seeing ready (never spins forever)", async () => {
     vi.useFakeTimers();
     const getStatus = vi.fn(async () => "processing" as const);

@@ -28,3 +28,10 @@ export const MEMBER_INVITATION_DEFAULT_TTL_MS = 14 * 86_400_000;
 
 /** Entropy (bytes) for member invitation token generation (256 bits). */
 export const MEMBER_INVITATION_TOKEN_ENTROPY_BYTES = 32;
+
+/**
+ * Max stored length of a terminal-pipeline-failure reason (issue #11). Keeps a runaway vendor
+ * error/stack from bloating the `stories.processing_error` column; it is an ops breadcrumb, not
+ * a full log.
+ */
+export const PROCESSING_ERROR_MAX_CHARS = 500;

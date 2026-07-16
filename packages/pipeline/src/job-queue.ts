@@ -12,6 +12,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   EnqueuedJob,
+  JobFailureHandler,
   JobHandler,
   JobName,
   JobPayload,
@@ -26,6 +27,7 @@ import { PIPELINE_JOB_MAX_ATTEMPTS } from "./constants";
 export class InProcessJobQueue implements JobQueue {
   private readonly queue: EnqueuedJob[] = [];
   private readonly handlers = new Map<JobName, JobHandler>();
+  private readonly failureHandlers = new Map<JobName, JobFailureHandler>();
   private readonly attemptsById = new Map<string, number>();
   private draining = false;
 
@@ -45,8 +47,10 @@ export class InProcessJobQueue implements JobQueue {
     return job.id;
   }
 
-  register(name: JobName, handler: JobHandler): void {
+  register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void {
     this.handlers.set(name, handler);
+    if (onFailure) this.failureHandlers.set(name, onFailure);
+    else this.failureHandlers.delete(name);
   }
 
   async drain(): Promise<void> {
@@ -72,7 +76,27 @@ export class InProcessJobQueue implements JobQueue {
           );
         }
         job.attempts = attempts;
-        await handler(job.payload);
+        try {
+          await handler(job.payload);
+        } catch (err) {
+          // The in-process queue has no retry budget, so a single throw IS terminal — mirror the
+          // durable queue's post-retries `onFailure` (issue #11). We still RE-THROW the original
+          // error afterward so drain's existing "a failing job surfaces to the caller" contract is
+          // unchanged (the dev synchronous dispatch and every existing test still see the error).
+          const onFailure = this.failureHandlers.get(job.name);
+          if (onFailure) {
+            const info =
+              err instanceof Error
+                ? { message: err.message, name: err.name }
+                : { message: String(err) };
+            try {
+              await onFailure(job.payload, info);
+            } catch {
+              // A failure handler that itself throws must not mask the original stage error.
+            }
+          }
+          throw err;
+        }
       }
     } finally {
       this.draining = false;

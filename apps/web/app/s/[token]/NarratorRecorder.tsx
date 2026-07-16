@@ -66,8 +66,8 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
             { signal: controller.signal },
           );
           if (!r.ok) throw new Error(`status ${r.status}`);
-          const j = (await r.json()) as { status?: "processing" | "ready" };
-          if (j.status !== "processing" && j.status !== "ready") {
+          const j = (await r.json()) as { status?: "processing" | "ready" | "failed" };
+          if (j.status !== "processing" && j.status !== "ready" && j.status !== "failed") {
             throw new Error("malformed status");
           }
           return j.status;
@@ -77,7 +77,9 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       // Guard every post-poll action on the live signal: an unmount that raced the final probe
       // must neither navigate nor set state on a dead component.
       if (controller.signal.aborted) return;
-      if (outcome === "ready") {
+      if (outcome === "ready" || outcome === "failed") {
+        // `failed` (issue #11) also routes to the approve surface — its ApprovePending view detects
+        // the failure and offers the retry affordance, so the recovery path lives in one place.
         router.push(`/s/${token}/approve/${storyId}`);
       } else if (outcome === "timeout") {
         setPhase("slow");

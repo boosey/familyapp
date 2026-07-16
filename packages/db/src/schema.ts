@@ -556,6 +556,22 @@ export const stories = pgTable(
     subjectPhotoId: uuid("subject_photo_id").references(
       (): AnyPgColumn => familyPhotos.id,
     ),
+    // --- pipeline processing signal (issue #11) ---
+    // A durable-job (transcribe / render_story) that exhausts its retries leaves the story in
+    // `draft` forever with no DB signal — the viewer-scoped status read (issue #2 slice 2b) then
+    // cannot tell "still processing" from "permanently failed". These three columns are that
+    // signal. They are orthogonal to `state`: a failed render is still a `draft`, so failure is
+    // NOT modeled as a lifecycle state (which would pollute the consent/publishing state machine).
+    /** Short human/ops reason for the terminal pipeline failure. NULL ⇒ no failure recorded. */
+    processingError: text("processing_error"),
+    /** When the pipeline terminally failed. PRESENCE is the "failed" signal the status read uses. */
+    processingFailedAt: timestamp("processing_failed_at", { withTimezone: true }),
+    /**
+     * Retry counter. Bumped on each narrator-initiated retry; also the dedupe-bust token — the
+     * Inngest adapter dedupes events by a hash of (stage, payload) within a 24h window, so a retry
+     * MUST vary the payload to actually re-fire. Carried into the re-dispatched job's `attempt`.
+     */
+    processingAttempt: integer("processing_attempt").notNull().default(0),
     // --- lifecycle ---
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

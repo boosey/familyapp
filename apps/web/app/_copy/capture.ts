@@ -50,5 +50,12 @@ export const capture = {
     preparingBody: "We're getting your story ready to hear. This page will update on its own.",
     takingLonger:
       "This is taking a little longer than usual. Your recording is safe — you can come back to this page in a bit.",
+    // Issue #11: the pipeline permanently failed (retries exhausted). Warm, non-technical, and
+    // offers a one-tap retry — the recording itself is never at risk.
+    failedTitle: "Something went wrong",
+    failedBody:
+      "We couldn't finish preparing your story this time. Your recording is safe — you can try again.",
+    tryAgain: "Try again",
+    retrying: "Trying again…",
   },
 } as const;

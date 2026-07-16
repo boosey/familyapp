@@ -181,6 +181,99 @@ describe("createInngestJobQueue — register / functions", () => {
   });
 });
 
+describe("createInngestJobQueue — onFailure wiring (issue #11)", () => {
+  it("passes NO onFailure to createFunction when the caller omits one", () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.register("transcribe", async () => {});
+    const opts = createFunction.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts.onFailure).toBeUndefined();
+    expect(opts.id).toBe("chronicle-transcribe");
+  });
+
+  it("wires onFailure into the function config and translates {event,error} → (payload, info)", async () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    const seen: Array<{ payload: unknown; info: unknown }> = [];
+    q.register("render_story", async () => {}, async (payload, info) => {
+      seen.push({ payload, info });
+    });
+    const opts = createFunction.mock.calls[0]![0] as {
+      onFailure?: (args: { event: { data: unknown }; error: unknown }) => Promise<void>;
+    };
+    expect(typeof opts.onFailure).toBe("function");
+    // Current SDK shape: `event` IS the original event, so `event.data` is the payload.
+    await opts.onFailure!({
+      event: { data: { storyId: "s-1", attempt: 2 } },
+      error: { message: "model exhausted retries", name: "RetryError" },
+    });
+    expect(seen).toEqual([
+      { payload: { storyId: "s-1", attempt: 2 }, info: { message: "model exhausted retries", name: "RetryError" } },
+    ]);
+  });
+
+  it("recovers the payload from the nested `inngest/function.failed` shape too", async () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    let received: unknown = null;
+    q.register("transcribe", async () => {}, async (payload) => {
+      received = payload;
+    });
+    const opts = createFunction.mock.calls[0]![0] as {
+      onFailure?: (args: { event: { data: unknown }; error: unknown }) => Promise<void>;
+    };
+    // Older/wrapper shape: the original event is nested under event.data.event.
+    await opts.onFailure!({
+      event: { data: { event: { data: { storyId: "nested-1" } } } },
+      error: { message: "boom" },
+    });
+    expect(received).toEqual({ storyId: "nested-1" });
+  });
+
+  it("SWALLOWS a throwing onFailure handler so it can't destabilize Inngest's callback", async () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.register("transcribe", async () => {}, async () => {
+      throw new Error("DB outage while recording failure");
+    });
+    const opts = createFunction.mock.calls[0]![0] as {
+      onFailure?: (args: { event: { data: unknown }; error: unknown }) => Promise<void>;
+    };
+    // The vendor callback must resolve, not reject, even though our handler threw.
+    await expect(
+      opts.onFailure!({ event: { data: { storyId: "s" } }, error: { message: "x" } }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("defaults a missing error message rather than throwing inside onFailure", async () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    let info: unknown = null;
+    q.register("transcribe", async () => {}, async (_p, i) => {
+      info = i;
+    });
+    const opts = createFunction.mock.calls[0]![0] as {
+      onFailure?: (args: { event: { data: unknown }; error?: unknown }) => Promise<void>;
+    };
+    await opts.onFailure!({ event: { data: { storyId: "s" } } });
+    expect(info).toEqual({ message: "unknown error" });
+  });
+});
+
+describe("createInngestJobQueue — retry dedupe-bust (issue #11)", () => {
+  it("a retry payload (attempt set) gets a DIFFERENT dedupe id than the initial run", async () => {
+    const { client } = stubClient();
+    const q = createInngestJobQueue({ client });
+    const initial = await q.enqueue("transcribe", { storyId: "s-1" });
+    const retry1 = await q.enqueue("transcribe", { storyId: "s-1", attempt: 1 });
+    const retry2 = await q.enqueue("transcribe", { storyId: "s-1", attempt: 2 });
+    // Without this, Inngest's 24h send-side dedupe would collapse the retry into the failed run.
+    expect(retry1).not.toBe(initial);
+    expect(retry2).not.toBe(initial);
+    expect(retry1).not.toBe(retry2);
+  });
+});
+
 describe("createInngestJobQueue — contract honesty", () => {
   it("drain() is a no-op and resolves", async () => {
     const { client, send } = stubClient();
