@@ -23,7 +23,7 @@ import {
 import type { Ask, AskStatus, Database } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
 import type { AuthContext } from "./authorization";
-import { viewerPersonId } from "./authorization";
+import { getStoryForViewer, viewerPersonId } from "./authorization";
 import { assertPersonCanAccessAlbumPhoto } from "./album-repository";
 import { PENDING_ASKS_DEFAULT_LIMIT } from "./constants";
 
@@ -47,6 +47,14 @@ export interface CreateAskInput {
    * make the ask unanswerable. Absent/empty ⇒ a plain question with no subject.
    */
   subjectPhotoIds?: string[];
+  /**
+   * The already-published Story this ask is a FOLLOW-UP on (#77). When set, the ask is a further
+   * question sprung from reading a shared story; it is stamped onto `asks.source_story_id` so the
+   * narrator's next session can reference where the question came from. The asker MUST be able to
+   * SEE this story — the front-door `getStoryForViewer` gate runs in `createAsk` — so a follow-up
+   * never leaks the existence of a story the asker could not otherwise read. Absent ⇒ a cold ask.
+   */
+  sourceStoryId?: string;
 }
 
 /** Set of family ids the person currently holds an ACTIVE membership in. */
@@ -169,6 +177,19 @@ export async function createAsk(
   // not defend against that window this slice.)
   const subjectPhotoIds = [...new Set(input.subjectPhotoIds ?? [])];
 
+  // Follow-up on a published story (#77): the asker MUST be able to SEE the source story. This routes
+  // through the single front door (`getStoryForViewer` applies the full state + consent-ledger gate),
+  // so a follow-up can never be posed on — and can never leak the existence of — a story the asker
+  // could not already read. A missing/unreadable story rejects the whole ask before any row is written.
+  if (input.sourceStoryId !== undefined) {
+    const source = await getStoryForViewer(db, ctx, input.sourceStoryId);
+    if (source === null) {
+      throw new AuthorizationError(
+        "cannot pose a follow-up on a story the asker cannot see",
+      );
+    }
+  }
+
   return db.transaction(async (tx) => {
     for (const photoId of subjectPhotoIds) {
       await assertPersonCanAccessAlbumPhoto(tx, asker, photoId);
@@ -181,6 +202,7 @@ export async function createAsk(
         targetPersonId: input.targetPersonId,
         questionText: question,
         status: "queued",
+        sourceStoryId: input.sourceStoryId ?? null,
       })
       .returning();
     if (familyIds.length > 0) {
