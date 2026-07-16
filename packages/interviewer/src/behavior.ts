@@ -214,6 +214,11 @@ export function ingestNarratorUtterance(state: SessionState, utterance: string):
   state.lastNarratorUtterance = utterance;
   if (detectDistress(utterance)) state.distressed = true;
   if (detectOffRamp(utterance)) state.offRampRequested = true;
+  // State hygiene: once distress/off-ramp latches (these flags are never reset within a session),
+  // any gap follow-up queued on an EARLIER turn is permanently unreachable — slot 0 of the picker
+  // always wins from here on. Drop it so `getState()` never reports a queued follow-up that will
+  // never be asked (an auditor/observability consumer would otherwise see dangling dead data).
+  if (state.distressed || state.offRampRequested) state.pendingGapFollowUp = null;
   return state;
 }
 

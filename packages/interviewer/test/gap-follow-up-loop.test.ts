@@ -195,6 +195,25 @@ describe("gap-driven follow-up in the controlled loop", () => {
     expect(session.getState().pendingGapFollowUp).toBeNull();
   });
 
+  it("clears a queued gap when distress/off-ramp latches on a LATER turn (state hygiene)", async () => {
+    // Regression: a gap queued on turn N must not linger in getState() once the session winds down
+    // on a subsequent answer. It is unreachable (slot 0 wins) — it must also not be dead data.
+    const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
+    const session = await createInterviewSession(makeDeps(evaluator), { narratorPersonId: NARRATOR });
+
+    await session.nextTurn();
+    await session.recordResponse(LONG_ANSWER); // gap queued
+    expect(session.getState().pendingGapFollowUp).not.toBeNull();
+
+    // The narrator now signals distress (without the queued gap having been served yet).
+    await session.recordResponse("I can't talk about that anymore, please stop.");
+    expect(session.getState().distressed).toBe(true);
+    expect(session.getState().pendingGapFollowUp).toBeNull();
+
+    // And the next turn winds down — the gap is never spoken.
+    expect((await session.nextTurn()).intent.kind).toBe("wind_down");
+  });
+
   it("with NO evaluator configured, the loop keeps its original reflection-only behavior", async () => {
     const session = await createInterviewSession(makeDeps(), { narratorPersonId: NARRATOR });
     await session.nextTurn();
