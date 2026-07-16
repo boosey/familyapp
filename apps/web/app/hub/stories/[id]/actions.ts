@@ -19,6 +19,7 @@ import {
 } from "@chronicle/core";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
 import { hub } from "@/app/_copy";
+import { FOLLOW_UP_QUESTION_MAX_CHARS } from "@/lib/constants";
 
 export type ActionResult = { error: string } | undefined;
 
@@ -316,6 +317,12 @@ export async function askFollowUpAction(formData: FormData): Promise<ActionResul
     return { error: hub.actions.invalidInput };
   }
 
+  // Length cap (#77 S2): a follow-up is a single human question, not an essay. Enforced on the trimmed
+  // text (the same value createAsk stores) so a spammy paste is rejected with the mapped copy.
+  if (questionText.trim().length > FOLLOW_UP_QUESTION_MAX_CHARS) {
+    return { error: hub.followUp.failed };
+  }
+
   plog("story", "askFollowUp: received", { person: viewerPersonId(ctx), story: sourceStoryId });
 
   try {
@@ -326,11 +333,13 @@ export async function askFollowUpAction(formData: FormData): Promise<ActionResul
     });
     plog("story", "askFollowUp: success", { story: sourceStoryId });
   } catch (err) {
+    // The real error (e.g. AuthorizationError wording) is logged server-side; the client gets a
+    // single generic message so internal authorization phrasing is never surfaced verbatim.
     plogError("story", "askFollowUp: error", {
       story: sourceStoryId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
-    return { error: err instanceof Error ? err.message : hub.actions.saveFailed };
+    return { error: hub.followUp.failed };
   }
 
   revalidatePath(`/hub/stories/${sourceStoryId}`);

@@ -184,6 +184,14 @@ export async function eraseStory(
     await tx.delete(storyViews).where(eq(storyViews.storyId, input.storyId));
     await tx.delete(followUpDecisions).where(eq(followUpDecisions.storyId, input.storyId));
     await tx.update(asks).set({ storyId: null }).where(eq(asks.storyId, input.storyId));
+    // Detach any FOLLOW-UP asks whose SOURCE is this story (#77). Like `story_id`, the FK is
+    // ON DELETE no action, so it must be nulled before the story delete or the erasure FK-fails and
+    // rolls back. Null-out (not cascade-delete) is correct: a follow-up question is a legitimate
+    // standalone ask that simply loses its now-erased origin.
+    await tx
+      .update(asks)
+      .set({ sourceStoryId: null })
+      .where(eq(asks.sourceStoryId, input.storyId));
     await tx.delete(consentRecords).where(eq(consentRecords.storyId, input.storyId));
     await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, input.storyId));
     await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, input.storyId));

@@ -36,6 +36,8 @@ import {
   appendTypedTakeContribution,
 } from "@chronicle/core";
 import { askFollowUpAction } from "@/app/hub/stories/[id]/actions";
+import { hub } from "@/app/_copy";
+import { FOLLOW_UP_QUESTION_MAX_CHARS } from "@/lib/constants";
 
 afterAll(() => {
   vi.restoreAllMocks();
@@ -151,7 +153,8 @@ describe("askFollowUpAction (#77)", () => {
         questionText: "Sneaky follow-up on a story I cannot see",
       }),
     );
-    expect(res?.error).toBeTruthy();
+    // S1: the client gets the GENERIC mapped copy, never the internal AuthorizationError wording.
+    expect(res?.error).toBe(hub.followUp.failed);
 
     expect(await listPendingAsksForNarrator(runtimeDb, narrator)).toHaveLength(0);
     expect(await runtimeDb.select().from(asks)).toHaveLength(0);
@@ -163,5 +166,45 @@ describe("askFollowUpAction (#77)", () => {
       fd({ storyId: "x", targetPersonId: "y", questionText: "q" }),
     );
     expect(res?.error).toBeTruthy();
+  });
+
+  it("S2: rejects an over-length question with the mapped copy and writes NO ask", async () => {
+    const narrator = await makePerson("Eleanor");
+    const cousin = await makePerson("Sofia");
+    const fam = await makeFamily("Boudreaux", narrator);
+    await addMember(narrator, fam);
+    await addMember(cousin, fam);
+    const storyId = await makePublishedStory(narrator, fam);
+
+    authCtx = { kind: "account", personId: cousin };
+    const res = await askFollowUpAction(
+      fd({
+        storyId,
+        targetPersonId: narrator,
+        questionText: "x".repeat(FOLLOW_UP_QUESTION_MAX_CHARS + 1),
+      }),
+    );
+    expect(res?.error).toBe(hub.followUp.failed);
+    expect(await listPendingAsksForNarrator(runtimeDb, narrator)).toHaveLength(0);
+  });
+
+  it("S2: accepts a question exactly AT the cap", async () => {
+    const narrator = await makePerson("Eleanor");
+    const cousin = await makePerson("Sofia");
+    const fam = await makeFamily("Boudreaux", narrator);
+    await addMember(narrator, fam);
+    await addMember(cousin, fam);
+    const storyId = await makePublishedStory(narrator, fam);
+
+    authCtx = { kind: "account", personId: cousin };
+    const res = await askFollowUpAction(
+      fd({
+        storyId,
+        targetPersonId: narrator,
+        questionText: "y".repeat(FOLLOW_UP_QUESTION_MAX_CHARS),
+      }),
+    );
+    expect(res).toBeUndefined();
+    expect(await listPendingAsksForNarrator(runtimeDb, narrator)).toHaveLength(1);
   });
 });
