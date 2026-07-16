@@ -14,6 +14,25 @@ export interface FollowUpButtonProps {
   narratorName: string;
 }
 
+// Static — hoisted out of the component so it is not re-allocated on every render (depends on no
+// props/state).
+const buttonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-ui-sm, 1.125rem)",
+  fontWeight: 600,
+  background: "transparent",
+  border: "1.5px solid var(--border)",
+  borderRadius: "var(--radius-pill, 9999px)",
+  padding: "6px 16px",
+  color: "var(--text-muted)",
+  cursor: "pointer",
+  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+  outline: "none",
+};
+
 /**
  * "Ask a follow-up" affordance on a published story (#77). Any authorized viewer (a member who can
  * SEE the story) can pose a further question tied to it; it routes into the EXISTING ask queue via
@@ -26,23 +45,6 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [isPending, startTransition] = useTransition();
-
-  const buttonStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm, 1.125rem)",
-    fontWeight: 600,
-    background: "transparent",
-    border: "1.5px solid var(--border)",
-    borderRadius: "var(--radius-pill, 9999px)",
-    padding: "6px 16px",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    transition: "background 0.15s, border-color 0.15s, color 0.15s",
-    outline: "none",
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,6 +157,7 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={hub.followUp.placeholder}
+          disabled={isPending}
           aria-invalid={error ? "true" : undefined}
           aria-describedby={error ? "follow-up-error" : undefined}
         />
@@ -162,6 +165,7 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
       {error && (
         <p
           id="follow-up-error"
+          role="alert"
           data-testid="follow-up-error"
           style={{
             fontFamily: "var(--font-ui)",
