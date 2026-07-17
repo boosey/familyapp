@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 import { getProtoStory } from "../../../mock-data";
 import { ListenStage } from "./ListenStage";
 
@@ -10,7 +11,7 @@ export default async function ListenPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (process.env.NODE_ENV === "production") redirect("/");
+  if (!isDevSurfaceEnabled()) redirect("/");
   const { id } = await params;
   const story = getProtoStory(id);
   if (!story) notFound();

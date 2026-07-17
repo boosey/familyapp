@@ -5,11 +5,14 @@
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
 import { common, auth, legal } from "@/app/_copy";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
+  const showPrototypes = isDevSurfaceEnabled();
+
   return (
     <main className="spark-landing">
       <div className="spark-landing__media" aria-hidden="true">
@@ -35,6 +38,24 @@ export default function Home() {
             <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
           </Link>
         </div>
+
+        {showPrototypes ? (
+          <p className="spark-landing__note" style={{ marginTop: 18 }}>
+            <Link
+              href="/dev/prototypes"
+              style={{
+                color: "#FFFFFF",
+                fontFamily: "var(--font-ui)",
+                fontSize: "1.05rem",
+                fontWeight: 600,
+                textDecoration: "underline",
+                textUnderlineOffset: 3,
+              }}
+            >
+              Browse UX prototypes →
+            </Link>
+          </p>
+        ) : null}
 
         <p className="spark-landing__note">{auth.landing.narratorNote}</p>
 

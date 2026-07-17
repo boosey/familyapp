@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 import { getProtoStory } from "../../mock-data";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export default async function SundayLetterStoryPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (process.env.NODE_ENV === "production") redirect("/");
+  if (!isDevSurfaceEnabled()) redirect("/");
   const { id } = await params;
   const story = getProtoStory(id);
   if (!story) notFound();

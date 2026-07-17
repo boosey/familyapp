@@ -4,6 +4,7 @@
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ const IDEAS = [
 ] as const;
 
 export default function PrototypesIndex() {
-  if (process.env.NODE_ENV === "production") {
+  if (!isDevSurfaceEnabled()) {
     redirect("/");
   }
 

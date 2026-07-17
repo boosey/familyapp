@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 import { TellStage } from "./TellStage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default function TellPage() {
-  if (process.env.NODE_ENV === "production") redirect("/");
+  if (!isDevSurfaceEnabled()) redirect("/");
   return <TellStage />;
 }

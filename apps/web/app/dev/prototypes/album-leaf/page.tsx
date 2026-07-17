@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 import { AlbumLeafProto } from "./AlbumLeafProto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default function AlbumLeafPage() {
-  if (process.env.NODE_ENV === "production") redirect("/");
+  if (!isDevSurfaceEnabled()) redirect("/");
   return <AlbumLeafProto />;
 }
