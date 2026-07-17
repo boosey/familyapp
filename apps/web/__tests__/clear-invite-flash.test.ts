@@ -6,8 +6,9 @@
  * breaking the entire invite result view. The fix moves the show-once deletion into THIS route
  * handler, invoked from a client effect after the link renders. This test pins that the handler
  * deletes the correct cookies (name + path) and returns 204, so the deletion never drifts back
- * into render. The handler clears BOTH show-once flash cookies (the narrator-invite link and the
- * member-invite link), since either result view may have set one.
+ * into render. The handler clears ALL THREE show-once flash cookies (the narrator-invite link, the
+ * member-invite link, and — Task 9 — the member-invite delivery-targets readout), since any result
+ * view may have set one.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -34,6 +35,8 @@ import {
   INVITE_FLASH_PATH,
   MEMBER_INVITE_FLASH_COOKIE,
   MEMBER_INVITE_FLASH_PATH,
+  MEMBER_INVITE_TARGETS_FLASH_COOKIE,
+  MEMBER_INVITE_TARGETS_FLASH_PATH,
 } from "../lib/invite-flash";
 
 describe("clear-invite-flash route handler", () => {
@@ -41,10 +44,10 @@ describe("clear-invite-flash route handler", () => {
     deleteSpy.mockReset();
   });
 
-  it("deletes both invite flash cookies by name + path and returns 204", async () => {
+  it("deletes all three invite flash cookies by name + path and returns 204", async () => {
     const res = (await POST()) as unknown as { status: number };
 
-    expect(deleteSpy).toHaveBeenCalledTimes(2);
+    expect(deleteSpy).toHaveBeenCalledTimes(3);
     expect(deleteSpy).toHaveBeenCalledWith({
       name: INVITE_FLASH_COOKIE,
       path: INVITE_FLASH_PATH,
@@ -52,6 +55,10 @@ describe("clear-invite-flash route handler", () => {
     expect(deleteSpy).toHaveBeenCalledWith({
       name: MEMBER_INVITE_FLASH_COOKIE,
       path: MEMBER_INVITE_FLASH_PATH,
+    });
+    expect(deleteSpy).toHaveBeenCalledWith({
+      name: MEMBER_INVITE_TARGETS_FLASH_COOKIE,
+      path: MEMBER_INVITE_TARGETS_FLASH_PATH,
     });
     expect(res.status).toBe(204);
   });

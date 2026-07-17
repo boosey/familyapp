@@ -54,6 +54,44 @@ describe("createInvitation", () => {
     expect(row?.tokenHash).not.toBe(token); // raw token never persisted
   });
 
+  it("stores an optional invitee phone and initializes delivery attempts to zero", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteePhone: "+15551230000",
+    });
+    const [row] = await db
+      .select({
+        inviteePhone: invitations.inviteePhone,
+        deliveryAttempts: invitations.deliveryAttempts,
+      })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(row?.inviteePhone).toBe("+15551230000");
+    expect(row?.deliveryAttempts).toBe(0);
+  });
+
+  it("persists requested delivery channels on the row", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+      deliveryChannels: ["email", "sms"],
+    });
+    const [row] = await db
+      .select({ deliveryChannels: invitations.deliveryChannels })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(row?.deliveryChannels).toEqual(["email", "sms"]);
+  });
+
   it("rejects an inviter who is not an active member", async () => {
     const { fam } = await familyWithSteward();
     const stranger = await makePerson(db, "Stranger");

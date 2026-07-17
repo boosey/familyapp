@@ -986,6 +986,16 @@ export const invitations = pgTable(
     inviteeName: text("invitee_name"),
     /** Optional email the invite was addressed to (the person may be unknown to the system). */
     inviteeEmail: text("invitee_email"),
+    /** Optional E.164 phone the invite was addressed to (SMS channel). */
+    inviteePhone: text("invitee_phone"),
+    /** Channels delivery was requested on at enqueue time (e.g. {email,sms}). */
+    deliveryChannels: text("delivery_channels").array(),
+    /** Set when at least one channel delivered successfully. */
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    /** Last delivery error string, if a channel failed. */
+    deliveryError: text("delivery_error"),
+    /** Incremented by the delivery worker on each attempt. */
+    deliveryAttempts: integer("delivery_attempts").notNull().default(0),
     /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
     relationshipLabel: text("relationship_label"),
     /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */

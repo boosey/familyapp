@@ -8,4 +8,5 @@ export { welcome } from "./welcome";
 export { capture } from "./capture";
 export { join } from "./join";
 export { hub } from "./hub";
+export { invitations } from "./invitations";
 export { legal } from "./legal";

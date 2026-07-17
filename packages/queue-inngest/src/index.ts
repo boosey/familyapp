@@ -69,6 +69,7 @@ import type {
   JobHandler,
   JobName,
   JobPayload,
+  JobPayloadMap,
   JobQueue,
 } from "@chronicle/pipeline";
 
@@ -127,7 +128,7 @@ export function createInngestJobQueue(
       return Array.from(functionsByName.values());
     },
 
-    async enqueue(name: JobName, payload: JobPayload): Promise<string> {
+    async enqueue<N extends JobName>(name: N, payload: JobPayloadMap[N]): Promise<string> {
       const id = dedupeId(name, payload);
       await client.send({
         name: eventName(name),
@@ -137,7 +138,11 @@ export function createInngestJobQueue(
       return id;
     },
 
-    register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void {
+    register<N extends JobName>(
+      name: N,
+      handler: JobHandler<N>,
+      onFailure?: JobFailureHandler<N>,
+    ): void {
       // `onFailure` (issue #11) fires AFTER Inngest exhausts the function's retries — the durable-
       // queue analogue of a terminal failure. We translate the vendor's `{ error, event }` back into
       // our vendor-neutral (payload, JobFailureInfo) so the orchestrator's handler stays SDK-free.
@@ -150,7 +155,7 @@ export function createInngestJobQueue(
                 // must never let it throw INSIDE Inngest's onFailure hook (that would destabilize the
                 // vendor callback). Swallow — the handler owns its own logging.
                 try {
-                  await onFailure(originalPayload(event), {
+                  await onFailure(originalPayload(event) as JobPayloadMap[N], {
                     message: String(error?.message ?? "unknown error"),
                     ...(error?.name ? { name: String(error.name) } : {}),
                   });
@@ -165,7 +170,7 @@ export function createInngestJobQueue(
         config,
         { event: eventName(name) },
         async ({ event }: { event: { data: unknown } }) => {
-          await handler(event.data as JobPayload);
+          await handler(event.data as JobPayloadMap[N]);
         },
       );
       // Map.set is the replace — no fragile string compare against `.id()` needed.
@@ -205,6 +210,13 @@ interface InngestFailureArgs {
  * passed to `onFailure` IS the original triggering event, so `event.data` is the payload. Older
  * shapes nested it under the `inngest/function.failed` wrapper at `event.data.event.data`; we accept
  * either so a minor SDK bump can't silently strand the storyId (which would drop the failure signal).
+ *
+ * NOTE: the `"storyId" in data` structural checks are story-shaped-payload probes — they only fire
+ * for the pipeline stages (`transcribe`/`render_story`). An invite (`invite.send`) payload has no
+ * `storyId`, so it falls through to the last-resort `(data ?? {})` return. That is functionally
+ * correct: in the flat (current-SDK) shape `event.data` IS the real payload, so we still hand back
+ * the genuine `InviteJobPayload` — the probes are only an ordering optimization + nested-shape
+ * fallback, not a story-only gate.
  */
 function originalPayload(event?: { data?: unknown } | null): JobPayload {
   const data = event?.data;

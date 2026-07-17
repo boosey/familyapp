@@ -14,10 +14,12 @@ import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createInvitation, listActiveFamiliesForPerson } from "@chronicle/core";
 import { memberships, persons } from "@chronicle/db/schema";
+import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
 import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
+import { resolveInviteChannels } from "@/lib/invite-delivery-channels";
 import type { FamilyFilter } from "@/lib/family-filter";
 import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
@@ -25,6 +27,8 @@ import {
   INVITE_FLASH_PATH,
   MEMBER_INVITE_FLASH_COOKIE,
   MEMBER_INVITE_FLASH_PATH,
+  MEMBER_INVITE_TARGETS_FLASH_COOKIE,
+  MEMBER_INVITE_TARGETS_FLASH_PATH,
 } from "@/lib/invite-flash";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
@@ -77,27 +81,61 @@ async function createInvite(formData: FormData): Promise<void> {
 
 async function createMemberInvite(formData: FormData): Promise<void> {
   "use server";
-  const { db, auth } = await getRuntime();
+  const rt = await getRuntime();
+  const { db, auth } = rt;
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") redirect("/sign-in");
   const inviteeName = String(formData.get("inviteeName") ?? "").trim();
   const inviteeEmail = String(formData.get("inviteeEmail") ?? "").trim();
+  const inviteePhoneRaw = String(formData.get("inviteePhone") ?? "").trim();
+  const smsConsent = formData.get("smsConsent") === "on";
   const relationshipLabel = String(formData.get("relationshipLabel") ?? "").trim();
   if (!inviteeName) throw new Error("name required");
+  // A typed-but-invalid phone must never silently become "no phone" — reject BEFORE creating the
+  // invite so the inviter can fix it (no orphaned invitation left behind for a typo'd number).
+  const normalizedPhone = inviteePhoneRaw ? normalizePhone(inviteePhoneRaw) : null;
+  if (inviteePhoneRaw && normalizedPhone === null) {
+    throw new Error(hub.invite.phoneInvalid);
+  }
   // Server-side family-target guard (Finding 2): resolve the single-family target against the inviter's
   // OWN active families so a crafted POST can't silently invite into an arbitrary first family.
   const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
   const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
 
+  const channels = resolveInviteChannels({
+    email: inviteeEmail || null,
+    normalizedPhone,
+    smsConsent,
+  });
+
   // createInvitation enforces the "inviter must be an active member" gate transactionally; no
   // redundant pre-check here.
-  const { token } = await createInvitation(db, {
+  const { invitationId, token } = await createInvitation(db, {
     familyId,
     inviterPersonId: ctx.personId,
     inviteeName,
     inviteeEmail: inviteeEmail || undefined,
+    inviteePhone: normalizedPhone ?? undefined,
+    deliveryChannels: channels.length ? channels : undefined,
     relationshipLabel: relationshipLabel || undefined,
   });
+
+  if (channels.length) {
+    try {
+      await rt.dispatchInviteDelivery({
+        invitationId,
+        token,
+        channels,
+        link: `${await origin()}/join/${token}`,
+      });
+    } catch (err) {
+      // Delivery dispatch must NEVER block invite creation or the copy-link fallback — the
+      // show-once link below is always available regardless of whether email/SMS went out.
+      // eslint-disable-next-line no-console
+      console.error("[chronicle] invite delivery dispatch failed", err);
+    }
+  }
+
   const jar = await cookies();
   jar.set(MEMBER_INVITE_FLASH_COOKIE, token, {
     httpOnly: true,
@@ -105,6 +143,23 @@ async function createMemberInvite(formData: FormData): Promise<void> {
     path: MEMBER_INVITE_FLASH_PATH,
     maxAge: 60,
   });
+
+  if (channels.length) {
+    // Human-readable destinations only (never the token) — a short-lived flash so the result view
+    // can render an honest "sending" line without a DB round-trip. Absent entirely for a pure
+    // copy-link invite (no contact given / no consent), so that path never falsely implies delivery.
+    const targets = [
+      channels.includes("email") && inviteeEmail ? inviteeEmail : null,
+      channels.includes("sms") && normalizedPhone ? normalizedPhone : null,
+    ].filter((t): t is string => Boolean(t));
+    jar.set(MEMBER_INVITE_TARGETS_FLASH_COOKIE, targets.join(", "), {
+      httpOnly: true,
+      sameSite: "lax",
+      path: MEMBER_INVITE_TARGETS_FLASH_PATH,
+      maxAge: 60,
+    });
+  }
+
   redirect("/hub?tab=invite");
 }
 
@@ -114,15 +169,31 @@ function LinkResult({
   blurb,
   link,
   note,
+  sendingTo,
 }: {
   title: string;
   blurb: string;
   link: string;
   note: string;
+  /** Task 9 — optional "Sending your invitation to …" status line, sourced purely from a flash
+   * cookie (no DB read). Rendered above the copy-link card, which remains the guaranteed fallback. */
+  sendingTo?: string;
 }) {
   return (
     <div style={{ maxWidth: 600 }}>
       <ClearInviteFlash />
+      {sendingTo ? (
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-meta)",
+            margin: "0 0 16px",
+          }}
+        >
+          {hub.invite.sendingTo(sendingTo)}
+        </p>
+      ) : null}
       <h2
         style={{
           fontFamily: "var(--font-story)",
@@ -233,12 +304,14 @@ export async function InviteTab({
   /* ── Member result (show-once) ───────────────────────────────────────────── */
   if (memberToken) {
     const link = `${await origin()}/join/${memberToken}`;
+    const sendingTo = jar.get(MEMBER_INVITE_TARGETS_FLASH_COOKIE)?.value;
     return (
       <LinkResult
         title={hub.invite.memberReadyTitle}
         blurb={hub.invite.memberReadyBlurb}
         link={link}
         note={hub.invite.fingerprintNote}
+        sendingTo={sendingTo || undefined}
       />
     );
   }
@@ -360,6 +433,19 @@ export async function InviteTab({
               className="kin-field"
               placeholder={hub.invite.emailPlaceholder}
             />
+          </label>
+          <label className="kin-form-label">
+            {hub.invite.phoneLabel} <span style={{ fontWeight: 400 }}>{hub.invite.phoneLabelOptional}</span>
+            <input
+              name="inviteePhone"
+              type="tel"
+              className="kin-field"
+              placeholder={hub.invite.phonePlaceholder}
+            />
+          </label>
+          <label className="kin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
+            <input name="smsConsent" type="checkbox" />
+            {hub.invite.smsConsentLabel}
           </label>
           <label className="kin-form-label">
             {hub.invite.relationshipLabel} <span style={{ fontWeight: 400 }}>{hub.invite.relationshipLabelOptional}</span>

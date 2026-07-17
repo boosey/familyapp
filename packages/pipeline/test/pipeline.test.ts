@@ -591,6 +591,7 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "@deepgram/sdk",
       "assemblyai",
       "cohere-ai",
+      "resend",
       "twilio",
       "telnyx",
       "@vonage/server-sdk",
@@ -603,12 +604,18 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
     // a future `import ... from "@sentry/anything"` fails CI.
     const forbiddenPrefixes = ["@sentry/"];
     const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
-    const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src", "packages/interviewer/src"];
+    const roots = ["packages/core/src", "packages/db/src", "packages/storage/src", "packages/capture/src", "packages/pipeline/src", "packages/interviewer/src", "packages/notifications/src"];
     // Documented exception: `packages/storage/src/r2.ts` is the production R2 adapter and is the
     // single place in storage/src permitted to import `@aws-sdk/*` (R2 speaks S3). It sits behind
     // the `MediaStorage` interface, so no vendor types leak into the IP packages downstream.
+    // Same pattern for notifications: `resend.ts` (Resend) and `twilio.ts` (Twilio) sit behind the
+    // `Notifier` interface — see docs/DECISIONS.md.
     // Any new entry here requires a DECISIONS.md entry explaining why the adapter cannot live in a separate service.
-    const ADAPTER_EXCEPTIONS = new Set<string>(["packages/storage/src/r2.ts"]);
+    const ADAPTER_EXCEPTIONS = new Set<string>([
+      "packages/storage/src/r2.ts",
+      "packages/notifications/src/resend.ts",
+      "packages/notifications/src/twilio.ts",
+    ]);
     const offenders: string[] = [];
     for (const root of roots) {
       walk(join(repoRoot, root), (full) => {
@@ -638,5 +645,32 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
         else if (/\.tsx?$/.test(e.name) && !e.name.endsWith(".d.ts")) visit(full);
       }
     }
+  });
+
+  it("would flag a resend/twilio import placed outside the carved-out adapter files", () => {
+    // Synthetic re-run of the same forbidden-import check against a fake file set, proving the
+    // guard's matching logic actually catches a violation rather than vacuously passing because
+    // no such import currently exists in the tree.
+    const forbidden = ["resend", "twilio"];
+    const ADAPTER_EXCEPTIONS = new Set<string>([
+      "packages/notifications/src/resend.ts",
+      "packages/notifications/src/twilio.ts",
+    ]);
+    const syntheticFiles: Record<string, string> = {
+      "packages/notifications/src/resend.ts": 'import { Resend } from "resend";',
+      "packages/notifications/src/twilio.ts": 'import twilio from "twilio";',
+      // Violation: a non-adapter file in the same package importing the SDK directly.
+      "packages/notifications/src/mock.ts": 'import { Resend } from "resend";',
+    };
+    const offenders: string[] = [];
+    for (const [relPath, contents] of Object.entries(syntheticFiles)) {
+      if (ADAPTER_EXCEPTIONS.has(relPath)) continue;
+      for (const f of forbidden) {
+        if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
+          offenders.push(`${relPath} imports ${f}`);
+        }
+      }
+    }
+    expect(offenders).toEqual(["packages/notifications/src/mock.ts imports resend"]);
   });
 });
