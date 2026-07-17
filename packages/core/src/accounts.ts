@@ -7,16 +7,25 @@
  * back-pointer, so the link cannot diverge). Sign-up therefore creates BOTH rows atomically and
  * sets that one FK — anything less leaves a half-formed identity.
  */
-import { eq } from "drizzle-orm";
-import { accounts, persons } from "@chronicle/db/schema";
+import { and, eq, isNotNull } from "drizzle-orm";
+import {
+  accounts,
+  persons,
+  accountIdentities,
+  accountContacts,
+} from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
 import { defaultSpokenName } from "./names";
 
 export interface SignUpAccountInput {
-  /** Opaque id from the auth provider (mock or Clerk). */
+  /** The auth VENDOR (e.g. "clerk"). */
+  provider: string;
+  /** The vendor's opaque user id. */
   authProviderUserId: string;
   email: string;
+  /** Whether the provider VERIFIED this email. Only a verified email becomes a match key. */
+  emailVerified: boolean;
   displayName: string;
   /** Name the interviewer speaks aloud. Defaults to the first whitespace-delimited word. */
   spokenName?: string;
@@ -73,6 +82,29 @@ export async function createAccountWithPerson(
       })
       .returning();
 
+    await tx.insert(accountIdentities).values({
+      accountId: account!.id,
+      provider: input.provider,
+      providerUserId: input.authProviderUserId,
+    });
+
+    // Only a VERIFIED email is persisted as a contact — it is the account's portable match key.
+    // An unverified email must NOT be written at all: UNIQUE(kind, value) is unconditional, so an
+    // unverified row would (a) let an unverified login squat an email globally and (b) collide with a
+    // real owner's verified row, breaking the "an unverified contact never adopts an existing account"
+    // boundary (spec §4). A brand-new login whose email is unverified therefore gets an identity but no
+    // contact, and falls through to its own separate account. Promoting a later-verified email to a
+    // contact is a separate reconcile concern (deferred).
+    const normEmail = input.email.trim().toLowerCase();
+    if (input.emailVerified && normEmail.length > 0) {
+      await tx.insert(accountContacts).values({
+        accountId: account!.id,
+        kind: "email",
+        value: normEmail,
+        verifiedAt: new Date(),
+      });
+    }
+
     return { accountId: account!.id, personId: person!.id };
   });
 }
@@ -120,6 +152,10 @@ export interface ReconcileAccountResult {
  * `displayName`) AND the controlled Person's `displayName` — the user-facing identity name the app
  * reads everywhere. The provider is treated as the source of truth for a self-account's profile name.
  *
+ * Resolves the account via its `(provider='clerk', provider_user_id)` identity row, NOT the raw
+ * `accounts.auth_provider_user_id` column — so an id ATTACHED by the verified-email heal path (a
+ * prod-instance id linked onto an account first created under a dev-instance id) also reconciles.
+ *
  * Deliberately does NOT touch `persons.spokenName`: that is a user-owned field (customized at
  * onboarding, e.g. spoken "Bob" for display "Robert") and must survive an unrelated email/name change.
  *
@@ -135,12 +171,18 @@ export async function reconcileAccountProfile(
   const displayName = input.displayName?.trim();
 
   return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.authProviderUserId, input.authProviderUserId))
+    const [ident] = await tx
+      .select({ accountId: accountIdentities.accountId })
+      .from(accountIdentities)
+      .where(
+        and(
+          eq(accountIdentities.provider, "clerk"),
+          eq(accountIdentities.providerUserId, input.authProviderUserId),
+        ),
+      )
       .limit(1);
-    if (!account) return { matched: false };
+    if (!ident) return { matched: false };
+    const account = { id: ident.accountId };
 
     const accountPatch: { email?: string; displayName?: string; updatedAt: Date } = {
       updatedAt: new Date(),
@@ -181,6 +223,10 @@ export interface DeactivateAccountResult {
  * stories that other members may depend on. Owner-initiated content erasure is the SEPARATE, explicit
  * ADR-0008 path; this webhook only detaches the credential.
  *
+ * Resolves the account via its `(provider='clerk', provider_user_id)` identity row (so a heal-attached
+ * id also deactivates). Severing is at the ACCOUNT level (`active = false`), so it disables EVERY
+ * identity on that account at once — correct, since the auth read paths all gate on `accounts.active`.
+ *
  * Idempotent: deactivating an already-inactive account is a harmless no-op, so a webhook replay/retry
  * is safe. No match → `{ matched: false }`.
  */
@@ -189,12 +235,18 @@ export async function deactivateAccountByAuthProviderUserId(
   authProviderUserId: string,
 ): Promise<DeactivateAccountResult> {
   return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.authProviderUserId, authProviderUserId))
+    const [ident] = await tx
+      .select({ accountId: accountIdentities.accountId })
+      .from(accountIdentities)
+      .where(
+        and(
+          eq(accountIdentities.provider, "clerk"),
+          eq(accountIdentities.providerUserId, authProviderUserId),
+        ),
+      )
       .limit(1);
-    if (!account) return { matched: false };
+    if (!ident) return { matched: false };
+    const account = { id: ident.accountId };
 
     await tx
       .update(accounts)
@@ -208,4 +260,64 @@ export async function deactivateAccountByAuthProviderUserId(
       .limit(1);
     return { matched: true, personId: person?.id };
   });
+}
+
+/** Resolve a vendor identity to its ACTIVE account's Person, or null. */
+export async function resolveAccountByIdentity(
+  db: Database,
+  provider: string,
+  providerUserId: string,
+): Promise<{ personId: string } | null> {
+  const [row] = await db
+    .select({ personId: persons.id })
+    .from(accountIdentities)
+    .innerJoin(accounts, eq(accounts.id, accountIdentities.accountId))
+    .innerJoin(persons, eq(persons.accountId, accounts.id))
+    .where(
+      and(
+        eq(accountIdentities.provider, provider),
+        eq(accountIdentities.providerUserId, providerUserId),
+        eq(accounts.active, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Resolve a VERIFIED email to its ACTIVE account id, or null. Unverified never matches. */
+export async function resolveAccountIdByVerifiedEmail(
+  db: Database,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.length === 0) return null;
+  const [row] = await db
+    .select({ accountId: accounts.id })
+    .from(accountContacts)
+    .innerJoin(accounts, eq(accounts.id, accountContacts.accountId))
+    .where(
+      and(
+        eq(accountContacts.kind, "email"),
+        eq(accountContacts.value, normalized),
+        isNotNull(accountContacts.verifiedAt),
+        eq(accounts.active, true),
+      ),
+    )
+    .limit(1);
+  return row?.accountId ?? null;
+}
+
+/** Attach a vendor identity to an existing account. Idempotent (no-op on conflict). */
+export async function attachIdentity(
+  db: Database,
+  accountId: string,
+  provider: string,
+  providerUserId: string,
+): Promise<void> {
+  await db
+    .insert(accountIdentities)
+    .values({ accountId, provider, providerUserId })
+    .onConflictDoNothing({
+      target: [accountIdentities.provider, accountIdentities.providerUserId],
+    });
 }

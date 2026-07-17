@@ -25,6 +25,23 @@ CREATE TYPE "public"."prose_revision_level" AS ENUM('user_authored', 'ai_transcr
 CREATE TYPE "public"."story_image_provenance" AS ENUM('family_photo', 'illustration');
 CREATE TYPE "public"."story_kind" AS ENUM('voice', 'text');
 CREATE TYPE "public"."story_state" AS ENUM('draft', 'pending_approval', 'approved', 'shared', 'archived');
+CREATE TABLE "account_contacts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"account_id" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"value" text NOT NULL,
+	"verified_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "account_identities" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"account_id" uuid NOT NULL,
+	"provider" text NOT NULL,
+	"provider_user_id" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "accounts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"auth_provider_user_id" text NOT NULL,
@@ -438,6 +455,8 @@ CREATE TABLE "voice_captions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE "account_contacts" ADD CONSTRAINT "account_contacts_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "account_identities" ADD CONSTRAINT "account_identities_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "ask_families" ADD CONSTRAINT "ask_families_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "ask_families" ADD CONSTRAINT "ask_families_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "ask_subject_photos" ADD CONSTRAINT "ask_subject_photos_ask_id_asks_id_fk" FOREIGN KEY ("ask_id") REFERENCES "public"."asks"("id") ON DELETE cascade ON UPDATE no action;
@@ -527,6 +546,10 @@ ALTER TABLE "story_views" ADD CONSTRAINT "story_views_person_id_persons_id_fk" F
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "voice_captions" ADD CONSTRAINT "voice_captions_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+CREATE UNIQUE INDEX "account_contacts_kind_value_uq" ON "account_contacts" USING btree ("kind","value");
+CREATE INDEX "account_contacts_account_id_idx" ON "account_contacts" USING btree ("account_id");
+CREATE UNIQUE INDEX "account_identities_provider_user_uq" ON "account_identities" USING btree ("provider","provider_user_id");
+CREATE INDEX "account_identities_account_id_idx" ON "account_identities" USING btree ("account_id");
 CREATE UNIQUE INDEX "accounts_auth_provider_user_id_uq" ON "accounts" USING btree ("auth_provider_user_id");
 CREATE UNIQUE INDEX "ask_families_ask_family_uq" ON "ask_families" USING btree ("ask_id","family_id");
 CREATE INDEX "ask_families_ask_idx" ON "ask_families" USING btree ("ask_id");

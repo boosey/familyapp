@@ -224,8 +224,10 @@ export async function mockSignUp(
         authProviderUserId,
       });
       const created = await createAccountWithPerson(tx as Database, {
+        provider: "mock",
         authProviderUserId,
         email,
+        emailVerified: true,
         displayName: input.displayName,
       });
       return created.personId;

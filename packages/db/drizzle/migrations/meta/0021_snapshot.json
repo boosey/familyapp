@@ -1,6 +1,6 @@
 {
-  "id": "18248979-69b0-4441-a575-228a549de4f5",
-  "prevId": "0034d756-e28a-461e-94c0-96586575d445",
+  "id": "13faf874-13ce-4226-9dfc-4172bcea4ef6",
+  "prevId": "18248979-69b0-4441-a575-228a549de4f5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1715,6 +1715,37 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "invitee_phone": {
+          "name": "invitee_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_channels": {
+          "name": "delivery_channels",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_error": {
+          "name": "delivery_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_attempts": {
+          "name": "delivery_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "relationship_label": {
           "name": "relationship_label",

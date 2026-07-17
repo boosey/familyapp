@@ -13,7 +13,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { accounts, persons } from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
-import { createAccountWithPerson } from "@chronicle/core";
+import { attachIdentity, createAccountWithPerson } from "@chronicle/core";
 import {
   applyClerkWebhookEvent,
   primaryEmailOf,
@@ -80,6 +80,8 @@ describe("applyClerkWebhookEvent — user.updated", () => {
   it("reconciles a rename + email onto the Account and Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:w1",
+      provider: "clerk",
+      emailVerified: true,
       email: "old@example.com",
       displayName: "Sofia Esposito",
     });
@@ -104,6 +106,8 @@ describe("applyClerkWebhookEvent — user.updated", () => {
   it("does not overwrite a good name when the provider sends no first/last name", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:w2",
+      provider: "clerk",
+      emailVerified: true,
       email: "keep@example.com",
       displayName: "Keep Me",
     });
@@ -134,6 +138,8 @@ describe("applyClerkWebhookEvent — user.deleted", () => {
   it("soft-deletes the account and preserves the Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:d1",
+      provider: "clerk",
+      emailVerified: true,
       email: "d@example.com",
       displayName: "Dana",
     });
@@ -154,6 +160,60 @@ describe("applyClerkWebhookEvent — user.deleted", () => {
       data: { deleted: true },
     });
     expect(outcome).toEqual({ type: "user.deleted", action: "ignored" });
+  });
+});
+
+describe("applyClerkWebhookEvent — resolves via ATTACHED identity (heal-attached id)", () => {
+  it("reconciles by an ATTACHED identity, not just the creation id", async () => {
+    const { personId, accountId } = await createAccountWithPerson(db, {
+      authProviderUserId: "dev_id9",
+      provider: "clerk",
+      emailVerified: true,
+      email: "w9@x.com",
+      displayName: "Old Name",
+    });
+    // A heal path attaches a NEW prod-instance id to the SAME account after creation.
+    await attachIdentity(db, accountId, "clerk", "prod_id9");
+
+    const outcome = await applyClerkWebhookEvent(
+      db,
+      userUpdated({
+        id: "prod_id9",
+        first_name: "New",
+        last_name: "Name",
+        email_addresses: [{ id: "eml_1", email_address: "w9@x.com" }],
+        primary_email_address_id: "eml_1",
+      }),
+    );
+
+    expect(outcome).toEqual({ type: "user.updated", action: "reconciled", matched: true });
+    expect((await person(personId))?.displayName).toBe("New Name");
+  });
+
+  it("deactivates by an ATTACHED identity, not just the creation id", async () => {
+    const { personId, accountId } = await createAccountWithPerson(db, {
+      authProviderUserId: "dev_id10",
+      provider: "clerk",
+      emailVerified: true,
+      email: "w10@x.com",
+      displayName: "Dead Name",
+    });
+    await attachIdentity(db, accountId, "clerk", "prod_id10");
+
+    const outcome = await applyClerkWebhookEvent(db, {
+      type: "user.deleted",
+      data: { id: "prod_id10", deleted: true },
+    });
+
+    expect(outcome).toEqual({ type: "user.deleted", action: "deactivated", matched: true });
+    // The whole account is severed regardless of WHICH identity carried the delete.
+    const [acctRow] = await db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.authProviderUserId, "dev_id10"))
+      .limit(1);
+    expect(acctRow?.active).toBe(false);
+    expect((await person(personId))?.displayName).toBe("Dead Name");
   });
 });
 

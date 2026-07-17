@@ -76,6 +76,8 @@ describe("resolveCallbackDestination", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_001",
+      provider: "clerk",
+      emailVerified: true,
       email: "new@example.com",
       displayName: "New Person",
     });
@@ -88,6 +90,8 @@ describe("resolveCallbackDestination", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_002",
+      provider: "clerk",
+      emailVerified: true,
       email: "stale@example.com",
       displayName: "Stale Invite Person",
     });
@@ -113,6 +117,8 @@ describe("resolveCallbackDestination", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_003",
+      provider: "clerk",
+      emailVerified: true,
       email: "noappend@example.com",
       displayName: "No Append Person",
     });
@@ -134,6 +140,8 @@ describe("resolveCallbackDestination", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_test_004",
+      provider: "clerk",
+      emailVerified: true,
       email: "noinvite@example.com",
       displayName: "No Invite Person",
     });
@@ -149,6 +157,8 @@ describe("resolveCallbackDestination", () => {
     // Inviter: an active member of a family who can issue an invitation.
     const { personId: inviterPersonId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_inviter",
+      provider: "clerk",
+      emailVerified: true,
       email: "inviter@example.com",
       displayName: "Sofia Inviter",
     });
@@ -176,6 +186,8 @@ describe("resolveCallbackDestination", () => {
     // The just-provisioned invitee lands at the callback carrying the pending invite.
     const { personId: inviteePersonId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_invitee",
+      provider: "clerk",
+      emailVerified: true,
       email: "invitee@example.com",
       displayName: "New Grandchild",
     });
