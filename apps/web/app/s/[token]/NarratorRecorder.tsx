@@ -112,6 +112,29 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
   const level = useAudioLevel(stream, !reduceMotion);
 
+  // Hold-to-record: press-down starts, release finishes. `start()` only reaches "listening" after
+  // an async getUserMedia, so a quick tap (down+up before the mic is ready) would otherwise release
+  // while phase is still "idle" and the stop would be dropped — leaving a recording that never ends.
+  // `heldRef` tracks whether the pointer is still down; when start resolves we honour a release that
+  // already happened. This keeps tap-to-toggle working (motor accessibility) alongside press-hold.
+  // These hooks MUST sit above the phase early-returns below (rules of hooks): once a capture flips
+  // phase to "processing"/"slow"/"done"/"softfail" the component returns early, and declaring them
+  // after those returns would skip them on that render → "rendered fewer hooks than expected".
+  const heldRef = useRef(false);
+  const onHoldStart = useCallback(async () => {
+    if (micPhase !== "idle") return;
+    heldRef.current = true;
+    await start();
+    // Released before the mic was ready → stop immediately. Safe even on a permission-denied
+    // fast-tap (start acquired no recorder) BECAUSE finish() is idempotent — it early-returns when
+    // there's nothing recording. Do not "simplify" by dropping this call; it's the tap fallback.
+    if (!heldRef.current) finish();
+  }, [micPhase, start, finish]);
+  const onHoldEnd = useCallback(() => {
+    heldRef.current = false;
+    if (micPhase === "listening") finish();
+  }, [micPhase, finish]);
+
   if (phase === "processing") {
     return (
       <div
@@ -186,26 +209,6 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       </p>
     );
   }
-
-  // Hold-to-record: press-down starts, release finishes. `start()` only reaches "listening" after
-  // an async getUserMedia, so a quick tap (down+up before the mic is ready) would otherwise release
-  // while phase is still "idle" and the stop would be dropped — leaving a recording that never ends.
-  // `heldRef` tracks whether the pointer is still down; when start resolves we honour a release that
-  // already happened. This keeps tap-to-toggle working (motor accessibility) alongside press-hold.
-  const heldRef = useRef(false);
-  const onHoldStart = useCallback(async () => {
-    if (micPhase !== "idle") return;
-    heldRef.current = true;
-    await start();
-    // Released before the mic was ready → stop immediately. Safe even on a permission-denied
-    // fast-tap (start acquired no recorder) BECAUSE finish() is idempotent — it early-returns when
-    // there's nothing recording. Do not "simplify" by dropping this call; it's the tap fallback.
-    if (!heldRef.current) finish();
-  }, [micPhase, start, finish]);
-  const onHoldEnd = useCallback(() => {
-    heldRef.current = false;
-    if (micPhase === "listening") finish();
-  }, [micPhase, finish]);
 
   return (
     <KindredVoiceButton
