@@ -822,6 +822,330 @@ describe("AlbumUploader Google Photos", () => {
     openSpy.mockRestore();
   });
 
+  // #94 UX: the destination modal opens the MOMENT the picker returns (popup closed), in a
+  // "preparing" state with a spinner, instead of waiting for the readiness poll to resolve first —
+  // so the >1-family viewer never sees dead air between confirming the Google picker and the dialog.
+  // Add is held disabled (even with a seeded family) until the session is confirmed ready, then enables.
+  it("opens the Google destination modal in a preparing state on picker return, then enables Add when ready", async () => {
+    // popup.closed flips true when the user confirms (Google autocloses) — BEFORE the server poll
+    // reports the selection ready. That gap is exactly the "it seems like it didn't work" window.
+    let closed = false;
+    const popup = {
+      get closed() {
+        return closed;
+      },
+      close: vi.fn(),
+      opener: window as unknown,
+    };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    // First poll: the popup has closed (user returned) but the selection isn't confirmed yet →
+    // preparing. Subsequent polls: ready.
+    pollGooglePhotosImportAction
+      .mockImplementationOnce(async () => {
+        closed = true;
+        return { ok: true, mediaItemsSet: false };
+      })
+      .mockResolvedValue({ ok: true, mediaItemsSet: true });
+    completeGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      added: 1,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+
+    // The dialog appears immediately in a preparing state: spinner note shown, Add disabled DESPITE
+    // the seeded family, and the family is pre-selectable while it prepares.
+    await vi.waitFor(() =>
+      expect(screen.queryByText(hub.album.destinationPreparing)).not.toBeNull(),
+    );
+    expect(addBtn().disabled).toBe(true);
+    expect(isOn(FAM_B.familyName)).toBe(true);
+    expect(completeGooglePhotosImportAction).not.toHaveBeenCalled();
+
+    // Once the session is confirmed ready, the preparing note clears and Add enables.
+    await vi.waitFor(() =>
+      expect(screen.queryByText(hub.album.destinationPreparing)).toBeNull(),
+    );
+    expect(addBtn().disabled).toBe(false);
+    fireEvent.click(addBtn());
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    openSpy.mockRestore();
+  });
+
+  // #94 UX: cancelling the preparing dialog ABORTS the in-flight import — a later readiness result
+  // must not reopen it or fire the completion (no silent import after the user backed out).
+  it("cancelling the preparing Google dialog aborts the import (no completion fires)", async () => {
+    let closed = false;
+    const popup = {
+      get closed() {
+        return closed;
+      },
+      close: vi.fn(),
+      opener: window as unknown,
+    };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    // The popup closes (dialog opens preparing), but the selection never becomes ready — the dialog
+    // stays in preparing until the user cancels.
+    pollGooglePhotosImportAction.mockImplementation(async () => {
+      closed = true;
+      return { ok: true, mediaItemsSet: false };
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+
+    await vi.waitFor(() =>
+      expect(screen.queryByText(hub.album.destinationPreparing)).not.toBeNull(),
+    );
+    fireEvent.click(cancelBtn());
+    await vi.waitFor(() => expect(modal()).toBeNull());
+
+    // Give any further in-flight polls a chance to (wrongly) resolve; nothing should import.
+    await new Promise((r) => setTimeout(r, 25));
+    expect(completeGooglePhotosImportAction).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  // #94 UX hardening: if the readiness poll REJECTS after the preparing modal is already open, the
+  // modal must be retracted (not left spinning forever) and the failure surfaced.
+  it("retracts the preparing Google dialog when the readiness poll rejects", async () => {
+    let closed = false;
+    const popup = {
+      get closed() {
+        return closed;
+      },
+      close: vi.fn(),
+      opener: window as unknown,
+    };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "sess-1",
+      pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+      pollIntervalMs: 1,
+      pollTimeoutMs: 5_000,
+    });
+    // First poll: popup closed, not ready → modal opens preparing. Second poll: still not ready (the
+    // modal is now open). Third poll onward: hard REJECT — must retract the open modal, not strand it.
+    pollGooglePhotosImportAction
+      .mockImplementationOnce(async () => {
+        closed = true;
+        return { ok: true, mediaItemsSet: false };
+      })
+      .mockResolvedValueOnce({ ok: true, mediaItemsSet: false })
+      .mockRejectedValue(new Error("network"));
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+
+    // The reject retracts the (opened) preparing modal and surfaces the failure — end state is
+    // deterministic even though the intermediate preparing frame is too brief to assert here (the
+    // preparing→ready path above already covers the visible spinner).
+    await vi.waitFor(() =>
+      expect(screen.queryByText(hub.album.googlePhotosImportFailed)).not.toBeNull(),
+    );
+    expect(modal()).toBeNull();
+    expect(completeGooglePhotosImportAction).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  // #94 UX concurrency: cancelling a preparing import re-enables the menu; a fresh import started
+  // right after must NOT let the abandoned first loop resurface — it must never reopen its modal or
+  // import its (now-stale) session. Generation fencing makes the old loop inert; only the new
+  // session ever completes.
+  it("a fresh Google import after cancelling a preparing one never imports the abandoned session", async () => {
+    let closed = false;
+    const popup = {
+      get closed() {
+        return closed;
+      },
+      close: vi.fn(),
+      opener: window as unknown,
+    };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "sess-1",
+        pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+        pollIntervalMs: 1,
+        pollTimeoutMs: 5_000,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "sess-2",
+        pickerUri: "https://photos.google.com/picker?sessionId=sess-2",
+        pollIntervalMs: 1,
+        pollTimeoutMs: 5_000,
+      });
+    // sess-1 opens the popup then never confirms ready (stays preparing); sess-2 is ready at once.
+    pollGooglePhotosImportAction.mockImplementation(async (sid: string) => {
+      if (sid === "sess-1") {
+        closed = true;
+        return { ok: true, mediaItemsSet: false };
+      }
+      return { ok: true, mediaItemsSet: true };
+    });
+    completeGooglePhotosImportAction.mockResolvedValue({
+      ok: true,
+      added: 1,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+
+    // Import #1 → preparing modal for sess-1.
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+    await vi.waitFor(() =>
+      expect(screen.queryByText(hub.album.destinationPreparing)).not.toBeNull(),
+    );
+    // Cancel it — modal closes, the sess-1 loop is superseded.
+    fireEvent.click(cancelBtn());
+    await vi.waitFor(() => expect(modal()).toBeNull());
+
+    // Import #2 → sess-2 becomes ready → Add imports sess-2.
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+    await vi.waitFor(() => {
+      expect(modal()).not.toBeNull();
+      expect(addBtn().disabled).toBe(false);
+    });
+    fireEvent.click(addBtn());
+
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    const formData = completeGooglePhotosImportAction.mock.calls[0]![0] as FormData;
+    expect(formData.get("sessionId")).toBe("sess-2"); // never the abandoned sess-1
+
+    // Let any lingering sess-1 polls settle — still exactly one completion, for sess-2 only.
+    await new Promise((r) => setTimeout(r, 25));
+    expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1);
+    openSpy.mockRestore();
+  });
+
+  // #94 UX concurrency: cancelling a READY (not preparing) Google modal bumps the import generation
+  // even though that loop has already exited — this must stay a harmless no-op and NOT wedge the next
+  // import (e.g. by making the fresh loop consider itself stale). Verifies the load-bearing claim in
+  // onDestinationCancel's comment.
+  it("cancelling a ready Google modal then re-importing still completes the new session", async () => {
+    const popup = { closed: false, close: vi.fn(), opener: window as unknown };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    startGooglePhotosImportAction
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "sess-1",
+        pickerUri: "https://photos.google.com/picker?sessionId=sess-1",
+        pollIntervalMs: 1,
+        pollTimeoutMs: 5_000,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "sess-2",
+        pickerUri: "https://photos.google.com/picker?sessionId=sess-2",
+        pollIntervalMs: 1,
+        pollTimeoutMs: 5_000,
+      });
+    // Both sessions report ready at once → each opens the modal already-ready (no preparing frame).
+    pollGooglePhotosImportAction.mockResolvedValue({ ok: true, mediaItemsSet: true });
+    completeGooglePhotosImportAction.mockResolvedValue({
+      ok: true,
+      added: 1,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+    });
+
+    render(
+      <AlbumUploader
+        families={[FAM_A, FAM_B]}
+        currentFamilyId={FAM_A.familyId}
+        defaultSelected={[FAM_B.familyId]}
+        googlePhotosConfigured
+        googlePhotosConnected
+      />,
+    );
+
+    // Import #1 → ready modal (Add enabled, no preparing state).
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+    await vi.waitFor(() => {
+      expect(modal()).not.toBeNull();
+      expect(addBtn().disabled).toBe(false);
+    });
+    // Cancel the READY modal — its loop already exited; the generation bump must be a safe no-op.
+    fireEvent.click(cancelBtn());
+    await vi.waitFor(() => expect(modal()).toBeNull());
+
+    // Import #2 must still work end-to-end and complete sess-2.
+    openAddMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: hub.album.googlePhotosImport }));
+    await vi.waitFor(() => {
+      expect(modal()).not.toBeNull();
+      expect(addBtn().disabled).toBe(false);
+    });
+    fireEvent.click(addBtn());
+
+    await vi.waitFor(() => expect(completeGooglePhotosImportAction).toHaveBeenCalledTimes(1));
+    const formData = completeGooglePhotosImportAction.mock.calls[0]![0] as FormData;
+    expect(formData.get("sessionId")).toBe("sess-2");
+    openSpy.mockRestore();
+  });
+
   it("opens a photos.google.com pickerUri (the real user-facing host)", async () => {
     const popup = { closed: false, close: vi.fn(), opener: window as unknown };
     const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);

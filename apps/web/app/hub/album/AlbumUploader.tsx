@@ -144,6 +144,20 @@ export function AlbumUploader({
   // chosen (device) or the Google picker completes (import) AND the viewer has >1 family; the modal's
   // Add fires the corresponding upload/import against the chosen destination, and Cancel discards it.
   const [pendingDestination, setPendingDestination] = useState<PendingDestination | null>(null);
+  // #94 UX: for a Google import the destination modal opens the MOMENT the picker returns (popup
+  // closed), before Google confirms the selection is ready — so the viewer never faces dead air.
+  // Until the session is confirmed ready, the modal is shown in a "preparing" state (Add held
+  // disabled behind a spinner). `false` while preparing; flips `true` when the readiness poll
+  // resolves. Only meaningful while a `google` payload is stashed.
+  const [googleSessionReady, setGoogleSessionReady] = useState(false);
+  // Monotonic "generation" fencing for the Google import loop. Each `runGoogleImport` captures the
+  // generation it started under; a Cancel (or a fresh import started right after one) BUMPS this ref,
+  // so any still-running older loop sees its generation is stale and goes inert — it never reopens the
+  // modal, re-seeds, clears state, or fires the completion for a session the viewer already backed
+  // out of. A single boolean flag couldn't do this: a re-import would reset it and silently
+  // un-cancel the abandoned loop. A ref (not state) so the running async loop reads the LATEST value
+  // without re-rendering.
+  const importGenRef = useRef(0);
 
   // Surface OAuth callback flash once, then strip the query params so a refresh doesn't repeat it.
   useEffect(() => {
@@ -321,11 +335,17 @@ export function AlbumUploader({
   const importDisabled = busy;
 
   async function runGoogleImport() {
+    // Claim a fresh generation; this also supersedes any older loop still running (e.g. one the
+    // viewer cancelled a moment ago), so only THIS loop may mutate the shared import state.
+    const gen = (importGenRef.current += 1);
+    const stale = () => importGenRef.current !== gen;
     setError(null);
     setNote(hub.album.googlePhotosImporting);
     setGooglePending(true);
     try {
       const started = await startGooglePhotosImportAction();
+      // Superseded while the session was being minted — abandon quietly.
+      if (stale()) return;
       if ("error" in started) {
         setError(started.error);
         setNote(null);
@@ -366,10 +386,47 @@ export function AlbumUploader({
       const pollTimeoutMs = started.pollTimeoutMs ?? PICKER_POLL_TIMEOUT_MS;
       const deadline = Date.now() + pollTimeoutMs;
       let ready = false;
+      // #94 UX: a >1-family viewer's destination modal opens the MOMENT the picker returns (popup
+      // closed) rather than after the readiness poll resolves — no dead air. `opened` tracks whether
+      // we've already stashed the payload + shown the modal in its "preparing" state.
+      let opened = false;
+      const openPreparingModal = () => {
+        setGooglePending(false);
+        setError(null);
+        setNote(null);
+        setGoogleSessionReady(false);
+        setSelected(seed());
+        setPendingDestination({ kind: "google", sessionId: started.sessionId });
+        opened = true;
+      };
+      // Close the popup and stop — used whenever this loop is abandoned (cancelled/superseded).
+      const closePopup = () => {
+        try {
+          if (!popup.closed) popup.close();
+        } catch {
+          /* ignore cross-origin / already-closed */
+        }
+      };
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, pollIntervalMs));
+        // The viewer cancelled this import (or a newer one superseded it) — stop before any further
+        // poll/state write. A stale loop must never touch the shared modal state.
+        if (stale()) {
+          closePopup();
+          return;
+        }
+        // The user has returned from the picker (Google autocloses on confirm). Show the destination
+        // modal NOW in its preparing state, then keep polling readiness in the background.
+        if (!opened && showPicker && popup.closed) openPreparingModal();
         const polled = await pollGooglePhotosImportAction(started.sessionId);
+        // Re-check after the await: a Cancel can land while the poll was in flight.
+        if (stale()) {
+          closePopup();
+          return;
+        }
         if ("error" in polled) {
+          closePopup();
+          if (opened) setPendingDestination(null);
           setError(polled.error);
           setNote(null);
           return;
@@ -382,34 +439,49 @@ export function AlbumUploader({
         }
       }
       // Best-effort close if /autoclose didn't (e.g. browser treated it as a tab).
-      try {
-        if (!popup.closed) popup.close();
-      } catch {
-        /* ignore cross-origin / already-closed */
-      }
+      closePopup();
+      // Superseded/cancelled during the final readiness settle — drop the session untouched.
+      if (stale()) return;
       if (!ready) {
+        // Timed out: retract the preparing modal (if we opened one) and surface the timeout.
+        if (opened) setPendingDestination(null);
         setError(hub.album.googlePhotosPickerTimedOut);
         setNote(null);
         return;
       }
 
-      // #94 — the picker is ready. A >1-family viewer must now pick a destination (the modal) before
-      // anything imports; stash the ready session and open it. A solo-family viewer proceeds straight
-      // through with no familyIds (the server defaults to the sole family).
+      // #94 — the session is ready. A >1-family viewer picks a destination in the modal before
+      // anything imports; a solo-family viewer proceeds straight through with no familyIds (the
+      // server defaults to the sole family).
       if (showPicker) {
-        setError(null);
-        setNote(null);
-        setGooglePending(false);
-        setSelected(seed());
-        setPendingDestination({ kind: "google", sessionId: started.sessionId });
+        // If the popup never reported closed (e.g. a browser treated it as a tab), the modal was
+        // never opened above — open it now, already ready. Otherwise just flip the open modal from
+        // preparing → ready so its Add enables (without re-seeding a selection the viewer may have
+        // already adjusted while it prepared).
+        if (!opened) {
+          setError(null);
+          setNote(null);
+          setGooglePending(false);
+          setSelected(seed());
+          setPendingDestination({ kind: "google", sessionId: started.sessionId });
+        }
+        setGoogleSessionReady(true);
         return;
       }
       await runGoogleComplete(started.sessionId, []);
     } catch {
+      // A superseded loop must not report its own failure over the newer run.
+      if (stale()) return;
+      // A hard failure (e.g. the readiness poll REJECTS) can strike after the preparing modal is
+      // already open — retract it so it can't spin forever, then surface the error behind it. A
+      // ready google modal has already `return`ed above, so this only ever clears a preparing one.
+      setPendingDestination((prev) => (prev?.kind === "google" ? null : prev));
       setError(hub.album.googlePhotosImportFailed);
       setNote(null);
     } finally {
-      setGooglePending(false);
+      // Only the current generation owns the busy flag — a superseded loop clearing it would wrongly
+      // re-enable the menu behind the newer loop that now owns the flow.
+      if (!stale()) setGooglePending(false);
     }
   }
 
@@ -475,8 +547,14 @@ export function AlbumUploader({
   }
 
   // The destination modal's Cancel (also Escape / backdrop): drop the stashed payload untouched —
-  // nothing has been stored (upload/import fires only on Add), so there is zero cleanup.
+  // nothing has been stored (upload/import fires only on Add), so there is zero cleanup. If a Google
+  // import is still preparing (its readiness loop is running), signal it to abort so a late "ready"
+  // result can't reopen the modal or fire the completion after the viewer backed out.
   function onDestinationCancel() {
+    // A preparing Google import still has a loop polling in the background — bump the generation so
+    // that loop goes inert (it won't reopen the modal or fire the import for the abandoned session).
+    // A ready modal's loop has already exited, so the bump is a harmless no-op there.
+    if (pendingDestination?.kind === "google") importGenRef.current += 1;
     setPendingDestination(null);
   }
 
@@ -550,6 +628,9 @@ export function AlbumUploader({
               ? hub.album.destinationTitle(pendingDestination.files.length)
               : hub.album.destinationTitleGeneric
           }
+          // Google-only: hold the modal in its preparing (spinner, Add-disabled) state until the
+          // picked session is confirmed ready. Device uploads have no async prep, so never preparing.
+          preparing={pendingDestination.kind === "google" && !googleSessionReady}
           onAdd={onDestinationAdd}
           onCancel={onDestinationCancel}
           restoreFocusRef={addMenuTriggerRef}

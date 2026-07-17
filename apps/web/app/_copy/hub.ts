@@ -480,6 +480,11 @@ export const hub = {
     destinationTitle: (count: number) =>
       `Add ${count === 1 ? "this photo" : `these ${count} photos`} to…`,
     destinationTitleGeneric: "Add these photos to…",
+    // #94 — Google import only: the destination modal opens the moment the picker returns, but the
+    // photos may still be settling on Google's side. This status (with a spinner) shows while we
+    // confirm the selection is ready; Add is held disabled until then. The device path is instant
+    // (no async prep) and never shows this.
+    destinationPreparing: "Preparing your photos…",
     // The confirm control; disabled until ≥1 family is chosen (the sole home of the no-fan-out rule).
     destinationAdd: "Add",
     // The dismiss control — discards the pending selection; nothing has been uploaded yet.

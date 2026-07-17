@@ -32,6 +32,7 @@ export function AlbumDestinationModal({
   selected,
   onToggle,
   title,
+  preparing = false,
   onAdd,
   onCancel,
   restoreFocusRef,
@@ -42,6 +43,14 @@ export function AlbumDestinationModal({
   onToggle: (familyId: string) => void;
   /** The count-aware (device) or count-agnostic (Google) title text. */
   title: string;
+  /**
+   * #94 (Google only): the modal opens the moment the picker returns, but the photos may still be
+   * settling on Google's side. While `preparing`, the family chips stay pickable but Add is held
+   * disabled behind a spinner/status — so the viewer can choose the destination during the wait and
+   * Add lights up the instant the session is confirmed ready. The device path never sets this (no
+   * async prep), so its Add gates on the selection alone, exactly as before.
+   */
+  preparing?: boolean;
   /** Fires the pending upload/import against the chosen destination. */
   onAdd: () => void;
   /** Discards the pending payload — nothing has been stored yet. */
@@ -102,7 +111,10 @@ export function AlbumDestinationModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onCancel]);
 
-  const addDisabled = selected.size === 0;
+  // Add is blocked with no family chosen (the no-fan-out rule) AND while a Google import is still
+  // preparing (the session isn't confirmed ready yet). A preparing modal keeps the chips live so the
+  // destination can be picked during the wait.
+  const addDisabled = selected.size === 0 || preparing;
 
   return (
     <div
@@ -169,7 +181,37 @@ export function AlbumDestinationModal({
           ariaLabel={hub.shell.familyDesignatorAria}
         />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 12,
+          }}
+        >
+          {/* Google-only: a quiet spinner + status while the picked photos settle on Google's side.
+              Left-aligned so it doesn't shove the buttons; `role="status"` announces it politely. */}
+          {preparing ? (
+            <div
+              role="status"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginRight: "auto",
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--text-ui-sm)",
+                color: "var(--text-meta)",
+              }}
+            >
+              <span
+                className="kindred-spinner"
+                aria-hidden="true"
+                style={{ width: 16, height: 16, borderWidth: 2 }}
+              />
+              {hub.album.destinationPreparing}
+            </div>
+          ) : null}
           <KindredButton variant="ghost" size="small" onClick={onCancel}>
             {hub.album.destinationCancel}
           </KindredButton>
