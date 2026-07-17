@@ -230,6 +230,10 @@ importers:
         version: 2.1.9(@types/node@22.20.0)(jsdom@29.1.1)(terser@5.48.0)
 
   packages/notifications:
+    dependencies:
+      libphonenumber-js:
+        specifier: ^1.11.0
+        version: 1.13.9
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -3345,6 +3349,9 @@ packages:
 
   just-extend@6.2.0:
     resolution: {integrity: sha512-cYofQu2Xpom82S6qD778jBDpwvvy39s1l/hrYij2u9AMdQcGRpaBu6kY4mVhuno5kJVi1DAz4aiphA2WI1/OAw==}
+
+  libphonenumber-js@1.13.9:
+    resolution: {integrity: sha512-VNS5vWMM7r0P66BYv+TQJATxExEgLxN+34hfHDVhDkUsGAE4cRg0shCNSLTXNKm7nIUscC7AfB51TjxEeF7msQ==}
 
   loader-runner@4.3.2:
     resolution: {integrity: sha512-DFEqQ3ihfS9blba08cLfYf1NRAIEm+dDjic073DRDc3/JspI/8wYmtDsHwd3+4hwvdxSK7PGaElfTmm0awWJ4w==}
@@ -7066,6 +7073,8 @@ snapshots:
   json5@2.2.3: {}
 
   just-extend@6.2.0: {}
+
+  libphonenumber-js@1.13.9: {}
 
   loader-runner@4.3.2: {}
 
