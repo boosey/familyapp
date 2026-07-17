@@ -74,6 +74,27 @@ class FakeMediaRecorder {
   }
 }
 
+// T7 hold-to-record mounts the live-waveform meter (useAudioLevel), which opens a Web Audio
+// AudioContext off the mic stream. jsdom has no Web Audio API, so stub a no-op AudioContext (mirrors
+// the MediaRecorder/getUserMedia stubs) — the meter is decorative and not under test here.
+class FakeAudioContext {
+  createMediaStreamSource() {
+    return { connect() {}, disconnect() {} };
+  }
+  createAnalyser() {
+    return {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteTimeDomainData() {},
+      connect() {},
+      disconnect() {},
+    };
+  }
+  close() {
+    return Promise.resolve();
+  }
+}
+
 beforeEach(() => {
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
@@ -81,6 +102,8 @@ beforeEach(() => {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).MediaRecorder = FakeMediaRecorder;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).AudioContext = FakeAudioContext;
   URL.createObjectURL = vi.fn(() => "blob:local-take");
   URL.revokeObjectURL = vi.fn();
 });
@@ -91,22 +114,26 @@ afterEach(() => {
 });
 
 // The capture screen now has a voice⇄text toggle, so several buttons coexist — target the voice
-// control by its aria-label rather than the (now-ambiguous) bare button role.
-const clickVoiceIdle = () =>
-  fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ }));
-const clickVoiceListening = () =>
-  fireEvent.click(screen.getByRole("button", { name: /Listening/ }));
+// control by its aria-label rather than the (now-ambiguous) bare button role. The mic runs in
+// hold-to-record mode: pointerDown starts, pointerUp stops. The button's accessible name flips from
+// "Hold to speak" → "Release to finish", so callers grab the element on start and stop that same node.
+const startVoice = () => {
+  const btn = screen.getByRole("button", { name: /Hold to speak/ });
+  fireEvent.pointerDown(btn);
+  return btn;
+};
+const stopVoice = (btn: HTMLElement) => fireEvent.pointerUp(btn);
 
 describe("StoryComposer optimistic transition", () => {
   it("shows the review-pending screen the moment recording stops", async () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
-    // Start: click the voice button (idle → listening, async getUserMedia).
-    clickVoiceIdle();
-    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+    // Start: hold the voice button (idle → listening, async getUserMedia).
+    const mic = startVoice();
+    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
 
-    // Stop: click again → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
-    clickVoiceListening();
+    // Stop: release → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
+    stopVoice(mic);
 
     // Review-pending appears while composeStoryAction is still pending.
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
@@ -133,9 +160,9 @@ describe("StoryComposer optimistic transition", () => {
     // EVERY successful capture. The poll path (and getAnswerStatusAction) were removed in slice 11.
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
-    clickVoiceIdle();
-    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-    clickVoiceListening();
+    const mic = startVoice();
+    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    stopVoice(mic);
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
     resolveRecord({
@@ -155,9 +182,9 @@ describe("StoryComposer optimistic transition", () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     // Record then stop → review-pending while the action is in flight.
-    clickVoiceIdle();
-    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-    clickVoiceListening();
+    const mic = startVoice();
+    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    stopVoice(mic);
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
     // Render fails: the error lands on the pending screen (no refresh, no remount). The `{ error }`
@@ -171,7 +198,7 @@ describe("StoryComposer optimistic transition", () => {
 
     // "Record again" clears the take (revoking its URL) and returns to the record screen.
     fireEvent.click(screen.getByRole("button", { name: /Record again/ }));
-    expect(screen.getByRole("button", { name: /Tap to speak/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Hold to speak/ })).toBeTruthy();
     expect(screen.queryByText(/Could not save your recording/)).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:local-take");
   });
