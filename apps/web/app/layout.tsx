@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
+import { Newsreader, Public_Sans, DM_Mono, Baloo_2, Nunito } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
@@ -32,6 +32,23 @@ const dmMono = DM_Mono({
   weight: ["400", "500"],
   display: "swap",
   variable: "--font-dm-mono",
+});
+
+// Playful skin display + read fonts (Baloo 2 headings, Nunito body). Exposed as CSS variables the
+// `_skins/playful.css` token block reads through `--font-baloo` / `--font-nunito`.
+const baloo = Baloo_2({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-baloo",
+});
+
+const nunito = Nunito({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-nunito",
 });
 
 export const metadata: Metadata = {
@@ -73,7 +90,7 @@ export default async function RootLayout({
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   return (
-    <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="heirloom" data-skin="playful" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
             flash/reflow. Generated from the preference registry — the single source of truth shared

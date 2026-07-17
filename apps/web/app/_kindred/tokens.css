@@ -85,6 +85,10 @@
   --font-story: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
   --font-ui: var(--font-public-sans, 'Public Sans'), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Font ROLE tokens (skin contract). Heirloom's display + read are serif (Newsreader); a skin
+   * that redefines these re-fonts the app with zero component edits. */
+  --font-display: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
+  --font-read: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
 
   --text-label: 0.875rem;
   --text-ui-sm: 1.125rem;
