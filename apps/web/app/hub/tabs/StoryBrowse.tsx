@@ -14,13 +14,13 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { hub, common } from "@/app/_copy";
+import { hub } from "@/app/_copy";
 import { TellStoryCard } from "./TellStoryCard";
+import { StoryCard } from "./StoryCard";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import {
   groupByDecade,
   highlightMatch,
-  initials,
   matchesQuery,
   timelineBase,
 } from "./story-browse-helpers";
@@ -229,11 +229,20 @@ function Feed({
   // how many columns fit. Column view is today's single stacked column of wide horizontal cards. The
   // Tell-a-story CTA is the first cell/card in either layout.
   if (view === "masonry") {
+    // The first cover-bearing item leads the masonry feed as a wider hero (`feature` variant).
+    const featureIndex = items.findIndex((it) => Boolean(it.coverPhotoId));
     return (
       <div style={{ columnWidth: 320, columnGap: 18 }} data-view="masonry">
         <TellStoryCard masonry />
-        {items.map((item) => (
-          <FeedCard key={item.id} item={item} href={href(item)} masonry />
+        {items.map((item, i) => (
+          <StoryCard
+            key={item.id}
+            item={item}
+            href={href(item)}
+            index={i}
+            masonry
+            variant={i === featureIndex ? "feature" : "feed"}
+          />
         ))}
       </div>
     );
@@ -242,90 +251,10 @@ function Feed({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }} data-view="column">
       <TellStoryCard />
-      {items.map((item) => (
-        <FeedCard key={item.id} item={item} href={href(item)} />
+      {items.map((item, i) => (
+        <StoryCard key={item.id} item={item} href={href(item)} index={i} />
       ))}
     </div>
-  );
-}
-
-function FeedCard({ item, href, masonry = false }: { item: StoryItem; href: string; masonry?: boolean }) {
-  // The non-cover accompaniment photos: everything in the ordered photo set except the cover (which
-  // already shows big on the left). Filtering by id — not by position — is robust even if the cover
-  // isn't the first element, and yields [] for a text-only or cover-only story.
-  const nonCoverPhotoIds = item.photoIds.filter((id) => id !== item.coverPhotoId);
-  return (
-    <Link href={href} style={masonry ? feedCardMasonry : feedCardStyle}>
-      {item.isNew ? (
-        <span style={newBadge}>
-          <span style={newDot} aria-hidden="true" />
-          {common.storyCard.badgeNew}
-        </span>
-      ) : null}
-
-      {/* Cover accompaniment (ADR-0009): the story's cover photo, served by the audited byte route.
-          A story with no attached image renders NOTHING here — a text-only card is first-class, so
-          there is no placeholder. In masonry the cover sits on top full-width (natural aspect, so
-          card heights vary); in column it's a fixed square on the left. */}
-      {item.coverPhotoId ? (
-        // eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth
-        // route (/api/album-photo/[photoId]), not a static asset; next/image would proxy/optimize it.
-        <img
-          src={`/api/album-photo/${item.coverPhotoId}`}
-          alt=""
-          style={masonry ? coverImageMasonry : coverImage}
-        />
-      ) : null}
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={initialsCircle} aria-hidden="true">
-            {initials(item.personName)}
-          </span>
-          <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-label)", color: "var(--text-meta)" }}>
-            {item.personName}
-          </span>
-          <span style={metaDot} aria-hidden="true" />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-label)", color: "var(--support)" }}>
-            {item.eventLabel ?? hub.browse.undated}
-          </span>
-        </div>
-
-        <p style={cardTitle}>{item.title}</p>
-        {item.summary ? <p style={cardSummary}>{item.summary}</p> : null}
-
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          {item.tags.map((tag) => (
-            <span key={tag} style={contentTagPill}>
-              {tag}
-            </span>
-          ))}
-          {item.families.map((f) => (
-            <span key={f.id} style={familyTagPill}>
-              {f.shortName || f.name}
-            </span>
-          ))}
-        </div>
-
-        {/* Non-cover accompaniment photos — a small thumbnail row below the tags (ADR-0009). The cover
-            already shows big on the left; these are the story's other attached photos, each served by
-            the audited /api/album-photo/[photoId] byte route. Nothing renders for a cover-only story. */}
-        {nonCoverPhotoIds.length > 0 ? (
-          <div style={thumbRow}>
-            {nonCoverPhotoIds.map((pid) => (
-              // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
-              <img
-                key={pid}
-                src={`/api/album-photo/${pid}`}
-                alt=""
-                data-testid="card-photo-thumb"
-                style={thumbImage}
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </Link>
   );
 }
 
@@ -556,163 +485,6 @@ function modePill(on: boolean): CSSProperties {
     boxShadow: on ? "var(--shadow-sm)" : "none",
   };
 }
-
-const feedCardStyle: CSSProperties = {
-  display: "flex",
-  gap: 22,
-  width: "100%",
-  textAlign: "left",
-  textDecoration: "none",
-  cursor: "pointer",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  padding: 22,
-  boxShadow: "var(--shadow-card)",
-  position: "relative",
-};
-
-const feedCardMasonry: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-  width: "100%",
-  textAlign: "left",
-  textDecoration: "none",
-  cursor: "pointer",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  padding: 18,
-  boxShadow: "var(--shadow-card)",
-  position: "relative",
-  // Keep a card whole across columns, and space cards down the column.
-  breakInside: "avoid",
-  marginBottom: 18,
-};
-
-const coverImageMasonry: CSSProperties = {
-  width: "100%",
-  height: "auto",
-  maxHeight: 320,
-  objectFit: "cover",
-  borderRadius: "var(--radius-md)",
-  background: "var(--surface-sunken)",
-  display: "block",
-};
-
-const newBadge: CSSProperties = {
-  position: "absolute",
-  top: 16,
-  right: 20,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-label)",
-  fontWeight: 500,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "var(--accent-strong)",
-};
-
-const newDot: CSSProperties = {
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  background: "var(--accent)",
-};
-
-const coverImage: CSSProperties = {
-  flex: "0 0 auto",
-  width: 120,
-  height: 120,
-  objectFit: "cover",
-  borderRadius: "var(--radius-md)",
-  background: "var(--surface-sunken)",
-  display: "block",
-};
-
-const thumbRow: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 6,
-  marginTop: 12,
-};
-
-const thumbImage: CSSProperties = {
-  width: 46,
-  height: 46,
-  flex: "0 0 auto",
-  objectFit: "cover",
-  borderRadius: "var(--radius-sm)",
-  background: "var(--surface-sunken)",
-  display: "block",
-};
-
-const initialsCircle: CSSProperties = {
-  width: 30,
-  height: 30,
-  borderRadius: "50%",
-  background: "var(--accent-soft)",
-  color: "var(--accent-strong)",
-  fontFamily: "var(--font-story)",
-  fontSize: 14,
-  fontWeight: 600,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flex: "0 0 auto",
-};
-
-const metaDot: CSSProperties = {
-  width: 4,
-  height: 4,
-  borderRadius: "50%",
-  background: "var(--border-strong)",
-  flex: "0 0 auto",
-};
-
-const cardTitle: CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontWeight: 500,
-  fontSize: "var(--text-story-lg)",
-  lineHeight: "var(--leading-snug)",
-  color: "var(--text-body)",
-  margin: "10px 0 6px",
-};
-
-const cardSummary: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  lineHeight: "var(--leading-body)",
-  color: "var(--text-muted)",
-  margin: "0 0 14px",
-  maxWidth: "60ch",
-};
-
-const contentTagPill: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-label)",
-  fontWeight: 500,
-  color: "var(--text-muted)",
-  background: "transparent",
-  border: "var(--border-width) solid var(--border-strong)",
-  borderRadius: "var(--radius-pill)",
-  padding: "5px 13px",
-};
-
-const familyTagPill: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-label)",
-  fontWeight: 500,
-  letterSpacing: "0.05em",
-  textTransform: "uppercase",
-  color: "var(--accent-strong)",
-  background: "var(--accent-soft)",
-  borderRadius: "var(--radius-pill)",
-  padding: "5px 13px",
-};
 
 const emptyCard: CSSProperties = {
   display: "flex",

@@ -1,0 +1,266 @@
+/*
+ * StoryCard — base card (token-driven, skin-neutral) + Playful structural signatures. The base
+ * reproduces the former inline FeedCard 1:1 (values already token-driven); the signatures are
+ * skin-scoped via :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+.card {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  color: inherit;
+  position: relative;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* Column view: today's wide horizontal card — cover square on the left. */
+.column {
+  gap: 22px;
+  padding: 22px;
+}
+
+/* Masonry view: stacked vertical card, cover on top full-width; kept whole across columns. */
+.masonry {
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  break-inside: avoid;
+  margin-bottom: 18px;
+}
+
+.photoWrap {
+  position: relative;
+  display: block;
+}
+.column .photoWrap {
+  flex: 0 0 auto;
+}
+
+.cover {
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  display: block;
+}
+.column .cover {
+  width: 120px;
+  height: 120px;
+}
+.masonry .cover {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.initialsCircle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: var(--font-story);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.personName {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+}
+
+.metaDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex: 0 0 auto;
+}
+
+.eventLabel {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--support);
+}
+
+.title {
+  font-family: var(--font-story);
+  font-weight: 500;
+  font-size: var(--text-story-lg);
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  margin: 10px 0 6px;
+}
+
+.summary {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  line-height: var(--leading-body);
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  max-width: 60ch;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sticker content tags (Playful backing tokens; skin-neutral falls back to sunken surfaces). The
+   i % 4 rotation cycles the four palettes. Family tags below keep the accent-soft look — not
+   stickerized. */
+.sticker {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+}
+.sticker0 { background: var(--sticker-coral-bg); color: var(--sticker-coral-ink); }
+.sticker1 { background: var(--sticker-sky-bg);   color: var(--sticker-sky-ink); }
+.sticker2 { background: var(--sticker-leaf-bg);  color: var(--sticker-leaf-ink); }
+.sticker3 { background: var(--sticker-gold-bg);  color: var(--sticker-gold-ink); }
+
+.familyTag {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+}
+
+.thumbRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.thumb {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  display: block;
+}
+
+.newBadge {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.newDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The card is a link — keep a visible focus ring. */
+.card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* Feature hero: the first cover-bearing masonry item, given a bigger cover + title. */
+.feature .cover {
+  max-height: 460px;
+}
+.feature .title {
+  font-size: var(--text-display);
+}
+
+/* ---- Playful structural signatures (photo-forward, tilt, tape, sticker rotation, highlighter) ----
+   All hook the hashed classes via :global and are suppressed under reduce-motion / solemn below. */
+
+/* Tilt: odd/even lean via the inline `--tilt` custom property (math stays in TS per the convention). */
+:global(:root[data-skin="playful"]) .card {
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .card:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Tape strip — decorative bright coral fill, no text ever sits on it. */
+:global(:root[data-skin="playful"]) .photoWrap::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+/* Highlighter wash behind the title (text stays --text-body; AA-guarded in Task 1). */
+:global(:root[data-skin="playful"]) .title {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 78%;
+  background-size: 100% 42%;
+}
+
+/* Suppress ALL structural signatures under reduce-motion OR solemn. */
+:global(:root[data-reduce-motion="on"]) .card,
+:global([data-tone="solemn"]) .card {
+  transform: none;
+}
+:global(:root[data-reduce-motion="on"]) .card:hover,
+:global([data-tone="solemn"]) .card:hover {
+  transform: none;
+  box-shadow: var(--shadow-card);
+}
+:global(:root[data-reduce-motion="on"]) .photoWrap::before,
+:global([data-tone="solemn"]) .photoWrap::before {
+  display: none;
+}
+:global(:root[data-reduce-motion="on"]) .title,
+:global([data-tone="solemn"]) .title {
+  background-image: none;
+}

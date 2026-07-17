@@ -8,8 +8,6 @@ export { KindredChip } from "./KindredChip";
 export type { KindredChipProps, ChipKind } from "./KindredChip";
 export { KindredListenBar } from "./KindredListenBar";
 export type { KindredListenBarProps } from "./KindredListenBar";
-export { KindredStoryCard } from "./KindredStoryCard";
-export type { KindredStoryCardProps } from "./KindredStoryCard";
 export { KindredAccountMenu } from "./KindredAccountMenu";
 export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
 // NOTE: AccountMenuMount is intentionally NOT re-exported here. It is a server-only
