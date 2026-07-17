@@ -40,6 +40,7 @@ import { FamilyTab } from "./tabs/FamilyTab";
 import { InviteTab } from "./tabs/InviteTab";
 import { RequestsTab } from "./tabs/RequestsTab";
 import { loadFamilyTabData } from "@/lib/family-tab-data";
+import styles from "./page.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -241,50 +242,14 @@ export default async function HubPage({
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        background: "var(--surface-page)",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 900,
-          margin: "0 auto",
-          padding: "0 clamp(16px, 4vw, 32px)",
-        }}
-      >
+    <main className={styles.main}>
+      <div className={styles.container}>
         {/* Header */}
-        <header
-          style={{
-            padding: "28px 0 0",
-            borderBottom: "var(--border-width) solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
+        <header className={styles.header}>
           {/* Title row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <h1
-                style={{
-                  fontFamily: "var(--font-story)",
-                  fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
-                  fontWeight: 400,
-                  color: "var(--text-body)",
-                  margin: 0,
-                  letterSpacing: "var(--tracking-tight)",
-                }}
-              >
+          <div className={styles.titleRow}>
+            <div className={styles.titleGroup}>
+              <h1 className={styles.familyName}>
                 {familyName}
               </h1>
             </div>
@@ -293,13 +258,13 @@ export default async function HubPage({
           </div>
 
           {/* Tabs row */}
-          <div style={{ marginBottom: -1 /* overlap the border */ }}>
+          <div className={styles.tabsRow}>
             <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
           </div>
         </header>
 
         {/* Tab content */}
-        <section style={{ padding: "28px 0" }}>
+        <section className={styles.content}>
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab
@@ -362,23 +327,8 @@ export default async function HubPage({
                 scopeId={familyTabFamilyId ?? undefined}
               />
             ) : (
-              <div
-                style={{
-                  background: "var(--surface-card)",
-                  border: "var(--border-width) solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: 30,
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: "var(--font-story)",
-                    fontSize: "var(--text-story)",
-                    color: "var(--text-muted)",
-                    margin: 0,
-                  }}
-                >
+              <div className={styles.emptyCard}>
+                <p className={styles.emptyText}>
                   {hub.tree.noFamily}
                 </p>
               </div>
@@ -395,23 +345,8 @@ export default async function HubPage({
                 inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
               />
             ) : (
-              <div
-                style={{
-                  background: "var(--surface-card)",
-                  border: "var(--border-width) solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: 30,
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: "var(--font-story)",
-                    fontSize: "var(--text-story)",
-                    color: "var(--text-muted)",
-                    margin: 0,
-                  }}
-                >
+              <div className={styles.emptyCard}>
+                <p className={styles.emptyText}>
                   {hub.shell.pendingEmpty}
                 </p>
               </div>

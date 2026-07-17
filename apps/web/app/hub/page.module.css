@@ -1,0 +1,65 @@
+.main {
+  min-height: 100dvh;
+  background: var(--surface-page);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 32px);
+}
+
+.header {
+  padding: 28px 0 0;
+  border-bottom: var(--border-width) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.familyName {
+  font-family: var(--font-display); /* was --font-story; Playful splits display from read */
+  font-size: clamp(1.75rem, 4vw, var(--text-display));
+  font-weight: 400;
+  color: var(--text-body);
+  margin: 0;
+  letter-spacing: var(--tracking-tight);
+}
+
+.tabsRow {
+  margin-bottom: -1px; /* overlap the border */
+}
+
+.content {
+  padding: 28px 0;
+}
+
+.emptyCard {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  text-align: center;
+}
+
+.emptyText {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-muted);
+  margin: 0;
+}
