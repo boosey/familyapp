@@ -39,15 +39,18 @@ Migrate these surfaces from inline `style={{}}` to **CSS Modules** (Phase 1 left
 - **Subagent build/review:** a builder writes code test-first; then a **fresh COLD reviewer** each round; iterate to clean. (Two rounds caught real AA bugs in Phase 1 — keep this rigor.)
 - **GIT RULES for every subagent (put in every prompt):** commit only on the current branch; author `boosey <boosey.boudreaux@gmail.com>` (Vercel git-author gate); NEVER `checkout`/`switch`/`reset`/`merge`/`rebase`/`push`/`branch -D`, never touch `master`, never open a PR. Main agent owns branch/push/PR.
 - **Preflight before pushing** (lint is a no-op here): `pnpm -r typecheck && pnpm -r test && pnpm --filter @chronicle/web build && pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle`.
-- **Open a PR for human review; do NOT merge; do NOT deploy.** Preview deploys are auto-created by Vercel on push (safe here — no DB migration; but if Phase 2 ever adds a migration, note that Vercel PREVIEW `db:migrate` runs against PROD Neon).
+- **Push to `feat/playful-skin-system`** — this updates PR #101 and redeploys its Vercel preview (how the user watches progress). Do **NOT** merge; do **NOT** deploy to prod. Safe here — no DB migration; but if Phase 2 ever adds one, note that Vercel PREVIEW `db:migrate` runs against PROD Neon, so keep migrations idempotent.
+
+## Branch base — DECIDED (do not re-ask)
+Phase 2 **continues on the existing `feat/playful-skin-system` branch** (worktree `.claude/worktrees/playful-skin`). Do **NOT** merge PR #101 first, and do **NOT** branch off master. The user wants the Vercel **preview build to keep running on this branch line** so they can watch the re-skin fill in surface by surface — every push to the branch redeploys `https://familyapp-git-feat-playful-skin-system-booseys-projects.vercel.app`. PR #101 simply grows to include Phase 2. (Splitting into separate PRs can happen later if the user asks.) When it eventually merges, master may have advanced — rebase/merge master in and re-run guards then, not now.
 
 ## Decisions to confirm at the START of Phase 2
-1. **Branch base:** if PR #101 has merged, branch Phase 2 off `master`; if not, **stack** on `feat/playful-skin-system`. Ask the user.
-2. **Coral hue final call:** keep AA-safe `#CC4A22` / go brighter with dark-ink text / rely on decorative bright `#EF7A54` in Phase 2. (User was shown the live preview.)
-3. **highlight-to-treasure data model:** does it touch the Like/consent model (a richer reaction) or stay a pure client enhancement? Resolve before building it.
-4. **Which novel interaction first** (hold-to-remember is lower-risk — pure client over the existing capture path).
+1. **Coral hue final call:** keep AA-safe `#CC4A22` / go brighter with dark-ink text / rely on decorative bright `#EF7A54` in Phase 2. (User was shown the live preview.)
+2. **highlight-to-treasure data model:** does it touch the Like/consent model (a richer reaction) or stay a pure client enhancement? Resolve before building it.
+3. **Which novel interaction first** (hold-to-remember is lower-risk — pure client over the existing capture path).
 
 ## First moves for the new session
-1. Read the spec + plan (above). Confirm #101 merge status + branch base with the user.
-2. Invoke **superpowers:writing-plans** to turn the Phase 2 outline into a detailed, TDD, per-surface plan (consider one PR per surface, or a small stack).
-3. Set up the worktree, `pnpm install`, then subagent-driven build with cold reviews, per the workflow above.
+1. Read the spec + plan (above). **Branch base is already decided** — continue on `feat/playful-skin-system`. Re-enter the existing worktree `.claude/worktrees/playful-skin` (`pnpm install` there if `node_modules` is missing). Do not merge #101; do not branch off master.
+2. Confirm the three open decisions above (coral hue, highlight-to-treasure data model, first interaction) with the user.
+3. Invoke **superpowers:writing-plans** to turn the Phase 2 outline into a detailed, TDD, per-surface plan (build surface by surface so each push gives the user a preview to watch).
+4. Subagent-driven build with cold reviews, per the workflow above. Push each surface to the branch as it goes green so the preview updates.
