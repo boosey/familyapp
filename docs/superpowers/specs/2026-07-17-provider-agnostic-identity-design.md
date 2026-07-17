@@ -85,7 +85,7 @@ Race safety preserved: `attach`/`create` rely on the unique constraints; on a co
 
 ### Verified-flag source
 
-Clerk's server user object exposes per-email `verification.status` (`EmailAddress.verification.status === 'verified'`). **To confirm against current Clerk docs during implementation** — this flag is the linchpin of the security gate. If a sign-in method could ever yield an email with a non-`verified` status, step 2 must skip it.
+Clerk's Backend `User.emailAddresses[]` each carry `.emailAddress` and `.verification` (`null | Verification`). **Confirmed against current Clerk Backend docs (2026-07-17):** `Verification.status ∈ {unverified, verified, transferable, failed, expired} | null`, and `verified` is the sole value meaning confirmed. The gate is `verification?.status === "verified"` — **fail-closed**: every other value (incl. `transferable`, `null`, missing) is treated as unverified and cannot adopt an existing account. Sources: Clerk Backend types `backend-email-address`, `backend-verification`.
 
 ## Rollout
 
