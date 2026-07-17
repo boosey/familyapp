@@ -44,8 +44,10 @@ export const REQUIRED = [
     name: "ALBUM_UPLOAD_TICKET_SECRET",
     why: "HMAC secret for direct-to-storage upload tickets (#20); upload-ticket.ts throws in prod without it.",
   },
-  { name: "ANTHROPIC_API_KEY", why: "LLM (story rendering, interviewer)." },
-  { name: "GROQ_API_KEY", why: "Speech-to-text transcription (Phase 1 voice capture)." },
+  {
+    name: "GROQ_API_KEY",
+    why: "Transcription AND the Phase-1 LLM (story rendering, interviewer) both run on Groq; without it prod silently falls back to scripted mocks.",
+  },
   { name: "INNGEST_EVENT_KEY", why: "Durable job queue — the pipeline (transcribe → render) runs on it." },
   { name: "INNGEST_SIGNING_KEY", why: "Durable job queue signature verification." },
 ];
@@ -55,6 +57,10 @@ export const REQUIRED = [
  * heads-up in the build log but must NOT fail the deploy.
  */
 export const RECOMMENDED = [
+  {
+    name: "ANTHROPIC_API_KEY",
+    why: "Optional LLM fallback; prod runs LLM on GROQ_API_KEY (runtime.ts) and only uses Anthropic when Groq is unset.",
+  },
   {
     name: "GOOGLE_PHOTOS_OAUTH_STATE_SECRET",
     why: "Google Photos import is feature-gated and has a dev fallback; set a dedicated secret in prod.",
