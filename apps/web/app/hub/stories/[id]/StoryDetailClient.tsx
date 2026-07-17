@@ -99,6 +99,8 @@ export function StoryDetailClient({
   // double increment). Stable identity via useCallback([storyId]) so the hook effect doesn't churn.
   const handleTreasure = useCallback(() => {
     startTransition(() => {
+      // Deliberately fire-and-forget / silent-on-error: revalidatePath reconciles the count and the
+      // tap <LikeButton> remains the surface that reports Like errors. Do NOT add error UI here.
       void setStoryLikeAction(storyId, true);
     });
   }, [storyId]);

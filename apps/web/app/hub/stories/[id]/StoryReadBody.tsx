@@ -17,7 +17,7 @@
  * prose fires `onTreasure(selectedText)` (wired by the parent to the existing Like path — a SET) and
  * flashes a transient highlighter wash over the whole prose blob.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTreasureHighlight } from "./useTreasureHighlight";
 import styles from "./StoryReadBody.module.css";
 
@@ -80,19 +80,33 @@ export function StoryReadBody({
     };
   }, []);
 
-  const handleTreasure = (text: string) => {
-    onTreasure?.(text);
-    setFlash(true);
-    if (flashTimer.current !== null) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlash(false), FLASH_MS);
-  };
+  // Stable across renders (deps: only `onTreasure`; `setFlash` + the timer ref are stable) so the hook
+  // doesn't re-bind its listeners on every render — the whole point of the NOOP/useCallback stability.
+  const handleTreasure = useCallback(
+    (text: string) => {
+      onTreasure?.(text);
+      setFlash(true);
+      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setFlash(false), FLASH_MS);
+    },
+    [onTreasure],
+  );
 
-  useTreasureHighlight(proseRef, enabled, enabled ? handleTreasure : NOOP);
+  // Gate the gesture off on the transcript tab (and the empty/noProse branch): the ref sits on the
+  // stable wrapper that contains BOTH bodies, so without a tab check a drag over transcript text would
+  // silently fire a Like with no visible flash (the flash class only lands on the prose <p>). The hook
+  // re-binds cleanly on tab change because this arg is in its effect dep array.
+  const gestureOn = enabled && active !== "transcript" && hasProse;
+  useTreasureHighlight(proseRef, gestureOn, gestureOn ? handleTreasure : NOOP);
 
   const proseClassName = flash ? `${styles.prose} ${styles.treasure}` : styles.prose;
 
   return (
-    <div ref={proseRef} aria-label={enabled ? treasureLabels?.aria : undefined}>
+    <div
+      ref={proseRef}
+      role={enabled ? "region" : undefined}
+      aria-label={enabled ? treasureLabels?.aria : undefined}
+    >
       {tabs.length >= 2 && (
         <div role="tablist" aria-label={`${labels.story} / ${labels.transcript}`} className={styles.tablist}>
           {tabs.map((tab) => {
