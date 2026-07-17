@@ -6,6 +6,7 @@ import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
 import { AccountMenuMount } from "./_kindred/AccountMenuMount";
 import { ALL_PREFERENCES, buildPrePaintScript } from "./_kindred/preferences/registry";
+import { DEFAULT_SKIN_ID } from "./_kindred/skin-constants";
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
@@ -89,8 +90,13 @@ export default async function RootLayout({
     : body;
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
+  //
+  // `data-skin` carries a STATIC SSR default (unlike `data-theme`, which is pre-paint-script-only):
+  // a skin swaps fonts + shape, so a pre-script flash of the wrong skin is far more jarring than a
+  // palette flash. It is sourced from DEFAULT_SKIN_ID (not a hardcoded literal) so it can never drift
+  // out of lockstep with the registry default and silently reintroduce a first-paint flash.
   return (
-    <html lang="en" data-theme="heirloom" data-skin="playful" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="heirloom" data-skin={DEFAULT_SKIN_ID} className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
             flash/reflow. Generated from the preference registry — the single source of truth shared

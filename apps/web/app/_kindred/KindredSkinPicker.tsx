@@ -6,6 +6,10 @@ import { PREFERENCES } from "./preferences/registry";
 import { readPreference, setPreference, applyPreference } from "./preferences/client";
 
 const pref = PREFERENCES.skin;
+// Preview-only swatch colours. These MIRROR each skin's palette (playful → _skins/playful.css,
+// heirloom → tokens.css) and are a deliberate small duplication: the swatches must paint the OTHER
+// skin's colours while the current skin's tokens are active, so they can't be var(--token). If a
+// skin's page/accent changes, update the matching entry here. (Follow-up: derive at build time.)
 const SWATCH: Record<SkinId, { page: string; accent: string }> = {
   playful:  { page: "#FBF1DE", accent: "#EF7A54" },
   heirloom: { page: "#F4ECE0", accent: "#BD5B3D" },
@@ -36,6 +40,7 @@ export function KindredSkinPicker() {
 }
 function cell(on: boolean): CSSProperties { return {
   display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"12px 16px", minWidth:100,
+  minHeight:"var(--touch-min)",
   cursor:"pointer", borderRadius:"var(--radius-md)",
   border: on ? "2px solid var(--accent)" : "var(--border-width) solid var(--border-strong)",
   background: on ? "var(--accent-soft)" : "var(--surface-card)",

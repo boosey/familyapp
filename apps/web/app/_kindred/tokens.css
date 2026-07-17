@@ -80,7 +80,17 @@
   --shadow-lift: 0 8px 28px rgba(80, 40, 30, 0.18);
 }
 
-:root {
+/* ── The skin model (data-skin) ──────────────────────────────────────────────
+ * A SKIN is a full design language (fonts + shape + motion + palette). Two ship:
+ *   • "heirloom" — the ORIGINAL language, and the base default. It deliberately rides this base
+ *     `:root` rather than a separate `_skins/heirloom.css`: its PALETTE is the `:root, [data-theme…]`
+ *     blocks above (so the archive/hearth palettes remain selectable as `data-theme` sub-variants —
+ *     a dedicated `[data-skin="heirloom"]` palette block would out-specify and break them), and its
+ *     LANGUAGE tokens are the block below. The `:root[data-skin="heirloom"]` selector is listed
+ *     explicitly on that block so `data-skin="heirloom"` is a REAL, greppable selector, not inert.
+ *   • "playful" — a full skin in `_skins/playful.css` that bakes in its own palette + language.
+ * The per-skin token contract both must satisfy is `_skins/skin-contract.ts` (guard test). */
+:root, :root[data-skin="heirloom"] {
   /* fonts — next/font injects the variables; these add the fallbacks */
   --font-story: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
   --font-ui: var(--font-public-sans, 'Public Sans'), system-ui, -apple-system, sans-serif;

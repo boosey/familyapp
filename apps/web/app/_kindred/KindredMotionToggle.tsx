@@ -18,7 +18,8 @@ export function KindredMotionToggle() {
       {REDUCE_MOTION_VALUES.map((v) => {
         const on = v === value;
         return (
-          <button key={v} type="button" onClick={() => choose(v)} aria-pressed={on} style={cell(on)}>
+          <button key={v} type="button" onClick={() => choose(v)} aria-pressed={on}
+            aria-label={`${label(v)} — ${hub.settings.motionAria}`} style={cell(on)}>
             {label(v)}
           </button>
         );

@@ -4,7 +4,7 @@
 :root[data-skin="playful"] {
   /* fonts */
   --font-display: var(--font-baloo), "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
-  --font-story:   var(--font-nunito), "Nunito", system-ui, sans-serif; /* legacy alias (prose) */
+  --font-story:   var(--font-nunito), "Nunito", system-ui, sans-serif; /* prose/reading face — NOT legacy: still read directly by ~51 call sites; kept in sync with --font-read until Phase-2 re-points them */
   --font-read:    var(--font-nunito), "Nunito", system-ui, sans-serif;
   --font-ui:      var(--font-nunito), "Nunito", system-ui, sans-serif;
   --font-mono:    var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace; /* same as base (DM Mono) */
@@ -15,7 +15,11 @@
   --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
 
   /* accent (coral) + support */
-  --accent: #EF7A54; --accent-strong: #D85F39; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
+  --accent: #EF7A54; --accent-strong: #D85F39; --accent-soft: #FFE3D3;
+  /* Text/icons ON the accent are DARK INK, not white: white on #EF7A54 is 2.77:1 (fails WCAG AA,
+   * even the 3.0 large-text bar); ink #2C221D on #EF7A54 is 5.6:1 (AA). This keeps the approved
+   * bright-coral hue and only changes button/pill text colour. Guarded by _skins/contrast.test.ts. */
+  --accent-on: #2C221D;
   --accent-soft-0: rgba(255,227,211,0);
   --support: #3F9E93; --support-soft: #D9ECDC;
 
