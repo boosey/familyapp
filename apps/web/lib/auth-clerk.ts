@@ -76,7 +76,9 @@ export async function resolveAuthProviderUserId(
       ),
     )
     .where(and(eq(persons.id, personId), eq(accounts.active, true)))
-    .orderBy(desc(accountIdentities.createdAt))
+    // Newest identity wins (the current-instance id after a heal); `id` is a deterministic tiebreaker
+    // so two identities sharing a `created_at` (e.g. same-transaction inserts) still pick stably.
+    .orderBy(desc(accountIdentities.createdAt), desc(accountIdentities.id))
     .limit(1);
   return row?.providerUserId ?? null;
 }
