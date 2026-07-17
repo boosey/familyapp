@@ -1,5 +1,7 @@
 /* Kindred — global base. Tokens (colors, typography, spacing, motion) live in tokens.css. */
 @import url('./_kindred/tokens.css');
+/* Skin token blocks layer on top (data-skin selectors, specificity 0,2,0 beats base :root). */
+@import url('./_skins/playful.css');
 
 * { box-sizing: border-box; }
 

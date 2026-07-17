@@ -1,0 +1,37 @@
+/* Playful & Warm skin — token overrides. Selector specificity (0,2,0) intentionally beats the
+ * base :root defaults so a component reading var(--token) re-skins with zero code changes.
+ * NOTE: every token named in _skins/skin-contract.ts MUST be defined here (contract test). */
+:root[data-skin="playful"] {
+  /* fonts */
+  --font-display: var(--font-baloo), "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --font-story:   var(--font-nunito), "Nunito", system-ui, sans-serif; /* legacy alias (prose) */
+  --font-read:    var(--font-nunito), "Nunito", system-ui, sans-serif;
+  --font-ui:      var(--font-nunito), "Nunito", system-ui, sans-serif;
+  /* --font-mono kept from base (DM Mono) */
+
+  /* surfaces / ink */
+  --paper-100: #FFFDF8; --paper-200: #FBF1DE; --paper-300: #FFF6E6;
+  --surface-page: #FBF1DE; --surface-card: #FFFDF8; --surface-sunken: #FFF6E6;
+  --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
+
+  /* accent (coral) + support */
+  --accent: #EF7A54; --accent-strong: #D85F39; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
+  --accent-soft-0: rgba(255,227,211,0);
+  --support: #3F9E93; --support-soft: #D9ECDC;
+
+  /* lines / focus */
+  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #EF7A54;
+
+  /* shape — rounder, chunkier */
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 26px; --radius-pill: 999px;
+  --border-width: 2px;
+
+  /* shadows — soft shelf + lift */
+  --shadow-sm: 0 2px 0 #F0DCC0;
+  --shadow-card: 0 6px 0 #F0DCC0;
+  --shadow-lift: 0 14px 30px rgba(180,120,70,0.24);
+
+  /* motion — gentle bounce (structural motion added in Phase 2, all guarded) */
+  --ease-quiet: cubic-bezier(0.34, 1.32, 0.4, 1);
+  --dur-fade: 0.16s; --dur-settle: 0.30s; --dur-pulse: 2.4s;
+}
