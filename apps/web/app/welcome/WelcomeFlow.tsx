@@ -161,7 +161,7 @@ export function WelcomeFlow({
   /* ── Layout primitives ─────────────────────────────────────────────────── */
   const page: CSSProperties = {
     minHeight: "100dvh",
-    background: "var(--atmosphere)",
+    background: "var(--surface-page)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -171,12 +171,11 @@ export function WelcomeFlow({
   const card: CSSProperties = {
     maxWidth: 560,
     width: "100%",
-    background: "color-mix(in srgb, var(--surface-card) 94%, transparent)",
-    border: "var(--border-width) solid var(--border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-lift)",
+    background: "var(--surface-card)",
+    border: "var(--border-width) solid var(--border-strong)",
+    borderRadius: "var(--radius-md)",
+    boxShadow: "none",
     padding: "clamp(28px, 5vw, 48px)",
-    backdropFilter: "blur(10px)",
   };
   const serifHeadline: CSSProperties = {
     fontFamily: "var(--font-story)",

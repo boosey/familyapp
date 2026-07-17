@@ -75,20 +75,20 @@ export function KindredAccountMenu({
     width: 48,
     height: 48,
     borderRadius: "var(--radius-md)",
-    background: "linear-gradient(145deg, var(--accent), var(--support))",
-    color: "#fff",
+    background: "var(--accent)",
+    color: "var(--accent-on)",
     fontFamily: "var(--font-story)",
     fontSize: "1.15rem",
     fontWeight: 600,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "2px solid color-mix(in srgb, var(--surface-card) 70%, transparent)",
-    boxShadow: "var(--shadow-sm)",
+    border: "var(--border-width) solid var(--accent-strong)",
+    boxShadow: "none",
     cursor: "pointer",
     flexShrink: 0,
     outline: "none",
-    transition: "box-shadow var(--dur-fade) var(--ease-quiet), transform var(--dur-settle) var(--ease-spring)",
+    transition: "box-shadow var(--dur-fade) var(--ease-quiet)",
   };
 
   const dropdownStyle: CSSProperties = {
@@ -96,13 +96,12 @@ export function KindredAccountMenu({
     top: 58,
     right: 0,
     width: 260,
-    background: "color-mix(in srgb, var(--surface-card) 96%, transparent)",
-    border: "1.5px solid var(--border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-lift)",
+    background: "var(--surface-card)",
+    border: "var(--border-width) solid var(--border-strong)",
+    borderRadius: "var(--radius-md)",
+    boxShadow: "none",
     padding: 8,
     zIndex: 20,
-    backdropFilter: "blur(12px)",
   };
 
   const headerStyle: CSSProperties = {

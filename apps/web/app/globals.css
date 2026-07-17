@@ -6,7 +6,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--atmosphere, var(--surface-page));
+  background: var(--surface-page);
   color: var(--text-body);
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
@@ -17,7 +17,7 @@ html, body {
 h1, h2, h3 {
   font-family: var(--font-story);
   color: var(--text-body);
-  font-weight: 550;
+  font-weight: 500;
   letter-spacing: var(--tracking-tight);
 }
 
@@ -35,19 +35,18 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-label); }
   display: flex;
   justify-content: center;
   padding: clamp(24px, 4vw, 64px) clamp(16px, 4vw, 32px);
-  background: var(--atmosphere);
+  background: var(--surface-page);
 }
 .kin-frame {
   width: 100%;
   max-width: 880px;
-  background: color-mix(in srgb, var(--surface-card) 94%, transparent);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(8px);
 }
 
 /* Elder full-bleed conversation surface — fills the viewport, no card chrome */
@@ -88,7 +87,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-label); }
   font-size: var(--text-ui-sm);
   color: var(--text-body);
   background: var(--surface-card);
-  border: 1.5px solid var(--border-strong);
+  border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 14px 16px;
   min-height: var(--touch-default);
@@ -97,7 +96,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-label); }
 .kin-field:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 textarea.kin-field { resize: vertical; min-height: 160px; }
 select.kin-field { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-meta) 50%), linear-gradient(135deg, var(--text-meta) 50%, transparent 50%); background-position: calc(100% - 22px) 50%, calc(100% - 14px) 50%; background-size: 8px 8px; background-repeat: no-repeat; padding-right: 40px; }
@@ -121,20 +120,20 @@ select.kin-field { appearance: none; background-image: linear-gradient(45deg, tr
   color: var(--text-meta);
   background: var(--surface-sunken);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
 }
 
 /* ---------------------------------------------------------------------------
- * Landing — full-bleed hero composition (brand → headline → line → CTAs).
+ * Landing — full-bleed photo + solid ink band. No ken-burns, no fade cascade.
  * ------------------------------------------------------------------------- */
 .spark-landing {
   position: relative;
   min-height: 100dvh;
   display: grid;
-  place-items: end stretch;
+  grid-template-rows: 1fr auto;
   overflow: hidden;
-  color: #F7FCFA;
+  color: #FFFFFF;
 }
 .spark-landing__media {
   position: absolute;
@@ -146,108 +145,110 @@ select.kin-field { appearance: none; background-image: linear-gradient(45deg, tr
   height: 100%;
   object-fit: cover;
   object-position: center 35%;
-  animation: spark-ken 12s var(--ease-quiet) both;
 }
 .spark-landing__veil {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(11, 36, 32, 0.28) 0%, rgba(11, 36, 32, 0.18) 35%, rgba(11, 36, 32, 0.72) 72%, rgba(11, 36, 32, 0.88) 100%),
-    radial-gradient(ellipse 70% 50% at 80% 20%, rgba(13, 148, 136, 0.25), transparent 60%);
+    linear-gradient(180deg, transparent 0%, transparent 42%, rgba(18, 24, 22, 0.55) 68%, rgba(18, 24, 22, 0.92) 100%);
 }
 .spark-landing__content {
   position: relative;
   z-index: 1;
-  width: min(720px, 100%);
-  padding: clamp(28px, 7vw, 72px) clamp(20px, 6vw, 64px) clamp(28px, 6vw, 56px);
+  width: 100%;
+  max-width: 720px;
+  padding: clamp(28px, 6vw, 56px) clamp(20px, 5vw, 48px);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
+  background: #121816;
+  border-top: 4px solid var(--accent, #0E5C52);
 }
 .spark-landing__brand {
   margin: 0;
   font-family: var(--font-story);
-  font-size: clamp(2.6rem, 8vw, 4.6rem);
-  font-weight: 650;
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
+  font-weight: 600;
   letter-spacing: var(--tracking-display);
   line-height: 1.05;
-  color: #F7FCFA;
-  text-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+  color: #FFFFFF;
 }
 .spark-landing__headline {
   margin: 0;
-  max-width: 18ch;
+  max-width: 20ch;
   font-family: var(--font-story);
-  font-size: clamp(1.35rem, 3.4vw, 1.85rem);
-  font-weight: 500;
+  font-size: clamp(1.25rem, 3vw, 1.65rem);
+  font-weight: 400;
   font-style: italic;
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-snug);
-  color: color-mix(in srgb, #F7FCFA 92%, #CCFBF1);
+  color: #E8EFEC;
 }
 .spark-landing__tagline {
   margin: 0;
-  max-width: 36ch;
+  max-width: 38ch;
   font-family: var(--font-ui);
   font-size: var(--text-ui);
   line-height: var(--leading-body);
-  color: color-mix(in srgb, #F7FCFA 78%, transparent);
+  color: #C5D0CB;
 }
 .spark-landing__ctas {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .spark-landing__ctas a:hover {
   text-decoration: none;
 }
-/* Secondary CTA reads on the dark hero veil */
 .spark-landing .spark-landing__ctas a:nth-child(2) button {
-  border-color: color-mix(in srgb, #F7FCFA 55%, transparent) !important;
-  color: #F7FCFA !important;
-  background: color-mix(in srgb, #0B2420 35%, transparent) !important;
+  border-color: #8A9A94 !important;
+  color: #FFFFFF !important;
+  background: transparent !important;
 }
 .spark-landing .spark-landing__ctas a:nth-child(2) button:hover {
-  background: color-mix(in srgb, #0B2420 55%, transparent) !important;
-  border-color: #F7FCFA !important;
+  background: #1C2421 !important;
+  border-color: #FFFFFF !important;
 }
 .spark-landing__note {
-  margin: 8px 0 0;
-  max-width: 40ch;
+  margin: 6px 0 0;
+  max-width: 42ch;
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: var(--tracking-mono);
-  color: color-mix(in srgb, #F7FCFA 62%, transparent);
+  color: #8A9A94;
 }
 .spark-landing__footer {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 .spark-landing__privacy {
   font-family: var(--font-ui);
   font-size: var(--text-label);
-  color: color-mix(in srgb, #F7FCFA 70%, transparent);
+  color: #8A9A94;
   text-decoration: none;
 }
 .spark-landing__privacy:hover {
-  color: #F7FCFA;
+  color: #FFFFFF;
   text-decoration: underline;
 }
 
 @media (min-width: 900px) {
   .spark-landing {
-    place-items: stretch;
+    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-rows: 1fr;
+  }
+  .spark-landing__veil {
+    background: linear-gradient(90deg, transparent 45%, rgba(18, 24, 22, 0.35) 70%, rgba(18, 24, 22, 0.95) 100%);
   }
   .spark-landing__content {
+    justify-self: end;
+    align-self: stretch;
+    max-width: none;
     justify-content: flex-end;
-    padding-bottom: clamp(48px, 8vh, 96px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spark-landing__photo {
-    animation: none;
+    border-top: none;
+    border-left: 4px solid var(--accent, #0E5C52);
+    padding: clamp(40px, 8vh, 80px) clamp(28px, 4vw, 56px);
   }
 }
 

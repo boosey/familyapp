@@ -3,7 +3,6 @@ import { common } from "@/app/_copy";
 
 export interface KindredStoryCardProps
   extends Omit<HTMLAttributes<HTMLElement>, "title" | "onClick"> {
-  /* New hi-fi fields */
   title?: string;
   year?: string;
   place?: string;
@@ -11,15 +10,11 @@ export interface KindredStoryCardProps
   excerpt?: string;
   imageSrc?: string;
   pinned?: boolean;
-  /** Short recorded-date stamp shown in the card's top-right corner, e.g. "JUN 2026". */
   recordedLabel?: string;
-  /** Renders a "NEW" pill at the start of the meta row (story unseen by the viewer). */
   isNew?: boolean;
-  /* Legacy back-compat fields (hub page still passes these) */
   era?: string;
   byline?: string;
   meta?: string[];
-  /* Behaviour */
   href?: string;
   onClick?: () => void;
   showArrow?: boolean;
@@ -27,8 +22,7 @@ export interface KindredStoryCardProps
 }
 
 /**
- * A single story card — media-forward composition with soft lift motion.
- * Photo leads when present; text-only stories keep a vivid accent panel.
+ * Album-leaf story row — hard border, photo lead, no float/shadow chrome.
  */
 export function KindredStoryCard({
   title,
@@ -91,10 +85,10 @@ export function KindredStoryCard({
         gap: "var(--space-5)",
         alignItems: "stretch",
         background: "var(--surface-card)",
-        border: "var(--border-width, 1.5px) solid var(--border)",
-        borderRadius: "var(--radius-xl)",
-        padding: "var(--space-4)",
-        boxShadow: "var(--shadow-card)",
+        border: "var(--border-width, 2px) solid var(--border-strong)",
+        borderRadius: "var(--radius-md)",
+        padding: 0,
+        boxShadow: "none",
         cursor: interactive ? "pointer" : "default",
         color: "inherit",
         textDecoration: "none",
@@ -103,57 +97,42 @@ export function KindredStoryCard({
         ...style,
       }}
     >
-      {/* Media column */}
       {imageSrc ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={imageSrc}
           alt=""
           style={{
-            width: 140,
-            minHeight: 140,
+            width: 132,
+            minHeight: 132,
             alignSelf: "stretch",
             flexShrink: 0,
-            borderRadius: "var(--radius-lg)",
+            borderRadius: 0,
             objectFit: "cover",
+            borderRight: "var(--border-width) solid var(--border-strong)",
           }}
         />
       ) : (
         <div
           aria-hidden="true"
           style={{
-            width: 140,
-            minHeight: 140,
+            width: 132,
+            minHeight: 132,
             flexShrink: 0,
-            borderRadius: "var(--radius-lg)",
-            background:
-              "linear-gradient(145deg, var(--accent-soft) 0%, color-mix(in srgb, var(--support-soft) 80%, var(--accent-soft)) 55%, var(--surface-sunken) 100%)",
+            background: "var(--accent-soft)",
+            borderRight: "var(--border-width) solid var(--border-strong)",
             display: "flex",
             alignItems: "flex-end",
-            justifyContent: "flex-start",
-            padding: 14,
-            position: "relative",
-            overflow: "hidden",
+            padding: 12,
           }}
         >
           <span
             style={{
-              position: "absolute",
-              inset: "-20% auto auto 40%",
-              width: 90,
-              height: 90,
-              borderRadius: "50%",
-              background: "color-mix(in srgb, var(--accent) 18%, transparent)",
-            }}
-          />
-          <span
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "1.05rem",
-              fontWeight: 600,
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-label)",
               color: "var(--accent-strong)",
-              letterSpacing: "var(--tracking-tight)",
-              position: "relative",
+              letterSpacing: "var(--tracking-mono)",
+              textTransform: "uppercase",
             }}
           >
             {common.storyCard.photo}
@@ -161,7 +140,6 @@ export function KindredStoryCard({
         </div>
       )}
 
-      {/* Content column */}
       <div
         style={{
           flex: 1,
@@ -169,7 +147,7 @@ export function KindredStoryCard({
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "4px 4px 4px 0",
+          padding: "16px 8px 16px 0",
         }}
       >
         {metaLabel || recordedLabel || isNew ? (
@@ -224,7 +202,7 @@ export function KindredStoryCard({
               fontFamily: "var(--font-story)",
               fontSize: "var(--text-story-lg)",
               lineHeight: "var(--leading-snug)",
-              fontWeight: 550,
+              fontWeight: 500,
               color: "var(--text-body)",
               marginBottom: "var(--space-2)",
               letterSpacing: "var(--tracking-tight)",
@@ -258,23 +236,18 @@ export function KindredStoryCard({
 
       {interactive && showArrow ? (
         <span
+          aria-hidden="true"
           style={{
-            width: 48,
-            height: 48,
             alignSelf: "center",
-            borderRadius: "var(--radius-md)",
-            border: "1.5px solid var(--border-strong)",
-            background: "var(--accent-soft)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--accent-strong)",
-            fontSize: 22,
+            padding: "0 18px",
+            color: "var(--accent)",
+            fontSize: 28,
+            fontWeight: 400,
+            lineHeight: 1,
             flexShrink: 0,
-            fontWeight: 600,
           }}
         >
-          {"›"}
+          →
         </span>
       ) : null}
 
@@ -283,8 +256,8 @@ export function KindredStoryCard({
           aria-label={common.storyCard.pinned}
           style={{
             position: "absolute",
-            top: "var(--space-3)",
-            right: interactive && showArrow ? 68 : "var(--space-4)",
+            top: 10,
+            right: interactive && showArrow ? 48 : 12,
             fontSize: 14,
             lineHeight: 1,
           }}
@@ -301,10 +274,10 @@ function NewPill() {
     <span
       style={{
         flex: "0 0 auto",
-        padding: "3px 9px",
+        padding: "2px 7px",
         borderRadius: "var(--radius-sm)",
-        background: "linear-gradient(120deg, var(--accent), var(--support))",
-        color: "#fff",
+        background: "var(--accent)",
+        color: "var(--accent-on)",
         fontFamily: "var(--font-mono)",
         fontSize: "var(--text-label)",
         letterSpacing: "var(--tracking-mono)",

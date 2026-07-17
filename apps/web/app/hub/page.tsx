@@ -241,22 +241,20 @@ export default async function HubPage({
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
-    <main className="spark-atmosphere" style={{ minHeight: "100dvh" }}>
+    <main style={{ minHeight: "100dvh", background: "var(--surface-page)" }}>
       <div
         style={{
-          maxWidth: 1040,
+          maxWidth: 960,
           margin: "0 auto",
-          padding: "0 clamp(16px, 4vw, 36px)",
+          padding: "0 clamp(16px, 4vw, 32px)",
         }}
       >
-        {/* Header — family name as hero signal, tabs as a floating rail */}
         <header
-          className="spark-rise"
           style={{
-            padding: "32px 0 0",
+            padding: "28px 0 0",
             display: "flex",
             flexDirection: "column",
-            gap: 20,
+            gap: 18,
           }}
         >
           <div
@@ -269,13 +267,13 @@ export default async function HubPage({
               paddingRight: 56 /* clear fixed account menu */,
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: "var(--text-label)",
                   letterSpacing: "var(--tracking-mono)",
-                  color: "var(--accent)",
+                  color: "var(--text-meta)",
                   textTransform: "uppercase",
                 }}
               >
@@ -284,7 +282,7 @@ export default async function HubPage({
               <h1
                 style={{
                   fontFamily: "var(--font-story)",
-                  fontSize: "clamp(2rem, 5vw, 3.25rem)",
+                  fontSize: "clamp(2rem, 5vw, 3rem)",
                   fontWeight: 500,
                   color: "var(--text-body)",
                   margin: 0,
@@ -295,26 +293,12 @@ export default async function HubPage({
                 {familyName}
               </h1>
             </div>
-            {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root
-                layout, so the hub no longer inlines its own copy in the header. */}
           </div>
 
-          <div
-            style={{
-              background: "color-mix(in srgb, var(--surface-card) 82%, transparent)",
-              border: "var(--border-width) solid color-mix(in srgb, var(--border) 80%, transparent)",
-              borderRadius: "var(--radius-xl)",
-              padding: "6px",
-              boxShadow: "var(--shadow-sm)",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
-          </div>
+          <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
         </header>
 
-        {/* Tab content */}
-        <section className="spark-rise spark-rise-delay-1" style={{ padding: "28px 0 48px" }}>
+        <section style={{ padding: "28px 0 48px" }}>
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab

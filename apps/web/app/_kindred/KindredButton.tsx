@@ -67,7 +67,7 @@ export function KindredButton({
     letterSpacing: "-0.01em",
     cursor: "pointer",
     transition:
-      "background var(--dur-fade) var(--ease-quiet), border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet), transform var(--dur-settle) var(--ease-spring), box-shadow var(--dur-settle) var(--ease-spring)",
+      "background var(--dur-fade) var(--ease-quiet), border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet)",
     ...SIZE_STYLES[size],
   };
 

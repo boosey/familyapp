@@ -15,18 +15,19 @@ export interface HubTabsProps {
   onChange: (key: string) => void;
 }
 
+/** Editorial tab strip — text + underline, no glass rail / gradient pill. */
 export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const navStyle: CSSProperties = {
     display: "flex",
     alignItems: "stretch",
-    gap: 2,
+    gap: 0,
     fontFamily: "var(--font-ui)",
     overflowX: "auto",
     scrollbarWidth: "thin",
     WebkitOverflowScrolling: "touch",
-    paddingBottom: 2,
+    borderBottom: "var(--border-width) solid var(--border)",
   };
 
   function getTabStyle(key: string): CSSProperties {
@@ -38,25 +39,23 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
       display: "inline-flex",
       alignItems: "center",
       gap: 8,
-      padding: "12px 18px",
-      borderRadius: "var(--radius-md)",
+      padding: "14px 16px",
+      borderRadius: 0,
       border: "none",
-      background: isActive
-        ? "var(--surface-card)"
-        : isHovered
-          ? "color-mix(in srgb, var(--surface-card) 70%, transparent)"
-          : "transparent",
-      color: isActive ? "var(--text-body)" : "var(--text-meta)",
+      borderBottom: isActive
+        ? "3px solid var(--accent)"
+        : "3px solid transparent",
+      marginBottom: -2,
+      background: "transparent",
+      color: isActive ? "var(--text-body)" : isHovered ? "var(--text-body)" : "var(--text-meta)",
       fontFamily: "var(--font-ui)",
       fontSize: "var(--text-ui-sm)",
-      fontWeight: isActive ? 650 : 500,
+      fontWeight: isActive ? 600 : 500,
       cursor: "pointer",
-      transition:
-        "background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet), box-shadow var(--dur-settle) var(--ease-spring)",
+      transition: "color var(--dur-fade) var(--ease-quiet), border-color var(--dur-fade) var(--ease-quiet)",
       outline: "none",
       minHeight: "var(--touch-min)",
       whiteSpace: "nowrap",
-      boxShadow: isActive ? "var(--shadow-sm)" : "none",
       flex: "0 0 auto",
     };
   }
@@ -69,23 +68,12 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
     height: 20,
     padding: "0 6px",
     borderRadius: "var(--radius-sm)",
-    background: "var(--support)",
-    color: "#fff",
+    background: "var(--accent)",
+    color: "var(--accent-on)",
     fontFamily: "var(--font-mono)",
     fontSize: "0.7rem",
     fontWeight: 700,
     lineHeight: 1,
-    letterSpacing: "0.02em",
-  };
-
-  const indicatorStyle: CSSProperties = {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 4,
-    height: 3,
-    borderRadius: 999,
-    background: "linear-gradient(90deg, var(--accent), var(--support))",
   };
 
   return (
@@ -102,13 +90,10 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
           onMouseLeave={() => setHovered(null)}
           onFocus={(e) => {
             (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              "0 0 0 4px var(--accent-soft)";
+              "0 0 0 3px var(--accent-soft)";
           }}
           onBlur={(e) => {
-            const isActive = tab.key === active;
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = isActive
-              ? "var(--shadow-sm)"
-              : "none";
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
           }}
         >
           {tab.label}
@@ -117,7 +102,6 @@ export function HubTabs({ tabs, active, onChange }: HubTabsProps) {
               {tab.badge}
             </span>
           )}
-          {tab.key === active ? <span aria-hidden="true" style={indicatorStyle} /> : null}
         </button>
       ))}
     </nav>

@@ -696,9 +696,9 @@ export const hub = {
       grove: "Grove",
     },
     paletteLabels: {
-      spark: "Spark palette — seafoam mist and teal energy",
-      harbor: "Harbor palette — sky mist and cobalt",
-      grove: "Grove palette — leaf light and chartreuse",
+      spark: "Spark palette — cool leaf page and deep teal",
+      harbor: "Harbor palette — cool gray and cobalt",
+      grove: "Grove palette — pale sage and olive",
     },
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.

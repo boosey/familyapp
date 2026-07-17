@@ -9,9 +9,9 @@ import { readPreference, setPreference, applyPreference } from "./preferences/cl
 const pref = PREFERENCES.theme;
 
 const SWATCH: Record<ThemeId, { page: string; accent: string }> = {
-  spark: { page: "#E8F4F0", accent: "#0D9488" },
-  harbor: { page: "#E4ECF5", accent: "#2563EB" },
-  grove: { page: "#E7F2DF", accent: "#65A30D" },
+  spark: { page: "#F0F3F1", accent: "#0E5C52" },
+  harbor: { page: "#EEF1F5", accent: "#1E4E8C" },
+  grove: { page: "#F1F3EC", accent: "#3F6212" },
 };
 
 export function KindredThemePicker() {

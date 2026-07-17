@@ -1,7 +1,5 @@
 /**
- * Shared chrome for the auth screens (sign-up / sign-in). Presentational only — no
- * state, no client boundary — so server components can compose it directly with their server-action
- * forms inside.
+ * Shared chrome for the auth screens (sign-up / sign-in). Flat panel, hard border.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -22,26 +20,24 @@ export function AuthScreen({
 }) {
   return (
     <main
-      className="spark-atmosphere"
       style={{
         minHeight: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        background: "var(--surface-page)",
         padding: "clamp(24px, 5vw, 48px) 16px",
       }}
     >
       <div
-        className="spark-rise"
         style={{
           maxWidth: 460,
           width: "100%",
-          padding: "clamp(28px, 5vw, 48px)",
-          background: "color-mix(in srgb, var(--surface-card) 92%, transparent)",
-          border: "var(--border-width) solid var(--border)",
-          borderRadius: "var(--radius-xl)",
-          boxShadow: "var(--shadow-lift)",
-          backdropFilter: "blur(12px)",
+          padding: "clamp(28px, 5vw, 44px)",
+          background: "var(--surface-card)",
+          border: "var(--border-width) solid var(--border-strong)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "none",
         }}
       >
         <Link
@@ -51,7 +47,7 @@ export function AuthScreen({
             fontSize: "1.15rem",
             fontWeight: 600,
             letterSpacing: "var(--tracking-tight)",
-            color: "var(--accent)",
+            color: "var(--text-body)",
             textDecoration: "none",
           }}
         >
@@ -61,7 +57,7 @@ export function AuthScreen({
           style={{
             fontFamily: "var(--font-story)",
             fontSize: "var(--text-display)",
-            fontWeight: 550,
+            fontWeight: 500,
             color: "var(--text-body)",
             margin: "16px 0 8px",
             lineHeight: "var(--leading-tight)",
