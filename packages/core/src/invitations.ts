@@ -32,6 +32,12 @@ export interface CreateInvitationInput {
   inviteeName?: string;
   inviteeEmail?: string;
   inviteePhone?: string;
+  /**
+   * Channels delivery was requested on at enqueue time (e.g. ["email","sms"]). Kept as `string[]`
+   * here — core stays vendor-agnostic and does not import `@chronicle/notifications`' branded
+   * `DeliveryChannel` type; the web layer narrows/produces it.
+   */
+  deliveryChannels?: string[];
   relationshipLabel?: string;
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
@@ -111,6 +117,7 @@ export async function createInvitation(
         inviteeName: input.inviteeName ?? null,
         inviteeEmail: input.inviteeEmail ?? null,
         inviteePhone: input.inviteePhone ?? null,
+        deliveryChannels: input.deliveryChannels ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         role: input.role ?? "member",
         status: "pending",

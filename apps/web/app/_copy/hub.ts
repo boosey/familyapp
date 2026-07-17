@@ -166,6 +166,12 @@ export const hub = {
     emailLabel: "Their email",
     emailLabelOptional: "(optional)",
     emailPlaceholder: "rosa@example.com",
+    // "Their phone" and "(optional)" are split so the span styling is preserved in JSX.
+    phoneLabel: "Their phone",
+    phoneLabelOptional: "(optional)",
+    phonePlaceholder: "+1 555 123 0000",
+    phoneInvalid: "That phone number doesn't look right — check the format and try again.",
+    smsConsentLabel: "OK to text them the invite link",
     // "Relationship" and "(optional)" are split so the span styling is preserved in JSX.
     relationshipLabel: "Relationship",
     relationshipLabelOptional: "(optional)",
