@@ -2,12 +2,30 @@
 
 import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
 import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
+import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
+import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
 import { hub } from "@/app/_copy";
 import type { CSSProperties } from "react";
 
 export function SettingsPanel() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+      <section aria-labelledby="settings-skin">
+        <h2 id="settings-skin" style={sectionTitle}>
+          {hub.settings.skinHeading}
+        </h2>
+        <p style={sectionIntro}>{hub.settings.skinIntro}</p>
+        <KindredSkinPicker />
+      </section>
+
+      <section aria-labelledby="settings-motion">
+        <h2 id="settings-motion" style={sectionTitle}>
+          {hub.settings.motionHeading}
+        </h2>
+        <p style={sectionIntro}>{hub.settings.motionIntro}</p>
+        <KindredMotionToggle />
+      </section>
+
       <section aria-labelledby="settings-text-size">
         <h2 id="settings-text-size" style={sectionTitle}>
           {hub.settings.textSizeHeading}

@@ -700,6 +700,22 @@ export const hub = {
       archive: "Archive palette — cool gray and teal",
       hearth: "Hearth palette — warm rose and coral",
     },
+    skinHeading: "Look and feel",
+    skinIntro: "Choose how the app looks and feels on this device.",
+    skinAria: "Look and feel",
+    skinShort: {
+      playful: "Playful",
+      heirloom: "Heirloom",
+    },
+    skinLabels: {
+      playful: "Playful look — warm and rounded, coral accents",
+      heirloom: "Heirloom look — classic serif, quieter chrome",
+    },
+    motionHeading: "Reduce motion",
+    motionIntro: "Turn off gentle animations and movement across the app.",
+    motionAria: "Reduce motion",
+    motionOnLabel: "On",
+    motionOffLabel: "Off",
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.
   kin: {

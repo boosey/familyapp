@@ -19,5 +19,7 @@ export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountM
 // directly from "./AccountMenuMount" in the (server-only) root layout instead.
 export { KindredFontScale } from "./KindredFontScale";
 export { KindredThemePicker } from "./KindredThemePicker";
+export { KindredSkinPicker } from "./KindredSkinPicker";
+export { KindredMotionToggle } from "./KindredMotionToggle";
 export { KindredProseEditor } from "./KindredProseEditor";
 export type { KindredProseEditorProps } from "./KindredProseEditor";
