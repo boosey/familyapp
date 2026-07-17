@@ -88,13 +88,20 @@ export async function createAccountWithPerson(
       providerUserId: input.authProviderUserId,
     });
 
+    // Only a VERIFIED email is persisted as a contact — it is the account's portable match key.
+    // An unverified email must NOT be written at all: UNIQUE(kind, value) is unconditional, so an
+    // unverified row would (a) let an unverified login squat an email globally and (b) collide with a
+    // real owner's verified row, breaking the "an unverified contact never adopts an existing account"
+    // boundary (spec §4). A brand-new login whose email is unverified therefore gets an identity but no
+    // contact, and falls through to its own separate account. Promoting a later-verified email to a
+    // contact is a separate reconcile concern (deferred).
     const normEmail = input.email.trim().toLowerCase();
-    if (normEmail.length > 0) {
+    if (input.emailVerified && normEmail.length > 0) {
       await tx.insert(accountContacts).values({
         accountId: account!.id,
         kind: "email",
         value: normEmail,
-        verifiedAt: input.emailVerified ? new Date() : null,
+        verifiedAt: new Date(),
       });
     }
 

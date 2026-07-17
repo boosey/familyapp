@@ -43,6 +43,33 @@ describe("identity/contact resolution", () => {
     expect(await resolveAccountIdByVerifiedEmail(db, "unv@x.com")).toBeNull();
   });
 
+  it("a second account with an already-VERIFIED email but UNVERIFIED itself is created separately (no contact collision)", async () => {
+    // Regression: createAccountWithPerson used to write an unverified contact row (verified_at NULL).
+    // Because UNIQUE(kind, value) is unconditional, that row collided with the first account's verified
+    // contact and made the second sign-up THROW — which would crash a distinct login instead of giving
+    // it its own account, and let an unverified login squat/attack an existing verified email.
+    const { personId: ownerPersonId } = await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "owner_id",
+      email: "shared@x.com",
+      emailVerified: true,
+      displayName: "Real Owner",
+    });
+    // A different login, same email, but NOT verified → must not collide, must be its own account.
+    const { personId: otherPersonId } = await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "other_id",
+      email: "shared@x.com",
+      emailVerified: false,
+      displayName: "Someone Else",
+    });
+    expect(otherPersonId).not.toBe(ownerPersonId);
+    // The verified email still resolves ONLY to the real owner — the unverified login never adopted it.
+    const acctId = await resolveAccountIdByVerifiedEmail(db, "shared@x.com");
+    expect(acctId).not.toBeNull();
+    expect((await resolveAccountByIdentity(db, "clerk", "owner_id"))?.personId).toBe(ownerPersonId);
+  });
+
   it("attachIdentity adds a second vendor id to the same account (idempotent)", async () => {
     const { personId } = await createAccountWithPerson(db, {
       provider: "clerk",
