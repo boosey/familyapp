@@ -44,6 +44,9 @@ importers:
       '@chronicle/llm-groq':
         specifier: workspace:*
         version: link:../../packages/llm-groq
+      '@chronicle/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@chronicle/photos-google':
         specifier: workspace:*
         version: link:../../packages/photos-google

@@ -7,7 +7,7 @@
  * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
@@ -120,6 +120,64 @@ export async function createInvitation(
 
     return { invitationId: row!.id, token, inviteePersonId: provisional!.id };
   });
+}
+
+export interface InvitationDeliveryContext {
+  inviterName: string;
+  familyName: string;
+  inviteeName: string | null;
+  inviteeEmail: string | null;
+  inviteePhone: string | null;
+}
+
+/** Safe projection for composing a delivery message: inviter + family names and the invitee contacts. */
+export async function getInvitationDeliveryContext(
+  db: Database,
+  invitationId: string,
+): Promise<InvitationDeliveryContext | null> {
+  const [row] = await db
+    .select({
+      inviterName: persons.displayName,
+      familyName: families.name,
+      inviteeName: invitations.inviteeName,
+      inviteeEmail: invitations.inviteeEmail,
+      inviteePhone: invitations.inviteePhone,
+    })
+    .from(invitations)
+    .innerJoin(families, eq(families.id, invitations.familyId))
+    .innerJoin(persons, eq(persons.id, invitations.inviterPersonId))
+    .where(eq(invitations.id, invitationId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    inviterName: row.inviterName ?? "Someone",
+    familyName: row.familyName,
+    inviteeName: row.inviteeName,
+    inviteeEmail: row.inviteeEmail,
+    inviteePhone: row.inviteePhone,
+  };
+}
+
+/**
+ * Record a delivery attempt outcome on the invitation. Increments deliveryAttempts; sets deliveredAt
+ * when at least one channel succeeded and/or deliveryError with the failure summary. Idempotent-safe
+ * to call once per worker run.
+ */
+export async function recordInviteDelivery(
+  db: Database,
+  invitationId: string,
+  outcome: { deliveredAt?: Date; deliveryError?: string },
+): Promise<void> {
+  // Atomic increment (mirrors the `processingAttempt` idiom in story-repository) — no read-then-write
+  // race. An UPDATE on a missing invitation is a harmless no-op, so no existence check is needed.
+  await db
+    .update(invitations)
+    .set({
+      deliveryAttempts: sql`${invitations.deliveryAttempts} + 1`,
+      ...(outcome.deliveredAt !== undefined ? { deliveredAt: outcome.deliveredAt } : {}),
+      ...(outcome.deliveryError !== undefined ? { deliveryError: outcome.deliveryError } : {}),
+    })
+    .where(eq(invitations.id, invitationId));
 }
 
 export interface InvitationView {

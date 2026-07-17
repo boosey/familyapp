@@ -172,9 +172,12 @@ export {
   createInvitation,
   getInvitationByToken,
   acceptInvitation,
+  getInvitationDeliveryContext,
+  recordInviteDelivery,
   type CreateInvitationInput,
   type CreateInvitationResult,
   type InvitationView,
+  type InvitationDeliveryContext,
 } from "./invitations";
 export {
   reapUnacceptedInvitees,
