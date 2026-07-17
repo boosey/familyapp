@@ -6,7 +6,7 @@
  */
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
-import { common, auth } from "@/app/_copy";
+import { common, auth, legal } from "@/app/_copy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +80,20 @@ export default function Home() {
       >
         {auth.landing.narratorNote}
       </p>
+
+      <footer style={{ marginTop: 32 }}>
+        <Link
+          href="/privacy"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-label)",
+            color: "var(--text-muted)",
+            textDecoration: "none",
+          }}
+        >
+          {legal.privacy.title}
+        </Link>
+      </footer>
     </main>
   );
 }
