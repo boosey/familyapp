@@ -5,6 +5,8 @@
  */
 export {
   accounts,
+  accountIdentities,
+  accountContacts,
   asks,
   askFamilies,
   askSubjectPhotos,

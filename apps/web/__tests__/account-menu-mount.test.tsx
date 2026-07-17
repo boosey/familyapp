@@ -62,6 +62,8 @@ describe("AccountMenuMount self-gating", () => {
     // no way out before. createAccountWithPerson deliberately does not onboard or join a family.
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "acct-menu-mount",
+      provider: "clerk",
+      emailVerified: true,
       email: "acct-menu-mount@example.test",
       displayName: "Ada Lovelace",
     });
@@ -98,6 +100,8 @@ describe("AccountMenuMount steward edit entries", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "steward-none",
+      provider: "clerk",
+      emailVerified: true,
       email: "steward-none@example.test",
       displayName: "No Steward",
     });
@@ -111,6 +115,8 @@ describe("AccountMenuMount steward edit entries", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "steward-one",
+      provider: "clerk",
+      emailVerified: true,
       email: "steward-one@example.test",
       displayName: "Solo Steward",
     });
@@ -132,6 +138,8 @@ describe("AccountMenuMount steward edit entries", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "steward-two",
+      provider: "clerk",
+      emailVerified: true,
       email: "steward-two@example.test",
       displayName: "Dual Steward",
     });
