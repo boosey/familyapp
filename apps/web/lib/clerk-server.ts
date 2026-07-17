@@ -149,8 +149,11 @@ export async function provisionOrResolveClerkUser(
 
   try {
     const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk",
       authProviderUserId: userId,
       email,
+      // TODO(task3): compute emailVerified from Clerk verification status
+      emailVerified: false,
       displayName,
     });
     return personId;

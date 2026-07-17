@@ -113,6 +113,8 @@ describe("provisionOrResolveClerkUser — JIT provisioning (ADR-0005)", () => {
         const { createAccountWithPerson } = await import("@chronicle/core");
         const created = await createAccountWithPerson(db, {
           authProviderUserId: id,
+          provider: "clerk",
+          emailVerified: true,
           email: "winner@example.com",
           displayName: "Winner Landing",
         });

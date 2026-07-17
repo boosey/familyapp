@@ -80,6 +80,8 @@ describe("applyClerkWebhookEvent — user.updated", () => {
   it("reconciles a rename + email onto the Account and Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:w1",
+      provider: "clerk",
+      emailVerified: true,
       email: "old@example.com",
       displayName: "Sofia Esposito",
     });
@@ -104,6 +106,8 @@ describe("applyClerkWebhookEvent — user.updated", () => {
   it("does not overwrite a good name when the provider sends no first/last name", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:w2",
+      provider: "clerk",
+      emailVerified: true,
       email: "keep@example.com",
       displayName: "Keep Me",
     });
@@ -134,6 +138,8 @@ describe("applyClerkWebhookEvent — user.deleted", () => {
   it("soft-deletes the account and preserves the Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:d1",
+      provider: "clerk",
+      emailVerified: true,
       email: "d@example.com",
       displayName: "Dana",
     });

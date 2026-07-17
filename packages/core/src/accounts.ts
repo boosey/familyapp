@@ -7,16 +7,25 @@
  * back-pointer, so the link cannot diverge). Sign-up therefore creates BOTH rows atomically and
  * sets that one FK — anything less leaves a half-formed identity.
  */
-import { eq } from "drizzle-orm";
-import { accounts, persons } from "@chronicle/db/schema";
+import { and, eq, isNotNull } from "drizzle-orm";
+import {
+  accounts,
+  persons,
+  accountIdentities,
+  accountContacts,
+} from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import { InvariantViolation } from "./errors";
 import { defaultSpokenName } from "./names";
 
 export interface SignUpAccountInput {
-  /** Opaque id from the auth provider (mock or Clerk). */
+  /** The auth VENDOR (e.g. "clerk"). */
+  provider: string;
+  /** The vendor's opaque user id. */
   authProviderUserId: string;
   email: string;
+  /** Whether the provider VERIFIED this email. Only a verified email becomes a match key. */
+  emailVerified: boolean;
   displayName: string;
   /** Name the interviewer speaks aloud. Defaults to the first whitespace-delimited word. */
   spokenName?: string;
@@ -72,6 +81,22 @@ export async function createAccountWithPerson(
         accountId: account!.id,
       })
       .returning();
+
+    await tx.insert(accountIdentities).values({
+      accountId: account!.id,
+      provider: input.provider,
+      providerUserId: input.authProviderUserId,
+    });
+
+    const normEmail = input.email.trim().toLowerCase();
+    if (normEmail.length > 0) {
+      await tx.insert(accountContacts).values({
+        accountId: account!.id,
+        kind: "email",
+        value: normEmail,
+        verifiedAt: input.emailVerified ? new Date() : null,
+      });
+    }
 
     return { accountId: account!.id, personId: person!.id };
   });
@@ -208,4 +233,64 @@ export async function deactivateAccountByAuthProviderUserId(
       .limit(1);
     return { matched: true, personId: person?.id };
   });
+}
+
+/** Resolve a vendor identity to its ACTIVE account's Person, or null. */
+export async function resolveAccountByIdentity(
+  db: Database,
+  provider: string,
+  providerUserId: string,
+): Promise<{ personId: string } | null> {
+  const [row] = await db
+    .select({ personId: persons.id })
+    .from(accountIdentities)
+    .innerJoin(accounts, eq(accounts.id, accountIdentities.accountId))
+    .innerJoin(persons, eq(persons.accountId, accounts.id))
+    .where(
+      and(
+        eq(accountIdentities.provider, provider),
+        eq(accountIdentities.providerUserId, providerUserId),
+        eq(accounts.active, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Resolve a VERIFIED email to its ACTIVE account id, or null. Unverified never matches. */
+export async function resolveAccountIdByVerifiedEmail(
+  db: Database,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.length === 0) return null;
+  const [row] = await db
+    .select({ accountId: accounts.id })
+    .from(accountContacts)
+    .innerJoin(accounts, eq(accounts.id, accountContacts.accountId))
+    .where(
+      and(
+        eq(accountContacts.kind, "email"),
+        eq(accountContacts.value, normalized),
+        isNotNull(accountContacts.verifiedAt),
+        eq(accounts.active, true),
+      ),
+    )
+    .limit(1);
+  return row?.accountId ?? null;
+}
+
+/** Attach a vendor identity to an existing account. Idempotent (no-op on conflict). */
+export async function attachIdentity(
+  db: Database,
+  accountId: string,
+  provider: string,
+  providerUserId: string,
+): Promise<void> {
+  await db
+    .insert(accountIdentities)
+    .values({ accountId, provider, providerUserId })
+    .onConflictDoNothing({
+      target: [accountIdentities.provider, accountIdentities.providerUserId],
+    });
 }

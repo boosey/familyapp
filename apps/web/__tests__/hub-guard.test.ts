@@ -89,6 +89,8 @@ describe("/hub family-first guard (wiring)", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "hub-guard-familyless",
+      provider: "clerk",
+      emailVerified: true,
       email: "hub-guard-familyless@example.test",
       displayName: "No Family",
     });
@@ -104,6 +106,8 @@ describe("/hub family-first guard (wiring)", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "hub-guard-notonboarded",
+      provider: "clerk",
+      emailVerified: true,
       email: "hub-guard-notonboarded@example.test",
       displayName: "Not Onboarded",
     });
@@ -119,6 +123,8 @@ describe("/hub family-first guard (wiring)", () => {
     testDb = await createTestDatabase();
     const { personId } = await createAccountWithPerson(testDb, {
       authProviderUserId: "hub-guard-member",
+      provider: "clerk",
+      emailVerified: true,
       email: "hub-guard-member@example.test",
       displayName: "Real Member",
     });
