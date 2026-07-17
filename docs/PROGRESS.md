@@ -17,6 +17,25 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-17** — **CLERK GO-LIVE (#9) + PROVIDER-AGNOSTIC IDENTITY (PR #99) COMPLETE.**
+  (a) **Clerk go-live** — production instance on `tellmeagain.app` (Clerk Frontend API
+  `clerk.tellmeagain.app`), `pk_live_`/`sk_live_` set on Vercel Production, live sign-up /
+  sign-in / magic-link redeem verified, JIT provisioning writing Account + Person to the prod
+  Neon branch. Runbook `docs/runbooks/clerk-vercel-go-live.md` master checklist ticked; **issue
+  #9 closed**. (Manual/human-gated steps confirmed by the operator — not machine-verifiable
+  here.) Prod does NOT inherit Clerk's shared Google OAuth creds, so social sign-in stays OFF
+  for beta (magic-link/email only) unless own OAuth client is provisioned per §C.
+  (b) **Clerk id transformation** — provider-agnostic identity (model B) **merged to `master`**
+  via **PR #99** (`2026-07-17T15:01`). Identity now anchors on a portable *verified* email
+  contact; the auth vendor's user id is a swappable pointer (`account_identities` +
+  `account_contacts`, migration **0020** + idempotent backfill). Heals dev→prod duplicate
+  accounts (John already fixed; **Zachary** heals on his next prod login — his prod clerk id
+  attaches to the existing account). `accounts.auth_provider_user_id` is now vestigial (dropped
+  in a follow-up). No dedicated issue existed — tracked by
+  `docs/superpowers/plans/2026-07-17-provider-agnostic-identity.md` (now marked SHIPPED).
+  **POST-DEPLOY CHECK STILL OWED:** confirm on prod that `ids == accts` and `contacts == accts`
+  and that Zachary lands in his existing account (no duplicate Person) after he next signs in.
+
 - **2026-07-12** — **KINSHIP STACK (ADR-0016) implemented, PENDING RELEASE** on the `kin-a-release`
   branch (NOT merged to `master`; `master` = `d2636e8`, without any of it). Human-gated release —
   runbook: `docs/superpowers/plans/2026-07-12-kinship-release-runbook.md`. Units: **#30** person
