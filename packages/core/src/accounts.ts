@@ -152,6 +152,10 @@ export interface ReconcileAccountResult {
  * `displayName`) AND the controlled Person's `displayName` — the user-facing identity name the app
  * reads everywhere. The provider is treated as the source of truth for a self-account's profile name.
  *
+ * Resolves the account via its `(provider='clerk', provider_user_id)` identity row, NOT the raw
+ * `accounts.auth_provider_user_id` column — so an id ATTACHED by the verified-email heal path (a
+ * prod-instance id linked onto an account first created under a dev-instance id) also reconciles.
+ *
  * Deliberately does NOT touch `persons.spokenName`: that is a user-owned field (customized at
  * onboarding, e.g. spoken "Bob" for display "Robert") and must survive an unrelated email/name change.
  *
@@ -167,12 +171,18 @@ export async function reconcileAccountProfile(
   const displayName = input.displayName?.trim();
 
   return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.authProviderUserId, input.authProviderUserId))
+    const [ident] = await tx
+      .select({ accountId: accountIdentities.accountId })
+      .from(accountIdentities)
+      .where(
+        and(
+          eq(accountIdentities.provider, "clerk"),
+          eq(accountIdentities.providerUserId, input.authProviderUserId),
+        ),
+      )
       .limit(1);
-    if (!account) return { matched: false };
+    if (!ident) return { matched: false };
+    const account = { id: ident.accountId };
 
     const accountPatch: { email?: string; displayName?: string; updatedAt: Date } = {
       updatedAt: new Date(),
@@ -213,6 +223,10 @@ export interface DeactivateAccountResult {
  * stories that other members may depend on. Owner-initiated content erasure is the SEPARATE, explicit
  * ADR-0008 path; this webhook only detaches the credential.
  *
+ * Resolves the account via its `(provider='clerk', provider_user_id)` identity row (so a heal-attached
+ * id also deactivates). Severing is at the ACCOUNT level (`active = false`), so it disables EVERY
+ * identity on that account at once — correct, since the auth read paths all gate on `accounts.active`.
+ *
  * Idempotent: deactivating an already-inactive account is a harmless no-op, so a webhook replay/retry
  * is safe. No match → `{ matched: false }`.
  */
@@ -221,12 +235,18 @@ export async function deactivateAccountByAuthProviderUserId(
   authProviderUserId: string,
 ): Promise<DeactivateAccountResult> {
   return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.authProviderUserId, authProviderUserId))
+    const [ident] = await tx
+      .select({ accountId: accountIdentities.accountId })
+      .from(accountIdentities)
+      .where(
+        and(
+          eq(accountIdentities.provider, "clerk"),
+          eq(accountIdentities.providerUserId, authProviderUserId),
+        ),
+      )
       .limit(1);
-    if (!account) return { matched: false };
+    if (!ident) return { matched: false };
+    const account = { id: ident.accountId };
 
     await tx
       .update(accounts)
