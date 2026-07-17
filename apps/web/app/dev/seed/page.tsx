@@ -115,6 +115,9 @@ export default async function DevSeedPage({
               <Link href="/dev/sign-in" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
                 <KindredButton label="Dev sign-in" variant="secondary" fullWidth />
               </Link>
+              <Link href="/dev/prototypes" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
+                <KindredButton label="UX prototypes" variant="secondary" fullWidth />
+              </Link>
               <Link href="/hub" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
                 <KindredButton label="Hub" variant="secondary" fullWidth />
               </Link>
