@@ -31,6 +31,7 @@ export interface CreateInvitationInput {
   inviterPersonId: string;
   inviteeName?: string;
   inviteeEmail?: string;
+  inviteePhone?: string;
   relationshipLabel?: string;
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
@@ -109,6 +110,7 @@ export async function createInvitation(
         inviteePersonId: provisional!.id,
         inviteeName: input.inviteeName ?? null,
         inviteeEmail: input.inviteeEmail ?? null,
+        inviteePhone: input.inviteePhone ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         role: input.role ?? "member",
         status: "pending",
