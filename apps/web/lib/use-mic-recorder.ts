@@ -15,6 +15,9 @@ export function useMicRecorder(opts: {
   onError?: () => void;
 }) {
   const [phase, setPhase] = useState<MicPhase>("idle");
+  // The live capture stream, surfaced as state so consumers (e.g. a mic-level waveform) can react
+  // to it. It mirrors streamRef, which stays the imperative handle used to stop the tracks.
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -28,6 +31,7 @@ export function useMicRecorder(opts: {
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
+      setStream(stream);
       chunksRef.current = [];
       const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
       mr.ondataavailable = (e) => {
@@ -48,6 +52,7 @@ export function useMicRecorder(opts: {
     } catch {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      setStream(null);
       setPhase("idle");
       optsRef.current.onError?.();
     }
@@ -57,9 +62,11 @@ export function useMicRecorder(opts: {
     setPhase("saving");
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setStream(null);
   }, []);
 
-  return { phase, start, finish };
+  return { phase, start, finish, stream };
 }
 
 export function pickMimeType(): string {

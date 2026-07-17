@@ -8,6 +8,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton } from "@/app/_kindred";
+import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
+import { useAudioLevel } from "@/app/_kindred/use-audio-level";
+import { PREFERENCES } from "@/app/_kindred/preferences/registry";
+import { readPreference } from "@/app/_kindred/preferences/client";
 import { capture, common } from "@/app/_copy";
 import { pollUntilReady } from "@/lib/poll-status";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
@@ -91,10 +95,16 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     }
   }, [token, askId, router]);
 
-  const { phase: micPhase, start, finish } = useMicRecorder({
+  const { phase: micPhase, start, finish, stream } = useMicRecorder({
     onRecorded: (blob) => void upload(blob),
     onError: () => setPhase("softfail"),
   });
+
+  // Hold-to-remember: a breathing waveform reflects the live mic. Under reduce-motion (or the
+  // solemn capture subtree's calmer palette) the waveform collapses to a static level bar and the
+  // audio-level rAF loop is disabled so nothing animates.
+  const reduceMotion = readPreference(PREFERENCES.reduceMotion) === "on";
+  const level = useAudioLevel(stream, !reduceMotion);
 
   if (phase === "processing") {
     return (
@@ -171,15 +181,40 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     );
   }
 
-  const onClick = micPhase === "listening" ? finish : micPhase === "idle" ? start : undefined;
+  // Hold-to-record: press-down starts, release finishes. `start()` only reaches "listening" after
+  // an async getUserMedia, so a quick tap (down+up before the mic is ready) would otherwise release
+  // while phase is still "idle" and the stop would be dropped — leaving a recording that never ends.
+  // `heldRef` tracks whether the pointer is still down; when start resolves we honour a release that
+  // already happened. This keeps tap-to-toggle working (motor accessibility) alongside press-hold.
+  const heldRef = useRef(false);
+  const onHoldStart = useCallback(async () => {
+    if (micPhase !== "idle") return;
+    heldRef.current = true;
+    await start();
+    // Released before the mic was ready → stop immediately.
+    if (!heldRef.current) finish();
+  }, [micPhase, start, finish]);
+  const onHoldEnd = useCallback(() => {
+    heldRef.current = false;
+    if (micPhase === "listening") finish();
+  }, [micPhase, finish]);
 
   return (
     <KindredVoiceButton
       listening={micPhase === "listening"}
       saving={micPhase === "saving"}
       size={220}
-      label={micPhase === "listening" ? common.voiceButton.listening : micPhase === "saving" ? common.voiceButton.oneMoment : common.voiceButton.tapToSpeak}
-      onClick={onClick}
+      label={
+        micPhase === "saving"
+          ? common.voiceButton.oneMoment
+          : micPhase === "listening"
+            ? common.voiceButton.releaseToFinish
+            : common.voiceButton.holdToSpeak
+      }
+      holdToRecord
+      onHoldStart={onHoldStart}
+      onHoldEnd={onHoldEnd}
+      waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
     />
   );
 }

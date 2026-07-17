@@ -31,6 +31,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
+import { useAudioLevel } from "@/app/_kindred/use-audio-level";
+import { PREFERENCES } from "@/app/_kindred/preferences/registry";
+import { readPreference } from "@/app/_kindred/preferences/client";
 import { hub, common } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import {
@@ -166,6 +170,9 @@ export function ComposingEditor({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  // The live stream mirrored as state so the hold-to-remember waveform can react to it. streamRef
+  // stays the imperative handle used to stop tracks.
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   // ── Prose + review state ────────────────────────────────────────────────────
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
@@ -510,6 +517,7 @@ export function ComposingEditor({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
+      setStream(stream);
       chunksRef.current = [];
       const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
       mr.ondataavailable = (e) => {
@@ -521,6 +529,8 @@ export function ComposingEditor({
       setRecordPhase("listening");
       clog("record_start", { story: composingStoryId ?? "(take-0)", take: composingStoryId ? "append" : "initial" });
     } catch {
+      streamRef.current = null;
+      setStream(null);
       setRecordPhase("softfail");
     }
   }, [uploadRecording, composingStoryId]);
@@ -529,14 +539,34 @@ export function ComposingEditor({
     setRecordPhase("saving");
     mediaRecorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setStream(null);
     clog("record_stop", { story: composingStoryId ?? "(take-0)" });
   }, [composingStoryId]);
 
-  const voiceClick = useCallback(() => {
-    if (recordPhase === "listening") stopRecording();
-    // Only START a recording when idle AND no other mutation is round-tripping (findings 3+4).
-    else if (recordPhase === "idle" && !otherMutationInFlight) void startRecording();
+  // ── Hold-to-remember wiring ──────────────────────────────────────────────────
+  // Press-and-hold to record: pointer-down starts (subject to the same idle + no-other-mutation
+  // gate the old tap toggle used, findings 3+4), pointer-up/leave/cancel stops. `startRecording`
+  // only reaches "listening" after an async getUserMedia, so a quick tap (down+up before the mic is
+  // ready) would otherwise release while phase is still "idle" and the stop would be dropped —
+  // leaving a recording that never ends. `heldRef` tracks whether the pointer is still down; when
+  // start resolves we honour a release that already happened. Tap-to-toggle thus survives for
+  // motor accessibility alongside press-hold.
+  const reduceMotion = readPreference(PREFERENCES.reduceMotion) === "on";
+  const level = useAudioLevel(stream, !reduceMotion);
+  const heldRef = useRef(false);
+  const onHoldStart = useCallback(async () => {
+    if (recordPhase !== "idle" || otherMutationInFlight) return;
+    heldRef.current = true;
+    await startRecording();
+    // Released before the mic was ready → stop immediately (only if start actually acquired a
+    // stream; on a softfail there's nothing to stop and stopRecording would clobber the error state).
+    if (!heldRef.current && streamRef.current) stopRecording();
   }, [recordPhase, otherMutationInFlight, startRecording, stopRecording]);
+  const onHoldEnd = useCallback(() => {
+    heldRef.current = false;
+    if (recordPhase === "listening") stopRecording();
+  }, [recordPhase, stopRecording]);
 
   // Submit typed text. Take 0 (no draft yet) → composeStoryAction (creates the story, full-screen
   // pending). Take ≥ 1 (composing) → appendTypedTakeAction onto the existing draft (inline).
@@ -1045,12 +1075,15 @@ export function ComposingEditor({
               size={160}
               label={
                 recordPhase === "listening"
-                  ? hub.answer.listeningTapStop
+                  ? common.voiceButton.releaseToFinish
                   : savingTake
                     ? common.voiceButton.oneMoment
-                    : common.voiceButton.tapToSpeak
+                    : common.voiceButton.holdToSpeak
               }
-              onClick={voiceClick}
+              holdToRecord
+              onHoldStart={onHoldStart}
+              onHoldEnd={onHoldEnd}
+              waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
             />
           ) : (
             <div className={styles.textEntry}>
@@ -1228,12 +1261,15 @@ export function ComposingEditor({
             size={220}
             label={
               recordPhase === "listening"
-                ? hub.answer.listeningTapStop
+                ? common.voiceButton.releaseToFinish
                 : recordPhase === "saving"
                   ? common.voiceButton.oneMoment
-                  : common.voiceButton.tapToSpeak
+                  : common.voiceButton.holdToSpeak
             }
-            onClick={voiceClick}
+            holdToRecord
+            onHoldStart={onHoldStart}
+            onHoldEnd={onHoldEnd}
+            waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
           />
           {recordPhase === "idle" && (
             <p

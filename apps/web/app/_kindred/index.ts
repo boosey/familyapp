@@ -2,6 +2,7 @@ export { KindredButton } from "./KindredButton";
 export type { KindredButtonProps } from "./KindredButton";
 export { KindredVoiceButton } from "./KindredVoiceButton";
 export type { KindredVoiceButtonProps } from "./KindredVoiceButton";
+export { BreathingWaveform } from "./BreathingWaveform";
 export { KindredPromptCard } from "./KindredPromptCard";
 export type { KindredPromptCardProps } from "./KindredPromptCard";
 export { KindredChip } from "./KindredChip";
