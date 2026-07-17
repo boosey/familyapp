@@ -11,7 +11,7 @@
  * /hub/stories/[id] route (restyled separately). Reading size is owned by the hub header's
  * KindredFontScale — not duplicated here.
  */
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
@@ -24,6 +24,7 @@ import {
   matchesQuery,
   timelineBase,
 } from "./story-browse-helpers";
+import styles from "./StoryBrowse.module.css";
 
 interface StoryBrowseProps {
   items: StoryItem[];
@@ -113,10 +114,11 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
 
   return (
     <div>
-      {/* Sub-nav: browse modes only. Family scope is owned by the hub header selector now — this
-          surface no longer renders a duplicate per-family control. */}
-      <div style={subnavRow}>
-        <div style={segmentGroup} role="tablist" aria-label={hub.shell.tabStories}>
+      {/* Secondary "view options" row: browse modes + (Feed only) the layout toggle, kept quiet and
+          right-aligned above the grid — not front-and-center (spec). Family scope is owned by the hub
+          header selector now — this surface no longer renders a duplicate per-family control. */}
+      <div className={styles.viewOptions}>
+        <div className={styles.segmentGroup} role="tablist" aria-label={hub.shell.tabStories}>
           {MODES.map((m) => (
             <button
               key={m}
@@ -124,7 +126,7 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
               role="tab"
               aria-selected={mode === m}
               onClick={() => setMode(m)}
-              style={modePill(mode === m)}
+              className={styles.modePill}
             >
               {m === "feed"
                 ? hub.browse.modeFeed
@@ -135,10 +137,10 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
           ))}
         </div>
 
-        {/* Feed layout toggle — right-justified on the same row as the mode pills. Only shown in Feed
-            mode (Timeline and Search own their own layouts; Column/Masonry only describe the card feed). */}
+        {/* Feed layout toggle — only shown in Feed mode (Timeline and Search own their own layouts;
+            Column/Masonry only describe the card feed). */}
         {mode === "feed" ? (
-          <div style={segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
+          <div className={styles.segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
             {(["masonry", "column"] as const).map((v) => (
               <button
                 key={v}
@@ -146,7 +148,7 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
                 role="radio"
                 aria-checked={feedView === v}
                 onClick={() => changeFeedView(v)}
-                style={modePill(feedView === v)}
+                className={styles.modePill}
               >
                 {v === "column" ? hub.browse.viewColumn : hub.browse.viewMasonry}
               </button>
@@ -155,7 +157,7 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
         ) : null}
       </div>
 
-      <div style={{ marginTop: 24 }}>
+      <div>
         {mode === "feed" ? (
           <Feed
             items={scoped}
@@ -212,14 +214,14 @@ function Feed({
             viewerFamilies.find((f) => f.id === selectedIds[0])?.name ?? "",
           );
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className={styles.column}>
         <TellStoryCard />
-        <div style={emptyCard}>
-          <span style={{ fontSize: 40 }} aria-hidden="true">
+        <div className={styles.emptyCard}>
+          <span className={styles.emptyEmoji} aria-hidden="true">
             📖
           </span>
-          <p style={emptyHeadline}>{hub.browse.feedEmpty(scopeName)}</p>
-          <p style={emptySub}>{hub.browse.feedEmptySub}</p>
+          <p className={styles.emptyHeadline}>{hub.browse.feedEmpty(scopeName)}</p>
+          <p className={styles.emptySub}>{hub.browse.feedEmptySub}</p>
         </div>
       </div>
     );
@@ -232,7 +234,7 @@ function Feed({
     // The first cover-bearing item leads the masonry feed as a wider hero (`feature` variant).
     const featureIndex = items.findIndex((it) => Boolean(it.coverPhotoId));
     return (
-      <div style={{ columnWidth: 320, columnGap: 18 }} data-view="masonry">
+      <div className={styles.masonry} data-view="masonry">
         <TellStoryCard masonry />
         {items.map((item, i) => (
           <StoryCard
@@ -249,7 +251,7 @@ function Feed({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }} data-view="column">
+    <div className={styles.column} data-view="column">
       <TellStoryCard />
       {items.map((item, i) => (
         <StoryCard key={item.id} item={item} href={href(item)} index={i} />
@@ -286,14 +288,14 @@ function Timeline({
 
   return (
     <div>
-      <div style={timelineHeaderRow}>
-        <h2 style={timelineHeading}>{heading}</h2>
-        <div style={segmentGroup} role="group" aria-label={heading}>
+      <div className={styles.timelineHeaderRow}>
+        <h2 className={styles.timelineHeading}>{heading}</h2>
+        <div className={styles.segmentGroup} role="group" aria-label={heading}>
           <button
             type="button"
             aria-pressed={wholeFamily}
             onClick={() => onWiden(true)}
-            style={modePill(wholeFamily)}
+            className={styles.modePill}
           >
             {hub.browse.widenWhole}
           </button>
@@ -301,21 +303,21 @@ function Timeline({
             type="button"
             aria-pressed={!wholeFamily}
             onClick={() => onWiden(false)}
-            style={modePill(!wholeFamily)}
+            className={styles.modePill}
           >
             {hub.browse.widenNarrator(viewerName)}
           </button>
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 34 }}>
+      <div className={styles.timelineGroups}>
         {groups.map((group) => (
           <section key={group.label}>
-            <div style={groupLabelRow}>
-              <span style={{ ...monoGroupLabel, color: "var(--accent)" }}>{group.label}</span>
-              <span style={hairline} aria-hidden="true" />
+            <div className={styles.groupLabelRow}>
+              <span className={`${styles.monoGroupLabel} ${styles.groupLabelEra}`}>{group.label}</span>
+              <span className={styles.hairline} aria-hidden="true" />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className={styles.timelineRowList}>
               {group.items.map((item) => (
                 <TimelineRow key={item.id} item={item} href={href(item)} year={String(item.eraYear)} />
               ))}
@@ -325,11 +327,11 @@ function Timeline({
 
         {/* Undated section — always shown, never hidden (design invariant). */}
         <section>
-          <div style={groupLabelRow}>
-            <span style={{ ...monoGroupLabel, color: "var(--support)" }}>{hub.browse.undated}</span>
-            <span style={hairline} aria-hidden="true" />
+          <div className={styles.groupLabelRow}>
+            <span className={`${styles.monoGroupLabel} ${styles.groupLabelUndated}`}>{hub.browse.undated}</span>
+            <span className={styles.hairline} aria-hidden="true" />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className={styles.timelineRowList}>
             {undated.map((item) => (
               <TimelineRow key={item.id} item={item} href={href(item)} year="· · ·" undated />
             ))}
@@ -352,14 +354,13 @@ function TimelineRow({
   undated?: boolean;
 }) {
   return (
-    <Link href={href} style={undated ? timelineRowUndated : timelineRow}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-label)", color: "var(--support)", flex: "0 0 70px" }}>
-        {year}
-      </span>
-      <span style={timelineRowTitle}>{item.title}</span>
-      <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-label)", color: "var(--text-meta)", flex: "0 0 auto" }}>
-        {item.personName}
-      </span>
+    <Link
+      href={href}
+      className={undated ? `${styles.timelineRow} ${styles.timelineRowUndated}` : styles.timelineRow}
+    >
+      <span className={styles.timelineRowYear}>{year}</span>
+      <span className={styles.timelineRowTitle}>{item.title}</span>
+      <span className={styles.timelineRowPerson}>{item.personName}</span>
     </Link>
   );
 }
@@ -383,37 +384,29 @@ function Search({
   );
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div className={styles.searchWrap}>
       <input
         type="text"
         value={query}
         onChange={(e) => onQuery(e.target.value)}
         placeholder={hub.browse.searchPlaceholder}
         aria-label={hub.browse.searchPlaceholder}
-        style={searchInput}
+        className={styles.searchInput}
       />
 
       {!trimmed ? (
-        <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-muted)", margin: "20px 0 0" }}>
-          {hub.browse.searchIdle}
-        </p>
+        <p className={styles.searchIdle}>{hub.browse.searchIdle}</p>
       ) : results.length === 0 ? (
-        <div style={searchNoResultsCard}>
-          <span style={{ fontSize: 32 }} aria-hidden="true">
+        <div className={styles.searchNoResultsCard}>
+          <span className={styles.searchNoResultsEmoji} aria-hidden="true">
             🔎
           </span>
-          <p style={{ fontFamily: "var(--font-story)", fontSize: "var(--text-ui-sm)", color: "var(--text-body)", margin: 0 }}>
-            {hub.browse.searchNoResults(trimmed)}
-          </p>
-          <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-label)", color: "var(--text-muted)", margin: 0 }}>
-            {hub.browse.searchNoResultsHint}
-          </p>
+          <p className={styles.searchNoResultsText}>{hub.browse.searchNoResults(trimmed)}</p>
+          <p className={styles.searchNoResultsHint}>{hub.browse.searchNoResultsHint}</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 22 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-label)", letterSpacing: "var(--tracking-mono)", color: "var(--support)" }}>
-            {hub.browse.searchCount(results.length)}
-          </div>
+        <div className={styles.searchResults}>
+          <div className={styles.searchCount}>{hub.browse.searchCount(results.length)}</div>
           {results.map((item) => (
             <SearchResult key={item.id} item={item} href={href(item)} query={trimmed} />
           ))}
@@ -426,21 +419,17 @@ function Search({
 function SearchResult({ item, href, query }: { item: StoryItem; href: string; query: string }) {
   const hit = highlightMatch(item.summary, query);
   return (
-    <Link href={href} style={searchResultCard}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "var(--font-story)", fontSize: "var(--text-story)", color: "var(--text-body)" }}>
-          {item.title}
-        </span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-label)", color: "var(--support)" }}>
-          {item.eventLabel ?? hub.browse.undated}
-        </span>
+    <Link href={href} className={styles.searchResultCard}>
+      <div className={styles.searchResultHead}>
+        <span className={styles.searchResultTitle}>{item.title}</span>
+        <span className={styles.searchResultEra}>{item.eventLabel ?? hub.browse.undated}</span>
       </div>
       {item.summary ? (
-        <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-label)", lineHeight: "var(--leading-body)", color: "var(--text-muted)", margin: 0 }}>
+        <p className={styles.searchResultSummary}>
           {hit ? (
             <>
               {hit.before}
-              <span style={highlightSpan}>{hit.match}</span>
+              <span className={styles.highlightSpan}>{hit.match}</span>
               {hit.after}
             </>
           ) : (
@@ -452,182 +441,3 @@ function SearchResult({ item, href, query }: { item: StoryItem; href: string; qu
   );
 }
 
-/* ── Shared styles ──────────────────────────────────────────────────────────────── */
-const subnavRow: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-};
-
-const segmentGroup: CSSProperties = {
-  display: "inline-flex",
-  gap: 4,
-  background: "var(--surface-sunken)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-pill)",
-  padding: 4,
-};
-
-function modePill(on: boolean): CSSProperties {
-  return {
-    padding: "10px 22px",
-    border: "none",
-    cursor: "pointer",
-    borderRadius: "var(--radius-pill)",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    background: on ? "var(--surface-card)" : "transparent",
-    color: on ? "var(--accent-strong)" : "var(--text-muted)",
-    boxShadow: on ? "var(--shadow-sm)" : "none",
-  };
-}
-
-const emptyCard: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  textAlign: "center",
-  gap: 16,
-  padding: "80px 40px",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-xl)",
-};
-
-const emptyHeadline: CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontWeight: 400,
-  fontSize: "var(--text-story-lg)",
-  lineHeight: "var(--leading-snug)",
-  color: "var(--text-body)",
-  margin: 0,
-  maxWidth: "28ch",
-};
-
-const emptySub: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  lineHeight: "var(--leading-body)",
-  color: "var(--text-muted)",
-  margin: 0,
-  maxWidth: "36ch",
-};
-
-const timelineHeaderRow: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-  marginBottom: 22,
-};
-
-const timelineHeading: CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontWeight: 400,
-  fontSize: "var(--text-story-lg)",
-  color: "var(--text-body)",
-  margin: 0,
-};
-
-const groupLabelRow: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: 14,
-};
-
-const monoGroupLabel: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-label)",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-};
-
-const hairline: CSSProperties = {
-  flex: 1,
-  height: 1,
-  background: "var(--border)",
-};
-
-const timelineRow: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 18,
-  width: "100%",
-  textAlign: "left",
-  textDecoration: "none",
-  cursor: "pointer",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-md)",
-  padding: "16px 20px",
-};
-
-const timelineRowUndated: CSSProperties = {
-  ...timelineRow,
-  background: "var(--surface-sunken)",
-  border: "var(--border-width) dashed var(--border-strong)",
-};
-
-const timelineRowTitle: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontFamily: "var(--font-story)",
-  fontSize: "var(--text-story)",
-  color: "var(--text-body)",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const searchInput: CSSProperties = {
-  width: "100%",
-  padding: "16px 20px",
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui)",
-  color: "var(--text-body)",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border-strong)",
-  borderRadius: "var(--radius-md)",
-  outline: "none",
-};
-
-const searchNoResultsCard: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  textAlign: "center",
-  gap: 12,
-  padding: "60px 30px",
-  marginTop: 20,
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-};
-
-const searchResultCard: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 6,
-  width: "100%",
-  textAlign: "left",
-  textDecoration: "none",
-  cursor: "pointer",
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-md)",
-  padding: "18px 22px",
-};
-
-const highlightSpan: CSSProperties = {
-  background: "var(--accent-soft)",
-  color: "var(--accent-strong)",
-  fontWeight: 600,
-  borderRadius: 3,
-  padding: "0 2px",
-};

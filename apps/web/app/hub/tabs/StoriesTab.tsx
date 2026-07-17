@@ -9,6 +9,7 @@ import { hub } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import { selectedIdList, type FamilyFilter } from "@/lib/family-filter";
 import { FamilyChips } from "../FamilyChips";
+import styles from "./StoriesTab.module.css";
 
 /** A self-initiated (ask-less) draft still in review — resumable from the Stories tab. recordedAt is
  *  an ISO string (serialized by the server component, matching the answer-drafts serialization). */
@@ -135,77 +136,20 @@ export function StoriesTab({
     ) : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+    <div className={styles.wrap}>
       {chips}
 
       {/* Resume: the viewer's own ask-less drafts still in review. Each links to /hub/tell/[storyId]. */}
       {selfDrafts.length > 0 && (
         <section>
-          <h2
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              letterSpacing: "var(--tracking-mono)",
-              textTransform: "uppercase",
-              color: "var(--text-meta)",
-              margin: "0 0 14px",
-            }}
-          >
-            {hub.stories.resumeHeading}
-          </h2>
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-            }}
-          >
+          <h2 className={styles.resumeHeading}>{hub.stories.resumeHeading}</h2>
+          <ul className={styles.resumeList}>
             {selfDrafts.map((d) => (
-              <li
-                key={d.storyId}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 20,
-                  background: "var(--surface-card)",
-                  border: "var(--border-width) solid var(--accent)",
-                  borderRadius: "var(--radius-lg)",
-                  boxShadow: "var(--shadow-card)",
-                  padding: "20px 24px",
-                }}
-              >
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    color: "var(--support)",
-                    letterSpacing: "var(--tracking-mono)",
-                  }}
-                >
+              <li key={d.storyId} className={styles.resumeItem}>
+                <span className={styles.resumeMeta}>
                   {hub.questions.recordedAt(relativeShortDate(d.recordedAt))}
                 </span>
-                <Link
-                  href={`/hub/tell/${d.storyId}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "12px 22px",
-                    borderRadius: "var(--radius-md)",
-                    border: "1.5px solid var(--accent)",
-                    background: "var(--accent-soft)",
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-ui-sm)",
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    textDecoration: "none",
-                  }}
-                >
+                <Link href={`/hub/tell/${d.storyId}`} className={styles.resumeLink}>
                   {hub.stories.resume}
                 </Link>
               </li>
@@ -218,29 +162,13 @@ export function StoriesTab({
         // Explicit empty selection (ADR-0021): every chip toggled OFF is an honest empty state — no
         // browse pool — rather than a silent "show all". The chip bar stays (above) so the viewer can
         // turn a family back on. Mirrors AlbumSurface's `none` short-circuit.
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui)",
-            color: "var(--text-meta)",
-            margin: 0,
-          }}
-        >
-          {hub.stories.noFamiliesSelected}
-        </p>
+        <p className={styles.emptyText}>{hub.stories.noFamiliesSelected}</p>
       ) : items.length === 0 ? (
         // No stories yet — the "Tell a story" CTA still leads (it's the entry point precisely when the
         // feed is empty), followed by the welcoming empty note.
         <>
           <TellStoryCard />
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-muted)",
-              margin: 0,
-            }}
-          >
+          <p className={styles.emptyTextMuted}>
             {/* A pending-only viewer (member of no family yet) reaches the hub with an empty feed since
                 Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than
                 the generic "when someone shares…" copy that assumes they already have a family. */}
