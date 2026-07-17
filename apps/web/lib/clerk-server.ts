@@ -23,9 +23,18 @@
 import "server-only";
 import {
   createAccountWithPerson,
-  findPersonIdByAuthProviderUserId,
+  resolveAccountByIdentity,
+  resolveAccountIdByVerifiedEmail,
+  attachIdentity,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
+
+/** One of a Clerk user's email addresses, reduced to the two facts linking cares about. */
+export interface ClerkEmail {
+  emailAddress: string;
+  /** True only when the provider marks this email verified — the sole match-key gate. */
+  verified: boolean;
+}
 
 /** The slice of a Clerk `User` we depend on. Narrow on purpose — a Clerk SDK bump is a non-event. */
 export interface ClerkUserLite {
@@ -34,6 +43,8 @@ export interface ClerkUserLite {
   lastName: string | null;
   /** Clerk's convenience getter — the primary email, or null. */
   primaryEmailAddress?: { emailAddress: string } | null;
+  /** ALL emails with verification status — the candidate match keys for linking. */
+  emailAddresses: ClerkEmail[];
 }
 
 /** Inject Clerk's `users.getUser` (tests stub; prod resolves the real Backend client). */
@@ -96,6 +107,12 @@ async function defaultGetClerkUser(userId: string): Promise<ClerkUserLite> {
     primaryEmailAddress: user.primaryEmailAddress
       ? { emailAddress: user.primaryEmailAddress.emailAddress }
       : null,
+    emailAddresses: (user.emailAddresses ?? []).map((e) => ({
+      emailAddress: e.emailAddress,
+      // FAIL-CLOSED gate: only Clerk's literal "verified" status counts. transferable/null/
+      // missing/unverified all → false, so an unverified email can never link to an account.
+      verified: e.verification?.status === "verified",
+    })),
   };
 }
 
@@ -120,49 +137,73 @@ export function clerkDisplayName(user: ClerkUserLite): string {
 }
 
 /**
- * Resolve a Clerk `userId` to our Person id, provisioning an Account + Person if this is the first
- * landing for that user. Idempotent: an already-provisioned user fast-paths to its existing Person.
+ * Resolve a Clerk `userId` to our Person id via the provider-agnostic 4-step identity engine
+ * (model B). The whole point is that a vendor user id is NOT the account key — a verified email is —
+ * so the same human landing under a fresh Clerk instance (dev→prod, or a provider swap) links to
+ * their existing account instead of forking a duplicate.
  *
- * Race safety (ADR-0005): two concurrent `/auth/callback` requests for the same brand-new user both
- * pass the initial "no Person yet" read; one wins `createAccountWithPerson`, the other loses on the
- * `accounts.authProviderUserId` uniqueness constraint and re-resolves the winner's Person — so the
- * identity is never forked. The loser's failure surfaces in TWO shapes depending on isolation:
+ *   1. KNOWN IDENTITY → fast path. An `account_identities` row for (provider, userId) already exists;
+ *      resolve straight to its Person without ever touching Clerk.
+ *   2. VERIFIED-EMAIL LINK. Unknown vendor id, but one of the user's *verified* emails already keys
+ *      an existing account → attach this vendor id as a new identity on that account and resolve.
+ *      Only VERIFIED emails are match keys — an unverified/attacker-controlled email can never take
+ *      over someone else's account (see the SECURITY test).
+ *   3. FRESH ACCOUNT. No known id and no verified-email match → create a new Account + Person. The
+ *      identity row is written here; an email *contact* is written only if the primary email is
+ *      verified (unverified primary → identity but no contact, so no unique-constraint collision).
+ *
+ * Race safety (4, the catch): two concurrent `/auth/callback` landings for the same brand-new user
+ * both miss steps 1–2 and both try to create; one wins, the other loses on the identity/account
+ * uniqueness guard and re-resolves the winner's Person — so the identity is never forked. The
+ * loser's failure surfaces in TWO shapes depending on isolation:
  *   - serialized transactions (e.g. PGlite, or a SERIALIZABLE retry): the in-transaction SELECT in
  *     `createAccountWithPerson` sees the committed row → `InvariantViolation`.
  *   - a true concurrent race under READ COMMITTED (prod Postgres): both SELECTs miss, both INSERT,
  *     the loser trips the unique INDEX → a raw driver error (SQLSTATE 23505), NOT InvariantViolation.
- * So the catch re-resolves on ANY error when a Person now exists — covering both shapes — and only
- * rethrows if provisioning genuinely failed (no Person materialized).
+ * So the catch re-resolves by identity on ANY error when a row now exists — covering both shapes —
+ * and only rethrows if provisioning genuinely failed (no account materialized).
  */
 export async function provisionOrResolveClerkUser(
   db: Database,
   userId: string,
   opts: { getClerkUser?: GetClerkUser } = {},
 ): Promise<string> {
-  const existing = await findPersonIdByAuthProviderUserId(db, userId);
-  if (existing) return existing;
+  const PROVIDER = "clerk";
+
+  // 1. Known identity → fast path.
+  const known = await resolveAccountByIdentity(db, PROVIDER, userId);
+  if (known) return known.personId;
 
   const getClerkUser = opts.getClerkUser ?? defaultGetClerkUser;
   const user = await getClerkUser(userId);
   const displayName = clerkDisplayName(user);
-  const email = user.primaryEmailAddress?.emailAddress ?? "";
+  const primaryEmail = user.primaryEmailAddress?.emailAddress ?? "";
+  const verifiedEmails = user.emailAddresses.filter((e) => e.verified).map((e) => e.emailAddress);
 
+  // 2. Unknown id but a VERIFIED email matches an existing account → attach + resolve.
+  for (const email of verifiedEmails) {
+    const accountId = await resolveAccountIdByVerifiedEmail(db, email);
+    if (accountId) {
+      await attachIdentity(db, accountId, PROVIDER, userId);
+      const attached = await resolveAccountByIdentity(db, PROVIDER, userId);
+      if (attached) return attached.personId;
+    }
+  }
+
+  // 3. Otherwise create a fresh account (identity + contact written inside).
   try {
     const { personId } = await createAccountWithPerson(db, {
-      provider: "clerk",
+      provider: PROVIDER,
       authProviderUserId: userId,
-      email,
-      // TODO(task3): compute emailVerified from Clerk verification status
-      emailVerified: false,
+      email: primaryEmail,
+      emailVerified: verifiedEmails.includes(primaryEmail),
       displayName,
     });
     return personId;
   } catch (err) {
-    // A concurrent landing may have provisioned this userId between our read and our write. If a
-    // Person now exists, return it (this covers BOTH the InvariantViolation and the raw 23505
-    // unique-violation shapes — see the race note above). Otherwise the failure is real: rethrow.
-    const personId = await findPersonIdByAuthProviderUserId(db, userId);
-    if (personId) return personId;
+    // Concurrent landing provisioned this id between our checks — re-resolve by identity.
+    const retry = await resolveAccountByIdentity(db, PROVIDER, userId);
+    if (retry) return retry.personId;
     throw err;
   }
 }

@@ -14,6 +14,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
+import { createAccountWithPerson } from "@chronicle/core";
 import { accounts, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import {
@@ -32,11 +33,19 @@ vi.mock("next/headers", () => ({
 }));
 
 function clerkUser(over: Partial<ClerkUserLite> & { id: string }): ClerkUserLite {
-  return {
+  const base = {
     firstName: "Ada",
     lastName: "Lovelace",
     primaryEmailAddress: { emailAddress: "ada@example.com" },
-    ...over,
+  };
+  const merged = { ...base, ...over };
+  return {
+    ...merged,
+    emailAddresses:
+      over.emailAddresses ??
+      (merged.primaryEmailAddress
+        ? [{ emailAddress: merged.primaryEmailAddress.emailAddress, verified: true }]
+        : []),
   };
 }
 
@@ -128,6 +137,46 @@ describe("provisionOrResolveClerkUser — JIT provisioning (ADR-0005)", () => {
     expect(await countAccounts(db, "clerk_midfetch")).toBe(1);
   });
 
+  it("STEP 2: unknown vendor id + verified matching email attaches to the existing account", async () => {
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk", authProviderUserId: "dev_zzz",
+      email: "zach@x.com", emailVerified: true, displayName: "Zach B",
+    });
+    const stub: GetClerkUser = async (_id) => ({
+      id: "prod_zzz", firstName: "Zach", lastName: "B",
+      primaryEmailAddress: { emailAddress: "zach@x.com" },
+      emailAddresses: [{ emailAddress: "zach@x.com", verified: true }],
+    });
+    const resolved = await provisionOrResolveClerkUser(db, "prod_zzz", { getClerkUser: stub });
+    expect(resolved).toBe(personId); // SAME person, no duplicate
+  });
+
+  it("SECURITY: unknown vendor id + UNVERIFIED matching email does NOT attach — new account", async () => {
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk", authProviderUserId: "dev_www",
+      email: "eve@x.com", emailVerified: true, displayName: "Eve",
+    });
+    const attacker: GetClerkUser = async (_id) => ({
+      id: "prod_attacker", firstName: "Not", lastName: "Eve",
+      primaryEmailAddress: { emailAddress: "eve@x.com" },
+      emailAddresses: [{ emailAddress: "eve@x.com", verified: false }], // UNVERIFIED
+    });
+    const resolved = await provisionOrResolveClerkUser(db, "prod_attacker", { getClerkUser: attacker });
+    expect(resolved).not.toBe(personId); // a SEPARATE account, no takeover
+  });
+
+  it("STEP 1: a known vendor id fast-paths to its person with no Clerk fetch", async () => {
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk", authProviderUserId: "known_id",
+      email: "k@x.com", emailVerified: true, displayName: "Kay",
+    });
+    const stub: GetClerkUser = async (_id) => { throw new Error("must not fetch Clerk on fast path"); };
+    expect(await provisionOrResolveClerkUser(db, "known_id", { getClerkUser: stub })).toBe(personId);
+  });
+
   it("uses the Clerk first/last name as the displayName for the new Person", async () => {
     const db = await createTestDatabase();
     const getClerkUser: GetClerkUser = async (id) =>
@@ -163,6 +212,7 @@ describe("clerkDisplayName — fallback ladder", () => {
         firstName: null,
         lastName: null,
         primaryEmailAddress: { emailAddress: "grace.hopper@navy.mil" },
+        emailAddresses: [{ emailAddress: "grace.hopper@navy.mil", verified: true }],
       }),
     ).toBe("grace.hopper");
   });
@@ -174,6 +224,7 @@ describe("clerkDisplayName — fallback ladder", () => {
         firstName: null,
         lastName: null,
         primaryEmailAddress: null,
+        emailAddresses: [],
       }),
     ).toBe("Family member");
   });

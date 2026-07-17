@@ -85,6 +85,8 @@ export async function applyClerkWebhookEvent(
           firstName: data.first_name ?? null,
           lastName: data.last_name ?? null,
           primaryEmailAddress: email ? { emailAddress: email } : null,
+          // clerkDisplayName never reads emailAddresses; [] satisfies the required field.
+          emailAddresses: [],
         })
       : undefined;
     const result = await reconcileAccountProfile(db, {
