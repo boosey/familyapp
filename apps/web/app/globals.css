@@ -313,3 +313,12 @@ select.kin-field { appearance: none; background-image: linear-gradient(45deg, tr
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* User-chosen reduce-motion (preference) — same collapse as the OS media query, opt-in per user.
+ * Structural motion (Phase 2 tilt/tape/bounce) additionally guards on :not([data-reduce-motion="on"]). */
+[data-reduce-motion="on"], [data-reduce-motion="on"] *, [data-reduce-motion="on"] *::before, [data-reduce-motion="on"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
