@@ -47,6 +47,7 @@ import {
 } from "./answer/[askId]/actions";
 import { useProseHistory } from "@/lib/use-prose-history";
 import { clog } from "@/lib/clog";
+import styles from "./ComposingEditor.module.css";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
 import { StoryPhotosEditor } from "./StoryPhotosEditor";
@@ -779,6 +780,11 @@ export function ComposingEditor({
 
   const composing = draft?.state === "draft" || (draft == null && activeStoryId != null);
 
+  // The whole composing/recording subtree is emotionally heavy → tone="solemn" (spec §4.5): the
+  // Task-1 guard mutes the decorative palette and the modules kill tilt/tape/breathing under it, so
+  // capture stays calm even under the Playful skin. Every render phase below is produced by this inner
+  // function and wrapped in one solemn container (`display: contents`, so it adds no layout box).
+  const renderPhase = () => {
   // ── PENDING-APPROVAL REVIEW (shrunk: title + relisten + edit + tier + Share/Discard) ──
   if (draft && draft.state === "pending_approval") {
     if (op === "share") {
@@ -1025,30 +1031,8 @@ export function ComposingEditor({
         )}
 
         {/* Persistent capture footer — mic + type box, both live (append more takes). */}
-        <div
-          style={{
-            borderTop: "var(--border-width) solid var(--border)",
-            paddingTop: 24,
-            marginTop: 8,
-            marginBottom: 24,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 20,
-          }}
-        >
-          <div
-            role="group"
-            aria-label={hub.compose.inputModeAria}
-            style={{
-              display: "inline-flex",
-              gap: 4,
-              padding: 4,
-              borderRadius: "var(--radius-pill)",
-              background: "var(--surface-card)",
-              border: "var(--border-width) solid var(--border)",
-            }}
-          >
+        <div className={styles.footer}>
+          <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
             <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={busy} onClick={() => setInputMode("voice")} />
             <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={busy} onClick={() => setInputMode("text")} />
           </div>
@@ -1069,7 +1053,7 @@ export function ComposingEditor({
               onClick={voiceClick}
             />
           ) : (
-            <div style={{ width: "100%", maxWidth: 480 }}>
+            <div className={styles.textEntry}>
               <label className="kin-form-label">
                 {hub.compose.textareaLabel}
                 <textarea
@@ -1081,7 +1065,7 @@ export function ComposingEditor({
                   disabled={busy}
                 />
               </label>
-              <div style={{ marginTop: 12 }}>
+              <div className={styles.textEntryActions}>
                 <KindredButton
                   label={hub.compose.continueLabel}
                   variant="secondary"
@@ -1231,18 +1215,7 @@ export function ComposingEditor({
         </p>
       )}
 
-      <div
-        role="group"
-        aria-label={hub.compose.inputModeAria}
-        style={{
-          display: "inline-flex",
-          gap: 4,
-          padding: 4,
-          borderRadius: "var(--radius-pill)",
-          background: "var(--surface-card)",
-          border: "var(--border-width) solid var(--border)",
-        }}
-      >
+      <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
         <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} onClick={() => setInputMode("voice")} />
         <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} onClick={() => setInputMode("text")} />
       </div>
@@ -1271,7 +1244,7 @@ export function ComposingEditor({
           )}
         </>
       ) : (
-        <div style={{ width: "100%", maxWidth: 480 }}>
+        <div className={styles.textEntry}>
           <label className="kin-form-label">
             {hub.compose.textareaLabel}
             <textarea
@@ -1282,7 +1255,7 @@ export function ComposingEditor({
               placeholder={hub.compose.textPlaceholder}
             />
           </label>
-          <div style={{ marginTop: 16 }}>
+          <div className={styles.textEntryActionsWide}>
             <KindredButton
               label={hub.compose.continueLabel}
               variant="primary"
@@ -1294,6 +1267,13 @@ export function ComposingEditor({
           </div>
         </div>
       )}
+    </div>
+  );
+  };
+
+  return (
+    <div data-tone="solemn" className={styles.capture}>
+      {renderPhase()}
     </div>
   );
 }
@@ -1490,20 +1470,7 @@ function ToggleOption({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      style={{
-        minHeight: 36,
-        padding: "0 18px",
-        borderRadius: "var(--radius-pill)",
-        border: "none",
-        background: active ? "var(--accent)" : "transparent",
-        color: active ? "var(--accent-on)" : "var(--text-muted)",
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-ui-sm)",
-        fontWeight: 600,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled && !active ? 0.5 : 1,
-        transition: "background var(--dur-fade), color var(--dur-fade)",
-      }}
+      className={styles.modeOption}
     >
       {label}
     </button>

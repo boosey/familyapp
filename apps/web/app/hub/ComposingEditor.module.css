@@ -1,0 +1,82 @@
+/*
+ * ComposingEditor — the live story-composing / capture surface. The whole subtree is tone="solemn"
+ * (set on `.capture` in ComposingEditor.tsx): this is the emotional core, so it stays calm — NO
+ * Playful tilt/tape/highlighter. Token-driven; a straight port of the capture-chrome inline styles
+ * (the persistent capture footer + the voice/type mode toggles). See _skins/CSS-MODULES.md.
+ */
+
+/* Outer solemn container — a plain contents-transparent wrapper carrying data-tone="solemn". */
+.capture {
+  display: contents;
+}
+
+/* Persistent capture footer — mic + type box, both live (append more takes). */
+.footer {
+  border-top: var(--border-width) solid var(--border);
+  padding-top: 24px;
+  margin-top: 8px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* The voice⇄text input-mode segmented toggle group (both the footer and the capture-entry copies). */
+.modeGroup {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+}
+
+/* One option inside the mode toggle group. */
+.modeOption {
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fade), color var(--dur-fade);
+}
+
+.modeOption[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+
+.modeOption:disabled {
+  cursor: not-allowed;
+}
+
+/* A disabled, non-active option dims; the active one keeps its fill even while disabled. */
+.modeOption:disabled[aria-pressed="false"] {
+  opacity: 0.5;
+}
+
+.modeOption:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Text-entry column (footer's type box + its continue button). */
+.textEntry {
+  width: 100%;
+  max-width: 480px;
+}
+
+.textEntryActions {
+  margin-top: 12px;
+}
+
+/* Capture-entry (take-0) continue button sits a touch lower than the footer's. */
+.textEntryActionsWide {
+  margin-top: 16px;
+}

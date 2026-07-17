@@ -8,8 +8,13 @@
  * Graceful degradation: tabs are content-driven. Two tabs (toggle shown) only when BOTH prose and
  * transcript exist; a single available body renders on its own with no toggle; when neither exists
  * we fall back to the "no prose yet" line (the recording above is then the whole story).
+ *
+ * Styling: token-driven CSS module (Phase 2). The prose stays a SINGLE <p> blob — highlight-to-
+ * treasure (Task 8) selects across the whole prose text, so it must not be split into per-line/
+ * paragraph elements.
  */
 import { useState } from "react";
+import styles from "./StoryReadBody.module.css";
 
 export type StoryReadBodyProps = {
   prose: string | null;
@@ -22,27 +27,6 @@ export type StoryReadBodyProps = {
 };
 
 type Tab = "prose" | "transcript";
-
-const proseStyle: React.CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontWeight: 400,
-  fontSize: "clamp(var(--text-story), 2.5vw, var(--text-story-lg))",
-  lineHeight: 1.65,
-  color: "var(--text-body)",
-  whiteSpace: "pre-wrap",
-  textWrap: "pretty",
-  margin: "0 0 60px",
-};
-
-const transcriptStyle: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-ui-sm)",
-  lineHeight: 1.7,
-  color: "var(--text-muted)",
-  whiteSpace: "pre-wrap",
-  textWrap: "pretty",
-  margin: "0 0 60px",
-};
 
 export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps) {
   const hasProse = Boolean(prose && prose.trim());
@@ -57,19 +41,7 @@ export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps)
   return (
     <div>
       {tabs.length >= 2 && (
-        <div
-          role="tablist"
-          aria-label={`${labels.story} / ${labels.transcript}`}
-          style={{
-            display: "inline-flex",
-            gap: 4,
-            background: "var(--surface-sunken)",
-            border: "1.5px solid var(--border)",
-            borderRadius: "var(--radius-pill)",
-            padding: 4,
-            margin: "0 0 20px",
-          }}
-        >
+        <div role="tablist" aria-label={`${labels.story} / ${labels.transcript}`} className={styles.tablist}>
           {tabs.map((tab) => {
             const on = active === tab;
             return (
@@ -79,18 +51,7 @@ export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps)
                 role="tab"
                 aria-selected={on}
                 onClick={() => setActive(tab)}
-                style={{
-                  padding: "9px 20px",
-                  border: "none",
-                  cursor: "pointer",
-                  borderRadius: "var(--radius-pill)",
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-ui-sm)",
-                  fontWeight: 600,
-                  background: on ? "var(--surface-card)" : "transparent",
-                  color: on ? "var(--accent-strong)" : "var(--text-muted)",
-                  boxShadow: on ? "var(--shadow-sm)" : "none",
-                }}
+                className={styles.tab}
               >
                 {tab === "prose" ? labels.story : labels.transcript}
               </button>
@@ -100,11 +61,11 @@ export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps)
       )}
 
       {active === "transcript" && hasTranscript ? (
-        <p style={transcriptStyle}>{transcript}</p>
+        <p className={styles.transcript}>{transcript}</p>
       ) : hasProse ? (
-        <p style={proseStyle}>{prose}</p>
+        <p className={styles.prose}>{prose}</p>
       ) : (
-        <p style={{ ...proseStyle, color: "var(--text-muted)" }}>{labels.noProse}</p>
+        <p className={`${styles.prose} ${styles.proseEmpty}`}>{labels.noProse}</p>
       )}
     </div>
   );
