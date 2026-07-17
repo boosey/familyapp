@@ -11,6 +11,8 @@ import {
   INVITE_FLASH_PATH,
   MEMBER_INVITE_FLASH_COOKIE,
   MEMBER_INVITE_FLASH_PATH,
+  MEMBER_INVITE_TARGETS_FLASH_COOKIE,
+  MEMBER_INVITE_TARGETS_FLASH_PATH,
 } from "@/lib/invite-flash";
 
 export const runtime = "nodejs";
@@ -20,5 +22,6 @@ export async function POST(): Promise<Response> {
   const jar = await cookies();
   jar.delete({ name: INVITE_FLASH_COOKIE, path: INVITE_FLASH_PATH });
   jar.delete({ name: MEMBER_INVITE_FLASH_COOKIE, path: MEMBER_INVITE_FLASH_PATH });
+  jar.delete({ name: MEMBER_INVITE_TARGETS_FLASH_COOKIE, path: MEMBER_INVITE_TARGETS_FLASH_PATH });
   return new NextResponse(null, { status: 204 });
 }

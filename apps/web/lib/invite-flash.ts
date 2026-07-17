@@ -13,3 +13,13 @@ export const INVITE_FLASH_PATH = "/hub";
  */
 export const MEMBER_INVITE_FLASH_COOKIE = "chronicle_flash_member_invite_token";
 export const MEMBER_INVITE_FLASH_PATH = "/hub";
+
+/**
+ * Third flash cookie: a short human-readable string naming WHERE the async delivery (email/SMS) was
+ * sent (e.g. "rosa@example.com, +15551230000") — never the token, never a DB round-trip. Set only
+ * when at least one delivery channel was actually attempted (Task 9); its absence means the member
+ * result view renders the copy-link with no "sending" line (pure copy-link, no delivery attempted).
+ * Same show-once contract and clearing route as the cookies above.
+ */
+export const MEMBER_INVITE_TARGETS_FLASH_COOKIE = "chronicle_flash_member_invite_targets";
+export const MEMBER_INVITE_TARGETS_FLASH_PATH = "/hub";

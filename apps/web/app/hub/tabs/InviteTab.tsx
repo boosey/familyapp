@@ -27,6 +27,8 @@ import {
   INVITE_FLASH_PATH,
   MEMBER_INVITE_FLASH_COOKIE,
   MEMBER_INVITE_FLASH_PATH,
+  MEMBER_INVITE_TARGETS_FLASH_COOKIE,
+  MEMBER_INVITE_TARGETS_FLASH_PATH,
 } from "@/lib/invite-flash";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
@@ -141,6 +143,23 @@ async function createMemberInvite(formData: FormData): Promise<void> {
     path: MEMBER_INVITE_FLASH_PATH,
     maxAge: 60,
   });
+
+  if (channels.length) {
+    // Human-readable destinations only (never the token) — a short-lived flash so the result view
+    // can render an honest "sending" line without a DB round-trip. Absent entirely for a pure
+    // copy-link invite (no contact given / no consent), so that path never falsely implies delivery.
+    const targets = [
+      channels.includes("email") && inviteeEmail ? inviteeEmail : null,
+      channels.includes("sms") && normalizedPhone ? normalizedPhone : null,
+    ].filter((t): t is string => Boolean(t));
+    jar.set(MEMBER_INVITE_TARGETS_FLASH_COOKIE, targets.join(", "), {
+      httpOnly: true,
+      sameSite: "lax",
+      path: MEMBER_INVITE_TARGETS_FLASH_PATH,
+      maxAge: 60,
+    });
+  }
+
   redirect("/hub?tab=invite");
 }
 
@@ -150,15 +169,31 @@ function LinkResult({
   blurb,
   link,
   note,
+  sendingTo,
 }: {
   title: string;
   blurb: string;
   link: string;
   note: string;
+  /** Task 9 — optional "Sending your invitation to …" status line, sourced purely from a flash
+   * cookie (no DB read). Rendered above the copy-link card, which remains the guaranteed fallback. */
+  sendingTo?: string;
 }) {
   return (
     <div style={{ maxWidth: 600 }}>
       <ClearInviteFlash />
+      {sendingTo ? (
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-ui-sm)",
+            color: "var(--text-meta)",
+            margin: "0 0 16px",
+          }}
+        >
+          {hub.invite.sendingTo(sendingTo)}
+        </p>
+      ) : null}
       <h2
         style={{
           fontFamily: "var(--font-story)",
@@ -269,12 +304,14 @@ export async function InviteTab({
   /* ── Member result (show-once) ───────────────────────────────────────────── */
   if (memberToken) {
     const link = `${await origin()}/join/${memberToken}`;
+    const sendingTo = jar.get(MEMBER_INVITE_TARGETS_FLASH_COOKIE)?.value;
     return (
       <LinkResult
         title={hub.invite.memberReadyTitle}
         blurb={hub.invite.memberReadyBlurb}
         link={link}
         note={hub.invite.fingerprintNote}
+        sendingTo={sendingTo || undefined}
       />
     );
   }

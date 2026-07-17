@@ -156,6 +156,10 @@ export const hub = {
     memberReadyTitle: "Invitation link is ready",
     memberReadyBlurb:
       "Send this to your relative. Opening it lets them create a login and join your family — you don't have to set anything up for them.",
+    // Task 9 — delivery-status readout. Delivery is async (off the request path), so this is the only
+    // signal the inviter gets that anything was sent; the copy-link below is always the honest fallback.
+    sendingTo: (targets: string) =>
+      `Sending your invitation to ${targets}. If it doesn't arrive, you can still share the link below.`,
     signedOut: "Sign in to invite someone.",
     memberHeading: "Invite a family member",
     memberBody:
