@@ -5,9 +5,10 @@
  * code does not change. Because every stage handler is built idempotent (re-running with the
  * same payload produces the same outputs without duplicate side effects), retries are safe.
  *
- * Pending-dedupe: if the same (name, storyId) is enqueued twice while still pending, the
- * second enqueue is a no-op. This mirrors what a real durable queue's dedupe key would do and
- * keeps tests honest — a callsite that retries enqueuing should not pile up duplicate work.
+ * Pending-dedupe: if two enqueues produce the same `jobDedupeKey(name, payload)` (the per-job-name
+ * dedupe key — see contracts.ts) while a prior is still pending, the second enqueue is a no-op.
+ * This mirrors what a real durable queue's dedupe key would do and keeps tests honest — a callsite
+ * that retries enqueuing should not pile up duplicate work.
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -16,8 +17,10 @@ import type {
   JobHandler,
   JobName,
   JobPayload,
+  JobPayloadMap,
   JobQueue,
 } from "./contracts";
+import { jobDedupeKey } from "./contracts";
 // PIPELINE_JOB_MAX_ATTEMPTS: hard cap on attempts per job-id in the in-process queue. A handler
 // that re-enqueues itself (e.g. render_story re-queueing transcribe when the transcript isn't
 // ready) under a real bug could otherwise spin forever — production Inngest caps retries, this
@@ -31,10 +34,9 @@ export class InProcessJobQueue implements JobQueue {
   private readonly attemptsById = new Map<string, number>();
   private draining = false;
 
-  async enqueue(name: JobName, payload: JobPayload): Promise<string> {
-    const existing = this.queue.find(
-      (j) => j.name === name && j.payload.storyId === payload.storyId,
-    );
+  async enqueue<N extends JobName>(name: N, payload: JobPayloadMap[N]): Promise<string> {
+    const key = jobDedupeKey(name, payload);
+    const existing = this.queue.find((j) => jobDedupeKey(j.name, j.payload) === key);
     if (existing) return existing.id;
     const job: EnqueuedJob = {
       id: randomUUID(),
@@ -47,9 +49,13 @@ export class InProcessJobQueue implements JobQueue {
     return job.id;
   }
 
-  register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void {
-    this.handlers.set(name, handler);
-    if (onFailure) this.failureHandlers.set(name, onFailure);
+  register<N extends JobName>(
+    name: N,
+    handler: JobHandler<N>,
+    onFailure?: JobFailureHandler<N>,
+  ): void {
+    this.handlers.set(name, handler as JobHandler);
+    if (onFailure) this.failureHandlers.set(name, onFailure as JobFailureHandler);
     else this.failureHandlers.delete(name);
   }
 
@@ -67,12 +73,12 @@ export class InProcessJobQueue implements JobQueue {
         if (!handler) {
           throw new Error(`no handler registered for job: ${job.name}`);
         }
-        const key = `${job.name}|${job.payload.storyId}`;
+        const key = jobDedupeKey(job.name, job.payload);
         const attempts = (this.attemptsById.get(key) ?? 0) + 1;
         this.attemptsById.set(key, attempts);
         if (attempts > PIPELINE_JOB_MAX_ATTEMPTS) {
           throw new Error(
-            `job '${job.name}' for story '${job.payload.storyId}' exceeded ${PIPELINE_JOB_MAX_ATTEMPTS} attempts in one drain — likely a handler re-queueing itself in a loop`,
+            `job '${job.name}' (key '${key}') exceeded ${PIPELINE_JOB_MAX_ATTEMPTS} attempts in one drain — likely a handler re-queueing itself in a loop`,
           );
         }
         job.attempts = attempts;

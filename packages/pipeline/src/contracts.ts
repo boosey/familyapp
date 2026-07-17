@@ -125,10 +125,10 @@ export interface LanguageModel {
 // stage with the same inputs produces the same outputs without duplicate side effects).
 // ---------------------------------------------------------------------------
 
-/** The pipeline stages Phase 1 ships. Adding a stage is a deliberate, named change. */
-export type JobName = "transcribe" | "render_story";
+/** Delivery channels an invitation can be sent over (email/SMS wedge). */
+export type DeliveryChannel = "email" | "sms";
 
-export interface JobPayload {
+export interface StoryJobPayload {
   /** All Phase-1 pipeline jobs target a single Story. */
   storyId: string;
   /**
@@ -140,6 +140,26 @@ export interface JobPayload {
   attempt?: number;
 }
 
+export interface InviteJobPayload {
+  invitationId: string;
+  token: string;
+  channels: DeliveryChannel[];
+}
+
+/** Maps each job name to its payload type. Adding a job = a deliberate, named entry here. */
+export interface JobPayloadMap {
+  transcribe: StoryJobPayload;
+  render_story: StoryJobPayload;
+  "invite.send": InviteJobPayload;
+}
+
+/** The pipeline stages Phase 1 ships (plus invite delivery). Adding a stage is a deliberate, named change. */
+export type JobName = keyof JobPayloadMap;
+
+/** Union of all job payload shapes. Handlers registered for a specific `JobName` should prefer the
+ *  precise `JobPayloadMap[N]` type (via `JobHandler<N>`) rather than narrowing this union. */
+export type JobPayload = JobPayloadMap[JobName];
+
 export interface EnqueuedJob {
   id: string;
   name: JobName;
@@ -148,7 +168,7 @@ export interface EnqueuedJob {
   attempts: number;
 }
 
-export type JobHandler = (payload: JobPayload) => Promise<void>;
+export type JobHandler<N extends JobName = JobName> = (payload: JobPayloadMap[N]) => Promise<void>;
 
 /** Vendor-neutral shape of a terminal failure — never leaks the queue vendor's error object. */
 export interface JobFailureInfo {
@@ -158,27 +178,41 @@ export interface JobFailureInfo {
 
 /**
  * Called when a stage has TERMINALLY failed — the durable queue exhausted its retries (issue #11).
- * Receives the original payload (so it can act on the storyId) and a vendor-neutral error summary.
- * MUST be idempotent and must not throw for a routine failure; its job is to record the signal.
+ * Receives the original payload (so it can act on the job's identifying id) and a vendor-neutral
+ * error summary. MUST be idempotent and must not throw for a routine failure; its job is to record
+ * the signal.
  */
-export type JobFailureHandler = (
-  payload: JobPayload,
+export type JobFailureHandler<N extends JobName = JobName> = (
+  payload: JobPayloadMap[N],
   error: JobFailureInfo,
 ) => Promise<void>;
+
+/**
+ * Per-name dedupe/attempt key: story jobs key on storyId(+attempt) (preserving the existing
+ * retry-generation dedupe-bust behavior — see `StoryJobPayload.attempt`), invite jobs key on
+ * invitationId. Adding a job name means adding a deliberate branch here.
+ */
+export function jobDedupeKey<N extends JobName>(name: N, payload: JobPayloadMap[N]): string {
+  if (name === "invite.send") {
+    return `invite.send|${(payload as InviteJobPayload).invitationId}`;
+  }
+  const p = payload as StoryJobPayload;
+  return `${name}|${p.storyId}${p.attempt !== undefined ? `|${p.attempt}` : ""}`;
+}
 
 export interface JobQueue {
   /**
    * Enqueue a stage. Returns the job id. Implementations may dedupe by (name, payload) — the
    * in-process impl below does, so re-enqueuing the same job is a no-op while a prior is pending.
    */
-  enqueue(name: JobName, payload: JobPayload): Promise<string>;
+  enqueue<N extends JobName>(name: N, payload: JobPayloadMap[N]): Promise<string>;
   /**
    * Register a handler for a stage. Calling twice for the same stage replaces the handler.
    * `onFailure` (optional) runs when the stage terminally fails after the queue exhausts retries —
    * the durable (Inngest) impl wires it to the vendor's native failure hook; the in-process impl,
    * which has no retries, invokes it the first (and only) time a handler throws.
    */
-  register(name: JobName, handler: JobHandler, onFailure?: JobFailureHandler): void;
+  register<N extends JobName>(name: N, handler: JobHandler<N>, onFailure?: JobFailureHandler<N>): void;
   /** Drain all pending jobs (running handlers). Returns when the queue is empty. */
   drain(): Promise<void>;
   /** Inspect pending jobs — for tests, retry inspection, and observability. */
