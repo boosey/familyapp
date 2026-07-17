@@ -60,14 +60,22 @@ describe("useMicRecorder", () => {
       });
       constructor(_stream: MediaStream, opts?: { mimeType?: string }) {
         if (opts?.mimeType) this.mimeType = opts.mimeType;
-        lastRecorder = this;
       }
       start() {
         this.state = "recording";
       }
     }
+    // Capture the most-recently constructed instance via a construct trap rather than aliasing
+    // `this` inside the constructor (oxlint no-this-alias) — the hook does `new MediaRecorder(...)`
+    // internally, so the trap fires and records the live instance for the tests to inspect.
     // @ts-expect-error test double
-    globalThis.MediaRecorder = FakeMediaRecorder;
+    globalThis.MediaRecorder = new Proxy(FakeMediaRecorder, {
+      construct(target, args) {
+        const instance = Reflect.construct(target, args) as FakeMediaRecorder;
+        lastRecorder = instance;
+        return instance;
+      },
+    });
   });
 
   afterEach(() => {
