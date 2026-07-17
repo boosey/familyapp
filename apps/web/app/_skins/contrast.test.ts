@@ -64,6 +64,12 @@ const STICKER_PAIRS = [
   ["--text-body", "--highlighter"],
 ] as const;
 
+// Under `[data-tone="solemn"]` the decorative palette collapses (globals.css): every sticker bg/ink
+// and the highlighter fall back to `--surface-sunken` + `--text-meta`. That fallback still renders
+// tag TEXT, so guard it too — otherwise a future `--surface-sunken`/`--text-meta` tweak could silently
+// make solemn tags illegible while every other pair here still passes.
+const SOLEMN_FALLBACK_PAIRS = [["--text-meta", "--surface-sunken"]] as const;
+
 function assertAA(css: string, fg: string, bg: string): void {
   const ratio = contrast(tokenHex(css, fg), tokenHex(css, bg));
   expect(ratio, `${fg} on ${bg} was ${ratio.toFixed(2)}:1 (need >= ${AA})`).toBeGreaterThanOrEqual(AA);
@@ -79,6 +85,12 @@ describe("skin contrast (WCAG AA)", () => {
   for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
     it(`${name}: sticker tags + highlighter meet AA`, () => {
       for (const [fg, bg] of STICKER_PAIRS) assertAA(css, fg, bg);
+    });
+  }
+
+  for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
+    it(`${name}: solemn-tone fallback text stays legible`, () => {
+      for (const [fg, bg] of SOLEMN_FALLBACK_PAIRS) assertAA(css, fg, bg);
     });
   }
 
