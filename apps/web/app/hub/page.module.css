@@ -26,6 +26,7 @@
 }
 
 .titleGroup {
+  /* holds the family name + future inline title actions — intentional extension seam */
   display: flex;
   align-items: center;
   gap: 14px;
@@ -45,7 +46,7 @@
   margin-bottom: -1px; /* overlap the border */
 }
 
-.content {
+.tabContent {
   padding: 28px 0;
 }
 

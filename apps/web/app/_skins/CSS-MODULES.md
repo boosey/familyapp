@@ -19,6 +19,9 @@ signatures require classes. Rules:
    ```
    Motion (transitions, breathing) additionally collapses via the global duration guard in
    `globals.css`; static tilt/tape are killed by the rule above.
-6. **Dynamic values** (a computed rotation, an audio level) → set a CSS custom property inline
-   (`style={{ "--i": index }}`) and consume it in the module. JS math stays in TS.
+6. **Dynamic values** (a computed rotation, an audio level) → set a CSS custom property inline and
+   consume it in the module. JS math stays in TS. Under TS-strict, a custom prop wants a *string*,
+   so cast: `style={{ "--i": String(index) } as CSSProperties}` (or emit an already-unit'd string,
+   e.g. `"--tilt": i % 2 ? "-0.55deg" : "0.55deg"`).
 7. **Focus:** every interactive element keeps a visible `:focus-visible` outline in the module.
+   (This shell module has no interactive element; the first worked example lands in `HubTabs.module.css`.)

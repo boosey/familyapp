@@ -264,7 +264,7 @@ export default async function HubPage({
         </header>
 
         {/* Tab content */}
-        <section className={styles.content}>
+        <section className={styles.tabContent}>
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab
