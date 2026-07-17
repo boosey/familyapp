@@ -38,12 +38,13 @@ export const auth = {
     backToHub: "‹ Back to hub",
   },
   landing: {
-    eyebrow: "Est. 2026",
+    eyebrow: "Stories that stay alive",
+    headline: "Hear them tell it — while you still can.",
     tagline:
-      "A warm place to gather your family's stories — and to help the people you love tell theirs before they're lost.",
-    signUp: "Sign up",
+      "Family Chronicle turns quiet memories into living stories your people can keep, share, and replay.",
+    signUp: "Start your chronicle",
     signIn: "Sign in",
     narratorNote:
-      "Invited a narrator to record? They open their own personal link — they never sign in here.",
+      "Invited to record? Open your personal link — no account needed.",
   },
 } as const;

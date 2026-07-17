@@ -9,9 +9,9 @@ import { readPreference, setPreference, applyPreference } from "./preferences/cl
 const pref = PREFERENCES.theme;
 
 const SWATCH: Record<ThemeId, { page: string; accent: string }> = {
-  heirloom: { page: "#F4ECE0", accent: "#BD5B3D" },
-  archive: { page: "#ECEEF0", accent: "#45707C" },
-  hearth: { page: "#F3E4DD", accent: "#B5524C" },
+  spark: { page: "#E8F4F0", accent: "#0D9488" },
+  harbor: { page: "#E4ECF5", accent: "#2563EB" },
+  grove: { page: "#E7F2DF", accent: "#65A30D" },
 };
 
 export function KindredThemePicker() {
@@ -83,7 +83,7 @@ function swatchStyle(page: string, accent: string): CSSProperties {
   return {
     width: 48,
     height: 32,
-    borderRadius: 6,
+    borderRadius: 8,
     background: page,
     border: "1px solid var(--border)",
     boxShadow: `inset 0 -6px 0 ${accent}`,

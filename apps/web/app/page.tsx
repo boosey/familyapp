@@ -1,8 +1,7 @@
 /**
  * Root landing — the account-holder front door. A login-free link-session visitor NEVER lands here;
- * they only ever follow their personal /s/[token] capture link. This is the warm marketing-light
- * entry for relatives: name the product, then offer the two real doors (create a family, or sign
- * in to an existing one).
+ * they only ever follow their personal /s/[token] capture link. This is the marketing-light
+ * entry for relatives: brand first, one promise, then the two real doors.
  */
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
@@ -13,87 +12,46 @@ export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--surface-page)",
-        padding: "6vh 6vw",
-        gap: 18,
-        textAlign: "center",
-      }}
-    >
-      <div className="kin-eyebrow">{auth.landing.eyebrow}</div>
-      <h1
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-display-lg)",
-          letterSpacing: "var(--tracking-tight)",
-          color: "var(--text-body)",
-          margin: 0,
-          lineHeight: "var(--leading-tight)",
-        }}
-      >
-        {common.appName}
-      </h1>
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-muted)",
-          maxWidth: "34ch",
-          margin: 0,
-          lineHeight: "var(--leading-body)",
-        }}
-      >
-        {auth.landing.tagline}
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 14,
-          justifyContent: "center",
-          marginTop: 12,
-        }}
-      >
-        <Link href="/sign-up" style={{ textDecoration: "none" }}>
-          <KindredButton label={auth.landing.signUp} size="large" />
-        </Link>
-        <Link href="/sign-in" style={{ textDecoration: "none" }}>
-          <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
-        </Link>
+    <main className="spark-landing">
+      {/* Full-bleed atmospheric plane — edge-to-edge, not an inset card */}
+      <div className="spark-landing__media" aria-hidden="true">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/landing-hero.jpg"
+          alt=""
+          className="spark-landing__photo"
+        />
+        <div className="spark-landing__veil" />
       </div>
 
-      <p
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "var(--tracking-mono)",
-          color: "var(--support)",
-          margin: "8px 0 0",
-        }}
-      >
-        {auth.landing.narratorNote}
-      </p>
+      <div className="spark-landing__content">
+        <p className="spark-landing__brand spark-rise">{common.appName}</p>
+        <h1 className="spark-landing__headline spark-rise spark-rise-delay-1">
+          {auth.landing.headline}
+        </h1>
+        <p className="spark-landing__tagline spark-rise spark-rise-delay-2">
+          {auth.landing.tagline}
+        </p>
 
-      <footer style={{ marginTop: 32 }}>
-        <Link
-          href="/privacy"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-label)",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-          }}
-        >
-          {legal.privacy.title}
-        </Link>
-      </footer>
+        <div className="spark-landing__ctas spark-rise spark-rise-delay-3">
+          <Link href="/sign-up" style={{ textDecoration: "none" }}>
+            <KindredButton label={auth.landing.signUp} size="large" />
+          </Link>
+          <Link href="/sign-in" style={{ textDecoration: "none" }}>
+            <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
+          </Link>
+        </div>
+
+        <p className="spark-landing__note spark-rise spark-rise-delay-4">
+          {auth.landing.narratorNote}
+        </p>
+
+        <footer className="spark-landing__footer">
+          <Link href="/privacy" className="spark-landing__privacy">
+            {legal.privacy.title}
+          </Link>
+        </footer>
+      </div>
     </main>
   );
 }

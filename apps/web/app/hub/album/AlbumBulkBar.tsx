@@ -121,7 +121,7 @@ export function AlbumBulkBar({
         aria-pressed={confirmingDelete}
         style={{
           ...btn,
-          color: "var(--accent-strong, #BD5B3D)",
+          color: "var(--accent-strong, #0F766E)",
           background: confirmingDelete ? "var(--accent-soft)" : "transparent",
           border: "var(--border-width) solid var(--accent)",
         }}

@@ -1,5 +1,5 @@
 /**
- * Shared centered-card chrome for the auth screens (sign-up / sign-in). Presentational only — no
+ * Shared chrome for the auth screens (sign-up / sign-in). Presentational only — no
  * state, no client boundary — so server components can compose it directly with their server-action
  * forms inside.
  */
@@ -22,33 +22,36 @@ export function AuthScreen({
 }) {
   return (
     <main
+      className="spark-atmosphere"
       style={{
         minHeight: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--surface-page)",
         padding: "clamp(24px, 5vw, 48px) 16px",
       }}
     >
       <div
+        className="spark-rise"
         style={{
-          maxWidth: 440,
+          maxWidth: 460,
           width: "100%",
           padding: "clamp(28px, 5vw, 48px)",
-          background: "var(--surface-card)",
+          background: "color-mix(in srgb, var(--surface-card) 92%, transparent)",
           border: "var(--border-width) solid var(--border)",
           borderRadius: "var(--radius-xl)",
           boxShadow: "var(--shadow-lift)",
+          backdropFilter: "blur(12px)",
         }}
       >
         <Link
           href="/"
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--text-label)",
-            letterSpacing: "var(--tracking-mono)",
-            color: "var(--support)",
+            fontFamily: "var(--font-story)",
+            fontSize: "1.15rem",
+            fontWeight: 600,
+            letterSpacing: "var(--tracking-tight)",
+            color: "var(--accent)",
             textDecoration: "none",
           }}
         >
@@ -58,10 +61,11 @@ export function AuthScreen({
           style={{
             fontFamily: "var(--font-story)",
             fontSize: "var(--text-display)",
-            fontWeight: 500,
+            fontWeight: 550,
             color: "var(--text-body)",
-            margin: "14px 0 8px",
+            margin: "16px 0 8px",
             lineHeight: "var(--leading-tight)",
+            letterSpacing: "var(--tracking-display)",
           }}
         >
           {title}

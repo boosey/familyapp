@@ -97,7 +97,7 @@ export function PhotoActionBar({
     pressed?: boolean;
     title?: string;
   }) {
-    const color = danger ? "var(--accent-strong, #BD5B3D)" : "var(--text-body)";
+    const color = danger ? "var(--accent-strong, #0F766E)" : "var(--text-body)";
     return (
       <button
         type="button"
@@ -118,7 +118,7 @@ export function PhotoActionBar({
                 border: "none",
                 borderRadius: "var(--radius-sm)",
                 background: "transparent",
-                color: danger ? "var(--accent-strong, #BD5B3D)" : "var(--text-body)",
+                color: danger ? "var(--accent-strong, #0F766E)" : "var(--text-body)",
                 fontSize: "1.35rem",
                 lineHeight: 1,
                 cursor: disabled || busy ? "not-allowed" : "pointer",

@@ -691,14 +691,14 @@ export const hub = {
     paletteIntro: "Choose the mood of the chronicle on this device.",
     paletteAria: "Color palette",
     paletteShort: {
-      heirloom: "Heirloom",
-      archive: "Archive",
-      hearth: "Hearth",
+      spark: "Spark",
+      harbor: "Harbor",
+      grove: "Grove",
     },
     paletteLabels: {
-      heirloom: "Heirloom palette — warm terracotta and sage",
-      archive: "Archive palette — cool gray and teal",
-      hearth: "Hearth palette — warm rose and coral",
+      spark: "Spark palette — seafoam mist and teal energy",
+      harbor: "Harbor palette — sky mist and cobalt",
+      grove: "Grove palette — leaf light and chartreuse",
     },
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.

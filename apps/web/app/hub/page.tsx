@@ -25,7 +25,7 @@ import {
   loadStoryCoverPhotoIds,
   loadStoryPhotoIds,
 } from "@/lib/hub-data";
-import { hub } from "@/app/_copy";
+import { common, hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
@@ -241,48 +241,55 @@ export default async function HubPage({
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        background: "var(--surface-page)",
-      }}
-    >
+    <main className="spark-atmosphere" style={{ minHeight: "100dvh" }}>
       <div
         style={{
-          maxWidth: 900,
+          maxWidth: 1040,
           margin: "0 auto",
-          padding: "0 clamp(16px, 4vw, 32px)",
+          padding: "0 clamp(16px, 4vw, 36px)",
         }}
       >
-        {/* Header */}
+        {/* Header — family name as hero signal, tabs as a floating rail */}
         <header
+          className="spark-rise"
           style={{
-            padding: "28px 0 0",
-            borderBottom: "var(--border-width) solid var(--border)",
+            padding: "32px 0 0",
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: 20,
           }}
         >
-          {/* Title row */}
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-end",
               justifyContent: "space-between",
               gap: 16,
               flexWrap: "wrap",
+              paddingRight: 56 /* clear fixed account menu */,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-label)",
+                  letterSpacing: "var(--tracking-mono)",
+                  color: "var(--accent)",
+                  textTransform: "uppercase",
+                }}
+              >
+                {common.appName}
+              </span>
               <h1
                 style={{
                   fontFamily: "var(--font-story)",
-                  fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
-                  fontWeight: 400,
+                  fontSize: "clamp(2rem, 5vw, 3.25rem)",
+                  fontWeight: 500,
                   color: "var(--text-body)",
                   margin: 0,
-                  letterSpacing: "var(--tracking-tight)",
+                  letterSpacing: "var(--tracking-display)",
+                  lineHeight: "var(--leading-tight)",
                 }}
               >
                 {familyName}
@@ -292,14 +299,22 @@ export default async function HubPage({
                 layout, so the hub no longer inlines its own copy in the header. */}
           </div>
 
-          {/* Tabs row */}
-          <div style={{ marginBottom: -1 /* overlap the border */ }}>
+          <div
+            style={{
+              background: "color-mix(in srgb, var(--surface-card) 82%, transparent)",
+              border: "var(--border-width) solid color-mix(in srgb, var(--border) 80%, transparent)",
+              borderRadius: "var(--radius-xl)",
+              padding: "6px",
+              boxShadow: "var(--shadow-sm)",
+              backdropFilter: "blur(10px)",
+            }}
+          >
             <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
           </div>
         </header>
 
         {/* Tab content */}
-        <section style={{ padding: "28px 0" }}>
+        <section className="spark-rise spark-rise-delay-1" style={{ padding: "28px 0 48px" }}>
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab

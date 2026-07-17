@@ -1,9 +1,9 @@
 /** Color palette ids — must match `[data-theme]` selectors in `_kindred/tokens.css`. */
-export const THEME_IDS = ["heirloom", "archive", "hearth"] as const;
+export const THEME_IDS = ["spark", "harbor", "grove"] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME_ID: ThemeId = "heirloom";
+export const DEFAULT_THEME_ID: ThemeId = "spark";
 
 export const THEME_STORAGE_KEY = "kin-theme";
 

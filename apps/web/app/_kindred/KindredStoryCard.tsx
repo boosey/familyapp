@@ -27,11 +27,8 @@ export interface KindredStoryCardProps
 }
 
 /**
- * A single story card — 120 × 120 photo thumbnail (or striped placeholder),
- * mono metadata row, serif title, excerpt, and optional pin indicator.
- *
- * Legacy: if `year`/`place`/`duration` are absent the component falls back to
- * the old `era` + `meta[]` display so the current hub page keeps working.
+ * A single story card — media-forward composition with soft lift motion.
+ * Photo leads when present; text-only stories keep a vivid accent panel.
  */
 export function KindredStoryCard({
   title,
@@ -56,7 +53,6 @@ export function KindredStoryCard({
   const Tag: "a" | "div" = href ? "a" : "div";
   const interactive = Boolean(href ?? onClick);
 
-  /* For onClick-only (non-anchor) cards, make the <div> keyboard accessible. */
   const buttonProps =
     !href && onClick
       ? {
@@ -71,12 +67,9 @@ export function KindredStoryCard({
         }
       : {};
 
-  /* Build the metadata row content. Prefer new scalar fields; fall back to legacy.
-     Narrator (byline) leads, then the event era / place / duration. */
   const newMetaParts = [byline, year, place, duration].filter(Boolean) as string[];
   const hasNewMeta = newMetaParts.length > 0;
 
-  /* Legacy row: era + byline + meta[] bullets */
   const legacyMetaParts: string[] = [];
   if (era) legacyMetaParts.push(era);
   if (byline) legacyMetaParts.push(byline);
@@ -92,33 +85,36 @@ export function KindredStoryCard({
       {...(href ? { href } : {})}
       {...buttonProps}
       onClick={onClick}
+      className={interactive ? "spark-card-lift" : undefined}
       style={{
         display: "flex",
         gap: "var(--space-5)",
-        alignItems: "center",
+        alignItems: "stretch",
         background: "var(--surface-card)",
         border: "var(--border-width, 1.5px) solid var(--border)",
-        borderRadius: "var(--radius-lg)",
-        padding: "var(--space-5)",
+        borderRadius: "var(--radius-xl)",
+        padding: "var(--space-4)",
         boxShadow: "var(--shadow-card)",
         cursor: interactive ? "pointer" : "default",
         color: "inherit",
         textDecoration: "none",
         position: "relative",
+        overflow: "hidden",
         ...style,
       }}
     >
-      {/* Thumbnail / placeholder */}
+      {/* Media column */}
       {imageSrc ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={imageSrc}
           alt=""
           style={{
-            width: 120,
-            height: 120,
+            width: 140,
+            minHeight: 140,
+            alignSelf: "stretch",
             flexShrink: 0,
-            borderRadius: "var(--radius-md)",
+            borderRadius: "var(--radius-lg)",
             objectFit: "cover",
           }}
         />
@@ -126,24 +122,38 @@ export function KindredStoryCard({
         <div
           aria-hidden="true"
           style={{
-            width: 120,
-            height: 120,
+            width: 140,
+            minHeight: 140,
             flexShrink: 0,
-            borderRadius: "var(--radius-md)",
-            backgroundColor: "var(--surface-sunken)",
-            backgroundImage:
-              "repeating-linear-gradient(45deg, var(--surface-sunken) 0 10px, var(--surface-page) 10px 20px)",
+            borderRadius: "var(--radius-lg)",
+            background:
+              "linear-gradient(145deg, var(--accent-soft) 0%, color-mix(in srgb, var(--support-soft) 80%, var(--accent-soft)) 55%, var(--surface-sunken) 100%)",
             display: "flex",
             alignItems: "flex-end",
-            justifyContent: "center",
-            paddingBottom: 8,
+            justifyContent: "flex-start",
+            padding: 14,
+            position: "relative",
+            overflow: "hidden",
           }}
         >
           <span
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              color: "var(--text-muted)",
+              position: "absolute",
+              inset: "-20% auto auto 40%",
+              width: 90,
+              height: 90,
+              borderRadius: "50%",
+              background: "color-mix(in srgb, var(--accent) 18%, transparent)",
+            }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--font-story)",
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "var(--accent-strong)",
+              letterSpacing: "var(--tracking-tight)",
+              position: "relative",
             }}
           >
             {common.storyCard.photo}
@@ -152,8 +162,16 @@ export function KindredStoryCard({
       )}
 
       {/* Content column */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Meta header: narrator + era on the left, recorded-date stamp on the right. */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "4px 4px 4px 0",
+        }}
+      >
         {metaLabel || recordedLabel || isNew ? (
           <div
             style={{
@@ -200,22 +218,22 @@ export function KindredStoryCard({
           </div>
         ) : null}
 
-        {/* Serif title */}
         {title ? (
           <div
             style={{
               fontFamily: "var(--font-story)",
               fontSize: "var(--text-story-lg)",
               lineHeight: "var(--leading-snug)",
+              fontWeight: 550,
               color: "var(--text-body)",
               marginBottom: "var(--space-2)",
+              letterSpacing: "var(--tracking-tight)",
             }}
           >
             {title}
           </div>
         ) : null}
 
-        {/* Excerpt */}
         {excerpt ? (
           <p
             style={{
@@ -225,7 +243,6 @@ export function KindredStoryCard({
               lineHeight: "var(--leading-body)",
               margin: 0,
               marginBottom: children ? "var(--space-2)" : 0,
-              /* Clamp to 3 lines */
               display: "-webkit-box",
               WebkitLineClamp: 3,
               WebkitBoxOrient: "vertical",
@@ -239,27 +256,28 @@ export function KindredStoryCard({
         {children}
       </div>
 
-      {/* Arrow — only when interactive and not suppressed */}
       {interactive && showArrow ? (
         <span
           style={{
             width: 48,
             height: 48,
-            borderRadius: "50%",
+            alignSelf: "center",
+            borderRadius: "var(--radius-md)",
             border: "1.5px solid var(--border-strong)",
+            background: "var(--accent-soft)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "var(--accent)",
+            color: "var(--accent-strong)",
             fontSize: 22,
             flexShrink: 0,
+            fontWeight: 600,
           }}
         >
           {"›"}
         </span>
       ) : null}
 
-      {/* Pin indicator */}
       {pinned ? (
         <span
           aria-label={common.storyCard.pinned}
@@ -278,21 +296,21 @@ export function KindredStoryCard({
   );
 }
 
-/** Small accent pill marking a story the viewer hasn't opened yet. */
 function NewPill() {
   return (
     <span
       style={{
         flex: "0 0 auto",
-        padding: "2px 8px",
-        borderRadius: "var(--radius-pill)",
-        background: "var(--accent)",
-        color: "var(--accent-on)",
+        padding: "3px 9px",
+        borderRadius: "var(--radius-sm)",
+        background: "linear-gradient(120deg, var(--accent), var(--support))",
+        color: "#fff",
         fontFamily: "var(--font-mono)",
         fontSize: "var(--text-label)",
         letterSpacing: "var(--tracking-mono)",
         lineHeight: 1.4,
         textTransform: "uppercase",
+        fontWeight: 700,
       }}
     >
       {common.storyCard.badgeNew}

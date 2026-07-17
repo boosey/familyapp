@@ -61,11 +61,13 @@ export function KindredButton({
     gap: "0.5rem",
     width: fullWidth ? "100%" : undefined,
     padding: "0 24px",
-    borderRadius: "var(--radius-pill)",
+    borderRadius: "var(--radius-lg)",
     fontFamily: "var(--font-ui)",
     fontWeight: 600,
+    letterSpacing: "-0.01em",
     cursor: "pointer",
-    transition: "background .15s, border-color .15s, color .15s",
+    transition:
+      "background var(--dur-fade) var(--ease-quiet), border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet), transform var(--dur-settle) var(--ease-spring), box-shadow var(--dur-settle) var(--ease-spring)",
     ...SIZE_STYLES[size],
   };
 

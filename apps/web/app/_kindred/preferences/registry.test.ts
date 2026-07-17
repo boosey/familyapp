@@ -15,8 +15,8 @@ const fontDef: PreferenceDef = {
 const themeDef: PreferenceDef = {
   key: "theme",
   storageKey: "kin-theme",
-  default: "heirloom",
-  validate: { kind: "enum", values: ["heirloom", "archive", "hearth"] },
+  default: "spark",
+  validate: { kind: "enum", values: ["spark", "harbor", "grove"] },
   apply: { strategy: "data-attr", attr: "data-theme" },
 };
 
@@ -49,11 +49,11 @@ describe("coerce — int-index (reading size)", () => {
 
 describe("coerce — enum (theme)", () => {
   it("keeps a known theme id", () => {
-    expect(coerce(themeDef, "archive")).toBe("archive");
+    expect(coerce(themeDef, "harbor")).toBe("harbor");
   });
   it("falls back to default for unknown / absent", () => {
-    expect(coerce(themeDef, "midnight")).toBe("heirloom");
-    expect(coerce(themeDef, null)).toBe("heirloom");
+    expect(coerce(themeDef, "midnight")).toBe("spark");
+    expect(coerce(themeDef, null)).toBe("spark");
   });
 });
 
@@ -62,10 +62,10 @@ describe("computeApplication", () => {
     expect(computeApplication(fontDef, 2)).toEqual({ target: "root-font-size", value: "12pt" });
   });
   it("data-attr yields the attribute name and the value verbatim", () => {
-    expect(computeApplication(themeDef, "archive")).toEqual({
+    expect(computeApplication(themeDef, "harbor")).toEqual({
       target: "data-attr",
       attr: "data-theme",
-      value: "archive",
+      value: "harbor",
     });
   });
 

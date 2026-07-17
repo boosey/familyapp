@@ -248,7 +248,7 @@ export function AddPhotosMenu({ label, triggerRef, device, google, manage }: Add
                 onClick={() => manage.onDisconnect()}
                 style={{
                   ...itemBaseStyle,
-                  color: "var(--accent-strong, #BD5B3D)",
+                  color: "var(--accent-strong, #0F766E)",
                   cursor: manage.pending ? "not-allowed" : "pointer",
                   opacity: manage.pending ? 0.7 : 1,
                 }}

@@ -1,6 +1,6 @@
 /**
  * Voice-only approval surface. The narrator lands here after the pipeline has prepared a draft. The
- * page renders in Kindred's intimate `hearth` theme; the original wide-band recording is one tap
+ * page uses the active Spark theme; the original wide-band recording is one tap
  * away in a listen bar, and the actual approval is spoken via `ApprovalRecorder`.
  *
  * Server-side: resolves the session token, confirms the story exists for this narrator via the

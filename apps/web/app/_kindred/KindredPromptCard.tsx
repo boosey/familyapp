@@ -18,15 +18,30 @@ export function KindredPromptCard({
   return (
     <div
       style={{
-        background: "var(--surface-card)",
+        background:
+          "linear-gradient(160deg, var(--surface-card) 0%, color-mix(in srgb, var(--accent-soft) 55%, var(--surface-card)) 100%)",
         border: "var(--border-width, 1.5px) solid var(--border)",
-        borderRadius: "var(--radius-lg)",
-        padding: "24px 28px",
-        boxShadow: "var(--shadow-sm)",
+        borderRadius: "var(--radius-xl)",
+        padding: "28px 30px",
+        boxShadow: "var(--shadow-card)",
+        position: "relative",
+        overflow: "hidden",
         ...style,
       }}
       {...rest}
     >
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          top: -30,
+          right: -20,
+          width: 120,
+          height: 120,
+          borderRadius: "50%",
+          background: "color-mix(in srgb, var(--support) 18%, transparent)",
+        }}
+      />
       {eyebrow ? (
         <div
           style={{
@@ -39,14 +54,15 @@ export function KindredPromptCard({
             letterSpacing: "0.06em",
             color: "var(--accent)",
             marginBottom: 14,
+            position: "relative",
           }}
         >
           <span
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "var(--accent)",
+              width: 8,
+              height: 8,
+              borderRadius: "var(--radius-sm)",
+              background: "linear-gradient(135deg, var(--accent), var(--support))",
               flexShrink: 0,
             }}
           />
@@ -60,6 +76,8 @@ export function KindredPromptCard({
             fontSize: "var(--text-prompt)",
             lineHeight: "var(--leading-snug)",
             color: "var(--text-body)",
+            letterSpacing: "var(--tracking-tight)",
+            position: "relative",
           }}
         >
           {question}

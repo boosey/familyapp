@@ -36,14 +36,14 @@ describe("KindredFontScale", () => {
 describe("KindredThemePicker", () => {
   it("choosing a palette writes localStorage and sets data-theme", () => {
     render(<KindredThemePicker />);
-    fireEvent.click(screen.getByLabelText(hub.settings.paletteLabels.archive));
-    expect(localStorage.getItem(PREFERENCES.theme.storageKey)).toBe("archive");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("archive");
+    fireEvent.click(screen.getByLabelText(hub.settings.paletteLabels.harbor));
+    expect(localStorage.getItem(PREFERENCES.theme.storageKey)).toBe("harbor");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("harbor");
   });
 
   it("re-applies the stored palette on mount", () => {
-    localStorage.setItem(PREFERENCES.theme.storageKey, "hearth");
+    localStorage.setItem(PREFERENCES.theme.storageKey, "grove");
     render(<KindredThemePicker />);
-    expect(document.documentElement.getAttribute("data-theme")).toBe("hearth");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("grove");
   });
 });

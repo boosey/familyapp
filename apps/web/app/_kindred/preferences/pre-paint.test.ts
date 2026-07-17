@@ -27,10 +27,10 @@ beforeEach(() => {
 describe("pre-paint script", () => {
   it("applies stored reading size and theme to <html>", () => {
     localStorage.setItem(PREFERENCES.readingSize.storageKey, "3"); // steps[3] = 14
-    localStorage.setItem(PREFERENCES.theme.storageKey, "archive");
+    localStorage.setItem(PREFERENCES.theme.storageKey, "harbor");
     runPrePaint();
     expect(document.documentElement.style.fontSize).toBe("14pt");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("archive");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("harbor");
   });
 
   it("falls back to declared defaults for missing/garbage values", () => {
@@ -38,7 +38,7 @@ describe("pre-paint script", () => {
     // theme key left unset
     runPrePaint();
     expect(document.documentElement.style.fontSize).toBe("10pt"); // default idx 1 → steps[1] = 10
-    expect(document.documentElement.getAttribute("data-theme")).toBe("heirloom");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("spark");
   });
 
   it("does not drift from the TS applier (computeApplication)", () => {

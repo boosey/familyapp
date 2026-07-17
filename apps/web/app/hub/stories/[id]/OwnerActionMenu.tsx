@@ -147,7 +147,7 @@ export function OwnerActionMenu({
 
   const dangerItemStyle: CSSProperties = {
     ...itemBaseStyle,
-    color: "var(--accent-strong, #BD5B3D)",
+    color: "var(--accent-strong, #0F766E)",
   };
 
   return (
@@ -279,7 +279,7 @@ export function OwnerActionMenu({
                   disabled={pending}
                   style={{
                     flex: 1,
-                    background: "var(--accent-strong, #BD5B3D)",
+                    background: "var(--accent-strong, #0F766E)",
                     color: "white",
                     border: "none",
                     borderRadius: "var(--radius-sm, 4px)",

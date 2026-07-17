@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
+import { Fraunces, Outfit, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
@@ -9,34 +9,34 @@ import { ALL_PREFERENCES, buildPrePaintScript } from "./_kindred/preferences/reg
 
 /**
  * Self-hosted via next/font (no runtime Google Fonts request, no FOUT chain).
- * Exposes CSS variables that `_kindred/tokens.css` reads through `--font-newsreader`,
- * `--font-public-sans`, and `--font-dm-mono` (mapped to `--font-story`/`--font-ui`/`--font-mono`).
+ * Exposes CSS variables that `_kindred/tokens.css` reads through `--font-fraunces`,
+ * `--font-outfit`, and `--font-jetbrains` (mapped to `--font-story`/`--font-ui`/`--font-mono`).
  */
-const newsreader = Newsreader({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
   display: "swap",
-  variable: "--font-newsreader",
+  variable: "--font-fraunces",
 });
 
-const publicSans = Public_Sans({
+const outfit = Outfit({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: "--font-public-sans",
+  variable: "--font-outfit",
 });
 
-const dmMono = DM_Mono({
+const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   display: "swap",
-  variable: "--font-dm-mono",
+  variable: "--font-jetbrains",
 });
 
 export const metadata: Metadata = {
   title: "Family Chronicle",
-  description: "A warm place to tell your stories.",
+  description: "The living place where your family's stories keep sparking.",
 };
 
 export const viewport: Viewport = {
@@ -71,9 +71,9 @@ export default async function RootLayout({
     ? await wrapWithClerk(body)
     : body;
   // className goes on <html> so the CSS variables are exposed at :root, which is where
-  // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
+  // _kindred/tokens.css references them via var(--font-fraunces) / var(--font-outfit).
   return (
-    <html lang="en" data-theme="heirloom" className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="spark" className={`${fraunces.variable} ${outfit.variable} ${jetbrains.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
             flash/reflow. Generated from the preference registry — the single source of truth shared
