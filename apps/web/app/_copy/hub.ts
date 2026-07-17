@@ -72,6 +72,10 @@ export const hub = {
     // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
     // empty state rather than a silent "show all". Mirrors album.noFamiliesSelected for the stories pool.
     noFamiliesSelected: "No families selected — turn one on above to see their stories.",
+    // Highlight-to-treasure (Task 8): drag across the prose to treasure the story (fires the existing
+    // Like path as a SET). The tap heart stays the primary affordance; this is the warm shortcut.
+    treasureAria: "Highlight any words to treasure this story",
+    treasureHint: "Tip: highlight a line that moved you to treasure it.",
   },
   intake: {
     // Banner shown at the top of the hub until the narrator's biographical profile is complete.

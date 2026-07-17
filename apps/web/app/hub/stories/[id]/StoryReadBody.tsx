@@ -12,9 +12,21 @@
  * Styling: token-driven CSS module (Phase 2). The prose stays a SINGLE <p> blob — highlight-to-
  * treasure (Task 8) selects across the whole prose text, so it must not be split into per-line/
  * paragraph elements.
+ *
+ * Highlight-to-treasure (Task 8): when `canTreasure` + `onTreasure` are supplied, dragging across the
+ * prose fires `onTreasure(selectedText)` (wired by the parent to the existing Like path — a SET) and
+ * flashes a transient highlighter wash over the whole prose blob.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTreasureHighlight } from "./useTreasureHighlight";
 import styles from "./StoryReadBody.module.css";
+
+// Module-scope no-op so `onTreasure ?? NOOP` keeps a STABLE identity across renders — otherwise the
+// hook's effect (which depends on the callback) would re-bind its listeners on every render.
+const NOOP = () => {};
+
+// How long the highlighter swipe lingers after a treasure, in ms.
+const FLASH_MS = 650;
 
 export type StoryReadBodyProps = {
   prose: string | null;
@@ -24,11 +36,21 @@ export type StoryReadBodyProps = {
     transcript: string;
     noProse: string;
   };
+  onTreasure?: (text: string) => void;
+  canTreasure?: boolean;
+  treasureLabels?: { hint: string; aria: string };
 };
 
 type Tab = "prose" | "transcript";
 
-export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps) {
+export function StoryReadBody({
+  prose,
+  transcript,
+  labels,
+  onTreasure,
+  canTreasure,
+  treasureLabels,
+}: StoryReadBodyProps) {
   const hasProse = Boolean(prose && prose.trim());
   const hasTranscript = Boolean(transcript && transcript.trim());
 
@@ -38,8 +60,39 @@ export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps)
 
   const [active, setActive] = useState<Tab>(tabs[0] ?? "prose");
 
+  // Ref lives on the STABLE outer wrapper, NOT the conditional prose <p>. RATIONALE: the prose <p>
+  // mounts/unmounts on the prose↔transcript tab toggle; a ref on it would leave the mouseup/touchend
+  // listeners bound to a detached node after a round-trip toggle (the hook's effect deps don't change
+  // on toggle, so it never re-binds). The stable wrapper avoids that stale-listener bug, and the
+  // hook's `el.contains(range.commonAncestorContainer)` check still scopes selection to whatever body
+  // is rendered. A deliberate refinement of the plan's "attach to the <p> blob" wording.
+  const proseRef = useRef<HTMLDivElement>(null);
+  const enabled = Boolean(canTreasure && onTreasure);
+
+  // Transient, React-SAFE highlighter swipe: we flip a flag class on the prose <p> (no DOM mutation /
+  // range wrapping that would fight React reconciliation) and clear it after FLASH_MS.
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+    };
+  }, []);
+
+  const handleTreasure = (text: string) => {
+    onTreasure?.(text);
+    setFlash(true);
+    if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(false), FLASH_MS);
+  };
+
+  useTreasureHighlight(proseRef, enabled, enabled ? handleTreasure : NOOP);
+
+  const proseClassName = flash ? `${styles.prose} ${styles.treasure}` : styles.prose;
+
   return (
-    <div>
+    <div ref={proseRef} aria-label={enabled ? treasureLabels?.aria : undefined}>
       {tabs.length >= 2 && (
         <div role="tablist" aria-label={`${labels.story} / ${labels.transcript}`} className={styles.tablist}>
           {tabs.map((tab) => {
@@ -60,10 +113,14 @@ export function StoryReadBody({ prose, transcript, labels }: StoryReadBodyProps)
         </div>
       )}
 
+      {enabled && treasureLabels && active !== "transcript" && hasProse && (
+        <p className={styles.treasureHint}>{treasureLabels.hint}</p>
+      )}
+
       {active === "transcript" && hasTranscript ? (
         <p className={styles.transcript}>{transcript}</p>
       ) : hasProse ? (
-        <p className={styles.prose}>{prose}</p>
+        <p className={proseClassName}>{prose}</p>
       ) : (
         <p className={`${styles.prose} ${styles.proseEmpty}`}>{labels.noProse}</p>
       )}

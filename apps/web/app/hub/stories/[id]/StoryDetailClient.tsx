@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { retargetStoryFamiliesAction } from "./actions";
+import { retargetStoryFamiliesAction, setStoryLikeAction } from "./actions";
 import { FavoriteButton } from "./FavoriteButton";
 import { FollowUpButton } from "./FollowUpButton";
 import { LikeButton } from "./LikeButton";
@@ -92,6 +92,16 @@ export function StoryDetailClient({
 
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Highlight-to-treasure (Task 8): dragging across the prose fires the EXISTING Like path as a SET
+  // (liked=true). No optimistic lift — the tap <LikeButton> stays the source of truth for the count;
+  // revalidatePath refreshes it. Re-firing when already liked is safe (a SET, not a toggle, so no
+  // double increment). Stable identity via useCallback([storyId]) so the hook effect doesn't churn.
+  const handleTreasure = useCallback(() => {
+    startTransition(() => {
+      void setStoryLikeAction(storyId, true);
+    });
+  }, [storyId]);
 
   // Avatar initials
   const initialsOf = (name: string) => {
@@ -492,6 +502,9 @@ export function StoryDetailClient({
               transcript: hub.browse.readTranscript,
               noProse: hub.browse.readNoProse,
             }}
+            canTreasure={canReact}
+            onTreasure={handleTreasure}
+            treasureLabels={{ hint: hub.stories.treasureHint, aria: hub.stories.treasureAria }}
           />
         </div>
       )}
