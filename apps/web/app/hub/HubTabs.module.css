@@ -2,8 +2,9 @@
  *
  * First CSS module with interactive elements: it is the worked example for rule 7 of
  * `_skins/CSS-MODULES.md` — every interactive element (.tab, .cta, .more toggle, .moreItem,
- * .subLink) carries a visible :focus-visible outline. Values are tokens only; no hardcoded hex/px
- * (the sole raw numbers are one-off layout dims with no token: the badge box + the menu min-width). */
+ * .subLink) carries a visible :focus-visible outline. Design values (color/radius/shadow/motion)
+ * are tokens; layout dims (gaps, paddings, badge box, menu min-width) use raw px per CSS-MODULES.md
+ * rule 3 — a faithful port of the old inline values, consistent with page.module.css house style. */
 
 .nav {
   display: flex;

@@ -46,4 +46,19 @@ describe("HubTabs de-clutter", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: hub.shell.tabRequests }));
     expect(onChange).toHaveBeenCalledWith("requests");
   });
+
+  it("closes the More menu on Escape", () => {
+    render(
+      <HubTabs
+        primaryTabs={primary}
+        overflowTabs={[{ key: "requests", label: hub.shell.tabRequests }]}
+        active="stories"
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.shell.moreAria }));
+    expect(screen.getByRole("menuitem", { name: hub.shell.tabRequests })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: hub.shell.tabRequests })).toBeNull();
+  });
 });
