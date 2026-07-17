@@ -22,6 +22,8 @@ beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("style");
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-skin");
+  document.documentElement.removeAttribute("data-reduce-motion");
 });
 
 describe("pre-paint script", () => {
@@ -39,6 +41,20 @@ describe("pre-paint script", () => {
     runPrePaint();
     expect(document.documentElement.style.fontSize).toBe("10pt"); // default idx 1 → steps[1] = 10
     expect(document.documentElement.getAttribute("data-theme")).toBe("heirloom");
+  });
+
+  it("applies stored skin and reduce-motion to <html>", () => {
+    localStorage.setItem(PREFERENCES.skin.storageKey, "heirloom");
+    localStorage.setItem(PREFERENCES.reduceMotion.storageKey, "on");
+    runPrePaint();
+    expect(document.documentElement.getAttribute("data-skin")).toBe("heirloom");
+    expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("on");
+  });
+
+  it("defaults skin=playful, reduce-motion=off when unset", () => {
+    runPrePaint();
+    expect(document.documentElement.getAttribute("data-skin")).toBe("playful");
+    expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("off");
   });
 
   it("does not drift from the TS applier (computeApplication)", () => {
