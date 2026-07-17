@@ -627,3 +627,48 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   with a *new* reviewer each round. This supersedes the earlier "sub-agents are review-only; lead
   engineer writes all code" rule (corrected 2026-06-27) and the general "use Agent Teams"
   preference. Net: coding agents both write and fix; reviewers are independent and per-round.
+
+### Test execution & merge gates (who runs the suite, when)
+
+Decided 2026-07-17. The suite was being executed up to three times per task — builder, reviewer,
+then main agent — which is slow and token-expensive. The rule below assigns each actor exactly the
+work it is uniquely good at, and settles pass/fail in the cheapest place that can be trusted.
+
+Where the vitest suite (and the rest of the matrix) actually runs today:
+
+| Path | lint | typecheck | **test** | build | drift |
+|---|---|---|---|---|---|
+| **PR** (`.github/workflows/ci.yml`, `on: pull_request`) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Direct push to master** (deliberate fast-path) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Vercel build** (`vercel.json` buildCommand) | ❌ | partial¹ | ❌ | ✅ | partial² |
+
+¹ `next build` only typechecks code reachable from the `apps/web` build graph; a broken
+`@chronicle/core` invariant that still compiles and isn't imported there ships clean.
+² `db:check-parity` runs (snapshot-vs-Neon), but not the drift-guard **unit test**.
+
+Rules:
+
+- **Builder sub-agent runs tests for its own red-green loop.** Necessary — that's how it knows to
+  iterate. It reports its final test output as an artifact.
+- **Reviewer sub-agent does NOT re-run the full suite.** Its inputs are the diff, the builder's
+  reported test output, and (on a PR) CI status. Its job is judgment CI can't do — correctness,
+  spec-adherence, security, convention, and whether the tests are *adequate*. It MAY run a
+  **narrow, targeted** test when it has a specific hypothesis ("this edge case looks uncovered" →
+  run that one test, or write a failing one). A blind full re-run is not review; it's redundant
+  execution.
+- **PR path: CI is the authoritative pass/fail gate.** It runs lint/typecheck/test/build/drift as
+  parallel matrix legs, off the dev machine, for free. On this path the main agent does not need a
+  final re-run — CI settles it.
+- **Direct-push-to-master path: the main agent MUST run the full local preflight before pushing**,
+  because nothing else does. Vercel runs `next build`, *not* the suite. The preflight mirrors CI's
+  matrix, not just `test` (gating only `test` leaves lint/typecheck/`next build`/drift holes on the
+  one path with no CI — the exact failure modes ci.yml's comments were written over):
+  ```
+  pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @chronicle/web build \
+    && pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle
+  ```
+- **Why direct-push exists:** free-plan GitHub CI is ~12 min (dominated by 5× cold
+  `pnpm install --frozen-lockfile` on fresh runners + queue wait, not test compute); local pays
+  install once and can run legs concurrently. **Smell test:** if you run the full preflight above
+  routinely, the fast-path isn't buying much over just opening a PR and letting CI do it in
+  parallel — prefer a PR for anything non-trivial.
