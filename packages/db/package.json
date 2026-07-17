@@ -17,7 +17,8 @@
     "test": "vitest run",
     "db:generate": "node scripts/gen-schema.mjs",
     "db:check-parity": "tsx scripts/check-parity.ts",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:users": "tsx scripts/list-users.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
