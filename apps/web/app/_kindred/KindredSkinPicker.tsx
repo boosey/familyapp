@@ -11,7 +11,7 @@ const pref = PREFERENCES.skin;
 // skin's colours while the current skin's tokens are active, so they can't be var(--token). If a
 // skin's page/accent changes, update the matching entry here. (Follow-up: derive at build time.)
 const SWATCH: Record<SkinId, { page: string; accent: string }> = {
-  playful:  { page: "#FBF1DE", accent: "#EF7A54" },
+  playful:  { page: "#FBF1DE", accent: "#CC4A22" },
   heirloom: { page: "#F4ECE0", accent: "#BD5B3D" },
 };
 

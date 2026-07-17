@@ -14,17 +14,22 @@
   --surface-page: #FBF1DE; --surface-card: #FFFDF8; --surface-sunken: #FFF6E6;
   --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
 
-  /* accent (coral) + support */
-  --accent: #EF7A54; --accent-strong: #D85F39; --accent-soft: #FFE3D3;
-  /* Text/icons ON the accent are DARK INK, not white: white on #EF7A54 is 2.77:1 (fails WCAG AA,
-   * even the 3.0 large-text bar); ink #2C221D on #EF7A54 is 5.6:1 (AA). This keeps the approved
-   * bright-coral hue and only changes button/pill text colour. Guarded by _skins/contrast.test.ts. */
-  --accent-on: #2C221D;
+  /* accent — warm coral, tuned for WCAG AA (guarded by _skins/contrast.test.ts). --accent-strong is
+   * the DARKER variant, used BOTH as text/icons on light surfaces (~40 call sites: FavoriteButton,
+   * TagInput chips, album controls, story detail…) AND as the primary-button HOVER background. Because
+   * --accent-on is a single shared token, --accent and --accent-strong both carry WHITE text, so both
+   * must be dark enough for white to clear AA (4.5:1). This mirrors heirloom's structure (accent = bg
+   * with white text; accent-strong = dark, for text-on-light).
+   *   --accent          #CC4A22 : white on it = 4.60:1 (AA); brightest coral AA allows w/ white text.
+   *   --accent-strong   #A83E1A : as text on cream = 5.56:1; white on it (hover) = 6.23:1 (AA).
+   * The bright coral #EF7A54 (white-on-it is 2.77:1, fails AA) returns in Phase 2 as a DECORATIVE fill
+   * — tape, tilt, sticker backgrounds — where it carries no small text and is safe. */
+  --accent: #CC4A22; --accent-strong: #A83E1A; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
   --accent-soft-0: rgba(255,227,211,0);
   --support: #3F9E93; --support-soft: #D9ECDC;
 
   /* lines / focus */
-  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #EF7A54;
+  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #CC4A22;
 
   /* shape — rounder, chunkier */
   --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 26px; --radius-pill: 999px;
