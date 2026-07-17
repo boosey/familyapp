@@ -573,6 +573,29 @@ describe("pipeline — prose provenance", () => {
 });
 
 describe("pipeline — no vendor SDK imports leak into IP code", () => {
+  // Shared matcher for the architecture guard AND its negative test below — the two must not
+  // drift (issue #108). Returns the first forbidden pattern found in `contents`, or null when
+  // the file is clean or carved out via `adapterExceptions`. A pattern ending in `*` is a
+  // quoted scope-prefix match (e.g. `@sentry/*` matches `"@sentry/nextjs"`); anything else must
+  // appear as a fully-quoted import specifier (`"resend"` / `'resend'`).
+  function isForbiddenImport(
+    contents: string,
+    forbidden: readonly string[],
+    relPath: string,
+    adapterExceptions: ReadonlySet<string>,
+  ): string | null {
+    if (adapterExceptions.has(relPath)) return null;
+    for (const f of forbidden) {
+      if (f.endsWith("*")) {
+        const prefix = f.slice(0, -1);
+        if (contents.includes(`"${prefix}`) || contents.includes(`'${prefix}`)) return f;
+      } else if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
+        return f;
+      }
+    }
+    return null;
+  }
+
   it("none of @chronicle/{core,db,storage,capture,pipeline,interviewer} src files import a vendor SDK", () => {
     // Tight allowlist: only these strings are permitted inside pipeline IP code. Any vendor
     // SDK import (e.g. "groq-sdk", "@anthropic-ai/sdk", "openai", "elevenlabs", "inngest",
@@ -617,21 +640,13 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "packages/notifications/src/twilio.ts",
     ]);
     const offenders: string[] = [];
+    const forbiddenPatterns = [...forbidden, ...forbiddenPrefixes.map((p) => `${p}*`)];
     for (const root of roots) {
       walk(join(repoRoot, root), (full) => {
         const relPath = full.slice(repoRoot.length).split(sep).join("/");
-        if (ADAPTER_EXCEPTIONS.has(relPath)) return;
         const contents = readFileSync(full, "utf8");
-        for (const f of forbidden) {
-          if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
-            offenders.push(`${full} imports ${f}`);
-          }
-        }
-        for (const p of forbiddenPrefixes) {
-          if (contents.includes(`"${p}`) || contents.includes(`'${p}`)) {
-            offenders.push(`${full} imports ${p}*`);
-          }
-        }
+        const hit = isForbiddenImport(contents, forbiddenPatterns, relPath, ADAPTER_EXCEPTIONS);
+        if (hit) offenders.push(`${full} imports ${hit}`);
       });
     }
     expect(offenders).toEqual([]);
@@ -648,10 +663,11 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
   });
 
   it("would flag a resend/twilio import placed outside the carved-out adapter files", () => {
-    // Synthetic re-run of the same forbidden-import check against a fake file set, proving the
-    // guard's matching logic actually catches a violation rather than vacuously passing because
-    // no such import currently exists in the tree.
-    const forbidden = ["resend", "twilio"];
+    // Synthetic run of the SAME shared matcher against a fake file set, proving the guard's
+    // matching logic actually catches a violation rather than vacuously passing because no
+    // such import currently exists in the tree. Both match modes are exercised: an exact
+    // specifier ("resend") and a scope-prefix pattern ("@sentry/*").
+    const forbidden = ["resend", "twilio", "@sentry/*"];
     const ADAPTER_EXCEPTIONS = new Set<string>([
       "packages/notifications/src/resend.ts",
       "packages/notifications/src/twilio.ts",
@@ -661,16 +677,17 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "packages/notifications/src/twilio.ts": 'import twilio from "twilio";',
       // Violation: a non-adapter file in the same package importing the SDK directly.
       "packages/notifications/src/mock.ts": 'import { Resend } from "resend";',
+      // Violation: a scope-prefixed import matched by the `@sentry/*` prefix pattern.
+      "packages/core/src/instrumentation.ts": 'import * as Sentry from "@sentry/nextjs";',
     };
     const offenders: string[] = [];
     for (const [relPath, contents] of Object.entries(syntheticFiles)) {
-      if (ADAPTER_EXCEPTIONS.has(relPath)) continue;
-      for (const f of forbidden) {
-        if (contents.includes(`"${f}"`) || contents.includes(`'${f}'`)) {
-          offenders.push(`${relPath} imports ${f}`);
-        }
-      }
+      const hit = isForbiddenImport(contents, forbidden, relPath, ADAPTER_EXCEPTIONS);
+      if (hit) offenders.push(`${relPath} imports ${hit}`);
     }
-    expect(offenders).toEqual(["packages/notifications/src/mock.ts imports resend"]);
+    expect(offenders).toEqual([
+      "packages/notifications/src/mock.ts imports resend",
+      "packages/core/src/instrumentation.ts imports @sentry/*",
+    ]);
   });
 });
