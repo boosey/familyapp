@@ -536,8 +536,13 @@ export function ComposingEditor({
   }, [uploadRecording, composingStoryId]);
 
   const stopRecording = useCallback(() => {
+    // Idempotent: a touch release fires pointerup + pointerleave in one tick, so the hold-to-record
+    // handlers can call stopRecording twice before React re-renders. Bail if there's nothing
+    // recording so the second call is a no-op rather than a stop()-on-inactive InvalidStateError.
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state === "inactive") return;
     setRecordPhase("saving");
-    mediaRecorderRef.current?.stop();
+    mr.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setStream(null);
@@ -552,7 +557,14 @@ export function ComposingEditor({
   // leaving a recording that never ends. `heldRef` tracks whether the pointer is still down; when
   // start resolves we honour a release that already happened. Tap-to-toggle thus survives for
   // motor accessibility alongside press-hold.
-  const reduceMotion = readPreference(PREFERENCES.reduceMotion) === "on";
+  // Reduce motion when the app preference is on OR the OS query is set — otherwise an OS-only user
+  // (CSS freezes the visual but JS would keep the rAF/AudioContext running, and we'd render the
+  // animated bars instead of the static one). SSR-safe: the waveform only renders while listening
+  // (client-only, post-interaction), so reading matchMedia during render can't mismatch hydration.
+  const reduceMotion =
+    readPreference(PREFERENCES.reduceMotion) === "on" ||
+    (typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
   const level = useAudioLevel(stream, !reduceMotion);
   const heldRef = useRef(false);
   const onHoldStart = useCallback(async () => {

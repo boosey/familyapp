@@ -35,22 +35,35 @@ function fakeStream() {
   } as unknown as MediaStream & { _track: { stop: ReturnType<typeof vi.fn> } };
 }
 
+/** The most recently constructed fake recorder, so a test can spy on its stop() / read its state. */
+let lastRecorder: {
+  state: "inactive" | "recording";
+  stop: ReturnType<typeof vi.fn>;
+} | null = null;
+
 describe("useMicRecorder", () => {
   beforeEach(() => {
-    // Minimal MediaRecorder stand-in — start/stop are inert; we only exercise the stream plumbing.
+    lastRecorder = null;
+    // MediaRecorder stand-in tracking `state` like the real API (inactive → recording → inactive),
+    // so the hook's stop-idempotency guard (bail when state === "inactive") is exercised faithfully.
     class FakeMediaRecorder {
       static isTypeSupported() {
         return true;
       }
       mimeType = "audio/webm";
+      state: "inactive" | "recording" = "inactive";
       ondataavailable: ((e: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
+      stop = vi.fn(() => {
+        this.state = "inactive";
+        this.onstop?.();
+      });
       constructor(_stream: MediaStream, opts?: { mimeType?: string }) {
         if (opts?.mimeType) this.mimeType = opts.mimeType;
+        lastRecorder = this;
       }
-      start() {}
-      stop() {
-        this.onstop?.();
+      start() {
+        this.state = "recording";
       }
     }
     // @ts-expect-error test double
@@ -155,5 +168,34 @@ describe("useMicRecorder", () => {
     // The recording was stopped: its tracks were stopped and the live stream cleared.
     expect(stream._track.stop).toHaveBeenCalled();
     expect(result.current.hook.stream).toBeNull();
+  });
+
+  // Regression: on touch, pointerup + pointerleave both fire onHoldEnd in the same tick, so finish()
+  // can be called twice before React re-renders. The second call must be a no-op (recorder already
+  // inactive) — not a recorder.stop()-on-inactive InvalidStateError.
+  it("finish() is idempotent — a second call is a no-op, not a throw", async () => {
+    const stream = fakeStream();
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    const { result } = renderHook(() => useMicRecorder({ onRecorded: vi.fn() }));
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.phase).toBe("listening");
+    expect(lastRecorder).not.toBeNull();
+
+    act(() => {
+      result.current.finish();
+      // Second call in the SAME tick (pointerup then pointerleave) — must not throw.
+      expect(() => result.current.finish()).not.toThrow();
+    });
+
+    // recorder.stop() ran exactly once despite two finish() calls.
+    expect(lastRecorder!.stop).toHaveBeenCalledTimes(1);
+    expect(result.current.stream).toBeNull();
   });
 });

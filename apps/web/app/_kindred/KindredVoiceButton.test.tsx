@@ -97,4 +97,67 @@ describe("KindredVoiceButton — hold-to-record", () => {
     expect(onHoldStart).not.toHaveBeenCalled();
     expect(onHoldEnd).not.toHaveBeenCalled();
   });
+
+  it("tolerates a double onHoldEnd (pointerUp + pointerLeave in one tick)", () => {
+    // A stubbed finish is what the consumers pass; the button must not crash if downstream is called
+    // twice — idempotency lives in the recorder (see use-mic-recorder.test.ts), the button just fires.
+    const onHoldEnd = vi.fn();
+    const { container } = render(
+      <KindredVoiceButton holdToRecord listening onHoldStart={vi.fn()} onHoldEnd={onHoldEnd} />,
+    );
+    const btn = container.querySelector("button")!;
+    fireEvent.pointerDown(btn);
+    fireEvent.pointerUp(btn);
+    fireEvent.pointerLeave(btn);
+    // Fired twice (up + leave); the recorder collapses the duplicate — the button doesn't dedupe.
+    expect(onHoldEnd).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("KindredVoiceButton — keyboard hold fallback", () => {
+  it("Enter toggles: onHoldStart when not listening, onHoldEnd when listening", () => {
+    const onHoldStart = vi.fn();
+    const onHoldEnd = vi.fn();
+    const idle = render(
+      <KindredVoiceButton holdToRecord onHoldStart={onHoldStart} onHoldEnd={onHoldEnd} />,
+    );
+    fireEvent.keyDown(idle.container.querySelector("button")!, { key: "Enter" });
+    expect(onHoldStart).toHaveBeenCalledTimes(1);
+    expect(onHoldEnd).not.toHaveBeenCalled();
+
+    const live = render(
+      <KindredVoiceButton holdToRecord listening onHoldStart={onHoldStart} onHoldEnd={onHoldEnd} />,
+    );
+    fireEvent.keyDown(live.container.querySelector("button")!, { key: "Enter" });
+    expect(onHoldEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("Space also toggles", () => {
+    const onHoldStart = vi.fn();
+    const { container } = render(
+      <KindredVoiceButton holdToRecord onHoldStart={onHoldStart} onHoldEnd={vi.fn()} />,
+    );
+    fireEvent.keyDown(container.querySelector("button")!, { key: " " });
+    expect(onHoldStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores auto-repeat (held key) so it doesn't machine-gun start/stop", () => {
+    const onHoldStart = vi.fn();
+    const { container } = render(
+      <KindredVoiceButton holdToRecord onHoldStart={onHoldStart} onHoldEnd={vi.fn()} />,
+    );
+    fireEvent.keyDown(container.querySelector("button")!, { key: "Enter", repeat: true });
+    expect(onHoldStart).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept keys when holdToRecord is off (tap-toggle button keeps native Enter→click)", () => {
+    const onHoldStart = vi.fn();
+    const onClick = vi.fn();
+    const { container } = render(
+      <KindredVoiceButton onClick={onClick} onHoldStart={onHoldStart} />,
+    );
+    fireEvent.keyDown(container.querySelector("button")!, { key: "Enter" });
+    // No custom keydown handler in tap mode; onHoldStart is untouched (native button handles Enter→click).
+    expect(onHoldStart).not.toHaveBeenCalled();
+  });
 });

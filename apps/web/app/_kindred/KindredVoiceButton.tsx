@@ -1,5 +1,5 @@
 "use client";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { Mic, Square } from "lucide-react";
 import { common } from "@/app/_copy";
 
@@ -101,12 +101,26 @@ export function KindredVoiceButton({
   // for exactly as long as it's held; a plain tap (fast down+up) still fires both, preserving the
   // tap-to-toggle fallback. When holdToRecord is off, none of these are attached and the button
   // keeps its original onClick-toggle contract untouched.
+  //
+  // Keyboard fallback: in hold mode onClick is nulled, so Enter/Space (which a native button turns
+  // into a click, NOT pointer events) would do nothing for keyboard-only narrators. A keyboard user
+  // can't physically "hold", so Enter/Space is a press-to-start / press-to-stop TOGGLE. `e.repeat`
+  // is ignored so a held key doesn't machine-gun start/stop.
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (!holdToRecord || isBlocked) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.repeat) return;
+    e.preventDefault();
+    if (listening) onHoldEnd?.();
+    else onHoldStart?.();
+  };
   const holdHandlers = holdToRecord
     ? {
         onPointerDown: isBlocked ? undefined : onHoldStart,
         onPointerUp: isBlocked ? undefined : onHoldEnd,
         onPointerLeave: isBlocked ? undefined : onHoldEnd,
         onPointerCancel: isBlocked ? undefined : onHoldEnd,
+        onKeyDown,
       }
     : {};
 

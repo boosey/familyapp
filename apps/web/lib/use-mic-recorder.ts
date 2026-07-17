@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type MicPhase = "idle" | "listening" | "saving";
 
@@ -59,12 +59,26 @@ export function useMicRecorder(opts: {
   }, []); // stable — reads opts via ref
 
   const finish = useCallback(() => {
+    // Idempotent: a touch release fires pointerup + pointerleave in one tick, so a hold-to-record
+    // consumer can call finish() twice before React re-renders. Bail if there's nothing recording
+    // (no recorder, or already stopped) so the second call is a no-op instead of a
+    // recorder.stop()-on-inactive InvalidStateError.
+    const mr = recorderRef.current;
+    if (!mr || mr.state === "inactive") return;
     setPhase("saving");
-    recorderRef.current?.stop();
+    mr.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setStream(null);
   }, []);
+
+  // Stop the mic if the component unmounts mid-recording — otherwise the tracks stay live (mic hot).
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    [],
+  );
 
   return { phase, start, finish, stream };
 }

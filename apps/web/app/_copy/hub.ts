@@ -270,8 +270,8 @@ export const hub = {
     discard: "Discard",
     micError:
       "Something went wrong with the microphone. Make sure you've allowed microphone access, then refresh the page to try again.",
-    listeningTapStop: "Listening… tap to stop",
-    // "One moment…" / "Tap to speak" live in common.voiceButton (shared with other capture surfaces).
+    // Hold-to-record captions ("Hold to speak" / "Release to finish") live in common.voiceButton
+    // (shared with other capture surfaces), alongside "One moment…" and "Tap to speak".
     takeYourTime: "Take your time. Long silences are fine.",
     // Optimistic review: shown over the editor slot while transcribe+render runs.
     polishing: "Polishing your words…",

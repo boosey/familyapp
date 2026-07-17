@@ -100,10 +100,16 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     onError: () => setPhase("softfail"),
   });
 
-  // Hold-to-remember: a breathing waveform reflects the live mic. Under reduce-motion (or the
-  // solemn capture subtree's calmer palette) the waveform collapses to a static level bar and the
-  // audio-level rAF loop is disabled so nothing animates.
-  const reduceMotion = readPreference(PREFERENCES.reduceMotion) === "on";
+  // Hold-to-remember: a breathing waveform reflects the live mic. The waveform intentionally keeps
+  // breathing on this (always-solemn) capture surface — it's the point of the surface. Reduce motion
+  // only when the app preference is on OR the OS query is set: then the waveform collapses to a
+  // static level bar and the audio-level rAF loop is disabled so nothing animates. (An OS-only user
+  // otherwise keeps the rAF/AudioContext running every frame even though CSS freezes the visual.)
+  // SSR-safe: the waveform only renders while listening (client-only, post-interaction).
+  const reduceMotion =
+    readPreference(PREFERENCES.reduceMotion) === "on" ||
+    (typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
   const level = useAudioLevel(stream, !reduceMotion);
 
   if (phase === "processing") {
@@ -191,7 +197,9 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     if (micPhase !== "idle") return;
     heldRef.current = true;
     await start();
-    // Released before the mic was ready → stop immediately.
+    // Released before the mic was ready → stop immediately. Safe even on a permission-denied
+    // fast-tap (start acquired no recorder) BECAUSE finish() is idempotent — it early-returns when
+    // there's nothing recording. Do not "simplify" by dropping this call; it's the tap fallback.
     if (!heldRef.current) finish();
   }, [micPhase, start, finish]);
   const onHoldEnd = useCallback(() => {

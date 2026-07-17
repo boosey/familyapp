@@ -1,6 +1,11 @@
 /* Breathing waveform — the live-mic feedback shown inside KindredVoiceButton while holding to record.
- * Decorative only; token-driven; accent-coloured. Motion collapses under the global reduce-motion /
- * OS reduce-motion guards (globals.css), and the component swaps to the static track below anyway. */
+ * Decorative only; token-driven; accent-coloured.
+ *
+ * The waveform INTENTIONALLY breathes on the capture surface even though capture is always solemn —
+ * per spec Task-7 it's the point of the surface, so it is NOT suppressed under data-tone="solemn".
+ * The static bar below is for the reduce-motion PREFERENCE (the component renders it via JS when the
+ * user's app pref is on, or the OS query matches). OS prefers-reduced-motion additionally freezes the
+ * animation via the @media guard in globals.css. There is deliberately no solemn animation suppressor. */
 
 .track {
   display: flex;
@@ -29,7 +34,8 @@
   50% { transform: scaleY(1.1); }
 }
 
-/* Reduced-motion / solemn: a single static level bar. No animation; width tracks the frozen level. */
+/* Reduce-motion preference (NOT solemn): a single static level bar. No animation; width tracks the
+ * frozen level. Rendered by the component's JS branch when the reduce-motion pref/OS query is set. */
 .staticTrack {
   display: flex;
   align-items: center;
