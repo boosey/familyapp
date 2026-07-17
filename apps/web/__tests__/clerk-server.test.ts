@@ -4,9 +4,9 @@
  *
  * The Clerk `users.getUser` call is injected as a stub (the `getClerkUser` seam) so these tests
  * never import @clerk/nextjs or hit the network. The DB is a real PGlite instance — we exercise the
- * actual `createAccountWithPerson` / `findPersonIdByAuthProviderUserId` Drizzle path, because the
- * properties we care about (idempotency, the concurrent-landing race resolving to ONE identity) are
- * real database behaviors, not mock theater.
+ * actual `createAccountWithPerson` / `resolveAccountByIdentity` Drizzle path, because the properties
+ * we care about (idempotency, the concurrent-landing race resolving to ONE identity, verified-email
+ * account linking) are real database behaviors, not mock theater.
  *
  * next/headers is mocked because clerk-server transitively imports server-only modules; the helpers
  * under test never touch cookies.
