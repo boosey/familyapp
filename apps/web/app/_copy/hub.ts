@@ -11,17 +11,31 @@ export const hub = {
     // so the hub shell itself has no anonymous copy.
     chronicle: "Your Chronicle",
     tabStories: "Stories",
-    // Sits between Stories and "To answer" — the hub's home for the Family album (#19).
+    // Sits between Stories and Questions — the hub's home for the Family album (#19).
     tabAlbum: "Album",
-    // Tab label follows the "Story Browse (Hub)" design ("To answer"); the section heading inside
-    // the tab stays "Questions for you" (hub.questions.title).
-    tabQuestions: "To answer",
+    // Task 3 (Playful de-clutter): "Questions" is now the PRIMARY tab label, grouping the three
+    // ask-related surfaces (To answer / Ask a question / Your asks) under one primary tab with a
+    // secondary sub-nav. It used to read "To answer" (that wording moved to questionsSubToAnswer).
+    // The section heading inside the To-answer surface stays "Questions for you" (hub.questions.title).
+    tabQuestions: "Questions",
     tabAsk: "Ask a question",
     tabAsks: "Your asks",
     // The family surface (tree + relatives list) — a real in-hub tab now, not a standalone route.
     tabFamily: "Family",
     tabInvite: "Invite",
     tabRequests: "Requests",
+    // Task 3 (Playful de-clutter): the prominent primary-nav call-to-action → /hub/tell. The "＋"
+    // is a full-width plus kept in the label so it rides through the copy layer (i18n on-ramp).
+    tellCta: "＋ Tell a story",
+    tellCtaAria: "Start telling a new story",
+    // Overflow "More ▾" menu holding the conditional Invite / Requests entries.
+    moreLabel: "More",
+    moreAria: "More sections",
+    // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
+    questionsSubToAnswer: "To answer",
+    questionsSubAsk: "Ask a question",
+    questionsSubYourAsks: "Your asks",
+    questionsSubNavAria: "Question sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",
     menuSwitchUser: "Switch user",

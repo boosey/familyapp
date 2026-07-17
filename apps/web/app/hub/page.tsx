@@ -28,6 +28,7 @@ import {
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
+import { QuestionsSubNav } from "./QuestionsSubNav";
 import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
@@ -208,27 +209,33 @@ export default async function HubPage({
   // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
   const viewerDisplayName = viewerName ?? "You";
 
-  const tabs = [
+  // Task 3 (Playful de-clutter): the primary nav is FOUR tabs — Stories · Album · Family · Questions
+  // — plus a prominent "Tell a story" CTA (rendered inside HubTabs). The three ask surfaces
+  // (questions/ask/asks) consolidate under the single Questions primary tab (a secondary sub-nav
+  // below switches among them); the conditional Invite/Requests entries move into a "More ▾"
+  // overflow menu. This regroups PRESENTATION ONLY — the routing keys, `?tab=` values, and the
+  // visibility gates below are byte-for-byte the same as before.
+  const primaryTabs = [
     { key: "stories", label: hub.shell.tabStories },
     { key: "album", label: hub.shell.tabAlbum },
+    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab (it used to
+    // be the standalone /hub/tree route, which hid the tab bar once opened).
+    { key: "family", label: hub.shell.tabFamily },
     {
       key: "questions",
       label: hub.shell.tabQuestions,
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
-    { key: "ask", label: hub.shell.tabAsk },
-    { key: "asks", label: hub.shell.tabAsks },
-    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab now (it used
-    // to be the standalone /hub/tree route, which hid the tab bar once opened).
-    { key: "family", label: hub.shell.tabFamily },
+  ];
+  const overflowTabs = [
     // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
-    // viewer (member of none) has nothing to invite into, so the tab is absent for them (Task 4.5).
+    // viewer (member of none) has nothing to invite into, so the entry is absent for them (Task 4.5).
     ...(inviteTabVisible(activeFamilies.length)
       ? [{ key: "invite", label: hub.shell.tabInvite }]
       : []),
-    // Tab stays visible while there are pending OR recently-decided requests; the badge counts
-    // only still-pending ones (the steward's actionable queue). Also member-only — a viewer who
-    // stewards no family has no request queue.
+    // Stays visible while there are pending OR recently-decided requests; the badge counts only
+    // still-pending ones (the steward's actionable queue). Also member-only — a viewer who stewards
+    // no family has no request queue.
     ...(requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length)
       ? [
           {
@@ -239,6 +246,11 @@ export default async function HubPage({
         ]
       : []),
   ];
+
+  // Which PRIMARY tab is visually active: the three ask surfaces all light up the Questions tab.
+  const primaryActive = ["questions", "ask", "asks"].includes(activeTab) ? "questions" : activeTab;
+  // The active ask surface drives the secondary sub-nav (only rendered inside the Questions content).
+  const questionsSurfaceActive = ["questions", "ask", "asks"].includes(activeTab);
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
@@ -259,7 +271,12 @@ export default async function HubPage({
 
           {/* Tabs row */}
           <div className={styles.tabsRow}>
-            <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
+            <HubTabsNav
+              primaryTabs={primaryTabs}
+              overflowTabs={overflowTabs}
+              active={primaryActive}
+              familiesParam={familiesRaw}
+            />
           </div>
         </header>
 
@@ -289,6 +306,12 @@ export default async function HubPage({
               googlePhotosOauthConnected={googlePhotosOauthConnected}
               googlePhotosOauthError={googlePhotosOauthError}
             />
+          )}
+          {/* Task 3: the three ask surfaces share one primary tab (Questions). A secondary sub-nav
+              switches among them, rendered ABOVE whichever surface is active. Content below is
+              unchanged — each key still renders exactly what it did before. */}
+          {questionsSurfaceActive && (
+            <QuestionsSubNav active={activeTab} familiesParam={familiesRaw} />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (
