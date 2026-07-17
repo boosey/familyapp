@@ -16,7 +16,6 @@ import type {
   JobFailureHandler,
   JobHandler,
   JobName,
-  JobPayload,
   JobPayloadMap,
   JobQueue,
 } from "./contracts";
