@@ -14,4 +14,9 @@ export const REQUIRED_SKIN_TOKENS = [
   "--font-display","--font-read","--font-ui","--font-story","--font-mono",
   "--radius-sm","--radius-md","--radius-lg","--radius-xl","--radius-pill",
   "--ease-quiet","--dur-fade","--dur-settle","--dur-pulse",
+  "--deco-coral","--tape-bg","--tilt-shadow","--highlighter",
+  "--sticker-coral-bg","--sticker-coral-ink",
+  "--sticker-sky-bg","--sticker-sky-ink",
+  "--sticker-leaf-bg","--sticker-leaf-ink",
+  "--sticker-gold-bg","--sticker-gold-ink",
 ] as const;

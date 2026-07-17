@@ -40,6 +40,18 @@
   --shadow-card: 0 6px 0 #F0DCC0;
   --shadow-lift: 0 14px 30px rgba(180,120,70,0.24);
 
+  /* --- Phase 2 structural-signature palette --- */
+  /* Decorative bright coral — FILL ONLY (tape, tilt-shadow, sticker backing). Never small text. */
+  --deco-coral: #EF7A54;
+  --tape-bg: rgba(239, 122, 84, 0.30);
+  --tilt-shadow: rgba(216, 95, 57, 0.22);
+  --highlighter: #FFE1A6;                        /* marker wash behind titles (text = --text-body) */
+  /* Sticker/candy tags — bg carries the label ink; each pair AA-guarded in contrast.test.ts */
+  --sticker-coral-bg: #FFE3D3;  --sticker-coral-ink: #B24218;
+  --sticker-sky-bg:   #DCEBF7;  --sticker-sky-ink:   #2F6187;
+  --sticker-leaf-bg:  #E6EFD6;  --sticker-leaf-ink:  #4F6B2C;
+  --sticker-gold-bg:  #F5DDB0;  --sticker-gold-ink:  #855A15;
+
   /* motion — gentle bounce (structural motion added in Phase 2, all guarded) */
   --ease-quiet: cubic-bezier(0.34, 1.32, 0.4, 1);
   --dur-fade: 0.16s; --dur-settle: 0.30s; --dur-pulse: 2.4s;

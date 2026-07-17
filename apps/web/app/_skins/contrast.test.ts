@@ -56,6 +56,14 @@ const SURFACE_TEXT_PAIRS = [
   ["--accent-strong", "--surface-page"],
 ] as const;
 
+const STICKER_PAIRS = [
+  ["--sticker-coral-ink", "--sticker-coral-bg"],
+  ["--sticker-sky-ink", "--sticker-sky-bg"],
+  ["--sticker-leaf-ink", "--sticker-leaf-bg"],
+  ["--sticker-gold-ink", "--sticker-gold-bg"],
+  ["--text-body", "--highlighter"],
+] as const;
+
 function assertAA(css: string, fg: string, bg: string): void {
   const ratio = contrast(tokenHex(css, fg), tokenHex(css, bg));
   expect(ratio, `${fg} on ${bg} was ${ratio.toFixed(2)}:1 (need >= ${AA})`).toBeGreaterThanOrEqual(AA);
@@ -65,6 +73,12 @@ describe("skin contrast (WCAG AA)", () => {
   for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
     it(`${name}: text/accent pairs on surfaces meet AA`, () => {
       for (const [fg, bg] of SURFACE_TEXT_PAIRS) assertAA(css, fg, bg);
+    });
+  }
+
+  for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
+    it(`${name}: sticker tags + highlighter meet AA`, () => {
+      for (const [fg, bg] of STICKER_PAIRS) assertAA(css, fg, bg);
     });
   }
 
