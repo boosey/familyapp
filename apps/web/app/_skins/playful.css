@@ -7,7 +7,7 @@
   --font-story:   var(--font-nunito), "Nunito", system-ui, sans-serif; /* legacy alias (prose) */
   --font-read:    var(--font-nunito), "Nunito", system-ui, sans-serif;
   --font-ui:      var(--font-nunito), "Nunito", system-ui, sans-serif;
-  /* --font-mono kept from base (DM Mono) */
+  --font-mono:    var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace; /* same as base (DM Mono) */
 
   /* surfaces / ink */
   --paper-100: #FFFDF8; --paper-200: #FBF1DE; --paper-300: #FFF6E6;
