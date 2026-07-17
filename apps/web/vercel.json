@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @chronicle/db db:migrate && pnpm --filter @chronicle/db db:check-parity && next build"
+  "buildCommand": "node scripts/check-env.mjs && pnpm --filter @chronicle/db db:migrate && pnpm --filter @chronicle/db db:check-parity && next build"
 }
