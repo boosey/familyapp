@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Public_Sans, DM_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
@@ -63,6 +64,7 @@ export default async function RootLayout({
           authenticated screen and nothing on the landing / auth / link-session surfaces. Sits inside
           <body> so it is within ClerkProvider (needed for the Clerk sign-out path). */}
       <AccountMenuMount />
+      <Analytics />
     </body>
   );
   const inner = isClerkConfigured()
