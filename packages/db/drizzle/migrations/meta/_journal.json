@@ -141,6 +141,13 @@
       "when": 1784219036752,
       "tag": "0019_tired_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784264436778,
+      "tag": "0020_gifted_magma",
+      "breakpoints": true
     }
   ]
 }
