@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
  * reliably across workers, so we re-implement the decision table here against
  * the documented cases and assert the exported helper matches local defaults.
  */
-import { isDevSurfaceEnabled } from "./dev-surface";
+import { isDevSurfaceEnabled } from "@/lib/dev-surface";
 
 describe("isDevSurfaceEnabled", () => {
   it("is true in local test/dev (NODE_ENV is not production under vitest)", () => {
