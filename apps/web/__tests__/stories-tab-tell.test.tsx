@@ -6,7 +6,7 @@
  * empty (they sit above the browse). selfDrafts carry ISO recordedAt strings (serialized upstream).
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoriesTab } from "@/app/hub/tabs/StoriesTab";
 
 const baseProps = {
@@ -34,12 +34,15 @@ describe("StoriesTab — tell a story entry", () => {
   });
 
   it("lists a self-initiated pending draft with a resume link", () => {
+    // #125: the resume list now lives behind the compact draft-reminder button in the control row —
+    // collapsed by default, it expands in place on click. Open it, then assert the per-draft link.
     render(
       <StoriesTab
         {...baseProps}
         selfDrafts={[{ storyId: "s1", kind: "text", recordedAt: new Date().toISOString() }]}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /draft/i }));
     expect(screen.getByRole("link", { name: /finish|resume/i }).getAttribute("href")).toBe(
       "/hub/tell/s1",
     );

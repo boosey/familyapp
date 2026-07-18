@@ -3,7 +3,7 @@
 /**
  * StoryCard — the story card rendered in the Hub feed (Feed mode), extracted from the former inline
  * `FeedCard` in StoryBrowse.tsx so the Playful structural signatures (tilt, tape, sticker tags,
- * highlighter, feature hero) can hook the hashed CSS-module classes.
+ * highlighter) can hook the hashed CSS-module classes.
  *
  * In the Playful masonry feed the card is no longer always photo-top: `layout` (assigned
  * deterministically per story by `pickStoryLayout`) selects one of several editorial variants so the
@@ -13,8 +13,7 @@
  *   • wrap     — the cover floats and the prose wraps around it.
  *   • collage  — cover + up to two extra photos in a small grid above the body.
  *   • textonly — no photo; a taped title + stickers (shorter card, breaks the rhythm).
- * The `feature` hero (first cover-bearing masonry item) overrides `layout` with the big photo-left
- * hero as before. Column view is uniform and passes no layout (defaults to `top`).
+ * Column view is uniform and passes no layout (defaults to `top`).
  *
  * Same data wiring throughout: cover + non-cover thumbnails via the audited /api/album-photo/[photoId]
  * byte route, `isNew` badge, content + family tags. All styling lives in StoryCard.module.css
@@ -36,7 +35,6 @@ export function StoryCard({
   href,
   index,
   masonry = false,
-  variant = "feed",
   layout = "top",
 }: {
   item: StoryItem;
@@ -46,12 +44,10 @@ export function StoryCard({
   index: number;
   /** Masonry (stacked vertical) vs. column (wide horizontal) layout. */
   masonry?: boolean;
-  /** The wider hero used for the first cover-bearing item in the masonry feed. */
-  variant?: "feed" | "feature";
   /**
    * The editorial card layout for the masonry feed (deterministic per story via pickStoryLayout).
-   * Ignored when `variant === "feature"` (the hero has its own fixed structure). Defaults to `top`,
-   * the classic photo-above-body card, so the column view and any non-masonry caller stay uniform.
+   * Defaults to `top`, the classic photo-above-body card, so the column view and any non-masonry
+   * caller stay uniform.
    */
   layout?: StoryLayout;
 }) {
@@ -60,10 +56,9 @@ export function StoryCard({
   // first element, and yields [] for a text-only or cover-only story.
   const nonCoverPhotoIds = item.photoIds.filter((id) => id !== item.coverPhotoId);
 
-  // The feature hero ignores `layout` (its structure is fixed); otherwise the effective layout is what
-  // pickStoryLayout chose. A missing cover always collapses to text-only regardless of the request.
-  const effectiveLayout: StoryLayout =
-    variant === "feature" ? "top" : !item.coverPhotoId ? "textonly" : layout;
+  // The effective layout is what pickStoryLayout chose. A missing cover always collapses to text-only
+  // regardless of the request.
+  const effectiveLayout: StoryLayout = !item.coverPhotoId ? "textonly" : layout;
 
   const layoutClass =
     effectiveLayout === "left"
@@ -79,7 +74,6 @@ export function StoryCard({
   const className = [
     styles.card,
     masonry ? styles.masonry : styles.column,
-    variant === "feature" ? styles.feature : null,
     layoutClass,
   ]
     .filter(Boolean)
@@ -181,8 +175,8 @@ export function StoryCard({
         </>
       ) : null}
 
-      {/* TOP (default / feature) and LEFT: the cover sits outside the body — above it in `top`
-          (full width), or down the left side in `left`. Text-only renders no photo at all. */}
+      {/* TOP (default) and LEFT: the cover sits outside the body — above it in `top` (full width), or
+          down the left side in `left`. Text-only renders no photo at all. */}
       {(effectiveLayout === "top" || effectiveLayout === "left") && item.coverPhotoId ? (
         <span className={styles.photoWrap}>
           {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth

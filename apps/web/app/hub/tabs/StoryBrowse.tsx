@@ -15,7 +15,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
-import { TellStoryCard } from "./TellStoryCard";
 import { StoryCard } from "./StoryCard";
 import { pickStoryLayout } from "./story-layout";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
@@ -203,7 +202,6 @@ function Feed({
   href: (item: StoryItem) => string;
   view: FeedView;
 }) {
-  // The "Tell a story" CTA leads the feed as its first item (both layouts) and the empty state below.
   if (items.length === 0) {
     // Multi-select empty-state copy (ADR-0021, #47): all families selected → "your families"; a single
     // family selected → "the {family} family"; a multi-family subset falls back to the generic "your
@@ -216,7 +214,6 @@ function Feed({
           );
     return (
       <div className={styles.column}>
-        <TellStoryCard />
         <div className={styles.emptyCard}>
           <span className={styles.emptyEmoji} aria-hidden="true">
             📖
@@ -229,14 +226,10 @@ function Feed({
   }
 
   // Masonry — CSS multi-column of vertical cards, each kept whole across columns; column width sets
-  // how many columns fit. Column view is today's single stacked column of wide horizontal cards. The
-  // Tell-a-story CTA is the first cell/card in either layout.
+  // how many columns fit. Column view is today's single stacked column of wide horizontal cards.
   if (view === "masonry") {
-    // The first cover-bearing item leads the masonry feed as a wider hero (`feature` variant).
-    const featureIndex = items.findIndex((it) => Boolean(it.coverPhotoId));
     return (
       <div className={styles.masonry} data-view="masonry">
-        <TellStoryCard masonry />
         {items.map((item, i) => (
           <StoryCard
             key={item.id}
@@ -244,10 +237,8 @@ function Feed({
             href={href(item)}
             index={i}
             masonry
-            variant={i === featureIndex ? "feature" : "feed"}
             // Deterministic per-story layout (photo-top / photo-left / wrap / collage / text-only) so
-            // the masonry feed reads like an editorial scrapbook and never repeats the same tile. The
-            // feature hero ignores this and keeps its fixed photo-forward structure.
+            // the masonry feed reads like an editorial scrapbook and never repeats the same tile.
             layout={pickStoryLayout(item)}
           />
         ))}
@@ -257,7 +248,6 @@ function Feed({
 
   return (
     <div className={styles.column} data-view="column">
-      <TellStoryCard />
       {items.map((item, i) => (
         <StoryCard key={item.id} item={item} href={href(item)} index={i} />
       ))}

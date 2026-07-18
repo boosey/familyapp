@@ -68,15 +68,14 @@ export const hub = {
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
     // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
-    // for ask-less drafts still in review. Playful mockup (Direction D): the invite card leads with an
-    // action heading, a warm reassurance body, and a pill affordance (arrow only — the heading carries
-    // the label, so the pill stays decorative and aria-hidden).
+    // for ask-less drafts still in review. `tellTitle` labels the right-justified control-row button
+    // (#125 — the single Tell-a-story affordance); `resume` is the per-draft link in the expanded list.
     tellTitle: "Tell a story",
-    tellBlurb:
-      "Start it whenever it comes to you — a sentence is enough. We'll help you shape the rest.",
-    tellAction: "→",
-    resumeHeading: "Finish what you started",
     resume: "Finish",
+    // Compact draft-reminder button in the single control row (#125): a small top line naming the
+    // count, and a "finish them" action line beneath it. Tapping it expands the per-draft resume list.
+    draftReminder: (n: number) => `You have ${n} draft ${n === 1 ? "story" : "stories"}`,
+    draftReminderAction: "finish them",
     // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
     // empty state rather than a silent "show all". Mirrors album.noFamiliesSelected for the stories pool.
     noFamiliesSelected: "No families selected — turn one on above to see their stories.",

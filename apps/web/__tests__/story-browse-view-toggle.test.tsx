@@ -102,16 +102,9 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 
-  it("renders the Tell-a-story CTA as the FIRST item of the feed (Masonry and Column)", () => {
-    const { container } = renderBrowse();
-    // Masonry (default): the feed container's first link is the /hub/tell CTA, ahead of the cards.
-    const mas = container.querySelector('[data-view="masonry"]')!;
-    expect(mas.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
-
-    fireEvent.click(screen.getByRole("radio", { name: hub.browse.viewColumn }));
-    const col = container.querySelector('[data-view="column"]')!;
-    expect(col.querySelector("a")?.getAttribute("href")).toBe("/hub/tell");
-  });
+  // (#125) The Tell-a-story CTA is no longer an in-feed item — it moved to the Stories control row
+  // (StoriesControls, covered by StoriesControls.test.tsx). StoryBrowse now renders only story cards,
+  // so there is no longer a leading /hub/tell link in the feed container to assert here.
 
   it("restores a persisted Column choice on mount (stored preference beats the Masonry default)", () => {
     window.localStorage.setItem("hub:feedView", "column");
