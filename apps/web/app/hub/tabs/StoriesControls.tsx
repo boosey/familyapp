@@ -36,9 +36,20 @@ interface StoriesControlsProps {
   selected: string[] | "all";
   /** The viewer's own ask-less drafts still awaiting approval — the compact reminder + resume list. */
   selfDrafts: SelfDraft[];
+  /**
+   * #138: whether the narrator's biographical intake is still incomplete. When true, a compact intake
+   * reminder button (matching the draft-reminder button) rides this row beside "Tell a story",
+   * replacing the former full-width IntakeReminder banner. False → no button.
+   */
+  intakeIncomplete?: boolean;
 }
 
-export function StoriesControls({ activeFamilies, selected, selfDrafts }: StoriesControlsProps) {
+export function StoriesControls({
+  activeFamilies,
+  selected,
+  selfDrafts,
+  intakeIncomplete = false,
+}: StoriesControlsProps) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
 
@@ -56,26 +67,38 @@ export function StoriesControls({ activeFamilies, selected, selfDrafts }: Storie
       <div className={styles.controlRow}>
         {chips}
 
-        {/* Compact draft-reminder — matches the control height, two short stacked lines. Toggles the
-            per-draft resume list below the row. */}
-        {hasDrafts ? (
-          <button
-            type="button"
-            className={styles.draftButton}
-            aria-expanded={expanded}
-            // Only point aria-controls at the list once it's actually rendered — the <ul id={listId}>
-            // is collapsed out of the DOM, and a dangling reference to a non-existent id is an a11y bug.
-            aria-controls={expanded ? listId : undefined}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            <span className={styles.draftButtonTop}>{hub.stories.draftReminder(selfDrafts.length)}</span>
-            <span className={styles.draftButtonAction}>{hub.stories.draftReminderAction}</span>
-          </button>
-        ) : null}
+        {/* Right-justified actions cluster (#138): both compact reminders sit BESIDE "Tell a story". */}
+        <div className={styles.controlRowActions}>
+          {/* Compact draft-reminder — matches the control height, two short stacked lines. Toggles the
+              per-draft resume list below the row. */}
+          {hasDrafts ? (
+            <button
+              type="button"
+              className={styles.reminderButton}
+              aria-expanded={expanded}
+              // Only point aria-controls at the list once it's actually rendered — the <ul id={listId}>
+              // is collapsed out of the DOM, and a dangling reference to a non-existent id is an a11y bug.
+              aria-controls={expanded ? listId : undefined}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              <span className={styles.reminderTop}>{hub.stories.draftReminder(selfDrafts.length)}</span>
+              <span className={styles.reminderAction}>{hub.stories.draftReminderAction}</span>
+            </button>
+          ) : null}
 
-        <Link href="/hub/tell" className={styles.tellButton}>
-          {hub.stories.tellTitle}
-        </Link>
+          {/* Compact intake reminder (#138) — same size as the draft button, links to /hub/about-you.
+              Replaces the former full-width IntakeReminder banner. */}
+          {intakeIncomplete ? (
+            <Link href="/hub/about-you" className={styles.reminderButton} aria-label={hub.intake.aria}>
+              <span className={styles.reminderTop}>{hub.intake.reminderTop}</span>
+              <span className={styles.reminderAction}>{hub.intake.reminderAction}</span>
+            </Link>
+          ) : null}
+
+          <Link href="/hub/tell" className={styles.tellButton}>
+            {hub.stories.tellTitle}
+          </Link>
+        </div>
       </div>
 
       {/* Resume: the viewer's own ask-less drafts still in review. Each links to /hub/tell/[storyId].
