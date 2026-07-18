@@ -50,6 +50,39 @@
   padding: 28px 0;
 }
 
+/* Family surface action row — holds the Invite button (moved out of the primary "More" menu). */
+.familyActions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 18px;
+}
+
+.inviteButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 700;
+  text-decoration: none;
+  min-height: var(--touch-min);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+
+.inviteButton:hover {
+  background: var(--accent-strong);
+}
+
+.inviteButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 .emptyCard {
   background: var(--surface-card);
   border: var(--border-width) solid var(--border);

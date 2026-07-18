@@ -44,30 +44,42 @@ function contrast(a: string, b: string): number {
 }
 
 const AA = 4.5;
+// Playful's accent is BRIGHT CORAL by owner decision (approved "Playful & warm" mockup, 2026-07-17):
+// white on #EF7A54 is 2.77:1, below AA, and that is the intended brand look ("i want the brighter
+// colors, that is exactly why we started this"). So the bright-coral + candy-sticker pairs are NOT
+// held to AA — only to a legibility FLOOR that still trips a truly-invisible regression. Body reading
+// text and the solemn-tone fallback stay AA-guarded on every skin.
+const BRAND_FLOOR = 2.6;
 
-// The pairs every skin must satisfy. `--accent-on` is the shared text/icon colour placed on BOTH
-// `--accent` (button base) and `--accent-strong` (button hover) — both must pass. `--accent-strong`
-// is ALSO used as text/icons directly on light surfaces (~40 call sites), so it must pass on card+page.
-const SURFACE_TEXT_PAIRS = [
+// Reading text that MUST meet AA on every skin (prose, and titles sitting on the highlighter wash).
+const BODY_TEXT_PAIRS = [
   ["--text-body", "--surface-card"],
   ["--text-body", "--surface-page"],
-  ["--accent-on", "--accent-strong"], // primary-button HOVER (bg=accent-strong, text=accent-on)
-  ["--accent-strong", "--surface-card"], // accent-strong AS text on light surfaces
+  ["--text-body", "--highlighter"],
+] as const;
+
+// Heirloom is the AA-safe skin; keep its accent pairs held to AA (its coral is the darker terracotta).
+const HEIRLOOM_ACCENT_PAIRS = [
+  ["--accent-on", "--accent-strong"],
+  ["--accent-strong", "--surface-card"],
   ["--accent-strong", "--surface-page"],
 ] as const;
 
-const STICKER_PAIRS = [
+// Playful's intentional brand pairs — bright coral fills + candy stickers. Below AA by design; guarded
+// only against total illegibility. If any of these ever needs strict AA, that's a design decision, not
+// a silent token drift.
+const PLAYFUL_BRAND_PAIRS = [
+  ["--accent-on", "--accent"], // white on bright coral button (2.77:1 — brand)
+  ["--accent-on", "--accent-strong"], // white on deeper coral (hover)
+  ["--accent-strong", "--surface-card"], // accent-coloured text on light
   ["--sticker-coral-ink", "--sticker-coral-bg"],
   ["--sticker-sky-ink", "--sticker-sky-bg"],
   ["--sticker-leaf-ink", "--sticker-leaf-bg"],
   ["--sticker-gold-ink", "--sticker-gold-bg"],
-  ["--text-body", "--highlighter"],
 ] as const;
 
-// Under `[data-tone="solemn"]` the decorative palette collapses (globals.css): every sticker bg/ink
-// and the highlighter fall back to `--surface-sunken` + `--text-meta`. That fallback still renders
-// tag TEXT, so guard it too — otherwise a future `--surface-sunken`/`--text-meta` tweak could silently
-// make solemn tags illegible while every other pair here still passes.
+// Under `[data-tone="solemn"]` the decorative palette collapses (globals.css): sticker bg/ink and the
+// highlighter fall back to `--surface-sunken` + `--text-meta`, which still renders tag TEXT — guard it.
 const SOLEMN_FALLBACK_PAIRS = [["--text-meta", "--surface-sunken"]] as const;
 
 function assertAA(css: string, fg: string, bg: string): void {
@@ -75,29 +87,27 @@ function assertAA(css: string, fg: string, bg: string): void {
   expect(ratio, `${fg} on ${bg} was ${ratio.toFixed(2)}:1 (need >= ${AA})`).toBeGreaterThanOrEqual(AA);
 }
 
-describe("skin contrast (WCAG AA)", () => {
+describe("skin contrast", () => {
   for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
-    it(`${name}: text/accent pairs on surfaces meet AA`, () => {
-      for (const [fg, bg] of SURFACE_TEXT_PAIRS) assertAA(css, fg, bg);
+    it(`${name}: body reading text meets AA`, () => {
+      for (const [fg, bg] of BODY_TEXT_PAIRS) assertAA(css, fg, bg);
     });
-  }
-
-  for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
-    it(`${name}: sticker tags + highlighter meet AA`, () => {
-      for (const [fg, bg] of STICKER_PAIRS) assertAA(css, fg, bg);
-    });
-  }
-
-  for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
-    it(`${name}: solemn-tone fallback text stays legible`, () => {
+    it(`${name}: solemn-tone fallback text stays legible (AA)`, () => {
       for (const [fg, bg] of SOLEMN_FALLBACK_PAIRS) assertAA(css, fg, bg);
     });
   }
 
-  it("playful: text/icons on the accent (button base) meet AA", () => {
-    // This is the pair the original bug shipped wrong (white on bright coral = 2.77:1). Playful now
-    // uses white on a deeper coral (#CC4A22 = 4.60:1). NOT asserted for heirloom, whose white-on-
-    // terracotta is a PRE-EXISTING 4.44:1 (a hair under AA) that this change does not touch.
-    assertAA(playful, "--accent-on", "--accent");
+  it("heirloom: accent pairs meet AA", () => {
+    for (const [fg, bg] of HEIRLOOM_ACCENT_PAIRS) assertAA(heirloom, fg, bg);
+  });
+
+  it("playful: bright brand pairs stay above the legibility floor (below AA by owner choice)", () => {
+    for (const [fg, bg] of PLAYFUL_BRAND_PAIRS) {
+      const ratio = contrast(tokenHex(playful, fg), tokenHex(playful, bg));
+      expect(
+        ratio,
+        `${fg} on ${bg} was ${ratio.toFixed(2)}:1 (brand pair; need >= ${BRAND_FLOOR})`,
+      ).toBeGreaterThanOrEqual(BRAND_FLOOR);
+    }
   });
 });

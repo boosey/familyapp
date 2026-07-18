@@ -14,22 +14,20 @@
   --surface-page: #FBF1DE; --surface-card: #FFFDF8; --surface-sunken: #FFF6E6;
   --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
 
-  /* accent — warm coral, tuned for WCAG AA (guarded by _skins/contrast.test.ts). --accent-strong is
-   * the DARKER variant, used BOTH as text/icons on light surfaces (~40 call sites: FavoriteButton,
-   * TagInput chips, album controls, story detail…) AND as the primary-button HOVER background. Because
-   * --accent-on is a single shared token, --accent and --accent-strong both carry WHITE text, so both
-   * must be dark enough for white to clear AA (4.5:1). This mirrors heirloom's structure (accent = bg
-   * with white text; accent-strong = dark, for text-on-light).
-   *   --accent          #CC4A22 : white on it = 4.60:1 (AA); brightest coral AA allows w/ white text.
-   *   --accent-strong   #A83E1A : as text on cream = 5.56:1; white on it (hover) = 6.23:1 (AA).
-   * The bright coral #EF7A54 (white-on-it is 2.77:1, fails AA) returns in Phase 2 as a DECORATIVE fill
-   * — tape, tilt, sticker backgrounds — where it carries no small text and is safe. */
-  --accent: #CC4A22; --accent-strong: #A83E1A; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
+  /* accent — BRIGHT CORAL, matching the owner-approved "Playful & warm" mockup
+   * (docs/design 2026-07-17 · directions.html Direction D). #EF7A54 is the PRIMARY accent: the
+   * "＋ Tell a story" CTA, active nav pill, avatar, and reaction buttons all render in it with white
+   * text. This is a deliberate BRAND choice: white on #EF7A54 is 2.77:1 (below WCAG AA), explicitly
+   * chosen by the owner over the darker AA-safe coral — "i want the brighter colors, that is exactly
+   * why we started this" (2026-07-17). The contrast guard therefore no longer enforces AA on the
+   * accent pairs (it still guards body prose + the solemn fallback). --accent-strong (#D85F39) is the
+   * deeper coral used for the byline dot ink, hover, and accent-coloured text on light surfaces. */
+  --accent: #EF7A54; --accent-strong: #D85F39; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
   --accent-soft-0: rgba(255,227,211,0);
   --support: #3F9E93; --support-soft: #D9ECDC;
 
   /* lines / focus */
-  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #CC4A22;
+  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #D85F39;
 
   /* shape — rounder, chunkier */
   --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 26px; --radius-pill: 999px;
@@ -45,12 +43,12 @@
   --deco-coral: #EF7A54;
   --tape-bg: rgba(239, 122, 84, 0.30);
   --tilt-shadow: rgba(216, 95, 57, 0.22);
-  --highlighter: #FFE1A6;                        /* marker wash behind titles (text = --text-body) */
-  /* Sticker/candy tags — bg carries the label ink; each pair AA-guarded in contrast.test.ts */
-  --sticker-coral-bg: #FFE3D3;  --sticker-coral-ink: #B24218;
-  --sticker-sky-bg:   #DCEBF7;  --sticker-sky-ink:   #2F6187;
-  --sticker-leaf-bg:  #E6EFD6;  --sticker-leaf-ink:  #4F6B2C;
-  --sticker-gold-bg:  #F5DDB0;  --sticker-gold-ink:  #855A15;
+  --highlighter: #FFD9A1;                        /* amber marker wash behind titles (mockup Direction D) */
+  /* Sticker/candy tags — candy inks from the approved mockup (brighter than the earlier AA-tuned set). */
+  --sticker-coral-bg: #FFE3D3;  --sticker-coral-ink: #C95A33;
+  --sticker-sky-bg:   #DCEBF7;  --sticker-sky-ink:   #356A92;
+  --sticker-leaf-bg:  #E6EFD6;  --sticker-leaf-ink:  #5B7A34;
+  --sticker-gold-bg:  #F5DDB0;  --sticker-gold-ink:  #9A6A1E;
 
   /* motion — gentle bounce (structural motion added in Phase 2, all guarded) */
   --ease-quiet: cubic-bezier(0.34, 1.32, 0.4, 1);

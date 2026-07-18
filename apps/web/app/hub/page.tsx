@@ -29,7 +29,7 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { QuestionsSubNav } from "./QuestionsSubNav";
-import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
+import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
 import { AlbumSurface } from "./album/AlbumSurface";
@@ -227,25 +227,23 @@ export default async function HubPage({
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
   ];
-  const overflowTabs = [
-    // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
-    // viewer (member of none) has nothing to invite into, so the entry is absent for them (Task 4.5).
-    ...(inviteTabVisible(activeFamilies.length)
-      ? [{ key: "invite", label: hub.shell.tabInvite }]
-      : []),
-    // Stays visible while there are pending OR recently-decided requests; the badge counts only
-    // still-pending ones (the steward's actionable queue). Also member-only — a viewer who stewards
-    // no family has no request queue.
-    ...(requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length)
-      ? [
-          {
-            key: "requests",
-            label: hub.shell.tabRequests,
-            badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
-          },
-        ]
-      : []),
-  ];
+  // Invite no longer lives in "More" — it's a button on the Family surface (you invite people INTO a
+  // family), rendered below. Requests is now the ONLY overflow entry: visible while there are pending
+  // OR recently-decided requests; the badge counts only still-pending ones (the steward's actionable
+  // queue). Member-only — a viewer who stewards no family has no request queue.
+  const overflowTabs = requestsTabVisible(
+    activeFamilies.length,
+    pendingRequests.length,
+    decidedRequests.length,
+  )
+    ? [
+        {
+          key: "requests",
+          label: hub.shell.tabRequests,
+          badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
+        },
+      ]
+    : [];
 
   // Which PRIMARY tab is visually active: the three ask surfaces all light up the Questions tab.
   const primaryActive = ["questions", "ask", "asks"].includes(activeTab) ? "questions" : activeTab;
@@ -328,8 +326,21 @@ export default async function HubPage({
               hasFamily={activeFamilies.length > 0}
             />
           )}
-          {activeTab === "family" &&
-            (familyTabData ? (
+          {activeTab === "family" && (
+            <>
+              {/* Invite lives here now (a family action), not in the primary nav's "More" menu — you
+                  invite people INTO a family. Member-only, same gate as the old overflow entry. */}
+              {inviteTabVisible(activeFamilies.length) && (
+                <div className={styles.familyActions}>
+                  <a
+                    className={styles.inviteButton}
+                    href={`/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`}
+                  >
+                    {hub.shell.tabInvite}
+                  </a>
+                </div>
+              )}
+              {familyTabData ? (
               <FamilyTab
                 familyId={familyTabData.familyId}
                 focusPersonId={familyTabData.focusPersonId}
@@ -355,7 +366,9 @@ export default async function HubPage({
                   {hub.tree.noFamily}
                 </p>
               </div>
-            ))}
+            )}
+            </>
+          )}
           {/* Invite is member-only: you invite people INTO a family you belong to. A pending-only
               viewer hitting ?tab=invite directly would otherwise reach a broken zero-option family
               form — gate the dispatch on membership and show the shared pending-only empty instead
