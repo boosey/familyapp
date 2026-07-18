@@ -306,19 +306,30 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // props to the SAME mounted component, so without this the previous family's tree persisted until a
   // List<->Tree toggle forced a remount (the "fix" users found). On a genuine family change we reload
   // from the new props, clear the background top-up dedupe set, and re-center the camera (reset-on-
-  // switch is acceptable per #141). Guarded by a ref so a re-render that merely hands a new `initial`
-  // identity for the SAME family never blows away in-session expansion/focus/camera state.
-  const prevFamilyIdRef = useRef(familyId);
-  useEffect(() => {
-    if (prevFamilyIdRef.current === familyId) return;
-    prevFamilyIdRef.current = familyId;
+  // switch is acceptable per #141). Guarded by a state check so a re-render that merely hands a new
+  // `initial` identity for the SAME family never blows away in-session expansion/focus/camera state.
+  // React recommends adjusting state when a prop changes during render (the "setState during render
+  // with previous-value tracking" pattern), so React discards the stale render and re-renders with the
+  // updated state before painting — avoiding a visible flash of stale state.
+  const [prevFamilyId, setPrevFamilyId] = useState(familyId);
+  if (familyId !== prevFamilyId) {
+    setPrevFamilyId(familyId);
     setNodes(initial.nodes);
     setEdges(initial.edges);
     setExpansion(EMPTY_EXPANSION);
     setFocusPersonId(initialFocusPersonId);
     toppedUp.current = new Set();
-    centerCamera();
-  }, [familyId, initial, initialFocusPersonId, centerCamera]);
+  }
+
+  // Camera centering reads DOM refs (viewportRef.current?.clientHeight) and may update parent-controlled
+  // state, so it is a genuine side effect and stays in a useEffect, guarded by a ref.
+  const prevFamilyIdRef = useRef(familyId);
+  useEffect(() => {
+    if (prevFamilyIdRef.current !== familyId) {
+      prevFamilyIdRef.current = familyId;
+      centerCamera();
+    }
+  }, [familyId, centerCamera]);
 
   // --- Background top-up: keep one layer past the frontier loaded (spec §7) -----------------------
   // After every render, look at drawn nodes whose kin flags say more exists at the boundary
