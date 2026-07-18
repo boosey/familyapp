@@ -61,19 +61,28 @@ function renderPanel(over: Partial<React.ComponentProps<typeof UnplacedMembers>>
   const onLink = over.onLink ?? vi.fn(okAction);
   const onSetNonFamily = over.onSetNonFamily ?? vi.fn(okAction);
   const onEndMembership = over.onEndMembership ?? vi.fn(okAction);
+  const onFetchAnchors =
+    over.onFetchAnchors ??
+    vi.fn(async () => ({
+      ok: true as const,
+      persons: [
+        { personId: "self", displayName: "You" },
+        { personId: "elena", displayName: "Elena" },
+      ],
+    }));
   render(
     <UnplacedMembers
       familyId="F"
       members={MEMBERS}
-      anchors={ANCHORS}
       viewerIsSteward={over.viewerIsSteward ?? false}
       variant={over.variant ?? "section"}
       onLink={onLink}
       onSetNonFamily={onSetNonFamily}
       onEndMembership={onEndMembership}
+      onFetchAnchors={onFetchAnchors}
     />,
   );
-  return { onLink, onSetNonFamily, onEndMembership };
+  return { onLink, onSetNonFamily, onEndMembership, onFetchAnchors };
 }
 
 /* ── 1. Both surfaces render the unplaced members ─────────────────────────────── */
@@ -129,12 +138,20 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
 
 /* ── 2. Actions invoke the right handler ──────────────────────────────────────── */
 
-it("place-in-tree opens the link modal and calls linkExistingMember with anchor + relation", async () => {
-  const { onLink } = renderPanel();
+it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingMember with anchor + relation", async () => {
+  const { onLink, onFetchAnchors } = renderPanel();
   act(() => screen.getByTestId("unplaced-place-u1").click());
 
-  // Modal open with the two pickers.
+  // Modal opens; anchors are fetched asynchronously.
   expect(screen.getByTestId("place-member-modal")).toBeTruthy();
+  expect(screen.getByTestId("place-member-loading-anchors")).toBeTruthy();
+
+  await act(async () => {
+    // Let the microtask queue flush so the fetch resolves.
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  expect(onFetchAnchors).toHaveBeenCalledWith("F");
   const anchor = screen.getByTestId("place-member-anchor") as HTMLSelectElement;
   const relation = screen.getByTestId("place-member-relation") as HTMLSelectElement;
   fireEvent.change(anchor, { target: { value: "elena" } });
@@ -191,7 +208,6 @@ it("renders nothing when there are no unplaced members", () => {
     <UnplacedMembers
       familyId="F"
       members={[]}
-      anchors={ANCHORS}
       viewerIsSteward
     />,
   );
