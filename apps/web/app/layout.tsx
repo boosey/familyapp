@@ -65,7 +65,7 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Family Chronicle",
+  title: "Tell Me Again",
   description: "A warm place to tell your stories.",
 };
 

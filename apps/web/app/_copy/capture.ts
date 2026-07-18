@@ -31,7 +31,7 @@ export const capture = {
     thanks: "Thank you.",
     alreadySettled:
       "This one is already settled. You can close this window whenever you're ready.",
-    brand: "Family Chronicle",
+    brand: "Tell Me Again",
     yourStory: "Your Story",
     readyToShare: "Ready to share this one?",
     haveAListen: "Have a listen first. Then tell me who should be able to hear it.",

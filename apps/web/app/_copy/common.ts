@@ -2,7 +2,7 @@
 // Shared, cross-route display copy. Static strings are literals; dynamic
 // strings are arrow functions whose params become i18n placeholders later.
 export const common = {
-  appName: "Family Chronicle",
+  appName: "Tell Me Again",
 
   account: {
     yourAccount: "Your account",
@@ -50,7 +50,7 @@ export const common = {
     recordedTitle: (label: string) => `Recorded ${label}`,
   },
 
-  authScreenBrand: "Family Chronicle",
+  authScreenBrand: "Tell Me Again",
 
   // Shared audience tiers (used by AnswerFlow + ApprovalRecorder)
   audienceTiers: {

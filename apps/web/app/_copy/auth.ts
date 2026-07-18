@@ -3,7 +3,7 @@
 export const auth = {
   signIn: {
     title: "Welcome back",
-    subtitle: "Sign in to Family Chronicle.",
+    subtitle: "Sign in to Tell Me Again.",
     error: "That email and password don't match. Please try again.",
     newHere: "New here?",
     createAccount: "Create an account",
@@ -38,9 +38,11 @@ export const auth = {
     backToHub: "‹ Back to hub",
   },
   // Landing page ("Tell Me Again") — the public front door and the URL Google's OAuth reviewer
-  // visits as the app homepage. The brand here is intentionally "Tell Me Again" (matching the
-  // Privacy Policy + tellmeagain.app), not the internal "Family Chronicle" — homepage / privacy /
-  // domain must name the same product for OAuth verification to read as coherent (#154 / #153).
+  // visits as the app homepage. The product is uniformly "Tell Me Again" across every surface —
+  // homepage, sign-in, welcome, invite emails, tab title, Privacy Policy, and the tellmeagain.app
+  // domain — because Google's reviewer walks the full OAuth flow, and any surface still naming a
+  // different product (formerly the internal "Family Chronicle") reads as an app-name mismatch and
+  // fails verification (#154 / #153).
   landing: {
     brand: "Tell Me Again",
     eyebrow: "tellmeagain.app",

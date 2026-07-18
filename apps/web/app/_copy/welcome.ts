@@ -6,7 +6,7 @@ export const welcome = {
   // Name-free greetings: the stored name at this point may still be the email-prefix placeholder,
   // so the intro must never address the person by an unconfirmed name. We ask for their name next.
   greetingInvited: "Welcome to the family.",
-  greetingDefault: "Welcome to Family Chronicle.",
+  greetingDefault: "Welcome to Tell Me Again.",
   introBody:
     "A couple of quick things and you'll be in — your name and your birthday. They help us tell your stories at your pace.",
   begin: "Let's begin",
