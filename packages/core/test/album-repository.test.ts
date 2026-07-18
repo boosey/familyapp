@@ -22,7 +22,7 @@ import {
 } from "../src/index";
 import {
   addMembership,
-  endMembership,
+  forceEndMembership,
   makeFamily,
   makePerson,
   makeStory,
@@ -179,7 +179,7 @@ describe("listAlbumPhotos", () => {
       storageKey: "family-photos/left",
     });
     expect((await listAlbumPhotos(db, account(former.id), fam.id)).length).toBe(1);
-    await endMembership(db, membership.id);
+    await forceEndMembership(db, membership.id);
     expect(await listAlbumPhotos(db, account(former.id), fam.id)).toEqual([]);
   });
 

@@ -1027,5 +1027,53 @@ export const hub = {
     collapseSiblings: "Collapse siblings",
     expandSiblings: "Show siblings",
   },
+  // Unplaced members (#161, ADR-0023) — active members who touch NO visible kinship edge, so they're
+  // invisible in the graph-only tree. Surfaced in BOTH views (a "not yet connected" tray on the tree,
+  // a section in the relatives list) with three actions: place in tree, leave as non-family, remove.
+  unplaced: {
+    // Section / tray heading + the short explanation of why these people show up here.
+    heading: "Not yet connected",
+    intro:
+      "These family members haven't been placed in the tree yet. Connect them to a relative, or set them aside.",
+    // Accessible group name wrapping the per-member action buttons.
+    memberActionsAria: (name: string) => `Actions for ${name}`,
+    // Fallback name for a member with no display name recorded.
+    unnamedMember: "Unnamed member",
+    // The three per-member actions.
+    place: "Place in tree",
+    leaveNonFamily: "Not family",
+    remove: "Remove",
+    // In-page confirm for the destructive steward-only remove (never a native confirm() dialog).
+    removeConfirm: (name: string) => `Remove ${name} from this family?`,
+    removeConfirmYes: "Remove",
+    removeConfirmNo: "Cancel",
+    // Undo affordance for a member set aside as non-family (shown in the non-family list).
+    nonFamilyHeading: "Set aside as not family",
+    restore: "Move back",
+    // Busy labels while an action's server call is in flight.
+    placing: "Placing…",
+    removing: "Removing…",
+    working: "Working…",
+    // Generic non-committal failure (leaks nothing about why a link/remove was refused).
+    actionFailed: "Couldn't do that. Please try again.",
+    // The place-in-tree modal (link an existing member to an anchor + relation).
+    placeHeading: (name: string) => `Place ${name} in the tree`,
+    placeClose: "Close",
+    placeIntro:
+      "Choose who they're related to and how. This connects the person you already have — it never creates a duplicate.",
+    anchorFieldLabel: "Related to",
+    relationFieldLabel: "How are they related?",
+    // The relation options are phrased from the MEMBER's perspective (member is the {relation} of anchor).
+    relationOptions: {
+      parent: "Parent",
+      child: "Child",
+      partner: "Partner",
+      sibling: "Sibling",
+      grandparent: "Grandparent",
+    },
+    placeSubmit: "Place in tree",
+    // No anchors available to link to (the tree is empty besides this member) — a rare edge case.
+    noAnchors: "There's no one to connect them to yet. Add someone to the tree first.",
+  },
 } as const;
 

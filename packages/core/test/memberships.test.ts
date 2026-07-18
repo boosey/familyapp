@@ -3,19 +3,27 @@
  * (rejoin after an ENDED membership is allowed), plus the read projections.
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
+import { memberships } from "@chronicle/db/schema";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   AuthorizationError,
   InvariantViolation,
   addMembership,
   designateNarrator,
+  endMembership,
   getStewardPersonId,
   isActiveMember,
   listActiveFamiliesForPerson,
   listActiveMembershipsForPerson,
   listMembersOfFamily,
+  setMemberNonFamily,
 } from "../src/index";
-import { endMembership, makeFamily, makePerson } from "./helpers";
+// The LOCAL test helper `forceEndMembership(db, membershipId)` ends a membership by RAW id (a test
+// convenience). It is distinct from the CORE `endMembership(db, ctx, {familyId, personId})` above,
+// which is steward-gated and the function under test — so we import the core one and keep the raw
+// helper under a non-colliding name.
+import { forceEndMembership, makeFamily, makePerson } from "./helpers";
 
 let db: Database;
 beforeEach(async () => {
@@ -55,7 +63,7 @@ describe("addMembership", () => {
       personId: p.id,
       familyId: fam.id,
     });
-    await endMembership(db, membershipId);
+    await forceEndMembership(db, membershipId);
     const rejoin = await addMembership(db, { personId: p.id, familyId: fam.id });
     expect(rejoin.membershipId).not.toBe(membershipId);
     expect(await isActiveMember(db, p.id, fam.id)).toBe(true);
@@ -109,7 +117,7 @@ describe("designateNarrator", () => {
     const steward = await makePerson(db, "S");
     const fam = await makeFamily(db, "Fam", steward.id);
     const { membershipId } = await addMembership(db, { personId: p.id, familyId: fam.id });
-    await endMembership(db, membershipId);
+    await forceEndMembership(db, membershipId);
 
     await expect(
       designateNarrator(db, { personId: p.id, familyId: fam.id }),
@@ -129,7 +137,7 @@ describe("read helpers", () => {
       familyId: famA.id,
     });
     await addMembership(db, { personId: p.id, familyId: famB.id });
-    await endMembership(db, membershipId);
+    await forceEndMembership(db, membershipId);
     const active = await listActiveMembershipsForPerson(db, p.id);
     expect(active.map((m) => m.familyId)).toEqual([famB.id]);
   });
@@ -160,7 +168,7 @@ describe("read helpers", () => {
       personId: b.id,
       familyId: fam.id,
     });
-    await endMembership(db, membershipId);
+    await forceEndMembership(db, membershipId);
     const members = await listMembersOfFamily(db, fam.id);
     expect(members.map((m) => m.personId)).toEqual([a.id]);
   });
@@ -206,7 +214,7 @@ describe("listActiveFamiliesForPerson", () => {
       personId: p.id,
       familyId: gone.id,
     });
-    await endMembership(db, membershipId);
+    await forceEndMembership(db, membershipId);
 
     const active = await listActiveFamiliesForPerson(db, p.id);
     expect(active.map((f) => f.familyId)).toEqual([kept.id]);
@@ -228,5 +236,158 @@ describe("listActiveFamiliesForPerson", () => {
   it("returns [] for a person with no active membership", async () => {
     const p = await makePerson(db, "P");
     expect(await listActiveFamiliesForPerson(db, p.id)).toEqual([]);
+  });
+});
+
+const account = (personId: string) => ({ kind: "account", personId }) as const;
+
+/** The `non_family` flag / status / ended_at of the CURRENT active row (or a resolved ended one). */
+async function membershipRow(db: Database, personId: string, familyId: string) {
+  const [row] = await db
+    .select({
+      status: memberships.status,
+      nonFamily: memberships.nonFamily,
+      endedAt: memberships.endedAt,
+    })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.familyId, familyId),
+      ),
+    )
+    .limit(1);
+  return row!;
+}
+
+describe("setMemberNonFamily (#161)", () => {
+  it("toggles the non_family flag on the target's active membership; reversible", async () => {
+    const steward = await makePerson(db, "S");
+    const member = await makePerson(db, "M");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: steward.id, familyId: fam.id });
+    await addMembership(db, { personId: member.id, familyId: fam.id });
+
+    expect((await membershipRow(db, member.id, fam.id)).nonFamily).toBe(false);
+
+    // Any active member (here the steward) may curate.
+    await setMemberNonFamily(db, account(steward.id), {
+      familyId: fam.id,
+      personId: member.id,
+      nonFamily: true,
+    });
+    expect((await membershipRow(db, member.id, fam.id)).nonFamily).toBe(true);
+
+    // Reversible.
+    await setMemberNonFamily(db, account(steward.id), {
+      familyId: fam.id,
+      personId: member.id,
+      nonFamily: false,
+    });
+    expect((await membershipRow(db, member.id, fam.id)).nonFamily).toBe(false);
+  });
+
+  it("a NON-steward active member may also curate", async () => {
+    const steward = await makePerson(db, "S");
+    const a = await makePerson(db, "A");
+    const b = await makePerson(db, "B");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: a.id, familyId: fam.id });
+    await addMembership(db, { personId: b.id, familyId: fam.id });
+
+    // `a` (a plain member, not steward) marks `b` non-family.
+    await setMemberNonFamily(db, account(a.id), {
+      familyId: fam.id,
+      personId: b.id,
+      nonFamily: true,
+    });
+    expect((await membershipRow(db, b.id, fam.id)).nonFamily).toBe(true);
+  });
+
+  it("rejects a non-member actor", async () => {
+    const steward = await makePerson(db, "S");
+    const member = await makePerson(db, "M");
+    const stranger = await makePerson(db, "X");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: member.id, familyId: fam.id });
+
+    await expect(
+      setMemberNonFamily(db, account(stranger.id), {
+        familyId: fam.id,
+        personId: member.id,
+        nonFamily: true,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect((await membershipRow(db, member.id, fam.id)).nonFamily).toBe(false);
+  });
+});
+
+describe("endMembership (#161)", () => {
+  it("steward ends a member: status=ended + ended_at set; access is revoked", async () => {
+    const steward = await makePerson(db, "S");
+    const member = await makePerson(db, "M");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: steward.id, familyId: fam.id });
+    await addMembership(db, { personId: member.id, familyId: fam.id });
+    expect(await isActiveMember(db, member.id, fam.id)).toBe(true);
+
+    await endMembership(db, account(steward.id), {
+      familyId: fam.id,
+      personId: member.id,
+    });
+
+    const row = await membershipRow(db, member.id, fam.id);
+    expect(row.status).toBe("ended");
+    expect(row.endedAt).not.toBeNull();
+    // Access revocation is automatic — the active-membership gate now fails.
+    expect(await isActiveMember(db, member.id, fam.id)).toBe(false);
+  });
+
+  it("rejects a non-steward member (steward-only)", async () => {
+    const steward = await makePerson(db, "S");
+    const member = await makePerson(db, "M");
+    const other = await makePerson(db, "O");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: member.id, familyId: fam.id });
+    await addMembership(db, { personId: other.id, familyId: fam.id });
+
+    // A plain member cannot remove another member.
+    await expect(
+      endMembership(db, account(other.id), {
+        familyId: fam.id,
+        personId: member.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await isActiveMember(db, member.id, fam.id)).toBe(true);
+  });
+
+  it("rejects an anonymous actor", async () => {
+    const steward = await makePerson(db, "S");
+    const member = await makePerson(db, "M");
+    const fam = await makeFamily(db, "Fam", steward.id);
+    await addMembership(db, { personId: member.id, familyId: fam.id });
+
+    await expect(
+      endMembership(db, { kind: "anonymous" }, {
+        familyId: fam.id,
+        personId: member.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("the steward cannot end their OWN membership (would leave the family stewardless)", async () => {
+    const steward = await makePerson(db, "S");
+    const fam = await makeFamily(db, "Fam", steward.id); // steward is the family steward
+    await addMembership(db, { personId: steward.id, familyId: fam.id });
+    expect(await isActiveMember(db, steward.id, fam.id)).toBe(true);
+
+    await expect(
+      endMembership(db, account(steward.id), {
+        familyId: fam.id,
+        personId: steward.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    // Still active — the guard blocked the self-removal.
+    expect(await isActiveMember(db, steward.id, fam.id)).toBe(true);
   });
 });
