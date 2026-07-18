@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
 import styles from "./HubTabs.module.css";
@@ -26,31 +24,32 @@ const SUB_TABS = [
  * this row switches between the family tree/relatives and the Requests queue. Presentation only — it
  * routes to the SAME existing `?tab=family|requests` keys, preserving `?families=` the same way
  * QuestionsSubNav / HubTabsNav do (omitted when absent). The per-key content in page.tsx is unchanged.
+ *
+ * Issue #134: these are real Next.js `<Link>`s (not `router.push` buttons) — actual anchors give
+ * middle-click / open-in-new-tab / prefetch for free, and no client boundary is needed here.
  */
 export function FamilySubNav({ active, familiesParam, requestsBadge }: FamilySubNavProps) {
-  const router = useRouter();
   return (
     <nav className={styles.subNav} aria-label={hub.shell.familySubNavAria}>
-      {SUB_TABS.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          className={styles.subLink}
-          aria-current={tab.key === active ? "page" : undefined}
-          onClick={() => {
-            const params = new URLSearchParams({ tab: tab.key });
-            if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
-            router.push(`/hub?${params.toString()}`);
-          }}
-        >
-          {tab.label}
-          {tab.key === "requests" && requestsBadge != null && requestsBadge > 0 && (
-            <span className={styles.badge} aria-label={hub.shell.unreadAria(requestsBadge)}>
-              {requestsBadge}
-            </span>
-          )}
-        </button>
-      ))}
+      {SUB_TABS.map((tab) => {
+        const params = new URLSearchParams({ tab: tab.key });
+        if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
+        return (
+          <Link
+            key={tab.key}
+            href={`/hub?${params.toString()}`}
+            className={styles.subLink}
+            aria-current={tab.key === active ? "page" : undefined}
+          >
+            {tab.label}
+            {tab.key === "requests" && requestsBadge != null && requestsBadge > 0 && (
+              <span className={styles.badge} aria-label={hub.shell.unreadAria(requestsBadge)}>
+                {requestsBadge}
+              </span>
+            )}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
