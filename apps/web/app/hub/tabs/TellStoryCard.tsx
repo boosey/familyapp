@@ -11,12 +11,10 @@ import { hub } from "@/app/_copy";
 export function TellStoryCard({ masonry = false }: { masonry?: boolean }) {
   return (
     <Link href="/hub/tell" style={masonry ? { ...cardStyle, ...masonryExtras } : cardStyle}>
-      <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-        <span style={titleStyle}>{hub.stories.tellTitle}</span>
-        <span style={blurbStyle}>{hub.stories.tellBlurb}</span>
-      </span>
-      <span aria-hidden="true" style={{ fontSize: "1.25rem", flex: "0 0 auto" }}>
-        →
+      <span style={titleStyle}>{hub.stories.tellTitle}</span>
+      <span style={blurbStyle}>{hub.stories.tellBlurb}</span>
+      <span aria-hidden="true" style={actionStyle}>
+        {hub.stories.tellAction}
       </span>
     </Link>
   );
@@ -24,30 +22,53 @@ export function TellStoryCard({ masonry = false }: { masonry?: boolean }) {
 
 const cardStyle: CSSProperties = {
   display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 20,
-  background: "var(--accent)",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: 10,
+  // Skin-pluggable: the Playful skin sets a coral→amber gradient; heirloom a solid accent.
+  background: "var(--tell-card-bg)",
   color: "var(--accent-on)",
   borderRadius: "var(--radius-lg)",
   boxShadow: "var(--shadow-card)",
-  padding: "20px 24px",
+  padding: "clamp(20px, 3vw, 30px) clamp(22px, 3vw, 34px)",
   textDecoration: "none",
 };
 
 const masonryExtras: CSSProperties = {
   breakInside: "avoid",
   marginBottom: 18,
+  // Span every column in the CSS-columns masonry so the "Tell a story" invitation leads the feed
+  // full-width rather than sitting as a narrow first cell.
+  columnSpan: "all",
 };
 
 const titleStyle: CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontSize: "var(--text-story)",
-  fontWeight: 500,
+  fontFamily: "var(--font-display)",
+  fontSize: "clamp(1.3rem, 2.6vw, 1.9rem)",
+  fontWeight: 700,
+  lineHeight: "var(--leading-snug)",
 };
 
 const blurbStyle: CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-ui-sm)",
-  opacity: 0.85,
+  lineHeight: "var(--leading-body)",
+  opacity: 0.92,
+  maxWidth: "46ch",
+};
+
+const actionStyle: CSSProperties = {
+  marginTop: 4,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 38,
+  height: 38,
+  borderRadius: "var(--radius-pill)",
+  background: "rgba(255, 255, 255, 0.24)",
+  border: "1px solid rgba(255, 255, 255, 0.6)",
+  color: "#fff",
+  fontSize: "1.15rem",
+  fontWeight: 600,
+  lineHeight: 1,
 };

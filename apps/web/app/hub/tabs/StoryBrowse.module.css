@@ -1,0 +1,335 @@
+/*
+ * StoryBrowse — feed/timeline/search chrome (mode segmented control, feed-view toggle, timeline
+ * rows, search input, empty states). Mostly a 1:1 port of the former inline `CSSProperties` objects
+ * (values already token-driven), plus the `.viewOptions` secondary row that relocates the mode +
+ * feed-view controls into a quieter, right-aligned row above the grid. The mode/view PILLS were
+ * DELIBERATELY down-sized for that secondary row (see `.modePill`) — the rest is a faithful port. No
+ * Playful structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+/* ── View-options secondary row ─────────────────────────────────────────────────
+   Quieter than the primary hub tabs: right-aligned, smaller pills. Holds the mode control
+   (Feed/Timeline/Search) and, in Feed mode, the Masonry/Column toggle. */
+.viewOptions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 4px 0 18px;
+  flex-wrap: wrap;
+}
+
+.segmentGroup {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-sunken);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+}
+
+/* Intentionally smaller than the former inline pills (was 10px 22px / --text-ui-sm) — down-sized to
+   read as a quieter SECONDARY control in the view-options row, per the Task 5 plan. Do NOT "restore"
+   the old sizing; the shrink is deliberate, not a porting slip. */
+.modePill {
+  padding: 8px 16px;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: 600;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--text-muted);
+}
+.modePill[aria-selected="true"],
+.modePill[aria-checked="true"],
+.modePill[aria-pressed="true"] {
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+.modePill:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Feed layouts ────────────────────────────────────────────────────────────── */
+.masonry {
+  column-width: 320px;
+  column-gap: 18px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Feed empty state ──────────────────────────────────────────────────────────── */
+.emptyCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 80px 40px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.emptyEmoji {
+  font-size: 40px;
+}
+
+.emptyHeadline {
+  font-family: var(--font-story);
+  font-weight: 400;
+  font-size: var(--text-story-lg);
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  margin: 0;
+  max-width: 28ch;
+}
+
+.emptySub {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  line-height: var(--leading-body);
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 36ch;
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────────── */
+.timelineHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.timelineHeading {
+  font-family: var(--font-story);
+  font-weight: 400;
+  font-size: var(--text-story-lg);
+  color: var(--text-body);
+  margin: 0;
+}
+
+.timelineGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.groupLabelRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.monoGroupLabel {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.groupLabelEra {
+  color: var(--accent);
+}
+.groupLabelUndated {
+  color: var(--support);
+}
+
+.hairline {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.timelineRowList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timelineRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+}
+
+.timelineRowUndated {
+  background: var(--surface-sunken);
+  border: var(--border-width) dashed var(--border-strong);
+}
+
+.timelineRowYear {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--support);
+  flex: 0 0 70px;
+}
+
+.timelineRowTitle {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timelineRowPerson {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+  flex: 0 0 auto;
+}
+
+.timelineRow:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Search ──────────────────────────────────────────────────────────────────── */
+.searchWrap {
+  max-width: 760px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 16px 20px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+.searchInput:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.searchIdle {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 20px 0 0;
+}
+
+.searchNoResultsCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 60px 30px;
+  margin-top: 20px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.searchNoResultsEmoji {
+  font-size: 32px;
+}
+
+.searchNoResultsText {
+  font-family: var(--font-story);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  margin: 0;
+}
+
+.searchNoResultsHint {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.searchResults {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.searchCount {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-mono);
+  color: var(--support);
+}
+
+.searchResultCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 22px;
+}
+.searchResultCard:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.searchResultHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.searchResultTitle {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-body);
+}
+
+.searchResultEra {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--support);
+}
+
+.searchResultSummary {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  line-height: var(--leading-body);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.highlightSpan {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+}

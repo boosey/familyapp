@@ -1,0 +1,54 @@
+/* Breathing waveform — the live-mic feedback shown inside KindredVoiceButton while holding to record.
+ * Decorative only; token-driven; accent-coloured.
+ *
+ * The waveform INTENTIONALLY breathes on the capture surface even though capture is always solemn —
+ * per spec Task-7 it's the point of the surface, so it is NOT suppressed under data-tone="solemn".
+ * The static bar below is for the reduce-motion PREFERENCE (the component renders it via JS when the
+ * user's app pref is on, or the OS query matches). OS prefers-reduced-motion additionally freezes the
+ * animation via the @media guard in globals.css. There is deliberately no solemn animation suppressor. */
+
+.track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 100%;
+  width: 100%;
+}
+
+.bar {
+  width: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  /* Height follows the smoothed level with a floor so bars never fully vanish; each bar breathes
+   * with a per-bar phase offset (--i) so the row undulates instead of pulsing in lockstep. */
+  height: calc(20% + var(--lvl, 0) * 70%);
+  transform-origin: center;
+  animation: breathing-waveform var(--dur-pulse, 2.4s) ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.18s);
+  will-change: transform;
+}
+
+@keyframes breathing-waveform {
+  0%, 100% { transform: scaleY(0.85); }
+  50% { transform: scaleY(1.1); }
+}
+
+/* Reduce-motion preference (NOT solemn): a single static level bar. No animation; width tracks the
+ * frozen level. Rendered by the component's JS branch when the reduce-motion pref/OS query is set. */
+.staticTrack {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  padding-inline: var(--space-2);
+  box-sizing: border-box;
+}
+
+.staticBar {
+  height: var(--space-1);
+  min-width: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  width: calc(var(--lvl, 0) * 100%);
+}

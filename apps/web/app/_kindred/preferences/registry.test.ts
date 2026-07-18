@@ -3,6 +3,8 @@ import { coerce, computeApplication, PREFERENCES, type PreferenceDef } from "./r
 import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "@/lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
 import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
+import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
+import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
 
 const fontDef: PreferenceDef = {
   key: "reading-size",
@@ -110,5 +112,20 @@ describe("PREFERENCES registry parity with the folded-in constants", () => {
     expect(PREFERENCES.theme.default).toBe(DEFAULT_THEME_ID);
     expect(PREFERENCES.theme.storageKey).toBe(THEME_STORAGE_KEY);
     expect(PREFERENCES.theme.validate).toMatchObject({ kind: "enum", values: THEME_IDS });
+  });
+});
+
+describe("PREFERENCES registry — skin + reduce-motion", () => {
+  it("skin is an enum data-attr writing data-skin, defaulting to playful", () => {
+    expect(PREFERENCES.skin.default).toBe(DEFAULT_SKIN_ID);
+    expect(PREFERENCES.skin.storageKey).toBe(SKIN_STORAGE_KEY);
+    expect(PREFERENCES.skin.validate).toMatchObject({ kind: "enum", values: SKIN_IDS });
+    expect(PREFERENCES.skin.apply).toEqual({ strategy: "data-attr", attr: "data-skin" });
+  });
+  it("reduceMotion is an on/off enum writing data-reduce-motion", () => {
+    expect(PREFERENCES.reduceMotion.default).toBe(DEFAULT_REDUCE_MOTION);
+    expect(PREFERENCES.reduceMotion.storageKey).toBe(MOTION_STORAGE_KEY);
+    expect(PREFERENCES.reduceMotion.validate).toMatchObject({ kind: "enum", values: REDUCE_MOTION_VALUES });
+    expect(PREFERENCES.reduceMotion.apply).toEqual({ strategy: "data-attr", attr: "data-reduce-motion" });
   });
 });

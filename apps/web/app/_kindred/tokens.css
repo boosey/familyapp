@@ -50,6 +50,19 @@
   --shadow-sm: 0 1px 2px rgba(70, 50, 30, 0.08);
   --shadow-card: 0 2px 10px rgba(70, 50, 30, 0.10);
   --shadow-lift: 0 8px 28px rgba(70, 50, 30, 0.16);
+
+  /* --- Phase 2 structural-signature palette (heirloom = muted) --- */
+  --deco-coral: var(--terracotta-600);
+  --tape-bg: rgba(189, 91, 61, 0.18);
+  --tilt-shadow: rgba(70, 50, 30, 0.16);
+  --highlighter: #EFE0C4;
+  /* "Tell a story" invite-card fill — heirloom keeps a quiet solid accent (no gradient). */
+  --tell-card-bg: var(--accent);
+  --accent-gradient: var(--accent); /* heirloom stays solid; Playful overrides with a coral→amber gradient */
+  --sticker-coral-bg: #F3DACE;  --sticker-coral-ink: #9E4830;
+  --sticker-sky-bg:   #DCE6EC;  --sticker-sky-ink:   #3C566A;
+  --sticker-leaf-bg:  #DEE4D6;  --sticker-leaf-ink:  #4C5B3A;
+  --sticker-gold-bg:  #EDE0C4;  --sticker-gold-ink:  #6E5A2A;
 }
 
 [data-theme="archive"] {
@@ -80,11 +93,25 @@
   --shadow-lift: 0 8px 28px rgba(80, 40, 30, 0.18);
 }
 
-:root {
+/* ── The skin model (data-skin) ──────────────────────────────────────────────
+ * A SKIN is a full design language (fonts + shape + motion + palette). Two ship:
+ *   • "heirloom" — the ORIGINAL language, and the base default. It deliberately rides this base
+ *     `:root` rather than a separate `_skins/heirloom.css`: its PALETTE is the `:root, [data-theme…]`
+ *     blocks above (so the archive/hearth palettes remain selectable as `data-theme` sub-variants —
+ *     a dedicated `[data-skin="heirloom"]` palette block would out-specify and break them), and its
+ *     LANGUAGE tokens are the block below. The `:root[data-skin="heirloom"]` selector is listed
+ *     explicitly on that block so `data-skin="heirloom"` is a REAL, greppable selector, not inert.
+ *   • "playful" — a full skin in `_skins/playful.css` that bakes in its own palette + language.
+ * The per-skin token contract both must satisfy is `_skins/skin-contract.ts` (guard test). */
+:root, :root[data-skin="heirloom"] {
   /* fonts — next/font injects the variables; these add the fallbacks */
   --font-story: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
   --font-ui: var(--font-public-sans, 'Public Sans'), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Font ROLE tokens (skin contract). Heirloom's display + read are serif (Newsreader); a skin
+   * that redefines these re-fonts the app with zero component edits. */
+  --font-display: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
+  --font-read: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
 
   --text-label: 0.875rem;
   --text-ui-sm: 1.125rem;

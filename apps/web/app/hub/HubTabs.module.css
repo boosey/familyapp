@@ -1,0 +1,226 @@
+/* HubTabs — primary hub nav (Task 3, Playful de-clutter).
+ *
+ * First CSS module with interactive elements: it is the worked example for rule 7 of
+ * `_skins/CSS-MODULES.md` — every interactive element (.tab, .cta, .more toggle, .moreItem,
+ * .subLink) carries a visible :focus-visible outline. Design values (color/radius/shadow/motion)
+ * are tokens; layout dims (gaps, paddings, badge box, menu min-width) use raw px per CSS-MODULES.md
+ * rule 3 — a faithful port of the old inline values, consistent with page.module.css house style. */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  flex-wrap: wrap;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: var(--touch-min);
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.tab:hover {
+  background: var(--surface-sunken);
+}
+
+/* Playful mockup Direction D: active tab is a SOLID coral pill (white ink), not accent-soft. */
+.tab[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-on);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* Text-bearing CTA — uses the AA `--accent` with white text, NOT the decorative `--deco-coral`. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent-gradient);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 700;
+  min-height: var(--touch-min);
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fade) var(--ease-quiet), filter var(--dur-fade) var(--ease-quiet);
+}
+
+.cta:hover {
+  filter: brightness(1.05);
+}
+
+.cta:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* Playful structural signature: the CTA lifts on hover. Suppressed under reduce-motion (and it is a
+ * transform, so it never fires under the solemn tone either — solemn rides reduce-motion here). */
+:global(:root[data-skin="playful"]) .cta:hover {
+  transform: translateY(-1px);
+}
+
+:global(:root[data-reduce-motion="on"]) .cta:hover,
+:global([data-tone="solemn"]) .cta:hover {
+  transform: none;
+}
+
+/* Overflow "More ▾" menu. */
+.more {
+  position: relative;
+}
+
+.moreToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  min-height: var(--touch-min);
+  cursor: pointer;
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+
+.moreToggle:hover {
+  background: var(--surface-sunken);
+}
+
+.moreToggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.moreMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lift);
+}
+
+.moreItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  min-height: var(--touch-min);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+
+.moreItem:hover {
+  background: var(--surface-sunken);
+}
+
+.moreItem:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Secondary sub-nav inside the Questions primary tab (To answer / Ask a question / Your asks). */
+.subNav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-5);
+  font-family: var(--font-ui);
+}
+
+.subLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid transparent;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  min-height: var(--touch-min);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.subLink:hover {
+  background: var(--surface-sunken);
+}
+
+.subLink[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.subLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

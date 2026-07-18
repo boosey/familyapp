@@ -116,6 +116,27 @@ class FakeMediaRecorder {
   }
 }
 
+// T7 hold-to-record mounts the live-waveform meter (useAudioLevel), which opens a Web Audio
+// AudioContext off the mic stream. jsdom has no Web Audio API, so stub a no-op AudioContext (mirrors
+// the MediaRecorder/getUserMedia stubs) — the meter is decorative and not under test here.
+class FakeAudioContext {
+  createMediaStreamSource() {
+    return { connect() {}, disconnect() {} };
+  }
+  createAnalyser() {
+    return {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteTimeDomainData() {},
+      connect() {},
+      disconnect() {},
+    };
+  }
+  close() {
+    return Promise.resolve();
+  }
+}
+
 beforeEach(() => {
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
@@ -123,6 +144,8 @@ beforeEach(() => {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).MediaRecorder = FakeMediaRecorder;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).AudioContext = FakeAudioContext;
   URL.createObjectURL = vi.fn(() => "blob:local-take");
   URL.revokeObjectURL = vi.fn();
 });
@@ -132,12 +155,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** Drive the voice button through idle → listening → stop (fires onstop → uploadRecording). Targets
- * the voice button by its aria-label so it works on the composing footer too. */
+/** Drive the voice button through idle → listening → stop (fires onstop → uploadRecording). The mic
+ * runs in hold-to-record mode (pointerDown starts, pointerUp stops) and its accessible name flips
+ * "Hold to speak" → "Release to finish", so grab the element up front and release that same node.
+ * Targets the voice button by its aria-label so it works on the composing footer too. */
 async function recordOnce() {
-  fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ })); // idle → listening
-  await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: /Listening/ })); // listening → stop
+  const mic = screen.getByRole("button", { name: /Hold to speak/ });
+  fireEvent.pointerDown(mic); // idle → listening
+  await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+  fireEvent.pointerUp(mic); // listening → stop
 }
 
 describe("StoryComposer follow-up loop (inline banner)", () => {
@@ -221,7 +247,7 @@ describe("StoryComposer follow-up loop (inline banner)", () => {
     await waitFor(() => expect(declineFollowUpAction).toHaveBeenCalledOnce());
 
     // Decline in flight → the mic cannot start a new recording.
-    expect((screen.getByRole("button", { name: /Tap to speak/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Hold to speak/ }) as HTMLButtonElement).disabled).toBe(true);
 
     resolveDecline({ kind: "appended", storyId: STORY_ID, prose: "My grandmother's house.", appendedSegment: "" });
     await waitFor(() =>
@@ -296,8 +322,8 @@ describe("StoryComposer per-take relisten (draft composing)", () => {
     expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(false);
 
     // Start listening (mic open).
-    fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ }));
-    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+    fireEvent.pointerDown(screen.getByRole("button", { name: /Hold to speak/ }));
+    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
 
     // Now everything except the mic is locked.
     expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(true);

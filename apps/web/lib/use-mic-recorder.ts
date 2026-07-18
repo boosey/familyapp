@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type MicPhase = "idle" | "listening" | "saving";
 
@@ -15,6 +15,9 @@ export function useMicRecorder(opts: {
   onError?: () => void;
 }) {
   const [phase, setPhase] = useState<MicPhase>("idle");
+  // The live capture stream, surfaced as state so consumers (e.g. a mic-level waveform) can react
+  // to it. It mirrors streamRef, which stays the imperative handle used to stop the tracks.
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -28,6 +31,7 @@ export function useMicRecorder(opts: {
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
+      setStream(stream);
       chunksRef.current = [];
       const mr = new MediaRecorder(stream, { mimeType: pickMimeType() });
       mr.ondataavailable = (e) => {
@@ -48,18 +52,35 @@ export function useMicRecorder(opts: {
     } catch {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      setStream(null);
       setPhase("idle");
       optsRef.current.onError?.();
     }
   }, []); // stable — reads opts via ref
 
   const finish = useCallback(() => {
+    // Idempotent: a touch release fires pointerup + pointerleave in one tick, so a hold-to-record
+    // consumer can call finish() twice before React re-renders. Bail if there's nothing recording
+    // (no recorder, or already stopped) so the second call is a no-op instead of a
+    // recorder.stop()-on-inactive InvalidStateError.
+    const mr = recorderRef.current;
+    if (!mr || mr.state === "inactive") return;
     setPhase("saving");
-    recorderRef.current?.stop();
+    mr.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setStream(null);
   }, []);
 
-  return { phase, start, finish };
+  // Stop the mic if the component unmounts mid-recording — otherwise the tracks stay live (mic hot).
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    [],
+  );
+
+  return { phase, start, finish, stream };
 }
 
 export function pickMimeType(): string {

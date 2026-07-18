@@ -11,17 +11,31 @@ export const hub = {
     // so the hub shell itself has no anonymous copy.
     chronicle: "Your Chronicle",
     tabStories: "Stories",
-    // Sits between Stories and "To answer" — the hub's home for the Family album (#19).
+    // Sits between Stories and Questions — the hub's home for the Family album (#19).
     tabAlbum: "Album",
-    // Tab label follows the "Story Browse (Hub)" design ("To answer"); the section heading inside
-    // the tab stays "Questions for you" (hub.questions.title).
-    tabQuestions: "To answer",
+    // Task 3 (Playful de-clutter): "Questions" is now the PRIMARY tab label, grouping the three
+    // ask-related surfaces (To answer / Ask a question / Your asks) under one primary tab with a
+    // secondary sub-nav. It used to read "To answer" (that wording moved to questionsSubToAnswer).
+    // The section heading inside the To-answer surface stays "Questions for you" (hub.questions.title).
+    tabQuestions: "Questions",
     tabAsk: "Ask a question",
     tabAsks: "Your asks",
     // The family surface (tree + relatives list) — a real in-hub tab now, not a standalone route.
     tabFamily: "Family",
     tabInvite: "Invite",
     tabRequests: "Requests",
+    // Task 3 (Playful de-clutter): the prominent primary-nav call-to-action → /hub/tell. The "＋"
+    // is a full-width plus kept in the label so it rides through the copy layer (i18n on-ramp).
+    tellCta: "＋ Tell a story",
+    tellCtaAria: "Start telling a new story",
+    // Overflow "More ▾" menu holding the conditional Invite / Requests entries.
+    moreLabel: "More",
+    moreAria: "More sections",
+    // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
+    questionsSubToAnswer: "To answer",
+    questionsSubAsk: "Ask a question",
+    questionsSubYourAsks: "Your asks",
+    questionsSubNavAria: "Question sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",
     menuSwitchUser: "Switch user",
@@ -44,20 +58,32 @@ export const hub = {
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
+    // Playful mockup (Direction D): mono eyebrow above the family name in the hub header. `n` is the
+    // number of active families the viewer chronicles across; singular/plural handled.
+    familyEyebrow: (n: number) =>
+      `YOUR FAMILY · ${n} CHRONICLING`,
   },
   stories: {
     untitled: "Untitled",
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
     // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
-    // for ask-less drafts still in review.
+    // for ask-less drafts still in review. Playful mockup (Direction D): the invite card leads with an
+    // action heading, a warm reassurance body, and a pill affordance (arrow only — the heading carries
+    // the label, so the pill stays decorative and aria-hidden).
     tellTitle: "Tell a story",
-    tellBlurb: "Something you want to remember — start it whenever it comes to you.",
+    tellBlurb:
+      "Start it whenever it comes to you — a sentence is enough. We'll help you shape the rest.",
+    tellAction: "→",
     resumeHeading: "Finish what you started",
     resume: "Finish",
     // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
     // empty state rather than a silent "show all". Mirrors album.noFamiliesSelected for the stories pool.
     noFamiliesSelected: "No families selected — turn one on above to see their stories.",
+    // Highlight-to-treasure (Task 8): drag across the prose to treasure the story (fires the existing
+    // Like path as a SET). The tap heart stays the primary affordance; this is the warm shortcut.
+    treasureAria: "Highlight any words to treasure this story",
+    treasureHint: "Tip: highlight a line that moved you to treasure it.",
   },
   intake: {
     // Banner shown at the top of the hub until the narrator's biographical profile is complete.
@@ -270,8 +296,8 @@ export const hub = {
     discard: "Discard",
     micError:
       "Something went wrong with the microphone. Make sure you've allowed microphone access, then refresh the page to try again.",
-    listeningTapStop: "Listening… tap to stop",
-    // "One moment…" / "Tap to speak" live in common.voiceButton (shared with other capture surfaces).
+    // Hold-to-record captions ("Hold to speak" / "Release to finish") live in common.voiceButton
+    // (shared with other capture surfaces), alongside "One moment…" and "Tap to speak".
     takeYourTime: "Take your time. Long silences are fine.",
     // Optimistic review: shown over the editor slot while transcribe+render runs.
     polishing: "Polishing your words…",
@@ -714,6 +740,22 @@ export const hub = {
       archive: "Archive palette — cool gray and teal",
       hearth: "Hearth palette — warm rose and coral",
     },
+    skinHeading: "Look and feel",
+    skinIntro: "Choose how the app looks and feels on this device.",
+    skinAria: "Look and feel",
+    skinShort: {
+      playful: "Playful",
+      heirloom: "Heirloom",
+    },
+    skinLabels: {
+      playful: "Playful look — warm and rounded, coral accents",
+      heirloom: "Heirloom look — classic serif, quieter chrome",
+    },
+    motionHeading: "Reduce motion",
+    motionIntro: "Turn off gentle animations and movement across the app.",
+    motionAria: "Reduce motion",
+    motionOnLabel: "On",
+    motionOffLabel: "Off",
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.
   kin: {

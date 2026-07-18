@@ -61,6 +61,27 @@ class FakeMediaRecorder {
   }
 }
 
+// T7 hold-to-record mounts the live-waveform meter (useAudioLevel), which opens a Web Audio
+// AudioContext off the mic stream. jsdom has no Web Audio API, so stub a no-op AudioContext (mirrors
+// the MediaRecorder/getUserMedia stubs) — the meter is decorative and not under test here.
+class FakeAudioContext {
+  createMediaStreamSource() {
+    return { connect() {}, disconnect() {} };
+  }
+  createAnalyser() {
+    return {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteTimeDomainData() {},
+      connect() {},
+      disconnect() {},
+    };
+  }
+  close() {
+    return Promise.resolve();
+  }
+}
+
 beforeEach(() => {
   statusQueue = ["ready"];
   Object.defineProperty(navigator, "mediaDevices", {
@@ -69,6 +90,8 @@ beforeEach(() => {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).MediaRecorder = FakeMediaRecorder;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).AudioContext = FakeAudioContext;
   installFetch();
 });
 
@@ -79,9 +102,12 @@ afterEach(() => {
 });
 
 async function recordAndStop() {
-  fireEvent.click(screen.getByRole("button"));
-  await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
-  fireEvent.click(screen.getByRole("button"));
+  // Hold-to-record mode: pointerDown starts, pointerUp stops. The button's accessible name flips
+  // "Hold to speak" → "Release to finish", so grab the element up front and release that same node.
+  const mic = screen.getByRole("button");
+  fireEvent.pointerDown(mic);
+  await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+  fireEvent.pointerUp(mic);
 }
 
 describe("NarratorRecorder async-aware capture", () => {

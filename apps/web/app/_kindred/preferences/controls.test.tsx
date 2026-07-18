@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
 import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
+import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
+import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
 import { PREFERENCES } from "@/app/_kindred/preferences/registry";
 import { common } from "@/app/_copy";
 import { hub } from "@/app/_copy";
@@ -16,6 +18,8 @@ afterEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("style");
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-skin");
+  document.documentElement.removeAttribute("data-reduce-motion");
 });
 
 describe("KindredFontScale", () => {
@@ -45,5 +49,35 @@ describe("KindredThemePicker", () => {
     localStorage.setItem(PREFERENCES.theme.storageKey, "hearth");
     render(<KindredThemePicker />);
     expect(document.documentElement.getAttribute("data-theme")).toBe("hearth");
+  });
+});
+
+describe("KindredSkinPicker", () => {
+  it("choosing a skin writes localStorage and sets data-skin", () => {
+    render(<KindredSkinPicker />);
+    fireEvent.click(screen.getByLabelText(hub.settings.skinLabels.heirloom));
+    expect(localStorage.getItem(PREFERENCES.skin.storageKey)).toBe("heirloom");
+    expect(document.documentElement.getAttribute("data-skin")).toBe("heirloom");
+  });
+
+  it("re-applies the stored skin on mount", () => {
+    localStorage.setItem(PREFERENCES.skin.storageKey, "heirloom");
+    render(<KindredSkinPicker />);
+    expect(document.documentElement.getAttribute("data-skin")).toBe("heirloom");
+  });
+});
+
+describe("KindredMotionToggle", () => {
+  it("choosing on writes localStorage and sets data-reduce-motion", () => {
+    render(<KindredMotionToggle />);
+    fireEvent.click(screen.getByText(hub.settings.motionOnLabel));
+    expect(localStorage.getItem(PREFERENCES.reduceMotion.storageKey)).toBe("on");
+    expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("on");
+  });
+
+  it("re-applies the stored motion preference on mount", () => {
+    localStorage.setItem(PREFERENCES.reduceMotion.storageKey, "on");
+    render(<KindredMotionToggle />);
+    expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("on");
   });
 });
