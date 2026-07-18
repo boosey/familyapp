@@ -40,6 +40,7 @@ function renderTab(
     familyId: string;
     families: { id: string; name: string }[];
     scopeId: string;
+    inviteHref: string;
   }>,
 ) {
   return render(
@@ -52,6 +53,7 @@ function renderTab(
       {...(initialView ? { initialView } : {})}
       {...(extra?.families ? { families: extra.families } : {})}
       {...(extra?.scopeId ? { scopeId: extra.scopeId } : {})}
+      {...(extra?.inviteHref ? { inviteHref: extra.inviteHref } : {})}
     />,
   );
 }
@@ -97,6 +99,30 @@ describe("FamilyTab view selector", () => {
     window.localStorage.setItem("hub:familyView", "tree");
     renderTab("list");
     expect(screen.getByTestId("mock-list")).toBeTruthy();
+  });
+});
+
+describe("FamilyTab Invite button on the selector row (#144)", () => {
+  const HREF = "/hub?tab=invite&families=fam-a";
+
+  it("renders the Invite button, right-justified on the selector row, in the Tree view", () => {
+    renderTab(undefined, { inviteHref: HREF });
+    const invite = screen.getByRole("link", { name: hub.shell.tabInvite });
+    expect(invite.getAttribute("href")).toBe(HREF);
+    // It shares the selector row with the Tree|List radiogroup (both present in the tree view).
+    expect(screen.getByRole("radio", { name: hub.tree.viewTree })).toBeTruthy();
+  });
+
+  it("keeps the Invite button in the List view too", () => {
+    renderTab("list", { inviteHref: HREF });
+    expect(screen.getByRole("link", { name: hub.shell.tabInvite }).getAttribute("href")).toBe(HREF);
+    // List view hides the tree Fit/zoom controls but the Invite button stays.
+    expect(screen.queryByTestId("tree-controls")).toBeNull();
+  });
+
+  it("renders NO Invite button when no inviteHref is given (pending-only / gated)", () => {
+    renderTab();
+    expect(screen.queryByRole("link", { name: hub.shell.tabInvite })).toBeNull();
   });
 });
 

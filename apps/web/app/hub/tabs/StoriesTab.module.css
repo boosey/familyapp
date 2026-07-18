@@ -10,9 +10,9 @@
   gap: 28px;
 }
 
-/* The single control row (#125): family-filter chips on the left, a compact draft-reminder, and a
-   right-justified "Tell a story" button. One compact row directly below the tab bar, above every
-   feed/empty branch. Spacing/tokens track the sibling controls in this file. */
+/* The single control row (#125, #138): family-filter chips on the left; a right-justified actions
+   cluster (compact reminders + the "Tell a story" button) on the right. One compact row directly below
+   the tab bar, above every feed/empty branch. Spacing/tokens track the sibling controls in this file. */
 .controlRow {
   display: flex;
   flex-wrap: wrap;
@@ -20,9 +20,21 @@
   gap: 12px;
 }
 
-/* Compact draft-reminder button — sized to the same height as the other controls (NOT a tall panel).
-   Two short stacked lines: a small count line and the "finish them" action beneath it. */
-.draftButton {
+/* The right-justified actions cluster (#138): both compact reminders (draft + intake) sit BESIDE the
+   "Tell a story" button. `margin-left: auto` pushes the whole cluster right (it used to live on
+   .tellButton alone); the cluster wraps as a unit on narrow viewports. */
+.controlRowActions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* Compact reminder button — shared by the draft-reminder (a toggle <button>) and the intake reminder
+   (a <Link>), #138. Sized to the same height as the other controls (NOT a tall panel/banner): two
+   short stacked lines, a label line and the action beneath it. */
+.reminderButton {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -34,20 +46,21 @@
   color: var(--accent);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
 }
-.draftButton:focus-visible {
+.reminderButton:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.draftButtonTop {
+.reminderTop {
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
   font-weight: 600;
   line-height: var(--leading-snug);
 }
 
-.draftButtonAction {
+.reminderAction {
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: var(--tracking-mono);
@@ -55,9 +68,8 @@
   color: var(--support);
 }
 
-/* Right-justified "Tell a story" button — the tab's single Tell-a-story affordance. */
+/* "Tell a story" button — the tab's single Tell-a-story affordance, rightmost in the actions cluster. */
 .tellButton {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   padding: 12px 22px;

@@ -58,6 +58,7 @@ export function AlbumFilterBar({
   value,
   onChange,
   rightSlot,
+  addSlot,
   familyChips,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
@@ -68,18 +69,13 @@ export function AlbumFilterBar({
   onChange: (next: AlbumFilterValue) => void;
   /** Right-justified controls that share the consolidated row (view selector + slider + Select). */
   rightSlot?: React.ReactNode;
+  /** The "Add Photos" affordance (#143), right-justified on the SAME row as the When · Search filters
+   *  (and the view controls). Rightmost element. Omit to render no add affordance in the bar. */
+  addSlot?: React.ReactNode;
   /** The shared browse Family filter chips (ADR-0021), sharing the consolidated control row on the
    *  LEFT alongside When · Search so view/size/Select + chips all wrap together on narrow viewports. */
   familyChips?: React.ReactNode;
 }) {
-  const fieldLabel: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    color: "var(--text-meta)",
-  };
   const control: React.CSSProperties = {
     minHeight: 40,
     padding: "6px 10px",
@@ -130,55 +126,52 @@ export function AlbumFilterBar({
         </div>
       ) : null}
 
-      {/* Row 2 — When · Search · Clear (left) share ONE row with the view controls (right, rightSlot). */}
+      {/* Row 2 — When · Search · Clear (left) share ONE row with the view controls AND the "Add Photos"
+          button (right). The When/Search visible labels are dropped (#143): the select's default option
+          ("Any time") and the input's placeholder ("Search…") carry the meaning; each control keeps an
+          aria-label so its accessible name is unchanged. */}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
-          alignItems: "flex-end",
+          alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
         }}
       >
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, minWidth: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, minWidth: 0 }}>
           {/* Shared browse Family filter chips (ADR-0021) — laid out inline in the consolidated row.
-              FamilyChips DROPS its bottom margin via the `inline` prop so the chips bottom-align with
+              FamilyChips DROPS its bottom margin via the `inline` prop so the chips align with
               When · Search; the wrapper is a plain flex box so they sit alongside and wrap with them. */}
           {familyChips ? (
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", minWidth: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", minWidth: 0 }}>
               {familyChips}
             </div>
           ) : null}
 
-          {/* Capture-time preset. */}
-          <label style={fieldLabel}>
-            {hub.album.filterPeriodLabel}
-            <select
-              aria-label={hub.album.filterPeriodLabel}
-              value={value.period}
-              onChange={(e) => onChange({ ...value, period: e.currentTarget.value as AlbumPeriod })}
-              style={{ ...control, minWidth: 140 }}
-            >
-              {PERIODS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Capture-time preset — label dropped (#143); "Any time" is the hint, aria-label names it. */}
+          <select
+            aria-label={hub.album.filterPeriodLabel}
+            value={value.period}
+            onChange={(e) => onChange({ ...value, period: e.currentTarget.value as AlbumPeriod })}
+            style={{ ...control, minWidth: 140 }}
+          >
+            {PERIODS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
 
-          {/* Caption / tag text search. */}
-          <label style={fieldLabel}>
-            {hub.album.filterTextLabel}
-            <input
-              type="search"
-              aria-label={hub.album.filterTextLabel}
-              placeholder={hub.album.filterTextPlaceholder}
-              value={value.text}
-              onChange={(e) => onChange({ ...value, text: e.currentTarget.value })}
-              style={{ ...control, minWidth: 180 }}
-            />
-          </label>
+          {/* Caption / tag text search — label dropped (#143); placeholder + aria-label carry it. */}
+          <input
+            type="search"
+            aria-label={hub.album.filterTextLabel}
+            placeholder={hub.album.filterTextPlaceholder}
+            value={value.text}
+            onChange={(e) => onChange({ ...value, text: e.currentTarget.value })}
+            style={{ ...control, minWidth: 180 }}
+          />
 
           {isFilterActive(value) ? (
             <button
@@ -202,9 +195,10 @@ export function AlbumFilterBar({
           ) : null}
         </div>
 
-        {rightSlot ? (
+        {rightSlot || addSlot ? (
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
             {rightSlot}
+            {addSlot}
           </div>
         ) : null}
       </div>

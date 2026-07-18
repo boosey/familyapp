@@ -33,7 +33,7 @@ import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySubNav } from "./FamilySubNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible, familyTabBadge } from "@/lib/hub-tabs";
-import { IntakeReminder } from "./IntakeReminder";
+import { isBiographicalProfileComplete } from "@/lib/intake-profile";
 import { PendingInvitesBanner } from "./PendingInvitesBanner";
 import { AlbumSurface } from "./album/AlbumSurface";
 import { StoriesTab } from "./tabs/StoriesTab";
@@ -145,6 +145,13 @@ export default async function HubPage({
       ? await loadFamilyTabData(db, ctx, familyTabFamilyId, anchorParam)
       : null;
   const familyInitialView = viewParam === "list" ? "list" : "tree";
+  // #144: the member-only Invite entry point now rides the Family tab's Tree/List selector row (moved
+  // off the page shell into <FamilyTab>). Same target + gate as before — you invite INTO a family, so
+  // it shows only for a viewer with ≥1 family; `?families=` is preserved so the invite lands on the
+  // current scope. `undefined` renders no button.
+  const familyInviteHref = inviteTabVisible(activeFamilies.length)
+    ? `/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`
+    : undefined;
 
   const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches] = await Promise.all([
     loadHubFeed(db, ctx),
@@ -215,6 +222,11 @@ export default async function HubPage({
   // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
   const viewerDisplayName = viewerName ?? "You";
 
+  // #138: the intake/profile reminder is a compact button on the Stories control row now (not a
+  // full-width banner across every tab). Compute completeness server-side so only the Stories tab
+  // shows it, and only while the biographical intake is unfinished.
+  const intakeIncomplete = !isBiographicalProfileComplete(viewerRow?.biographicalAnchors ?? {});
+
   // Issue #124 (Playful de-clutter): the primary nav is exactly FOUR tabs — Stories · Album · Family
   // · Questions — with no global "Tell a story" CTA (the single Tell affordance lives on the Stories
   // tab, #125) and no "More ▾" overflow menu. Two surfaces fold onto a primary tab, each switched by a
@@ -235,11 +247,11 @@ export default async function HubPage({
     },
   ];
 
-  // Which PRIMARY tab is visually active: the three ask surfaces light up Questions; family + requests
-  // both light up Family (Requests is now a Family-surface sub-nav, not its own chrome entry).
+  // Which PRIMARY tab is visually active: the three ask surfaces light up Questions; family, requests,
+  // and invite all light up Family (Requests + Invite are Family-surface entries, not their own chrome).
   const primaryActive = ["questions", "ask", "asks"].includes(activeTab)
     ? "questions"
-    : ["family", "requests"].includes(activeTab)
+    : ["family", "requests", "invite"].includes(activeTab)
       ? "family"
       : activeTab;
   // The active ask surface drives the Questions secondary sub-nav (rendered inside the Questions content).
@@ -288,7 +300,6 @@ export default async function HubPage({
         {/* Tab content */}
         <section className={styles.tabContent}>
           <PendingInvitesBanner matches={pendingInviteMatches} />
-          <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab
               feed={feed}
@@ -302,6 +313,7 @@ export default async function HubPage({
               selfDrafts={selfDrafts}
               filter={filter}
               activeFamilies={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
+              intakeIncomplete={intakeIncomplete}
             />
           )}
           {activeTab === "album" && (
@@ -317,7 +329,13 @@ export default async function HubPage({
               switches among them, rendered ABOVE whichever surface is active. Content below is
               unchanged — each key still renders exactly what it did before. */}
           {questionsSurfaceActive && (
-            <QuestionsSubNav active={activeTab} familiesParam={familiesRaw} />
+            <QuestionsSubNav
+              active={activeTab}
+              familiesParam={familiesRaw}
+              // #142: badge the "To answer" sub-link with the pending-ask count — the same count the
+              // top-level Questions primary tab already carries (listPendingAsksForNarrator).
+              toAnswerBadge={pendingAsks.length}
+            />
           )}
           {/* Issue #124: family + requests share one primary tab (Family). A secondary sub-nav switches
               between the tree/relatives view and the steward's Requests queue, rendered ABOVE whichever
@@ -347,18 +365,6 @@ export default async function HubPage({
           )}
           {activeTab === "family" && (
             <>
-              {/* Invite lives here now (a family action), not in the primary nav's "More" menu — you
-                  invite people INTO a family. Member-only, same gate as the old overflow entry. */}
-              {inviteTabVisible(activeFamilies.length) && (
-                <div className={styles.familyActions}>
-                  <a
-                    className={styles.inviteButton}
-                    href={`/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`}
-                  >
-                    {hub.shell.tabInvite}
-                  </a>
-                </div>
-              )}
               {familyTabData ? (
               <FamilyTab
                 familyId={familyTabData.familyId}
@@ -367,6 +373,8 @@ export default async function HubPage({
                 tree={familyTabData.tree}
                 kin={familyTabData.kin}
                 initialView={familyInitialView}
+                // #144: Invite button relocated onto FamilyTab's Tree/List selector row.
+                inviteHref={familyInviteHref}
                 // Family filter chips (ADR-0021 §Tree, #48). Gate the chip data on >=2 families — the
                 // same rule AlbumSurface uses — so the client widget's next/navigation hooks stay out
                 // of the server render for a 0/1-family viewer. The single ON chip is the resolved

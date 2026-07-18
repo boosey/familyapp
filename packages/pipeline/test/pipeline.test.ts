@@ -622,6 +622,9 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "trigger.dev",
       "@trigger.dev/sdk",
       "@trigger.dev/sdk/*",
+      // sharp (native image processing, issue #139) is confined to apps/web's thumbnail path — it must
+      // never leak into the IP/vendor-seam packages (it is not behind a MediaStorage-style interface).
+      "sharp",
     ];
     // Scope-prefix bans: any import under one of these npm scopes is forbidden, regardless of the
     // concrete package (e.g. "@sentry/nextjs", "@sentry/node", "@sentry/core"). Sentry lives only

@@ -3,21 +3,18 @@
  * Issue #124 (Playful de-clutter): <FamilySubNav> is the secondary sub-nav inside the Family primary
  * tab — it switches between the family tree/relatives view and the steward's Requests queue, routing
  * to the SAME `?tab=family|requests` keys and preserving `?families=` the way HubTabsNav does. The
- * Requests sub-link badges the pending-request count. `useRouter` is mocked to assert the target.
+ * Requests sub-link badges the pending-request count.
+ *
+ * Issue #134: the sub-nav is now real `<Link>` navigation, so we assert on rendered `<a href>`
+ * targets rather than router-push calls.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { FamilySubNav } from "./FamilySubNav";
 import { hub } from "@/app/_copy";
 
-const push = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-}));
-
 afterEach(() => {
   cleanup();
-  push.mockClear();
 });
 
 describe("FamilySubNav", () => {
@@ -27,22 +24,22 @@ describe("FamilySubNav", () => {
     expect(screen.getByText(hub.shell.tabRequests)).toBeTruthy();
   });
 
-  it("routes to ?tab=requests, preserving ?families= when present", () => {
+  it("links to ?tab=requests, preserving ?families= when present", () => {
     render(<FamilySubNav active="family" familiesParam="fam-marino" />);
-    fireEvent.click(screen.getByText(hub.shell.tabRequests));
-    expect(push).toHaveBeenCalledWith("/hub?tab=requests&families=fam-marino");
+    const link = screen.getByText(hub.shell.tabRequests).closest("a")!;
+    expect(link.getAttribute("href")).toBe("/hub?tab=requests&families=fam-marino");
   });
 
   it("OMITS ?families= when the filter is absent", () => {
     render(<FamilySubNav active="family" familiesParam={null} />);
-    fireEvent.click(screen.getByText(hub.shell.tabRequests));
-    expect(push).toHaveBeenCalledWith("/hub?tab=requests");
+    const link = screen.getByText(hub.shell.tabRequests).closest("a")!;
+    expect(link.getAttribute("href")).toBe("/hub?tab=requests");
   });
 
   it("marks the active key with aria-current=page", () => {
     render(<FamilySubNav active="requests" familiesParam={null} />);
-    const requests = screen.getByText(hub.shell.tabRequests).closest("button")!;
-    const familyTree = screen.getByText(hub.shell.familySubTree).closest("button")!;
+    const requests = screen.getByText(hub.shell.tabRequests).closest("a")!;
+    const familyTree = screen.getByText(hub.shell.familySubTree).closest("a")!;
     expect(requests.getAttribute("aria-current")).toBe("page");
     expect(familyTree.getAttribute("aria-current")).toBeNull();
   });

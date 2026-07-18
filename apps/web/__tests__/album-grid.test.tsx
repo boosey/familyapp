@@ -309,7 +309,9 @@ function renderedPhotoIds(): string[] {
     .queryAllByRole("img")
     .map((img) => (img as HTMLImageElement).getAttribute("src") ?? "")
     .filter((src) => src.startsWith("/api/album-photo/"))
-    .map((src) => src.replace("/api/album-photo/", ""));
+    // Grid tiles request the thumbnail variant (issue #139) — strip the `?variant=thumb` query to
+    // recover the bare photo id this helper asserts on.
+    .map((src) => src.replace("/api/album-photo/", "").replace(/\?.*$/, ""));
 }
 
 describe("AlbumGrid filtering (item 9)", () => {
@@ -354,6 +356,26 @@ describe("AlbumGrid filtering (item 9)", () => {
     fireEvent.change(text, { target: { value: "zzzznomatch" } });
     expect(screen.getByText(hub.album.filterNoMatches)).toBeTruthy();
     expect(renderedPhotoIds()).toEqual([]);
+  });
+
+  // #143 — the "Add Photos" affordance rides the control row via `addSlot`.
+  it("renders the addSlot (Add Photos) on the control row", () => {
+    render(<AlbumGrid photos={ENRICHED} addSlot={<button type="button">Add Photos</button>} />);
+    expect(screen.getByRole("button", { name: "Add Photos" })).toBeTruthy();
+  });
+
+  // #143 — the visible When/Search labels are dropped; the controls keep their accessible names (via
+  // aria-label) and in-control hints (the select's default option + the input's placeholder).
+  it("drops the visible When/Search labels but keeps accessible names + in-control hints", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    const period = screen.getByRole("combobox", { name: hub.album.filterPeriodLabel });
+    const search = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
+    // In-control hints carry the purpose without a visible label.
+    expect(search.getAttribute("placeholder")).toBe(hub.album.filterTextPlaceholder);
+    expect(within(period).getByRole("option", { name: hub.album.filterPeriodAll })).toBeTruthy();
+    // The label STRINGS never render as visible text (they live only as aria-labels now).
+    expect(screen.queryByText(hub.album.filterPeriodLabel)).toBeNull();
+    expect(screen.queryByText(hub.album.filterTextLabel)).toBeNull();
   });
 });
 
