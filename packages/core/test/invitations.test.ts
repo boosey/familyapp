@@ -643,6 +643,184 @@ describe("durable invite token (#116)", () => {
   });
 });
 
+describe("createInvitation dedup on email OR phone + merge-on-collision (#117)", () => {
+  /** Count of provisional (origin='invitee') Persons in the DB. */
+  async function inviteePersonCount(): Promise<number> {
+    const rows = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.origin, "invitee"));
+    return rows.length;
+  }
+
+  it("dedups a re-invite matched on PHONE only", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const first = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+    });
+    const second = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+    });
+    expect(second.inviteePersonId).toBe(first.inviteePersonId);
+    expect(second.invitationId).toBe(first.invitationId);
+    expect(await inviteePersonCount()).toBe(1);
+  });
+
+  it("matches a single provisional via EITHER identifier when both were entered", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const first = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+    });
+    const viaEmail = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    const viaPhone = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+    });
+    expect(viaEmail.inviteePersonId).toBe(first.inviteePersonId);
+    expect(viaPhone.inviteePersonId).toBe(first.inviteePersonId);
+    expect(await inviteePersonCount()).toBe(1);
+  });
+
+  it("merges colliding provisionals (email→A, phone→B): asks + invite re-pointed, loser deleted", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const a = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    const b = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+    });
+    expect(b.inviteePersonId).not.toBe(a.inviteePersonId);
+    expect(await inviteePersonCount()).toBe(2);
+
+    // A question queued against the phone-only provisional BEFORE the collision is discovered.
+    const [queued] = await db
+      .insert(asks)
+      .values({
+        askerPersonId: steward.id,
+        targetPersonId: b.inviteePersonId,
+        questionText: "What was your village like?",
+        status: "queued",
+      })
+      .returning({ id: asks.id });
+
+    // The re-invite carrying BOTH identifiers discovers the collision and merges.
+    const merged = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+    });
+
+    // The EMAIL-matched provisional wins; the phone-only one is gone, person and invite row alike.
+    expect(merged.inviteePersonId).toBe(a.inviteePersonId);
+    expect(merged.invitationId).toBe(a.invitationId);
+    expect(await inviteePersonCount()).toBe(1);
+    const allInvites = await db.select({ id: invitations.id }).from(invitations);
+    expect(allInvites).toHaveLength(1);
+    const loserGone = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.id, b.inviteePersonId));
+    expect(loserGone).toHaveLength(0);
+
+    // The queued ask moved onto the surviving provisional.
+    const [ask] = await db
+      .select({ targetPersonId: asks.targetPersonId })
+      .from(asks)
+      .where(eq(asks.id, queued!.id))
+      .limit(1);
+    expect(ask?.targetPersonId).toBe(a.inviteePersonId);
+
+    // The surviving invite carries the FULL identifier set entered this time.
+    const [refreshed] = await db
+      .select({
+        inviteeEmail: invitations.inviteeEmail,
+        inviteePhone: invitations.inviteePhone,
+      })
+      .from(invitations)
+      .where(eq(invitations.id, a.invitationId))
+      .limit(1);
+    expect(refreshed?.inviteeEmail).toBe("sal@example.com");
+    expect(refreshed?.inviteePhone).toBe("+15551230000");
+  });
+
+  it("keeps people with no shared identifier separate", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Maria",
+      inviteePhone: "+15551230000",
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Grandpa Joe",
+    });
+    expect(await inviteePersonCount()).toBe(3);
+  });
+
+  it("reaper cannot orphan the surviving invite after a merge", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const a = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+      ttlMs: -1, // dead + reapable on its own
+    });
+    const merged = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+    });
+
+    const { reapedPersonIds } = await reapUnacceptedInvitees(db);
+    expect(reapedPersonIds).toHaveLength(0);
+    expect(merged.invitationId).toBe(a.invitationId);
+    expect(await getInvitationByToken(db, merged.token)).not.toBeNull();
+    expect(await inviteePersonCount()).toBe(1);
+  });
+});
+
 describe("getInvitationByToken", () => {
   it("returns the safe welcome-screen view (no email)", async () => {
     const { steward, fam } = await familyWithSteward("Esposito");

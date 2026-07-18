@@ -170,22 +170,29 @@ export async function createInvitation(
     // sealed copy). When it is still LIVE we return the SAME token (opened from its sealed copy), so
     // a link already sent by email keeps working when the inviter later sends it by SMS or copies it.
     //
-    // Match key: the email, matched case-insensitively — the ONLY reliable contact identity we have.
-    // Email-less invites are deliberately NOT deduped: without a contact key, matching on name alone
-    // would risk silently merging two different real people who share a name (e.g. two cousins both
-    // entered as "Sal") with no undo — a worse failure than the duplicate row we are fixing. Such
-    // repeat invites simply mint a fresh provisional Person, which the reaper cleans up when it dies.
-    // `accepted` invites are excluded: their anchor is a real Account Person, not a reusable
-    // provisional. The persons join re-asserts that.
-    const matchKey = trimmedEmail
-      ? sql`lower(${invitations.inviteeEmail}) = ${trimmedEmail.toLowerCase()}`
-      : null;
+    // Match key: the invitee's EMAIL (case-insensitive) OR PHONE (exact — the web layer normalizes
+    // to E.164 before create). Both are reliable contact identities; matching on either dedups the
+    // re-invite. Invites with NEITHER identifier are deliberately NOT deduped: matching on name
+    // alone would risk silently merging two different real people who share a name (e.g. two
+    // cousins both entered as "Sal") with no undo — a worse failure than the duplicate row we are
+    // fixing. Such repeat invites simply mint a fresh provisional Person, which the reaper cleans
+    // up when it dies. `accepted` invites are excluded: their anchor is a real Account Person, not
+    // a reusable provisional. The persons join re-asserts that.
+    const matchClauses = [
+      trimmedEmail
+        ? sql`lower(${invitations.inviteeEmail}) = ${trimmedEmail.toLowerCase()}`
+        : null,
+      trimmedPhone ? eq(invitations.inviteePhone, trimmedPhone) : null,
+    ].filter((c) => c !== null);
 
-    if (matchKey) {
-      const [existing] = await tx
+    if (matchClauses.length > 0) {
+      // Two rows suffice to detect the collision case: email → provisional A, phone → provisional B.
+      const matches = await tx
         .select({
           id: invitations.id,
           inviteePersonId: invitations.inviteePersonId,
+          inviteeEmail: invitations.inviteeEmail,
+          inviteePhone: invitations.inviteePhone,
           tokenSealed: invitations.tokenSealed,
           status: invitations.status,
           expiresAt: invitations.expiresAt,
@@ -198,13 +205,53 @@ export async function createInvitation(
             ne(invitations.status, "accepted"),
             eq(persons.origin, "invitee"),
             isNull(persons.accountId),
-            matchKey,
+            or(...matchClauses),
           ),
         )
         .orderBy(desc(invitations.createdAt))
-        .limit(1);
+        .limit(2);
+
+      // The winner carries the combined identifiers forward. An EMAIL match wins over a phone-only
+      // match when the two identifiers resolve to DIFFERENT provisional people (issue #117:
+      // merge-on-collision) — email is the stronger identity; the loser provisional is merged away.
+      const emailMatch = trimmedEmail
+        ? matches.find(
+            (m) => m.inviteeEmail?.toLowerCase() === trimmedEmail.toLowerCase(),
+          )
+        : undefined;
+      const existing = emailMatch ?? matches[0];
 
       if (existing) {
+        // Merge-on-collision (#117): the other identifier matched a DIFFERENT provisional Person.
+        // Re-point the loser's queued asks onto the winner, delete the loser's invitation rows
+        // (one invite row per invitee — the reaper invariant above), then delete the now-empty
+        // loser Person. Mirrors acceptInvitation's re-point+delete primitive.
+        const losers = matches.filter(
+          (m) => m.inviteePersonId !== existing.inviteePersonId,
+        );
+        for (const loser of losers) {
+          const [loserPerson] = await tx
+            .select({ accountId: persons.accountId })
+            .from(persons)
+            .where(eq(persons.id, loser.inviteePersonId))
+            .limit(1);
+          if (!loserPerson || loserPerson.accountId !== null) {
+            // The match join guarantees an Account-less provisional; anything else signals a
+            // corrupted anchor we must not silently delete (same guard as acceptInvitation).
+            throw new InvariantViolation(
+              "merge-on-collision: loser invitee anchor is missing or Account-bearing — refusing to merge",
+            );
+          }
+          await tx
+            .update(asks)
+            .set({ targetPersonId: existing.inviteePersonId })
+            .where(eq(asks.targetPersonId, loser.inviteePersonId));
+          await tx
+            .delete(invitations)
+            .where(eq(invitations.inviteePersonId, loser.inviteePersonId));
+          await tx.delete(persons).where(eq(persons.id, loser.inviteePersonId));
+        }
+
         const isLive =
           existing.status === "pending" &&
           (existing.expiresAt === null ||
@@ -229,12 +276,19 @@ export async function createInvitation(
                 }
               : {}),
             // Only overwrite invitee metadata the caller actually supplied, so a bare re-invite does
-            // not wipe a name/label/role captured on the original.
+            // not wipe a name/label/role captured on the original. The surviving invite ends up
+            // carrying the FULL identifier set entered this time (#117).
             ...(input.inviteeName !== undefined
               ? { inviteeName: input.inviteeName ?? null }
               : {}),
             ...(input.inviteeEmail !== undefined
               ? { inviteeEmail: input.inviteeEmail ?? null }
+              : {}),
+            ...(input.inviteePhone !== undefined
+              ? { inviteePhone: input.inviteePhone ?? null }
+              : {}),
+            ...(input.deliveryChannels !== undefined
+              ? { deliveryChannels: input.deliveryChannels ?? null }
               : {}),
             ...(input.relationshipLabel !== undefined
               ? { relationshipLabel: input.relationshipLabel ?? null }
