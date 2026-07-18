@@ -16,6 +16,7 @@
 import { hub } from "@/app/_copy";
 import type { AlbumGridPhoto } from "./AlbumGrid";
 import { PhotoActionBar } from "./PhotoActionBar";
+import { albumPhotoSrc } from "./photo-src";
 
 const EM_DASH = "—";
 
@@ -135,7 +136,7 @@ export function AlbumListView({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- audited auth route, not a static asset. */}
                     <img
-                      src={`/api/album-photo/${photo.id}`}
+                      src={albumPhotoSrc(photo.id, { thumb: true })}
                       alt={hub.album.photoAlt(photo.caption)}
                       style={{
                         width: cellThumb,

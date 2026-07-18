@@ -309,7 +309,9 @@ function renderedPhotoIds(): string[] {
     .queryAllByRole("img")
     .map((img) => (img as HTMLImageElement).getAttribute("src") ?? "")
     .filter((src) => src.startsWith("/api/album-photo/"))
-    .map((src) => src.replace("/api/album-photo/", ""));
+    // Grid tiles request the thumbnail variant (issue #139) — strip the `?variant=thumb` query to
+    // recover the bare photo id this helper asserts on.
+    .map((src) => src.replace("/api/album-photo/", "").replace(/\?.*$/, ""));
 }
 
 describe("AlbumGrid filtering (item 9)", () => {

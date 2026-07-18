@@ -22,6 +22,7 @@ import {
   type PickedPhoto,
 } from "@chronicle/photos-google";
 import { getRuntime } from "@/lib/runtime";
+import { warmThumbnail } from "@/lib/thumbnail";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 import {
@@ -310,6 +311,8 @@ export async function completeGooglePhotosImportAction(
           exifCapturedAt: exif.capturedAt,
           exifGps: exif.gps,
         });
+        // Warm the grid thumbnail from the bytes already downloaded (issue #139); best-effort.
+        await warmThumbnail(storage, storageKey, downloaded.bytes);
         added += 1;
       } catch (err) {
         failed += 1;
@@ -450,6 +453,8 @@ export async function importOneGooglePhotoAction(
       exifCapturedAt: exif.capturedAt,
       exifGps: exif.gps,
     });
+    // Warm the grid thumbnail from the bytes already downloaded (issue #139); best-effort.
+    await warmThumbnail(gate.runtime.storage, storageKey, downloaded.bytes);
 
     revalidatePath("/hub/album");
     revalidatePath("/hub");
