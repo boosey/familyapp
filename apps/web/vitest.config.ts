@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { sharedTest } from "../../vitest.shared";
 
 /**
  * Workspace packages are referenced via TS source aliases (the repo filesystem doesn't support
@@ -79,6 +80,7 @@ export default defineConfig({
   // The app tsconfig uses jsx:"preserve" for Next; esbuild needs an explicit transform here.
   esbuild: { jsx: "automatic" },
   test: {
+    ...sharedTest,
     // Component tests are .tsx and opt into jsdom per-file via `// @vitest-environment jsdom`;
     // the default node environment is kept for the logic-only .ts suites.
     // Tests live under __tests__/ AND colocated beside the code they cover (the tree layout/relabel
