@@ -19,6 +19,20 @@ export class InvariantViolation extends Error {
 }
 
 /**
+ * Raised when an invitation is addressed to someone who is ALREADY an active member of the
+ * family (issue #119) — matched on a verified account contact (email or phone). Distinct from
+ * InvariantViolation so the web layer can show a friendly "they're already in" message instead
+ * of a generic failure.
+ */
+export class AlreadyFamilyMemberError extends Error {
+  readonly code = "ALREADY_FAMILY_MEMBER";
+  constructor(message: string) {
+    super(message);
+    this.name = "AlreadyFamilyMemberError";
+  }
+}
+
+/**
  * Raised when an abuse/cost guard refuses an otherwise-valid operation (issue #105) — e.g. an
  * inviter blowing past the generous invite-send ceiling. Distinct from InvariantViolation so the
  * web layer can map it to a friendly "slow down" message rather than a generic failure.

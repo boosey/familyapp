@@ -103,7 +103,12 @@ export {
 } from "./narrator-memory";
 export { eraseStory, eraseAsk, eraseVoiceCaption } from "./erasure-repository";
 export type { EraseResult } from "./erasure-repository";
-export { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
+export {
+  AlreadyFamilyMemberError,
+  AuthorizationError,
+  InvariantViolation,
+  ThrottleError,
+} from "./errors";
 export {
   createAsk,
   listPendingAsksForNarrator,
@@ -184,6 +189,10 @@ export {
   type InvitationDeliveryContext,
 } from "./invitations";
 export { sealToken, openToken, resolveSealKey } from "./token-seal";
+export {
+  findActiveFamilyMemberByContact,
+  type ConflictingFamilyMember,
+} from "./invite-member-guard";
 export {
   reapUnacceptedInvitees,
   type ReapResult,

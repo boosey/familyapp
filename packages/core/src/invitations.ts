@@ -12,7 +12,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
-import { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
+import {
+  AlreadyFamilyMemberError,
+  AuthorizationError,
+  InvariantViolation,
+  ThrottleError,
+} from "./errors";
+import { findActiveFamilyMemberByContact } from "./invite-member-guard";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
 import { openToken, sealToken } from "./token-seal";
@@ -109,6 +115,21 @@ export async function createInvitation(
     const trimmedName = input.inviteeName?.trim() || null;
     const trimmedEmail = input.inviteeEmail?.trim() || null;
     const trimmedPhone = input.inviteePhone?.trim() || null;
+
+    // Same-family duplicate-member guard (issue #119): if the invitee's email or phone already
+    // resolves to an ACTIVE member of this family (via their verified account contacts), inviting
+    // them is a mistake — refuse before any throttle counting or dedup refresh. Runs before the
+    // throttle so a refused invite never burns the inviter's generous budget.
+    const conflictingMember = await findActiveFamilyMemberByContact(tx, {
+      familyId: input.familyId,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+    });
+    if (conflictingMember) {
+      throw new AlreadyFamilyMemberError(
+        `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
+      );
+    }
 
     const inviterWindowStart = new Date(
       Date.now() - INVITE_THROTTLE_INVITER_WINDOW_MS,

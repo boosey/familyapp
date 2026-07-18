@@ -5,10 +5,18 @@
  * accept (membership + status flip; reject double-accept and expired).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { asks, invitations, persons } from "@chronicle/db/schema";
+import {
+  accountContacts,
+  accounts,
+  asks,
+  invitations,
+  memberships,
+  persons,
+} from "@chronicle/db/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  AlreadyFamilyMemberError,
   AuthorizationError,
   InvariantViolation,
   ThrottleError,
@@ -991,5 +999,107 @@ describe("acceptInvitation", () => {
       .from(invitations);
     expect(invite?.inviteePersonId).toBe(joined.id);
     expect(invite?.acceptedPersonId).toBe(joined.id);
+  });
+});
+
+
+describe("same-family duplicate-member guard (#119)", () => {
+  /** Account-backed person with verified contacts + a membership in the given family. */
+  async function memberWithContacts(
+    familyId: string,
+    contacts: { kind: "email" | "phone"; value: string; verified?: boolean }[],
+    membershipStatus: "active" | "ended" = "active",
+  ) {
+    const [acct] = await db
+      .insert(accounts)
+      .values({ authProviderUserId: `user_${Math.random()}`, email: contacts[0]?.value ?? "m@x.com" })
+      .returning({ id: accounts.id });
+    for (const c of contacts) {
+      await db.insert(accountContacts).values({
+        accountId: acct!.id,
+        kind: c.kind,
+        value: c.value,
+        verifiedAt: c.verified === false ? null : new Date(),
+      });
+    }
+    const [person] = await db
+      .insert(persons)
+      .values({ displayName: "Existing Member", accountId: acct!.id })
+      .returning({ id: persons.id });
+    await db.insert(memberships).values({
+      personId: person!.id,
+      familyId,
+      status: membershipStatus,
+    });
+    return person!;
+  }
+
+  it("rejects an invite whose EMAIL belongs to an active member of the family", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await memberWithContacts(fam.id, [{ kind: "email", value: "sal@example.com" }]);
+    await expect(
+      createInvitation(db, {
+        familyId: fam.id,
+        inviterPersonId: steward.id,
+        inviteeName: "Sal",
+        inviteeEmail: "SAL@example.com", // case-insensitive
+      }),
+    ).rejects.toBeInstanceOf(AlreadyFamilyMemberError);
+  });
+
+  it("rejects an invite whose PHONE belongs to an active member of the family", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await memberWithContacts(fam.id, [{ kind: "phone", value: "+15551234567" }]);
+    await expect(
+      createInvitation(db, {
+        familyId: fam.id,
+        inviterPersonId: steward.id,
+        inviteeName: "Sal",
+        inviteePhone: "+15551234567",
+      }),
+    ).rejects.toBeInstanceOf(AlreadyFamilyMemberError);
+  });
+
+  it("allows the same contact in a DIFFERENT family", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const other = await makeFamily(db, "Other", steward.id);
+    await memberWithContacts(other.id, [{ kind: "email", value: "sal@example.com" }]);
+    const invite = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    expect(invite.token).toBeTruthy();
+  });
+
+  it("never matches an UNVERIFIED contact", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await memberWithContacts(fam.id, [
+      { kind: "email", value: "sal@example.com", verified: false },
+    ]);
+    const invite = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    expect(invite.token).toBeTruthy();
+  });
+
+  it("allows re-inviting after the membership has ENDED", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await memberWithContacts(
+      fam.id,
+      [{ kind: "email", value: "sal@example.com" }],
+      "ended",
+    );
+    const invite = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    expect(invite.token).toBeTruthy();
   });
 });
