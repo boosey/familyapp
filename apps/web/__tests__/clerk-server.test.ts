@@ -192,6 +192,77 @@ describe("provisionOrResolveClerkUser — JIT provisioning (ADR-0005)", () => {
   });
 });
 
+describe("verified-phone account linking (#121)", () => {
+  it("STEP 2: unknown vendor id + verified matching PHONE attaches to the existing account", async () => {
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk", authProviderUserId: "dev_phone",
+      email: "ph@x.com", emailVerified: true,
+      phone: "+12133734253", phoneVerified: true,
+      displayName: "Pat Phone",
+    });
+    // The same human lands under a NEW Clerk user id with a different email but the SAME
+    // verified phone → links to the existing account instead of forking a duplicate.
+    const stub: GetClerkUser = async (_id) => ({
+      id: "prod_phone", firstName: "Pat", lastName: "Phone",
+      primaryEmailAddress: { emailAddress: "pat-other@x.com" },
+      emailAddresses: [{ emailAddress: "pat-other@x.com", verified: true }],
+      primaryPhoneNumber: { phoneNumber: "+12133734253" },
+      phoneNumbers: [{ phoneNumber: "+12133734253", verified: true }],
+    });
+    const resolved = await provisionOrResolveClerkUser(db, "prod_phone", { getClerkUser: stub });
+    expect(resolved).toBe(personId); // SAME person, no duplicate
+  });
+
+  it("SECURITY: unknown vendor id + UNVERIFIED matching phone does NOT attach — new account", async () => {
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk", authProviderUserId: "dev_phone2",
+      email: "v@x.com", emailVerified: true,
+      phone: "+12135550199", phoneVerified: true,
+      displayName: "Vic",
+    });
+    const attacker: GetClerkUser = async (_id) => ({
+      id: "prod_attacker_phone", firstName: "Not", lastName: "Vic",
+      primaryEmailAddress: { emailAddress: "attacker@x.com" },
+      emailAddresses: [{ emailAddress: "attacker@x.com", verified: true }],
+      primaryPhoneNumber: { phoneNumber: "+12135550199" },
+      phoneNumbers: [{ phoneNumber: "+12135550199", verified: false }], // UNVERIFIED
+    });
+    const resolved = await provisionOrResolveClerkUser(db, "prod_attacker_phone", { getClerkUser: attacker });
+    expect(resolved).not.toBe(personId); // a SEPARATE account, no takeover
+  });
+
+  it("a fresh sign-up stores its verified primary phone as a contact", async () => {
+    const db = await createTestDatabase();
+    const stub: GetClerkUser = async (id) => ({
+      id, firstName: "New", lastName: "User",
+      primaryEmailAddress: { emailAddress: "new@x.com" },
+      emailAddresses: [{ emailAddress: "new@x.com", verified: true }],
+      primaryPhoneNumber: { phoneNumber: "(213) 373-4253" },
+      phoneNumbers: [{ phoneNumber: "(213) 373-4253", verified: true }],
+    });
+    await provisionOrResolveClerkUser(db, "clerk_with_phone", { getClerkUser: stub });
+    // Stored E.164-normalized, resolvable as a match key for a later landing.
+    const { resolveAccountIdByVerifiedPhone } = await import("@chronicle/core");
+    expect(await resolveAccountIdByVerifiedPhone(db, "+12133734253")).not.toBeNull();
+  });
+
+  it("a fresh sign-up with an UNVERIFIED primary phone stores no phone contact", async () => {
+    const db = await createTestDatabase();
+    const stub: GetClerkUser = async (id) => ({
+      id, firstName: "New", lastName: "User",
+      primaryEmailAddress: { emailAddress: "new2@x.com" },
+      emailAddresses: [{ emailAddress: "new2@x.com", verified: true }],
+      primaryPhoneNumber: { phoneNumber: "+12135550142" },
+      phoneNumbers: [{ phoneNumber: "+12135550142", verified: false }],
+    });
+    await provisionOrResolveClerkUser(db, "clerk_unv_phone", { getClerkUser: stub });
+    const { resolveAccountIdByVerifiedPhone } = await import("@chronicle/core");
+    expect(await resolveAccountIdByVerifiedPhone(db, "+12135550142")).toBeNull();
+  });
+});
+
 describe("clerkDisplayName — fallback ladder", () => {
   it("prefers 'First Last'", () => {
     expect(

@@ -26,6 +26,13 @@ export interface SignUpAccountInput {
   email: string;
   /** Whether the provider VERIFIED this email. Only a verified email becomes a match key. */
   emailVerified: boolean;
+  /**
+   * The account's phone, already normalized to E.164 by the caller (core stays vendor-agnostic;
+   * the web layer runs `normalizePhone`). Optional.
+   */
+  phone?: string | null;
+  /** Whether the provider VERIFIED this phone. Only a verified phone becomes a match key (#121). */
+  phoneVerified?: boolean;
   displayName: string;
   /** Name the interviewer speaks aloud. Defaults to the first whitespace-delimited word. */
   spokenName?: string;
@@ -101,6 +108,20 @@ export async function createAccountWithPerson(
         accountId: account!.id,
         kind: "email",
         value: normEmail,
+        verifiedAt: new Date(),
+      });
+    }
+
+    // Same verified-only rule for phone (#121): only a provider-VERIFIED phone becomes a match
+    // key, and an unverified phone is never written at all (the unconditional UNIQUE(kind, value)
+    // would otherwise let an unverified login squat a number globally). Callers normalize to
+    // E.164 up front, so the value is stored exactly as supplied.
+    const normPhone = input.phone?.trim() || null;
+    if (input.phoneVerified && normPhone) {
+      await tx.insert(accountContacts).values({
+        accountId: account!.id,
+        kind: "phone",
+        value: normPhone,
         verifiedAt: new Date(),
       });
     }
@@ -284,27 +305,48 @@ export async function resolveAccountByIdentity(
   return row ?? null;
 }
 
-/** Resolve a VERIFIED email to its ACTIVE account id, or null. Unverified never matches. */
-export async function resolveAccountIdByVerifiedEmail(
+/** Resolve a VERIFIED contact of the given kind to its ACTIVE account id, or null. */
+async function resolveAccountIdByVerifiedContact(
   db: Database,
-  email: string,
+  kind: "email" | "phone",
+  value: string,
 ): Promise<string | null> {
-  const normalized = email.trim().toLowerCase();
-  if (normalized.length === 0) return null;
+  if (value.length === 0) return null;
   const [row] = await db
     .select({ accountId: accounts.id })
     .from(accountContacts)
     .innerJoin(accounts, eq(accounts.id, accountContacts.accountId))
     .where(
       and(
-        eq(accountContacts.kind, "email"),
-        eq(accountContacts.value, normalized),
+        eq(accountContacts.kind, kind),
+        eq(accountContacts.value, value),
         isNotNull(accountContacts.verifiedAt),
         eq(accounts.active, true),
       ),
     )
     .limit(1);
   return row?.accountId ?? null;
+}
+
+/** Resolve a VERIFIED email to its ACTIVE account id, or null. Unverified never matches. */
+export async function resolveAccountIdByVerifiedEmail(
+  db: Database,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  return resolveAccountIdByVerifiedContact(db, "email", normalized);
+}
+
+/**
+ * Resolve a VERIFIED phone to its ACTIVE account id, or null (issue #121). Unverified never
+ * matches. Phone match is EXACT — callers normalize to E.164 first (the web layer's
+ * `normalizePhone`); core stays vendor-agnostic and does not re-normalize.
+ */
+export async function resolveAccountIdByVerifiedPhone(
+  db: Database,
+  phone: string,
+): Promise<string | null> {
+  return resolveAccountIdByVerifiedContact(db, "phone", phone.trim());
 }
 
 /** Attach a vendor identity to an existing account. Idempotent (no-op on conflict). */

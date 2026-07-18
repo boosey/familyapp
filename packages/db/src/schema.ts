@@ -353,7 +353,8 @@ export const accountIdentities = pgTable(
 // account_contacts — portable, verified match keys for a login. `verified_at` NULL
 // means unverified and is NEVER a match key (an unverified contact must never adopt
 // an existing account). UNIQUE(kind, value) guarantees a verified contact maps to at
-// most one account. v1 matches kind='email' only; 'phone' is accepted but inert.
+// most one account. Both kind='email' (lowercased) and kind='phone' (E.164) are live
+// match keys (issue #121 — verified-phone account linking).
 // ---------------------------------------------------------------------------
 export const accountContacts = pgTable(
   "account_contacts",

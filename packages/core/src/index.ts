@@ -127,6 +127,7 @@ export {
   deactivateAccountByAuthProviderUserId,
   resolveAccountByIdentity,
   resolveAccountIdByVerifiedEmail,
+  resolveAccountIdByVerifiedPhone,
   attachIdentity,
   type SignUpAccountInput,
   type AccountWithPerson,

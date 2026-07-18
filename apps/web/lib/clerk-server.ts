@@ -25,14 +25,23 @@ import {
   createAccountWithPerson,
   resolveAccountByIdentity,
   resolveAccountIdByVerifiedEmail,
+  resolveAccountIdByVerifiedPhone,
   attachIdentity,
 } from "@chronicle/core";
+import { normalizePhone } from "@chronicle/notifications";
 import type { Database } from "@chronicle/db";
 
 /** One of a Clerk user's email addresses, reduced to the two facts linking cares about. */
 export interface ClerkEmail {
   emailAddress: string;
   /** True only when the provider marks this email verified — the sole match-key gate. */
+  verified: boolean;
+}
+
+/** One of a Clerk user's phone numbers, reduced to the two facts linking cares about (#121). */
+export interface ClerkPhone {
+  phoneNumber: string;
+  /** True only when the provider marks this phone verified — the sole match-key gate. */
   verified: boolean;
 }
 
@@ -45,6 +54,10 @@ export interface ClerkUserLite {
   primaryEmailAddress?: { emailAddress: string } | null;
   /** ALL emails with verification status — the candidate match keys for linking. */
   emailAddresses: ClerkEmail[];
+  /** Clerk's convenience getter — the primary phone, or null (#121). */
+  primaryPhoneNumber?: { phoneNumber: string } | null;
+  /** ALL phones with verification status — candidate match keys alongside emails (#121). */
+  phoneNumbers?: ClerkPhone[];
 }
 
 /** Inject Clerk's `users.getUser` (tests stub; prod resolves the real Backend client). */
@@ -113,6 +126,14 @@ async function defaultGetClerkUser(userId: string): Promise<ClerkUserLite> {
       // missing/unverified all → false, so an unverified email can never link to an account.
       verified: e.verification?.status === "verified",
     })),
+    primaryPhoneNumber: user.primaryPhoneNumber
+      ? { phoneNumber: user.primaryPhoneNumber.phoneNumber }
+      : null,
+    phoneNumbers: (user.phoneNumbers ?? []).map((p) => ({
+      phoneNumber: p.phoneNumber,
+      // Same fail-closed gate as email (#121): only literal "verified" counts.
+      verified: p.verification?.status === "verified",
+    })),
   };
 }
 
@@ -144,10 +165,11 @@ export function clerkDisplayName(user: ClerkUserLite): string {
  *
  *   1. KNOWN IDENTITY → fast path. An `account_identities` row for (provider, userId) already exists;
  *      resolve straight to its Person without ever touching Clerk.
- *   2. VERIFIED-EMAIL LINK. Unknown vendor id, but one of the user's *verified* emails already keys
- *      an existing account → attach this vendor id as a new identity on that account and resolve.
- *      Only VERIFIED emails are match keys — an unverified/attacker-controlled email can never take
- *      over someone else's account (see the SECURITY test).
+ *   2. VERIFIED-CONTACT LINK. Unknown vendor id, but one of the user's *verified* emails OR
+ *      phones (#121) already keys an existing account → attach this vendor id as a new identity
+ *      on that account and resolve. Only VERIFIED contacts are match keys — an
+ *      unverified/attacker-controlled contact can never take over someone else's account (see
+ *      the SECURITY test).
  *   3. FRESH ACCOUNT. No known id and no verified-email match → create a new Account + Person. The
  *      identity row is written here; an email *contact* is written only if the primary email is
  *      verified (unverified primary → identity but no contact, so no unique-constraint collision).
@@ -179,8 +201,16 @@ export async function provisionOrResolveClerkUser(
   const displayName = clerkDisplayName(user);
   const primaryEmail = user.primaryEmailAddress?.emailAddress ?? "";
   const verifiedEmails = user.emailAddresses.filter((e) => e.verified).map((e) => e.emailAddress);
+  // Verified phones, normalized to E.164 — the storage/match form for kind='phone' contacts.
+  const verifiedPhones = (user.phoneNumbers ?? [])
+    .filter((p) => p.verified)
+    .map((p) => normalizePhone(p.phoneNumber))
+    .filter((p): p is string => p !== null);
+  const primaryPhone = user.primaryPhoneNumber
+    ? normalizePhone(user.primaryPhoneNumber.phoneNumber)
+    : null;
 
-  // 2. Unknown id but a VERIFIED email matches an existing account → attach + resolve.
+  // 2. Unknown id but a VERIFIED email or phone matches an existing account → attach + resolve.
   for (const email of verifiedEmails) {
     const accountId = await resolveAccountIdByVerifiedEmail(db, email);
     if (accountId) {
@@ -189,14 +219,24 @@ export async function provisionOrResolveClerkUser(
       if (attached) return attached.personId;
     }
   }
+  for (const phone of verifiedPhones) {
+    const accountId = await resolveAccountIdByVerifiedPhone(db, phone);
+    if (accountId) {
+      await attachIdentity(db, accountId, PROVIDER, userId);
+      const attached = await resolveAccountByIdentity(db, PROVIDER, userId);
+      if (attached) return attached.personId;
+    }
+  }
 
-  // 3. Otherwise create a fresh account (identity + contact written inside).
+  // 3. Otherwise create a fresh account (identity + verified contacts written inside).
   try {
     const { personId } = await createAccountWithPerson(db, {
       provider: PROVIDER,
       authProviderUserId: userId,
       email: primaryEmail,
       emailVerified: verifiedEmails.includes(primaryEmail),
+      phone: primaryPhone,
+      phoneVerified: primaryPhone !== null && verifiedPhones.includes(primaryPhone),
       displayName,
     });
     return personId;
