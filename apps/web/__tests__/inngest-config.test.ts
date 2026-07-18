@@ -13,19 +13,24 @@ import { assertInngestServeable, isInngestConfigured } from "../lib/inngest-conf
 const EVENT = "INNGEST_EVENT_KEY";
 const SIGNING = "INNGEST_SIGNING_KEY";
 const BASE = "APP_BASE_URL";
+const ENC = "INVITE_TOKEN_ENC_KEY";
+const ENC_KEY_B64 = Buffer.alloc(32, 7).toString("base64");
 
 describe("inngest-config gates", () => {
   let savedEvent: string | undefined;
   let savedSigning: string | undefined;
   let savedBase: string | undefined;
+  let savedEnc: string | undefined;
 
   beforeEach(() => {
     savedEvent = process.env[EVENT];
     savedSigning = process.env[SIGNING];
     savedBase = process.env[BASE];
+    savedEnc = process.env[ENC];
     delete process.env[EVENT];
     delete process.env[SIGNING];
     delete process.env[BASE];
+    delete process.env[ENC];
   });
 
   afterEach(() => {
@@ -35,6 +40,8 @@ describe("inngest-config gates", () => {
     else process.env[SIGNING] = savedSigning;
     if (savedBase === undefined) delete process.env[BASE];
     else process.env[BASE] = savedBase;
+    if (savedEnc === undefined) delete process.env[ENC];
+    else process.env[ENC] = savedEnc;
   });
 
   it("isInngestConfigured: false when the event key is absent, true when present", () => {
@@ -84,6 +91,31 @@ describe("inngest-config gates", () => {
     process.env[EVENT] = "evt_abc";
     process.env[SIGNING] = "signkey_xyz";
     process.env[BASE] = "https://tellmeagain.app";
+    process.env[ENC] = ENC_KEY_B64;
+    expect(() => assertInngestServeable()).not.toThrow();
+  });
+
+  it("assertInngestServeable: THROWS when INVITE_TOKEN_ENC_KEY is missing (issue #103)", () => {
+    // Without the envelope key the dispatch can't seal the invite token before enqueue, so the
+    // raw token would ride the persisted Inngest payload in plaintext — the exact weakening #103
+    // exists to close. Boot must crash loudly, not fall back to plaintext.
+    process.env[EVENT] = "evt_abc";
+    process.env[SIGNING] = "signkey_xyz";
+    process.env[BASE] = "https://tellmeagain.app";
+    expect(() => assertInngestServeable()).toThrow(/INVITE_TOKEN_ENC_KEY is missing or invalid/);
+  });
+
+  it("assertInngestServeable: THROWS when INVITE_TOKEN_ENC_KEY does not decode to 32 bytes", () => {
+    process.env[EVENT] = "evt_abc";
+    process.env[SIGNING] = "signkey_xyz";
+    process.env[BASE] = "https://tellmeagain.app";
+    process.env[ENC] = Buffer.alloc(16, 1).toString("base64");
+    expect(() => assertInngestServeable()).toThrow(/INVITE_TOKEN_ENC_KEY is missing or invalid/);
+  });
+
+  it("assertInngestServeable: INVITE_TOKEN_ENC_KEY is NOT required when Inngest is unconfigured (dev/CI)", () => {
+    // No event key → in-process synchronous path → the token never crosses a persisted payload →
+    // no envelope key needed. Must stay a no-op with no key set.
     expect(() => assertInngestServeable()).not.toThrow();
   });
 

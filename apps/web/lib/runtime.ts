@@ -59,9 +59,15 @@ import { isInngestConfigured, assertInngestServeable } from "./inngest-config";
 import { makeDispatchPipeline, type DispatchPipeline } from "./dispatch-pipeline";
 import {
   makeDispatchInviteDelivery,
+  makeInviteSendWorker,
   type DispatchInviteDelivery,
 } from "./dispatch-invite-delivery";
 import { deliverInvite } from "./deliver-invite";
+import {
+  getInviteTokenEncKey,
+  openInviteToken,
+  sealInviteToken,
+} from "./invite-token-seal";
 import { resolvePublicOrigin } from "./public-origin";
 
 export { isClerkConfigured, isInngestConfigured };
@@ -246,9 +252,10 @@ type Runtime = {
   dispatchPipeline: DispatchPipeline;
   /**
    * Dispatch invite delivery (email/SMS) for a just-created invitation. Mirrors `dispatchPipeline`'s
-   * durable-vs-synchronous split: Inngest configured → enqueue `invite.send` onto the shared jobQueue
-   * (the registered worker rebuilds the link from the token); else deliver synchronously in-request
-   * via the composite `notifier`. See `lib/dispatch-invite-delivery.ts`.
+   * durable-vs-synchronous split: Inngest configured → seal the token (INVITE_TOKEN_ENC_KEY) and
+   * enqueue `invite.send` onto the shared jobQueue (the registered worker opens the sealed token
+   * and rebuilds the link); else deliver synchronously in-request via the composite `notifier`.
+   * See `lib/dispatch-invite-delivery.ts`.
    */
   dispatchInviteDelivery: DispatchInviteDelivery;
   /**
@@ -442,23 +449,26 @@ async function build(): Promise<Runtime> {
     inngestPipeline = createPipeline({ db, storage, transcriber, languageModel, jobQueue });
     // Register the invite-delivery worker on the SAME jobQueue as the pipeline stages, so its
     // function is included in `jobQueue.functions` below and the /api/inngest serve route mounts
-    // it alongside transcribe/render_story. The worker rebuilds the join link from the token —
-    // durable delivery never carries a caller-constructed link across the enqueue boundary.
-    jobQueue.register("invite.send", async (p) => {
-      const origin = resolvePublicOrigin({
-        configuredBaseUrl: process.env.APP_BASE_URL,
-        host: null,
-        forwardedProto: null,
-        isProduction: true,
-      });
-      await deliverInvite({
-        db,
-        notifier,
-        invitationId: p.invitationId,
-        channels: p.channels,
-        link: `${origin}/join/${p.token}`,
-      });
-    });
+    // it alongside transcribe/render_story. The worker OPENS the envelope-encrypted token from
+    // the payload (issue #103 — the raw token never rides the persisted Inngest payload in
+    // plaintext) and rebuilds the join link — durable delivery never carries a caller-constructed
+    // link across the enqueue boundary. The open/origin/deliver seams live in the pure
+    // makeInviteSendWorker (unit-tested in dispatch-invite-delivery.test.ts).
+    jobQueue.register(
+      "invite.send",
+      makeInviteSendWorker({
+        openToken: (sealedToken) => openInviteToken(sealedToken, getInviteTokenEncKey()),
+        resolveOrigin: () =>
+          resolvePublicOrigin({
+            configuredBaseUrl: process.env.APP_BASE_URL,
+            host: null,
+            forwardedProto: null,
+            isProduction: true,
+          }),
+        deliver: ({ invitationId, channels, link }) =>
+          deliverInvite({ db, notifier, invitationId, channels, link }),
+      }),
+    );
     inngest = { client, functions: jobQueue.functions };
   }
 
@@ -472,10 +482,13 @@ async function build(): Promise<Runtime> {
 
   // Single dispatch helper the invite server action uses. Branch selection lives in the pure
   // makeDispatchInviteDelivery (unit-tested in dispatch-invite-delivery.test.ts). The durable path
-  // enqueues onto the SAME Inngest jobQueue the invite.send worker above was registered on.
+  // SEALS the token (INVITE_TOKEN_ENC_KEY, issue #103) and enqueues onto the SAME Inngest
+  // jobQueue the invite.send worker above was registered on. The key is only READ on the enqueue
+  // branch — the synchronous path never seals, so dev/CI needs no key.
   const dispatchInviteDelivery = makeDispatchInviteDelivery({
     inngestConfigured,
     ...(inngestJobQueue ? { inngestJobQueue } : {}),
+    sealToken: (token) => sealInviteToken(token, getInviteTokenEncKey()),
     deliver: ({ invitationId, channels, link }) =>
       deliverInvite({ db, notifier, invitationId, channels, link }),
   });

@@ -697,6 +697,11 @@ Decided 2026-07-17. Spec: `docs/superpowers/specs/2026-07-17-invite-delivery-ema
   SHA-256 hash is stored in the DB. An async worker has no other way to reconstruct the link once
   it's off the request path, so the payload becomes a second place the plaintext token exists
   (at rest, in Inngest's job store) for the (short) lifetime of the job.
+  **Superseded 2026-07-18 (issue #103):** the token is now envelope-encrypted (AES-256-GCM under
+  a server-held `INVITE_TOKEN_ENC_KEY`) before enqueue, so the persisted payload carries only
+  ciphertext and the worker opens it in memory to build the link — "leak ≠ working invite" is
+  restored. `INVITE_TOKEN_ENC_KEY` is boot-required whenever `INNGEST_EVENT_KEY` is set (see
+  `assertInngestServeable`); the inline path (Inngest unset) never seals and needs no key.
   - **Rejected alternative 1 — inline send.** Sending synchronously on the request path preserves
     the invariant natively (the token never leaves process memory except inside the rendered
     message). Rejected because the user explicitly chose async delivery via Inngest — request
@@ -707,4 +712,4 @@ Decided 2026-07-17. Spec: `docs/superpowers/specs/2026-07-17-invite-delivery-ema
     "a leaked payload ≠ a working invite," closing the gap the plaintext choice opens. Rejected
     for this iteration as added complexity (key management for a payload-level envelope) not
     justified yet; noted here so it's a conscious, revisitable deferral rather than an
-    overlooked gap.
+    overlooked gap. **Adopted 2026-07-18 (issue #103)** — see the superseding note above.

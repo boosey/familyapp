@@ -17,6 +17,7 @@
  * fail-fast), keeping the boolean gate single-purpose.
  */
 import { resolvePublicOrigin } from "./public-origin";
+import { getInviteTokenEncKey } from "./invite-token-seal";
 
 export function isInngestConfigured(): boolean {
   return (process.env.INNGEST_EVENT_KEY ?? "").length > 0;
@@ -42,6 +43,13 @@ export function isInngestConfigured(): boolean {
  *      pipeline stages (transcribe/render_story) do NOT need this — but they're registered on the
  *      same durable queue as `invite.send`, so "Inngest configured" always implies the invite
  *      worker is live and this var is required.
+ *
+ *   3. `INVITE_TOKEN_ENC_KEY` (base64-encoded 32-byte key) — the durable `invite.send` payload
+ *      carries the invite token envelope-ENCRYPTED (issue #103), so dispatch must seal before
+ *      enqueue and the worker must open before building the link. Missing/malformed → invite
+ *      delivery cannot run; a silent plaintext fallback would leak a working invite token into
+ *      Inngest's persisted store. The inline (Inngest-unconfigured) path never seals, so dev/CI
+ *      needs no key.
  *
  * We crash at boot naming the missing var, exactly as `selectMediaStorage` throws on a partial R2
  * config — a loud boot failure beats a silent, forever-broken async job. Called from `build()`
@@ -81,6 +89,25 @@ export function assertInngestServeable(): void {
         "delivered. Set APP_BASE_URL to the public origin (e.g. https://app.example.com) in every " +
         "environment where INNGEST_EVENT_KEY is set (including Preview), or unset INNGEST_EVENT_KEY " +
         `(dev/in-process mode). Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+  }
+  // The durable `invite.send` payload carries the invite token envelope-ENCRYPTED (issue #103).
+  // Without INVITE_TOKEN_ENC_KEY the dispatch cannot seal before enqueue — and silently falling
+  // back to a plaintext token would resurrect the exact weakening #103 closed. Validate the key
+  // at boot (reusing getInviteTokenEncKey so the decode rule has a single source of truth), same
+  // fail-loud philosophy as the signing-key and APP_BASE_URL checks above.
+  try {
+    getInviteTokenEncKey();
+  } catch (cause) {
+    throw new Error(
+      "Inngest is configured (INNGEST_EVENT_KEY set) but INVITE_TOKEN_ENC_KEY is missing or invalid. " +
+        "The durable invite.send path seals the invite token with this key before enqueue so the " +
+        "persisted Inngest payload holds only ciphertext; without it, invites cannot be delivered " +
+        "(and a plaintext fallback would leak a working invite token into Inngest's store). Set " +
+        "INVITE_TOKEN_ENC_KEY to a base64-encoded 32-byte key (`openssl rand -base64 32`) in every " +
+        "environment where INNGEST_EVENT_KEY is set, or unset INNGEST_EVENT_KEY (dev/in-process " +
+        `mode). Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`,
       { cause },
     );
   }

@@ -107,4 +107,15 @@ describe("checkEnv productionOnly vars (the Inngest pair)", () => {
     delete env.INNGEST_SIGNING_KEY;
     expect(checkEnv(env).ok).toBe(true);
   });
+
+  it("requires INVITE_TOKEN_ENC_KEY alongside the Inngest keys on a PRODUCTION deploy (#103)", () => {
+    // The durable invite.send path seals the invite token with this key before enqueue; without
+    // it the raw token would ride the persisted Inngest payload in plaintext.
+    const env = fullEnv();
+    env.VERCEL_ENV = "production";
+    delete env.INVITE_TOKEN_ENC_KEY;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired.map((m) => m.name)).toContain("INVITE_TOKEN_ENC_KEY");
+  });
 });

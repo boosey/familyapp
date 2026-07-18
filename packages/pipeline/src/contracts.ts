@@ -142,7 +142,14 @@ export interface StoryJobPayload {
 
 export interface InviteJobPayload {
   invitationId: string;
-  token: string;
+  /**
+   * The invite token, envelope-ENCRYPTED (AES-256-GCM, sealed with the server-held
+   * `INVITE_TOKEN_ENC_KEY` before enqueue — see apps/web/lib/invite-token-seal.ts). Inngest
+   * persists event payloads durably, so the raw token must never ride in plaintext: a leak of
+   * the job store then yields only ciphertext ("leak ≠ working invite", issue #103). The
+   * `invite.send` worker opens this in memory to build the join link.
+   */
+  sealedToken: string;
   channels: DeliveryChannel[];
 }
 

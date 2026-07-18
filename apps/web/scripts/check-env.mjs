@@ -63,6 +63,11 @@ export const REQUIRED = [
     why: "Durable job queue signature verification (production). Preview deploys omit it on purpose — no Inngest worker is served there.",
     productionOnly: true,
   },
+  {
+    name: "INVITE_TOKEN_ENC_KEY",
+    why: "Envelope-encryption key for the invite token in the invite.send job payload (#103); the durable path throws without it. Preview deploys omit it on purpose (direct in-process route).",
+    productionOnly: true,
+  },
 ];
 
 /**

@@ -35,6 +35,7 @@ only warns). All set in **Vercel → Project → Settings → Environment Variab
 | `GROQ_API_KEY` | Transcription + Phase-1 LLM | console.groq.com (§E.3) |
 | `INNGEST_EVENT_KEY` | Durable job queue | Inngest dashboard (§E.5) |
 | `INNGEST_SIGNING_KEY` | Job queue sig verification | Inngest dashboard (§E.5) |
+| `INVITE_TOKEN_ENC_KEY` | Envelope-encrypts the invite token in the `invite.send` payload (#103) | generate: `openssl rand -base64 32` (must decode to 32 bytes) |
 
 ### RECOMMENDED — warns only, safe fallback
 | Var | Set it if… |
