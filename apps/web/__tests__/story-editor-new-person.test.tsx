@@ -62,13 +62,17 @@ it("adding a new person threads the real minted personId back so a same-session 
   const addFd = tagStorySubjectAction.mock.calls[0]![0] as FormData;
   expect(addFd.get("newPersonDisplayName")).toBe("Grandma Rose");
 
-  // Wait for the optimistic placeholder to be replaced with the real minted id.
-  const removeButton = await waitFor(() => {
-    const btn = document.querySelector('[aria-label="Remove Grandma Rose"]');
+  // The placeholder→real-id swap runs INSIDE the add transition, during which TagInput (and its ✕
+  // buttons) are disabled. Wait for that transition to fully settle — remove button present AND
+  // enabled — so the swap has been applied and the click can't land on a disabled/stale node.
+  await waitFor(() => {
+    const btn = document.querySelector('[aria-label="Remove Grandma Rose"]') as HTMLButtonElement | null;
     expect(btn).toBeTruthy();
-    return btn as HTMLButtonElement;
+    expect(btn!.disabled).toBe(false);
   });
 
+  // Query fresh right before clicking so we never hold a node detached by the swap re-render.
+  const removeButton = document.querySelector('[aria-label="Remove Grandma Rose"]') as HTMLButtonElement;
   fireEvent.click(removeButton);
 
   await waitFor(() => expect(untagStorySubjectAction).toHaveBeenCalledTimes(1));

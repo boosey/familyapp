@@ -122,6 +122,9 @@ export function LandingExperience() {
       <main>
         {/* ---- hero ---- */}
         <section className={styles.hero}>
+          {/* Brand wordmark — the exact app name, shown prominently so the homepage name
+              matches the OAuth consent-screen app name Google verifies against (#154). */}
+          <p className={styles.wordmark}>{landing.brand}</p>
           <p className={styles.eyebrow}>{landing.eyebrow}</p>
           <h1 className={styles.refrain}>
             <span className={styles.mark}>{landing.refrain}</span>
@@ -167,6 +170,13 @@ export function LandingExperience() {
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* ---- photos: device + Google Photos (the Google Photos OAuth scope this homepage discloses, #154) ---- */}
+        <section className={styles.section}>
+          <p className={styles.kicker}>{landing.photos.eyebrow}</p>
+          <h2 className={styles.sectionTitle}>{landing.photos.title}</h2>
+          <p className={styles.sectionBody}>{landing.photos.body}</p>
         </section>
 
         {/* ---- why now ---- */}

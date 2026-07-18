@@ -130,6 +130,16 @@
   opacity: calc(1 - var(--hero, 0) * 0.85);
   transform: translate3d(0, calc(var(--hero, 0) * -28px), 0);
 }
+/* Brand wordmark — the exact app name ("Tell Me Again") as a clear lockup at the top of the
+   hero, so the homepage prominently displays the same name as the OAuth consent screen (#154). */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-body);
+  margin: 0;
+}
 .eyebrow {
   font-family: var(--font-mono);
   font-size: var(--text-label);
