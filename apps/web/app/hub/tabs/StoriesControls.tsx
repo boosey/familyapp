@@ -63,7 +63,9 @@ export function StoriesControls({ activeFamilies, selected, selfDrafts }: Storie
             type="button"
             className={styles.draftButton}
             aria-expanded={expanded}
-            aria-controls={listId}
+            // Only point aria-controls at the list once it's actually rendered — the <ul id={listId}>
+            // is collapsed out of the DOM, and a dangling reference to a non-existent id is an a11y bug.
+            aria-controls={expanded ? listId : undefined}
             onClick={() => setExpanded((v) => !v)}
           >
             <span className={styles.draftButtonTop}>{hub.stories.draftReminder(selfDrafts.length)}</span>
@@ -82,10 +84,16 @@ export function StoriesControls({ activeFamilies, selected, selfDrafts }: Storie
         <ul id={listId} className={styles.resumeList}>
           {selfDrafts.map((d) => (
             <li key={d.storyId} className={styles.resumeItem}>
-              <span className={styles.resumeMeta}>
+              {/* Per-draft date meta id so each identical "Finish" link is distinguishable to a
+                  screen reader (WCAG 2.4.4 — link purpose from its accessible description). */}
+              <span id={`meta-${d.storyId}`} className={styles.resumeMeta}>
                 {hub.questions.recordedAt(relativeShortDate(d.recordedAt))}
               </span>
-              <Link href={`/hub/tell/${d.storyId}`} className={styles.resumeLink}>
+              <Link
+                href={`/hub/tell/${d.storyId}`}
+                className={styles.resumeLink}
+                aria-describedby={`meta-${d.storyId}`}
+              >
                 {hub.stories.resume}
               </Link>
             </li>
