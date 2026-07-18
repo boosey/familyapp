@@ -6,9 +6,11 @@
  *
  * Variable NAMES here are identical to that export by design — keep them in sync.
  * When the design system changes, re-port from _ds (do not rename on import).
- * The only intentional divergence: fonts are self-hosted via next/font in
+ * The only intentional divergences: fonts are self-hosted via next/font in
  * app/layout.tsx (--font-newsreader / --font-public-sans / --font-dm-mono),
- * rather than the export's Google Fonts @import.
+ * rather than the export's Google Fonts @import; and two type-scale steps the
+ * export lacks (--text-ui-md: 19px, --text-display-md: 52px) are added for the
+ * narrator capture surface (marked inline below).
  *
  * There are NO --kin-* tokens. That was an older, divergent naming that only ever
  * lived in loose design-system .jsx reference files; the app uses the canonical
@@ -115,12 +117,16 @@
 
   --text-label: 0.875rem;
   --text-ui-sm: 1.125rem;
+  /* --text-ui-md / --text-display-md are APP-SIDE additions (not in the canonical _ds export):
+   * they fill the 19px / 52px steps the narrator capture header + hello sizes need. */
+  --text-ui-md: 1.1875rem; /* 19px */
   --text-ui: 1.25rem;
   --text-ui-lg: 1.5rem;
   --text-story: 1.375rem;
   --text-story-lg: 1.75rem;
   --text-prompt: 2rem;
   --text-display: 2.75rem;
+  --text-display-md: 3.25rem; /* 52px */
   --text-display-lg: 3.5rem;
 
   --leading-tight: 1.15;
