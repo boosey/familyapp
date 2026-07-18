@@ -13,7 +13,8 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createInvitation, listActiveFamiliesForPerson, AlreadyFamilyMemberError, ThrottleError } from "@chronicle/core";
-import { memberships, persons } from "@chronicle/db/schema";
+import type { InviteRelationship } from "@chronicle/db";
+import { inviteRelationshipEnum, memberships, persons } from "@chronicle/db/schema";
 import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
 import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
@@ -80,6 +81,15 @@ async function createInvite(formData: FormData): Promise<void> {
   redirect("/hub?tab=invite");
 }
 
+/** Narrow an arbitrary form value to the fixed relationship vocabulary; anything else ⇒ "other"
+ *  (the safe no-auto-placement fallback — never a guessed edge). The vocabulary is read straight from
+ *  the Drizzle enum so this guard can never drift from the schema when a value is added. */
+function parseInviteRelationship(raw: string): InviteRelationship {
+  return (inviteRelationshipEnum.enumValues as readonly string[]).includes(raw)
+    ? (raw as InviteRelationship)
+    : "other";
+}
+
 async function createMemberInvite(formData: FormData): Promise<void> {
   "use server";
   const rt = await getRuntime();
@@ -89,7 +99,14 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   const inviteeName = String(formData.get("inviteeName") ?? "").trim();
   const inviteeEmail = String(formData.get("inviteeEmail") ?? "").trim();
   const inviteePhoneRaw = String(formData.get("inviteePhone") ?? "").trim();
-  const relationshipLabel = String(formData.get("relationshipLabel") ?? "").trim();
+  // #164 (ADR-0023): the STRUCTURED relationship picker drives tree placement. Validate against the
+  // fixed vocabulary server-side (a crafted POST can send anything); an unknown value falls back to
+  // "other" — the safe no-auto-placement outcome, never a guessed edge.
+  const relationship = parseInviteRelationship(String(formData.get("relationship") ?? ""));
+  // Derive the free-text display label the welcome screen shows from the pick (display only, editable
+  // there). "other" carries no derived label — the invitee can type their own.
+  const relationshipLabel =
+    relationship === "other" ? "" : hub.invite.relationshipDisplayLabels[relationship];
   const intent = parseInviteIntent(String(formData.get("intent") ?? ""));
   if (!inviteeName) throw new Error("name required");
   // A typed-but-invalid phone must never silently become "no phone" — reject BEFORE creating the
@@ -137,6 +154,7 @@ async function createMemberInvite(formData: FormData): Promise<void> {
       inviteePhone: normalizedPhone ?? undefined,
       deliveryChannels: channels.length ? channels : undefined,
       relationshipLabel: relationshipLabel || undefined,
+      relationship,
     }));
   } catch (err) {
     if (err instanceof ThrottleError) {

@@ -85,15 +85,28 @@ export function MemberInviteForm({
         {hub.invite.identifierHint}
       </p>
       <label className="kin-form-label">
-        {hub.invite.relationshipLabel}{" "}
-        <span style={{ fontWeight: 400 }}>{hub.invite.relationshipLabelOptional}</span>
-        <input
-          name="relationshipLabel"
-          type="text"
-          className="kin-field"
-          placeholder={hub.invite.relationshipPlaceholder}
-        />
+        {hub.invite.relationshipQuestion}
+        <select name="relationship" className="kin-field" defaultValue="other">
+          {(
+            Object.keys(hub.invite.relationshipOptions) as (keyof typeof hub.invite.relationshipOptions)[]
+          ).map((value) => (
+            <option key={value} value={value}>
+              {hub.invite.relationshipOptions[value]}
+            </option>
+          ))}
+        </select>
       </label>
+      <p
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-label)",
+          lineHeight: "var(--leading-body)",
+          color: "var(--text-muted)",
+          margin: "-8px 0 0",
+        }}
+      >
+        {hub.invite.relationshipHelp}
+      </p>
       <FamilyDesignatorChips
         families={families}
         seeded={seededFamily}

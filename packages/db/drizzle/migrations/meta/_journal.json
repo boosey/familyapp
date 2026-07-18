@@ -183,6 +183,13 @@
       "when": 1784365966718,
       "tag": "0025_elite_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784400902097,
+      "tag": "0026_quiet_risque",
+      "breakpoints": true
     }
   ]
 }

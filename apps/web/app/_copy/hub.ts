@@ -225,10 +225,32 @@ export const hub = {
     // guard). Plain-language: no numbers, no "rate limit" jargon.
     throttled:
       "That's a lot of invitations in a short time. Take a breather and try again a little later — if you're inviting a big group, spread it out over the day.",
-    // "Relationship" and "(optional)" are split so the span styling is preserved in JSX.
-    relationshipLabel: "Relationship",
-    relationshipLabelOptional: "(optional)",
-    relationshipPlaceholder: "e.g. your cousin",
+    // #164 (ADR-0023): a STRUCTURED relationship picker (fixed vocabulary) — the placement signal
+    // that positions the member on the family tree the moment they accept. The value names the
+    // invitee's role relative to the inviter ("My son" ⇒ they are the inviter's son).
+    relationshipQuestion: "How are they related to you?",
+    relationshipHelp:
+      "This places them correctly in your family tree when they join. Choose “Someone else” if none of these fit — you can position them later.",
+    // Option labels, keyed by the machine value sent to core.createInvitation.
+    relationshipOptions: {
+      wife: "My wife",
+      husband: "My husband",
+      mother: "My mother",
+      father: "My father",
+      son: "My son",
+      daughter: "My daughter",
+      other: "Someone else",
+    },
+    // The free-text label stored for the welcome screen, DERIVED from the pick (display only). Absent
+    // for "other" — the invitee can type their own on the welcome screen.
+    relationshipDisplayLabels: {
+      wife: "Wife",
+      husband: "Husband",
+      mother: "Mother",
+      father: "Father",
+      son: "Son",
+      daughter: "Daughter",
+    },
     familyLabel: "Family",
     // Custom validity message when the family designator (ADR-0021, #49) blocks an empty submit — the
     // ambiguous >1-family case with no deliberate pick.

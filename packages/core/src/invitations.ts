@@ -11,7 +11,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
-import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
+import type {
+  Database,
+  InvitationStatus,
+  InviteRelationship,
+  MembershipRole,
+} from "@chronicle/db";
 import {
   AlreadyFamilyMemberError,
   AuthorizationError,
@@ -19,6 +24,7 @@ import {
   ThrottleError,
 } from "./errors";
 import { findActiveFamilyMemberByContact } from "./invite-member-guard";
+import { placeInvitedMemberOnAccept } from "./kinship-write";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
 import { openToken, sealToken } from "./token-seal";
@@ -52,6 +58,13 @@ export interface CreateInvitationInput {
    */
   deliveryChannels?: string[];
   relationshipLabel?: string;
+  /**
+   * Structured, machine-readable relationship (#164, ADR-0023) — the PLACEMENT signal. On acceptance
+   * a direct primitive (`wife`/`husband`/`mother`/`father`/`son`/`daughter`) auto-creates the matching
+   * kinship edge and sets the invitee's sex; `other` records "no auto-edge" (unplaced, handled by
+   * #161). Absent leaves the invite with no placement signal — `relationshipLabel` stays display-only.
+   */
+  relationship?: InviteRelationship;
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
   ttlMs?: number;
@@ -332,6 +345,9 @@ export async function createInvitation(
             ...(input.relationshipLabel !== undefined
               ? { relationshipLabel: input.relationshipLabel ?? null }
               : {}),
+            ...(input.relationship !== undefined
+              ? { inviteRelationship: input.relationship ?? null }
+              : {}),
             ...(input.role !== undefined ? { role: input.role } : {}),
           })
           .where(eq(invitations.id, existing.id));
@@ -391,6 +407,7 @@ export async function createInvitation(
         inviteePhone: trimmedPhone,
         deliveryChannels: input.deliveryChannels ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
+        inviteRelationship: input.relationship ?? null,
         role: input.role ?? "member",
         status: "pending",
         expiresAt,
@@ -568,6 +585,8 @@ export async function acceptInvitation(
         status: invitations.status,
         expiresAt: invitations.expiresAt,
         inviteePersonId: invitations.inviteePersonId,
+        inviterPersonId: invitations.inviterPersonId,
+        inviteRelationship: invitations.inviteRelationship,
       })
       .from(invitations)
       .where(eq(invitations.tokenHash, tokenHash))
@@ -640,6 +659,24 @@ export async function acceptInvitation(
 
     if (provisionalId !== input.acceptedPersonId) {
       await tx.delete(persons).where(eq(persons.id, provisionalId));
+    }
+
+    // #164 (ADR-0023): auto-place the new member on the family tree from the invite's STRUCTURED
+    // relationship — the exact fact the inviter supplied, no longer discarded (the production
+    // incident this prevents). Only the six DIRECT primitives place an edge here; `other` and a
+    // nullish relationship write nothing (the member is left unplaced for #161, never guessed). The
+    // edge is a normal `asserted` edge, actor = the inviter, subject to the same hide/steward overlay.
+    // Runs on the REAL accepting Person (the provisional is already merged away) inside this tx.
+    if (
+      invite.inviteRelationship !== null &&
+      invite.inviteRelationship !== "other"
+    ) {
+      await placeInvitedMemberOnAccept(tx, {
+        familyId: invite.familyId,
+        inviterPersonId: invite.inviterPersonId,
+        inviteePersonId: input.acceptedPersonId,
+        relationship: invite.inviteRelationship,
+      });
     }
 
     return { membershipId, familyId: invite.familyId };
