@@ -3,13 +3,15 @@
  * NOTE: every token named in _skins/skin-contract.ts MUST be defined here (contract test). */
 :root[data-skin="playful"] {
   /* fonts */
-  /* Crisp humanist sans matching the approved "Playful & warm" mockup (Direction D rendered in
-   * Segoe UI / Trebuchet, NOT the rounded Baloo). Keep the system stack so it looks like the mockup
-   * the owner signed off on; swap to a hosted face later if cross-platform parity is wanted. */
-  --font-display: "Segoe UI", "Trebuchet MS", system-ui, -apple-system, "Helvetica Neue", sans-serif;
-  --font-story:   var(--font-nunito), "Nunito", system-ui, sans-serif; /* prose/reading face — NOT legacy: still read directly by ~51 call sites; kept in sync with --font-read until Phase-2 re-points them */
-  --font-read:    var(--font-nunito), "Nunito", system-ui, sans-serif;
-  --font-ui:      var(--font-nunito), "Nunito", system-ui, sans-serif;
+  /* One crisp humanist sans throughout, matching the approved "Playful & warm" mockup (Direction D —
+   * a single Segoe-like sans for display AND body, NOT the rounded Baloo/Nunito pairing). Source Sans 3
+   * is the hosted, cross-platform near-match to Segoe UI (self-hosted via next/font, exposed as
+   * --font-source-sans in layout.tsx), so the design renders identically on every OS rather than only
+   * looking right where Segoe happens to be installed. --font-display/ui/read/story all point at it. */
+  --font-display: var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-story:   var(--font-source-sans), "Segoe UI", system-ui, sans-serif; /* prose/reading face — read directly by ~51 call sites; kept in sync with --font-read */
+  --font-read:    var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-ui:      var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
   --font-mono:    var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace; /* same as base (DM Mono) */
 
   /* surfaces / ink */

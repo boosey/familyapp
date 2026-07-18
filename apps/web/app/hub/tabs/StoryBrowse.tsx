@@ -17,6 +17,7 @@ import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { TellStoryCard } from "./TellStoryCard";
 import { StoryCard } from "./StoryCard";
+import { pickStoryLayout } from "./story-layout";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
 import {
   groupByDecade,
@@ -244,6 +245,10 @@ function Feed({
             index={i}
             masonry
             variant={i === featureIndex ? "feature" : "feed"}
+            // Deterministic per-story layout (photo-top / photo-left / wrap / collage / text-only) so
+            // the masonry feed reads like an editorial scrapbook and never repeats the same tile. The
+            // feature hero ignores this and keeps its fixed photo-forward structure.
+            layout={pickStoryLayout(item)}
           />
         ))}
       </div>

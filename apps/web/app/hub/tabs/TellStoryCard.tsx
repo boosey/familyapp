@@ -37,6 +37,9 @@ const cardStyle: CSSProperties = {
 const masonryExtras: CSSProperties = {
   breakInside: "avoid",
   marginBottom: 18,
+  // Span every column in the CSS-columns masonry so the "Tell a story" invitation leads the feed
+  // full-width rather than sitting as a narrow first cell.
+  columnSpan: "all",
 };
 
 const titleStyle: CSSProperties = {

@@ -203,12 +203,96 @@
   outline-offset: 3px;
 }
 
-/* Feature hero: the first cover-bearing masonry item, given a bigger cover + title. */
+/* Feature hero: the first cover-bearing masonry item, given a bigger cover + title. In the CSS-columns
+   masonry it spans every column (a full-width lead), so it never gets split across the flow. */
+.masonry.feature {
+  column-span: all;
+}
 .feature .cover {
   max-height: 460px;
 }
 .feature .title {
   font-size: var(--text-display);
+}
+
+/* ---- Varied editorial card layouts (masonry feed) ---------------------------------------------
+   Assigned deterministically per story by pickStoryLayout so the feed reads like a scrapbook and
+   never repeats the same photo-top tile. `top` is the base masonry card above; these add the LEFT
+   (photo down the side), WRAP (prose flows around a floated photo), COLLAGE (small photo grid) and
+   TEXTONLY (no photo) variants. Radii use the shape tokens (like .cover / .thumb); layout spacing is
+   hardcoded px to match this file's existing card spacing (22px/18px/46px). Values track the approved
+   "Playful & warm" mockup .lay-left / .lay-wrap / .collage / .textonly rules. */
+
+/* LEFT: horizontal card, cover runs down the left ~42% of the width, body on the right. */
+.layLeft {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+}
+.layLeft .photoWrap {
+  flex: 0 0 42%;
+  margin: 10px 0 10px 10px;
+}
+.layLeft .cover {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+.layLeft .body {
+  padding: 16px 18px;
+}
+
+/* WRAP: the cover floats and the prose wraps around it. Body is a block (not flex) so float works. */
+.layWrap .body {
+  display: block;
+}
+.wrapPhoto {
+  float: left;
+  width: 46%;
+  aspect-ratio: 4 / 5;
+  margin: 2px 15px 8px 0;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-sunken);
+}
+.layWrap .title {
+  margin-top: 0;
+}
+.layWrap .tags {
+  clear: both;
+}
+
+/* COLLAGE: cover + up to two extra photos in a small grid above the body. */
+.layCollage {
+  gap: 0;
+  padding: 0;
+}
+.collage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 84px;
+  gap: 6px;
+  margin: 10px 10px 0;
+}
+.collageCell {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  display: block;
+}
+.collageTall {
+  grid-row: span 2;
+}
+.layCollage .body {
+  padding: 18px;
+}
+
+/* TEXTONLY: no photo — a shorter card (taped title + stickers) that breaks the feed rhythm. The card
+   renders no photo element; with nothing above it the title needn't reserve top spacing. */
+.textonly .title {
+  margin-top: 0;
 }
 
 /* ---- Playful structural signatures (photo-forward, tilt, tape, sticker rotation, highlighter) ----

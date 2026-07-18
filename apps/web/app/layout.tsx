@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Public_Sans, DM_Mono, Baloo_2, Nunito } from "next/font/google";
+import { Newsreader, Public_Sans, DM_Mono, Baloo_2, Nunito, Source_Sans_3 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
@@ -52,6 +52,18 @@ const nunito = Nunito({
   variable: "--font-nunito",
 });
 
+// Playful skin display/UI/read face: Source Sans 3 — a hosted, cross-platform humanist sans that
+// closely matches the Segoe UI look the owner signed off on in the "Playful & warm" mockup, so the
+// approved single-crisp-sans-throughout design renders the same on every OS (not just Windows).
+// Exposed as the `--font-source-sans` variable that `_skins/playful.css` points --font-display/ui/
+// read/story at.
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-source-sans",
+});
+
 export const metadata: Metadata = {
   title: "Family Chronicle",
   description: "A warm place to tell your stories.",
@@ -96,7 +108,7 @@ export default async function RootLayout({
   // palette flash. It is sourced from DEFAULT_SKIN_ID (not a hardcoded literal) so it can never drift
   // out of lockstep with the registry default and silently reintroduce a first-paint flash.
   return (
-    <html lang="en" data-theme="heirloom" data-skin={DEFAULT_SKIN_ID} className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="heirloom" data-skin={DEFAULT_SKIN_ID} className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable} ${sourceSans.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
             flash/reflow. Generated from the preference registry — the single source of truth shared

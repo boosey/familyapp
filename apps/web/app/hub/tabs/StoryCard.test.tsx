@@ -104,4 +104,52 @@ describe("StoryCard", () => {
     );
     expect(container.querySelectorAll("img")).toHaveLength(0);
   });
+
+  it("layout=left applies the photo-left class and keeps the cover as the first image", () => {
+    const { container } = render(
+      <StoryCard item={item} href="/hub/stories/s1?from=feed" index={0} masonry layout="left" />,
+    );
+    const link = container.querySelector("a") as HTMLElement;
+    expect(link.className).toContain(styles.layLeft);
+    const imgs = container.querySelectorAll("img");
+    expect(imgs[0]?.getAttribute("src")).toBe("/api/album-photo/ph1");
+  });
+
+  it("layout=wrap floats the cover inside the body via the wrapPhoto class", () => {
+    const { container } = render(
+      <StoryCard item={item} href="/hub/stories/s1?from=feed" index={0} masonry layout="wrap" />,
+    );
+    const link = container.querySelector("a") as HTMLElement;
+    expect(link.className).toContain(styles.layWrap);
+    const wrap = container.querySelector(`.${styles.wrapPhoto}`);
+    expect(wrap?.getAttribute("src")).toBe("/api/album-photo/ph1");
+  });
+
+  it("layout=collage renders the cover plus extra photos in the collage grid", () => {
+    const threePhoto: StoryItem = { ...item, coverPhotoId: "ph1", photoIds: ["ph1", "ph2", "ph3"] };
+    const { container } = render(
+      <StoryCard item={threePhoto} href="/hub/stories/s1?from=feed" index={0} masonry layout="collage" />,
+    );
+    const link = container.querySelector("a") as HTMLElement;
+    expect(link.className).toContain(styles.layCollage);
+    const collage = container.querySelector(`.${styles.collage}`) as HTMLElement;
+    expect(collage).toBeTruthy();
+    // Cover + up to two extras (ph1, ph2, ph3).
+    const cells = collage.querySelectorAll("img");
+    expect(cells).toHaveLength(3);
+    expect(cells[0]?.getAttribute("src")).toBe("/api/album-photo/ph1");
+    // The first collage cell is the tall one.
+    expect(cells[0]?.className).toContain(styles.collageTall);
+  });
+
+  it("layout=textonly renders no photo even when a cover exists (defensive collapse)", () => {
+    // A missing cover always collapses to text-only regardless of the requested layout.
+    const noCover: StoryItem = { ...item, coverPhotoId: null, photoIds: [] };
+    const { container } = render(
+      <StoryCard item={noCover} href="/hub/stories/s1?from=feed" index={0} masonry layout="collage" />,
+    );
+    const link = container.querySelector("a") as HTMLElement;
+    expect(link.className).toContain(styles.textonly);
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+  });
 });
