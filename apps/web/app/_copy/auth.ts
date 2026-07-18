@@ -85,6 +85,12 @@ export const auth = {
         },
       ],
     },
+    photos: {
+      eyebrow: "Photos, too",
+      title: "Bring in the photos your stories live in.",
+      body:
+        "Upload photos straight from your device — or connect Google Photos to bring in the ones already there — and attach them to a memory. The wedding, the old kitchen, the road trip: a photograph pulls the story out of the person who was in it — who's there, where it was, what happened next. We use your photos only to help your family tell and keep these stories. They are never sold, never shared, and never used for advertising.",
+    },
     why: {
       eyebrow: "Why now",
       title: "The stories go quiet sooner than we think.",
