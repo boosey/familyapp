@@ -152,7 +152,7 @@ describe("RequestsDesignator — seed + list scoping (no write-back)", () => {
         decline={noop}
       />,
     );
-    expect(screen.getByRole("button", { name: "Marino" }).getAttribute("aria-pressed")).toBe(
+    expect(screen.getByRole("button", { name: /^Marino/ }).getAttribute("aria-pressed")).toBe(
       "true",
     );
     expect(screen.queryByText("Bea")).toBeTruthy();
@@ -173,7 +173,7 @@ describe("RequestsDesignator — seed + list scoping (no write-back)", () => {
     expect(screen.queryByText("Ann")).toBeTruthy();
     expect(screen.queryByText("Bea")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Marino/ }));
 
     expect(screen.queryByText("Bea")).toBeTruthy();
     expect(screen.queryByText("Ann")).toBeNull();
