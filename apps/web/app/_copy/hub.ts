@@ -83,11 +83,13 @@ export const hub = {
     treasureHint: "Tip: highlight a line that moved you to treasure it.",
   },
   intake: {
-    // Banner shown at the top of the hub until the narrator's biographical profile is complete.
-    // Its CTA links to /hub/about-you (the intake surface).
-    aria: "Your introduction",
-    body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived.",
-    cta: "Continue your introduction",
+    // Compact intake reminder on the Stories control row (#138) — a two-line button (matching the
+    // draft-reminder button) shown until the narrator's biographical profile is complete. Links to
+    // /hub/about-you (the intake surface). Replaces the former full-width banner.
+    reminderTop: "Finish your introduction",
+    reminderAction: "add details",
+    // Accessible name for the compact reminder link (the two visible lines are decorative spans).
+    aria: "Finish your introduction — add a few details about your life",
   },
   pendingInvites: {
     // #120 — confirm cards surfaced when the viewer's VERIFIED email/phone matches a live pending

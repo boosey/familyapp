@@ -11,6 +11,9 @@ interface QuestionsSubNavProps {
   /** The raw current `?families=` browse-filter value (or null when absent) — preserved on switch,
    *  mirroring HubTabsNav. */
   familiesParam: string | null;
+  /** #142: the viewer's pending-ask count — badges the "To answer" sub-link; absent/0 hides the badge.
+   *  Mirrors the top-level Questions tab badge (same `listPendingAsksForNarrator` count). */
+  toAnswerBadge?: number;
 }
 
 const SUB_TABS = [
@@ -26,7 +29,7 @@ const SUB_TABS = [
  * SAME existing `?tab=questions|ask|asks` keys, preserving `?families=` the same way HubTabsNav does
  * (omitted when absent). The per-key content in page.tsx is unchanged.
  */
-export function QuestionsSubNav({ active, familiesParam }: QuestionsSubNavProps) {
+export function QuestionsSubNav({ active, familiesParam, toAnswerBadge }: QuestionsSubNavProps) {
   const router = useRouter();
   return (
     <nav className={styles.subNav} aria-label={hub.shell.questionsSubNavAria}>
@@ -43,6 +46,11 @@ export function QuestionsSubNav({ active, familiesParam }: QuestionsSubNavProps)
           }}
         >
           {tab.label}
+          {tab.key === "questions" && toAnswerBadge != null && toAnswerBadge > 0 && (
+            <span className={styles.badge} aria-label={hub.shell.unreadAria(toAnswerBadge)}>
+              {toAnswerBadge}
+            </span>
+          )}
         </button>
       ))}
     </nav>

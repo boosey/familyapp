@@ -39,6 +39,10 @@ interface StoriesTabProps {
    * set. Must match the parse basis so the chips and the narrowing agree.
    */
   activeFamilies: ViewerFamily[];
+  /** #138: whether the narrator's biographical intake is incomplete — drives the compact intake
+   *  reminder button on the control row (replaces the former full-width banner). Defaults to false
+   *  (no reminder) when omitted. */
+  intakeIncomplete?: boolean;
 }
 
 /** The era a story is ABOUT, when known: "1962 · MARCH" with a place note, else "1962". Null when
@@ -66,6 +70,7 @@ export function StoriesTab({
   selfDrafts,
   filter,
   activeFamilies,
+  intakeIncomplete = false,
 }: StoriesTabProps) {
   const dated = feed.flatMap((slot) =>
     slot.stories.map((story) => {
@@ -121,6 +126,7 @@ export function StoriesTab({
         activeFamilies={activeFamilies}
         selected={filter.kind === "all" ? "all" : selectedIds}
         selfDrafts={selfDrafts}
+        intakeIncomplete={intakeIncomplete}
       />
 
       {filter.kind === "none" ? (

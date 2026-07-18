@@ -1,0 +1,29 @@
+/* FamilyTab — the Invite affordance that now rides the Tree/List selector row (#144), right-justified.
+ * Ported verbatim from page.module.css's former `.inviteButton` (the button relocated OFF the page
+ * shell and ONTO this row) so the coral-pill look + hover + focus-visible outline are preserved. */
+
+.inviteButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 700;
+  text-decoration: none;
+  min-height: var(--touch-min);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+
+.inviteButton:hover {
+  background: var(--accent-strong);
+}
+
+.inviteButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}

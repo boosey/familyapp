@@ -17,6 +17,7 @@ import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
 import { FamilyChips } from "../FamilyChips";
+import styles from "./FamilyTab.module.css";
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 
@@ -49,6 +50,13 @@ export interface FamilyTabProps {
    * chip bar just reflects `[scopeId]` — no client-side "first of set" logic needed here.
    */
   scopeId?: string;
+  /**
+   * #144: the member-only Invite entry point, relocated OFF the page shell and ONTO the Tree/List
+   * selector row (right-justified). The href is the SAME `/hub?tab=invite[&families=…]` target the
+   * page used to render above the tab; the server passes it only when invites are warranted (the
+   * viewer belongs to ≥1 family), so `undefined` simply renders no button.
+   */
+  inviteHref?: string;
 }
 
 export function FamilyTab({
@@ -60,6 +68,7 @@ export function FamilyTab({
   initialView = "tree",
   families = [],
   scopeId,
+  inviteHref,
 }: FamilyTabProps) {
   const [view, setView] = useState<FamilyView>(initialView);
   const router = useRouter();
@@ -153,39 +162,59 @@ export function FamilyTab({
           })}
         </div>
 
-        {view === "tree" && (
+        {/* Right side of the selector row: the tree Fit/−/+ controls (tree view only) and the
+            member-only Invite button (#144), right-justified. The Invite button shows in BOTH views. */}
+        {(view === "tree" || inviteHref) && (
           <div
-            data-testid="tree-controls"
-            style={{ display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              marginLeft: "auto",
+              flexWrap: "wrap",
+            }}
           >
-            <button type="button" onClick={() => canvasRef.current?.fit()} data-testid="tree-fit" style={controlPill}>
-              {hub.tree.fit}
-            </button>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <button
-                type="button"
-                onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
-                data-testid="tree-zoom-out"
-                aria-label={hub.tree.zoomOut}
-                disabled={scale <= ZOOM_MIN + 0.001}
-                style={zoomBtn(scale <= ZOOM_MIN + 0.001)}
+            {view === "tree" && (
+              <div
+                data-testid="tree-controls"
+                style={{ display: "inline-flex", alignItems: "center", gap: 12 }}
               >
-                <span aria-hidden="true">−</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
-                data-testid="tree-zoom-in"
-                aria-label={hub.tree.zoomIn}
-                disabled={scale >= ZOOM_MAX - 0.001}
-                style={zoomBtn(scale >= ZOOM_MAX - 0.001)}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </div>
-            <span style={{ fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-meta)" }}>
-              {hub.tree.pan}
-            </span>
+                <button type="button" onClick={() => canvasRef.current?.fit()} data-testid="tree-fit" style={controlPill}>
+                  {hub.tree.fit}
+                </button>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
+                    data-testid="tree-zoom-out"
+                    aria-label={hub.tree.zoomOut}
+                    disabled={scale <= ZOOM_MIN + 0.001}
+                    style={zoomBtn(scale <= ZOOM_MIN + 0.001)}
+                  >
+                    <span aria-hidden="true">−</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
+                    data-testid="tree-zoom-in"
+                    aria-label={hub.tree.zoomIn}
+                    disabled={scale >= ZOOM_MAX - 0.001}
+                    style={zoomBtn(scale >= ZOOM_MAX - 0.001)}
+                  >
+                    <span aria-hidden="true">+</span>
+                  </button>
+                </div>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-meta)" }}>
+                  {hub.tree.pan}
+                </span>
+              </div>
+            )}
+
+            {inviteHref ? (
+              <a className={styles.inviteButton} href={inviteHref}>
+                {hub.shell.tabInvite}
+              </a>
+            ) : null}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { StoriesControls, type SelfDraft } from "./StoriesControls";
+import { hub } from "@/app/_copy";
 
 // FamilyChips (mounted only for ≥2 families) pulls next/navigation hooks; these tests keep
 // activeFamilies at length < 2 so the chip bar never mounts, isolating the draft-reminder + Tell-a-
@@ -52,5 +53,40 @@ describe("StoriesControls", () => {
     render(<StoriesControls activeFamilies={[]} selected="all" selfDrafts={[]} />);
     const tell = screen.getByRole("link", { name: "Tell a story" });
     expect(tell.getAttribute("href")).toBe("/hub/tell");
+  });
+
+  // #138 — compact intake reminder button replaces the former full-width banner.
+  it("shows the compact intake reminder linking to /hub/about-you when intake is incomplete", () => {
+    render(
+      <StoriesControls
+        activeFamilies={[]}
+        selected="all"
+        selfDrafts={[]}
+        intakeIncomplete
+      />,
+    );
+    const intake = screen.getByRole("link", { name: hub.intake.aria });
+    expect(intake.getAttribute("href")).toBe("/hub/about-you");
+    expect(screen.getByText(hub.intake.reminderTop)).toBeTruthy();
+  });
+
+  it("omits the intake reminder when intake is complete (default)", () => {
+    render(<StoriesControls activeFamilies={[]} selected="all" selfDrafts={[]} />);
+    expect(screen.queryByRole("link", { name: hub.intake.aria })).toBeNull();
+  });
+
+  it("shows BOTH reminders beside Tell a story when drafts exist AND intake is incomplete", () => {
+    render(
+      <StoriesControls
+        activeFamilies={[]}
+        selected="all"
+        selfDrafts={drafts}
+        intakeIncomplete
+      />,
+    );
+    // draft reminder (button) + intake reminder (link) + Tell a story (link) all present.
+    expect(screen.getByText("You have 2 draft stories")).toBeTruthy();
+    expect(screen.getByRole("link", { name: hub.intake.aria })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Tell a story" })).toBeTruthy();
   });
 });
