@@ -27,6 +27,20 @@ import {
 
 const { landing } = auth;
 
+/** The primary/secondary call-to-action pair — used in both the hero and the closing section. */
+function LandingCta() {
+  return (
+    <div className={styles.ctaRow}>
+      <Link href="/sign-up" className={styles.ctaLink}>
+        <KindredButton label={landing.primaryCta} size="large" />
+      </Link>
+      <Link href="/sign-in" className={styles.ctaLink}>
+        <KindredButton label={landing.signIn} variant="secondary" size="large" />
+      </Link>
+    </div>
+  );
+}
+
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
   const mqReduced =
@@ -113,14 +127,7 @@ export function LandingExperience() {
             <span className={styles.mark}>{landing.refrain}</span>
           </h1>
           <p className={styles.lede}>{landing.lede}</p>
-          <div className={styles.ctaRow}>
-            <Link href="/sign-up" style={{ textDecoration: "none" }}>
-              <KindredButton label={landing.primaryCta} size="large" />
-            </Link>
-            <Link href="/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label={landing.signIn} variant="secondary" size="large" />
-            </Link>
-          </div>
+          <LandingCta />
           <p className={styles.narratorNote}>{landing.narratorNote}</p>
           <span className={styles.scrollCue}>
             <span className={styles.scrollCueDot} aria-hidden />
@@ -172,14 +179,7 @@ export function LandingExperience() {
         <section className={styles.closing}>
           <h2 className={styles.closingTitle}>{landing.closing.title}</h2>
           <p className={styles.closingBody}>{landing.closing.body}</p>
-          <div className={styles.ctaRow}>
-            <Link href="/sign-up" style={{ textDecoration: "none" }}>
-              <KindredButton label={landing.primaryCta} size="large" />
-            </Link>
-            <Link href="/sign-in" style={{ textDecoration: "none" }}>
-              <KindredButton label={landing.signIn} variant="secondary" size="large" />
-            </Link>
-          </div>
+          <LandingCta />
         </section>
       </main>
 
