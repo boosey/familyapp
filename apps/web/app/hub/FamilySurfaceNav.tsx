@@ -60,7 +60,7 @@ export function FamilySurfaceNav({
 
   return (
     <div className={styles.row}>
-      <nav className={hubTabStyles.subNav} aria-label={hub.shell.familySubNavAria}>
+      <nav className={styles.selectorNav} aria-label={hub.shell.familySubNavAria}>
         {items.map((item) => (
           <Link
             key={item.key}

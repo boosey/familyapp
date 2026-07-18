@@ -74,12 +74,18 @@ export function FamilyTab({
   const atMin = scale <= ZOOM_MIN + 0.001;
   const atMax = scale >= ZOOM_MAX - 0.001;
 
+  // The family-selector row carries the chip bar (>=2 families) and, in the tree view, the zoom
+  // controls. Skip it entirely when it would be empty — i.e. the List view with a self-hiding chip bar
+  // (<2 families) — so a single-family relatives list doesn't gain a stray empty gap above it.
+  const showFamilyRow = view === "tree" || families.length >= 2;
+
   return (
     <div>
       {/* Family-selector row (#159): the single-select family chips on the LEFT (ADR-0021 §Tree #48),
-          and the tree's Fit / − / + controls right-justified on the SAME row (tree view only). The row
-          renders even when the chip bar self-hides (<2 families) so the tree still gets its zoom
-          controls; `margin-left:auto` on the controls keeps them hard-right regardless. */}
+          and the tree's Fit / − / + controls right-justified on the SAME row (tree view only). In the
+          tree view the row renders even when the chip bar self-hides (<2 families) so the tree still
+          gets its zoom controls; `margin-left:auto` on the controls keeps them hard-right regardless. */}
+      {showFamilyRow && (
       <div className={styles.familyRow}>
         <FamilyChips singleSelect inline families={families} selected={[scopeId ?? familyId]} />
 
@@ -118,6 +124,7 @@ export function FamilyTab({
           </div>
         )}
       </div>
+      )}
 
       {view === "tree" ? (
         <TreeCanvas

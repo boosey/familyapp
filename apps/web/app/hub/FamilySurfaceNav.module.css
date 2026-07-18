@@ -13,6 +13,18 @@
   margin-bottom: var(--space-5);
 }
 
+/* The selector links reuse HubTabs.module.css `.subLink`/`.badge` for the item look, but NOT `.subNav`
+ * — that class carries its own `margin-bottom` (it was designed as a standalone block), which would
+ * double up with `.row`'s here and add a stray gap when the nav wraps above the Invite button. This is
+ * the same flex layout minus that margin. */
+.selectorNav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--font-ui);
+}
+
 .inviteButton {
   display: inline-flex;
   align-items: center;
