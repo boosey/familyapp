@@ -177,27 +177,31 @@
   margin: var(--space-3) 0 0;
   max-width: 44ch;
 }
+/* Pinned to the bottom edge of the first viewport so it reads as "there's more below". */
 .scrollCue {
-  margin-top: var(--space-6);
+  position: absolute;
+  left: 50%;
+  bottom: clamp(1.25rem, 4vh, 2.5rem);
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: var(--tracking-mono);
   text-transform: uppercase;
   color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
-.scrollCueDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
+.scrollChevron {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
   animation: landing-bob var(--dur-pulse, 2.4s) var(--ease-quiet) infinite;
 }
 @keyframes landing-bob {
-  0%, 100% { transform: translateY(0); opacity: 1; }
-  50% { transform: translateY(4px); opacity: 0.5; }
+  0%, 100% { transform: translateY(-3px); opacity: 0.55; }
+  50% { transform: translateY(4px); opacity: 1; }
 }
 
 /* ---- how it works: keepsake step cards ---- */
@@ -395,5 +399,5 @@
   .hero { opacity: 1; transform: none; }
   .stepCard { transform: none; }
   .progressRail { display: none; }
-  .scrollCueDot { animation: none; }
+  .scrollChevron { animation: none; }
 }

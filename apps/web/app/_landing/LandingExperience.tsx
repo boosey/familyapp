@@ -130,8 +130,19 @@ export function LandingExperience() {
           <LandingCta />
           <p className={styles.narratorNote}>{landing.narratorNote}</p>
           <span className={styles.scrollCue}>
-            <span className={styles.scrollCueDot} aria-hidden />
             {landing.scrollCue}
+            <svg
+              className={styles.scrollChevron}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M5 8l7 7 7-7" />
+            </svg>
           </span>
         </section>
 
