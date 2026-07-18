@@ -175,6 +175,10 @@ export const hub = {
     phoneLabelOptional: "(optional)",
     phonePlaceholder: "+1 555 123 0000",
     phoneInvalid: "That phone number doesn't look right — check the format and try again.",
+    // #105 — shown when the generous invite-send throttle refuses an invite (bulk-paste accident
+    // guard). Plain-language: no numbers, no "rate limit" jargon.
+    throttled:
+      "That's a lot of invitations in a short time. Take a breather and try again a little later — if you're inviting a big group, spread it out over the day.",
     smsConsentLabel: "OK to text them the invite link",
     // "Relationship" and "(optional)" are split so the span styling is preserved in JSX.
     relationshipLabel: "Relationship",

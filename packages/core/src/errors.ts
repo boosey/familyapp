@@ -17,3 +17,16 @@ export class InvariantViolation extends Error {
     this.name = "InvariantViolation";
   }
 }
+
+/**
+ * Raised when an abuse/cost guard refuses an otherwise-valid operation (issue #105) — e.g. an
+ * inviter blowing past the generous invite-send ceiling. Distinct from InvariantViolation so the
+ * web layer can map it to a friendly "slow down" message rather than a generic failure.
+ */
+export class ThrottleError extends Error {
+  readonly code = "THROTTLED";
+  constructor(message: string) {
+    super(message);
+    this.name = "ThrottleError";
+  }
+}
