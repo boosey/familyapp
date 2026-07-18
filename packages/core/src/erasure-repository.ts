@@ -19,6 +19,8 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   familyPhotoFamilies,
   media,
+  photoPlaces,
+  places,
   proseRevisions,
   stories,
   storyImages,
@@ -590,8 +592,59 @@ export async function eraseAccount(
       );
       if (hasKinship) continue; // leave the family standing; its edges must survive.
 
-      // Family-scoped leftovers (FK order). story_families is already gone (story cascade); asks'
-      // ask_families likewise. Clear the remaining family-scoped rows before the family row.
+      // Every column that FKs `families.id` (enumerated from schema.ts `=> families.id`) MUST be
+      // cleared/nulled BEFORE `DELETE families`, or the delete FK-fails and the whole tx rolls back
+      // (real accounts then cannot be erased). Classification for THIS doomed family:
+      //   - memberships.family_id            (NN) → DELETE ALL rows of the family (see below).
+      //   - places.family_id                 (NN) → DELETE child photo_places, then the places.
+      //   - photo_places.place_id            (→ places.id, no cascade) → deleted just before places.
+      //   - family_photo_families.family_id  (NN) → DELETE the photo↔family link rows.
+      //   - stories.originating_family_id    (nullable) → NULL it on any SURVIVING (foreign) story.
+      //   - story_families.family_id         (NN) → DELETE the family's share rows. The erasing
+      //       person's OWN shares went with their story cascade (a), but a FOREIGN retained person's
+      //       story can be shared INTO this family (blocker #2 is owner-scoped, so it never fires); its
+      //       share row must be cleared here or DELETE families FK-fails (symmetric to originating_*).
+      //   - ask_families.family_id           (NN) → deleted below (asks' addressing).
+      //   - invitations.family_id            (NN) → deleted below.
+      //   - join_requests.family_id          (NN) → deleted below.
+      //   - link_sessions.family_id          (NN) → deleted below.
+      //   - kinship_assertions.family_id     (NN, append-only) → handled by the `hasKinship` guard
+      //   - kinship_subject_hides.family_id  (NN, append-only) → above (family left standing if any).
+
+      // memberships: DELETE ALL of the doomed family's memberships, not just the erasing person's
+      // (their own already went in (d)). Blocker #1 already refused if any OTHER *active* member
+      // exists; a paused/ended other member's membership dies with the family being destroyed.
+      await tx.delete(memberships).where(eq(memberships.familyId, fam.id));
+
+      // places + photo_places: photo_places.place_id → places.id has NO cascade, so delete the
+      // place tags for this family's places FIRST, then the places. (Typed subselect, not raw SQL.)
+      await tx.delete(photoPlaces).where(
+        inArray(
+          photoPlaces.placeId,
+          tx.select({ id: places.id }).from(places).where(eq(places.familyId, fam.id)),
+        ),
+      );
+      await tx.delete(places).where(eq(places.familyId, fam.id));
+
+      // family_photo_families: the photo↔family placement link (the photo itself is retained via its
+      // contributor). Just the link row for this family.
+      await tx.delete(familyPhotoFamilies).where(eq(familyPhotoFamilies.familyId, fam.id));
+
+      // stories.originating_family_id (NULLABLE): the erasing person's OWN stories are already gone
+      // (own-story cascade in (a)); only foreign RETAINED stories can still carry this family as their
+      // capture context. NULL it — never delete those stories. Ordered AFTER the own-story cascade.
+      await tx
+        .update(stories)
+        .set({ originatingFamilyId: null })
+        .where(eq(stories.originatingFamilyId, fam.id));
+
+      // story_families: the erasing person's OWN shares are already gone (own-story cascade in (a)),
+      // but a FOREIGN retained person's story can be shared into this family — clear those share rows
+      // (the foreign story itself survives, merely detached from the doomed family).
+      await tx.delete(storyFamilies).where(eq(storyFamilies.familyId, fam.id));
+
+      // Family-scoped leftovers (FK order). asks' ask_families is torn down likewise. Clear the
+      // remaining family-scoped rows before the family row.
       await tx.delete(askFamilies).where(eq(askFamilies.familyId, fam.id));
       await tx.delete(invitations).where(eq(invitations.familyId, fam.id));
       await tx.delete(joinRequests).where(eq(joinRequests.familyId, fam.id));

@@ -5,6 +5,8 @@ import {
   familyPhotoFamilies,
   familyPhotos,
   media,
+  photoPlaces,
+  places,
   stories,
   storyRecordings,
 } from "@chronicle/db/content";
@@ -360,6 +362,169 @@ describe("eraseAccount — blocker: an owned voice caption is on a photo shared 
     expect(result.blockers.some((b) => b.includes(cap!.id))).toBe(true);
     expect(await db.select().from(voiceCaptions).where(eq(voiceCaptions.id, cap!.id))).toHaveLength(1);
     expect(await db.select().from(persons).where(eq(persons.id, person.id))).toHaveLength(1);
+  });
+});
+
+describe("eraseAccount — sole-family teardown: places + photo_places (FK, no cascade)", () => {
+  it("deletes the family's places (and their photo_places tags) so DELETE families succeeds", async () => {
+    const { person } = await makeAccountPerson("Cartographer");
+    const family = await makeFamily(person.id);
+    // A photo contributed by ANOTHER retained person (so it never forces the erasing person to
+    // demote), placed into the doomed family and place-tagged. The place lives in the doomed family.
+    const contributor = await makePerson("Contributor");
+    const [photo] = await db
+      .insert(familyPhotos)
+      .values({
+        contributorPersonId: contributor.id,
+        source: "upload",
+        storageKey: `family-photos/${crypto.randomUUID()}`,
+      })
+      .returning();
+    await db.insert(familyPhotoFamilies).values({ photoId: photo!.id, familyId: family.id });
+    const [place] = await db
+      .insert(places)
+      .values({ familyId: family.id, name: "Cherry Street", createdByPersonId: contributor.id })
+      .returning();
+    const [pp] = await db
+      .insert(photoPlaces)
+      .values({ photoId: photo!.id, placeId: place!.id, taggedByPersonId: contributor.id })
+      .returning();
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    // Family + place + photo_places tag are all gone (no FK violation on DELETE families).
+    expect(await db.select().from(families).where(eq(families.id, family.id))).toHaveLength(0);
+    expect(await db.select().from(places).where(eq(places.id, place!.id))).toHaveLength(0);
+    expect(await db.select().from(photoPlaces).where(eq(photoPlaces.id, pp!.id))).toHaveLength(0);
+  });
+});
+
+describe("eraseAccount — sole-family teardown: family_photo_families placement (FK, no cascade)", () => {
+  it("deletes the family↔photo link so DELETE families succeeds", async () => {
+    const { person } = await makeAccountPerson("Placer");
+    const family = await makeFamily(person.id);
+    // Photo contributed by ANOTHER retained person so the erasing person hard-deletes; the placement
+    // link into the doomed family is the FK under test.
+    const contributor = await makePerson("Contributor");
+    const [photo] = await db
+      .insert(familyPhotos)
+      .values({
+        contributorPersonId: contributor.id,
+        source: "upload",
+        storageKey: `family-photos/${crypto.randomUUID()}`,
+      })
+      .returning();
+    await db.insert(familyPhotoFamilies).values({ photoId: photo!.id, familyId: family.id });
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    expect(await db.select().from(families).where(eq(families.id, family.id))).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(familyPhotoFamilies)
+        .where(eq(familyPhotoFamilies.familyId, family.id)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("eraseAccount — sole-family teardown: another person's story originating_family_id", () => {
+  it("NULLs originating_family_id on a SURVIVING foreign story (never deletes it) and succeeds", async () => {
+    const { person } = await makeAccountPerson("Founder");
+    const family = await makeFamily(person.id);
+    // ANOTHER person's PRIVATE story whose capture context (originating_family_id) is the doomed
+    // family, but which is NOT shared to it (so it survives and must not be deleted).
+    const other = await makePerson("Chronicler");
+    const [foreignStory] = await db
+      .insert(stories)
+      .values({
+        ownerPersonId: other.id,
+        kind: "text",
+        state: "draft",
+        audienceTier: "private",
+        originatingFamilyId: family.id,
+      })
+      .returning();
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    // The doomed family is gone.
+    expect(await db.select().from(families).where(eq(families.id, family.id))).toHaveLength(0);
+    // The foreign story SURVIVES, with originating_family_id nulled out.
+    const [survivor] = await db
+      .select()
+      .from(stories)
+      .where(eq(stories.id, foreignStory!.id));
+    expect(survivor).toBeDefined();
+    expect(survivor!.originatingFamilyId).toBeNull();
+  });
+});
+
+describe("eraseAccount — sole-family teardown: another person's story shared via story_families", () => {
+  it("detaches a foreign SURVIVING story from the doomed family (deletes its story_families row) and succeeds", async () => {
+    const { person } = await makeAccountPerson("Host");
+    const family = await makeFamily(person.id);
+    // ANOTHER retained person owns a story that is SHARED INTO the doomed family (story_families).
+    // The owner is NOT an active member of the family (sharing ≠ membership), so blocker #1 does not
+    // fire; blocker #2 only inspects the ERASING person's own stories, so it does not fire either.
+    const other = await makePerson("Guest");
+    const [foreignStory] = await db
+      .insert(stories)
+      .values({ ownerPersonId: other.id, kind: "text", state: "shared", audienceTier: "family" })
+      .returning();
+    const [sf] = await db
+      .insert(storyFamilies)
+      .values({ storyId: foreignStory!.id, familyId: family.id })
+      .returning();
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    // The doomed family is gone (no story_families FK violation).
+    expect(await db.select().from(families).where(eq(families.id, family.id))).toHaveLength(0);
+    // The foreign story SURVIVES, detached from the doomed family (its story_families row is gone).
+    expect(await db.select().from(stories).where(eq(stories.id, foreignStory!.id))).toHaveLength(1);
+    expect(
+      await db.select().from(storyFamilies).where(eq(storyFamilies.id, sf!.id)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("eraseAccount — sole-family teardown: another person's non-active membership", () => {
+  it("deletes a paused OTHER member's membership with the family, leaving that person untouched", async () => {
+    const { person } = await makeAccountPerson("Steward");
+    const family = await makeFamily(person.id);
+    // Another person whose membership in the doomed family is PAUSED (so it is NOT a blocker), but
+    // whose NOT-NULL membership row would still FK-block DELETE families if left behind.
+    const other = await makePerson("PausedMember");
+    const [pausedMembership] = await db
+      .insert(memberships)
+      .values({ personId: other.id, familyId: family.id, role: "member", status: "paused" })
+      .returning();
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    // Family gone, the paused membership gone with it...
+    expect(await db.select().from(families).where(eq(families.id, family.id))).toHaveLength(0);
+    expect(
+      await db.select().from(memberships).where(eq(memberships.id, pausedMembership!.id)),
+    ).toHaveLength(0);
+    // ...but the OTHER person themselves is untouched.
+    expect(await db.select().from(persons).where(eq(persons.id, other.id))).toHaveLength(1);
   });
 });
 
