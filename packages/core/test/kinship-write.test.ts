@@ -14,6 +14,7 @@ import {
   addMembership,
   addRelative,
   deriveKin,
+  linkExistingMember,
   resolveKinshipProjection,
   type AuthContext,
   type KinRelation,
@@ -720,5 +721,231 @@ describe("addRelative — optional anchorPersonId", () => {
       (e) => e.personAId === outsider.id || e.personBId === outsider.id,
     );
     expect(touchesOutsider).toBe(false);
+  });
+});
+
+/** Count all persons rows — used to prove `linkExistingMember` mints NO duplicate for the member. */
+async function personCount(): Promise<number> {
+  const rows = await db.select({ id: persons.id }).from(persons);
+  return rows.length;
+}
+
+describe("linkExistingMember (#161)", () => {
+  it("links an existing member as a parent of the anchor — creates the edge, mints NO duplicate person", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const before = await personCount();
+
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "parent",
+      existingPersonId: otherPersonId, // `other` becomes a parent of `me` (the default anchor)
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(1);
+
+    // No new Person minted for the linked member (a direct parent link mints no bridge either).
+    expect(await personCount()).toBe(before);
+
+    // The edge places `other` as a parent of `me`.
+    const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+    const edge = edges.find(
+      (e) => e.edgeType === "parent_of" && e.personAId === otherPersonId && e.personBId === mePersonId,
+    );
+    expect(edge).toBeDefined();
+    expect(deriveKin(edges, mePersonId).find((k) => k.personId === otherPersonId)?.relation).toBe("parent");
+  });
+
+  it("links an existing member as a partner of a chosen anchor", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "partner",
+      anchorPersonId: mePersonId,
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+    expect(deriveKin(edges, mePersonId).find((k) => k.personId === otherPersonId)?.relation).toBe("partner");
+  });
+
+  it("links an existing member as a CHILD of the anchor — single parent_of edge, no member dupe", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const before = await personCount();
+
+    // `other` becomes a child of `me` (the default anchor).
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "child",
+      anchorPersonId: mePersonId,
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(1);
+    // No duplicate person minted for the linked member.
+    expect(await personCount()).toBe(before);
+
+    const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+    const edge = edges.find(
+      (e) => e.edgeType === "parent_of" && e.personAId === mePersonId && e.personBId === otherPersonId,
+    );
+    expect(edge).toBeDefined();
+    expect(deriveKin(edges, mePersonId).find((k) => k.personId === otherPersonId)?.relation).toBe("child");
+  });
+
+  it("links a child with a distinct valid co-parent — BOTH parent_of edges, no member dupe", async () => {
+    // Three members: me (anchor), coParent, and the child being linked.
+    const me = await makePerson(db, "Me");
+    const coParent = await makePerson(db, "CoParent");
+    const kid = await makePerson(db, "Kid");
+    const fam = await makeFamily(db, "Esposito", me.id);
+    await addMembership(db, { personId: me.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: coParent.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: kid.id, familyId: fam.id, role: "member" });
+    const ctx = account(me.id);
+    const before = (await db.select({ id: persons.id }).from(persons)).length;
+
+    const res = await linkExistingMember(db, ctx, {
+      familyId: fam.id,
+      relation: "child",
+      anchorPersonId: me.id,
+      existingPersonId: kid.id,
+      coParentPersonId: coParent.id,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(2);
+    // No duplicate person minted for the linked member (nor the co-parent).
+    expect((await db.select({ id: persons.id }).from(persons)).length).toBe(before);
+
+    const { edges } = await resolveKinshipProjection(db, ctx, fam.id);
+    const parentsOfKid = edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === kid.id)
+      .map((e) => e.personAId)
+      .sort();
+    expect(parentsOfKid).toEqual([me.id, coParent.id].sort());
+  });
+
+  it("BLOCKING: rejects coParentPersonId === existingPersonId (would make the child its own parent)", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const before = await personCount();
+
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "child",
+      anchorPersonId: mePersonId,
+      existingPersonId: otherPersonId,
+      coParentPersonId: otherPersonId, // the child cannot be its own co-parent
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/co-?parent|self/i);
+
+    // NOTHING written — no self-loop parent_of(X,X) row, no partial single-parent edge.
+    const rows = await db.select().from(kinshipAssertions);
+    expect(rows).toHaveLength(0);
+    // And no person minted.
+    expect(await personCount()).toBe(before);
+  });
+
+  it("sibling link mints the bridge couple but NO duplicate of the linked member", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const before = await personCount();
+
+    // Link `other` as a sibling of `me` (parentless anchor → mints TWO placeholder parents).
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "sibling",
+      anchorPersonId: mePersonId,
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.bridgePersonIds).toHaveLength(2); // two placeholder parents minted
+
+    // Two bridges minted, but NOT a duplicate of `other`.
+    expect(await personCount()).toBe(before + 2);
+
+    const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+    expect(deriveKin(edges, mePersonId).find((k) => k.personId === otherPersonId)?.relation).toBe("sibling");
+  });
+
+  it("grandparent link tops up a bridge parent when the anchor has none, no member dupe", async () => {
+    const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
+    const before = await personCount();
+
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "grandparent",
+      anchorPersonId: mePersonId,
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.bridgePersonIds).toHaveLength(1); // one anonymous bridge parent
+    expect(await personCount()).toBe(before + 1);
+
+    const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+    expect(deriveKin(edges, mePersonId).find((k) => k.personId === otherPersonId)?.relation).toBe("grandparent");
+  });
+
+  it("denies an anonymous caller", async () => {
+    const { db, familyId, otherPersonId } = await seedTwoMemberFamily();
+    const res = await linkExistingMember(db, { kind: "anonymous" }, {
+      familyId,
+      relation: "parent",
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/not signed in/i);
+  });
+
+  it("denies when the actor is not a member of the family", async () => {
+    const { db, familyId, otherPersonId } = await seedTwoMemberFamily();
+    const stranger = await makePerson(db, "Stranger");
+    const res = await linkExistingMember(db, account(stranger.id), {
+      familyId,
+      relation: "parent",
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/not a member/i);
+  });
+
+  it("denies when existingPersonId is not an active member of the family", async () => {
+    const { db, ctx, familyId } = await seedTwoMemberFamily();
+    // A person that exists but is not a member of this family.
+    const outsider = await makePerson(db, "Outsider");
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "parent",
+      existingPersonId: outsider.id,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/not an active member/i);
+    // Nothing written.
+    const rows = await db.select().from(kinshipAssertions);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("denies a self-link (existingPersonId === anchorPersonId)", async () => {
+    const { db, ctx, familyId, mePersonId } = await seedTwoMemberFamily();
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "partner",
+      anchorPersonId: mePersonId,
+      existingPersonId: mePersonId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/same person|self/i);
+  });
+
+  it("denies when the anchor is not attachable in this family", async () => {
+    const { db, ctx, familyId, otherPersonId } = await seedTwoMemberFamily();
+    // An anchor that is neither a member nor visible in the projection.
+    const strangerAnchor = await makePerson(db, "StrangerAnchor");
+    const res = await linkExistingMember(db, ctx, {
+      familyId,
+      relation: "parent",
+      anchorPersonId: strangerAnchor.id,
+      existingPersonId: otherPersonId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/anchor/i);
   });
 });

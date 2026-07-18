@@ -12,8 +12,10 @@ import {
   addRelative,
   deriveKin,
   listMyKin,
+  listUnplacedMembers,
   normalizeEdgeEndpoints,
   resolveKinshipProjection,
+  setMemberNonFamily,
   type KinRelation,
   type ResolvedKinshipEdge,
 } from "../src/index";
@@ -322,6 +324,72 @@ describe("listMyKin — read composition", () => {
     await expect(listMyKin(db, account(stranger.id), fam.id)).rejects.toBeInstanceOf(
       AuthorizationError,
     );
+  });
+});
+
+describe("listUnplacedMembers (#161)", () => {
+  it("returns an active member who is an endpoint of no visible edge", async () => {
+    // `member` is the steward/reader; add a second member with no kinship edge.
+    const { member, fam } = await familyWithMember("Reader");
+    const lonely = await makePerson(db, "Lonely");
+    await addMembership(db, { personId: lonely.id, familyId: fam.id, role: "member" });
+
+    const unplaced = await listUnplacedMembers(db, account(member.id), fam.id);
+    const ids = unplaced.map((u) => u.personId).sort();
+    // Both `member` and `lonely` touch no edge → both unplaced.
+    expect(ids).toEqual([member.id, lonely.id].sort());
+    const lonelyRow = unplaced.find((u) => u.personId === lonely.id);
+    expect(lonelyRow).toMatchObject({ displayName: "Lonely", role: "member" });
+  });
+
+  it("excludes a member once they are an endpoint of a visible edge", async () => {
+    const { member, fam } = await familyWithMember("Reader");
+    const other = await makePerson(db, "Other");
+    await addMembership(db, { personId: other.id, familyId: fam.id, role: "member" });
+    // Place `other` by asserting a parent_of edge with `other` as the child.
+    const parent = await makePerson(db, "TheirParent");
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: parent.id, b: other.id, actor: member.id });
+
+    const unplaced = await listUnplacedMembers(db, account(member.id), fam.id);
+    const ids = unplaced.map((u) => u.personId);
+    expect(ids).not.toContain(other.id); // now placed
+    expect(ids).toContain(member.id); // still unplaced
+  });
+
+  it("excludes a member flagged non_family via setMemberNonFamily", async () => {
+    const { member, fam } = await familyWithMember("Reader");
+    const caregiver = await makePerson(db, "Caregiver");
+    await addMembership(db, { personId: caregiver.id, familyId: fam.id, role: "member" });
+
+    await setMemberNonFamily(db, account(member.id), {
+      familyId: fam.id,
+      personId: caregiver.id,
+      nonFamily: true,
+    });
+
+    const unplaced = await listUnplacedMembers(db, account(member.id), fam.id);
+    expect(unplaced.map((u) => u.personId)).not.toContain(caregiver.id);
+  });
+
+  it("a DENIED-only edge does not place a member (still unplaced)", async () => {
+    const { member, fam } = await familyWithMember("Reader");
+    const other = await makePerson(db, "Other");
+    await addMembership(db, { personId: other.id, familyId: fam.id, role: "member" });
+    const parent = await makePerson(db, "TheirParent");
+    // Assert then deny — the edge's latest state is denied, so it is NOT visible → not placed.
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: parent.id, b: other.id, actor: member.id });
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: parent.id, b: other.id, actor: member.id, state: "denied" });
+
+    const unplaced = await listUnplacedMembers(db, account(member.id), fam.id);
+    expect(unplaced.map((u) => u.personId)).toContain(other.id);
+  });
+
+  it("rejects a non-member (auth flows through resolveKinshipProjection)", async () => {
+    const { fam } = await familyWithMember("Reader");
+    const stranger = await makePerson(db, "Stranger");
+    await expect(
+      listUnplacedMembers(db, account(stranger.id), fam.id),
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 

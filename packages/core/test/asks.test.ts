@@ -19,7 +19,7 @@ import {
   listAsksByAsker,
   listPendingAsksForNarrator,
 } from "../src/index";
-import { addMembership, endMembership, makeFamily, makePerson } from "./helpers";
+import { addMembership, forceEndMembership, makeFamily, makePerson } from "./helpers";
 
 let db: Database;
 beforeEach(async () => {
@@ -102,7 +102,7 @@ describe("createAsk — co-membership authorization", () => {
     const fam = await makeFamily(db, "Boudreaux", narrator.id);
     await addMembership(db, narrator.id, fam.id);
     const m = await addMembership(db, exSpouse.id, fam.id);
-    await endMembership(db, m.id);
+    await forceEndMembership(db, m.id);
     await expect(
       createAsk(
         db,
@@ -386,7 +386,7 @@ describe("createAsk — ADR-0006 invitation floor", () => {
           eq(memberships.familyId, fam.id),
         ),
       );
-    await endMembership(db, m!.id);
+    await forceEndMembership(db, m!.id);
 
     await expect(
       createAsk(

@@ -450,6 +450,12 @@ export const memberships = pgTable(
       .references(() => families.id),
     role: membershipRoleEnum("role").notNull().default("member"),
     status: membershipStatusEnum("status").notNull().default("active"),
+    // #161 (ADR-0023): the Family tab renders the kinship GRAPH, so an active member with no kinship
+    // edge is invisible ("unplaced"). This per-(person, family) flag lets a member be curated OUT of
+    // the "unplaced" set — marking that they belong to the family membership but are not (yet) meant
+    // to appear as a tree node ("Other", e.g. a caregiver). `true` ⇒ excluded from listUnplacedMembers.
+    // Reversible (setMemberNonFamily). NOT a synonym for "not family" — it is purely a placement hint.
+    nonFamily: boolean("non_family").notNull().default(false),
     startedAt: timestamp("started_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

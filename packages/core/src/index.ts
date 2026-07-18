@@ -174,8 +174,12 @@ export {
   isActiveMember,
   getStewardPersonId,
   listMembersOfFamily,
+  setMemberNonFamily,
+  endMembership,
   type ActiveFamilyView,
   type FamilyMemberView,
+  type SetMemberNonFamilyInput,
+  type EndMembershipInput,
 } from "./memberships";
 export {
   createInvitation,
@@ -208,6 +212,7 @@ export {
   normalizeEdgeEndpoints,
   deriveKin,
   listMyKin,
+  listUnplacedMembers,
   listGovernableKinEdges,
   resolveKinshipTree,
   inviteStatusFor,
@@ -218,6 +223,7 @@ export {
   type KinRelation,
   type DerivedKin,
   type KinListEntry,
+  type UnplacedMember,
   type GovernableKinEdge,
   type TreeWindow,
   type TreeNode,
@@ -225,6 +231,7 @@ export {
 } from "./kinship-repository";
 export {
   addRelative,
+  linkExistingMember,
   affirmEdge,
   denyEdge,
   correctEdge,
@@ -236,6 +243,8 @@ export {
   type AddRelativeInput,
   type AddRelativeResult,
   type AddRelativeRelation,
+  type LinkExistingMemberInput,
+  type LinkExistingMemberResult,
   type EdgeRef,
   type KinshipEdgeActionResult,
   type CorrectEdgeInput,

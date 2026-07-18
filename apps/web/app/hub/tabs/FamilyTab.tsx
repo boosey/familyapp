@@ -15,13 +15,14 @@
  * (`?families=`) with the tree's `Fit / − / +` controls right-justified on the same row (tree view
  * only). Camera state (pan/scale) is lifted here so those controls can drive the canvas.
  */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { KinListEntry, KinshipTreeData } from "@chronicle/core";
+import type { KinListEntry, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
+import { UnplacedMembers, type AnchorOption } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
 import styles from "./FamilyTab.module.css";
 
@@ -37,6 +38,13 @@ export interface FamilyTabProps {
   kin: KinListEntry[];
   /** Which view to render — resolved by the page shell from `?view=` (#158). Defaults to the tree. */
   view?: FamilyView;
+  /**
+   * #161/ADR-0023 — active members placed in NO visible kinship edge. Surfaced as a "not yet
+   * connected" tray (Tree view) and section (List view) with place/non-family/remove actions.
+   */
+  unplaced?: UnplacedMember[];
+  /** Steward-only: gates the destructive "remove member" action in the unplaced surface. */
+  viewerIsSteward?: boolean;
   /**
    * The viewer's active families (chip data for the shared `?families=` filter, ADR-0021 §Tree #48).
    * The server gates the MOUNT on `families.length >= 2`, so this only carries chips when a chip bar is
@@ -59,10 +67,35 @@ export function FamilyTab({
   tree,
   kin,
   view = "tree",
+  unplaced = [],
+  viewerIsSteward = false,
   families = [],
   scopeId,
 }: FamilyTabProps) {
   const router = useRouter();
+
+  // Anchors an unplaced member can be linked to = the persons already drawn in the tree (they're the
+  // only ones visible to attach to). Named from the tree's loaded nodes; nameless nodes fall back to a
+  // neutral label. Recomputed only when the node set changes.
+  const anchorOptions = useMemo<AnchorOption[]>(
+    () =>
+      tree.nodes.map((n) => ({
+        id: n.personId,
+        name: n.displayName?.trim() || hub.kin.edgeUnknownPerson,
+      })),
+    [tree.nodes],
+  );
+
+  const unplacedPanel =
+    unplaced.length > 0 ? (
+      <UnplacedMembers
+        familyId={familyId}
+        members={unplaced}
+        anchors={anchorOptions}
+        viewerIsSteward={viewerIsSteward}
+        variant={view === "tree" ? "tray" : "section"}
+      />
+    ) : null;
 
   // CAMERA state lifted out of TreeCanvas (§5) so the Fit/−/+ controls can live in the family-selector
   // row. TreeCanvas keeps `fit()`/`center()` (they need layout bounds + the viewport ref) behind an
@@ -127,23 +160,32 @@ export function FamilyTab({
       )}
 
       {view === "tree" ? (
-        <TreeCanvas
-          ref={canvasRef}
-          familyId={familyId}
-          focusPersonId={focusPersonId}
-          viewerPersonId={viewerPersonId}
-          initial={tree}
-          pan={pan}
-          onPanChange={(updater) => setPan(updater)}
-          scale={scale}
-          onScaleChange={(updater) => setScale(updater)}
-          // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
-          // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
-          // its DEFAULT so it stays mountable without a router in unit tests.
-          navigate={(url) => router.push(url)}
-        />
+        <>
+          <TreeCanvas
+            ref={canvasRef}
+            familyId={familyId}
+            focusPersonId={focusPersonId}
+            viewerPersonId={viewerPersonId}
+            initial={tree}
+            pan={pan}
+            onPanChange={(updater) => setPan(updater)}
+            scale={scale}
+            onScaleChange={(updater) => setScale(updater)}
+            // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
+            // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
+            // its DEFAULT so it stays mountable without a router in unit tests.
+            navigate={(url) => router.push(url)}
+          />
+          {/* #161: unplaced members as a "not yet connected" tray BELOW the canvas — a separate strip
+              at the margin, deliberately OUTSIDE computeTreeLayout / the pan-zoom layer so it never
+              destabilizes the pedigree layout engine. */}
+          {unplacedPanel}
+        </>
       ) : (
-        <KinList kin={kin} />
+        <>
+          <KinList kin={kin} />
+          {unplacedPanel}
+        </>
       )}
     </div>
   );
