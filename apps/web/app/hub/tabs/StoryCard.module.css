@@ -106,10 +106,11 @@
 }
 
 .title {
-  font-family: var(--font-story);
-  font-weight: 500;
+  font-family: var(--font-display); /* Playful mockup Direction D: heading-heavy card titles */
+  font-weight: 800;
   font-size: var(--text-story-lg);
   line-height: var(--leading-snug);
+  letter-spacing: -0.005em;
   color: var(--text-body);
   margin: 10px 0 6px;
 }

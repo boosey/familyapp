@@ -36,9 +36,10 @@
   background: var(--surface-sunken);
 }
 
+/* Playful mockup Direction D: active tab is a SOLID coral pill (white ink), not accent-soft. */
 .tab[aria-selected="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--accent);
+  color: var(--accent-on);
   font-weight: 600;
 }
 

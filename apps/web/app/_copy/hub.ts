@@ -58,15 +58,22 @@ export const hub = {
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
+    // Playful mockup (Direction D): mono eyebrow above the family name in the hub header. `n` is the
+    // number of active families the viewer chronicles across; singular/plural handled.
+    familyEyebrow: (n: number) =>
+      `YOUR FAMILY · ${n} CHRONICLING`,
   },
   stories: {
     untitled: "Untitled",
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
     // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
-    // for ask-less drafts still in review.
-    tellTitle: "Tell a story",
-    tellBlurb: "Something you want to remember — start it whenever it comes to you.",
+    // for ask-less drafts still in review. Playful mockup (Direction D): the invite card leads with a
+    // QUESTION heading, a warm reassurance body, and a pill action.
+    tellTitle: "Something you want to remember?",
+    tellBlurb:
+      "Start it whenever it comes to you — a sentence is enough. We'll help you shape the rest.",
+    tellAction: "Tell a story →",
     resumeHeading: "Finish what you started",
     resume: "Finish",
     // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest

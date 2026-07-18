@@ -44,6 +44,8 @@
   --tape-bg: rgba(239, 122, 84, 0.30);
   --tilt-shadow: rgba(216, 95, 57, 0.22);
   --highlighter: #FFD9A1;                        /* amber marker wash behind titles (mockup Direction D) */
+  /* "Tell a story" invite-card fill — the mockup's warm coral→amber gradient (Direction D .invite). */
+  --tell-card-bg: linear-gradient(135deg, #EF7A54, #E8A02A);
   /* Sticker/candy tags — candy inks from the approved mockup (brighter than the earlier AA-tuned set). */
   --sticker-coral-bg: #FFE3D3;  --sticker-coral-ink: #C95A33;
   --sticker-sky-bg:   #DCEBF7;  --sticker-sky-ink:   #356A92;

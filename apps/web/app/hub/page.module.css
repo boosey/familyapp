@@ -33,13 +33,23 @@
   flex-wrap: wrap;
 }
 
+/* Mono eyebrow above the family name (Playful mockup Direction D .mast eyebrow). */
+.familyEyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem; /* ~11px */
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+
 .familyName {
   font-family: var(--font-display); /* was --font-story; Playful splits display from read */
   font-size: clamp(1.75rem, 4vw, var(--text-display));
-  font-weight: 400;
+  font-weight: 800; /* Playful mockup Direction D: heavy display heading */
   color: var(--text-body);
   margin: 0;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.02em;
 }
 
 .tabsRow {
