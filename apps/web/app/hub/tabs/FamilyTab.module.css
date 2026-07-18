@@ -1,29 +1,68 @@
-/* FamilyTab — the Invite affordance that now rides the Tree/List selector row (#144), right-justified.
- * Ported verbatim from page.module.css's former `.inviteButton` (the button relocated OFF the page
- * shell and ONTO this row) so the coral-pill look + hover + focus-visible outline are preserved. */
+/* FamilyTab — the family-selector row (#159): the shared single-select FamilyChips on the left with the
+ * tree's Fit / − / + controls right-justified on the same row (tree view only). CSS Modules + tokens
+ * (per _skins/CSS-MODULES.md) so `[data-skin]` overrides aren't out-specified by inline styles. The old
+ * `.inviteButton` moved to FamilySurfaceNav.module.css when the Invite entry point relocated onto the
+ * shared selector row. */
 
-.inviteButton {
+.familyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.zoomControls {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--accent-on);
+  gap: 12px;
+  /* Keep the controls hard-right even when the chip bar self-hides (<2 families) or wraps. */
+  margin-left: auto;
+}
+
+.zoomPair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlPill {
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
-  font-weight: 700;
-  text-decoration: none;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border-strong);
+  background: transparent;
+  color: var(--text-body);
   min-height: var(--touch-min);
-  box-shadow: var(--shadow-sm);
-  transition: background var(--dur-fade) var(--ease-quiet);
+  cursor: pointer;
 }
 
-.inviteButton:hover {
-  background: var(--accent-strong);
-}
-
-.inviteButton:focus-visible {
+.controlPill:focus-visible,
+.zoomBtn:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline-offset: 2px;
+}
+
+.zoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: var(--border-width) solid var(--border-strong);
+  background: transparent;
+  color: var(--text-body);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.zoomBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

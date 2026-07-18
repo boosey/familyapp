@@ -247,8 +247,12 @@ export const hub = {
   requests: {
     signedOut: "Sign in to review join requests.",
     title: "Requests to join",
+    // #160: this sentence is no longer an inline paragraph — it's revealed by the circled-i info icon
+    // beside the Requests heading (see `infoAria` for that icon's accessible name).
     intro:
       "As steward, you approve everyone who joins. Nothing is shared with a requester until you say yes.",
+    // Accessible name for the circled-i info icon that reveals `intro` as a tooltip (#160).
+    infoAria: "Why you approve requests",
     empty: "No requests waiting right now.",
     // Accessible name for a family chip's pending-request count badge (#140).
     pendingCountAria: (count: number) => `${count} pending`,
@@ -938,9 +942,8 @@ export const hub = {
     viewSelectorAria: "Choose family view",
     viewTree: "Tree",
     viewList: "List",
-    // Canvas controls.
+    // Canvas controls. (#159 removed the "Drag to pan" hint — drag still works, the label was noise.)
     fit: "Fit",
-    pan: "Drag to pan",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     // Add-a-relative modal (opened from the tree's + and kebab).

@@ -159,6 +159,23 @@ describe("FamilyChips", () => {
       );
       expect(container.firstChild).toBeNull();
     });
+
+    // #140: the Requests family selector badges each chip with that family's pending-request count.
+    it("badges each chip with its per-family count; 0/absent shows no badge", () => {
+      render(
+        <FamilyChips
+          singleSelect
+          families={FAMILIES}
+          selected={["fam-a"]}
+          badges={{ "fam-a": 2, "fam-b": 1 }}
+          badgeLabel={(n) => `${n} pending`}
+        />,
+      );
+      expect(screen.getByLabelText("2 pending").textContent).toBe("2");
+      expect(screen.getByLabelText("1 pending").textContent).toBe("1");
+      // Rossi (fam-c) has no entry → no badge.
+      expect(screen.queryByLabelText("0 pending")).toBeNull();
+    });
   });
 
   // ── Multi-select regression: default mode still TOGGLES/expands (not collapses). ──────────────

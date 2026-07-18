@@ -1,0 +1,42 @@
+/* FamilySurfaceNav (#158) — the shared selector row (Family tree · List · Requests) with the Invite
+ * button right-justified. The selector links reuse HubTabs.module.css `.subNav`/`.subLink`/`.badge`;
+ * this module owns only the row layout and the Invite pill. `.inviteButton` was moved here verbatim
+ * from FamilyTab.module.css when the Invite entry point relocated OFF the tree row and ONTO this shared
+ * selector row (it now shows on all three sub-tabs, not just the tree). */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: var(--space-5);
+}
+
+.inviteButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 700;
+  text-decoration: none;
+  min-height: var(--touch-min);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fade) var(--ease-quiet);
+  /* Keep the button hard-right even if the selector nav wraps to its own line. */
+  margin-left: auto;
+}
+
+.inviteButton:hover {
+  background: var(--accent-strong);
+}
+
+.inviteButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}

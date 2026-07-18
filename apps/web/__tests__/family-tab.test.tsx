@@ -1,26 +1,25 @@
 // @vitest-environment jsdom
 /**
- * FamilyTab — the hub's Family tab (2026-07-14): a Tree | List view selector wrapping the tree canvas
- * and the searchable relatives list. The tree used to be a standalone /hub/tree route (which hid the
- * hub tab bar); now it's an in-hub tab. Verifies the selector toggles views, persists the choice to
- * localStorage, and honors a `?view=list` deep-link. TreeCanvas + KinList are stubbed (this is a pure
- * view-selector test).
+ * FamilyTab — the hub's Family tab content. Since #158 the Tree/List choice is URL-driven (the
+ * `Family tree · List · Requests` selector lives in <FamilySurfaceNav>), so FamilyTab simply renders
+ * whichever `view` the page resolved from `?view=` — there is no in-tab pill and no localStorage. This
+ * component now owns only the family-selector row: the shared single-select <FamilyChips> (`?families=`)
+ * with the tree's Fit/−/+ controls right-justified on it (tree view only). TreeCanvas + KinList are
+ * stubbed (this is a pure view + chip-row test).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { hub } from "@/app/_copy";
 import type { KinshipTreeData } from "@chronicle/core";
 
 // TreeCanvas is stubbed to ECHO the family it's rendering, so a `?families=` change (→ a different
-// scopeId/familyId prop) can be asserted at the canvas boundary (mirrors album-surface.test.tsx's
-// AlbumGrid stub). KinList is a pure view stub.
+// scopeId/familyId prop) can be asserted at the canvas boundary. KinList is a pure view stub.
 vi.mock("@/app/hub/tree/tree-canvas", () => ({
   TreeCanvas: ({ familyId }: { familyId: string }) => (
     <div data-testid="mock-tree" data-family={familyId} />
   ),
 }));
 vi.mock("@/app/hub/tabs/KinList", () => ({ KinList: () => <div data-testid="mock-list" /> }));
-// FamilyTab calls useRouter() (Slice D #6: client-side nav) and now mounts <FamilyChips>, which needs
+// FamilyTab calls useRouter() (Slice D #6: client-side nav) and mounts <FamilyChips>, which needs
 // usePathname()/useSearchParams() too. This bare mount has no Next app-router provider, so stub the
 // whole next/navigation surface. `push` is shared so the chip-collapse can be asserted.
 const push = vi.fn();
@@ -35,12 +34,11 @@ import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 const TREE: KinshipTreeData = { familyId: "F", rootPersonId: "p1", nodes: [], edges: [] };
 
 function renderTab(
-  initialView?: "tree" | "list",
+  view?: "tree" | "list",
   extra?: Partial<{
     familyId: string;
     families: { id: string; name: string }[];
     scopeId: string;
-    inviteHref: string;
   }>,
 ) {
   return render(
@@ -50,10 +48,9 @@ function renderTab(
       viewerPersonId="p1"
       tree={TREE}
       kin={[]}
-      {...(initialView ? { initialView } : {})}
+      {...(view ? { view } : {})}
       {...(extra?.families ? { families: extra.families } : {})}
       {...(extra?.scopeId ? { scopeId: extra.scopeId } : {})}
-      {...(extra?.inviteHref ? { inviteHref: extra.inviteHref } : {})}
     />,
   );
 }
@@ -61,11 +58,6 @@ function renderTab(
 afterEach(() => {
   cleanup();
   push.mockClear();
-  try {
-    window.localStorage.clear();
-  } catch {
-    /* ignore */
-  }
 });
 
 const TWO_FAMILIES = [
@@ -73,56 +65,24 @@ const TWO_FAMILIES = [
   { id: "fam-b", name: "Marino" },
 ];
 
-describe("FamilyTab view selector", () => {
-  it("defaults to the Tree view", () => {
+describe("FamilyTab view rendering (URL-driven, #158)", () => {
+  it("defaults to the Tree view (with its Fit/zoom controls)", () => {
     renderTab();
     expect(screen.getByTestId("mock-tree")).toBeTruthy();
     expect(screen.queryByTestId("mock-list")).toBeNull();
-    expect(screen.getByRole("radio", { name: hub.tree.viewTree }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("tree-controls")).toBeTruthy();
   });
 
-  it("switches to the List view and persists the choice", () => {
-    renderTab();
-    fireEvent.click(screen.getByRole("radio", { name: hub.tree.viewList }));
-    expect(screen.getByTestId("mock-list")).toBeTruthy();
-    expect(screen.queryByTestId("mock-tree")).toBeNull();
-    expect(window.localStorage.getItem("hub:familyView")).toBe("list");
-  });
-
-  it("restores a persisted List choice on mount", () => {
-    window.localStorage.setItem("hub:familyView", "list");
-    renderTab();
-    expect(screen.getByTestId("mock-list")).toBeTruthy();
-  });
-
-  it("honors a ?view=list deep-link over the stored preference", () => {
-    window.localStorage.setItem("hub:familyView", "tree");
+  it("renders the List view for view=list, hiding the tree controls", () => {
     renderTab("list");
     expect(screen.getByTestId("mock-list")).toBeTruthy();
-  });
-});
-
-describe("FamilyTab Invite button on the selector row (#144)", () => {
-  const HREF = "/hub?tab=invite&families=fam-a";
-
-  it("renders the Invite button, right-justified on the selector row, in the Tree view", () => {
-    renderTab(undefined, { inviteHref: HREF });
-    const invite = screen.getByRole("link", { name: hub.shell.tabInvite });
-    expect(invite.getAttribute("href")).toBe(HREF);
-    // It shares the selector row with the Tree|List radiogroup (both present in the tree view).
-    expect(screen.getByRole("radio", { name: hub.tree.viewTree })).toBeTruthy();
-  });
-
-  it("keeps the Invite button in the List view too", () => {
-    renderTab("list", { inviteHref: HREF });
-    expect(screen.getByRole("link", { name: hub.shell.tabInvite }).getAttribute("href")).toBe(HREF);
-    // List view hides the tree Fit/zoom controls but the Invite button stays.
+    expect(screen.queryByTestId("mock-tree")).toBeNull();
     expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 
-  it("renders NO Invite button when no inviteHref is given (pending-only / gated)", () => {
+  it("renders NO in-tab Tree/List radiogroup (the selector moved to FamilySurfaceNav)", () => {
     renderTab();
-    expect(screen.queryByRole("link", { name: hub.shell.tabInvite })).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
   });
 });
 
@@ -135,7 +95,6 @@ describe("FamilyTab family filter chip bar (ADR-0021 §Tree, #48)", () => {
   it("renders the single-select chip bar when >=2 families, ON chip = the scope", () => {
     renderTab(undefined, { families: TWO_FAMILIES, scopeId: "fam-b", familyId: "fam-b" });
     expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
-    // Only the scoped family's chip is pressed (single-select).
     expect(screen.getByRole("button", { name: "Esposito" }).getAttribute("aria-pressed")).toBe(
       "false",
     );
@@ -154,8 +113,6 @@ describe("FamilyTab family filter chip bar (ADR-0021 §Tree, #48)", () => {
   });
 
   it("the tree renders whatever family the resolved scope names (scopeId → canvas)", () => {
-    // Selection→render: a `?families=` change resolves server-side to a new scopeId/familyId, which
-    // the canvas echoes. Two renders with different scopes render different families.
     const { unmount } = renderTab(undefined, {
       families: TWO_FAMILIES,
       scopeId: "fam-a",
