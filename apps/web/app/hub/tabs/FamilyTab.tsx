@@ -15,14 +15,14 @@
  * (`?families=`) with the tree's `Fit / − / +` controls right-justified on the same row (tree view
  * only). Camera state (pan/scale) is lifted here so those controls can drive the canvas.
  */
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KinListEntry, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
-import { UnplacedMembers, type AnchorOption } from "./UnplacedMembers";
+import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
 import styles from "./FamilyTab.module.css";
 
@@ -74,24 +74,13 @@ export function FamilyTab({
 }: FamilyTabProps) {
   const router = useRouter();
 
-  // Anchors an unplaced member can be linked to = the persons already drawn in the tree (they're the
-  // only ones visible to attach to). Named from the tree's loaded nodes; nameless nodes fall back to a
-  // neutral label. Recomputed only when the node set changes.
-  const anchorOptions = useMemo<AnchorOption[]>(
-    () =>
-      tree.nodes.map((n) => ({
-        id: n.personId,
-        name: n.displayName?.trim() || hub.kin.edgeUnknownPerson,
-      })),
-    [tree.nodes],
-  );
-
+  // #169: unplaced members fetch their anchor list family-wide (no longer limited to the tree
+  // window), so the parent no longer needs to compute anchorOptions from tree.nodes.
   const unplacedPanel =
     unplaced.length > 0 ? (
       <UnplacedMembers
         familyId={familyId}
         members={unplaced}
-        anchors={anchorOptions}
         viewerIsSteward={viewerIsSteward}
         variant={view === "tree" ? "tray" : "section"}
       />

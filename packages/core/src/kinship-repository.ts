@@ -365,6 +365,54 @@ export async function listUnplacedMembers(
 }
 
 // ---------------------------------------------------------------------------
+// listPlacedPersons (#169) — every person who is an endpoint of at least one
+// visible kinship edge in the family, i.e. "already placed in the tree".
+// Used by the unplaced-member placement UX so the anchor picker offers the
+// FULL set of placed relatives, not just the ones inside the current bounded
+// tree window. Returns displayName for rendering a searchable list.
+// ---------------------------------------------------------------------------
+
+export interface PlacedPersonView {
+  personId: string;
+  displayName: string | null;
+}
+
+/**
+ * List every person who is an endpoint of at least one VISIBLE kinship edge in `familyId` (#169).
+ * "Placed" means touched by a visible edge (same definition as `listUnplacedMembers` uses for the
+ * complement set). Auth flows through `resolveKinshipProjection` (active-membership required,
+ * anonymous rejected). Sorted by displayName then id for a deterministic, searchable list.
+ */
+export async function listPlacedPersons(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+): Promise<PlacedPersonView[]> {
+  const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+  const placed = new Set<string>();
+  for (const e of edges) {
+    placed.add(e.personAId);
+    placed.add(e.personBId);
+  }
+  if (placed.size === 0) return [];
+
+  const rows = await db
+    .select({
+      id: persons.id,
+      displayName: persons.displayName,
+    })
+    .from(persons)
+    .where(inArray(persons.id, Array.from(placed)));
+
+  rows.sort(
+    (a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "") ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return rows.map((r) => ({ personId: r.id, displayName: r.displayName }));
+}
+
+// ---------------------------------------------------------------------------
 // listGovernableKinEdges (issues #33/#34) — the read composition the governance
 // UI renders: the family's CURRENT visible edges (already latest-supersede- and
 // hide-filtered) with each endpoint's display name, plus two viewer capability

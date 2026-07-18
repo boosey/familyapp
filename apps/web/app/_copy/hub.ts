@@ -1072,6 +1072,8 @@ export const hub = {
       grandparent: "Grandparent",
     },
     placeSubmit: "Place in tree",
+    // Loading state while the modal fetches the family-wide placed-person list (#169).
+    loadingAnchors: "Loading relatives…",
     // No anchors available to link to (the tree is empty besides this member) — a rare edge case.
     noAnchors: "There's no one to connect them to yet. Add someone to the tree first.",
   },

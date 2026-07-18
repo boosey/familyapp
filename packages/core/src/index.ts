@@ -214,6 +214,7 @@ export {
   listMyKin,
   listUnplacedMembers,
   listGovernableKinEdges,
+  listPlacedPersons,
   resolveKinshipTree,
   inviteStatusFor,
   canViewerSeePerson,
@@ -228,6 +229,7 @@ export {
   type TreeWindow,
   type TreeNode,
   type KinshipTreeData,
+  type PlacedPersonView,
 } from "./kinship-repository";
 export {
   addRelative,

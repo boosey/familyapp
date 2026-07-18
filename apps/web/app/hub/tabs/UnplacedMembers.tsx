@@ -24,6 +24,7 @@ import { hub } from "@/app/_copy";
 import {
   endMembershipAction,
   linkExistingMemberAction,
+  listPlacedPersonsAction,
   setMemberNonFamilyAction,
 } from "../tree/actions";
 import styles from "./UnplacedMembers.module.css";
@@ -37,8 +38,6 @@ export interface AnchorOption {
 export interface UnplacedMembersProps {
   familyId: string;
   members: UnplacedMember[];
-  /** Placed persons the member can attach to (from the tree's loaded nodes). */
-  anchors: AnchorOption[];
   /** Steward-only: gates the destructive Remove affordance (the write path re-checks). */
   viewerIsSteward: boolean;
   /** Wrapper variant — `tray` adds the dashed canvas-margin framing used in the Tree view. */
@@ -47,6 +46,7 @@ export interface UnplacedMembersProps {
   onLink?: typeof linkExistingMemberAction;
   onSetNonFamily?: typeof setMemberNonFamilyAction;
   onEndMembership?: typeof endMembershipAction;
+  onFetchAnchors?: typeof listPlacedPersonsAction;
 }
 
 function memberName(m: UnplacedMember): string {
@@ -57,12 +57,12 @@ function memberName(m: UnplacedMember): string {
 export function UnplacedMembers({
   familyId,
   members,
-  anchors,
   viewerIsSteward,
   variant = "section",
   onLink = linkExistingMemberAction,
   onSetNonFamily = setMemberNonFamilyAction,
   onEndMembership = endMembershipAction,
+  onFetchAnchors = listPlacedPersonsAction,
 }: UnplacedMembersProps) {
   const router = useRouter();
   // The member currently being placed (its modal is open), or null.
@@ -275,8 +275,8 @@ export function UnplacedMembers({
         <PlaceMemberModal
           familyId={familyId}
           member={placing}
-          anchors={anchors}
           onLink={onLink}
+          onFetchAnchors={onFetchAnchors}
           onClose={() => setPlacing(null)}
           onSuccess={() => {
             setPlacing(null);
@@ -300,8 +300,8 @@ const RELATIONS: readonly AddRelativeRelation[] = [
 interface PlaceMemberModalProps {
   familyId: string;
   member: UnplacedMember;
-  anchors: AnchorOption[];
   onLink: typeof linkExistingMemberAction;
+  onFetchAnchors: typeof listPlacedPersonsAction;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -315,16 +315,44 @@ interface PlaceMemberModalProps {
 function PlaceMemberModal({
   familyId,
   member,
-  anchors,
   onLink,
+  onFetchAnchors,
   onClose,
   onSuccess,
 }: PlaceMemberModalProps) {
   const name = memberName(member);
-  const [anchorId, setAnchorId] = useState<string>(anchors[0]?.id ?? "");
+  const [anchorId, setAnchorId] = useState<string>("");
   const [relation, setRelation] = useState<AddRelativeRelation>("parent");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [anchors, setAnchors] = useState<AnchorOption[]>([]);
+  const [loadingAnchors, setLoadingAnchors] = useState(true);
+
+  // Fetch the full family-wide placed-person list on mount (#169).
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoadingAnchors(true);
+      const res = await onFetchAnchors(familyId);
+      if (cancelled) return;
+      if (res.ok) {
+        const opts = res.persons.map((p) => ({
+          id: p.personId,
+          name: p.displayName?.trim() || hub.kin.edgeUnknownPerson,
+        }));
+        setAnchors(opts);
+        const first = opts[0];
+        if (first) {
+          setAnchorId(first.id);
+        }
+      } else {
+        setError(hub.unplaced.actionFailed);
+      }
+      setLoadingAnchors(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [familyId, onFetchAnchors]);
 
   // Escape closes (mirrors AddRelativeModal — a window listener, not a div handler, so it fires
   // regardless of focus).
@@ -375,7 +403,9 @@ function PlaceMemberModal({
 
         <p className={styles.intro}>{hub.unplaced.placeIntro}</p>
 
-        {hasAnchors ? (
+        {loadingAnchors ? (
+          <p className={styles.intro} data-testid="place-member-loading-anchors">{hub.unplaced.loadingAnchors}</p>
+        ) : hasAnchors ? (
           <form
             className={styles.form}
             action={onSubmit}

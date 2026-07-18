@@ -18,12 +18,14 @@ import {
   endMembership,
   linkExistingMember,
   listActiveFamiliesForPerson,
+  listPlacedPersons,
   resolveKinshipTree,
   setMemberNonFamily,
   updatePersonIdentityAsEditor,
   type AddRelativeRelation,
   type EditPersonPatch,
   type KinshipTreeData,
+  type PlacedPersonView,
   type TreeWindow,
 } from "@chronicle/core";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
@@ -201,6 +203,34 @@ async function resolveFamilyScopedActor(
   const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
   if (!activeFamilies.some((f) => f.familyId === familyId)) return { ok: false, error: "invalid" };
   return { ok: true, db, ctx };
+}
+
+export type PlacedPersonsResult =
+  | { ok: true; persons: PlacedPersonView[] }
+  | { ok: false; error: "unauthorized" | "invalid" | "failed" };
+
+/**
+ * List every person already placed in the family's kinship tree (#169). Used by the unplaced-member
+ * placement UX so the anchor picker offers the FULL family-wide set, not just the ones inside the
+ * current bounded tree window. Re-validates the family against the viewer's active families.
+ */
+export async function listPlacedPersonsAction(
+  familyId: string,
+): Promise<PlacedPersonsResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  try {
+    const persons = await listPlacedPersons(scoped.db, scoped.ctx, familyId);
+    plog("tree", "listPlacedPersons: success", { family: familyId, count: persons.length });
+    return { ok: true, persons };
+  } catch (err) {
+    plogError("tree", "listPlacedPersons: error", {
+      family: familyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
 }
 
 export type LinkExistingMemberActionResult =
