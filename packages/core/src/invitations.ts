@@ -7,7 +7,7 @@
  * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
@@ -77,6 +77,90 @@ export async function createInvitation(
       throw new AuthorizationError(
         "only an active member of the family may send an invitation",
       );
+    }
+
+    // Re-invite dedup: a re-send to someone who was already invited but never joined must NOT mint a
+    // second provisional Person (the old bug left duplicate `origin='invitee'` rows behind). If an
+    // unaccepted invitation to this same invitee already exists in this family, we REFRESH that one
+    // row in place — new token, back to `pending`, new expiry — reusing its provisional Person.
+    //
+    // Refresh-in-place (not a second invitation row) is load-bearing: the housekeeping reaper deletes
+    // ALL invitations pointing at a reaped provisional Person, so a stale dead invite left beside a
+    // fresh one would let the reaper destroy the live invite. One invite row per invitee keeps that safe.
+    //
+    // Match key: the email, matched case-insensitively — the ONLY reliable contact identity we have.
+    // Email-less invites are deliberately NOT deduped: without a contact key, matching on name alone
+    // would risk silently merging two different real people who share a name (e.g. two cousins both
+    // entered as "Sal") with no undo — a worse failure than the duplicate row we are fixing. Such
+    // repeat invites simply mint a fresh provisional Person, which the reaper cleans up when it dies.
+    // `accepted` invites are excluded: their anchor is a real Account Person, not a reusable
+    // provisional. The persons join re-asserts that.
+    const trimmedName = input.inviteeName?.trim() || null;
+    const trimmedEmail = input.inviteeEmail?.trim() || null;
+    const matchKey = trimmedEmail
+      ? sql`lower(${invitations.inviteeEmail}) = ${trimmedEmail.toLowerCase()}`
+      : null;
+
+    if (matchKey) {
+      const [existing] = await tx
+        .select({
+          id: invitations.id,
+          inviteePersonId: invitations.inviteePersonId,
+        })
+        .from(invitations)
+        .innerJoin(persons, eq(persons.id, invitations.inviteePersonId))
+        .where(
+          and(
+            eq(invitations.familyId, input.familyId),
+            ne(invitations.status, "accepted"),
+            eq(persons.origin, "invitee"),
+            isNull(persons.accountId),
+            matchKey,
+          ),
+        )
+        .orderBy(desc(invitations.createdAt))
+        .limit(1);
+
+      if (existing) {
+        await tx
+          .update(invitations)
+          .set({
+            tokenHash: hashToken(token),
+            inviterPersonId: input.inviterPersonId,
+            status: "pending",
+            expiresAt,
+            // Only overwrite invitee metadata the caller actually supplied, so a bare re-invite does
+            // not wipe a name/label/role captured on the original.
+            ...(input.inviteeName !== undefined
+              ? { inviteeName: input.inviteeName ?? null }
+              : {}),
+            ...(input.inviteeEmail !== undefined
+              ? { inviteeEmail: input.inviteeEmail ?? null }
+              : {}),
+            ...(input.relationshipLabel !== undefined
+              ? { relationshipLabel: input.relationshipLabel ?? null }
+              : {}),
+            ...(input.role !== undefined ? { role: input.role } : {}),
+          })
+          .where(eq(invitations.id, existing.id));
+
+        // Keep the provisional Person's placeholder name in step when a fresh name is supplied.
+        if (trimmedName) {
+          await tx
+            .update(persons)
+            .set({
+              displayName: trimmedName,
+              spokenName: defaultSpokenName(trimmedName),
+            })
+            .where(eq(persons.id, existing.inviteePersonId));
+        }
+
+        return {
+          invitationId: existing.id,
+          token,
+          inviteePersonId: existing.inviteePersonId,
+        };
+      }
     }
 
     // ADR-0006: mint the provisional (Account-less) Person the invitation anchors to. It carries the
