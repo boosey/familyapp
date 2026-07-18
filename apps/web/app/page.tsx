@@ -1,99 +1,32 @@
 /**
- * Root landing — the account-holder front door. A login-free link-session visitor NEVER lands here;
- * they only ever follow their personal /s/[token] capture link. This is the warm marketing-light
- * entry for relatives: name the product, then offer the two real doors (create a family, or sign
- * in to an existing one).
+ * Root landing ("Tell Me Again") — the account-holder front door and the public homepage Google's
+ * OAuth reviewer visits when verifying the Google Photos integration (#154). A login-free
+ * link-session visitor NEVER lands here; they only ever follow their personal /s/[token] capture
+ * link. The scroll-driven experience lives in the client `<LandingExperience>`; this server
+ * component owns the page-level metadata so the crawler gets a clear, on-domain description.
  */
-import Link from "next/link";
-import { KindredButton } from "@/app/_kindred";
-import { common, auth, legal } from "@/app/_copy";
+import type { Metadata } from "next";
+import { LandingExperience } from "./_landing/LandingExperience";
+import { auth } from "./_copy";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+
+const { landing } = auth;
+
+export const metadata: Metadata = {
+  title: `${landing.brand} — ${landing.what.title}`,
+  description: landing.lede,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: `${landing.brand} — ${landing.what.title}`,
+    description: landing.lede,
+    url: "https://tellmeagain.app",
+    siteName: landing.brand,
+    type: "website",
+  },
+  robots: { index: true, follow: true },
+};
 
 export default function Home() {
-  return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--surface-page)",
-        padding: "6vh 6vw",
-        gap: 18,
-        textAlign: "center",
-      }}
-    >
-      <div className="kin-eyebrow">{auth.landing.eyebrow}</div>
-      <h1
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-display-lg)",
-          letterSpacing: "var(--tracking-tight)",
-          color: "var(--text-body)",
-          margin: 0,
-          lineHeight: "var(--leading-tight)",
-        }}
-      >
-        {common.appName}
-      </h1>
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-muted)",
-          maxWidth: "34ch",
-          margin: 0,
-          lineHeight: "var(--leading-body)",
-        }}
-      >
-        {auth.landing.tagline}
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 14,
-          justifyContent: "center",
-          marginTop: 12,
-        }}
-      >
-        <Link href="/sign-up" style={{ textDecoration: "none" }}>
-          <KindredButton label={auth.landing.signUp} size="large" />
-        </Link>
-        <Link href="/sign-in" style={{ textDecoration: "none" }}>
-          <KindredButton label={auth.landing.signIn} variant="secondary" size="large" />
-        </Link>
-      </div>
-
-      <p
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "var(--tracking-mono)",
-          color: "var(--support)",
-          margin: "8px 0 0",
-        }}
-      >
-        {auth.landing.narratorNote}
-      </p>
-
-      <footer style={{ marginTop: 32 }}>
-        <Link
-          href="/privacy"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-label)",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-          }}
-        >
-          {legal.privacy.title}
-        </Link>
-      </footer>
-    </main>
-  );
+  return <LandingExperience />;
 }

@@ -1,0 +1,403 @@
+/*
+ * Landing experience ("Tell Me Again") — the public front door / OAuth homepage.
+ *
+ * Base classes are token-driven and skin-neutral (only tokens defined in EVERY skin). The Playful
+ * flourishes — highlighter marker, keepsake tilt + tape, coral→amber gradient, sticker step numbers,
+ * shelf shadow — hook `:global(:root[data-skin="playful"])` so a switch to heirloom degrades to a
+ * calm, legible page rather than referencing undefined Phase-2 tokens. All structural tilt/tape is
+ * suppressed under reduce-motion / solemn (CSS-MODULES.md rule 5); scroll drift is driven by the
+ * `--py-*` / `--sp` / `--hero` custom properties that LandingExperience writes, and which stay at
+ * their resting 0 when motion is off (so the page is complete and static without JS).
+ */
+
+.root {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+}
+
+/* Thin scroll-progress rail pinned to the top edge. */
+.progressRail {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 4px;
+  z-index: 10;
+  background: transparent;
+  pointer-events: none;
+}
+.progressFill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(var(--sp, 0));
+  transform-origin: left center;
+  background: var(--accent);
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+}
+
+/* ---- decorative parallax field (behind everything, aria-hidden) ---- */
+.decor {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.blob,
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+.blob {
+  background: var(--accent-soft);
+  filter: blur(2px);
+  opacity: 0.7;
+}
+.ring {
+  border: var(--border-width) solid var(--border-strong);
+  opacity: 0.5;
+}
+/* Each shape rides a parallax channel; sign chooses drift direction for depth. */
+.driftSlowUp {
+  transform: translate3d(0, calc(var(--py-slow, 0px) * -1), 0);
+}
+.driftMediumDown {
+  transform: translate3d(0, var(--py-medium, 0px), 0);
+}
+.driftFastUp {
+  transform: translate3d(0, calc(var(--py-fast, 0px) * -1), 0);
+}
+
+.blobA { top: -6vw; right: -4vw; width: 34vw; height: 34vw; }
+.blobB { top: 128vh; left: -8vw; width: 40vw; height: 40vw; background: var(--support-soft); }
+.blobC { top: 250vh; right: -10vw; width: 30vw; height: 30vw; }
+.ringA { top: 76vh; left: -7vw; width: 24vw; height: 24vw; }
+.ringB { top: 190vh; right: 10vw; width: 16vw; height: 16vw; }
+
+/* ---- shared section scaffolding ---- */
+.section {
+  position: relative;
+  z-index: 1;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(4.5rem, 12vh, 9rem) clamp(1.5rem, 6vw, 4rem);
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin: 0 0 var(--space-4);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-body);
+  margin: 0 0 var(--space-5);
+  max-width: 20ch;
+}
+
+.sectionBody {
+  font-size: clamp(1.125rem, 2.2vw, 1.5rem);
+  line-height: var(--leading-body);
+  color: var(--text-meta);
+  margin: 0;
+  max-width: 46ch;
+}
+
+/* ---- hero ---- */
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100svh;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 6vw, 4rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-5);
+  /* Fades and lifts away as the first viewport scrolls past (JS sets --hero 0→1). */
+  opacity: calc(1 - var(--hero, 0) * 0.85);
+  transform: translate3d(0, calc(var(--hero, 0) * -28px), 0);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  color: var(--accent-strong);
+  margin: 0;
+}
+.refrain {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(3.25rem, 13vw, 9rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--text-body);
+  margin: 0;
+}
+.mark {
+  /* the phrase itself — a marker wash slides in behind it under the playful skin */
+  position: relative;
+  display: inline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.lede {
+  font-family: var(--font-read);
+  font-size: clamp(1.25rem, 2.6vw, 1.75rem);
+  line-height: var(--leading-snug);
+  color: var(--text-meta);
+  margin: 0;
+  max-width: 34ch;
+}
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+}
+.ctaLink {
+  text-decoration: none;
+}
+.narratorNote {
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  margin: var(--space-3) 0 0;
+  max-width: 44ch;
+}
+/* Pinned to the bottom edge of the first viewport so it reads as "there's more below". */
+.scrollCue {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(1.25rem, 4vh, 2.5rem);
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.scrollChevron {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+  animation: landing-bob var(--dur-pulse, 2.4s) var(--ease-quiet) infinite;
+}
+@keyframes landing-bob {
+  0%, 100% { transform: translateY(-3px); opacity: 0.55; }
+  50% { transform: translateY(4px); opacity: 1; }
+}
+
+/* ---- how it works: keepsake step cards ---- */
+.stepList {
+  list-style: none;
+  margin: var(--space-7) 0 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2rem);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.stepCard {
+  position: relative;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-ui-sm);
+  margin-bottom: var(--space-4);
+}
+.stepTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-ui-lg);
+  color: var(--text-body);
+  margin: 0 0 var(--space-3);
+}
+.stepBody {
+  font-size: var(--text-ui-sm);
+  line-height: var(--leading-body);
+  color: var(--text-meta);
+  margin: 0;
+}
+/* decorative "tape" tab — playful only */
+.tape {
+  display: none;
+}
+
+/* ---- trust + closing ---- */
+.trust {
+  composes: section;
+}
+.privacyLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-ui-sm);
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: var(--border-width) solid var(--accent-soft);
+  padding-bottom: 2px;
+}
+.privacyLink:hover { color: var(--accent); border-color: var(--accent); }
+.privacyLink:focus-visible {
+  outline: var(--border-width) solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.closing {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: clamp(5rem, 14vh, 10rem) clamp(1.5rem, 6vw, 4rem);
+}
+.closingTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(2.25rem, 6vw, 4rem);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-body);
+  margin: 0 0 var(--space-4);
+}
+.closingBody {
+  font-size: clamp(1.125rem, 2.4vw, 1.5rem);
+  color: var(--text-meta);
+  margin: 0 0 var(--space-6);
+}
+.closing .ctaRow { justify-content: center; }
+
+/* ---- footer ---- */
+.footer {
+  position: relative;
+  z-index: 1;
+  border-top: var(--border-width) solid var(--border);
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 3rem) clamp(1.5rem, 6vw, 4rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-label);
+}
+.footerBrand { font-weight: var(--weight-semibold); color: var(--text-meta); }
+.footerLinks { display: flex; flex-wrap: wrap; gap: var(--space-5); }
+.footerLink { color: var(--text-muted); text-decoration: none; }
+.footerLink:hover { color: var(--accent-strong); text-decoration: underline; }
+.footerLink:focus-visible {
+  outline: var(--border-width) solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* =====================================================================
+ * Playful skin flourishes — decorative, scoped so heirloom degrades cleanly.
+ * ===================================================================== */
+:global(:root[data-skin="playful"]) .mark {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 8%,
+    var(--highlighter) 8%,
+    var(--highlighter) 84%,
+    transparent 84%
+  );
+  padding: 0 0.08em;
+  border-radius: var(--radius-sm);
+}
+:global(:root[data-skin="playful"]) .stepCard {
+  box-shadow: var(--shadow-card);
+}
+:global(:root[data-skin="playful"]) .stepCard:nth-child(1) { --tilt: -1.4deg; }
+:global(:root[data-skin="playful"]) .stepCard:nth-child(2) { --tilt: 0.8deg; }
+:global(:root[data-skin="playful"]) .stepCard:nth-child(3) { --tilt: -0.6deg; }
+:global(:root[data-skin="playful"]) .stepCard:hover {
+  transform: rotate(0deg) translateY(-4px);
+  box-shadow: var(--shadow-lift);
+}
+:global(:root[data-skin="playful"]) .tape {
+  display: block;
+  position: absolute;
+  top: -0.85rem;
+  left: 50%;
+  width: 5.5rem;
+  height: 1.7rem;
+  transform: translateX(-50%) rotate(-2.5deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+}
+:global(:root[data-skin="playful"]) .stepNum {
+  background: var(--accent-gradient);
+  color: var(--accent-on);
+}
+:global(:root[data-skin="playful"]) .closingTitle {
+  color: var(--accent-strong);
+}
+
+/* =====================================================================
+ * Reduce-motion / solemn — kill drift + tilt + tape, keep everything legible.
+ * ===================================================================== */
+:global(:root[data-reduce-motion="on"]) .stepCard,
+:global([data-tone="solemn"]) .stepCard {
+  transform: none;
+}
+:global(:root[data-reduce-motion="on"]) .stepCard:hover,
+:global([data-tone="solemn"]) .stepCard:hover {
+  transform: translateY(-4px);
+}
+:global(:root[data-reduce-motion="on"]) .hero,
+:global([data-tone="solemn"]) .hero {
+  opacity: 1;
+  transform: none;
+}
+:global(:root[data-reduce-motion="on"]) .tape,
+:global([data-tone="solemn"]) .tape {
+  display: none;
+}
+:global(:root[data-reduce-motion="on"]) .progressRail {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero { opacity: 1; transform: none; }
+  .stepCard { transform: none; }
+  .progressRail { display: none; }
+  .scrollChevron { animation: none; }
+}
