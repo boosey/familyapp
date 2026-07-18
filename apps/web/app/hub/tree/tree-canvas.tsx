@@ -318,7 +318,6 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     setEdges(initial.edges);
     setExpansion(EMPTY_EXPANSION);
     setFocusPersonId(initialFocusPersonId);
-    toppedUp.current = new Set();
   }
 
   // Camera centering reads DOM refs (viewportRef.current?.clientHeight) and may update parent-controlled
@@ -327,6 +326,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   useEffect(() => {
     if (prevFamilyIdRef.current !== familyId) {
       prevFamilyIdRef.current = familyId;
+      toppedUp.current = new Set();
       centerCamera();
     }
   }, [familyId, centerCamera]);
