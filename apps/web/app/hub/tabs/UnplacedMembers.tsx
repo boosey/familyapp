@@ -341,7 +341,9 @@ function PlaceMemberModal({
           name: p.displayName?.trim() || hub.kin.edgeUnknownPerson,
         }));
         setAnchors(opts);
-        if (opts.length > 0) setAnchorId(opts[0].id);
+        if (opts.length > 0) {
+          setAnchorId(opts[0].id);
+        }
       } else {
         setError(hub.unplaced.actionFailed);
       }

@@ -50,11 +50,6 @@ const MEMBERS: UnplacedMember[] = [
   { personId: "u2", displayName: "Marco Ricci", role: "member" },
 ];
 
-const ANCHORS = [
-  { id: "self", name: "You" },
-  { id: "elena", name: "Elena" },
-];
-
 const okAction = async () => ({ ok: true as const });
 
 function renderPanel(over: Partial<React.ComponentProps<typeof UnplacedMembers>> = {}) {
