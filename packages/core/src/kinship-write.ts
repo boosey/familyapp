@@ -15,8 +15,15 @@
 import { and, eq } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
-import type { Database, KinshipEdgeType, KinshipNature, PersonSex } from "@chronicle/db";
+import type {
+  Database,
+  InviteRelationship,
+  KinshipEdgeType,
+  KinshipNature,
+  PersonSex,
+} from "@chronicle/db";
 import type { AuthContext } from "./authorization";
+import { InvariantViolation } from "./errors";
 import { isActiveMember } from "./memberships";
 import { normalizeEdgeEndpoints, resolveKinshipProjection } from "./kinship-repository";
 
@@ -450,6 +457,114 @@ export async function addRelative(
     }
     return result;
   });
+}
+
+// ===========================================================================
+// Accept-time auto-placement from a structured invite relationship (#164, ADR-0023).
+//
+// When an invitation carried a STRUCTURED relationship (the fixed invite vocabulary) and is
+// accepted, the new member should appear in the family's tree the instant they join — the exact
+// fact needed to place them was collected at invite time (the production incident that motivated
+// this: an invite that said "Son" was discarded on accept, leaving the member invisible). Only the
+// six DIRECT primitives auto-place; `other` records "no auto-edge" and the member is left unplaced
+// for #161 — a sibling/grandparent/in-law needs a bridge node (ADR-0017) and is NEVER guessed here.
+//
+// The auto-written edge is NOT privileged: it is a normal `asserted` edge, actor = the inviter, so
+// it flows through the SAME governance overlay as any manual assertion — first-asserter-wins, the
+// subject hide-veto (#34), and steward deny/correct (#33). Lives in this allowlisted kinship file so
+// `acceptInvitation` (invitations.ts) drives it WITHOUT importing the guarded kinship tables itself.
+// ===========================================================================
+
+/** A tx/db handle that can read, insert edges, and update the invitee's `sex`. */
+type PlacementTx = DbOrTx & Pick<Database, "update">;
+
+/**
+ * The invite-picker vocabulary → (edge to write, invitee sex) placement table (#164). The value
+ * names the INVITEE's role relative to the INVITER (the actor): `son` ⇒ the invitee is the inviter's
+ * son ⇒ the inviter is a parent of the invitee; `mother` ⇒ the invitee is the inviter's mother ⇒ the
+ * invitee is a parent of the inviter. `other` is absent — it writes no edge and touches no sex.
+ */
+const INVITE_PLACEMENT: Record<
+  Exclude<InviteRelationship, "other">,
+  { edge: "partner" | "inviteeIsParent" | "inviterIsParent"; sex: PersonSex }
+> = {
+  wife: { edge: "partner", sex: "female" },
+  husband: { edge: "partner", sex: "male" },
+  mother: { edge: "inviteeIsParent", sex: "female" },
+  father: { edge: "inviteeIsParent", sex: "male" },
+  son: { edge: "inviterIsParent", sex: "male" },
+  daughter: { edge: "inviterIsParent", sex: "female" },
+};
+
+export interface PlaceInvitedMemberResult {
+  /** The appended kinship edge id, or null when the relationship was `other` (no auto-edge). */
+  edgeId: string | null;
+  /** The invitee `sex` written, or null when none was set (no gendered pick, or already set). */
+  sexSet: PersonSex | null;
+}
+
+/**
+ * Auto-place a just-accepted member from the invite's structured relationship (#164). MUST run
+ * inside `acceptInvitation`'s transaction so the membership, merge, and edge commit atomically.
+ * `inviterPersonId` is the actor (and the anchor the edge attaches to); `inviteePersonId` is the
+ * REAL accepting Person (the provisional has already been merged away by the caller). Writes exactly
+ * ONE primitive edge for a direct relationship and matches the invitee's `sex` to the gendered pick;
+ * `other` (and any nullish relationship — handled by the caller) writes nothing.
+ *
+ * The `sex` write is CONSERVATIVE — only when the invitee's sex is currently unset (`null`/`unknown`)
+ * — so accepting a second-family invite can never clobber a sex the member set themselves. The
+ * common path (a freshly JIT-provisioned account, sex `unknown`) still gets labelled with no extra
+ * data entry (user story #6). Mirrors `reconcileMentionIntoAccount`'s carry-when-unset rule.
+ */
+export async function placeInvitedMemberOnAccept(
+  tx: PlacementTx,
+  input: {
+    familyId: string;
+    inviterPersonId: string;
+    inviteePersonId: string;
+    relationship: Exclude<InviteRelationship, "other">;
+  },
+): Promise<PlaceInvitedMemberResult> {
+  const { familyId, inviterPersonId: me, inviteePersonId } = input;
+  // `INVITE_PLACEMENT` is total over the six direct values; the lookup is `T | undefined` only under
+  // `noUncheckedIndexedAccess`, so the guard is a type-narrowing formality (unreachable at runtime).
+  const plan = INVITE_PLACEMENT[input.relationship];
+  if (plan === undefined) {
+    throw new InvariantViolation(`no placement for invite relationship '${input.relationship}'`);
+  }
+
+  let edgeId: string;
+  switch (plan.edge) {
+    case "partner":
+      edgeId = await insertPartneredWith(tx, familyId, me, me, inviteePersonId);
+      break;
+    case "inviteeIsParent":
+      // The invitee is a parent of the inviter (mother/father).
+      edgeId = await insertParentOf(tx, familyId, me, inviteePersonId, me, "unknown");
+      break;
+    case "inviterIsParent":
+      // The inviter is a parent of the invitee (son/daughter).
+      edgeId = await insertParentOf(tx, familyId, me, me, inviteePersonId, "unknown");
+      break;
+  }
+
+  // Match the invitee's sex to the gendered pick — but only fill an unset value (see doc above).
+  let sexSet: PersonSex | null = null;
+  const [invitee] = await tx
+    .select({ sex: persons.sex })
+    .from(persons)
+    .where(eq(persons.id, inviteePersonId))
+    .limit(1);
+  const sexUnset = invitee === undefined || invitee.sex === null || invitee.sex === "unknown";
+  if (sexUnset) {
+    await tx
+      .update(persons)
+      .set({ sex: plan.sex, updatedAt: new Date() })
+      .where(eq(persons.id, inviteePersonId));
+    sexSet = plan.sex;
+  }
+
+  return { edgeId, sexSet };
 }
 
 // ===========================================================================

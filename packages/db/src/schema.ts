@@ -143,6 +143,23 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
 ]);
 
 /**
+ * Structured, machine-readable relationship the inviter picks at invite time (#164, ADR-0023). A
+ * FIXED vocabulary — this is the placement signal that acceptance turns into a kinship edge (the
+ * free-text `relationshipLabel` is display only, never placement). Only the six DIRECT primitives
+ * auto-place a member on the tree; `other` records "no auto-edge" (a sibling/grandparent/in-law/
+ * non-relative is left unplaced for #161, never guessed — ADR-0016/0017).
+ */
+export const inviteRelationshipEnum = pgEnum("invite_relationship", [
+  "wife",
+  "husband",
+  "mother",
+  "father",
+  "son",
+  "daughter",
+  "other",
+]);
+
+/**
  * Join-request lifecycle. A stranger who discovered a (discoverable) family asks its steward to
  * let them in; the steward approves (→ membership) or declines. Discovery never bypasses
  * steward consent — joining is always approval-gated. See ADR-0001.
@@ -1012,6 +1029,12 @@ export const invitations = pgTable(
     sendCount: integer("send_count").notNull().default(1),
     /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
     relationshipLabel: text("relationship_label"),
+    /**
+     * Structured relationship the inviter picked (#164, ADR-0023) — the machine-readable PLACEMENT
+     * signal `acceptInvitation` turns into a kinship edge (see inviteRelationshipEnum). NULL on rows
+     * predating #164 and whenever no structured pick was made; a NULL never auto-places.
+     */
+    inviteRelationship: inviteRelationshipEnum("invite_relationship"),
     /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */
     role: membershipRoleEnum("role").notNull().default("member"),
     status: invitationStatusEnum("status").notNull().default("pending"),
@@ -1827,6 +1850,8 @@ export type MediaKind = (typeof mediaKindEnum.enumValues)[number];
 export type ConsentAction = (typeof consentActionEnum.enumValues)[number];
 export type AskStatus = (typeof askStatusEnum.enumValues)[number];
 export type InvitationStatus = (typeof invitationStatusEnum.enumValues)[number];
+export type InviteRelationship =
+  (typeof inviteRelationshipEnum.enumValues)[number];
 export type JoinRequestStatus =
   (typeof joinRequestStatusEnum.enumValues)[number];
 export type ProseRevisionLevel =

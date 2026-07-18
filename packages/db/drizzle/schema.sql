@@ -10,6 +10,7 @@ CREATE TYPE "public"."follow_up_outcome" AS ENUM('answered', 'skipped', 'off_ram
 CREATE TYPE "public"."follow_up_record_kind" AS ENUM('decision', 'outcome');
 CREATE TYPE "public"."intake_origin" AS ENUM('voice', 'typed');
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');
+CREATE TYPE "public"."invite_relationship" AS ENUM('wife', 'husband', 'mother', 'father', 'son', 'daughter', 'other');
 CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'declined');
 CREATE TYPE "public"."kinship_edge_type" AS ENUM('parent_of', 'partnered_with');
 CREATE TYPE "public"."kinship_nature" AS ENUM('biological', 'adoptive', 'step', 'foster', 'unknown');
@@ -209,6 +210,7 @@ CREATE TABLE "invitations" (
 	"delivery_attempts" integer DEFAULT 0 NOT NULL,
 	"send_count" integer DEFAULT 1 NOT NULL,
 	"relationship_label" text,
+	"invite_relationship" "invite_relationship",
 	"role" "membership_role" DEFAULT 'member' NOT NULL,
 	"status" "invitation_status" DEFAULT 'pending' NOT NULL,
 	"accepted_person_id" uuid,

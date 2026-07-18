@@ -35,6 +35,7 @@ export {
   followUpRecordKindEnum,
   intakeOriginEnum,
   invitationStatusEnum,
+  inviteRelationshipEnum,
   joinRequestStatusEnum,
   lifeStatusEnum,
   mediaKindEnum,
