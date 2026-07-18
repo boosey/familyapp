@@ -20,6 +20,8 @@ import { resolvePostAuthRoute } from "../lib/post-auth-route";
 async function newOnboardedPerson(db: Awaited<ReturnType<typeof createTestDatabase>>, tag: string) {
   const { personId } = await createAccountWithPerson(db, {
     authProviderUserId: `post-auth-${tag}`,
+    provider: "clerk",
+    emailVerified: true,
     email: `post-auth-${tag}@example.test`,
     displayName: `Test ${tag}`,
   });
@@ -32,6 +34,8 @@ describe("resolvePostAuthRoute", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "post-auth-fresh",
+      provider: "clerk",
+      emailVerified: true,
       email: "post-auth-fresh@example.test",
       displayName: "Fresh Signup",
     });
@@ -43,6 +47,8 @@ describe("resolvePostAuthRoute", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "post-auth-newfam",
+      provider: "clerk",
+      emailVerified: true,
       email: "post-auth-newfam@example.test",
       displayName: "New Steward",
     });
@@ -56,6 +62,8 @@ describe("resolvePostAuthRoute", () => {
     const { boudreauxFamilyId } = await seedInto(db, new InMemoryMediaStorage());
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "post-auth-findfirst",
+      provider: "clerk",
+      emailVerified: true,
       email: "post-auth-findfirst@example.test",
       displayName: "Finder First",
     });

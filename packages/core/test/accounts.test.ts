@@ -32,6 +32,8 @@ describe("createAccountWithPerson", () => {
   it("creates account + person and wires the account_id FK", async () => {
     const { accountId, personId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:abc",
+      provider: "clerk",
+      emailVerified: true,
       email: "sofia@example.com",
       displayName: "Sofia Esposito",
     });
@@ -45,6 +47,8 @@ describe("createAccountWithPerson", () => {
   it("defaults spokenName to the first word of displayName", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:s1",
+      provider: "clerk",
+      emailVerified: true,
       email: "s@example.com",
       displayName: "Sofia Maria Esposito",
     });
@@ -54,6 +58,8 @@ describe("createAccountWithPerson", () => {
   it("honors an explicit spokenName", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:s2",
+      provider: "clerk",
+      emailVerified: true,
       email: "s2@example.com",
       displayName: "Salvatore",
       spokenName: "Sal",
@@ -64,12 +70,16 @@ describe("createAccountWithPerson", () => {
   it("rejects a duplicate authProviderUserId", async () => {
     await createAccountWithPerson(db, {
       authProviderUserId: "mock:dup",
+      provider: "clerk",
+      emailVerified: true,
       email: "a@example.com",
       displayName: "Ann",
     });
     await expect(
       createAccountWithPerson(db, {
         authProviderUserId: "mock:dup",
+        provider: "clerk",
+        emailVerified: true,
         email: "b@example.com",
         displayName: "Bob",
       }),
@@ -80,6 +90,8 @@ describe("createAccountWithPerson", () => {
     await expect(
       createAccountWithPerson(db, {
         authProviderUserId: "mock:empty",
+        provider: "clerk",
+        emailVerified: true,
         email: "e@example.com",
         displayName: "   ",
       }),

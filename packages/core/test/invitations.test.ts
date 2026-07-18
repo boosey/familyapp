@@ -10,12 +10,19 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   AuthorizationError,
   InvariantViolation,
+  ThrottleError,
   acceptInvitation,
   addMembership,
   createInvitation,
   getInvitationByToken,
   isActiveMember,
 } from "../src/index";
+import {
+  INVITE_THROTTLE_DESTINATION_LIMIT,
+  INVITE_THROTTLE_DESTINATION_WINDOW_MS,
+  INVITE_THROTTLE_INVITER_LIMIT,
+  INVITE_THROTTLE_INVITER_WINDOW_MS,
+} from "../src/constants";
 import { makeFamily, makePerson } from "./helpers";
 
 let db: Database;
@@ -52,6 +59,44 @@ describe("createInvitation", () => {
       .limit(1);
     expect(row?.tokenHash).toBeTruthy();
     expect(row?.tokenHash).not.toBe(token); // raw token never persisted
+  });
+
+  it("stores an optional invitee phone and initializes delivery attempts to zero", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteePhone: "+15551230000",
+    });
+    const [row] = await db
+      .select({
+        inviteePhone: invitations.inviteePhone,
+        deliveryAttempts: invitations.deliveryAttempts,
+      })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(row?.inviteePhone).toBe("+15551230000");
+    expect(row?.deliveryAttempts).toBe(0);
+  });
+
+  it("persists requested delivery channels on the row", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+      deliveryChannels: ["email", "sms"],
+    });
+    const [row] = await db
+      .select({ deliveryChannels: invitations.deliveryChannels })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(row?.deliveryChannels).toEqual(["email", "sms"]);
   });
 
   it("rejects an inviter who is not an active member", async () => {
@@ -99,6 +144,153 @@ describe("createInvitation", () => {
       .where(eq(persons.id, inviteePersonId))
       .limit(1);
     expect(person?.displayName).toBe("Invited member");
+  });
+});
+
+describe("createInvitation throttle (#105)", () => {
+  /**
+   * Bulk-seed invitation rows directly (token hashes just need uniqueness) so the throttle
+   * boundary can be tested without driving the limit count through createInvitation itself.
+   * Every seeded row anchors to one shared provisional Person — only the FK has to hold.
+   */
+  async function seedInvitations(opts: {
+    count: number;
+    inviterPersonId: string;
+    familyId: string;
+    email?: string;
+    phone?: string;
+    createdAt?: Date;
+  }) {
+    const anchor = await makePerson(db, "Seed Anchor");
+    const stamp = Math.random().toString(36).slice(2);
+    await db.insert(invitations).values(
+      Array.from({ length: opts.count }, (_, i) => ({
+        tokenHash: `seed-${stamp}-${i}`,
+        familyId: opts.familyId,
+        inviterPersonId: opts.inviterPersonId,
+        inviteePersonId: anchor.id,
+        inviteeEmail: opts.email ?? null,
+        inviteePhone: opts.phone ?? null,
+        createdAt: opts.createdAt ?? new Date(),
+      })),
+    );
+  }
+
+  it("allows invites up to the per-inviter ceiling, then refuses the next one", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await seedInvitations({
+      count: INVITE_THROTTLE_INVITER_LIMIT - 1,
+      inviterPersonId: steward.id,
+      familyId: fam.id,
+    });
+    // The invite that reaches the ceiling still goes through…
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+    });
+    // …and the one past it is refused, writing nothing.
+    await expect(
+      createInvitation(db, {
+        familyId: fam.id,
+        inviterPersonId: steward.id,
+        inviteeName: "One too many",
+      }),
+    ).rejects.toBeInstanceOf(ThrottleError);
+  });
+
+  it("does not count the inviter's invitations older than the window", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await seedInvitations({
+      count: INVITE_THROTTLE_INVITER_LIMIT,
+      inviterPersonId: steward.id,
+      familyId: fam.id,
+      createdAt: new Date(Date.now() - INVITE_THROTTLE_INVITER_WINDOW_MS - 60_000),
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+    });
+  });
+
+  it("does not count OTHER inviters toward the per-inviter ceiling", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const other = await makePerson(db, "Other Member");
+    await seedInvitations({
+      count: INVITE_THROTTLE_INVITER_LIMIT,
+      inviterPersonId: other.id,
+      familyId: fam.id,
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+    });
+  });
+
+  it("throttles repeat sends to the same email destination, case-insensitively, across inviters", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const other = await makePerson(db, "Other Member");
+    // Seeded by a DIFFERENT inviter, in mixed case — the destination arm is app-wide.
+    await seedInvitations({
+      count: INVITE_THROTTLE_DESTINATION_LIMIT,
+      inviterPersonId: other.id,
+      familyId: fam.id,
+      email: "Sal@Example.com",
+    });
+    await expect(
+      createInvitation(db, {
+        familyId: fam.id,
+        inviterPersonId: steward.id,
+        inviteeName: "Salvatore",
+        inviteeEmail: "sal@example.com",
+      }),
+    ).rejects.toBeInstanceOf(ThrottleError);
+    // A different destination is unaffected.
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteeEmail: "salvatore@example.com",
+    });
+  });
+
+  it("throttles repeat sends to the same phone destination", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await seedInvitations({
+      count: INVITE_THROTTLE_DESTINATION_LIMIT,
+      inviterPersonId: steward.id,
+      familyId: fam.id,
+      phone: "+15551230000",
+    });
+    await expect(
+      createInvitation(db, {
+        familyId: fam.id,
+        inviterPersonId: steward.id,
+        inviteeName: "Salvatore",
+        inviteePhone: "+15551230000",
+      }),
+    ).rejects.toBeInstanceOf(ThrottleError);
+  });
+
+  it("does not count destination sends older than the window", async () => {
+    const { steward, fam } = await familyWithSteward();
+    await seedInvitations({
+      count: INVITE_THROTTLE_DESTINATION_LIMIT,
+      inviterPersonId: steward.id,
+      familyId: fam.id,
+      email: "sal@example.com",
+      createdAt: new Date(
+        Date.now() - INVITE_THROTTLE_DESTINATION_WINDOW_MS - 60_000,
+      ),
+    });
+    await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Salvatore",
+      inviteeEmail: "sal@example.com",
+    });
   });
 });
 

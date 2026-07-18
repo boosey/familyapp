@@ -7,13 +7,17 @@
  * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
-import { AuthorizationError, InvariantViolation } from "./errors";
+import { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
 import {
+  INVITE_THROTTLE_DESTINATION_LIMIT,
+  INVITE_THROTTLE_DESTINATION_WINDOW_MS,
+  INVITE_THROTTLE_INVITER_LIMIT,
+  INVITE_THROTTLE_INVITER_WINDOW_MS,
   MEMBER_INVITATION_DEFAULT_TTL_MS,
   MEMBER_INVITATION_TOKEN_ENTROPY_BYTES,
 } from "./constants";
@@ -31,6 +35,13 @@ export interface CreateInvitationInput {
   inviterPersonId: string;
   inviteeName?: string;
   inviteeEmail?: string;
+  inviteePhone?: string;
+  /**
+   * Channels delivery was requested on at enqueue time (e.g. ["email","sms"]). Kept as `string[]`
+   * here — core stays vendor-agnostic and does not import `@chronicle/notifications`' branded
+   * `DeliveryChannel` type; the web layer narrows/produces it.
+   */
+  deliveryChannels?: string[];
   relationshipLabel?: string;
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
@@ -79,6 +90,63 @@ export async function createInvitation(
       );
     }
 
+    // Invite-send throttle (issue #105) — a GENEROUS accident guard, not a rate-limit against
+    // determined abuse. Two independent arms, each a rolling window counted over the invitations
+    // table (every creation is a row, so rows ≈ sends):
+    //   1. Per INVITER: caps a bulk-paste/scripting accident (a whole spreadsheet's worth of
+    //      invites in one sitting) across all families the inviter belongs to.
+    //   2. Per DESTINATION (email OR phone): protects the RECIPIENT from being spammed — app-wide,
+    //      so it holds even when different inviters (or families) address the same person.
+    // Both run inside the creation tx so a burst of concurrent submissions sees one consistent
+    // count. Exceeding either arm refuses the invite with ThrottleError; nothing is written.
+    const inviterWindowStart = new Date(
+      Date.now() - INVITE_THROTTLE_INVITER_WINDOW_MS,
+    );
+    const [inviterCount] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.inviterPersonId, input.inviterPersonId),
+          gt(invitations.createdAt, inviterWindowStart),
+        ),
+      );
+    if ((inviterCount?.n ?? 0) >= INVITE_THROTTLE_INVITER_LIMIT) {
+      throw new ThrottleError(
+        `inviter ${input.inviterPersonId} exceeded ${INVITE_THROTTLE_INVITER_LIMIT} invitations per hour`,
+      );
+    }
+
+    const trimmedEmail = input.inviteeEmail?.trim() || null;
+    const trimmedPhone = input.inviteePhone?.trim() || null;
+    if (trimmedEmail || trimmedPhone) {
+      const destinationWindowStart = new Date(
+        Date.now() - INVITE_THROTTLE_DESTINATION_WINDOW_MS,
+      );
+      // Match whichever contacts were supplied: email case-insensitively, phone exactly (callers
+      // normalize to E.164 before create — see the web action's normalizePhone).
+      const destinationClauses = [
+        trimmedEmail
+          ? sql`lower(${invitations.inviteeEmail}) = ${trimmedEmail.toLowerCase()}`
+          : null,
+        trimmedPhone ? eq(invitations.inviteePhone, trimmedPhone) : null,
+      ].filter((c) => c !== null);
+      const [destinationCount] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(invitations)
+        .where(
+          and(
+            or(...destinationClauses),
+            gt(invitations.createdAt, destinationWindowStart),
+          ),
+        );
+      if ((destinationCount?.n ?? 0) >= INVITE_THROTTLE_DESTINATION_LIMIT) {
+        throw new ThrottleError(
+          `destination already received ${INVITE_THROTTLE_DESTINATION_LIMIT} invitations in the last 24 hours`,
+        );
+      }
+    }
+
     // ADR-0006: mint the provisional (Account-less) Person the invitation anchors to. It carries the
     // inviter-supplied name as a placeholder; the real display/spoken name arrive when the invitee
     // signs up (their Person's names win on merge — see acceptInvitation).
@@ -109,6 +177,8 @@ export async function createInvitation(
         inviteePersonId: provisional!.id,
         inviteeName: input.inviteeName ?? null,
         inviteeEmail: input.inviteeEmail ?? null,
+        inviteePhone: input.inviteePhone ?? null,
+        deliveryChannels: input.deliveryChannels ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         role: input.role ?? "member",
         status: "pending",
@@ -118,6 +188,64 @@ export async function createInvitation(
 
     return { invitationId: row!.id, token, inviteePersonId: provisional!.id };
   });
+}
+
+export interface InvitationDeliveryContext {
+  inviterName: string;
+  familyName: string;
+  inviteeName: string | null;
+  inviteeEmail: string | null;
+  inviteePhone: string | null;
+}
+
+/** Safe projection for composing a delivery message: inviter + family names and the invitee contacts. */
+export async function getInvitationDeliveryContext(
+  db: Database,
+  invitationId: string,
+): Promise<InvitationDeliveryContext | null> {
+  const [row] = await db
+    .select({
+      inviterName: persons.displayName,
+      familyName: families.name,
+      inviteeName: invitations.inviteeName,
+      inviteeEmail: invitations.inviteeEmail,
+      inviteePhone: invitations.inviteePhone,
+    })
+    .from(invitations)
+    .innerJoin(families, eq(families.id, invitations.familyId))
+    .innerJoin(persons, eq(persons.id, invitations.inviterPersonId))
+    .where(eq(invitations.id, invitationId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    inviterName: row.inviterName ?? "Someone",
+    familyName: row.familyName,
+    inviteeName: row.inviteeName,
+    inviteeEmail: row.inviteeEmail,
+    inviteePhone: row.inviteePhone,
+  };
+}
+
+/**
+ * Record a delivery attempt outcome on the invitation. Increments deliveryAttempts; sets deliveredAt
+ * when at least one channel succeeded and/or deliveryError with the failure summary. Idempotent-safe
+ * to call once per worker run.
+ */
+export async function recordInviteDelivery(
+  db: Database,
+  invitationId: string,
+  outcome: { deliveredAt?: Date; deliveryError?: string },
+): Promise<void> {
+  // Atomic increment (mirrors the `processingAttempt` idiom in story-repository) — no read-then-write
+  // race. An UPDATE on a missing invitation is a harmless no-op, so no existence check is needed.
+  await db
+    .update(invitations)
+    .set({
+      deliveryAttempts: sql`${invitations.deliveryAttempts} + 1`,
+      ...(outcome.deliveredAt !== undefined ? { deliveredAt: outcome.deliveredAt } : {}),
+      ...(outcome.deliveryError !== undefined ? { deliveryError: outcome.deliveryError } : {}),
+    })
+    .where(eq(invitations.id, invitationId));
 }
 
 export interface InvitationView {

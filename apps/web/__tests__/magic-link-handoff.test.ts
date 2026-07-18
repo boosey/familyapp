@@ -53,6 +53,8 @@ describe("resolveAuthProviderUserId", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_has_account",
+      provider: "clerk",
+      emailVerified: true,
       email: "kin@example.com",
       displayName: "Kin Folk",
     });
@@ -83,6 +85,8 @@ describe("Clerk adapter establishAccountSession (handoff)", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk_handoff_user",
+      provider: "clerk",
+      emailVerified: true,
       email: "handoff@example.com",
       displayName: "Hand Off",
     });
@@ -119,6 +123,8 @@ describe("mock adapter establishAccountSession (established)", () => {
     const db = await createTestDatabase();
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:user-1",
+      provider: "clerk",
+      emailVerified: true,
       email: "mock@example.com",
       displayName: "Mock User",
     });

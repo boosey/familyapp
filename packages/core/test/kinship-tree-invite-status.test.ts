@@ -124,6 +124,8 @@ describe("resolveKinshipTree — inviteStatus projection (truth table)", () => {
     // An account-backed person is already a real user.
     const { personId: holderId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:holder",
+      provider: "clerk",
+      emailVerified: true,
       email: "holder@example.com",
       displayName: "Marco Esposito",
     });

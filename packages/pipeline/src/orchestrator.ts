@@ -38,7 +38,7 @@ import type { MediaStorage } from "@chronicle/storage";
 import type {
   JobFailureInfo,
   JobName,
-  JobPayload,
+  StoryJobPayload,
   JobQueue,
   LanguageModel,
   Transcriber,
@@ -75,8 +75,8 @@ export interface Pipeline {
   /** Drain the queue (run all enqueued stages to completion). */
   runToCompletion(): Promise<void>;
   /** Direct stage entrypoints, exposed for tests that want to drive stages explicitly. */
-  runTranscribeStage(payload: JobPayload): Promise<void>;
-  runRenderStoryStage(payload: JobPayload): Promise<void>;
+  runTranscribeStage(payload: StoryJobPayload): Promise<void>;
+  runRenderStoryStage(payload: StoryJobPayload): Promise<void>;
   /** Access to the queue for inspection. */
   readonly queue: JobQueue;
 }
@@ -88,14 +88,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   // Carry the retry generation (issue #11) verbatim through internal cascades. `attempt` is only
   // present on a retried run; when omitted the payload — and therefore its dedupe id — is identical
   // to the initial run, so the normal path's queue behavior is unchanged.
-  const withAttempt = (storyId: string, attempt: number | undefined): JobPayload =>
+  const withAttempt = (storyId: string, attempt: number | undefined): StoryJobPayload =>
     attempt === undefined ? { storyId } : { storyId, attempt };
 
   // Terminal-failure handler shared by both stages: a stage that exhausted the durable queue's
   // retries lands here (issue #11). Stamp a DB signal so the viewer-scoped status read can report
   // `failed` instead of an indefinite `processing`. Must not throw — it is the last-resort recorder.
   const onStageFailure = (stage: JobName) => async (
-    payload: JobPayload,
+    payload: StoryJobPayload,
     error: JobFailureInfo,
   ): Promise<void> => {
     plog("pipeline", `${stage}: TERMINAL failure → marking story failed`, {
@@ -117,7 +117,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   };
 
-  const runTranscribeStage = async (payload: JobPayload): Promise<void> => {
+  const runTranscribeStage = async (payload: StoryJobPayload): Promise<void> => {
     const done = startTimer();
     plog("pipeline", "transcribe: begin", { story: payload.storyId });
     const view = await getStoryAndRecordingForPipeline(deps.db, payload.storyId);
@@ -253,7 +253,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     await queue.enqueue("render_story", withAttempt(view.storyId, payload.attempt));
   };
 
-  const runRenderStoryStage = async (payload: JobPayload): Promise<void> => {
+  const runRenderStoryStage = async (payload: StoryJobPayload): Promise<void> => {
     const done = startTimer();
     plog("pipeline", "render: begin", { story: payload.storyId });
     const view = await getStoryAndRecordingForPipeline(deps.db, payload.storyId);
@@ -366,4 +366,4 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   };
 }
 
-export type { JobName, JobPayload };
+export type { JobName, StoryJobPayload };

@@ -43,6 +43,8 @@ describe("reconcileAccountProfile", () => {
   it("propagates a renamed name to the Account mirror AND the controlled Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:u1",
+      provider: "clerk",
+      emailVerified: true,
       email: "sofia@example.com",
       displayName: "Sofia Esposito",
     });
@@ -64,6 +66,8 @@ describe("reconcileAccountProfile", () => {
   it("never clobbers the user-owned spokenName", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:u2",
+      provider: "clerk",
+      emailVerified: true,
       email: "s@example.com",
       displayName: "Salvatore",
       spokenName: "Sal",
@@ -82,6 +86,8 @@ describe("reconcileAccountProfile", () => {
   it("leaves a stored value untouched when the incoming field is blank/absent", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:u3",
+      provider: "clerk",
+      emailVerified: true,
       email: "keep@example.com",
       displayName: "Keep Me",
     });
@@ -102,6 +108,8 @@ describe("reconcileAccountProfile", () => {
   it("is idempotent under replay", async () => {
     await createAccountWithPerson(db, {
       authProviderUserId: "clerk:u4",
+      provider: "clerk",
+      emailVerified: true,
       email: "a@example.com",
       displayName: "Ann",
     });
@@ -129,6 +137,8 @@ describe("deactivateAccountByAuthProviderUserId", () => {
   it("soft-deletes the account (active=false) and preserves the Person", async () => {
     const { personId } = await createAccountWithPerson(db, {
       authProviderUserId: "clerk:d1",
+      provider: "clerk",
+      emailVerified: true,
       email: "d@example.com",
       displayName: "Dana",
     });
@@ -146,6 +156,8 @@ describe("deactivateAccountByAuthProviderUserId", () => {
   it("is idempotent (deactivating an already-inactive account is a no-op)", async () => {
     await createAccountWithPerson(db, {
       authProviderUserId: "clerk:d2",
+      provider: "clerk",
+      emailVerified: true,
       email: "d2@example.com",
       displayName: "Deb",
     });

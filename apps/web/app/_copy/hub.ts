@@ -182,6 +182,10 @@ export const hub = {
     memberReadyTitle: "Invitation link is ready",
     memberReadyBlurb:
       "Send this to your relative. Opening it lets them create a login and join your family — you don't have to set anything up for them.",
+    // Task 9 — delivery-status readout. Delivery is async (off the request path), so this is the only
+    // signal the inviter gets that anything was sent; the copy-link below is always the honest fallback.
+    sendingTo: (targets: string) =>
+      `Sending your invitation to ${targets}. If it doesn't arrive, you can still share the link below.`,
     signedOut: "Sign in to invite someone.",
     memberHeading: "Invite a family member",
     memberBody:
@@ -192,6 +196,16 @@ export const hub = {
     emailLabel: "Their email",
     emailLabelOptional: "(optional)",
     emailPlaceholder: "rosa@example.com",
+    // "Their phone" and "(optional)" are split so the span styling is preserved in JSX.
+    phoneLabel: "Their phone",
+    phoneLabelOptional: "(optional)",
+    phonePlaceholder: "+1 555 123 0000",
+    phoneInvalid: "That phone number doesn't look right — check the format and try again.",
+    // #105 — shown when the generous invite-send throttle refuses an invite (bulk-paste accident
+    // guard). Plain-language: no numbers, no "rate limit" jargon.
+    throttled:
+      "That's a lot of invitations in a short time. Take a breather and try again a little later — if you're inviting a big group, spread it out over the day.",
+    smsConsentLabel: "OK to text them the invite link",
     // "Relationship" and "(optional)" are split so the span styling is preserved in JSX.
     relationshipLabel: "Relationship",
     relationshipLabelOptional: "(optional)",

@@ -320,6 +320,62 @@ export const accounts = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// account_identities — a login credential from ONE auth VENDOR (provider='clerk',
+// NOT 'google'/'sms'). Google/password/SMS inside Clerk still yield ONE Clerk user
+// id -> one row. A second row only appears on a vendor switch or a dev+prod overlap.
+// The vendor id is a swappable POINTER; the durable identity is the Account + its
+// verified contacts. UNIQUE(provider, provider_user_id) makes the concurrent-attach
+// race safe (loser trips the constraint and re-resolves the winner).
+// ---------------------------------------------------------------------------
+export const accountIdentities = pgTable(
+  "account_identities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    provider: text("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("account_identities_provider_user_uq").on(
+      t.provider,
+      t.providerUserId,
+    ),
+    index("account_identities_account_id_idx").on(t.accountId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// account_contacts — portable, verified match keys for a login. `verified_at` NULL
+// means unverified and is NEVER a match key (an unverified contact must never adopt
+// an existing account). UNIQUE(kind, value) guarantees a verified contact maps to at
+// most one account. v1 matches kind='email' only; 'phone' is accepted but inert.
+// ---------------------------------------------------------------------------
+export const accountContacts = pgTable(
+  "account_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    kind: text("kind").notNull(),
+    value: text("value").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("account_contacts_kind_value_uq").on(t.kind, t.value),
+    index("account_contacts_account_id_idx").on(t.accountId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Family (the Chronicle) — a container that owns NOTHING expressive. Stories are
 // surfaced into it, never stored in it.
 // ---------------------------------------------------------------------------
@@ -930,6 +986,16 @@ export const invitations = pgTable(
     inviteeName: text("invitee_name"),
     /** Optional email the invite was addressed to (the person may be unknown to the system). */
     inviteeEmail: text("invitee_email"),
+    /** Optional E.164 phone the invite was addressed to (SMS channel). */
+    inviteePhone: text("invitee_phone"),
+    /** Channels delivery was requested on at enqueue time (e.g. {email,sms}). */
+    deliveryChannels: text("delivery_channels").array(),
+    /** Set when at least one channel delivered successfully. */
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    /** Last delivery error string, if a channel failed. */
+    deliveryError: text("delivery_error"),
+    /** Incremented by the delivery worker on each attempt. */
+    deliveryAttempts: integer("delivery_attempts").notNull().default(0),
     /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
     relationshipLabel: text("relationship_label"),
     /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */
@@ -1657,6 +1723,10 @@ export type Person = typeof persons.$inferSelect;
 export type NewPerson = typeof persons.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
+export type AccountIdentity = typeof accountIdentities.$inferSelect;
+export type NewAccountIdentity = typeof accountIdentities.$inferInsert;
+export type AccountContact = typeof accountContacts.$inferSelect;
+export type NewAccountContact = typeof accountContacts.$inferInsert;
 export type Family = typeof families.$inferSelect;
 export type NewFamily = typeof families.$inferInsert;
 export type Membership = typeof memberships.$inferSelect;

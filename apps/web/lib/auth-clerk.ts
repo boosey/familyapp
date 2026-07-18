@@ -1,9 +1,12 @@
 /**
  * Clerk-backed AuthProvider — the production identity adapter for the account-holder hub.
  *
- * Per DECISIONS.md, Clerk is the named auth vendor. Account stores only the provider's opaque
- * user id (`accounts.authProviderUserId`), nothing expressive — so the adapter's job is purely:
- *   Clerk session  →  Clerk userId  →  Account.authProviderUserId  →  Person.accountId  →  Person id.
+ * Per DECISIONS.md, Clerk is the named auth vendor. A Clerk login is one of the account's
+ * `account_identities` rows (provider='clerk'); the durable identity is the Account itself. The
+ * adapter's job is purely:
+ *   Clerk session  →  Clerk userId  →  account_identities  →  Account  →  Person.accountId  →  Person id.
+ * Resolving through the identities table (not `accounts.authProviderUserId`) lets ANY of the account's
+ * clerk identities authenticate it — including one attached AFTER account creation during a heal.
  *
  * Defense in depth: same posture as the DevCookie stub — failures NEVER throw. Anything other
  * than "Clerk says userId X AND we have an Account row for X AND a Person points at it" resolves
@@ -20,8 +23,8 @@
  * Clerk's `auth()` is injectable so the unit tests need no Clerk install and never hit network.
  */
 import "server-only";
-import { and, eq } from "drizzle-orm";
-import { accounts, persons } from "@chronicle/db/schema";
+import { and, desc, eq } from "drizzle-orm";
+import { accounts, persons, accountIdentities } from "@chronicle/db/schema";
 import type { AuthContext } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import type { AuthProvider, EstablishAccountSessionResult } from "./auth";
@@ -41,11 +44,20 @@ export interface ClerkAuthProviderOptions {
 }
 
 /**
- * Resolve a Person to their Account's Clerk userId (`accounts.authProviderUserId`), or null. Inner
- * join: a value comes back ONLY if the Person has an ACTIVE Account (mirrors the join in auth-mock.ts).
- * The `active` filter mirrors `resolvePersonRow`: a soft-deleted account (Clerk `user.deleted`, issue
- * #10) must not be able to establish a magic-link session either — it resolves to null, and the caller
- * `establishAccountSession` then declines to mint a sign-in ticket.
+ * Resolve a Person to their Account's NEWEST Clerk identity (`account_identities.providerUserId`),
+ * or null. A healed account (Model B) may hold MORE THAN ONE clerk identity — a dead dev-instance id
+ * plus the live prod-instance id attached during the heal — so we mint the sign-in ticket for the
+ * newest-attached one, which is the current-instance (live) id.
+ *
+ * Inner join: a value comes back ONLY if the Person has an ACTIVE Account with at least one clerk
+ * identity. The `active` filter mirrors `resolvePersonRow`: a soft-deleted account (Clerk
+ * `user.deleted`, issue #10) must not be able to establish a magic-link session either — it resolves
+ * to null, and the caller `establishAccountSession` then declines to mint a sign-in ticket.
+ *
+ * Limitation: the newest-identity heuristic assumes the most recently attached clerk id is the live
+ * one. Pruning dead identities on heal (so there is only ever one clerk id) is deferred; until then a
+ * pathological re-attach ordering could mint against a stale id. Acceptable for the dev+prod overlap
+ * this exists to survive.
  * Exported for unit testing.
  */
 export async function resolveAuthProviderUserId(
@@ -53,12 +65,22 @@ export async function resolveAuthProviderUserId(
   personId: string,
 ): Promise<string | null> {
   const [row] = await db
-    .select({ authProviderUserId: accounts.authProviderUserId })
+    .select({ providerUserId: accountIdentities.providerUserId })
     .from(persons)
     .innerJoin(accounts, eq(accounts.id, persons.accountId))
+    .innerJoin(
+      accountIdentities,
+      and(
+        eq(accountIdentities.accountId, accounts.id),
+        eq(accountIdentities.provider, "clerk"),
+      ),
+    )
     .where(and(eq(persons.id, personId), eq(accounts.active, true)))
+    // Newest identity wins (the current-instance id after a heal); `id` is a deterministic tiebreaker
+    // so two identities sharing a `created_at` (e.g. same-transaction inserts) still pick stably.
+    .orderBy(desc(accountIdentities.createdAt), desc(accountIdentities.id))
     .limit(1);
-  return row?.authProviderUserId ?? null;
+  return row?.providerUserId ?? null;
 }
 
 /**
@@ -81,8 +103,12 @@ async function resolvePersonRow(
   let lastErr: unknown;
   for (let attempt = 1; attempt <= AUTH_LOOKUP_MAX_ATTEMPTS; attempt++) {
     try {
-      // Single inner join: a row only comes back if BOTH the Account exists for this Clerk userId
-      // AND a Person points at that Account. An orphan resolves to null → anonymous upstream.
+      // Join anchored on account_identities: a row comes back only if SOME clerk identity holds this
+      // userId AND its Account is active AND a Person points at that Account. Resolving through the
+      // identities table (not `accounts.authProviderUserId`) means a login is authenticated by ANY of
+      // the account's clerk identities — including one attached AFTER account creation during a Model B
+      // heal (a prod-instance id grafted onto an account first created under a dead dev id). An orphan
+      // (no Person) resolves to null → anonymous upstream.
       //
       // `accounts.active` is the load-bearing filter for the Clerk `user.deleted` webhook (issue #10):
       // that webhook SOFT-deletes by flipping `active = false` (it never erases the Person/content).
@@ -91,9 +117,16 @@ async function resolvePersonRow(
       // resolves to null → anonymous, exactly like a missing account.
       const [row] = await db
         .select({ personId: persons.id })
-        .from(accounts)
+        .from(accountIdentities)
+        .innerJoin(accounts, eq(accounts.id, accountIdentities.accountId))
         .innerJoin(persons, eq(persons.accountId, accounts.id))
-        .where(and(eq(accounts.authProviderUserId, userId), eq(accounts.active, true)))
+        .where(
+          and(
+            eq(accountIdentities.provider, "clerk"),
+            eq(accountIdentities.providerUserId, userId),
+            eq(accounts.active, true),
+          ),
+        )
         .limit(1);
       return row ?? null;
     } catch (err) {

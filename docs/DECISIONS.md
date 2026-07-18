@@ -108,6 +108,13 @@ Every non-obvious choice and its one-line rationale. Newest at top within each s
   stub in tests. Prompts + behavior policy live in our code, never the vendor's.
 - **TTS default: ElevenLabs**, behind a `Voice` interface. Mock in tests. (Interviewer's
   synthetic question-voice only — never the narrator's preserved recordings.)
+- **Email default: Resend**, behind the `@chronicle/notifications` `Notifier` interface. SDK
+  usage confined to `packages/notifications/src/resend.ts`; mock in tests.
+- **SMS default: Twilio**, behind the same `Notifier` interface. SDK usage confined to
+  `packages/notifications/src/twilio.ts`; mock in tests. Both adapters are enforced by the
+  vendor-SDK architecture guard in `packages/pipeline/test/pipeline.test.ts` (`roots` now
+  includes `packages/notifications/src`; `resend`/`twilio` are forbidden imports outside their
+  named adapter files).
 
 ## Architecture & layout
 
@@ -672,3 +679,32 @@ Rules:
   install once and can run legs concurrently. **Smell test:** if you run the full preflight above
   routinely, the fast-path isn't buying much over just opening a PR and letting CI do it in
   parallel — prefer a PR for anything non-trivial.
+
+## Invite delivery (email/SMS) — vendor choice + a deliberate invariant weakening
+
+Decided 2026-07-17. Spec: `docs/superpowers/specs/2026-07-17-invite-delivery-email-sms-design.md`.
+
+- **Resend (email) and Twilio (SMS) are the default adapters behind a new `Notifier` seam**
+  (`@chronicle/notifications`). Both vendor SDKs are confined to `resend.ts`/`twilio.ts`
+  respectively; nothing else in the package (or any other IP package) may import them, enforced by
+  extending the existing vendor-SDK architecture guard (`packages/pipeline/test/pipeline.test.ts`)
+  to scan `packages/notifications/src`, with `resend.ts`/`twilio.ts` carved out exactly like
+  `packages/storage/src/r2.ts` is for `@aws-sdk/*`.
+- **Async (Inngest) delivery was chosen over an inline send**, which forces a deliberate,
+  accepted weakening of the standing "the raw invite token is never persisted" invariant: the
+  plaintext token is placed in the Inngest job payload so the off-request-path worker can build
+  the join link. Normally the raw token lives only in the emailed/texted link itself; only its
+  SHA-256 hash is stored in the DB. An async worker has no other way to reconstruct the link once
+  it's off the request path, so the payload becomes a second place the plaintext token exists
+  (at rest, in Inngest's job store) for the (short) lifetime of the job.
+  - **Rejected alternative 1 — inline send.** Sending synchronously on the request path preserves
+    the invariant natively (the token never leaves process memory except inside the rendered
+    message). Rejected because the user explicitly chose async delivery via Inngest — request
+    latency and vendor-outage isolation for email/SMS sends outweighed keeping the invariant
+    intact for free.
+  - **Rejected alternative 2 — envelope-encrypt the token in the payload.** Encrypting the token
+    before putting it in the job payload (and decrypting only in the worker) would preserve
+    "a leaked payload ≠ a working invite," closing the gap the plaintext choice opens. Rejected
+    for this iteration as added complexity (key management for a payload-level envelope) not
+    justified yet; noted here so it's a conscious, revisitable deferral rather than an
+    overlooked gap.

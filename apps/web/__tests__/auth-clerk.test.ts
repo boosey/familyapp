@@ -9,9 +9,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDatabase } from "@chronicle/db";
-import { accounts, persons } from "@chronicle/db/schema";
+import { accounts, accountIdentities, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
-import { deactivateAccountByAuthProviderUserId } from "@chronicle/core";
+import {
+  attachIdentity,
+  createAccountWithPerson,
+  deactivateAccountByAuthProviderUserId,
+  resolveAccountIdByVerifiedEmail,
+} from "@chronicle/core";
 import {
   createClerkAuthProvider,
   resolveAuthProviderUserId,
@@ -36,6 +41,14 @@ async function seedPersonWithAccount(
       accountId: account!.id,
     })
     .returning({ id: persons.id });
+  // The Clerk read path resolves via account_identities (not accounts.authProviderUserId),
+  // so a hand-built account seed must carry a matching clerk identity row or it is invisible
+  // to resolvePersonRow / resolveAuthProviderUserId.
+  await db.insert(accountIdentities).values({
+    accountId: account!.id,
+    provider: "clerk",
+    providerUserId: clerkUserId,
+  });
   return { personId: person!.id, accountId: account!.id };
 }
 
@@ -95,6 +108,30 @@ describe("createClerkAuthProvider", () => {
     // Proves it actually retried past the transient failure rather than degrading.
     expect(selectCalls).toBeGreaterThanOrEqual(2);
     warnSpy.mockRestore();
+  });
+
+  it("resolves a session for an identity attached AFTER account creation (healed account)", async () => {
+    // Model B heal: the account was created under a dead dev-instance clerk id (`dev_old`) and a
+    // live prod-instance id (`prod_new`) was later attached via attachIdentity. A login on the
+    // prod id must resolve to the SAME account — the read path joins account_identities, so any of
+    // the account's clerk identities authenticates it, not just the creation-time one.
+    const db = await createTestDatabase();
+    const { personId } = await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "dev_old",
+      email: "h@x.com",
+      emailVerified: true,
+      displayName: "Healed",
+    });
+    const accountId = await resolveAccountIdByVerifiedEmail(db, "h@x.com");
+    await attachIdentity(db, accountId!, "clerk", "prod_new");
+    const provider = createClerkAuthProvider(db, {
+      auth: async () => ({ userId: "prod_new" }),
+    });
+    await expect(provider.getCurrentAuthContext()).resolves.toEqual({
+      kind: "account",
+      personId,
+    });
   });
 
   it("degrades to anonymous when Clerk userId has no matching Account (defense in depth)", async () => {

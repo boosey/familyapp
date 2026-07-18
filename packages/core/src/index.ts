@@ -103,7 +103,7 @@ export {
 } from "./narrator-memory";
 export { eraseStory, eraseAsk, eraseVoiceCaption } from "./erasure-repository";
 export type { EraseResult } from "./erasure-repository";
-export { AuthorizationError, InvariantViolation } from "./errors";
+export { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
 export {
   createAsk,
   listPendingAsksForNarrator,
@@ -120,6 +120,9 @@ export {
   findPersonIdByAuthProviderUserId,
   reconcileAccountProfile,
   deactivateAccountByAuthProviderUserId,
+  resolveAccountByIdentity,
+  resolveAccountIdByVerifiedEmail,
+  attachIdentity,
   type SignUpAccountInput,
   type AccountWithPerson,
   type ReconcileAccountProfileInput,
@@ -172,9 +175,12 @@ export {
   createInvitation,
   getInvitationByToken,
   acceptInvitation,
+  getInvitationDeliveryContext,
+  recordInviteDelivery,
   type CreateInvitationInput,
   type CreateInvitationResult,
   type InvitationView,
+  type InvitationDeliveryContext,
 } from "./invitations";
 export {
   reapUnacceptedInvitees,

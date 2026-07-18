@@ -64,6 +64,8 @@ beforeEach(() => {
 async function seedSteward(tag: string) {
   const { personId } = await createAccountWithPerson(testDb, {
     authProviderUserId: `edit-${tag}`,
+    provider: "clerk",
+    emailVerified: true,
     email: `edit-${tag}@example.test`,
     displayName: `Steward ${tag}`,
   });

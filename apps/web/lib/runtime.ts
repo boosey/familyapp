@@ -45,12 +45,24 @@ import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
 import { Inngest } from "inngest";
 import { createInngestJobQueue } from "@chronicle/queue-inngest";
 import type { InngestFunction } from "inngest";
+import {
+  MockNotifier,
+  ResendEmailAdapter,
+  TwilioSmsAdapter,
+  type Notifier,
+} from "@chronicle/notifications";
 import { type AuthProvider } from "./auth";
 import { createClerkAuthProvider } from "./auth-clerk";
 import { createMockAuthProvider } from "./auth-mock";
 import { isClerkConfigured } from "./clerk-config";
 import { isInngestConfigured, assertInngestServeable } from "./inngest-config";
 import { makeDispatchPipeline, type DispatchPipeline } from "./dispatch-pipeline";
+import {
+  makeDispatchInviteDelivery,
+  type DispatchInviteDelivery,
+} from "./dispatch-invite-delivery";
+import { deliverInvite } from "./deliver-invite";
+import { resolvePublicOrigin } from "./public-origin";
 
 export { isClerkConfigured, isInngestConfigured };
 
@@ -233,6 +245,13 @@ type Runtime = {
    */
   dispatchPipeline: DispatchPipeline;
   /**
+   * Dispatch invite delivery (email/SMS) for a just-created invitation. Mirrors `dispatchPipeline`'s
+   * durable-vs-synchronous split: Inngest configured → enqueue `invite.send` onto the shared jobQueue
+   * (the registered worker rebuilds the link from the token); else deliver synchronously in-request
+   * via the composite `notifier`. See `lib/dispatch-invite-delivery.ts`.
+   */
+  dispatchInviteDelivery: DispatchInviteDelivery;
+  /**
    * True when `INNGEST_EVENT_KEY` is set, i.e. `dispatchPipeline` takes the durable enqueue path.
    * (In prod the serve route ALSO needs `INNGEST_SIGNING_KEY`; see `lib/inngest-config.ts`.)
    */
@@ -363,6 +382,35 @@ async function build(): Promise<Runtime> {
   // adapters are actually live so "am I on real AI?" is answerable from the dev console.
   // eslint-disable-next-line no-console
   console.info(`[chronicle] live adapters → transcriber=${transcriberName} languageModel=${llmName}`);
+
+  // Runtime switch (mirrors Groq-vs-mock / Clerk-vs-mock above): real vendor adapters when their
+  // env vars are present, else the deterministic MockNotifier. Each channel is selected
+  // independently — e.g. RESEND configured but TWILIO absent yields a real email adapter and a
+  // mock SMS adapter, so "am I on real delivery?" degrades one channel at a time, not all-or-nothing.
+  const emailConfigured = present(process.env.RESEND_API_KEY) && present(process.env.RESEND_FROM);
+  const smsConfigured =
+    present(process.env.TWILIO_ACCOUNT_SID) &&
+    present(process.env.TWILIO_AUTH_TOKEN) &&
+    present(process.env.TWILIO_FROM);
+  const emailNotifier: Notifier = emailConfigured
+    ? ResendEmailAdapter.fromApiKey(process.env.RESEND_API_KEY!, process.env.RESEND_FROM!)
+    : new MockNotifier();
+  const smsNotifier: Notifier = smsConfigured
+    ? TwilioSmsAdapter.fromCredentials(
+        process.env.TWILIO_ACCOUNT_SID!,
+        process.env.TWILIO_AUTH_TOKEN!,
+        process.env.TWILIO_FROM!,
+      )
+    : new MockNotifier();
+  // Composite: routes by NotificationMessage.channel to the matching vendor/mock adapter.
+  const notifier: Notifier = {
+    send: (m) => (m.channel === "email" ? emailNotifier.send(m) : smsNotifier.send(m)),
+  };
+  // eslint-disable-next-line no-console
+  console.info(
+    `[chronicle] live adapters → email=${emailConfigured ? "resend" : "mock"} sms=${smsConfigured ? "twilio" : "mock"}`,
+  );
+
   // Factory: each call gets a fresh pipeline with its own in-process queue (see Runtime type).
   const newPipeline = (): Pipeline =>
     createPipeline({ db, storage, transcriber, languageModel });
@@ -378,6 +426,7 @@ async function build(): Promise<Runtime> {
   const inngestConfigured = isInngestConfigured();
   let inngest: Runtime["inngest"];
   let inngestPipeline: Pipeline | undefined;
+  let inngestJobQueue: ReturnType<typeof createInngestJobQueue> | undefined;
   if (inngestConfigured) {
     // Fail-fast on the half-configured signing-key trap BEFORE constructing anything: an event key
     // without a signing key would enqueue + register but never execute (silent forever-draft).
@@ -389,7 +438,27 @@ async function build(): Promise<Runtime> {
       ...(process.env.INNGEST_EVENT_KEY ? { eventKey: process.env.INNGEST_EVENT_KEY } : {}),
     });
     const jobQueue = createInngestJobQueue({ client });
+    inngestJobQueue = jobQueue;
     inngestPipeline = createPipeline({ db, storage, transcriber, languageModel, jobQueue });
+    // Register the invite-delivery worker on the SAME jobQueue as the pipeline stages, so its
+    // function is included in `jobQueue.functions` below and the /api/inngest serve route mounts
+    // it alongside transcribe/render_story. The worker rebuilds the join link from the token —
+    // durable delivery never carries a caller-constructed link across the enqueue boundary.
+    jobQueue.register("invite.send", async (p) => {
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: true,
+      });
+      await deliverInvite({
+        db,
+        notifier,
+        invitationId: p.invitationId,
+        channels: p.channels,
+        link: `${origin}/join/${p.token}`,
+      });
+    });
     inngest = { client, functions: jobQueue.functions };
   }
 
@@ -401,6 +470,16 @@ async function build(): Promise<Runtime> {
     ...(inngestPipeline ? { inngestPipeline } : {}),
   });
 
+  // Single dispatch helper the invite server action uses. Branch selection lives in the pure
+  // makeDispatchInviteDelivery (unit-tested in dispatch-invite-delivery.test.ts). The durable path
+  // enqueues onto the SAME Inngest jobQueue the invite.send worker above was registered on.
+  const dispatchInviteDelivery = makeDispatchInviteDelivery({
+    inngestConfigured,
+    ...(inngestJobQueue ? { inngestJobQueue } : {}),
+    deliver: ({ invitationId, channels, link }) =>
+      deliverInvite({ db, notifier, invitationId, channels, link }),
+  });
+
   return {
     db,
     storage,
@@ -410,6 +489,7 @@ async function build(): Promise<Runtime> {
     transcriber,
     newPipeline,
     dispatchPipeline,
+    dispatchInviteDelivery,
     inngestConfigured,
     ...(inngest ? { inngest } : {}),
     narratorMemory: noopNarratorMemorySink,

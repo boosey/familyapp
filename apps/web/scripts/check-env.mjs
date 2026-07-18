@@ -17,17 +17,13 @@
  *   REQUIRED    — absence breaks core functionality in production → non-zero exit → build fails.
  *   RECOMMENDED — optional / feature-gated / has a safe fallback → warn only, never fails the build.
  *
+ * A REQUIRED entry may set `productionOnly: true`: it is enforced only when VERCEL_ENV ===
+ * "production". Preview deploys deliberately omit the Inngest keys so the pipeline and invite
+ * delivery take the direct in-process route (dispatch-pipeline.ts / dispatch-invite-delivery.ts)
+ * instead of the durable queue — preview must NOT hard-fail on their absence.
+ *
  * Keep the lists as the single, documented source of truth. Adding a new hard-required prod secret?
  * Add it to REQUIRED with a one-line `why`; the drift is then caught before it can reach production.
- *
- * PREVIEW vs PRODUCTION
- * ---------------------
- * A REQUIRED var may carry `previewOptional: true` — it is hard-required on a Production Vercel build
- * but downgraded to warn-only on a Preview build (`VERCEL_ENV === "preview"`). This exists for the
- * INNGEST_* keys: INNGEST_EVENT_KEY is deliberately NOT shared to Preview (a shared key let a preview
- * deploy hijack prod's durable queue — see the "Inngest hijack" incident), so enforcing it on Preview
- * would block every preview build. The pipeline (transcribe → render) simply doesn't run on previews;
- * that is acceptable for UI review. Production's guarantee is unchanged.
  *
  * Plain Node ESM (`.mjs`, run via `node`) — apps/web has no `tsx`, matching scripts/check-port.mjs.
  * The check itself is a pure `env -> result` function so it is unit-testable (see __tests__/check-env.test.ts).
@@ -59,13 +55,13 @@ export const REQUIRED = [
   },
   {
     name: "INNGEST_EVENT_KEY",
-    why: "Durable job queue — the pipeline (transcribe → render) runs on it.",
-    previewOptional: true,
+    why: "Durable job queue — the production pipeline (transcribe → render) runs on it. Preview deploys omit it on purpose and take the direct in-process route.",
+    productionOnly: true,
   },
   {
     name: "INNGEST_SIGNING_KEY",
-    why: "Durable job queue signature verification.",
-    previewOptional: true,
+    why: "Durable job queue signature verification (production). Preview deploys omit it on purpose — no Inngest worker is served there.",
+    productionOnly: true,
   },
 ];
 
@@ -102,19 +98,15 @@ export function shouldEnforce(env) {
 
 /**
  * Pure check: partition REQUIRED / RECOMMENDED into present vs missing. `ok` reflects REQUIRED only.
- * The CLI wrapper maps `ok` to the exit code; RECOMMENDED never affects it.
- *
- * On a Preview build (`VERCEL_ENV === "preview"`), REQUIRED vars flagged `previewOptional` are
- * downgraded to warn-only: they never fail the build and instead ride along in `missingRecommended`.
- * Everywhere else (Production, or a durable DATABASE_URL build) they are hard-required as usual.
+ * The CLI wrapper maps `ok` to the exit code; RECOMMENDED never affects it. Entries flagged
+ * `productionOnly` are enforced solely on production deploys (VERCEL_ENV === "production") —
+ * previews (and durable local builds, where VERCEL_ENV is unset) are allowed to omit them.
  */
 export function checkEnv(env) {
-  const isPreview = env.VERCEL_ENV === "preview";
-  const enforced = REQUIRED.filter((v) => !(isPreview && v.previewOptional));
-  const downgraded = isPreview ? REQUIRED.filter((v) => v.previewOptional) : [];
-
-  const missingRequired = enforced.filter((v) => !present(env[v.name]));
-  const missingRecommended = [...RECOMMENDED, ...downgraded].filter((v) => !present(env[v.name]));
+  const isProduction = env.VERCEL_ENV === "production";
+  const required = REQUIRED.filter((v) => !v.productionOnly || isProduction);
+  const missingRequired = required.filter((v) => !present(env[v.name]));
+  const missingRecommended = RECOMMENDED.filter((v) => !present(env[v.name]));
   const ok = missingRequired.length === 0;
   return { ok, missingRequired, missingRecommended };
 }
