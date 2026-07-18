@@ -123,6 +123,7 @@ export function AlbumGrid({
   pendingTiles = [],
   onRetryTile,
   familyChips,
+  addSlot,
 }: {
   photos: AlbumGridPhoto[];
   /** ADR-0015 · F2 — in-flight/failed placeholder tiles rendered BEFORE the real photos. Default []
@@ -132,6 +133,9 @@ export function AlbumGrid({
   onRetryTile?: (tempId: string) => void;
   /** The shared browse Family filter chips (ADR-0021), consolidated into the one control row. */
   familyChips?: React.ReactNode;
+  /** The "Add Photos" affordance (#143) — rendered right-justified on the SAME control row as the
+   *  When/Search filters and the view controls. Omit when the caller renders the uploader elsewhere. */
+  addSlot?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -309,6 +313,7 @@ export function AlbumGrid({
         value={filter}
         onChange={setFilter}
         familyChips={familyChips}
+        addSlot={addSlot}
         rightSlot={
           <>
             <AlbumViewControls
