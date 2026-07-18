@@ -289,6 +289,7 @@ CREATE TABLE "memberships" (
 	"family_id" uuid NOT NULL,
 	"role" "membership_role" DEFAULT 'member' NOT NULL,
 	"status" "membership_status" DEFAULT 'active' NOT NULL,
+	"non_family" boolean DEFAULT false NOT NULL,
 	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"ended_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

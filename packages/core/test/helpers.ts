@@ -165,7 +165,12 @@ export async function revokeConsent(
   });
 }
 
-export async function endMembership(db: Database, membershipId: string) {
+/**
+ * Force-end a membership by RAW id — a test convenience for seeding ended rows. NOT the core
+ * `endMembership` (which is steward-gated and takes `(ctx, {familyId, personId})`). Renamed to avoid
+ * colliding with that exported function (#161).
+ */
+export async function forceEndMembership(db: Database, membershipId: string) {
   await db
     .update(memberships)
     .set({ status: "ended" })

@@ -11,6 +11,7 @@ import { and, eq } from "drizzle-orm";
 import { families, memberships, persons } from "@chronicle/db/schema";
 import type { Database, Membership, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation } from "./errors";
+import { viewerPersonId, type AuthContext } from "./authorization";
 
 /**
  * A handle that is either the pooled client or an open transaction. The membership insert is reused
@@ -201,4 +202,98 @@ export async function listMembersOfFamily(
   // Members are named self/invitee persons; displayName is nullable only for placeholder mentions
   // (ADR-0016), which never hold a membership. `?? ""` is a compiler guard.
   return rows.map((r) => ({ ...r, displayName: r.displayName ?? "" }));
+}
+
+// ---------------------------------------------------------------------------
+// Member curation (#161, ADR-0023) — mark a member "non-family" (exclude from
+// the unplaced set) and end a membership (steward-only removal).
+// ---------------------------------------------------------------------------
+
+export interface SetMemberNonFamilyInput {
+  familyId: string;
+  personId: string;
+  nonFamily: boolean;
+}
+
+/**
+ * Set the `non_family` flag on `personId`'s ACTIVE membership in `familyId` (#161, ADR-0023). Any
+ * active member of the family may curate this — deciding a member is not (yet) a tree node is
+ * low-stakes and reversible, so it is NOT steward-gated (unlike `endMembership`). `true` removes the
+ * member from `listUnplacedMembers`; `false` restores them. A no-op if the person holds no active
+ * membership in the family (the WHERE matches nothing) — never an error, mirroring the idempotent
+ * curation intent. `persons` are global rows, so this is scoped by (person, family, status=active).
+ */
+export async function setMemberNonFamily(
+  db: Pick<Database, "select" | "update">,
+  ctx: AuthContext,
+  input: SetMemberNonFamilyInput,
+): Promise<void> {
+  const actor = viewerPersonId(ctx);
+  if (actor === null || !(await isActiveMember(db, actor, input.familyId))) {
+    throw new AuthorizationError(
+      "only an active member of this family may curate membership placement",
+    );
+  }
+  await db
+    .update(memberships)
+    .set({ nonFamily: input.nonFamily, updatedAt: new Date() })
+    .where(
+      and(
+        eq(memberships.personId, input.personId),
+        eq(memberships.familyId, input.familyId),
+        eq(memberships.status, "active"),
+      ),
+    );
+}
+
+export interface EndMembershipInput {
+  familyId: string;
+  personId: string;
+}
+
+/**
+ * End `personId`'s ACTIVE membership in `familyId` (#161, ADR-0023) — STEWARD-ONLY. Sets
+ * `status='ended'` + `ended_at=now` on the active row (append-only in spirit: a rejoin is a NEW
+ * active row, honoring the at-most-one-active index). Access revocation is automatic — the
+ * authorization front door and every kinship read gate on `status='active'`, so an ended member
+ * immediately loses family content + tree visibility. Authored stories and asserted kinship edges
+ * are UNTOUCHED (they survive the person leaving; ADR-0016 kinship is append-only anyway). A no-op
+ * WHERE-match (no active membership) still succeeds — ending a non-member is vacuously done.
+ */
+export async function endMembership(
+  db: Pick<Database, "select" | "update">,
+  ctx: AuthContext,
+  input: EndMembershipInput,
+): Promise<void> {
+  const actor = viewerPersonId(ctx);
+  if (actor === null) {
+    throw new AuthorizationError("not signed in");
+  }
+  const steward = await getStewardPersonId(db, input.familyId);
+  if (steward === null) {
+    throw new AuthorizationError("family not found");
+  }
+  if (steward !== actor) {
+    throw new AuthorizationError(
+      "only the family steward may remove a member",
+    );
+  }
+  // The steward cannot remove THEMSELVES — that would leave the family stewardless (nobody could
+  // govern edges or remove members). Steward handoff is a separate, deliberate operation (out of
+  // scope here). Guard it so the one remaining governor can never accidentally strand the family.
+  if (input.personId === steward) {
+    throw new AuthorizationError(
+      "the family steward cannot remove their own membership (hand off stewardship first)",
+    );
+  }
+  await db
+    .update(memberships)
+    .set({ status: "ended", endedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(memberships.personId, input.personId),
+        eq(memberships.familyId, input.familyId),
+        eq(memberships.status, "active"),
+      ),
+    );
 }

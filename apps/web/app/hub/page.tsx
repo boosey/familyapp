@@ -382,6 +382,10 @@ export default async function HubPage({
                 // #158: the Tree/List choice is URL-driven now (?view=), resolved here and rendered by
                 // FamilyTab; the selector itself lives in <FamilySurfaceNav> above.
                 view={familyView}
+                // #161/ADR-0023: active members with no visible kinship edge, surfaced as a "not yet
+                // connected" tray/section with place/non-family/remove actions.
+                unplaced={familyTabData.unplaced}
+                viewerIsSteward={familyTabData.viewerIsSteward}
                 // Family filter chips (ADR-0021 §Tree, #48). Gate the chip data on >=2 families — the
                 // same rule AlbumSurface uses — so the client widget's next/navigation hooks stay out
                 // of the server render for a 0/1-family viewer. The single ON chip is the resolved

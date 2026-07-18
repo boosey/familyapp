@@ -8,16 +8,19 @@
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  addRelative,
   decideMediaRead,
   decideStoryRead,
+  endMembership,
   getMediaForViewer,
   getStoryForViewer,
   listStoriesForViewer,
+  resolveKinshipProjection,
   type AuthContext,
 } from "../src/index";
 import {
   addMembership,
-  endMembership,
+  forceEndMembership,
   makeApprovalAudio,
   makeFamily,
   makePerson,
@@ -135,7 +138,7 @@ describe("family-tier access", () => {
 
   it("denies a co-member whose membership is ENDED (divorce)", async () => {
     const { sofia, sofiaMembership, story } = await setup("family");
-    await endMembership(db, sofiaMembership.id);
+    await forceEndMembership(db, sofiaMembership.id);
     expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
       false,
     );
@@ -269,7 +272,7 @@ describe("family-tier access", () => {
       true,
     );
     // Owner leaves the targeted family: the three-way intersection is now empty.
-    await endMembership(db, ownerMembership.id);
+    await forceEndMembership(db, ownerMembership.id);
     expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(
       false,
     );
@@ -412,5 +415,62 @@ describe("the single front door never leaks via the list helper", () => {
       ownerPersonId: e.id,
     });
     expect(forAnon).toHaveLength(0);
+  });
+});
+
+describe("endMembership (#161) — access revoked, content + kinship survive", () => {
+  it("after removal the person is denied family content, while their story rows and kinship edges remain", async () => {
+    // Steward `e` (family creator) removes co-member `sofia`.
+    const e = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "Boudreaux", e.id); // steward = e
+    await addMembership(db, e.id, fam.id, "active");
+    await addMembership(db, sofia.id, fam.id, "active");
+
+    // Sofia authored a family story targeted into fam, and asserted a kinship edge (a parent of her).
+    const { story } = await makeStory(db, {
+      ownerPersonId: sofia.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
+    });
+    const rel = await addRelative(db, account(sofia.id), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "Sofia's Mom",
+    });
+    expect(rel.allowed).toBe(true);
+
+    // Before removal: the co-member steward can read Sofia's shared family story.
+    expect((await decideStoryRead(db, account(e.id), story)).allowed).toBe(true);
+
+    // Steward removes Sofia.
+    await endMembership(db, account(e.id), { familyId: fam.id, personId: sofia.id });
+
+    // Access is revoked: Sofia (no longer active) is denied the family content of OTHERS. She can
+    // still read her OWN story (owner always can), so test the revocation against a family story she
+    // does not own — here `e`'s.
+    const eStory = (
+      await makeStory(db, {
+        ownerPersonId: e.id,
+        state: "shared",
+        audienceTier: "family",
+        withApprovalConsent: true,
+        targetFamilyIds: [fam.id],
+      })
+    ).story;
+    expect((await decideStoryRead(db, account(sofia.id), eStory)).allowed).toBe(false);
+
+    // Her authored story ROW is untouched — she (the owner) still reads it in any state.
+    expect((await decideStoryRead(db, account(sofia.id), story)).allowed).toBe(true);
+    expect((await getStoryForViewer(db, account(sofia.id), story.id))?.id).toBe(story.id);
+
+    // Her asserted kinship edge is untouched — the steward still sees it in the projection.
+    const { edges } = await resolveKinshipProjection(db, account(e.id), fam.id);
+    const edge = edges.find(
+      (ed) => ed.edgeType === "parent_of" && ed.personBId === sofia.id,
+    );
+    expect(edge).toBeDefined();
   });
 });

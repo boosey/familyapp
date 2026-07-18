@@ -22,7 +22,7 @@ import {
 } from "../src/index";
 import {
   addMembership,
-  endMembership,
+  forceEndMembership,
   makeFamily,
   makePerson,
   makeStory,
@@ -184,7 +184,7 @@ describe("attachPhotoToStory — album-access gate (ADR-0009 lines 33-34)", () =
 
     // The contributor leaves the family — they hold no active membership anywhere the photo lives —
     // but a contributor may always attach their own artifact (mirrors decideAlbumPhotoManage).
-    await endMembership(db, membership.id);
+    await forceEndMembership(db, membership.id);
     const { story } = await makeStory(db, {
       ownerPersonId: contributor.id,
       state: "draft",
