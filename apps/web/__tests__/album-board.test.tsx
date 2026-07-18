@@ -423,7 +423,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
     chooseFiles(["a.png"]);
 
     const img = await screen.findByRole("img", { name: PHOTO_ALT });
-    expect(img.getAttribute("src")).toBe("/api/album-photo/opt-1");
+    // Grid tiles request the thumbnail variant (issue #139).
+    expect(img.getAttribute("src")).toBe("/api/album-photo/opt-1?variant=thumb");
     // No spinner and no blank left behind.
     expect(screen.queryByLabelText(hub.album.importingTile)).toBeNull();
     expect(refresh).toHaveBeenCalled(); // refresh still fires — only to reconcile, not to reveal.

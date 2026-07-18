@@ -35,6 +35,7 @@ import {
 } from "./AlbumFilterBar";
 import { AlbumBulkBar } from "./AlbumBulkBar";
 import { deleteAlbumPhotoAction, bulkSoftDeleteAlbumPhotosAction } from "./actions";
+import { albumPhotoSrc } from "./photo-src";
 import type { PendingTile } from "./import-progress";
 
 export interface AlbumGridPhoto {
@@ -503,7 +504,7 @@ function PendingImportTile({
       <li style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- audited auth route, not a static asset. */}
         <img
-          src={`/api/album-photo/${tile.photoId}`}
+          src={albumPhotoSrc(tile.photoId, { thumb: true })}
           alt={hub.album.photoAlt(null)}
           style={{
             width: "100%",
@@ -582,7 +583,7 @@ function MasonryPendingTile({
       {tile.status === "loaded" && tile.photoId ? (
         // eslint-disable-next-line @next/next/no-img-element -- audited auth route, not a static asset.
         <img
-          src={`/api/album-photo/${tile.photoId}`}
+          src={albumPhotoSrc(tile.photoId, { thumb: true })}
           alt={hub.album.photoAlt(null)}
           style={{
             width: "100%",
@@ -787,7 +788,7 @@ function AlbumTile({
         {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth
             route, not a static asset; next/image would proxy/optimize it. */}
         <img
-          src={`/api/album-photo/${photo.id}`}
+          src={albumPhotoSrc(photo.id, { thumb: true })}
           alt={hub.album.photoAlt(photo.caption)}
           style={{
             width: "100%",

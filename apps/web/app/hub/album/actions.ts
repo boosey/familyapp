@@ -45,6 +45,7 @@ import {
 import { isAllowedImageContentType, type UploadTarget } from "@chronicle/storage";
 import { getRuntime } from "@/lib/runtime";
 import { createUploadTicket, verifyUploadTicket } from "@/lib/upload-ticket";
+import { warmThumbnail } from "@/lib/thumbnail";
 import { extractPhotoExif, type PhotoExif } from "@/app/hub/album/exif";
 import { hub } from "@/app/_copy";
 import type { ImportOnePhotoResult } from "./import-progress";
@@ -225,6 +226,13 @@ export async function recordAlbumPhotoAction(
     }
     return { error: hub.actions.photoUploadFailedDetail(sanitizeStorageErrorDetail(err)) };
   }
+
+  // Generate the grid thumbnail NOW, from the bytes already in memory (issue #139) — so the optimistic
+  // tile, which requests `?variant=thumb`, has a thumbnail waiting instead of forcing a first-view lazy
+  // generation. Best-effort and awaited: `warmThumbnail` never throws, and awaiting guarantees the write
+  // completes before this serverless invocation may freeze. A miss here is harmless — the serve route
+  // regenerates lazily.
+  await warmThumbnail(storage, key, bytes);
 
   revalidatePath("/hub");
   revalidatePath("/hub/album");
