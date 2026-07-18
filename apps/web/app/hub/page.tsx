@@ -235,11 +235,11 @@ export default async function HubPage({
     },
   ];
 
-  // Which PRIMARY tab is visually active: the three ask surfaces light up Questions; family + requests
-  // both light up Family (Requests is now a Family-surface sub-nav, not its own chrome entry).
+  // Which PRIMARY tab is visually active: the three ask surfaces light up Questions; family, requests,
+  // and invite all light up Family (Requests + Invite are Family-surface entries, not their own chrome).
   const primaryActive = ["questions", "ask", "asks"].includes(activeTab)
     ? "questions"
-    : ["family", "requests"].includes(activeTab)
+    : ["family", "requests", "invite"].includes(activeTab)
       ? "family"
       : activeTab;
   // The active ask surface drives the Questions secondary sub-nav (rendered inside the Questions content).
