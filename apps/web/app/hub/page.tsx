@@ -30,8 +30,9 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { QuestionsSubNav } from "./QuestionsSubNav";
+import { FamilySubNav } from "./FamilySubNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
-import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
+import { inviteTabVisible, requestsTabVisible, familyTabBadge } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
 import { PendingInvitesBanner } from "./PendingInvitesBanner";
 import { AlbumSurface } from "./album/AlbumSurface";
@@ -214,46 +215,43 @@ export default async function HubPage({
   // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
   const viewerDisplayName = viewerName ?? "You";
 
-  // Task 3 (Playful de-clutter): the primary nav is FOUR tabs — Stories · Album · Family · Questions
-  // — plus a prominent "Tell a story" CTA (rendered inside HubTabs). The three ask surfaces
-  // (questions/ask/asks) consolidate under the single Questions primary tab (a secondary sub-nav
-  // below switches among them); the conditional Invite/Requests entries move into a "More ▾"
-  // overflow menu. This regroups PRESENTATION ONLY — the routing keys, `?tab=` values, and the
-  // visibility gates below are byte-for-byte the same as before.
+  // Issue #124 (Playful de-clutter): the primary nav is exactly FOUR tabs — Stories · Album · Family
+  // · Questions — with no global "Tell a story" CTA (the single Tell affordance lives on the Stories
+  // tab, #125) and no "More ▾" overflow menu. Two surfaces fold onto a primary tab, each switched by a
+  // secondary sub-nav below: the three ask surfaces (questions/ask/asks) fold onto Questions, and the
+  // steward's Requests queue folds onto Family. The Family tab badges the actionable pending-request
+  // count; Questions badges pending asks. This regroups PRESENTATION ONLY — the routing keys, `?tab=`
+  // values, and the visibility gates below are byte-for-byte the same as before.
   const primaryTabs = [
     { key: "stories", label: hub.shell.tabStories },
     { key: "album", label: hub.shell.tabAlbum },
-    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab (it used to
-    // be the standalone /hub/tree route, which hid the tab bar once opened).
-    { key: "family", label: hub.shell.tabFamily },
+    // Family surface — the visual tree + relatives list (formerly the standalone /hub/tree route) plus
+    // the steward's Requests queue folded in as a sub-nav. Badged with the pending-request count.
+    { key: "family", label: hub.shell.tabFamily, badge: familyTabBadge(pendingRequests.length) },
     {
       key: "questions",
       label: hub.shell.tabQuestions,
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
   ];
-  // Invite no longer lives in "More" — it's a button on the Family surface (you invite people INTO a
-  // family), rendered below. Requests is now the ONLY overflow entry: visible while there are pending
-  // OR recently-decided requests; the badge counts only still-pending ones (the steward's actionable
-  // queue). Member-only — a viewer who stewards no family has no request queue.
-  const overflowTabs = requestsTabVisible(
-    activeFamilies.length,
-    pendingRequests.length,
-    decidedRequests.length,
-  )
-    ? [
-        {
-          key: "requests",
-          label: hub.shell.tabRequests,
-          badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
-        },
-      ]
-    : [];
 
-  // Which PRIMARY tab is visually active: the three ask surfaces all light up the Questions tab.
-  const primaryActive = ["questions", "ask", "asks"].includes(activeTab) ? "questions" : activeTab;
-  // The active ask surface drives the secondary sub-nav (only rendered inside the Questions content).
+  // Which PRIMARY tab is visually active: the three ask surfaces light up Questions; family + requests
+  // both light up Family (Requests is now a Family-surface sub-nav, not its own chrome entry).
+  const primaryActive = ["questions", "ask", "asks"].includes(activeTab)
+    ? "questions"
+    : ["family", "requests"].includes(activeTab)
+      ? "family"
+      : activeTab;
+  // The active ask surface drives the Questions secondary sub-nav (rendered inside the Questions content).
   const questionsSurfaceActive = ["questions", "ask", "asks"].includes(activeTab);
+  // The Family surface hosts both the tree/relatives view and the Requests queue.
+  const familySurfaceActive = ["family", "requests"].includes(activeTab);
+  // Show the Family sub-nav only when the Requests queue is live (pending OR recently-decided, and the
+  // viewer stewards a family) — otherwise the lone "Family tree" sub-tab is noise. The `|| requests`
+  // clause keeps a deep-linked Requests view navigable even for a non-steward (no dead-end, no 404).
+  const showFamilySubNav =
+    requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length) ||
+    activeTab === "requests";
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
@@ -281,7 +279,6 @@ export default async function HubPage({
           <div className={styles.tabsRow}>
             <HubTabsNav
               primaryTabs={primaryTabs}
-              overflowTabs={overflowTabs}
               active={primaryActive}
               familiesParam={familiesRaw}
             />
@@ -321,6 +318,17 @@ export default async function HubPage({
               unchanged — each key still renders exactly what it did before. */}
           {questionsSurfaceActive && (
             <QuestionsSubNav active={activeTab} familiesParam={familiesRaw} />
+          )}
+          {/* Issue #124: family + requests share one primary tab (Family). A secondary sub-nav switches
+              between the tree/relatives view and the steward's Requests queue, rendered ABOVE whichever
+              is active (only when the Requests queue is live, or a Requests deep-link needs the way out).
+              Content below each key is unchanged. */}
+          {familySurfaceActive && showFamilySubNav && (
+            <FamilySubNav
+              active={activeTab}
+              familiesParam={familiesRaw}
+              requestsBadge={pendingRequests.length}
+            />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (

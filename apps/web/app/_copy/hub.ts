@@ -24,18 +24,16 @@ export const hub = {
     tabFamily: "Family",
     tabInvite: "Invite",
     tabRequests: "Requests",
-    // Task 3 (Playful de-clutter): the prominent primary-nav call-to-action → /hub/tell. The "＋"
-    // is a full-width plus kept in the label so it rides through the copy layer (i18n on-ramp).
-    tellCta: "＋ Tell a story",
-    tellCtaAria: "Start telling a new story",
-    // Overflow "More ▾" menu holding the conditional Invite / Requests entries.
-    moreLabel: "More",
-    moreAria: "More sections",
     // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
     questionsSubToAnswer: "To answer",
     questionsSubAsk: "Ask a question",
     questionsSubYourAsks: "Your asks",
     questionsSubNavAria: "Question sections",
+    // Issue #124 (Playful de-clutter): secondary sub-nav inside the Family primary tab — the tree/
+    // relatives view and the steward's Requests queue (which used to be a "More ▾" overflow entry).
+    // The Requests sub-label reuses `tabRequests`.
+    familySubTree: "Family tree",
+    familySubNavAria: "Family sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",
     menuSwitchUser: "Switch user",

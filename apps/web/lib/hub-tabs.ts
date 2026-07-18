@@ -24,6 +24,12 @@ export function requestsTabVisible(
   return activeFamilyCount > 0 && (pendingCount > 0 || decidedCount > 0);
 }
 
+/** The Family-tab badge = the steward's actionable pending-request count; hidden (undefined) at zero
+ *  so decided-only queues don't badge the tab. */
+export function familyTabBadge(pendingCount: number): number | undefined {
+  return pendingCount > 0 ? pendingCount : undefined;
+}
+
 /**
  * Narrow steward-side request rows to the hub scope: "all" aggregates across every family the steward
  * stewards (each row carries its own `familyName` for labeling); a family scope keeps only that

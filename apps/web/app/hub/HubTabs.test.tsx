@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 /**
- * Task 3 (Playful de-clutter): <HubTabs> renders exactly the four primary tabs + a "Tell a story"
- * CTA, and tucks the conditional overflow entries (Invite / Requests) behind a "More ▾" menu.
+ * Issue #124 (Playful de-clutter): <HubTabs> renders exactly the four primary tabs, each with an
+ * optional numeric badge. There is no longer a "＋ Tell a story" CTA and no "More ▾" overflow menu —
+ * the two conditional entries moved out of the chrome (Invite → Family surface button; Requests →
+ * Family sub-nav, see FamilySubNav).
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { HubTabs } from "./HubTabs";
 import { hub } from "@/app/_copy";
 
@@ -18,47 +20,26 @@ const primary = [
 ];
 
 describe("HubTabs de-clutter", () => {
-  it("renders exactly the four primary tabs plus a Tell-a-story CTA", () => {
-    render(<HubTabs primaryTabs={primary} overflowTabs={[]} active="stories" onChange={() => {}} />);
+  it("renders exactly the four primary tabs", () => {
+    render(<HubTabs primaryTabs={primary} active="stories" onChange={() => {}} />);
     expect(screen.getAllByRole("tab")).toHaveLength(4);
-    expect(screen.getByRole("link", { name: hub.shell.tellCtaAria }).getAttribute("href")).toBe(
-      "/hub/tell",
-    );
   });
 
-  it("shows no More menu when there are no overflow tabs", () => {
-    render(<HubTabs primaryTabs={primary} overflowTabs={[]} active="stories" onChange={() => {}} />);
-    expect(screen.queryByRole("button", { name: hub.shell.moreAria })).toBeNull();
+  it("renders a tab's numeric badge", () => {
+    const badged = primary.map((t) => (t.key === "family" ? { ...t, badge: 3 } : t));
+    render(<HubTabs primaryTabs={badged} active="stories" onChange={() => {}} />);
+    expect(screen.getByText("3")).toBeTruthy();
   });
 
-  it("tucks overflow tabs behind a More menu", () => {
-    const onChange = vi.fn();
-    render(
-      <HubTabs
-        primaryTabs={primary}
-        overflowTabs={[{ key: "requests", label: hub.shell.tabRequests }]}
-        active="stories"
-        onChange={onChange}
-      />,
-    );
-    expect(screen.queryByRole("tab", { name: hub.shell.tabRequests })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: hub.shell.moreAria }));
-    fireEvent.click(screen.getByRole("menuitem", { name: hub.shell.tabRequests }));
-    expect(onChange).toHaveBeenCalledWith("requests");
+  it("renders no Tell-a-story link", () => {
+    render(<HubTabs primaryTabs={primary} active="stories" onChange={() => {}} />);
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("closes the More menu on Escape", () => {
-    render(
-      <HubTabs
-        primaryTabs={primary}
-        overflowTabs={[{ key: "requests", label: hub.shell.tabRequests }]}
-        active="stories"
-        onChange={() => {}}
-      />,
+  it("renders no overflow menu toggle", () => {
+    const { container } = render(
+      <HubTabs primaryTabs={primary} active="stories" onChange={() => {}} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.shell.moreAria }));
-    expect(screen.getByRole("menuitem", { name: hub.shell.tabRequests })).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menuitem", { name: hub.shell.tabRequests })).toBeNull();
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
   });
 });
