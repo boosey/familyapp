@@ -301,6 +301,25 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reset all internal state when the FAMILY changes (#141). The canvas seeds nodes/edges/expansion/
+  // focus from props on MOUNT only; switching families via the chip bar hands NEW `familyId` + `initial`
+  // props to the SAME mounted component, so without this the previous family's tree persisted until a
+  // List<->Tree toggle forced a remount (the "fix" users found). On a genuine family change we reload
+  // from the new props, clear the background top-up dedupe set, and re-center the camera (reset-on-
+  // switch is acceptable per #141). Guarded by a ref so a re-render that merely hands a new `initial`
+  // identity for the SAME family never blows away in-session expansion/focus/camera state.
+  const prevFamilyIdRef = useRef(familyId);
+  useEffect(() => {
+    if (prevFamilyIdRef.current === familyId) return;
+    prevFamilyIdRef.current = familyId;
+    setNodes(initial.nodes);
+    setEdges(initial.edges);
+    setExpansion(EMPTY_EXPANSION);
+    setFocusPersonId(initialFocusPersonId);
+    toppedUp.current = new Set();
+    centerCamera();
+  }, [familyId, initial, initialFocusPersonId, centerCamera]);
+
   // --- Background top-up: keep one layer past the frontier loaded (spec §7) -----------------------
   // After every render, look at drawn nodes whose kin flags say more exists at the boundary
   // (hasHiddenParents/Children) OR whose neighbors aren't yet loaded, and quietly fetch a subtree
@@ -333,9 +352,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     return () => {
       cancelled = true;
     };
-    // Re-run when the drawn frontier changes.
+    // Re-run when the drawn frontier changes, OR when the family switches (#141). Listing `familyId`
+    // means a family change ALWAYS tears down this effect (its cleanup sets `cancelled`), so an
+    // in-flight top-up fetch closed over the OLD family can never merge stale nodes into the freshly
+    // switched tree — even in the corner case where the two families' placed-node counts coincide and
+    // neither `layout.placed.length` nor `nodes.length` changes value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout.placed.length, nodes.length]);
+  }, [layout.placed.length, nodes.length, familyId]);
 
   // --- Focus (re-root) with pan-delta so the camera holds still (§1/§3) --------------------------
   // The kebab Focus action re-roots the tree on `personId`: refetch that subtree (server re-root),
