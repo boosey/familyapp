@@ -169,6 +169,13 @@
       "when": 1784352297104,
       "tag": "0023_productive_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784356524606,
+      "tag": "0024_wooden_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

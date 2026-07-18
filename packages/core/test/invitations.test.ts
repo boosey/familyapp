@@ -706,7 +706,7 @@ describe("createInvitation dedup on email OR phone + merge-on-collision (#117)",
     expect(await inviteePersonCount()).toBe(1);
   });
 
-  it("merges colliding provisionals (email→A, phone→B): asks + invite re-pointed, loser deleted", async () => {
+  it("merges colliding provisionals (email→A, phone→B): asks + invite re-pointed, DEAD loser deleted", async () => {
     const { steward, fam } = await familyWithSteward();
     const a = await createInvitation(db, {
       familyId: fam.id,
@@ -719,6 +719,7 @@ describe("createInvitation dedup on email OR phone + merge-on-collision (#117)",
       inviterPersonId: steward.id,
       inviteeName: "Sal",
       inviteePhone: "+15551230000",
+      ttlMs: -1, // dead — a merge only ever deletes a DEAD loser (a live link must survive)
     });
     expect(b.inviteePersonId).not.toBe(a.inviteePersonId);
     expect(await inviteePersonCount()).toBe(2);
@@ -774,6 +775,40 @@ describe("createInvitation dedup on email OR phone + merge-on-collision (#117)",
       .limit(1);
     expect(refreshed?.inviteeEmail).toBe("sal@example.com");
     expect(refreshed?.inviteePhone).toBe("+15551230000");
+  });
+
+  it("preserves a LIVE loser invite — its already-delivered link keeps working (#116)", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const a = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    const b = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteePhone: "+15551230000",
+    });
+    expect(b.inviteePersonId).not.toBe(a.inviteePersonId);
+
+    // The re-invite carrying BOTH identifiers collides — but BOTH invites are live, so nothing is
+    // merged away: the winner is refreshed, the live loser keeps its row, Person, and token.
+    const merged = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      inviteePhone: "+15551230000",
+    });
+
+    expect(merged.invitationId).toBe(a.invitationId); // live email match wins
+    expect(await inviteePersonCount()).toBe(2); // both provisionals survive
+    // The live loser's previously-sent link still resolves.
+    const loserView = await getInvitationByToken(db, b.token);
+    expect(loserView).not.toBeNull();
+    expect(loserView?.status).toBe("pending");
   });
 
   it("keeps people with no shared identifier separate", async () => {

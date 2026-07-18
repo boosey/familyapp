@@ -7,15 +7,17 @@
  * Two honest branches, mirroring the env-switch idiom used everywhere else in runtime.ts:
  *
  *   - Inngest CONFIGURED (prod durable path): ENQUEUE ONLY. We call `jobQueue.enqueue("invite.send",
- *     { invitationId, token, channels })` and return immediately. The registered `invite.send`
- *     worker (wired in runtime.ts onto the SAME Inngest jobQueue that carries the pipeline stages)
- *     rebuilds the link from the token at delivery time — the `link` argument is therefore UNUSED
- *     on this branch (it exists only for the synchronous branch's shape).
+ *     { invitationId, channels })` and return immediately. The payload carries NO token — the raw
+ *     invite token never crosses the enqueue boundary (it would sit in the persisted event
+ *     payload). The registered `invite.send` worker (wired in runtime.ts onto the SAME Inngest
+ *     jobQueue that carries the pipeline stages) recovers the token at delivery time via core's
+ *     `getInvitationTokenForDelivery` and rebuilds the link from it.
  *
  *   - Inngest UNCONFIGURED (dev/CI synchronous path): call the provided `deliver` closure (which
  *     wraps `deliverInvite` with the runtime's db + composite notifier) in-request, best-effort.
- *     A delivery failure here must never block invite creation — the caller (the server action)
- *     wraps this call in try/catch.
+ *     The closure recovers the token the same way the worker does — the caller never hands a raw
+ *     token (or a link derived from one) to this seam. A delivery failure here must never block
+ *     invite creation — the caller (the server action) wraps this call in try/catch.
  */
 import type { DeliveryChannel } from "@chronicle/notifications";
 import type { JobQueue } from "@chronicle/pipeline";
@@ -23,9 +25,7 @@ import { plog } from "@chronicle/pipeline";
 
 export interface DispatchInviteDeliveryArgs {
   invitationId: string;
-  token: string;
   channels: DeliveryChannel[];
-  link: string;
 }
 
 export type DispatchInviteDelivery = (args: DispatchInviteDeliveryArgs) => Promise<void>;
@@ -40,10 +40,10 @@ export interface DispatchInviteDeliveryDeps {
   inngestJobQueue?: JobQueue;
   /**
    * The dev/CI synchronous delivery closure — wraps `deliverInvite` with the runtime's db +
-   * composite notifier. Called with the caller-supplied `link` directly (no token→link rebuild
-   * needed on this branch, since we're not crossing a worker boundary).
+   * composite notifier, recovering the token via `getInvitationTokenForDelivery` and building
+   * the link itself (the caller supplies neither).
    */
-  deliver: (args: { invitationId: string; channels: DeliveryChannel[]; link: string }) => Promise<void>;
+  deliver: (args: { invitationId: string; channels: DeliveryChannel[] }) => Promise<void>;
 }
 
 export function makeDispatchInviteDelivery(
@@ -51,14 +51,13 @@ export function makeDispatchInviteDelivery(
 ): DispatchInviteDelivery {
   return async (args: DispatchInviteDeliveryArgs): Promise<void> => {
     if (deps.inngestConfigured && deps.inngestJobQueue) {
-      // Durable path: enqueue only. The invite.send worker rebuilds the link from the token.
+      // Durable path: enqueue only. The invite.send worker recovers the token and rebuilds the link.
       plog("invite", "dispatch: durable enqueue (Inngest worker delivers)", {
         invitationId: args.invitationId,
         channels: args.channels.join(","),
       });
       await deps.inngestJobQueue.enqueue("invite.send", {
         invitationId: args.invitationId,
-        token: args.token,
         channels: args.channels,
       });
       return;
@@ -71,7 +70,6 @@ export function makeDispatchInviteDelivery(
     await deps.deliver({
       invitationId: args.invitationId,
       channels: args.channels,
-      link: args.link,
     });
   };
 }

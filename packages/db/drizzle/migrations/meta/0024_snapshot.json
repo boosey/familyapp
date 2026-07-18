@@ -1,6 +1,6 @@
 {
-  "id": "4e1e1278-4e3e-4957-8798-52e675226e5b",
-  "prevId": "33500bf5-fdb4-40ef-adc6-7d1e13216a08",
+  "id": "b005b920-0494-4b14-bdaa-91870f28c575",
+  "prevId": "4e1e1278-4e3e-4957-8798-52e675226e5b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1855,6 +1855,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "send_count": {
+          "name": "send_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "relationship_label": {
           "name": "relationship_label",

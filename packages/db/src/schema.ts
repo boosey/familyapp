@@ -1004,6 +1004,12 @@ export const invitations = pgTable(
     deliveryError: text("delivery_error"),
     /** Incremented by the delivery worker on each attempt. */
     deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+    /**
+     * How many times this invite has been (re)sent: 1 on creation, +1 on every dedup refresh
+     * (#117 re-send refreshes one row in place). The #105 throttle arms SUM this column so a
+     * re-send counts even though it inserts no new row.
+     */
+    sendCount: integer("send_count").notNull().default(1),
     /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
     relationshipLabel: text("relationship_label"),
     /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */
@@ -1013,6 +1019,7 @@ export const invitations = pgTable(
     acceptedPersonId: uuid("accepted_person_id").references(() => persons.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** Creation time — on a dedup-refreshed invite this is bumped, so read it as "last (re)sent at". */
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1035,9 +1042,11 @@ export const invitationDismissals = pgTable(
   "invitation_dismissals",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Cascade: deleting an invitation (housekeeping reaper, merge-on-collision) takes its
+    // dismissal rows with it — the invite is gone, so "Not me" records about it are meaningless.
     invitationId: uuid("invitation_id")
       .notNull()
-      .references(() => invitations.id),
+      .references(() => invitations.id, { onDelete: "cascade" }),
     accountId: uuid("account_id")
       .notNull()
       .references(() => accounts.id),

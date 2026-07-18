@@ -27,6 +27,7 @@ import {
   ScriptedLanguageModel,
   withTranscriberLogging,
   withLanguageModelLogging,
+  plog,
   type Pipeline,
   type LanguageModel,
   type Transcriber,
@@ -36,6 +37,7 @@ import {
   type FollowUpEvaluator,
 } from "@chronicle/interviewer";
 import {
+  getInvitationTokenForDelivery,
   noopNarratorMemorySink,
   type NarratorMemorySink,
 } from "@chronicle/core";
@@ -247,8 +249,9 @@ type Runtime = {
   /**
    * Dispatch invite delivery (email/SMS) for a just-created invitation. Mirrors `dispatchPipeline`'s
    * durable-vs-synchronous split: Inngest configured → enqueue `invite.send` onto the shared jobQueue
-   * (the registered worker rebuilds the link from the token); else deliver synchronously in-request
-   * via the composite `notifier`. See `lib/dispatch-invite-delivery.ts`.
+   * (payload carries NO token — the registered worker recovers it via `getInvitationTokenForDelivery`
+   * and rebuilds the link); else deliver synchronously in-request via the composite `notifier`.
+   * See `lib/dispatch-invite-delivery.ts`.
    */
   dispatchInviteDelivery: DispatchInviteDelivery;
   /**
@@ -442,9 +445,19 @@ async function build(): Promise<Runtime> {
     inngestPipeline = createPipeline({ db, storage, transcriber, languageModel, jobQueue });
     // Register the invite-delivery worker on the SAME jobQueue as the pipeline stages, so its
     // function is included in `jobQueue.functions` below and the /api/inngest serve route mounts
-    // it alongside transcribe/render_story. The worker rebuilds the join link from the token —
-    // durable delivery never carries a caller-constructed link across the enqueue boundary.
+    // it alongside transcribe/render_story. The event payload carries NO token — the raw invite
+    // token never crosses the enqueue boundary; the worker recovers it from the sealed copy at
+    // delivery time and rebuilds the join link from it.
     jobQueue.register("invite.send", async (p) => {
+      const token = await getInvitationTokenForDelivery(db, p.invitationId);
+      if (!token) {
+        // The invite died (expired, accepted, or merged away) between enqueue and execution —
+        // nothing to deliver. Skip without erroring so Inngest doesn't retry a dead send.
+        plog("invite", "worker: invite no longer deliverable — skipping send", {
+          invitationId: p.invitationId,
+        });
+        return;
+      }
       const origin = resolvePublicOrigin({
         configuredBaseUrl: process.env.APP_BASE_URL,
         host: null,
@@ -456,7 +469,7 @@ async function build(): Promise<Runtime> {
         notifier,
         invitationId: p.invitationId,
         channels: p.channels,
-        link: `${origin}/join/${p.token}`,
+        link: `${origin}/join/${token}`,
       });
     });
     inngest = { client, functions: jobQueue.functions };
@@ -476,8 +489,25 @@ async function build(): Promise<Runtime> {
   const dispatchInviteDelivery = makeDispatchInviteDelivery({
     inngestConfigured,
     ...(inngestJobQueue ? { inngestJobQueue } : {}),
-    deliver: ({ invitationId, channels, link }) =>
-      deliverInvite({ db, notifier, invitationId, channels, link }),
+    deliver: async ({ invitationId, channels }) => {
+      // Synchronous path recovers the token exactly like the durable worker — the raw token never
+      // comes from the caller. A dead invite (expired/accepted between create and here) is a skip.
+      const token = await getInvitationTokenForDelivery(db, invitationId);
+      if (!token) return;
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: process.env.NODE_ENV === "production",
+      });
+      await deliverInvite({
+        db,
+        notifier,
+        invitationId,
+        channels,
+        link: `${origin}/join/${token}`,
+      });
+    },
   });
 
   return {

@@ -207,6 +207,7 @@ CREATE TABLE "invitations" (
 	"delivered_at" timestamp with time zone,
 	"delivery_error" text,
 	"delivery_attempts" integer DEFAULT 0 NOT NULL,
+	"send_count" integer DEFAULT 1 NOT NULL,
 	"relationship_label" text,
 	"role" "membership_role" DEFAULT 'member' NOT NULL,
 	"status" "invitation_status" DEFAULT 'pending' NOT NULL,
@@ -492,7 +493,7 @@ ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_person_id_persons_id
 ALTER TABLE "intake_answers" ADD CONSTRAINT "intake_answers_media_id_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "intake_revisions" ADD CONSTRAINT "intake_revisions_intake_answer_id_intake_answers_id_fk" FOREIGN KEY ("intake_answer_id") REFERENCES "public"."intake_answers"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "intake_revisions" ADD CONSTRAINT "intake_revisions_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
-ALTER TABLE "invitation_dismissals" ADD CONSTRAINT "invitation_dismissals_invitation_id_invitations_id_fk" FOREIGN KEY ("invitation_id") REFERENCES "public"."invitations"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "invitation_dismissals" ADD CONSTRAINT "invitation_dismissals_invitation_id_invitations_id_fk" FOREIGN KEY ("invitation_id") REFERENCES "public"."invitations"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "invitation_dismissals" ADD CONSTRAINT "invitation_dismissals_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "invitations" ADD CONSTRAINT "invitations_inviter_person_id_persons_id_fk" FOREIGN KEY ("inviter_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;

@@ -8,7 +8,8 @@
  * Key source: `INVITE_TOKEN_ENC_KEY` env (64 hex chars or 32-byte base64). When unset — the dev /
  * test default in this zero-config repo (see AGENTS.md) — a fixed, clearly-marked DEV-ONLY key is
  * used. Sealed tokens produced under the dev key are NOT protected; production must set the env var
- * (surfaced by apps/web's check-env deploy gate). Callers may inject a key explicitly for tests.
+ * (enforced by apps/web's check-env deploy gate, and `resolveSealKey` THROWS when the var is absent
+ * under VERCEL_ENV=production). Callers may inject a key explicitly for tests.
  *
  * Payload format: `v1.<base64url iv>.<base64url ciphertext>.<base64url authTag>` — versioned so a
  * future algorithm rotation can tell old rows apart.
@@ -50,6 +51,14 @@ export function resolveSealKey(
   const raw = env.INVITE_TOKEN_ENC_KEY;
   if (raw && raw.trim().length > 0) {
     return decodeKey(raw); // a malformed value throws here, at seal/open time — loud, not silent
+  }
+  if (env.VERCEL_ENV === "production") {
+    // In production the dev-only fallback would seal every invite token under a well-known,
+    // committed key — effectively plaintext at rest. check-env.mjs fails the deploy build first;
+    // this is the runtime backstop so a misconfigured prod can never silently seal.
+    throw new Error(
+      "INVITE_TOKEN_ENC_KEY is required in production (VERCEL_ENV=production) — refusing to seal/open invite tokens under the dev-only fallback key",
+    );
   }
   return DEV_ONLY_KEY;
 }

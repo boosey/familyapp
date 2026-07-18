@@ -5,16 +5,16 @@ import { InProcessJobQueue } from "../src/job-queue";
 describe("jobDedupeKey — per-name namespace + discrimination contract", () => {
   it("separates namespaces even when the id strings match", () => {
     // A name-blind implementation that only reads an id off the payload would collapse these.
-    expect(jobDedupeKey("invite.send", { invitationId: "x", token: "t", channels: ["email"] })).not.toBe(
+    expect(jobDedupeKey("invite.send", { invitationId: "x", channels: ["email"] })).not.toBe(
       jobDedupeKey("transcribe", { storyId: "x" }),
     );
   });
 
   it("invite jobs: same invitationId → same key, different → different", () => {
-    const a1 = jobDedupeKey("invite.send", { invitationId: "inv-1", token: "t", channels: ["email"] });
-    // Same invitationId, DIFFERENT token/channels — the key must ignore everything but invitationId.
-    const a2 = jobDedupeKey("invite.send", { invitationId: "inv-1", token: "other", channels: ["sms"] });
-    const b = jobDedupeKey("invite.send", { invitationId: "inv-2", token: "t", channels: ["email"] });
+    const a1 = jobDedupeKey("invite.send", { invitationId: "inv-1", channels: ["email"] });
+    // Same invitationId, DIFFERENT channels — the key must ignore everything but invitationId.
+    const a2 = jobDedupeKey("invite.send", { invitationId: "inv-1", channels: ["sms"] });
+    const b = jobDedupeKey("invite.send", { invitationId: "inv-2", channels: ["email"] });
     expect(a1).toBe(a2);
     expect(a1).not.toBe(b);
   });
@@ -45,8 +45,8 @@ describe("jobDedupeKey — per-name namespace + discrimination contract", () => 
 describe("InProcessJobQueue invite jobs", () => {
   it("dedupes invite.send by invitationId while pending", async () => {
     const q = new InProcessJobQueue();
-    const id1 = await q.enqueue("invite.send", { invitationId: "inv-1", token: "t", channels: ["email"] });
-    const id2 = await q.enqueue("invite.send", { invitationId: "inv-1", token: "t", channels: ["email"] });
+    const id1 = await q.enqueue("invite.send", { invitationId: "inv-1", channels: ["email"] });
+    const id2 = await q.enqueue("invite.send", { invitationId: "inv-1", channels: ["email"] });
     expect(id1).toBe(id2);
     expect(q.pending()).toHaveLength(1);
   });
@@ -54,7 +54,7 @@ describe("InProcessJobQueue invite jobs", () => {
   it("keeps invite and story jobs in separate dedupe namespaces", async () => {
     const q = new InProcessJobQueue();
     await q.enqueue("transcribe", { storyId: "s-1" });
-    await q.enqueue("invite.send", { invitationId: "s-1", token: "t", channels: ["sms"] });
+    await q.enqueue("invite.send", { invitationId: "s-1", channels: ["sms"] });
     expect(q.pending()).toHaveLength(2);
   });
 

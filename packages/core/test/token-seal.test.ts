@@ -59,4 +59,18 @@ describe("resolveSealKey", () => {
     expect(dev).toHaveLength(32);
     expect(resolveSealKey(undefined, { INVITE_TOKEN_ENC_KEY: "   " })).toEqual(dev);
   });
+
+  it("THROWS in production when the env var is absent — never seal under the dev key in prod", () => {
+    expect(() => resolveSealKey(undefined, { VERCEL_ENV: "production" })).toThrow(
+      /INVITE_TOKEN_ENC_KEY/,
+    );
+    // A set key still wins in production; preview/dev keep the dev-only fallback.
+    expect(
+      resolveSealKey(undefined, {
+        VERCEL_ENV: "production",
+        INVITE_TOKEN_ENC_KEY: KEY_A.toString("hex"),
+      }),
+    ).toEqual(KEY_A);
+    expect(resolveSealKey(undefined, { VERCEL_ENV: "preview" })).toHaveLength(32);
+  });
 });

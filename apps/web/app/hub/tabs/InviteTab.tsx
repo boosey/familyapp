@@ -150,11 +150,11 @@ async function createMemberInvite(formData: FormData): Promise<void> {
 
   if (channels.length) {
     try {
+      // Only the invitation id + channels cross this seam — the raw token never transits the
+      // Inngest event payload; both delivery paths recover it server-side (#115 review).
       await rt.dispatchInviteDelivery({
         invitationId,
-        token,
         channels,
-        link: `${await origin()}/join/${token}`,
       });
     } catch (err) {
       // Delivery dispatch must NEVER block invite creation or the copy-link fallback — the

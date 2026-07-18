@@ -108,3 +108,21 @@ describe("checkEnv productionOnly vars (the Inngest pair)", () => {
     expect(checkEnv(env).ok).toBe(true);
   });
 });
+
+describe("checkEnv INVITE_TOKEN_ENC_KEY (production-required)", () => {
+  it("requires INVITE_TOKEN_ENC_KEY on a PRODUCTION deploy", () => {
+    const env = fullEnv();
+    env.VERCEL_ENV = "production";
+    delete env.INVITE_TOKEN_ENC_KEY;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired.map((m) => m.name)).toContain("INVITE_TOKEN_ENC_KEY");
+  });
+
+  it("allows a PREVIEW deploy to omit it (token-seal dev fallback is acceptable there)", () => {
+    const env = fullEnv();
+    env.VERCEL_ENV = "preview";
+    delete env.INVITE_TOKEN_ENC_KEY;
+    expect(checkEnv(env).ok).toBe(true);
+  });
+});

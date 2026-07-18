@@ -105,7 +105,8 @@ export async function createInvitation(
 
     // Invite-send throttle (issue #105) — a GENEROUS accident guard, not a rate-limit against
     // determined abuse. Two independent arms, each a rolling window counted over the invitations
-    // table (every creation is a row, so rows ≈ sends):
+    // table. Dedup (#117) refreshes one row in place instead of inserting per send, so the count
+    // sums `sendCount` (1 on create, +1 per refresh) rather than rows — every (re)send counts:
     //   1. Per INVITER: caps a bulk-paste/scripting accident (a whole spreadsheet's worth of
     //      invites in one sitting) across all families the inviter belongs to.
     //   2. Per DESTINATION (email OR phone): protects the RECIPIENT from being spammed — app-wide,
@@ -135,7 +136,7 @@ export async function createInvitation(
       Date.now() - INVITE_THROTTLE_INVITER_WINDOW_MS,
     );
     const [inviterCount] = await tx
-      .select({ n: sql<number>`count(*)::int` })
+      .select({ n: sql<number>`coalesce(sum(${invitations.sendCount}), 0)::int` })
       .from(invitations)
       .where(
         and(
@@ -162,7 +163,7 @@ export async function createInvitation(
         trimmedPhone ? eq(invitations.inviteePhone, trimmedPhone) : null,
       ].filter((c) => c !== null);
       const [destinationCount] = await tx
-        .select({ n: sql<number>`count(*)::int` })
+        .select({ n: sql<number>`coalesce(sum(${invitations.sendCount}), 0)::int` })
         .from(invitations)
         .where(
           and(
@@ -207,7 +208,8 @@ export async function createInvitation(
     ].filter((c) => c !== null);
 
     if (matchClauses.length > 0) {
-      // Two rows suffice to detect the collision case: email → provisional A, phone → provisional B.
+      // Match sets are tiny (one row per invitee identifier in one family) — no limit, so legacy
+      // duplicate rows are all seen and the merge loop below can clean up every dead loser.
       const matches = await tx
         .select({
           id: invitations.id,
@@ -229,18 +231,25 @@ export async function createInvitation(
             or(...matchClauses),
           ),
         )
-        .orderBy(desc(invitations.createdAt))
-        .limit(2);
+        .orderBy(desc(invitations.createdAt));
 
-      // The winner carries the combined identifiers forward. An EMAIL match wins over a phone-only
-      // match when the two identifiers resolve to DIFFERENT provisional people (issue #117:
-      // merge-on-collision) — email is the stronger identity; the loser provisional is merged away.
+      // The winner carries the combined identifiers forward. Winner selection prefers a LIVE match
+      // (pending + unexpired) so a merge never kills an invite whose link was already delivered
+      // (#116's durable-link promise): live email match, else the first live match, else a dead
+      // email match (email is the stronger identity, #117), else the most recent match.
+      const isLiveMatch = (m: (typeof matches)[number]): boolean =>
+        m.status === "pending" &&
+        (m.expiresAt === null || m.expiresAt.getTime() > Date.now());
       const emailMatch = trimmedEmail
         ? matches.find(
             (m) => m.inviteeEmail?.toLowerCase() === trimmedEmail.toLowerCase(),
           )
         : undefined;
-      const existing = emailMatch ?? matches[0];
+      const existing =
+        (emailMatch && isLiveMatch(emailMatch) ? emailMatch : undefined) ??
+        matches.find(isLiveMatch) ??
+        emailMatch ??
+        matches[0];
 
       if (existing) {
         // Merge-on-collision (#117): the other identifier matched a DIFFERENT provisional Person.
@@ -251,6 +260,11 @@ export async function createInvitation(
           (m) => m.inviteePersonId !== existing.inviteePersonId,
         );
         for (const loser of losers) {
+          // A LIVE loser is NEVER merged away: its link may already have been delivered, and
+          // deleting the row would 404 a working link (#116). It keeps its row/Person/token — the
+          // duplicate self-heals when that invite expires and a later re-invite merges it as a
+          // dead loser.
+          if (isLiveMatch(loser)) continue;
           const [loserPerson] = await tx
             .select({ accountId: persons.accountId })
             .from(persons)
@@ -273,18 +287,21 @@ export async function createInvitation(
           await tx.delete(persons).where(eq(persons.id, loser.inviteePersonId));
         }
 
-        const isLive =
-          existing.status === "pending" &&
-          (existing.expiresAt === null ||
-            existing.expiresAt.getTime() > Date.now());
         // Recover the durable token for a live invite; null forces the rotation path (dead invite,
         // or a legacy row with nothing sealed under the active key).
-        const durableToken = isLive ? openToken(existing.tokenSealed) : null;
+        const durableToken = isLiveMatch(existing)
+          ? openToken(existing.tokenSealed)
+          : null;
 
         await tx
           .update(invitations)
           .set({
             inviterPersonId: input.inviterPersonId,
+            // A refresh IS a re-send: `createdAt` on a refreshed invite means "last (re)sent at",
+            // keeping the row inside the rolling throttle window, and sendCount accumulates each
+            // (re)send so both #105 throttle arms count it (rows ≈ sends survives dedup).
+            createdAt: new Date(),
+            sendCount: sql`${invitations.sendCount} + 1`,
             // Rotation (dead invite only): fresh token, hash, sealed copy, back to pending, new
             // expiry. On the durable path NONE of the token fields are touched — the previously
             // sent link keeps working.
@@ -298,15 +315,16 @@ export async function createInvitation(
               : {}),
             // Only overwrite invitee metadata the caller actually supplied, so a bare re-invite does
             // not wipe a name/label/role captured on the original. The surviving invite ends up
-            // carrying the FULL identifier set entered this time (#117).
+            // carrying the FULL identifier set entered this time (#117). Contacts are stored in
+            // their TRIMMED form (the same form used as the match key), never verbatim.
             ...(input.inviteeName !== undefined
               ? { inviteeName: input.inviteeName ?? null }
               : {}),
             ...(input.inviteeEmail !== undefined
-              ? { inviteeEmail: input.inviteeEmail ?? null }
+              ? { inviteeEmail: trimmedEmail }
               : {}),
             ...(input.inviteePhone !== undefined
-              ? { inviteePhone: input.inviteePhone ?? null }
+              ? { inviteePhone: trimmedPhone }
               : {}),
             ...(input.deliveryChannels !== undefined
               ? { deliveryChannels: input.deliveryChannels ?? null }
@@ -367,8 +385,10 @@ export async function createInvitation(
         inviterPersonId: input.inviterPersonId,
         inviteePersonId: provisional!.id,
         inviteeName: input.inviteeName ?? null,
-        inviteeEmail: input.inviteeEmail ?? null,
-        inviteePhone: input.inviteePhone ?? null,
+        // Store contacts in their TRIMMED form — the same form the dedup/throttle match keys use,
+        // so a later re-invite matches this row exactly.
+        inviteeEmail: trimmedEmail,
+        inviteePhone: trimmedPhone,
         deliveryChannels: input.deliveryChannels ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         role: input.role ?? "member",
