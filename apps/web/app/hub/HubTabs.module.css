@@ -76,7 +76,7 @@
   padding: 10px 20px;
   border-radius: var(--radius-pill);
   border: none;
-  background: var(--accent);
+  background: var(--accent-gradient);
   color: var(--accent-on);
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
@@ -85,11 +85,11 @@
   cursor: pointer;
   text-decoration: none;
   box-shadow: var(--shadow-sm);
-  transition: transform var(--dur-fade) var(--ease-quiet), background var(--dur-fade) var(--ease-quiet);
+  transition: transform var(--dur-fade) var(--ease-quiet), filter var(--dur-fade) var(--ease-quiet);
 }
 
 .cta:hover {
-  background: var(--accent-strong);
+  filter: brightness(1.05);
 }
 
 .cta:focus-visible {

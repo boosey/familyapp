@@ -58,6 +58,7 @@
   --highlighter: #EFE0C4;
   /* "Tell a story" invite-card fill — heirloom keeps a quiet solid accent (no gradient). */
   --tell-card-bg: var(--accent);
+  --accent-gradient: var(--accent); /* heirloom stays solid; Playful overrides with a coral→amber gradient */
   --sticker-coral-bg: #F3DACE;  --sticker-coral-ink: #9E4830;
   --sticker-sky-bg:   #DCE6EC;  --sticker-sky-ink:   #3C566A;
   --sticker-leaf-bg:  #DEE4D6;  --sticker-leaf-ink:  #4C5B3A;
