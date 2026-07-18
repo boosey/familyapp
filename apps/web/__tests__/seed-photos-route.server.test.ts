@@ -109,13 +109,11 @@ describe("POST /api/dev/seed-photos (preview-only demo seed)", () => {
       ok: boolean;
       vercelEnv: string;
       accounts: number;
-      stories: number;
       markerPresent: boolean;
     };
     expect(present.ok).toBe(true);
     expect(present.vercelEnv).toBe("preview");
     expect(present.accounts).toBe(0); // makePerson creates no Account row
-    expect(present.stories).toBe(0);
     expect(present.markerPresent).toBe(true);
 
     // marker with no matching family → absent

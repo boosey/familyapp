@@ -22,7 +22,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import {
   approveAndShareStory,
   attachPhotoToStory,
@@ -34,8 +34,9 @@ import {
   updateDerivedFields,
 } from "@chronicle/core";
 // `accounts` + `families` are OPEN-schema identity tables (not behind the front-door guard), so a
-// read-only count is fine. `stories` is a GUARDED content table; its total row count (no content
-// read) is taken via the documented dev-only raw-SQL bypass below — this whole route is preview-only.
+// read-only count is fine. (We deliberately do NOT count the guarded `stories` table here — the
+// planted `?marker=` family is the definitive isolation fingerprint, and a raw-SQL bypass whose
+// result shape differs between PGlite and the Neon driver is not worth the fragility.)
 import { accounts, families } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 
@@ -293,12 +294,8 @@ export async function GET(request: Request): Promise<Response> {
 
   const marker = new URL(request.url).searchParams.get("marker");
 
-  // accounts + families: open-schema counts. stories: guarded content table — total-row count only,
-  // via the documented dev-only raw-SQL bypass (no content is read; this route is preview-only).
+  // accounts: open-schema row count (robust across PGlite + the Neon driver via the query builder).
   const [accountRow] = await db.select({ n: count() }).from(accounts);
-  const storyCountRes = await db.execute(sql`select count(*)::int as n from stories`);
-  const storyCount =
-    (storyCountRes as unknown as { rows: Array<{ n: number }> }).rows[0]?.n ?? 0;
 
   let markerPresent = false;
   if (marker) {
@@ -313,7 +310,6 @@ export async function GET(request: Request): Promise<Response> {
     ok: true,
     vercelEnv: process.env.VERCEL_ENV,
     accounts: accountRow?.n ?? 0,
-    stories: storyCount,
     markerPresent,
   });
 }
