@@ -14,9 +14,12 @@
  *     (`relationToRoot === "self"`). The VIEWER's own card always reads "You" (takes precedence over
  *     blank/relation). Anonymous bridges get NO chip (their relation is already in the name line).
  *     (This reverses the earlier "no relation line" rule.)
- *   - Focus ring (Slice A #8) — when `focus` is set, a solid ring around the card in the person's sex
- *     color (`--sex-male`/`--sex-female`), or `--border-strong` when sex is unknown. Width from the
- *     `--tree-focus-ring-width` token. The ring moves with the focus person on re-focus.
+ *   - Focus badge (Slice A #8) — when `focus` is set, a small disc pinned to the avatar's lower-right
+ *     corner (a white "target" glyph on the person's sex color — `--sex-male`/`--sex-female`, or
+ *     `--border-strong` when sex is unknown), separated from the avatar by a `--surface-card` rim.
+ *     It marks the card the tree is currently rooted on and moves with the focus person on re-focus.
+ *     (Replaced an earlier outer ring drawn as a box-shadow, which detached from the card at the
+ *     Playful skin's thick border + large corner radius.)
  *   - Anonymous bridge (`identified === false`) — dashed border, `?` avatar, italic "Unknown
  *     <relation>", no dates, no chip. INERT (carets/kebab suppressed by the canvas/layout, not here).
  *
@@ -26,6 +29,8 @@ import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
 import {
   AVATAR_SIZE_PX,
+  FOCUS_BADGE_GLYPH_PX,
+  FOCUS_BADGE_SIZE_PX,
   KEBAB_INSET_PX,
   MONOGRAM_HUE_MODULO,
   MONOGRAM_LIGHTNESS_PCT,
@@ -115,10 +120,10 @@ function sexBarColor(node: TreeNode): string | null {
 }
 
 /**
- * The focus ring color (Slice A #8): the person's sex color, or the neutral `--border-strong` when
+ * The focus badge color (Slice A #8): the person's sex color, or the neutral `--border-strong` when
  * sex is unknown. Always a concrete color (unlike the sex BAR, which draws nothing for unknown).
  */
-export function focusRingColor(node: TreeNode): string {
+export function focusBadgeColor(node: TreeNode): string {
   if (node.sex === "male") return "var(--sex-male)";
   if (node.sex === "female") return "var(--sex-female)";
   return "var(--border-strong)";
@@ -160,7 +165,7 @@ export interface PersonNodeProps {
    * RIGHT partner; undefined leaves all corners rounded.
    */
   squareCorner?: "bottom-left" | "bottom-right";
-  /** True for the FOCUS person's card (Slice A #8) — draws the sex-colored focus ring. */
+  /** True for the FOCUS person's card (Slice A #8) — draws the sex-colored focus badge on the avatar. */
   focus?: boolean;
   /** True for the VIEWER's own card (Slice A #9) — its relation chip reads "You". */
   isViewer?: boolean;
@@ -179,11 +184,6 @@ export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }
     : "var(--border-width) solid var(--border)";
 
   const sexColor = sexBarColor(node);
-  // Solid ring in the sex color (neutral when unknown), drawn as an outer box-shadow so it never
-  // affects layout. Only on the focus person's card (Slice A #8).
-  const focusRing = focus
-    ? `0 0 0 var(--tree-focus-ring-width) ${focusRingColor(node)}`
-    : undefined;
 
   // Flatten one inner-bottom corner when this card is a couple half hosting a seam affordance. Order:
   // top-left top-right bottom-right bottom-left.
@@ -228,7 +228,6 @@ export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }
           borderRadius,
           border,
           background: "var(--surface-card)",
-          boxShadow: focusRing,
           font: "inherit",
           overflow: "hidden",
         }}
@@ -248,44 +247,84 @@ export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }
             }}
           />
         )}
-        {/* Avatar: photo → monogram → `?`. */}
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photo}
-            alt=""
-            aria-hidden="true"
-            data-testid={`tree-node-photo-${node.personId}`}
-            style={{
-              flex: "0 0 auto",
-              width: AVATAR_SIZE_PX,
-              height: AVATAR_SIZE_PX,
-              borderRadius: "50%",
-              objectFit: "cover",
-            }}
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            data-testid={`tree-node-monogram-${node.personId}`}
-            style={{
-              flex: "0 0 auto",
-              width: AVATAR_SIZE_PX,
-              height: AVATAR_SIZE_PX,
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-ui)",
-              fontWeight: 600,
-              fontSize: "1.35rem",
-              color: "#fff",
-              background: anon ? "var(--border-strong)" : monogramColor(node.personId),
-            }}
-          >
-            {initial}
-          </span>
-        )}
+        {/* Avatar (photo → monogram → `?`) with the focus badge pinned to its lower-right corner. */}
+        <span
+          style={{
+            position: "relative",
+            flex: "0 0 auto",
+            width: AVATAR_SIZE_PX,
+            height: AVATAR_SIZE_PX,
+          }}
+        >
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo}
+              alt=""
+              aria-hidden="true"
+              data-testid={`tree-node-photo-${node.personId}`}
+              style={{
+                width: AVATAR_SIZE_PX,
+                height: AVATAR_SIZE_PX,
+                borderRadius: "50%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              data-testid={`tree-node-monogram-${node.personId}`}
+              style={{
+                width: AVATAR_SIZE_PX,
+                height: AVATAR_SIZE_PX,
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--font-ui)",
+                fontWeight: 600,
+                fontSize: "1.35rem",
+                color: "#fff",
+                background: anon ? "var(--border-strong)" : monogramColor(node.personId),
+              }}
+            >
+              {initial}
+            </span>
+          )}
+          {/* Focus badge (Slice A #8): marks the card the tree is rooted on. */}
+          {focus && (
+            <span
+              aria-hidden="true"
+              data-testid={`tree-node-focus-badge-${node.personId}`}
+              style={{
+                position: "absolute",
+                right: 0,
+                bottom: 0,
+                boxSizing: "border-box",
+                width: FOCUS_BADGE_SIZE_PX,
+                height: FOCUS_BADGE_SIZE_PX,
+                borderRadius: "50%",
+                background: focusBadgeColor(node),
+                border: "var(--border-width) solid var(--surface-card)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <svg
+                width={FOCUS_BADGE_GLYPH_PX}
+                height={FOCUS_BADGE_GLYPH_PX}
+                viewBox="0 0 12 12"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle cx="6" cy="6" r="4.25" stroke="#fff" strokeWidth="1.5" />
+                <circle cx="6" cy="6" r="1.5" fill="#fff" />
+              </svg>
+            </span>
+          )}
+        </span>
         <span style={{ width: "100%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
           <span
             style={{
