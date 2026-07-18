@@ -101,8 +101,8 @@ export {
   type NarratorMemorySink,
   noopNarratorMemorySink,
 } from "./narrator-memory";
-export { eraseStory, eraseAsk, eraseVoiceCaption } from "./erasure-repository";
-export type { EraseResult } from "./erasure-repository";
+export { eraseStory, eraseAsk, eraseVoiceCaption, eraseAccount } from "./erasure-repository";
+export type { EraseResult, EraseAccountResult } from "./erasure-repository";
 export { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
 export {
   createAsk,
