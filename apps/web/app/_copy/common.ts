@@ -28,6 +28,8 @@ export const common = {
     oneMoment: "One moment…",
     listening: "Listening…",
     tapToSpeak: "Tap to speak",
+    holdToSpeak: "Hold to speak",
+    releaseToFinish: "Release to finish",
   },
 
   // Prose editor toolbar (AnswerFlow review + ApprovalRecorder) — AI polish + undo/redo.

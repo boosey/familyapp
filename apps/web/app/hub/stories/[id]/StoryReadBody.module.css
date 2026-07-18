@@ -1,0 +1,91 @@
+/*
+ * StoryReadBody — the finished-story read surface: a Prose ↔ Transcript segmented toggle above the
+ * story text. Token-driven, skin-neutral (no Playful structural signatures — this is a calm read
+ * surface). Prose reads in --font-read; the segmented tabs are --font-ui. See _skins/CSS-MODULES.md.
+ *
+ * NB: `.prose` MUST render as a single <p> blob — highlight-to-treasure (Task 8) selects across the
+ * whole prose text, so it must never be split into per-line/paragraph elements.
+ */
+
+.prose {
+  font-family: var(--font-read);
+  font-weight: 400;
+  font-size: clamp(var(--text-story), 2.5vw, var(--text-story-lg));
+  line-height: 1.65;
+  color: var(--text-body);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+  margin: 0 0 60px;
+}
+
+/* The "no prose yet" fallback line: same prose type, muted. */
+.proseEmpty {
+  color: var(--text-muted);
+}
+
+/* Highlight-to-treasure (Task 8): a transient highlighter wash swept across the whole prose blob when
+ * a treasure fires. Static (a background wash, not motion), so no reduce-motion suppression is needed.
+ * Under a solemn subtree it degrades to a quiet underline — no candy highlighter. */
+.treasure {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 82%;
+  background-size: 100% 40%;
+  border-radius: 2px;
+}
+
+:global([data-tone="solemn"]) .treasure {
+  background-image: none;
+  text-decoration: underline;
+}
+
+/* The muted "highlight to treasure" hint line shown near the prose when treasuring is available. */
+.treasureHint {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-meta);
+  margin: 0 0 12px;
+}
+
+.transcript {
+  font-family: var(--font-mono);
+  font-size: var(--text-ui-sm);
+  line-height: 1.7;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+  margin: 0 0 60px;
+}
+
+.tablist {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-sunken);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  margin: 0 0 20px;
+}
+
+.tab {
+  padding: 9px 20px;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

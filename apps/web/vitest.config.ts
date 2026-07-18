@@ -88,6 +88,8 @@ export default defineConfig({
       "__tests__/**/*.test.tsx",
       "app/**/*.test.ts",
       "app/**/*.test.tsx",
+      "lib/**/*.test.ts",
+      "lib/**/*.test.tsx",
     ],
     exclude: ["__tests__/**/*-shim.ts", "node_modules/**"],
   },

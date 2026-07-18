@@ -1,0 +1,66 @@
+/* Playful & Warm skin — token overrides. Selector specificity (0,2,0) intentionally beats the
+ * base :root defaults so a component reading var(--token) re-skins with zero code changes.
+ * NOTE: every token named in _skins/skin-contract.ts MUST be defined here (contract test). */
+:root[data-skin="playful"] {
+  /* fonts */
+  /* One crisp humanist sans throughout, matching the approved "Playful & warm" mockup (Direction D —
+   * a single Segoe-like sans for display AND body, NOT the rounded Baloo/Nunito pairing). Source Sans 3
+   * is the hosted, cross-platform near-match to Segoe UI (self-hosted via next/font, exposed as
+   * --font-source-sans in layout.tsx), so the design renders identically on every OS rather than only
+   * looking right where Segoe happens to be installed. --font-display/ui/read/story all point at it. */
+  --font-display: var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-story:   var(--font-source-sans), "Segoe UI", system-ui, sans-serif; /* prose/reading face — read directly by ~51 call sites; kept in sync with --font-read */
+  --font-read:    var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-ui:      var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-mono:    var(--font-dm-mono, 'DM Mono'), ui-monospace, 'SF Mono', Menlo, monospace; /* same as base (DM Mono) */
+
+  /* surfaces / ink */
+  --paper-100: #FFFDF8; --paper-200: #FBF1DE; --paper-300: #FFF6E6;
+  --surface-page: #FBF1DE; --surface-card: #FFFDF8; --surface-sunken: #FFF6E6;
+  --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
+
+  /* accent — BRIGHT CORAL, matching the owner-approved "Playful & warm" mockup
+   * (docs/design 2026-07-17 · directions.html Direction D). #EF7A54 is the PRIMARY accent: the
+   * "＋ Tell a story" CTA, active nav pill, avatar, and reaction buttons all render in it with white
+   * text. This is a deliberate BRAND choice: white on #EF7A54 is 2.77:1 (below WCAG AA), explicitly
+   * chosen by the owner over the darker AA-safe coral — "i want the brighter colors, that is exactly
+   * why we started this" (2026-07-17). The contrast guard therefore no longer enforces AA on the
+   * accent pairs (it still guards body prose + the solemn fallback). --accent-strong (#D85F39) is the
+   * deeper coral used for the byline dot ink, hover, and accent-coloured text on light surfaces. */
+  --accent: #EF7A54; --accent-strong: #E0742E; --accent-soft: #FFE3D3; --accent-on: #FFFFFF;
+  /* Warm coral→amber gradient — the fill the owner liked on the "Something you want to remember?"
+   * card. Reused for the primary CTA so buttons carry the same orange, not flat terracotta. */
+  --accent-gradient: linear-gradient(135deg, #EF7A54, #E8A02A);
+  --accent-soft-0: rgba(255,227,211,0);
+  --support: #3F9E93; --support-soft: #D9ECDC;
+
+  /* lines / focus */
+  --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #D85F39;
+
+  /* shape — rounder, chunkier */
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 26px; --radius-pill: 999px;
+  --border-width: 2px;
+
+  /* shadows — soft shelf + lift */
+  --shadow-sm: 0 2px 0 #F0DCC0;
+  --shadow-card: 0 6px 0 #F0DCC0;
+  --shadow-lift: 0 14px 30px rgba(180,120,70,0.24);
+
+  /* --- Phase 2 structural-signature palette --- */
+  /* Decorative bright coral — FILL ONLY (tape, tilt-shadow, sticker backing). Never small text. */
+  --deco-coral: #EF7A54;
+  --tape-bg: rgba(239, 122, 84, 0.30);
+  --tilt-shadow: rgba(216, 95, 57, 0.22);
+  --highlighter: #FFD9A1;                        /* amber marker wash behind titles (mockup Direction D) */
+  /* "Tell a story" invite-card fill — the same warm coral→amber gradient. */
+  --tell-card-bg: var(--accent-gradient);
+  /* Sticker/candy tags — candy inks from the approved mockup (brighter than the earlier AA-tuned set). */
+  --sticker-coral-bg: #FFE3D3;  --sticker-coral-ink: #C95A33;
+  --sticker-sky-bg:   #DCEBF7;  --sticker-sky-ink:   #356A92;
+  --sticker-leaf-bg:  #E6EFD6;  --sticker-leaf-ink:  #5B7A34;
+  --sticker-gold-bg:  #F5DDB0;  --sticker-gold-ink:  #9A6A1E;
+
+  /* motion — gentle bounce (structural motion added in Phase 2, all guarded) */
+  --ease-quiet: cubic-bezier(0.34, 1.32, 0.4, 1);
+  --dur-fade: 0.16s; --dur-settle: 0.30s; --dur-pulse: 2.4s;
+}

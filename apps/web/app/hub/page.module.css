@@ -1,0 +1,109 @@
+.main {
+  min-height: 100dvh;
+  background: var(--surface-page);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 32px);
+}
+
+.header {
+  padding: 28px 0 0;
+  border-bottom: var(--border-width) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.titleGroup {
+  /* holds the family name + future inline title actions — intentional extension seam */
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Mono eyebrow above the family name (Playful mockup Direction D .mast eyebrow). */
+.familyEyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem; /* ~11px */
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+
+.familyName {
+  font-family: var(--font-display); /* was --font-story; Playful splits display from read */
+  font-size: clamp(1.75rem, 4vw, var(--text-display));
+  font-weight: 800; /* Playful mockup Direction D: heavy display heading */
+  color: var(--text-body);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.tabsRow {
+  margin-bottom: -1px; /* overlap the border */
+}
+
+.tabContent {
+  padding: 28px 0;
+}
+
+/* Family surface action row — holds the Invite button (moved out of the primary "More" menu). */
+.familyActions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 18px;
+}
+
+.inviteButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 700;
+  text-decoration: none;
+  min-height: var(--touch-min);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+
+.inviteButton:hover {
+  background: var(--accent-strong);
+}
+
+.inviteButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.emptyCard {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  text-align: center;
+}
+
+.emptyText {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-muted);
+  margin: 0;
+}

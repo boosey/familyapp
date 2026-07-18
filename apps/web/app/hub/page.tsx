@@ -29,7 +29,8 @@ import {
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
-import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
+import { QuestionsSubNav } from "./QuestionsSubNav";
+import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
 import { PendingInvitesBanner } from "./PendingInvitesBanner";
@@ -42,6 +43,7 @@ import { FamilyTab } from "./tabs/FamilyTab";
 import { InviteTab } from "./tabs/InviteTab";
 import { RequestsTab } from "./tabs/RequestsTab";
 import { loadFamilyTabData } from "@/lib/family-tab-data";
+import styles from "./page.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -212,99 +214,82 @@ export default async function HubPage({
   // Non-null display name for the Stories tab (labels the Timeline "Just {viewer}" toggle).
   const viewerDisplayName = viewerName ?? "You";
 
-  const tabs = [
+  // Task 3 (Playful de-clutter): the primary nav is FOUR tabs — Stories · Album · Family · Questions
+  // — plus a prominent "Tell a story" CTA (rendered inside HubTabs). The three ask surfaces
+  // (questions/ask/asks) consolidate under the single Questions primary tab (a secondary sub-nav
+  // below switches among them); the conditional Invite/Requests entries move into a "More ▾"
+  // overflow menu. This regroups PRESENTATION ONLY — the routing keys, `?tab=` values, and the
+  // visibility gates below are byte-for-byte the same as before.
+  const primaryTabs = [
     { key: "stories", label: hub.shell.tabStories },
     { key: "album", label: hub.shell.tabAlbum },
+    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab (it used to
+    // be the standalone /hub/tree route, which hid the tab bar once opened).
+    { key: "family", label: hub.shell.tabFamily },
     {
       key: "questions",
       label: hub.shell.tabQuestions,
       badge: pendingAsks.length > 0 ? pendingAsks.length : undefined,
     },
-    { key: "ask", label: hub.shell.tabAsk },
-    { key: "asks", label: hub.shell.tabAsks },
-    // Family surface — the visual tree + relatives list, a real in-hub `?tab=family` tab now (it used
-    // to be the standalone /hub/tree route, which hid the tab bar once opened).
-    { key: "family", label: hub.shell.tabFamily },
-    // Invite is a member-only affordance: you invite INTO a family you belong to. A pending-only
-    // viewer (member of none) has nothing to invite into, so the tab is absent for them (Task 4.5).
-    ...(inviteTabVisible(activeFamilies.length)
-      ? [{ key: "invite", label: hub.shell.tabInvite }]
-      : []),
-    // Tab stays visible while there are pending OR recently-decided requests; the badge counts
-    // only still-pending ones (the steward's actionable queue). Also member-only — a viewer who
-    // stewards no family has no request queue.
-    ...(requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length)
-      ? [
-          {
-            key: "requests",
-            label: hub.shell.tabRequests,
-            badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
-          },
-        ]
-      : []),
   ];
+  // Invite no longer lives in "More" — it's a button on the Family surface (you invite people INTO a
+  // family), rendered below. Requests is now the ONLY overflow entry: visible while there are pending
+  // OR recently-decided requests; the badge counts only still-pending ones (the steward's actionable
+  // queue). Member-only — a viewer who stewards no family has no request queue.
+  const overflowTabs = requestsTabVisible(
+    activeFamilies.length,
+    pendingRequests.length,
+    decidedRequests.length,
+  )
+    ? [
+        {
+          key: "requests",
+          label: hub.shell.tabRequests,
+          badge: pendingRequests.length > 0 ? pendingRequests.length : undefined,
+        },
+      ]
+    : [];
+
+  // Which PRIMARY tab is visually active: the three ask surfaces all light up the Questions tab.
+  const primaryActive = ["questions", "ask", "asks"].includes(activeTab) ? "questions" : activeTab;
+  // The active ask surface drives the secondary sub-nav (only rendered inside the Questions content).
+  const questionsSurfaceActive = ["questions", "ask", "asks"].includes(activeTab);
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        background: "var(--surface-page)",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 900,
-          margin: "0 auto",
-          padding: "0 clamp(16px, 4vw, 32px)",
-        }}
-      >
+    <main className={styles.main}>
+      <div className={styles.container}>
         {/* Header */}
-        <header
-          style={{
-            padding: "28px 0 0",
-            borderBottom: "var(--border-width) solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
+        <header className={styles.header}>
           {/* Title row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <h1
-                style={{
-                  fontFamily: "var(--font-story)",
-                  fontSize: "clamp(1.75rem, 4vw, var(--text-display))",
-                  fontWeight: 400,
-                  color: "var(--text-body)",
-                  margin: 0,
-                  letterSpacing: "var(--tracking-tight)",
-                }}
-              >
-                {familyName}
-              </h1>
+          <div className={styles.titleRow}>
+            <div className={styles.titleGroup}>
+              <div>
+                <p className={styles.familyEyebrow}>
+                  {hub.shell.familyEyebrow(activeFamilies.length)}
+                </p>
+                <h1 className={styles.familyName}>
+                  {familyName}
+                </h1>
+              </div>
             </div>
             {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root
                 layout, so the hub no longer inlines its own copy in the header. */}
           </div>
 
           {/* Tabs row */}
-          <div style={{ marginBottom: -1 /* overlap the border */ }}>
-            <HubTabsNav tabs={tabs} active={activeTab} familiesParam={familiesRaw} />
+          <div className={styles.tabsRow}>
+            <HubTabsNav
+              primaryTabs={primaryTabs}
+              overflowTabs={overflowTabs}
+              active={primaryActive}
+              familiesParam={familiesRaw}
+            />
           </div>
         </header>
 
         {/* Tab content */}
-        <section style={{ padding: "28px 0" }}>
+        <section className={styles.tabContent}>
           <PendingInvitesBanner matches={pendingInviteMatches} />
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
@@ -331,6 +316,12 @@ export default async function HubPage({
               googlePhotosOauthError={googlePhotosOauthError}
             />
           )}
+          {/* Task 3: the three ask surfaces share one primary tab (Questions). A secondary sub-nav
+              switches among them, rendered ABOVE whichever surface is active. Content below is
+              unchanged — each key still renders exactly what it did before. */}
+          {questionsSurfaceActive && (
+            <QuestionsSubNav active={activeTab} familiesParam={familiesRaw} />
+          )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
           {activeTab === "ask" && (
             <AskTab
@@ -346,8 +337,21 @@ export default async function HubPage({
               hasFamily={activeFamilies.length > 0}
             />
           )}
-          {activeTab === "family" &&
-            (familyTabData ? (
+          {activeTab === "family" && (
+            <>
+              {/* Invite lives here now (a family action), not in the primary nav's "More" menu — you
+                  invite people INTO a family. Member-only, same gate as the old overflow entry. */}
+              {inviteTabVisible(activeFamilies.length) && (
+                <div className={styles.familyActions}>
+                  <a
+                    className={styles.inviteButton}
+                    href={`/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`}
+                  >
+                    {hub.shell.tabInvite}
+                  </a>
+                </div>
+              )}
+              {familyTabData ? (
               <FamilyTab
                 familyId={familyTabData.familyId}
                 focusPersonId={familyTabData.focusPersonId}
@@ -368,27 +372,14 @@ export default async function HubPage({
                 scopeId={familyTabFamilyId ?? undefined}
               />
             ) : (
-              <div
-                style={{
-                  background: "var(--surface-card)",
-                  border: "var(--border-width) solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: 30,
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: "var(--font-story)",
-                    fontSize: "var(--text-story)",
-                    color: "var(--text-muted)",
-                    margin: 0,
-                  }}
-                >
+              <div className={styles.emptyCard}>
+                <p className={styles.emptyText}>
                   {hub.tree.noFamily}
                 </p>
               </div>
-            ))}
+            )}
+            </>
+          )}
           {/* Invite is member-only: you invite people INTO a family you belong to. A pending-only
               viewer hitting ?tab=invite directly would otherwise reach a broken zero-option family
               form — gate the dispatch on membership and show the shared pending-only empty instead
@@ -401,23 +392,8 @@ export default async function HubPage({
                 inviteeName={typeof inviteeNameParam === "string" ? inviteeNameParam : undefined}
               />
             ) : (
-              <div
-                style={{
-                  background: "var(--surface-card)",
-                  border: "var(--border-width) solid var(--border)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: 30,
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: "var(--font-story)",
-                    fontSize: "var(--text-story)",
-                    color: "var(--text-muted)",
-                    margin: 0,
-                  }}
-                >
+              <div className={styles.emptyCard}>
+                <p className={styles.emptyText}>
                   {hub.shell.pendingEmpty}
                 </p>
               </div>

@@ -14,6 +14,8 @@ import {
 } from "@/lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
 import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
+import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
+import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
 
 export type PreferenceValidator =
   | { kind: "int-index"; length: number }
@@ -99,6 +101,20 @@ export const PREFERENCES = {
     default: DEFAULT_THEME_ID,
     validate: { kind: "enum", values: THEME_IDS },
     apply: { strategy: "data-attr", attr: "data-theme" },
+  },
+  skin: {
+    key: "skin",
+    storageKey: SKIN_STORAGE_KEY,
+    default: DEFAULT_SKIN_ID,
+    validate: { kind: "enum", values: SKIN_IDS },
+    apply: { strategy: "data-attr", attr: "data-skin" },
+  },
+  reduceMotion: {
+    key: "reduce-motion",
+    storageKey: MOTION_STORAGE_KEY,
+    default: DEFAULT_REDUCE_MOTION,
+    validate: { kind: "enum", values: REDUCE_MOTION_VALUES },
+    apply: { strategy: "data-attr", attr: "data-reduce-motion" },
   },
 } as const satisfies Record<string, PreferenceDef>;
 

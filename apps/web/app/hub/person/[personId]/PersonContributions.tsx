@@ -15,7 +15,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
-import { HubTabs } from "@/app/hub/HubTabs";
+import hubTabStyles from "@/app/hub/HubTabs.module.css";
 
 export type PersonSection = "stories" | "photos" | "mentions";
 
@@ -54,16 +54,32 @@ export function PersonContributions({
     router.push(`${pathname}?section=${next}`);
   };
 
+  // A plain 3-tab section nav — NOT the hub-shell nav (no Tell-a-story CTA, no overflow menu). It
+  // reuses HubTabs.module.css's tab pill styling so the pills stay single-sourced, but renders its
+  // own tablist so the Task-3 hub-shell affordances never leak onto the person page.
   const tabs = [
-    { key: "stories", label: hub.personPage.tabStories },
-    { key: "photos", label: hub.personPage.tabPhotos },
-    { key: "mentions", label: hub.personPage.tabMentions },
+    { key: "stories" as const, label: hub.personPage.tabStories },
+    { key: "photos" as const, label: hub.personPage.tabPhotos },
+    { key: "mentions" as const, label: hub.personPage.tabMentions },
   ];
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <HubTabs tabs={tabs} active={section} onChange={change} />
+        <nav className={hubTabStyles.nav} role="tablist" aria-label={hub.personPage.sectionsAria}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={tab.key === section}
+              className={hubTabStyles.tab}
+              onClick={() => change(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {section === "stories" && (

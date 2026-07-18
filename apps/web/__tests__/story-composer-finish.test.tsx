@@ -146,7 +146,7 @@ describe("StoryComposer Finish-check", () => {
 
     // While the finish is in flight: editor is read-only and the mic can't start a new recording.
     await waitFor(() => expect(editor().disabled).toBe(true));
-    expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /hold to speak/i }) as HTMLButtonElement).disabled).toBe(true);
 
     // Resolve so the test doesn't leave a dangling promise.
     resolveFinish({ kind: "finished", storyId: STORY_ID });
@@ -171,7 +171,7 @@ describe("StoryComposer Finish-check", () => {
 
     // While the Polish is in flight, Finish and the mic can't start a competing mutation.
     await waitFor(() => expect(finishBtn().disabled).toBe(true));
-    expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /hold to speak/i }) as HTMLButtonElement).disabled).toBe(true);
 
     resolvePolish({ prose: POLISHED });
     await waitFor(() => expect(finishBtn().disabled).toBe(false));
