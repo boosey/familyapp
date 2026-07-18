@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Fit / − / + controls now live in FamilyTab's view-selector row (tree Slice A §5), not inside
- * TreeCanvas. pan/scale are lifted to FamilyTab and passed to TreeCanvas as controlled props; Fit is
- * called through TreeCanvas's imperative handle. These tests drive the controls from FamilyTab and read
- * the resulting `scale(...)` out of the pan-layer transform — and assert the LIST view hides them.
+ * Fit / − / + controls live on FamilyTab's family-selector row (#159), not inside TreeCanvas. pan/scale
+ * are lifted to FamilyTab and passed to TreeCanvas as controlled props; Fit is called through
+ * TreeCanvas's imperative handle. These tests drive the controls from FamilyTab and read the resulting
+ * `scale(...)` out of the pan-layer transform — and assert the LIST view (rendered via the `view` prop,
+ * URL-driven since #158) hides them.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
-// FamilyTab calls useRouter() (Slice D #6: client-side nav) and now mounts <FamilyChips>, which calls
+// FamilyTab calls useRouter() (Slice D #6: client-side nav) and mounts <FamilyChips>, which calls
 // usePathname()/useSearchParams() unconditionally (React hooks run before its <2-family self-hide).
 // This bare mount has no Next app-router provider, so stub the whole surface. These tests pass no
 // `families`, so FamilyChips self-hides after the hooks return — no chip bar is rendered.
@@ -21,7 +22,6 @@ import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 
 afterEach(() => {
   cleanup();
-  localStorage.clear();
 });
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
@@ -62,9 +62,16 @@ const data: KinshipTreeData = {
   ],
 };
 
-function renderTab() {
+function renderTab(view: "tree" | "list" = "tree") {
   return render(
-    <FamilyTab familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} tree={data} kin={[]} />,
+    <FamilyTab
+      familyId="F"
+      focusPersonId={FOCUS}
+      viewerPersonId={FOCUS}
+      tree={data}
+      kin={[]}
+      view={view}
+    />,
   );
 }
 
@@ -75,7 +82,7 @@ function scaleOf(): number {
   return parseFloat(m[1]!);
 }
 
-it("renders Fit + zoom-in + zoom-out controls in the selector row (tree view)", () => {
+it("renders Fit + zoom-in + zoom-out controls on the family-selector row (tree view)", () => {
   renderTab();
   expect(screen.getByTestId("tree-controls")).toBeTruthy();
   expect(screen.getByTestId("tree-fit")).toBeTruthy();
@@ -83,10 +90,8 @@ it("renders Fit + zoom-in + zoom-out controls in the selector row (tree view)", 
   expect(screen.getByTestId("tree-zoom-out")).toBeTruthy();
 });
 
-it("the list view hides the tree controls", async () => {
-  renderTab();
-  expect(screen.getByTestId("tree-controls")).toBeTruthy();
-  await act(async () => screen.getByRole("radio", { name: /list/i }).click());
+it("the list view hides the tree controls", () => {
+  renderTab("list");
   expect(screen.queryByTestId("tree-controls")).toBeNull();
   expect(screen.queryByTestId("tree-fit")).toBeNull();
 });

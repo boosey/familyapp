@@ -1,0 +1,78 @@
+/* InfoTooltip (#160) — a circled-i info affordance + its revealed tooltip. Design values are tokens;
+ * the icon rides as a superscript beside a heading. Motion is a quiet fade, gated behind
+ * prefers-reduced-motion (solemn-safe). */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+  /* Superscript: nudge the icon up against the heading's cap height. */
+  vertical-align: super;
+  margin-left: 6px;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  cursor: pointer;
+  /* A comfortable hit target around the 16px glyph without disturbing text flow. */
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.trigger:hover {
+  color: var(--text-body);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.icon {
+  display: block;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: 260px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-lift);
+  color: var(--text-body);
+  /* Reset the heading's superscript context so the sentence renders at normal size/baseline. */
+  vertical-align: baseline;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 400;
+  line-height: var(--leading-body);
+  text-align: left;
+  white-space: normal;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tooltip {
+    animation: infoTooltipFade var(--dur-fade) var(--ease-quiet);
+  }
+}
+
+@keyframes infoTooltipFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

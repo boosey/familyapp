@@ -30,7 +30,7 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubTabsNav } from "./HubTabsNav";
 import { QuestionsSubNav } from "./QuestionsSubNav";
-import { FamilySubNav } from "./FamilySubNav";
+import { FamilySurfaceNav } from "./FamilySurfaceNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible, familyTabBadge } from "@/lib/hub-tabs";
 import { isBiographicalProfileComplete } from "@/lib/intake-profile";
@@ -144,11 +144,11 @@ export default async function HubPage({
     activeTab === "family" && familyTabFamilyId
       ? await loadFamilyTabData(db, ctx, familyTabFamilyId, anchorParam)
       : null;
-  const familyInitialView = viewParam === "list" ? "list" : "tree";
-  // #144: the member-only Invite entry point now rides the Family tab's Tree/List selector row (moved
-  // off the page shell into <FamilyTab>). Same target + gate as before — you invite INTO a family, so
-  // it shows only for a viewer with ≥1 family; `?families=` is preserved so the invite lands on the
-  // current scope. `undefined` renders no button.
+  const familyView = viewParam === "list" ? "list" : "tree";
+  // #144/#158: the member-only Invite entry point rides the shared Family selector row (<FamilySurfaceNav>).
+  // Same target + gate as before — you invite INTO a family, so it shows only for a viewer with ≥1
+  // family; `?families=` is preserved so the invite lands on the current scope. `undefined` renders no
+  // button.
   const familyInviteHref = inviteTabVisible(activeFamilies.length)
     ? `/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`
     : undefined;
@@ -256,14 +256,19 @@ export default async function HubPage({
       : activeTab;
   // The active ask surface drives the Questions secondary sub-nav (rendered inside the Questions content).
   const questionsSurfaceActive = ["questions", "ask", "asks"].includes(activeTab);
-  // The Family surface hosts both the tree/relatives view and the Requests queue.
+  // The Family surface hosts the tree/relatives view AND the Requests queue.
   const familySurfaceActive = ["family", "requests"].includes(activeTab);
-  // Show the Family sub-nav only when the Requests queue is live (pending OR recently-decided, and the
-  // viewer stewards a family) — otherwise the lone "Family tree" sub-tab is noise. The `|| requests`
-  // clause keeps a deep-linked Requests view navigable even for a non-steward (no dead-end, no 404).
-  const showFamilySubNav =
+  // #158: the shared selector row (Family tree · List · Requests) shows on the family surface whenever
+  // there's a family to browse, OR the viewer deep-linked Requests (so the way out is always present).
+  const showFamilySelector =
+    familySurfaceActive && (activeFamilies.length > 0 || activeTab === "requests");
+  // The Requests ITEM in the selector appears only when the steward queue is live (pending OR
+  // recently-decided) or the viewer deep-linked Requests — otherwise it's a link into an empty surface.
+  const showRequestsItem =
     requestsTabVisible(activeFamilies.length, pendingRequests.length, decidedRequests.length) ||
     activeTab === "requests";
+  // Which selector item is active: Requests when on the requests tab, else the resolved `?view=`.
+  const familySelectorActive = activeTab === "requests" ? "requests" : familyView;
 
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
@@ -337,15 +342,17 @@ export default async function HubPage({
               toAnswerBadge={pendingAsks.length}
             />
           )}
-          {/* Issue #124: family + requests share one primary tab (Family). A secondary sub-nav switches
-              between the tree/relatives view and the steward's Requests queue, rendered ABOVE whichever
-              is active (only when the Requests queue is live, or a Requests deep-link needs the way out).
-              Content below each key is unchanged. */}
-          {familySurfaceActive && showFamilySubNav && (
-            <FamilySubNav
-              active={activeTab}
+          {/* #158: family + requests share one primary tab (Family). A single selector row (Family tree ·
+              List · Requests) with a right-justified Invite renders ABOVE whichever surface is active, on
+              all three sub-tabs. The Requests badge is the AGGREGATE pending count across every stewarded
+              family (#159) — so a steward still sees requests exist in a family they haven't selected. */}
+          {showFamilySelector && (
+            <FamilySurfaceNav
+              active={familySelectorActive}
               familiesParam={familiesRaw}
+              showRequests={showRequestsItem}
               requestsBadge={pendingRequests.length}
+              inviteHref={familyInviteHref}
             />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
@@ -372,9 +379,9 @@ export default async function HubPage({
                 viewerPersonId={ctx.personId}
                 tree={familyTabData.tree}
                 kin={familyTabData.kin}
-                initialView={familyInitialView}
-                // #144: Invite button relocated onto FamilyTab's Tree/List selector row.
-                inviteHref={familyInviteHref}
+                // #158: the Tree/List choice is URL-driven now (?view=), resolved here and rendered by
+                // FamilyTab; the selector itself lives in <FamilySurfaceNav> above.
+                view={familyView}
                 // Family filter chips (ADR-0021 §Tree, #48). Gate the chip data on >=2 families — the
                 // same rule AlbumSurface uses — so the client widget's next/navigation hooks stay out
                 // of the server render for a 0/1-family viewer. The single ON chip is the resolved
@@ -417,7 +424,9 @@ export default async function HubPage({
           {activeTab === "requests" && (
             <RequestsTab
               families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
-              seedFamilyId={scope}
+              // #159: the Requests list scopes to the SAME resolved family the tree uses (`?families=`),
+              // defaulting to the first active family when the filter is absent (never "all" for a steward).
+              scopeFamilyId={familyTabFamilyId ?? "all"}
             />
           )}
         </section>

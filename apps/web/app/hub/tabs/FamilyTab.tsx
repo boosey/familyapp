@@ -1,15 +1,21 @@
 "use client";
 /**
- * FamilyTab — the hub's "Family" tab (2026-07-14). The visual family tree used to be a standalone
- * `/hub/tree` route (which hid the hub tab bar) and the relatives list a separate `/hub/kin` route;
- * both are folded in here behind a Tree | List view selector so the tab chrome never disappears.
+ * FamilyTab — the hub's "Family" tab content (the visual tree + the relatives list). The tree used to
+ * be a standalone `/hub/tree` route and the relatives list a separate `/hub/kin` route; both are folded
+ * in here.
  *
  *   - Tree view → the interactive <TreeCanvas> (pan/zoom, per-card add via modal).
  *   - List  view → the searchable read-only <KinList> of the viewer's relatives.
  *
- * The chosen view persists to localStorage (SSR-safe: default "tree", hydrated in an effect).
+ * The Tree/List selection is URL-driven now (#158): the `Family tree · List · Requests` selector lives
+ * in <FamilySurfaceNav> (rendered by the page shell) and this component simply renders whichever `view`
+ * the page resolved from `?view=`. There is no localStorage toggle and no in-tab pill anymore.
+ *
+ * This component owns ONLY the family-selector row (#159): the shared single-select <FamilyChips>
+ * (`?families=`) with the tree's `Fit / − / +` controls right-justified on the same row (tree view
+ * only). Camera state (pan/scale) is lifted here so those controls can drive the canvas.
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KinListEntry, KinshipTreeData } from "@chronicle/core";
 import { hub } from "@/app/_copy";
@@ -21,13 +27,7 @@ import styles from "./FamilyTab.module.css";
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 
-type FamilyView = "tree" | "list";
-
-const VIEW_KEY = "hub:familyView";
-
-function isView(v: string | null): v is FamilyView {
-  return v === "tree" || v === "list";
-}
+export type FamilyView = "tree" | "list";
 
 export interface FamilyTabProps {
   familyId: string;
@@ -35,8 +35,8 @@ export interface FamilyTabProps {
   viewerPersonId: string;
   tree: KinshipTreeData;
   kin: KinListEntry[];
-  /** When the tab was opened with `?view=list` (e.g. a deep link), start on the List view. */
-  initialView?: FamilyView;
+  /** Which view to render — resolved by the page shell from `?view=` (#158). Defaults to the tree. */
+  view?: FamilyView;
   /**
    * The viewer's active families (chip data for the shared `?families=` filter, ADR-0021 §Tree #48).
    * The server gates the MOUNT on `families.length >= 2`, so this only carries chips when a chip bar is
@@ -50,13 +50,6 @@ export interface FamilyTabProps {
    * chip bar just reflects `[scopeId]` — no client-side "first of set" logic needed here.
    */
   scopeId?: string;
-  /**
-   * #144: the member-only Invite entry point, relocated OFF the page shell and ONTO the Tree/List
-   * selector row (right-justified). The href is the SAME `/hub?tab=invite[&families=…]` target the
-   * page used to render above the tab; the server passes it only when invites are warranted (the
-   * viewer belongs to ≥1 family), so `undefined` simply renders no button.
-   */
-  inviteHref?: string;
 }
 
 export function FamilyTab({
@@ -65,159 +58,73 @@ export function FamilyTab({
   viewerPersonId,
   tree,
   kin,
-  initialView = "tree",
+  view = "tree",
   families = [],
   scopeId,
-  inviteHref,
 }: FamilyTabProps) {
-  const [view, setView] = useState<FamilyView>(initialView);
   const router = useRouter();
 
-  // CAMERA state lifted out of TreeCanvas (§5) so the Fit/−/+ controls can live in the selector row.
-  // TreeCanvas keeps `fit()`/`center()` (they need layout bounds + the viewport ref) behind an
+  // CAMERA state lifted out of TreeCanvas (§5) so the Fit/−/+ controls can live in the family-selector
+  // row. TreeCanvas keeps `fit()`/`center()` (they need layout bounds + the viewport ref) behind an
   // imperative handle; Fit calls it. Zoom −/+ are simple clamped setScale calls owned here.
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
   const canvasRef = useRef<TreeCanvasHandle | null>(null);
 
-  // Hydrate the persisted choice on mount (client only), unless a deep-link asked for a specific view.
-  useEffect(() => {
-    if (initialView !== "tree") return; // an explicit ?view= wins over the stored preference
-    try {
-      const stored = window.localStorage.getItem(VIEW_KEY);
-      if (isView(stored)) setView(stored);
-    } catch {
-      /* localStorage unavailable — keep the default. */
-    }
-  }, [initialView]);
+  const atMin = scale <= ZOOM_MIN + 0.001;
+  const atMax = scale >= ZOOM_MAX - 0.001;
 
-  function changeView(v: FamilyView) {
-    setView(v);
-    try {
-      window.localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* ignore persistence failure */
-    }
-  }
+  // The family-selector row carries the chip bar (>=2 families) and, in the tree view, the zoom
+  // controls. Skip it entirely when it would be empty — i.e. the List view with a self-hiding chip bar
+  // (<2 families) — so a single-family relatives list doesn't gain a stray empty gap above it.
+  const showFamilyRow = view === "tree" || families.length >= 2;
 
   return (
     <div>
-      {/* Family filter chip bar (ADR-0021 §Tree, #48) — single-select: tapping a chip COLLAPSES the
-          shared ?families= set to just that family and the tree re-renders it. Sits ABOVE the Tree|List
-          selector so it's visible in the tree view (it also shows in list view — acceptable). The ON
-          chip reflects the server-resolved single scope; FamilyChips self-hides for <2 families, and
-          the server only passes chips when >=2 anyway. `scopeId` may be undefined during a transient
-          render — fall back to the concrete `familyId` the tree is showing. */}
-      <FamilyChips singleSelect families={families} selected={[scopeId ?? familyId]} />
+      {/* Family-selector row (#159): the single-select family chips on the LEFT (ADR-0021 §Tree #48),
+          and the tree's Fit / − / + controls right-justified on the SAME row (tree view only). In the
+          tree view the row renders even when the chip bar self-hides (<2 families) so the tree still
+          gets its zoom controls; `margin-left:auto` on the controls keeps them hard-right regardless. */}
+      {showFamilyRow && (
+      <div className={styles.familyRow}>
+        <FamilyChips singleSelect inline families={families} selected={[scopeId ?? familyId]} />
 
-      {/* Selector row: Tree | List on the LEFT; Fit / − / + on the RIGHT (tree view only, §5). */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-          marginBottom: 20,
-        }}
-      >
-        <div
-          role="radiogroup"
-          aria-label={hub.tree.viewSelectorAria}
-          style={{
-            display: "inline-flex",
-            padding: 3,
-            gap: 2,
-            borderRadius: "var(--radius-pill)",
-            background: "var(--surface-sunken)",
-            border: "var(--border-width) solid var(--border)",
-          }}
-        >
-          {(["tree", "list"] as const).map((v) => {
-            const selected = v === view;
-            return (
+        {view === "tree" && (
+          <div className={styles.zoomControls} data-testid="tree-controls">
+            <button
+              type="button"
+              onClick={() => canvasRef.current?.fit()}
+              data-testid="tree-fit"
+              className={styles.controlPill}
+            >
+              {hub.tree.fit}
+            </button>
+            <div className={styles.zoomPair}>
               <button
-                key={v}
                 type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => changeView(v)}
-                style={{
-                  minHeight: 40,
-                  padding: "8px 20px",
-                  border: "none",
-                  borderRadius: "var(--radius-pill)",
-                  background: selected ? "var(--surface-card)" : "transparent",
-                  boxShadow: selected ? "var(--shadow-lift)" : "none",
-                  color: selected ? "var(--text-heading)" : "var(--text-meta)",
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-ui-sm)",
-                  fontWeight: selected ? 600 : 500,
-                  cursor: "pointer",
-                }}
+                onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
+                data-testid="tree-zoom-out"
+                aria-label={hub.tree.zoomOut}
+                disabled={atMin}
+                className={styles.zoomBtn}
               >
-                {v === "tree" ? hub.tree.viewTree : hub.tree.viewList}
+                <span aria-hidden="true">−</span>
               </button>
-            );
-          })}
-        </div>
-
-        {/* Right side of the selector row: the tree Fit/−/+ controls (tree view only) and the
-            member-only Invite button (#144), right-justified. The Invite button shows in BOTH views. */}
-        {(view === "tree" || inviteHref) && (
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              marginLeft: "auto",
-              flexWrap: "wrap",
-            }}
-          >
-            {view === "tree" && (
-              <div
-                data-testid="tree-controls"
-                style={{ display: "inline-flex", alignItems: "center", gap: 12 }}
+              <button
+                type="button"
+                onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
+                data-testid="tree-zoom-in"
+                aria-label={hub.tree.zoomIn}
+                disabled={atMax}
+                className={styles.zoomBtn}
               >
-                <button type="button" onClick={() => canvasRef.current?.fit()} data-testid="tree-fit" style={controlPill}>
-                  {hub.tree.fit}
-                </button>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
-                    data-testid="tree-zoom-out"
-                    aria-label={hub.tree.zoomOut}
-                    disabled={scale <= ZOOM_MIN + 0.001}
-                    style={zoomBtn(scale <= ZOOM_MIN + 0.001)}
-                  >
-                    <span aria-hidden="true">−</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
-                    data-testid="tree-zoom-in"
-                    aria-label={hub.tree.zoomIn}
-                    disabled={scale >= ZOOM_MAX - 0.001}
-                    style={zoomBtn(scale >= ZOOM_MAX - 0.001)}
-                  >
-                    <span aria-hidden="true">+</span>
-                  </button>
-                </div>
-                <span style={{ fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-meta)" }}>
-                  {hub.tree.pan}
-                </span>
-              </div>
-            )}
-
-            {inviteHref ? (
-              <a className={styles.inviteButton} href={inviteHref}>
-                {hub.shell.tabInvite}
-              </a>
-            ) : null}
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
+      )}
 
       {view === "tree" ? (
         <TreeCanvas
@@ -240,35 +147,4 @@ export function FamilyTab({
       )}
     </div>
   );
-}
-
-const controlPill: React.CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  fontWeight: 600,
-  padding: "8px 16px",
-  borderRadius: "var(--radius-pill)",
-  border: "var(--border-width) solid var(--border-strong)",
-  background: "transparent",
-  color: "var(--text-body)",
-  cursor: "pointer",
-};
-
-function zoomBtn(disabled: boolean): React.CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 34,
-    height: 34,
-    borderRadius: "50%",
-    border: "var(--border-width) solid var(--border-strong)",
-    background: "transparent",
-    color: "var(--text-body)",
-    fontSize: "1.2rem",
-    lineHeight: 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.4 : 1,
-    padding: 0,
-  };
 }

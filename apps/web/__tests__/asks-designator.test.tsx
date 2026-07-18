@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Behavior tests for the Asks + Requests Family DESIGNATORS (ADR-0021, issue #50).
+ * Behavior tests for the Asks Family DESIGNATOR (ADR-0021, issue #50). (The Requests surface no longer
+ * uses a designator — since #159 it scopes via the URL-driven `?families=` filter, tested at
+ * FamilyChips / RequestsTab instead.)
  *
- * These client wrappers are SEEDED from the browse filter `?families=` but hold their own state and
+ * This client wrapper is SEEDED from the browse filter `?families=` but holds its own state and
  * NEVER write it back. We assert:
  *   - SEED: the initial designated family comes from the seed (a real seed wins; "all"/unknown → first).
  *   - LIST SCOPING: only the designated family's rows show; switching the designator changes which rows
@@ -15,7 +17,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AsksDesignator, type AsksDesignatorAsk } from "@/app/hub/tabs/AsksDesignator";
-import { RequestsDesignator, type RequestRow } from "@/app/hub/tabs/RequestsDesignator";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -117,81 +118,5 @@ describe("AsksDesignator — seed + list scoping (no write-back)", () => {
     );
     expect(screen.queryByRole("group", { name: "Choose a family" })).toBeNull();
     expect(screen.queryByText(/Q about Esposito/)).toBeTruthy();
-  });
-});
-
-describe("RequestsDesignator — seed + list scoping (no write-back)", () => {
-  const noop = async () => {};
-  const pending: RequestRow[] = [
-    {
-      joinRequestId: "r1",
-      familyId: "fam-a",
-      familyName: "Esposito",
-      requesterName: "Ann",
-      message: null,
-      status: "pending",
-    },
-    {
-      joinRequestId: "r2",
-      familyId: "fam-b",
-      familyName: "Marino",
-      requesterName: "Bea",
-      message: null,
-      status: "pending",
-    },
-  ];
-
-  it("SEED: a concrete seed shows only that family's requests", () => {
-    render(
-      <RequestsDesignator
-        families={FAMILIES}
-        seedFamilyId="fam-b"
-        pending={pending}
-        decided={[]}
-        approve={noop}
-        decline={noop}
-      />,
-    );
-    expect(screen.getByRole("button", { name: /^Marino/ }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    expect(screen.queryByText("Bea")).toBeTruthy();
-    expect(screen.queryByText("Ann")).toBeNull();
-  });
-
-  it("LIST SCOPING: switching the designator narrows rows WITHOUT a router.push", () => {
-    render(
-      <RequestsDesignator
-        families={FAMILIES}
-        seedFamilyId="fam-a"
-        pending={pending}
-        decided={[]}
-        approve={noop}
-        decline={noop}
-      />,
-    );
-    expect(screen.queryByText("Ann")).toBeTruthy();
-    expect(screen.queryByText("Bea")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /^Marino/ }));
-
-    expect(screen.queryByText("Bea")).toBeTruthy();
-    expect(screen.queryByText("Ann")).toBeNull();
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it("one-family viewer: no chip bar, the (unfiltered) requests list still shows", () => {
-    render(
-      <RequestsDesignator
-        families={[FAMILIES[0]!]}
-        seedFamilyId="fam-a"
-        pending={[pending[0]!]}
-        decided={[]}
-        approve={noop}
-        decline={noop}
-      />,
-    );
-    expect(screen.queryByRole("group", { name: "Choose a family" })).toBeNull();
-    expect(screen.queryByText("Ann")).toBeTruthy();
   });
 });

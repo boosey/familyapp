@@ -6,8 +6,8 @@ import { FAMILIES_PARAM, serializeSelection } from "@/lib/family-filter";
 import { familyChipStyle } from "./family-chip-style";
 import { hub } from "@/app/_copy";
 // The count-pill lives as ONE shared class in HubTabs.module.css (centralization convention) — the
-// hub tabs and sub-navs already reuse it (see FamilySubNav), so a per-family count badge on a chip
-// pulls the SAME `.badge` visual rather than re-declaring the pill and risking drift.
+// hub tabs and the Family selector row already reuse it (see FamilySurfaceNav), so a per-family count
+// badge on a chip pulls the SAME `.badge` visual rather than re-declaring the pill and risking drift.
 import hubTabStyles from "./HubTabs.module.css";
 
 /**
