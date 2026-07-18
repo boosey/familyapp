@@ -1024,6 +1024,37 @@ export const invitations = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// invitation_dismissals — a per-account "Not me" on a surfaced pending invite (issue #120).
+// An invite matched to an account's verified contacts is surfaced in the hub until acted on;
+// dismissal records that THIS account declined the match. It NEVER revokes the invitation —
+// the emailed/texted link keeps working for the real invitee. UNIQUE(invitation, account)
+// makes "Not me" idempotent.
+// ---------------------------------------------------------------------------
+
+export const invitationDismissals = pgTable(
+  "invitation_dismissals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    invitationId: uuid("invitation_id")
+      .notNull()
+      .references(() => invitations.id),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("invitation_dismissals_invitation_account_uq").on(
+      t.invitationId,
+      t.accountId,
+    ),
+    index("invitation_dismissals_account_idx").on(t.accountId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // JoinRequest — a stranger's approval-gated request to join a discoverable family.
 // Discovery surfaces the family; this row is the steward's consent gate. Approval creates a
 // Membership (never bypassed). Decline closes it. ADR-0001.
@@ -1753,6 +1784,8 @@ export type LinkSession = typeof linkSessions.$inferSelect;
 export type NewLinkSession = typeof linkSessions.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
+export type InvitationDismissal = typeof invitationDismissals.$inferSelect;
+export type NewInvitationDismissal = typeof invitationDismissals.$inferInsert;
 export type JoinRequest = typeof joinRequests.$inferSelect;
 export type NewJoinRequest = typeof joinRequests.$inferInsert;
 export type MockAuthUser = typeof mockAuthUsers.$inferSelect;

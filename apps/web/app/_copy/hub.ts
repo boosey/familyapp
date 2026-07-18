@@ -66,6 +66,20 @@ export const hub = {
     body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived.",
     cta: "Continue your introduction",
   },
+  pendingInvites: {
+    // #120 — confirm cards surfaced when the viewer's VERIFIED email/phone matches a live pending
+    // invitation. Explicit confirm only; "Not me" never revokes the invite. The card names the
+    // inviter and the family — never the inviter-typed invitee name.
+    aria: "Invitations waiting for you",
+    cardLine: (inviterName: string, familyName: string) =>
+      `${inviterName} invited you to join the ${familyName} family`,
+    blurb:
+      "We matched this invitation to your email or phone number. Only join if it's really meant for you.",
+    join: "Join",
+    notMe: "Not me",
+    noLongerAvailable:
+      "That invitation is no longer available — it may have been accepted or expired.",
+  },
   aboutYou: {
     // The /hub/about-you intake surface — a short structured walk through the biographical profile.
     eyebrow: "Your introduction",

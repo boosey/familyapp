@@ -195,6 +195,11 @@ export {
   type ConflictingFamilyMember,
 } from "./invite-member-guard";
 export {
+  listPendingInvitationsForPerson,
+  dismissInvitationForAccount,
+  type PendingInvitationMatch,
+} from "./invite-discovery";
+export {
   reapUnacceptedInvitees,
   type ReapResult,
 } from "./person-housekeeping";
