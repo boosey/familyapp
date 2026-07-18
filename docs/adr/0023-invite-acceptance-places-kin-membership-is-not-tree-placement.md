@@ -31,7 +31,7 @@ Two structural gaps caused and sustained it:
 **Invitation acceptance auto-asserts a kinship edge from a structured relationship.** The invite
 relationship becomes a fixed picker — `Wife · Husband · Mother · Father · Son · Daughter · Other` —
 and on acceptance the two **direct primitives** are written silently (`partnered_with` for
-spouse; `parent_of` for parent/child, directed by which side is elder) and the invitee's `sex` is
+spouse; `parent_of` for parent/child, directed by the picked relationship role (invitee → inviter when Mother/Father are chosen; inviter → invitee when Son/Daughter are chosen)) and the invitee's `sex` is
 set. This is in-model: the inviter is an active member with authority to assert, governance is
 *first-asserter-wins with no endpoint confirmation* (ADR-0016), the subject retains the **hide
 veto**, and the steward retains **deny/correct**. Only fresh, structured, direct-primitive intent
