@@ -84,14 +84,6 @@ describe("StoryCard", () => {
     expect(link.style.getPropertyValue("--tilt")).toBe("-0.55deg");
   });
 
-  it("applies the feature class to the anchor for variant=feature", () => {
-    const { container } = render(
-      <StoryCard item={item} href="/hub/stories/s1?from=feed" index={0} masonry variant="feature" />,
-    );
-    const link = container.querySelector("a") as HTMLElement;
-    expect(link.className).toContain(styles.feature);
-  });
-
   it("renders the New badge for a story new to the viewer", () => {
     render(<StoryCard item={item} href="/hub/stories/s1?from=feed" index={0} masonry />);
     expect(screen.getByText("New")).toBeTruthy();

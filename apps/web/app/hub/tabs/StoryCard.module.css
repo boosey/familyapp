@@ -203,18 +203,6 @@
   outline-offset: 3px;
 }
 
-/* Feature hero: the first cover-bearing masonry item, given a bigger cover + title. In the CSS-columns
-   masonry it spans every column (a full-width lead), so it never gets split across the flow. */
-.masonry.feature {
-  column-span: all;
-}
-.feature .cover {
-  max-height: 460px;
-}
-.feature .title {
-  font-size: var(--text-display);
-}
-
 /* ---- Varied editorial card layouts (masonry feed) ---------------------------------------------
    Assigned deterministically per story by pickStoryLayout so the feed reads like a scrapbook and
    never repeats the same photo-top tile. `top` is the base masonry card above; these add the LEFT
