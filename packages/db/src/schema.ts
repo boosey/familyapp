@@ -1047,9 +1047,12 @@ export const invitationDismissals = pgTable(
     invitationId: uuid("invitation_id")
       .notNull()
       .references(() => invitations.id, { onDelete: "cascade" }),
+    // Cascade: erasing an account (eraseAccount / severAccount) takes its dismissal records with it —
+    // a "Not me" is meaningless once the account that declared it is gone. Without this the account
+    // DELETE FK-fails and the whole erasure rolls back (issue #133).
     accountId: uuid("account_id")
       .notNull()
-      .references(() => accounts.id),
+      .references(() => accounts.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
