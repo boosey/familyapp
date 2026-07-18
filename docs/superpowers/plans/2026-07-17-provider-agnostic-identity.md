@@ -1,5 +1,15 @@
 # Provider-Agnostic Identity Implementation Plan
 
+> ✅ **SHIPPED — 2026-07-17.** Implemented and **merged to `master` via PR #99**
+> (`2026-07-17T15:01`). `account_identities` + `account_contacts` live behind migration **0020**
+> + idempotent backfill; JIT provisioning rewritten to the 4-step engine (known identity →
+> verified-email attach → create → concurrent re-resolve); auth read path + webhook reconcilers
+> repointed to identities. All CI gates green (typecheck/lint/build/`-r test`/drift). This plan
+> is retained as the record of the "Clerk id transformation." **Follow-ups still open:** drop
+> the vestigial `accounts.auth_provider_user_id`; prune dead identities on heal; phone/SMS
+> matching; person-erasure kinship carve-out. **Post-deploy check owed:** verify `ids == accts`
+> and `contacts == accts` on prod, and that Zachary lands in his existing account on next login.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Anchor identity on a portable verified contact (email) and make the auth vendor's user id a swappable pointer, so a login is matched by verified email when its vendor id is unknown — healing dev→prod duplicates, surviving Clerk deletion and vendor switches, without ever letting an unverified contact adopt an existing account.

@@ -1,5 +1,12 @@
 # Runbook — Production go-live on `tellmeagain.app` (Clerk + Vercel + all prod env)
 
+> ✅ **DONE — 2026-07-17.** Go-live complete: prod Clerk instance on `tellmeagain.app`
+> (Frontend API `clerk.tellmeagain.app`), `pk_live_`/`sk_live_` set on Vercel Production,
+> live sign-up / sign-in / magic-link redeem + JIT provisioning verified against the prod Neon
+> branch. **Issue #9 closed.** Social sign-in left OFF for beta (magic-link/email only) — prod
+> does not inherit Clerk's shared Google OAuth creds (§C). This runbook is retained as the
+> reference for the same flow (re-provisioning, adding social OAuth later, rollback).
+
 Closes issue **#9**. Domain: **`tellmeagain.app`** (DNS hosted by Vercel — nameservers
 `ns1/ns2.vercel-dns.com`, confirmed via `nslookup -type=ns tellmeagain.app`).
 
@@ -268,17 +275,17 @@ handles the DB rows).
 
 ## Master checklist
 
-- [ ] §0 Verified full prod env inventory (`vercel env ls production`); know what's missing
-- [ ] §A dev acceptance green (Name required, 5 test users, core loop)
-- [ ] §B prod Clerk instance created
-- [ ] §B Clerk DNS records added in Vercel DNS; Clerk **Verified**
-- [ ] §B apex `tellmeagain.app` added as Vercel project domain
-- [ ] §B prod webhook + `CLERK_WEBHOOK_SIGNING_SECRET`
-- [ ] §C social OAuth decided (OFF for beta, or custom creds per provider)
-- [ ] §D Google Photos OAuth (or explicitly deferred — feature stays hidden)
-- [ ] §E R2 (×4) / Groq / Inngest (×2) / ticket secret confirmed on Production
-- [ ] §E.1 `DATABASE_URL` = Neon **production** branch, migrated
-- [ ] §F `pk_live_`/`sk_live_` set; `APP_BASE_URL=https://tellmeagain.app`; redeploy green
-- [ ] §G all verify steps pass on `tellmeagain.app`
-- [ ] §H (optional) beta accounts pre-created
-- [ ] Close #9
+- [x] §0 Verified full prod env inventory (`vercel env ls production`); know what's missing
+- [x] §A dev acceptance green (Name required, 5 test users, core loop)
+- [x] §B prod Clerk instance created
+- [x] §B Clerk DNS records added in Vercel DNS; Clerk **Verified**
+- [x] §B apex `tellmeagain.app` added as Vercel project domain
+- [x] §B prod webhook + `CLERK_WEBHOOK_SIGNING_SECRET`
+- [x] §C social OAuth decided — **OFF for beta** (magic-link/email only; no prod OAuth creds)
+- [ ] §D Google Photos OAuth — **deferred** (feature stays hidden until creds are set)
+- [x] §E R2 (×4) / Groq / Inngest (×2) / ticket secret confirmed on Production
+- [x] §E.1 `DATABASE_URL` = Neon **production** branch, migrated
+- [x] §F `pk_live_`/`sk_live_` set; `APP_BASE_URL=https://tellmeagain.app`; redeploy green
+- [x] §G all verify steps pass on `tellmeagain.app`
+- [ ] §H (optional) beta accounts pre-created — skipped (self-signup via JIT)
+- [x] Close #9
