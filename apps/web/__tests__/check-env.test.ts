@@ -64,6 +64,51 @@ describe("checkEnv", () => {
   });
 });
 
+describe("checkEnv on Vercel Preview (VERCEL_ENV=preview)", () => {
+  /** Full env minus the preview-optional INNGEST keys, tagged as a preview build. */
+  function previewEnvWithoutInngest(): Record<string, string> {
+    const env = fullEnv();
+    env.VERCEL_ENV = "preview";
+    delete env.INNGEST_EVENT_KEY;
+    delete env.INNGEST_SIGNING_KEY;
+    return env;
+  }
+
+  it("downgrades the INNGEST_* keys to warn-only — a missing one does NOT fail the build", () => {
+    const result = checkEnv(previewEnvWithoutInngest());
+    expect(result.ok).toBe(true);
+    const requiredNames = result.missingRequired.map((m) => m.name);
+    expect(requiredNames).not.toContain("INNGEST_EVENT_KEY");
+    expect(requiredNames).not.toContain("INNGEST_SIGNING_KEY");
+  });
+
+  it("still surfaces the missing INNGEST_* keys as recommended (warn) on preview", () => {
+    const recommendedNames = checkEnv(previewEnvWithoutInngest()).missingRecommended.map((m) => m.name);
+    expect(recommendedNames).toEqual(
+      expect.arrayContaining(["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"]),
+    );
+  });
+
+  it("still hard-fails on a non-preview-optional required var (e.g. DATABASE_URL) on preview", () => {
+    const env = previewEnvWithoutInngest();
+    delete env.DATABASE_URL;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired.map((m) => m.name)).toContain("DATABASE_URL");
+  });
+});
+
+describe("checkEnv on Vercel Production (VERCEL_ENV=production)", () => {
+  it("still REQUIRES the INNGEST_* keys — a missing one fails the build", () => {
+    const env = fullEnv();
+    env.VERCEL_ENV = "production";
+    delete env.INNGEST_EVENT_KEY;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired.map((m) => m.name)).toContain("INNGEST_EVENT_KEY");
+  });
+});
+
 describe("shouldEnforce", () => {
   it("enforces on a Vercel build", () => {
     expect(shouldEnforce({ VERCEL: "1" })).toBe(true);
