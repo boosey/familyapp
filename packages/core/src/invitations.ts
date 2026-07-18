@@ -2,9 +2,11 @@
  * Member invitations — the account-creating join link (distinct from the link session token).
  *
  * An invitation leads a NEW person to create an Account and join a family. Like
- * the link session, the raw token is sent in the link and NEVER stored: only its SHA-256 hash
- * lives in the DB, so a database leak does not expose working invites (mirrors
- * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
+ * the link session, the raw token is sent in the link and NEVER stored in plaintext: only its
+ * SHA-256 hash plus an AES-256-GCM-sealed copy (issue #116 — one durable link per pending invite,
+ * so the token must be recoverable for re-delivery without rotation) live in the DB. A database
+ * leak yields no working invite as long as INVITE_TOKEN_ENC_KEY stays out of the database
+ * (mirrors `@chronicle/capture`'s `hashToken`).
  */
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
@@ -13,6 +15,7 @@ import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
 import { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
+import { openToken, sealToken } from "./token-seal";
 import {
   INVITE_THROTTLE_DESTINATION_LIMIT,
   INVITE_THROTTLE_DESTINATION_WINDOW_MS,
@@ -50,7 +53,11 @@ export interface CreateInvitationInput {
 
 export interface CreateInvitationResult {
   invitationId: string;
-  /** The raw token — returned ONCE, to be embedded in the invite link. Never persisted. */
+  /**
+   * The raw token — embedded in the invite link. Never persisted in plaintext (hash + sealed copy
+   * only); for a LIVE pending re-invite this is the SAME token as before (issue #116 — one durable
+   * link), freshly minted only on create or on rotation of a dead invite.
+   */
   token: string;
   /**
    * The provisional (Account-less) Person minted for this invitee (ADR-0006). An Ask may target
@@ -152,11 +159,16 @@ export async function createInvitation(
     // Re-invite dedup: a re-send to someone who was already invited but never joined must NOT mint a
     // second provisional Person (the old bug left duplicate `origin='invitee'` rows behind). If an
     // unaccepted invitation to this same invitee already exists in this family, we REFRESH that one
-    // row in place — new token, back to `pending`, new expiry — reusing its provisional Person.
+    // row in place, reusing its provisional Person.
     //
     // Refresh-in-place (not a second invitation row) is load-bearing: the housekeeping reaper deletes
     // ALL invitations pointing at a reaped provisional Person, so a stale dead invite left beside a
     // fresh one would let the reaper destroy the live invite. One invite row per invitee keeps that safe.
+    //
+    // ONE DURABLE LINK per pending invite (issue #116): the matched invite's token is ROTATED only
+    // when it is DEAD (expired or no longer pending) — or unrecoverable (a pre-#116 row with no
+    // sealed copy). When it is still LIVE we return the SAME token (opened from its sealed copy), so
+    // a link already sent by email keeps working when the inviter later sends it by SMS or copies it.
     //
     // Match key: the email, matched case-insensitively — the ONLY reliable contact identity we have.
     // Email-less invites are deliberately NOT deduped: without a contact key, matching on name alone
@@ -174,6 +186,9 @@ export async function createInvitation(
         .select({
           id: invitations.id,
           inviteePersonId: invitations.inviteePersonId,
+          tokenSealed: invitations.tokenSealed,
+          status: invitations.status,
+          expiresAt: invitations.expiresAt,
         })
         .from(invitations)
         .innerJoin(persons, eq(persons.id, invitations.inviteePersonId))
@@ -190,13 +205,29 @@ export async function createInvitation(
         .limit(1);
 
       if (existing) {
+        const isLive =
+          existing.status === "pending" &&
+          (existing.expiresAt === null ||
+            existing.expiresAt.getTime() > Date.now());
+        // Recover the durable token for a live invite; null forces the rotation path (dead invite,
+        // or a legacy row with nothing sealed under the active key).
+        const durableToken = isLive ? openToken(existing.tokenSealed) : null;
+
         await tx
           .update(invitations)
           .set({
-            tokenHash: hashToken(token),
             inviterPersonId: input.inviterPersonId,
-            status: "pending",
-            expiresAt,
+            // Rotation (dead invite only): fresh token, hash, sealed copy, back to pending, new
+            // expiry. On the durable path NONE of the token fields are touched — the previously
+            // sent link keeps working.
+            ...(durableToken === null
+              ? {
+                  tokenHash: hashToken(token),
+                  tokenSealed: sealToken(token),
+                  status: "pending" as const,
+                  expiresAt,
+                }
+              : {}),
             // Only overwrite invitee metadata the caller actually supplied, so a bare re-invite does
             // not wipe a name/label/role captured on the original.
             ...(input.inviteeName !== undefined
@@ -225,7 +256,7 @@ export async function createInvitation(
 
         return {
           invitationId: existing.id,
-          token,
+          token: durableToken ?? token,
           inviteePersonId: existing.inviteePersonId,
         };
       }
@@ -256,6 +287,7 @@ export async function createInvitation(
       .insert(invitations)
       .values({
         tokenHash: hashToken(token),
+        tokenSealed: sealToken(token),
         familyId: input.familyId,
         inviterPersonId: input.inviterPersonId,
         inviteePersonId: provisional!.id,
@@ -272,6 +304,30 @@ export async function createInvitation(
 
     return { invitationId: row!.id, token, inviteePersonId: provisional!.id };
   });
+}
+
+/**
+ * Recover the raw token of a LIVE pending invitation for (re-)delivery over another channel
+ * (issue #116 — the durable link is delivered, never rotated, by the deliver path). Returns null
+ * for a missing, non-pending, expired, or unrecoverable (legacy/unsealed) invitation — callers
+ * must treat null as "create/rotate instead", never fall back to a fresh send silently.
+ */
+export async function getInvitationTokenForDelivery(
+  db: Database,
+  invitationId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({
+      tokenSealed: invitations.tokenSealed,
+      status: invitations.status,
+      expiresAt: invitations.expiresAt,
+    })
+    .from(invitations)
+    .where(eq(invitations.id, invitationId))
+    .limit(1);
+  if (!row || row.status !== "pending") return null;
+  if (row.expiresAt !== null && row.expiresAt.getTime() < Date.now()) return null;
+  return openToken(row.tokenSealed);
 }
 
 export interface InvitationDeliveryContext {

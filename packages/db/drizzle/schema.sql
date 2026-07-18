@@ -189,6 +189,7 @@ CREATE TABLE "intake_revisions" (
 CREATE TABLE "invitations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"token_hash" text NOT NULL,
+	"token_sealed" text,
 	"family_id" uuid NOT NULL,
 	"inviter_person_id" uuid NOT NULL,
 	"invitee_person_id" uuid NOT NULL,

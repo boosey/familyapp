@@ -176,12 +176,14 @@ export {
   getInvitationByToken,
   acceptInvitation,
   getInvitationDeliveryContext,
+  getInvitationTokenForDelivery,
   recordInviteDelivery,
   type CreateInvitationInput,
   type CreateInvitationResult,
   type InvitationView,
   type InvitationDeliveryContext,
 } from "./invitations";
+export { sealToken, openToken, resolveSealKey } from "./token-seal";
 export {
   reapUnacceptedInvitees,
   type ReapResult,

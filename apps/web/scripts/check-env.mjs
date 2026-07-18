@@ -79,6 +79,10 @@ export const RECOMMENDED = [
     why: "Google Photos import is feature-gated and has a dev fallback; set a dedicated secret in prod.",
   },
   { name: "APP_BASE_URL", why: "Absolute base URL for links/redirects; falls back to inferred origin." },
+  {
+    name: "INVITE_TOKEN_ENC_KEY",
+    why: "Seals invite tokens at rest (#116). Absence falls back to a fixed DEV-ONLY key — fine locally, but in production sealed tokens are effectively plaintext; set a 32-byte key (hex/base64).",
+  },
   { name: "NEXT_PUBLIC_SENTRY_DSN", why: "Error observability; absence only means no Sentry reporting." },
 ];
 

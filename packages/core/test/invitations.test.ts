@@ -1,7 +1,8 @@
 /**
- * Tests for member invitations — token hashing (raw never stored), inviter-must-be-member guard,
- * the safe welcome-screen view, and atomic accept (membership + status flip; reject double-accept
- * and expired).
+ * Tests for member invitations — token hashing (raw never stored in plaintext; hash + sealed
+ * copy), the one-durable-link rule (#116: rotation only on a dead invite), the #105 throttle,
+ * re-invite dedup, the inviter-must-be-member guard, the safe welcome-screen view, and atomic
+ * accept (membership + status flip; reject double-accept and expired).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { asks, invitations, persons } from "@chronicle/db/schema";
@@ -15,7 +16,9 @@ import {
   addMembership,
   createInvitation,
   getInvitationByToken,
+  getInvitationTokenForDelivery,
   isActiveMember,
+  openToken,
   reapUnacceptedInvitees,
 } from "../src/index";
 import {
@@ -331,8 +334,8 @@ describe("createInvitation re-invite dedup (regression)", () => {
     expect(second.invitationId).toBe(first.invitationId);
     const allInvites = await db.select({ id: invitations.id }).from(invitations);
     expect(allInvites).toHaveLength(1);
-    // A genuinely fresh token was minted.
-    expect(second.token).not.toBe(first.token);
+    // #116: the invite is still LIVE, so the durable link is reused — NO new token is minted.
+    expect(second.token).toBe(first.token);
   });
 
   it("matches the email case-insensitively", async () => {
@@ -353,7 +356,7 @@ describe("createInvitation re-invite dedup (regression)", () => {
     expect(await inviteePersonCount()).toBe(1);
   });
 
-  it("invalidates the old token and makes the refreshed invite acceptable via the new one", async () => {
+  it("keeps the SAME token live across a re-invite of a pending invite (one durable link, #116)", async () => {
     const { steward, fam } = await familyWithSteward();
     const first = await createInvitation(db, {
       familyId: fam.id,
@@ -368,7 +371,37 @@ describe("createInvitation re-invite dedup (regression)", () => {
       inviteeEmail: "sal@example.com",
     });
 
-    // The superseded token no longer resolves; the fresh one does.
+    // The original emailed link still resolves — sending over a second channel did not kill it.
+    expect(second.token).toBe(first.token);
+    expect(await getInvitationByToken(db, first.token)).not.toBeNull();
+
+    const joined = await makePerson(db, "Salvatore Esposito");
+    const { familyId } = await acceptInvitation(db, {
+      token: first.token,
+      acceptedPersonId: joined.id,
+    });
+    expect(familyId).toBe(fam.id);
+    expect(await isActiveMember(db, joined.id, fam.id)).toBe(true);
+  });
+
+  it("rotates the token when re-inviting an EXPIRED (dead) invite — the old link dies (#116)", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const first = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      ttlMs: -1, // already expired
+    });
+    const second = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+
+    // The dead invite's token no longer resolves; the rotated one does.
+    expect(second.token).not.toBe(first.token);
     expect(await getInvitationByToken(db, first.token)).toBeNull();
     expect(await getInvitationByToken(db, second.token)).not.toBeNull();
 
@@ -378,7 +411,6 @@ describe("createInvitation re-invite dedup (regression)", () => {
       acceptedPersonId: joined.id,
     });
     expect(familyId).toBe(fam.id);
-    expect(await isActiveMember(db, joined.id, fam.id)).toBe(true);
   });
 
   it("re-invites an EXPIRED invite by refreshing it back to pending", async () => {
@@ -526,6 +558,88 @@ describe("createInvitation re-invite dedup (regression)", () => {
     });
     // A brand-new provisional Person is minted (we do not resurrect the accepted anchor).
     expect(second.inviteePersonId).not.toBe(joined.id);
+  });
+});
+
+describe("durable invite token (#116)", () => {
+  it("stores only the token's hash and a sealed copy — never the raw token", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId, token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    const [row] = await db
+      .select({
+        tokenHash: invitations.tokenHash,
+        tokenSealed: invitations.tokenSealed,
+      })
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    expect(row?.tokenHash).not.toBe(token);
+    expect(row?.tokenSealed).toBeTruthy();
+    expect(row?.tokenSealed).not.toContain(token); // sealed, not plaintext
+    // …and the sealed copy opens back to the raw token under the active key.
+    expect(openToken(row!.tokenSealed)).toBe(token);
+  });
+
+  it("getInvitationTokenForDelivery recovers the raw token of a live pending invite", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const { invitationId, token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    expect(await getInvitationTokenForDelivery(db, invitationId)).toBe(token);
+  });
+
+  it("getInvitationTokenForDelivery returns null for an expired or accepted invite", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const expired = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+      ttlMs: -1,
+    });
+    expect(await getInvitationTokenForDelivery(db, expired.invitationId)).toBeNull();
+
+    const live = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Maria",
+      inviteeEmail: "maria@example.com",
+    });
+    const joined = await makePerson(db, "Maria Esposito");
+    await acceptInvitation(db, { token: live.token, acceptedPersonId: joined.id });
+    expect(await getInvitationTokenForDelivery(db, live.invitationId)).toBeNull();
+  });
+
+  it("rotates (does not crash) when re-inviting a legacy invite whose token was never sealed", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const first = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    // Simulate a pre-#116 row: no sealed copy exists to recover the durable token from.
+    await db
+      .update(invitations)
+      .set({ tokenSealed: null })
+      .where(eq(invitations.id, first.invitationId));
+    const second = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Sal",
+      inviteeEmail: "sal@example.com",
+    });
+    expect(second.invitationId).toBe(first.invitationId);
+    expect(second.token).not.toBe(first.token); // unrecoverable → rotate
+    expect(await getInvitationByToken(db, second.token)).not.toBeNull();
   });
 });
 

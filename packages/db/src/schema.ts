@@ -966,6 +966,13 @@ export const invitations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** SHA-256 of the long unguessable token. The raw token lives only in the emailed link. */
     tokenHash: text("token_hash").notNull(),
+    /**
+     * AES-256-GCM-sealed copy of the raw token (issue #116): one durable link per pending invite
+     * means the token must be RECOVERABLE for re-delivery over another channel without rotating it.
+     * Sealed (never plaintext), so a DB leak still yields no working invite — the key lives in
+     * server env (`INVITE_TOKEN_ENC_KEY`), not the database. NULL only on rows predating #116.
+     */
+    tokenSealed: text("token_sealed"),
     familyId: uuid("family_id")
       .notNull()
       .references(() => families.id),
