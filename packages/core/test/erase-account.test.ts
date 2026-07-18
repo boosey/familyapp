@@ -20,6 +20,8 @@ import {
   consentRecords,
   families,
   googlePhotosConnections,
+  invitations,
+  invitationDismissals,
   memberships,
   persons,
   storyFamilies,
@@ -525,6 +527,61 @@ describe("eraseAccount — sole-family teardown: another person's non-active mem
     ).toHaveLength(0);
     // ...but the OTHER person themselves is untouched.
     expect(await db.select().from(persons).where(eq(persons.id, other.id))).toHaveLength(1);
+  });
+});
+
+describe("eraseAccount — deletes the account's invitation_dismissals rows (issue #133 FK cascade)", () => {
+  it("hard-deletes an account that owns a 'Not me' dismissal without an FK violation, taking the dismissal with it", async () => {
+    // The account being erased owns a "Not me" dismissal (issue #120) on some surfaced invitation.
+    // The dismissal's account_id → accounts.id FK previously had NO onDelete action, so DELETE
+    // accounts (in severAccount) FK-failed and the whole erasure rolled back. Seed the FULL FK chain
+    // for the invitation the dismissal points at (its own family + inviter + provisional invitee),
+    // owned by OTHER retained people so nothing forces the erasing person to demote.
+    const { person, account } = await makeAccountPerson("Dismisser");
+    const inviter = await makePerson("Inviter");
+    const invitee = await makePerson("ProvisionalInvitee");
+    const inviteFamily = await makeFamily(inviter.id, "InviteFamily");
+    const [invitation] = await db
+      .insert(invitations)
+      .values({
+        tokenHash: `hash-${crypto.randomUUID()}`,
+        familyId: inviteFamily.id,
+        inviterPersonId: inviter.id,
+        inviteePersonId: invitee.id,
+      })
+      .returning();
+    const [dismissal] = await db
+      .insert(invitationDismissals)
+      .values({ invitationId: invitation!.id, accountId: account.id })
+      .returning();
+
+    // Sanity: the dismissal exists and points at the account under erasure.
+    expect(
+      await db
+        .select()
+        .from(invitationDismissals)
+        .where(eq(invitationDismissals.id, dismissal!.id)),
+    ).toHaveLength(1);
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    // Before the FK carried ON DELETE CASCADE, DELETE accounts FK-failed → the tx rolled back and
+    // this returned ok:false / threw. It must now succeed and take the dismissal row with it.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+
+    expect(await db.select().from(accounts).where(eq(accounts.id, account.id))).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(invitationDismissals)
+        .where(eq(invitationDismissals.id, dismissal!.id)),
+    ).toHaveLength(0);
+    // The invitation itself is a foreign, retained row — untouched by the account erasure.
+    expect(
+      await db.select().from(invitations).where(eq(invitations.id, invitation!.id)),
+    ).toHaveLength(1);
   });
 });
 

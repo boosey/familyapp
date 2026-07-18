@@ -447,52 +447,54 @@ export async function eraseAccount(
   const blockers: string[] = [];
 
   // (1) Families this person creates/stewards that have ANY OTHER active member. Erasing the person
-  //     would orphan a family other people still actively belong to.
-  const stewarded = await db
-    .select({ id: families.id })
+  //     would orphan a family other people still actively belong to. One selectDistinct + innerJoin
+  //     (matching blockers (3)/(4)): the join to an OTHER active membership IS the "has other members"
+  //     predicate, so only offending families come back.
+  const blockedFamilies = await db
+    .selectDistinct({ id: families.id })
     .from(families)
+    .innerJoin(
+      memberships,
+      and(
+        eq(memberships.familyId, families.id),
+        eq(memberships.status, "active"),
+        ne(memberships.personId, personId),
+      ),
+    )
     .where(
       sql`(${families.creatorPersonId} = ${personId} OR ${families.stewardPersonId} = ${personId})`,
     );
-  for (const fam of stewarded) {
-    const [other] = await db
-      .select({ id: memberships.id })
-      .from(memberships)
-      .where(
-        and(
-          eq(memberships.familyId, fam.id),
-          eq(memberships.status, "active"),
-          ne(memberships.personId, personId),
-        ),
-      )
-      .limit(1);
-    if (other) blockers.push(`stewards family ${fam.id} which has other active members`);
+  for (const fam of blockedFamilies) {
+    blockers.push(`stewards family ${fam.id} which has other active members`);
   }
 
   // (2) Stories this person owns that are shared to a family with another active member. Erasing the
-  //     owner would yank a story out from under readers who still actively share that family.
+  //     owner would yank a story out from under readers who still actively share that family. One
+  //     selectDistinct + innerJoin (matching blockers (3)/(4)). `ownedStories` is fetched separately
+  //     below because the teardown phase reuses the FULL owned-story set, not just the blocking ones.
+  const blockedStories = await db
+    .selectDistinct({ id: stories.id })
+    .from(stories)
+    .innerJoin(storyFamilies, eq(storyFamilies.storyId, stories.id))
+    .innerJoin(
+      memberships,
+      and(
+        eq(memberships.familyId, storyFamilies.familyId),
+        eq(memberships.status, "active"),
+        ne(memberships.personId, personId),
+      ),
+    )
+    .where(eq(stories.ownerPersonId, personId));
+  for (const story of blockedStories) {
+    blockers.push(`story ${story.id} is shared to a family with other members`);
+  }
+
+  // The FULL set of stories this person owns — reused by the teardown phase (a) to cascade-erase
+  // every one. Kept as its own query (blocker (2) above only surfaces the offending subset).
   const ownedStories = await db
     .select({ id: stories.id })
     .from(stories)
     .where(eq(stories.ownerPersonId, personId));
-  for (const story of ownedStories) {
-    const [sharedToOthers] = await db
-      .select({ id: memberships.id })
-      .from(storyFamilies)
-      .innerJoin(
-        memberships,
-        and(
-          eq(memberships.familyId, storyFamilies.familyId),
-          eq(memberships.status, "active"),
-          ne(memberships.personId, personId),
-        ),
-      )
-      .where(eq(storyFamilies.storyId, story.id))
-      .limit(1);
-    if (sharedToOthers) {
-      blockers.push(`story ${story.id} is shared to a family with other members`);
-    }
-  }
 
   // (3) Asks this person ASKED that are addressed (ask_families) to a family with another active
   //     member — erasing the asker would delete an open/answered question out from under a family
