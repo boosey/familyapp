@@ -248,6 +248,8 @@ export const hub = {
     intro:
       "As steward, you approve everyone who joins. Nothing is shared with a requester until you say yes.",
     empty: "No requests waiting right now.",
+    // Accessible name for a family chip's pending-request count badge (#140).
+    pendingCountAria: (count: number) => `${count} pending`,
     approve: "Approve",
     decline: "Decline",
     // Mono status shown in place once a request is decided (uppercased in the view).

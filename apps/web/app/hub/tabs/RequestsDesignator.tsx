@@ -116,6 +116,15 @@ export function RequestsDesignator({
   const visiblePending = requestsInScope(pending, scope);
   const visibleDecided = requestsInScope(decided, scope);
 
+  // #140: per-family pending-request counts, grouped from the steward's full pending set (NOT the
+  // scoped/visible subset — the badge on EACH chip must show that family's own count regardless of
+  // which chip is currently designated). Their sum equals the aggregate Requests badge (both count
+  // `pending`). Only positive counts render a badge (FamilyChips hides 0/absent).
+  const pendingCountByFamily = pending.reduce<Record<string, number>>((acc, r) => {
+    acc[r.familyId] = (acc[r.familyId] ?? 0) + 1;
+    return acc;
+  }, {});
+
   const heading = (
     <>
       <h2
@@ -145,7 +154,13 @@ export function RequestsDesignator({
 
   const chips = showChips ? (
     <div style={{ margin: "20px 0 0" }}>
-      <FamilyChips families={families} value={selected} onSelect={setSelected} />
+      <FamilyChips
+        families={families}
+        value={selected}
+        onSelect={setSelected}
+        badges={pendingCountByFamily}
+        badgeLabel={hub.requests.pendingCountAria}
+      />
     </div>
   ) : null;
 

@@ -5,6 +5,10 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { FAMILIES_PARAM, serializeSelection } from "@/lib/family-filter";
 import { familyChipStyle } from "./family-chip-style";
 import { hub } from "@/app/_copy";
+// The count-pill lives as ONE shared class in HubTabs.module.css (centralization convention) — the
+// hub tabs and sub-navs already reuse it (see FamilySubNav), so a per-family count badge on a chip
+// pulls the SAME `.badge` visual rather than re-declaring the pill and risking drift.
+import hubTabStyles from "./HubTabs.module.css";
 
 /**
  * A family as a chip renders. `shortName` (ADR-0021) is the steward-set brief label shown in place of
@@ -40,6 +44,11 @@ interface FamilyChipsFilterProps {
    * trailing space before the next block on the stories/tree browse surfaces.
    */
   inline?: boolean;
+  /** Optional per-family count badge (e.g. pending join-requests, #140): a chip whose id maps to a
+   *  positive count renders the shared count-pill; 0/absent shows no badge. */
+  badges?: Record<string, number>;
+  /** Accessible name for a chip's count badge, given the count (the caller owns what the count MEANS). */
+  badgeLabel?: (count: number) => string;
   /** FILTER mode (default): omit `value`/`onSelect`. Multi-select, writes `?families=`. */
   value?: undefined;
   onSelect?: undefined;
@@ -52,6 +61,10 @@ interface FamilyChipsDesignatorProps {
   value: string;
   /** DESIGNATOR mode: called with the newly-picked family id. Never touches the router/URL. */
   onSelect: (id: string) => void;
+  /** Optional per-family count badge (e.g. pending join-requests, #140) — see the filter-mode note. */
+  badges?: Record<string, number>;
+  /** Accessible name for a chip's count badge, given the count. */
+  badgeLabel?: (count: number) => string;
   selected?: undefined;
 }
 
@@ -88,6 +101,10 @@ export function FamilyChips(props: FamilyChipsProps) {
   const searchParams = useSearchParams();
 
   const { families } = props;
+  // Optional per-family count badges (#140) — present in either mode; read off the raw props before the
+  // mode narrowing below.
+  const badges = props.badges;
+  const badgeLabel = props.badgeLabel;
   // Discriminate the two modes ONCE, narrowing `props` for the whole body.
   const designatorProps = props.value !== undefined ? props : null;
   const filterProps = props.value === undefined ? props : null;
@@ -166,6 +183,7 @@ export function FamilyChips(props: FamilyChipsProps) {
     >
       {families.map((f) => {
         const on = isOn(f.id);
+        const count = badges?.[f.id] ?? 0;
         return (
           <button
             key={f.id}
@@ -175,6 +193,14 @@ export function FamilyChips(props: FamilyChipsProps) {
             onClick={() => (designator ? select(f.id) : onFilterChip(f.id))}
           >
             {chipLabel(f)}
+            {count > 0 ? (
+              <span
+                className={hubTabStyles.badge}
+                aria-label={badgeLabel ? badgeLabel(count) : String(count)}
+              >
+                {count}
+              </span>
+            ) : null}
           </button>
         );
       })}
