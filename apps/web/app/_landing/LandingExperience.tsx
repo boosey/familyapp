@@ -122,6 +122,9 @@ export function LandingExperience() {
       <main>
         {/* ---- hero ---- */}
         <section className={styles.hero}>
+          {/* Brand wordmark — the exact app name, shown prominently so the homepage name
+              matches the OAuth consent-screen app name Google verifies against (#154). */}
+          <p className={styles.wordmark}>{landing.brand}</p>
           <p className={styles.eyebrow}>{landing.eyebrow}</p>
           <h1 className={styles.refrain}>
             <span className={styles.mark}>{landing.refrain}</span>
