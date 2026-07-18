@@ -1,9 +1,11 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { sharedTest } from "../../vitest.shared";
 
 const p = (rel: string) => fileURLToPath(new URL(rel, import.meta.url));
 
 export default defineConfig({
+  test: { ...sharedTest },
   resolve: {
     alias: {
       "@chronicle/db/content": p("../db/src/content.ts"),
