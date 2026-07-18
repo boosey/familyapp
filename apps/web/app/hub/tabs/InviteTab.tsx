@@ -12,7 +12,7 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { createInvitation, listActiveFamiliesForPerson } from "@chronicle/core";
+import { createInvitation, listActiveFamiliesForPerson, ThrottleError } from "@chronicle/core";
 import { memberships, persons } from "@chronicle/db/schema";
 import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
@@ -109,16 +109,27 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   });
 
   // createInvitation enforces the "inviter must be an active member" gate transactionally; no
-  // redundant pre-check here.
-  const { invitationId, token } = await createInvitation(db, {
-    familyId,
-    inviterPersonId: ctx.personId,
-    inviteeName,
-    inviteeEmail: inviteeEmail || undefined,
-    inviteePhone: normalizedPhone ?? undefined,
-    deliveryChannels: channels.length ? channels : undefined,
-    relationshipLabel: relationshipLabel || undefined,
-  });
+  // redundant pre-check here. It also enforces the generous invite-send throttle (#105): a
+  // ThrottleError means the inviter (or this destination) hit the accident ceiling, so we reject
+  // BEFORE any delivery is enqueued and surface a plain-language message — nothing is written.
+  let invitationId: string;
+  let token: string;
+  try {
+    ({ invitationId, token } = await createInvitation(db, {
+      familyId,
+      inviterPersonId: ctx.personId,
+      inviteeName,
+      inviteeEmail: inviteeEmail || undefined,
+      inviteePhone: normalizedPhone ?? undefined,
+      deliveryChannels: channels.length ? channels : undefined,
+      relationshipLabel: relationshipLabel || undefined,
+    }));
+  } catch (err) {
+    if (err instanceof ThrottleError) {
+      throw new Error(hub.invite.throttled);
+    }
+    throw err;
+  }
 
   if (channels.length) {
     try {

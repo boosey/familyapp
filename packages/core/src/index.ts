@@ -103,7 +103,7 @@ export {
 } from "./narrator-memory";
 export { eraseStory, eraseAsk, eraseVoiceCaption } from "./erasure-repository";
 export type { EraseResult } from "./erasure-repository";
-export { AuthorizationError, InvariantViolation } from "./errors";
+export { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
 export {
   createAsk,
   listPendingAsksForNarrator,

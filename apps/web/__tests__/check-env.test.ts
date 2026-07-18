@@ -77,3 +77,34 @@ describe("shouldEnforce", () => {
     expect(shouldEnforce({})).toBe(false);
   });
 });
+
+describe("checkEnv productionOnly vars (the Inngest pair)", () => {
+  it("still requires the Inngest keys on a PRODUCTION deploy", () => {
+    const env = fullEnv();
+    env.VERCEL_ENV = "production";
+    delete env.INNGEST_EVENT_KEY;
+    delete env.INNGEST_SIGNING_KEY;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired.map((m) => m.name)).toEqual(
+      expect.arrayContaining(["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"]),
+    );
+  });
+
+  it("allows a PREVIEW deploy to omit the Inngest keys (direct in-process route)", () => {
+    const env = fullEnv();
+    env.VERCEL_ENV = "preview";
+    delete env.INNGEST_EVENT_KEY;
+    delete env.INNGEST_SIGNING_KEY;
+    const result = checkEnv(env);
+    expect(result.ok).toBe(true);
+    expect(result.missingRequired).toEqual([]);
+  });
+
+  it("treats an unset VERCEL_ENV (durable local build) as non-production for the Inngest keys", () => {
+    const env = fullEnv(); // no VERCEL_ENV
+    delete env.INNGEST_EVENT_KEY;
+    delete env.INNGEST_SIGNING_KEY;
+    expect(checkEnv(env).ok).toBe(true);
+  });
+});

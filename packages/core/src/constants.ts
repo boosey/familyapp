@@ -30,6 +30,26 @@ export const MEMBER_INVITATION_DEFAULT_TTL_MS = 14 * 86_400_000;
 export const MEMBER_INVITATION_TOKEN_ENTROPY_BYTES = 32;
 
 /**
+ * Invite-send throttle (issue #105). Deliberately GENEROUS: the guard exists to catch an accident
+ * (e.g. an inviter pasting a whole spreadsheet into the form, or a script re-submitting in a loop)
+ * before it spams real inboxes/phones and racks up SMS cost — not to police normal use. A real
+ * family inviting everyone they know in one sitting should never brush these numbers.
+ */
+
+/** Max invitations one inviter may create per rolling window (across all their families). */
+export const INVITE_THROTTLE_INVITER_LIMIT = 30;
+/** Rolling window for the per-inviter invite ceiling (1 hour). */
+export const INVITE_THROTTLE_INVITER_WINDOW_MS = 3_600_000;
+
+/**
+ * Max invitations addressed to the same destination (email OR phone) per rolling window, app-wide
+ * — this arm protects the RECIPIENT, so it holds even across different inviters/families.
+ */
+export const INVITE_THROTTLE_DESTINATION_LIMIT = 3;
+/** Rolling window for the per-destination invite ceiling (24 hours). */
+export const INVITE_THROTTLE_DESTINATION_WINDOW_MS = 86_400_000;
+
+/**
  * Max stored length of a terminal-pipeline-failure reason (issue #11). Keeps a runaway vendor
  * error/stack from bloating the `stories.processing_error` column; it is an ops breadcrumb, not
  * a full log.
