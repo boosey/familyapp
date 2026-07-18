@@ -19,6 +19,7 @@ export {
   families,
   googlePhotosConnections,
   invitations,
+  invitationDismissals,
   joinRequests,
   memberships,
   mockAuthUsers,

@@ -1,0 +1,1 @@
+ALTER TABLE "invitations" ADD COLUMN "send_count" integer DEFAULT 1 NOT NULL;

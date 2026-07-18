@@ -103,7 +103,12 @@ export {
 } from "./narrator-memory";
 export { eraseStory, eraseAsk, eraseVoiceCaption, eraseAccount } from "./erasure-repository";
 export type { EraseResult, EraseAccountResult } from "./erasure-repository";
-export { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
+export {
+  AlreadyFamilyMemberError,
+  AuthorizationError,
+  InvariantViolation,
+  ThrottleError,
+} from "./errors";
 export {
   createAsk,
   listPendingAsksForNarrator,
@@ -122,6 +127,7 @@ export {
   deactivateAccountByAuthProviderUserId,
   resolveAccountByIdentity,
   resolveAccountIdByVerifiedEmail,
+  resolveAccountIdByVerifiedPhone,
   attachIdentity,
   type SignUpAccountInput,
   type AccountWithPerson,
@@ -176,12 +182,23 @@ export {
   getInvitationByToken,
   acceptInvitation,
   getInvitationDeliveryContext,
+  getInvitationTokenForDelivery,
   recordInviteDelivery,
   type CreateInvitationInput,
   type CreateInvitationResult,
   type InvitationView,
   type InvitationDeliveryContext,
 } from "./invitations";
+export { sealToken, openToken, resolveSealKey } from "./token-seal";
+export {
+  findActiveFamilyMemberByContact,
+  type ConflictingFamilyMember,
+} from "./invite-member-guard";
+export {
+  listPendingInvitationsForPerson,
+  dismissInvitationForAccount,
+  type PendingInvitationMatch,
+} from "./invite-discovery";
 export {
   reapUnacceptedInvitees,
   type ReapResult,

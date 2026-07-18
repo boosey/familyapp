@@ -12,14 +12,14 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { createInvitation, listActiveFamiliesForPerson, ThrottleError } from "@chronicle/core";
+import { createInvitation, listActiveFamiliesForPerson, AlreadyFamilyMemberError, ThrottleError } from "@chronicle/core";
 import { memberships, persons } from "@chronicle/db/schema";
 import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
 import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
-import { resolveInviteChannels } from "@/lib/invite-delivery-channels";
+import { parseInviteIntent, planInviteChannels } from "@/lib/invite-delivery-channels";
 import type { FamilyFilter } from "@/lib/family-filter";
 import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
@@ -33,6 +33,7 @@ import {
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
+import { MemberInviteForm } from "./MemberInviteForm";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
 
@@ -88,8 +89,8 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   const inviteeName = String(formData.get("inviteeName") ?? "").trim();
   const inviteeEmail = String(formData.get("inviteeEmail") ?? "").trim();
   const inviteePhoneRaw = String(formData.get("inviteePhone") ?? "").trim();
-  const smsConsent = formData.get("smsConsent") === "on";
   const relationshipLabel = String(formData.get("relationshipLabel") ?? "").trim();
+  const intent = parseInviteIntent(String(formData.get("intent") ?? ""));
   if (!inviteeName) throw new Error("name required");
   // A typed-but-invalid phone must never silently become "no phone" — reject BEFORE creating the
   // invite so the inviter can fix it (no orphaned invitation left behind for a typo'd number).
@@ -97,21 +98,34 @@ async function createMemberInvite(formData: FormData): Promise<void> {
   if (inviteePhoneRaw && normalizedPhone === null) {
     throw new Error(hub.invite.phoneInvalid);
   }
+  // #118: at least one identifier is required for EVERY action (even "Get link") — identifiers
+  // power dedup (#117) and the surface-and-confirm reconciliation (#120).
+  if (!inviteeEmail && !normalizedPhone) {
+    throw new Error(hub.invite.identifierRequired);
+  }
+  // The clicked action must match the contacts entered (Send-to-email needs an email, etc.).
+  const plan = planInviteChannels(intent, {
+    email: inviteeEmail || null,
+    normalizedPhone,
+  });
+  if (!plan.ok) {
+    throw new Error(
+      plan.reason === "email_required"
+        ? hub.invite.emailRequired
+        : hub.invite.phoneRequired,
+    );
+  }
+  const channels = plan.channels;
   // Server-side family-target guard (Finding 2): resolve the single-family target against the inviter's
   // OWN active families so a crafted POST can't silently invite into an arbitrary first family.
   const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
   const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
 
-  const channels = resolveInviteChannels({
-    email: inviteeEmail || null,
-    normalizedPhone,
-    smsConsent,
-  });
-
   // createInvitation enforces the "inviter must be an active member" gate transactionally; no
   // redundant pre-check here. It also enforces the generous invite-send throttle (#105): a
   // ThrottleError means the inviter (or this destination) hit the accident ceiling, so we reject
   // BEFORE any delivery is enqueued and surface a plain-language message — nothing is written.
+  // The #119 duplicate-member guard surfaces as a "they're already in" message the same way.
   let invitationId: string;
   let token: string;
   try {
@@ -128,16 +142,19 @@ async function createMemberInvite(formData: FormData): Promise<void> {
     if (err instanceof ThrottleError) {
       throw new Error(hub.invite.throttled);
     }
+    if (err instanceof AlreadyFamilyMemberError) {
+      throw new Error(hub.invite.alreadyMember);
+    }
     throw err;
   }
 
   if (channels.length) {
     try {
+      // Only the invitation id + channels cross this seam — the raw token never transits the
+      // Inngest event payload; both delivery paths recover it server-side (#115 review).
       await rt.dispatchInviteDelivery({
         invitationId,
-        token,
         channels,
-        link: `${await origin()}/join/${token}`,
       });
     } catch (err) {
       // Delivery dispatch must NEVER block invite creation or the copy-link fallback — the
@@ -422,60 +439,12 @@ export async function InviteTab({
         <p style={sectionBlurb}>
           {hub.invite.memberBody}
         </p>
-        <form action={createMemberInvite} style={{ display: "grid", gap: 20 }}>
-          <label className="kin-form-label">
-            {hub.invite.nameLabel}
-            <input
-              name="inviteeName"
-              type="text"
-              required
-              className="kin-field"
-              placeholder={hub.invite.namePlaceholder}
-              // Slice D (#6): pre-filled when the tree's Invite affordance deep-links here with a
-              // person's name (`?inviteeName=`). Still editable; the form posts to createInvitation.
-              defaultValue={inviteeName?.trim() || undefined}
-            />
-          </label>
-          <label className="kin-form-label">
-            {hub.invite.emailLabel} <span style={{ fontWeight: 400 }}>{hub.invite.emailLabelOptional}</span>
-            <input
-              name="inviteeEmail"
-              type="email"
-              className="kin-field"
-              placeholder={hub.invite.emailPlaceholder}
-            />
-          </label>
-          <label className="kin-form-label">
-            {hub.invite.phoneLabel} <span style={{ fontWeight: 400 }}>{hub.invite.phoneLabelOptional}</span>
-            <input
-              name="inviteePhone"
-              type="tel"
-              className="kin-field"
-              placeholder={hub.invite.phonePlaceholder}
-            />
-          </label>
-          <label className="kin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
-            <input name="smsConsent" type="checkbox" />
-            {hub.invite.smsConsentLabel}
-          </label>
-          <label className="kin-form-label">
-            {hub.invite.relationshipLabel} <span style={{ fontWeight: 400 }}>{hub.invite.relationshipLabelOptional}</span>
-            <input
-              name="relationshipLabel"
-              type="text"
-              className="kin-field"
-              placeholder={hub.invite.relationshipPlaceholder}
-            />
-          </label>
-          <FamilyDesignatorChips
-            families={designatorFamilies}
-            seeded={seededFamily}
-            name="familyId"
-            label={hub.invite.familyLabel}
-            requiredMessage={hub.invite.familyRequired}
-          />
-          <KindredButton type="submit" label={hub.invite.createInviteLink} />
-        </form>
+        <MemberInviteForm
+          action={createMemberInvite}
+          families={designatorFamilies}
+          seededFamily={seededFamily}
+          defaultName={inviteeName?.trim() || undefined}
+        />
       </section>
 
       <hr className="kin-divider" />

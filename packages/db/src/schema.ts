@@ -353,7 +353,8 @@ export const accountIdentities = pgTable(
 // account_contacts — portable, verified match keys for a login. `verified_at` NULL
 // means unverified and is NEVER a match key (an unverified contact must never adopt
 // an existing account). UNIQUE(kind, value) guarantees a verified contact maps to at
-// most one account. v1 matches kind='email' only; 'phone' is accepted but inert.
+// most one account. Both kind='email' (lowercased) and kind='phone' (E.164) are live
+// match keys (issue #121 — verified-phone account linking).
 // ---------------------------------------------------------------------------
 export const accountContacts = pgTable(
   "account_contacts",
@@ -966,6 +967,13 @@ export const invitations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** SHA-256 of the long unguessable token. The raw token lives only in the emailed link. */
     tokenHash: text("token_hash").notNull(),
+    /**
+     * AES-256-GCM-sealed copy of the raw token (issue #116): one durable link per pending invite
+     * means the token must be RECOVERABLE for re-delivery over another channel without rotating it.
+     * Sealed (never plaintext), so a DB leak still yields no working invite — the key lives in
+     * server env (`INVITE_TOKEN_ENC_KEY`), not the database. NULL only on rows predating #116.
+     */
+    tokenSealed: text("token_sealed"),
     familyId: uuid("family_id")
       .notNull()
       .references(() => families.id),
@@ -996,6 +1004,12 @@ export const invitations = pgTable(
     deliveryError: text("delivery_error"),
     /** Incremented by the delivery worker on each attempt. */
     deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+    /**
+     * How many times this invite has been (re)sent: 1 on creation, +1 on every dedup refresh
+     * (#117 re-send refreshes one row in place). The #105 throttle arms SUM this column so a
+     * re-send counts even though it inserts no new row.
+     */
+    sendCount: integer("send_count").notNull().default(1),
     /** Free-text relationship label shown on the welcome screen ("Rosa's father"); editable there. */
     relationshipLabel: text("relationship_label"),
     /** Role the invitee receives on acceptance. Defaults to `member` (no age-based roles in UI). */
@@ -1005,6 +1019,7 @@ export const invitations = pgTable(
     acceptedPersonId: uuid("accepted_person_id").references(() => persons.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** Creation time — on a dedup-refreshed invite this is bumped, so read it as "last (re)sent at". */
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1012,6 +1027,39 @@ export const invitations = pgTable(
   (t) => [
     uniqueIndex("invitations_token_hash_uq").on(t.tokenHash),
     index("invitations_family_idx").on(t.familyId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// invitation_dismissals — a per-account "Not me" on a surfaced pending invite (issue #120).
+// An invite matched to an account's verified contacts is surfaced in the hub until acted on;
+// dismissal records that THIS account declined the match. It NEVER revokes the invitation —
+// the emailed/texted link keeps working for the real invitee. UNIQUE(invitation, account)
+// makes "Not me" idempotent.
+// ---------------------------------------------------------------------------
+
+export const invitationDismissals = pgTable(
+  "invitation_dismissals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Cascade: deleting an invitation (housekeeping reaper, merge-on-collision) takes its
+    // dismissal rows with it — the invite is gone, so "Not me" records about it are meaningless.
+    invitationId: uuid("invitation_id")
+      .notNull()
+      .references(() => invitations.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("invitation_dismissals_invitation_account_uq").on(
+      t.invitationId,
+      t.accountId,
+    ),
+    index("invitation_dismissals_account_idx").on(t.accountId),
   ],
 );
 
@@ -1745,6 +1793,8 @@ export type LinkSession = typeof linkSessions.$inferSelect;
 export type NewLinkSession = typeof linkSessions.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
+export type InvitationDismissal = typeof invitationDismissals.$inferSelect;
+export type NewInvitationDismissal = typeof invitationDismissals.$inferInsert;
 export type JoinRequest = typeof joinRequests.$inferSelect;
 export type NewJoinRequest = typeof joinRequests.$inferInsert;
 export type MockAuthUser = typeof mockAuthUsers.$inferSelect;

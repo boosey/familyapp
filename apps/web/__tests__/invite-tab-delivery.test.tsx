@@ -68,13 +68,15 @@ async function render(): Promise<string> {
   );
 }
 
-describe("InviteTab — member form pins phone + SMS consent (regression)", () => {
-  it("renders the phone input and SMS-consent checkbox in the member form", async () => {
+describe("InviteTab — member form pins phone + the three send actions (#118)", () => {
+  it("renders the phone input and the three intent buttons in the member form", async () => {
     await setup();
     cookieStore = {};
     const html = await render();
     expect(html).toContain('name="inviteePhone"');
-    expect(html).toContain('name="smsConsent"');
+    expect(html).toContain('value="send_email"');
+    expect(html).toContain('value="send_phone"');
+    expect(html).toContain('value="get_link"');
   });
 });
 

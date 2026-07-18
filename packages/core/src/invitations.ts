@@ -2,17 +2,26 @@
  * Member invitations — the account-creating join link (distinct from the link session token).
  *
  * An invitation leads a NEW person to create an Account and join a family. Like
- * the link session, the raw token is sent in the link and NEVER stored: only its SHA-256 hash
- * lives in the DB, so a database leak does not expose working invites (mirrors
- * `@chronicle/capture`'s `hashToken`). The raw token is returned exactly once, at creation.
+ * the link session, the raw token is sent in the link and NEVER stored in plaintext: only its
+ * SHA-256 hash plus an AES-256-GCM-sealed copy (issue #116 — one durable link per pending invite,
+ * so the token must be recoverable for re-delivery without rotation) live in the DB. A database
+ * leak yields no working invite as long as INVITE_TOKEN_ENC_KEY stays out of the database
+ * (mirrors `@chronicle/capture`'s `hashToken`).
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { asks, families, invitations, persons } from "@chronicle/db/schema";
 import type { Database, InvitationStatus, MembershipRole } from "@chronicle/db";
-import { AuthorizationError, InvariantViolation, ThrottleError } from "./errors";
+import {
+  AlreadyFamilyMemberError,
+  AuthorizationError,
+  InvariantViolation,
+  ThrottleError,
+} from "./errors";
+import { findActiveFamilyMemberByContact } from "./invite-member-guard";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
+import { openToken, sealToken } from "./token-seal";
 import {
   INVITE_THROTTLE_DESTINATION_LIMIT,
   INVITE_THROTTLE_DESTINATION_WINDOW_MS,
@@ -50,7 +59,11 @@ export interface CreateInvitationInput {
 
 export interface CreateInvitationResult {
   invitationId: string;
-  /** The raw token — returned ONCE, to be embedded in the invite link. Never persisted. */
+  /**
+   * The raw token — embedded in the invite link. Never persisted in plaintext (hash + sealed copy
+   * only); for a LIVE pending re-invite this is the SAME token as before (issue #116 — one durable
+   * link), freshly minted only on create or on rotation of a dead invite.
+   */
   token: string;
   /**
    * The provisional (Account-less) Person minted for this invitee (ADR-0006). An Ask may target
@@ -92,18 +105,38 @@ export async function createInvitation(
 
     // Invite-send throttle (issue #105) — a GENEROUS accident guard, not a rate-limit against
     // determined abuse. Two independent arms, each a rolling window counted over the invitations
-    // table (every creation is a row, so rows ≈ sends):
+    // table. Dedup (#117) refreshes one row in place instead of inserting per send, so the count
+    // sums `sendCount` (1 on create, +1 per refresh) rather than rows — every (re)send counts:
     //   1. Per INVITER: caps a bulk-paste/scripting accident (a whole spreadsheet's worth of
     //      invites in one sitting) across all families the inviter belongs to.
     //   2. Per DESTINATION (email OR phone): protects the RECIPIENT from being spammed — app-wide,
     //      so it holds even when different inviters (or families) address the same person.
     // Both run inside the creation tx so a burst of concurrent submissions sees one consistent
     // count. Exceeding either arm refuses the invite with ThrottleError; nothing is written.
+    const trimmedName = input.inviteeName?.trim() || null;
+    const trimmedEmail = input.inviteeEmail?.trim() || null;
+    const trimmedPhone = input.inviteePhone?.trim() || null;
+
+    // Same-family duplicate-member guard (issue #119): if the invitee's email or phone already
+    // resolves to an ACTIVE member of this family (via their verified account contacts), inviting
+    // them is a mistake — refuse before any throttle counting or dedup refresh. Runs before the
+    // throttle so a refused invite never burns the inviter's generous budget.
+    const conflictingMember = await findActiveFamilyMemberByContact(tx, {
+      familyId: input.familyId,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+    });
+    if (conflictingMember) {
+      throw new AlreadyFamilyMemberError(
+        `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
+      );
+    }
+
     const inviterWindowStart = new Date(
       Date.now() - INVITE_THROTTLE_INVITER_WINDOW_MS,
     );
     const [inviterCount] = await tx
-      .select({ n: sql<number>`count(*)::int` })
+      .select({ n: sql<number>`coalesce(sum(${invitations.sendCount}), 0)::int` })
       .from(invitations)
       .where(
         and(
@@ -117,8 +150,6 @@ export async function createInvitation(
       );
     }
 
-    const trimmedEmail = input.inviteeEmail?.trim() || null;
-    const trimmedPhone = input.inviteePhone?.trim() || null;
     if (trimmedEmail || trimmedPhone) {
       const destinationWindowStart = new Date(
         Date.now() - INVITE_THROTTLE_DESTINATION_WINDOW_MS,
@@ -132,7 +163,7 @@ export async function createInvitation(
         trimmedPhone ? eq(invitations.inviteePhone, trimmedPhone) : null,
       ].filter((c) => c !== null);
       const [destinationCount] = await tx
-        .select({ n: sql<number>`count(*)::int` })
+        .select({ n: sql<number>`coalesce(sum(${invitations.sendCount}), 0)::int` })
         .from(invitations)
         .where(
           and(
@@ -144,6 +175,183 @@ export async function createInvitation(
         throw new ThrottleError(
           `destination already received ${INVITE_THROTTLE_DESTINATION_LIMIT} invitations in the last 24 hours`,
         );
+      }
+    }
+
+    // Re-invite dedup: a re-send to someone who was already invited but never joined must NOT mint a
+    // second provisional Person (the old bug left duplicate `origin='invitee'` rows behind). If an
+    // unaccepted invitation to this same invitee already exists in this family, we REFRESH that one
+    // row in place, reusing its provisional Person.
+    //
+    // Refresh-in-place (not a second invitation row) is load-bearing: the housekeeping reaper deletes
+    // ALL invitations pointing at a reaped provisional Person, so a stale dead invite left beside a
+    // fresh one would let the reaper destroy the live invite. One invite row per invitee keeps that safe.
+    //
+    // ONE DURABLE LINK per pending invite (issue #116): the matched invite's token is ROTATED only
+    // when it is DEAD (expired or no longer pending) — or unrecoverable (a pre-#116 row with no
+    // sealed copy). When it is still LIVE we return the SAME token (opened from its sealed copy), so
+    // a link already sent by email keeps working when the inviter later sends it by SMS or copies it.
+    //
+    // Match key: the invitee's EMAIL (case-insensitive) OR PHONE (exact — the web layer normalizes
+    // to E.164 before create). Both are reliable contact identities; matching on either dedups the
+    // re-invite. Invites with NEITHER identifier are deliberately NOT deduped: matching on name
+    // alone would risk silently merging two different real people who share a name (e.g. two
+    // cousins both entered as "Sal") with no undo — a worse failure than the duplicate row we are
+    // fixing. Such repeat invites simply mint a fresh provisional Person, which the reaper cleans
+    // up when it dies. `accepted` invites are excluded: their anchor is a real Account Person, not
+    // a reusable provisional. The persons join re-asserts that.
+    const matchClauses = [
+      trimmedEmail
+        ? sql`lower(${invitations.inviteeEmail}) = ${trimmedEmail.toLowerCase()}`
+        : null,
+      trimmedPhone ? eq(invitations.inviteePhone, trimmedPhone) : null,
+    ].filter((c) => c !== null);
+
+    if (matchClauses.length > 0) {
+      // Match sets are tiny (one row per invitee identifier in one family) — no limit, so legacy
+      // duplicate rows are all seen and the merge loop below can clean up every dead loser.
+      const matches = await tx
+        .select({
+          id: invitations.id,
+          inviteePersonId: invitations.inviteePersonId,
+          inviteeEmail: invitations.inviteeEmail,
+          inviteePhone: invitations.inviteePhone,
+          tokenSealed: invitations.tokenSealed,
+          status: invitations.status,
+          expiresAt: invitations.expiresAt,
+        })
+        .from(invitations)
+        .innerJoin(persons, eq(persons.id, invitations.inviteePersonId))
+        .where(
+          and(
+            eq(invitations.familyId, input.familyId),
+            ne(invitations.status, "accepted"),
+            eq(persons.origin, "invitee"),
+            isNull(persons.accountId),
+            or(...matchClauses),
+          ),
+        )
+        .orderBy(desc(invitations.createdAt));
+
+      // The winner carries the combined identifiers forward. Winner selection prefers a LIVE match
+      // (pending + unexpired) so a merge never kills an invite whose link was already delivered
+      // (#116's durable-link promise): live email match, else the first live match, else a dead
+      // email match (email is the stronger identity, #117), else the most recent match.
+      const isLiveMatch = (m: (typeof matches)[number]): boolean =>
+        m.status === "pending" &&
+        (m.expiresAt === null || m.expiresAt.getTime() > Date.now());
+      const emailMatch = trimmedEmail
+        ? matches.find(
+            (m) => m.inviteeEmail?.toLowerCase() === trimmedEmail.toLowerCase(),
+          )
+        : undefined;
+      const existing =
+        (emailMatch && isLiveMatch(emailMatch) ? emailMatch : undefined) ??
+        matches.find(isLiveMatch) ??
+        emailMatch ??
+        matches[0];
+
+      if (existing) {
+        // Merge-on-collision (#117): the other identifier matched a DIFFERENT provisional Person.
+        // Re-point the loser's queued asks onto the winner, delete the loser's invitation rows
+        // (one invite row per invitee — the reaper invariant above), then delete the now-empty
+        // loser Person. Mirrors acceptInvitation's re-point+delete primitive.
+        const losers = matches.filter(
+          (m) => m.inviteePersonId !== existing.inviteePersonId,
+        );
+        for (const loser of losers) {
+          // A LIVE loser is NEVER merged away: its link may already have been delivered, and
+          // deleting the row would 404 a working link (#116). It keeps its row/Person/token — the
+          // duplicate self-heals when that invite expires and a later re-invite merges it as a
+          // dead loser.
+          if (isLiveMatch(loser)) continue;
+          const [loserPerson] = await tx
+            .select({ accountId: persons.accountId })
+            .from(persons)
+            .where(eq(persons.id, loser.inviteePersonId))
+            .limit(1);
+          if (!loserPerson || loserPerson.accountId !== null) {
+            // The match join guarantees an Account-less provisional; anything else signals a
+            // corrupted anchor we must not silently delete (same guard as acceptInvitation).
+            throw new InvariantViolation(
+              "merge-on-collision: loser invitee anchor is missing or Account-bearing — refusing to merge",
+            );
+          }
+          await tx
+            .update(asks)
+            .set({ targetPersonId: existing.inviteePersonId })
+            .where(eq(asks.targetPersonId, loser.inviteePersonId));
+          await tx
+            .delete(invitations)
+            .where(eq(invitations.inviteePersonId, loser.inviteePersonId));
+          await tx.delete(persons).where(eq(persons.id, loser.inviteePersonId));
+        }
+
+        // Recover the durable token for a live invite; null forces the rotation path (dead invite,
+        // or a legacy row with nothing sealed under the active key).
+        const durableToken = isLiveMatch(existing)
+          ? openToken(existing.tokenSealed)
+          : null;
+
+        await tx
+          .update(invitations)
+          .set({
+            inviterPersonId: input.inviterPersonId,
+            // A refresh IS a re-send: `createdAt` on a refreshed invite means "last (re)sent at",
+            // keeping the row inside the rolling throttle window, and sendCount accumulates each
+            // (re)send so both #105 throttle arms count it (rows ≈ sends survives dedup).
+            createdAt: new Date(),
+            sendCount: sql`${invitations.sendCount} + 1`,
+            // Rotation (dead invite only): fresh token, hash, sealed copy, back to pending, new
+            // expiry. On the durable path NONE of the token fields are touched — the previously
+            // sent link keeps working.
+            ...(durableToken === null
+              ? {
+                  tokenHash: hashToken(token),
+                  tokenSealed: sealToken(token),
+                  status: "pending" as const,
+                  expiresAt,
+                }
+              : {}),
+            // Only overwrite invitee metadata the caller actually supplied, so a bare re-invite does
+            // not wipe a name/label/role captured on the original. The surviving invite ends up
+            // carrying the FULL identifier set entered this time (#117). Contacts are stored in
+            // their TRIMMED form (the same form used as the match key), never verbatim.
+            ...(input.inviteeName !== undefined
+              ? { inviteeName: input.inviteeName ?? null }
+              : {}),
+            ...(input.inviteeEmail !== undefined
+              ? { inviteeEmail: trimmedEmail }
+              : {}),
+            ...(input.inviteePhone !== undefined
+              ? { inviteePhone: trimmedPhone }
+              : {}),
+            ...(input.deliveryChannels !== undefined
+              ? { deliveryChannels: input.deliveryChannels ?? null }
+              : {}),
+            ...(input.relationshipLabel !== undefined
+              ? { relationshipLabel: input.relationshipLabel ?? null }
+              : {}),
+            ...(input.role !== undefined ? { role: input.role } : {}),
+          })
+          .where(eq(invitations.id, existing.id));
+
+        // Keep the provisional Person's placeholder name in step when a fresh name is supplied.
+        if (trimmedName) {
+          await tx
+            .update(persons)
+            .set({
+              displayName: trimmedName,
+              spokenName: defaultSpokenName(trimmedName),
+            })
+            .where(eq(persons.id, existing.inviteePersonId));
+        }
+
+        return {
+          invitationId: existing.id,
+          token: durableToken ?? token,
+          inviteePersonId: existing.inviteePersonId,
+        };
       }
     }
 
@@ -172,12 +380,15 @@ export async function createInvitation(
       .insert(invitations)
       .values({
         tokenHash: hashToken(token),
+        tokenSealed: sealToken(token),
         familyId: input.familyId,
         inviterPersonId: input.inviterPersonId,
         inviteePersonId: provisional!.id,
         inviteeName: input.inviteeName ?? null,
-        inviteeEmail: input.inviteeEmail ?? null,
-        inviteePhone: input.inviteePhone ?? null,
+        // Store contacts in their TRIMMED form — the same form the dedup/throttle match keys use,
+        // so a later re-invite matches this row exactly.
+        inviteeEmail: trimmedEmail,
+        inviteePhone: trimmedPhone,
         deliveryChannels: input.deliveryChannels ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         role: input.role ?? "member",
@@ -188,6 +399,30 @@ export async function createInvitation(
 
     return { invitationId: row!.id, token, inviteePersonId: provisional!.id };
   });
+}
+
+/**
+ * Recover the raw token of a LIVE pending invitation for (re-)delivery over another channel
+ * (issue #116 — the durable link is delivered, never rotated, by the deliver path). Returns null
+ * for a missing, non-pending, expired, or unrecoverable (legacy/unsealed) invitation — callers
+ * must treat null as "create/rotate instead", never fall back to a fresh send silently.
+ */
+export async function getInvitationTokenForDelivery(
+  db: Database,
+  invitationId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({
+      tokenSealed: invitations.tokenSealed,
+      status: invitations.status,
+      expiresAt: invitations.expiresAt,
+    })
+    .from(invitations)
+    .where(eq(invitations.id, invitationId))
+    .limit(1);
+  if (!row || row.status !== "pending") return null;
+  if (row.expiresAt !== null && row.expiresAt.getTime() < Date.now()) return null;
+  return openToken(row.tokenSealed);
 }
 
 export interface InvitationDeliveryContext {

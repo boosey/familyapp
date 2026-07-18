@@ -1,0 +1,1 @@
+ALTER TABLE "invitations" ADD COLUMN IF NOT EXISTS "token_sealed" text;

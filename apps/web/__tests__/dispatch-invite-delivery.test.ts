@@ -2,7 +2,8 @@
  * Tests for the durable-vs-synchronous invite-delivery dispatch decision
  * (lib/dispatch-invite-delivery.ts), mirroring dispatch-pipeline.test.ts's branch-selection style:
  * fake job queue + fake `deliver` closure, asserting each branch calls exactly the one it should
- * and never the other.
+ * and never the other. Neither branch carries the raw invite token — the worker and the sync
+ * closure both recover it server-side via `getInvitationTokenForDelivery`.
  */
 import { describe, expect, it } from "vitest";
 import type { DeliveryChannel } from "@chronicle/notifications";
@@ -29,8 +30,8 @@ function fakeJobQueue(): JobQueue & { enqueued: Array<{ name: JobName; payload: 
 }
 
 describe("makeDispatchInviteDelivery — branch selection", () => {
-  it("UNCONFIGURED: calls the synchronous deliver closure with invitationId/channels/link", async () => {
-    const delivered: Array<{ invitationId: string; channels: DeliveryChannel[]; link: string }> = [];
+  it("UNCONFIGURED: calls the synchronous deliver closure with invitationId/channels only", async () => {
+    const delivered: Array<{ invitationId: string; channels: DeliveryChannel[] }> = [];
     const jobQueue = fakeJobQueue();
     const dispatch = makeDispatchInviteDelivery({
       inngestConfigured: false,
@@ -42,19 +43,15 @@ describe("makeDispatchInviteDelivery — branch selection", () => {
 
     await dispatch({
       invitationId: "inv-1",
-      token: "raw-token",
       channels: ["email"],
-      link: "https://app.example.com/join/raw-token",
     });
 
-    expect(delivered).toEqual([
-      { invitationId: "inv-1", channels: ["email"], link: "https://app.example.com/join/raw-token" },
-    ]);
+    expect(delivered).toEqual([{ invitationId: "inv-1", channels: ["email"] }]);
     // Synchronous path never touches the queue.
     expect(jobQueue.enqueued).toHaveLength(0);
   });
 
-  it("CONFIGURED: enqueues invite.send with invitationId/token/channels and does NOT deliver synchronously", async () => {
+  it("CONFIGURED: enqueues invite.send with invitationId/channels (NO token) and does NOT deliver synchronously", async () => {
     const jobQueue = fakeJobQueue();
     let deliverCalls = 0;
     const dispatch = makeDispatchInviteDelivery({
@@ -67,15 +64,14 @@ describe("makeDispatchInviteDelivery — branch selection", () => {
 
     await dispatch({
       invitationId: "inv-2",
-      token: "raw-token-2",
       channels: ["email", "sms"],
-      link: "https://app.example.com/join/raw-token-2",
     });
 
     expect(jobQueue.enqueued).toEqual([
       {
         name: "invite.send",
-        payload: { invitationId: "inv-2", token: "raw-token-2", channels: ["email", "sms"] },
+        // The raw token must NOT appear in the event payload — the worker recovers it from the DB.
+        payload: { invitationId: "inv-2", channels: ["email", "sms"] },
       },
     ]);
     // Durable path never calls the synchronous deliver closure.
@@ -83,7 +79,7 @@ describe("makeDispatchInviteDelivery — branch selection", () => {
   });
 
   it("CONFIGURED but no shared job queue supplied: falls back to the synchronous path (defensive)", async () => {
-    const delivered: Array<{ invitationId: string; channels: DeliveryChannel[]; link: string }> = [];
+    const delivered: Array<{ invitationId: string; channels: DeliveryChannel[] }> = [];
     const dispatch = makeDispatchInviteDelivery({
       inngestConfigured: true,
       deliver: async (args) => {
@@ -93,13 +89,9 @@ describe("makeDispatchInviteDelivery — branch selection", () => {
 
     await dispatch({
       invitationId: "inv-3",
-      token: "raw-token-3",
       channels: ["sms"],
-      link: "https://app.example.com/join/raw-token-3",
     });
 
-    expect(delivered).toEqual([
-      { invitationId: "inv-3", channels: ["sms"], link: "https://app.example.com/join/raw-token-3" },
-    ]);
+    expect(delivered).toEqual([{ invitationId: "inv-3", channels: ["sms"] }]);
   });
 });

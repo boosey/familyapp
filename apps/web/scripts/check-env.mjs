@@ -63,6 +63,11 @@ export const REQUIRED = [
     why: "Durable job queue signature verification (production). Preview deploys omit it on purpose — no Inngest worker is served there.",
     productionOnly: true,
   },
+  {
+    name: "INVITE_TOKEN_ENC_KEY",
+    why: "Seals invite tokens at rest (#116); without it token-seal.ts would fall back to a fixed DEV-ONLY key (sealed tokens effectively plaintext) — it throws in production instead. Preview may omit it (dev fallback acceptable there).",
+    productionOnly: true,
+  },
 ];
 
 /**

@@ -9,6 +9,7 @@ import {
   createAccountWithPerson,
   resolveAccountByIdentity,
   resolveAccountIdByVerifiedEmail,
+  resolveAccountIdByVerifiedPhone,
   attachIdentity,
 } from "../src/index";
 
@@ -82,5 +83,60 @@ describe("identity/contact resolution", () => {
     await attachIdentity(db, acctId!, "clerk", "prod_id");
     await attachIdentity(db, acctId!, "clerk", "prod_id"); // idempotent, no throw
     expect((await resolveAccountByIdentity(db, "clerk", "prod_id"))?.personId).toBe(personId);
+  });
+});
+
+describe("verified-phone match keys (#121)", () => {
+  it("writes a VERIFIED phone contact and resolves it back to the account", async () => {
+    await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "phone_user",
+      email: "p@x.com",
+      emailVerified: true,
+      phone: "+15551234567",
+      phoneVerified: true,
+      displayName: "Phone User",
+    });
+    const acctId = await resolveAccountIdByVerifiedPhone(db, "+15551234567");
+    expect(acctId).not.toBeNull();
+    expect((await resolveAccountByIdentity(db, "clerk", "phone_user"))?.personId).toBeTruthy();
+  });
+
+  it("an UNVERIFIED phone is NOT a match key (never even stored)", async () => {
+    await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "unv_phone_user",
+      email: "up@x.com",
+      emailVerified: true,
+      phone: "+15557654321",
+      phoneVerified: false,
+      displayName: "Unv Phone User",
+    });
+    expect(await resolveAccountIdByVerifiedPhone(db, "+15557654321")).toBeNull();
+  });
+
+  it("an unverified phone does not collide with the real owner's verified phone", async () => {
+    // Mirrors the email regression above: UNIQUE(kind, value) is unconditional, so an unverified
+    // phone written as a row would break the real owner's verified contact.
+    const { personId: ownerPersonId } = await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "phone_owner",
+      email: "owner@x.com",
+      emailVerified: true,
+      phone: "+15550001111",
+      phoneVerified: true,
+      displayName: "Phone Owner",
+    });
+    const { personId: otherPersonId } = await createAccountWithPerson(db, {
+      provider: "clerk",
+      authProviderUserId: "phone_other",
+      email: "other@x.com",
+      emailVerified: true,
+      phone: "+15550001111",
+      phoneVerified: false,
+      displayName: "Someone Else",
+    });
+    expect(otherPersonId).not.toBe(ownerPersonId);
+    expect(await resolveAccountIdByVerifiedPhone(db, "+15550001111")).not.toBeNull();
   });
 });

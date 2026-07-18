@@ -142,7 +142,11 @@ export interface StoryJobPayload {
 
 export interface InviteJobPayload {
   invitationId: string;
-  token: string;
+  /**
+   * Deliberately NO token here: the raw invite token never crosses the enqueue boundary (it would
+   * sit in the persisted event payload). The `invite.send` worker recovers it at delivery time via
+   * `getInvitationTokenForDelivery` (core) and treats null as a dead invite — skip, no error.
+   */
   channels: DeliveryChannel[];
 }
 

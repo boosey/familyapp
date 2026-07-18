@@ -14,6 +14,7 @@ import {
   listDecidedJoinRequestsForSteward,
   listOutstandingDrafts,
   listActiveFamiliesForPerson,
+  listPendingInvitationsForPerson,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -32,6 +33,7 @@ import { QuestionsSubNav } from "./QuestionsSubNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
 import { inviteTabVisible, requestsTabVisible } from "@/lib/hub-tabs";
 import { IntakeReminder } from "./IntakeReminder";
+import { PendingInvitesBanner } from "./PendingInvitesBanner";
 import { AlbumSurface } from "./album/AlbumSurface";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
@@ -143,7 +145,7 @@ export default async function HubPage({
       : null;
   const familyInitialView = viewParam === "list" ? "list" : "tree";
 
-  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
@@ -158,6 +160,9 @@ export default async function HubPage({
       .where(eq(persons.id, ctx.personId))
       .then((rows) => rows[0] ?? null),
     listOutstandingDrafts(db, ctx.personId),
+    // #120: live pending invites addressed to this account's verified contacts — the confirm
+    // cards rendered above the tabs until Join / "Not me".
+    listPendingInvitationsForPerson(db, ctx.personId),
   ]);
 
   // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
@@ -285,6 +290,7 @@ export default async function HubPage({
 
         {/* Tab content */}
         <section className={styles.tabContent}>
+          <PendingInvitesBanner matches={pendingInviteMatches} />
           <IntakeReminder profile={viewerRow?.biographicalAnchors ?? {}} />
           {activeTab === "stories" && (
             <StoriesTab

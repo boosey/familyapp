@@ -91,6 +91,20 @@ export const hub = {
     body: "There's still a little more of your introduction to fill in — a few details about where you're from and the life you've lived.",
     cta: "Continue your introduction",
   },
+  pendingInvites: {
+    // #120 — confirm cards surfaced when the viewer's VERIFIED email/phone matches a live pending
+    // invitation. Explicit confirm only; "Not me" never revokes the invite. The card names the
+    // inviter and the family — never the inviter-typed invitee name.
+    aria: "Invitations waiting for you",
+    cardLine: (inviterName: string, familyName: string) =>
+      `${inviterName} invited you to join the ${familyName} family`,
+    blurb:
+      "We matched this invitation to your email or phone number. Only join if it's really meant for you.",
+    join: "Join",
+    notMe: "Not me",
+    noLongerAvailable:
+      "That invitation is no longer available — it may have been accepted or expired.",
+  },
   aboutYou: {
     // The /hub/about-you intake surface — a short structured walk through the biographical profile.
     eyebrow: "Your introduction",
@@ -191,20 +205,26 @@ export const hub = {
       "Send a relative a link to create their own login and join the family. They'll confirm who they are, then go through a short welcome.",
     nameLabel: "Their name",
     namePlaceholder: "e.g. Rosa Esposito",
-    // "Their email" and "(optional)" are split so the span styling is preserved in JSX.
+    // #118: email and phone are individually optional but AT LEAST ONE is required — see
+    // identifierHint/identifierRequired.
     emailLabel: "Their email",
-    emailLabelOptional: "(optional)",
     emailPlaceholder: "rosa@example.com",
-    // "Their phone" and "(optional)" are split so the span styling is preserved in JSX.
     phoneLabel: "Their phone",
-    phoneLabelOptional: "(optional)",
     phonePlaceholder: "+1 555 123 0000",
     phoneInvalid: "That phone number doesn't look right — check the format and try again.",
+    identifierHint:
+      "Give at least one — an email or a phone number. It's how we recognize them if they join without the link, and how we avoid inviting the same person twice.",
+    identifierRequired:
+      "Add an email or a phone number — at least one — so we can recognize them when they join.",
+    emailRequired: "Add their email to send it by email — or choose another way below.",
+    phoneRequired: "Add their phone number to text it — or choose another way below.",
+    // #119 — the duplicate-member guard refusing an invite to someone already in the family.
+    alreadyMember:
+      "They're already a member of this family — no invitation needed.",
     // #105 — shown when the generous invite-send throttle refuses an invite (bulk-paste accident
     // guard). Plain-language: no numbers, no "rate limit" jargon.
     throttled:
       "That's a lot of invitations in a short time. Take a breather and try again a little later — if you're inviting a big group, spread it out over the day.",
-    smsConsentLabel: "OK to text them the invite link",
     // "Relationship" and "(optional)" are split so the span styling is preserved in JSX.
     relationshipLabel: "Relationship",
     relationshipLabelOptional: "(optional)",
@@ -213,7 +233,11 @@ export const hub = {
     // Custom validity message when the family designator (ADR-0021, #49) blocks an empty submit — the
     // ambiguous >1-family case with no deliberate pick.
     familyRequired: "Choose a family for this invitation.",
-    createInviteLink: "Create invite link",
+    // #118 — the three send actions. The phone button doubles as the SMS consent: pressing it IS
+    // the explicit ask to text them.
+    sendToEmail: "Send to their email",
+    sendToPhone: "Text it to their phone",
+    getLink: "Get a link to share",
     narratorHeading: "Set up someone to record",
     narratorBody:
       "Choose a family member and we'll create their own private link. Opening it starts a gentle voice session — they just tap and talk, with no login, account, or app to set up. You hand them the link; they do the rest whenever they're ready.",
