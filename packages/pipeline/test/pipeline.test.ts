@@ -607,7 +607,8 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "openai",
       "elevenlabs",
       "inngest",
-      "@aws-sdk",
+      "inngest/*",
+      "@aws-sdk/*",
       "@google/genai",
       "@google/generative-ai",
       "@google-cloud/speech",
@@ -620,6 +621,7 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "@vonage/server-sdk",
       "trigger.dev",
       "@trigger.dev/sdk",
+      "@trigger.dev/sdk/*",
     ];
     // Scope-prefix bans: any import under one of these npm scopes is forbidden, regardless of the
     // concrete package (e.g. "@sentry/nextjs", "@sentry/node", "@sentry/core"). Sentry lives only
@@ -667,7 +669,7 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
     // matching logic actually catches a violation rather than vacuously passing because no
     // such import currently exists in the tree. Both match modes are exercised: an exact
     // specifier ("resend") and a scope-prefix pattern ("@sentry/*").
-    const forbidden = ["resend", "twilio", "@sentry/*"];
+    const forbidden = ["resend", "twilio", "@sentry/*", "@aws-sdk/*", "inngest", "inngest/*", "@trigger.dev/sdk", "@trigger.dev/sdk/*"];
     const ADAPTER_EXCEPTIONS = new Set<string>([
       "packages/notifications/src/resend.ts",
       "packages/notifications/src/twilio.ts",
@@ -679,6 +681,14 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
       "packages/notifications/src/mock.ts": 'import { Resend } from "resend";',
       // Violation: a scope-prefixed import matched by the `@sentry/*` prefix pattern.
       "packages/core/src/instrumentation.ts": 'import * as Sentry from "@sentry/nextjs";',
+      // Violation: a scoped vendor subpath import in a non-adapter file (issue #111).
+      "packages/storage/src/local.ts": 'import { S3Client } from "@aws-sdk/client-s3";',
+      // Violation: an unscoped vendor subpath import — the bare "inngest" exact entry
+      // never fires on `inngest/next` (cold review of #111).
+      "packages/pipeline/src/serve.ts": 'import { serve } from "inngest/next";',
+      // Violation: Trigger.dev v3's documented subpath import — "@trigger.dev/sdk"
+      // exact-match never fires on `@trigger.dev/sdk/v3` (cold review of #111).
+      "packages/core/src/jobs.ts": 'import { tasks } from "@trigger.dev/sdk/v3";',
     };
     const offenders: string[] = [];
     for (const [relPath, contents] of Object.entries(syntheticFiles)) {
@@ -688,6 +698,9 @@ describe("pipeline — no vendor SDK imports leak into IP code", () => {
     expect(offenders).toEqual([
       "packages/notifications/src/mock.ts imports resend",
       "packages/core/src/instrumentation.ts imports @sentry/*",
+      "packages/storage/src/local.ts imports @aws-sdk/*",
+      "packages/pipeline/src/serve.ts imports inngest/*",
+      "packages/core/src/jobs.ts imports @trigger.dev/sdk/*",
     ]);
   });
 });
