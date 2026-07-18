@@ -47,8 +47,11 @@ interface FamilyChipsFilterProps {
   /** Optional per-family count badge (e.g. pending join-requests, #140): a chip whose id maps to a
    *  positive count renders the shared count-pill; 0/absent shows no badge. */
   badges?: Record<string, number>;
-  /** Accessible name for a chip's count badge, given the count (the caller owns what the count MEANS). */
-  badgeLabel?: (count: number) => string;
+  /** Accessible name for each chip's count badge, keyed by family id (the caller owns what the count
+   *  MEANS). Precomputed STRINGS, not a formatter fn: FamilyChips is a client component, and a Server
+   *  Component caller cannot pass a plain function across the RSC boundary (it isn't serializable —
+   *  that regressed the Requests tab into a 500). A family id absent here falls back to the raw count. */
+  badgeLabels?: Record<string, string>;
   /** FILTER mode (default): omit `value`/`onSelect`. Multi-select, writes `?families=`. */
   value?: undefined;
   onSelect?: undefined;
@@ -63,8 +66,8 @@ interface FamilyChipsDesignatorProps {
   onSelect: (id: string) => void;
   /** Optional per-family count badge (e.g. pending join-requests, #140) — see the filter-mode note. */
   badges?: Record<string, number>;
-  /** Accessible name for a chip's count badge, given the count. */
-  badgeLabel?: (count: number) => string;
+  /** Accessible name for each chip's count badge, keyed by family id — see the filter-mode note. */
+  badgeLabels?: Record<string, string>;
   selected?: undefined;
 }
 
@@ -104,7 +107,7 @@ export function FamilyChips(props: FamilyChipsProps) {
   // Optional per-family count badges (#140) — present in either mode; read off the raw props before the
   // mode narrowing below.
   const badges = props.badges;
-  const badgeLabel = props.badgeLabel;
+  const badgeLabels = props.badgeLabels;
   // Discriminate the two modes ONCE, narrowing `props` for the whole body.
   const designatorProps = props.value !== undefined ? props : null;
   const filterProps = props.value === undefined ? props : null;
@@ -196,7 +199,7 @@ export function FamilyChips(props: FamilyChipsProps) {
             {count > 0 ? (
               <span
                 className={hubTabStyles.badge}
-                aria-label={badgeLabel ? badgeLabel(count) : String(count)}
+                aria-label={badgeLabels?.[f.id] ?? String(count)}
               >
                 {count}
               </span>

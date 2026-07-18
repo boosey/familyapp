@@ -20,7 +20,10 @@ const FAMILIES = [
   { id: "a", name: "Alpha" },
   { id: "b", name: "Beta" },
 ];
-const label = (n: number) => `${n} pending`;
+// Badge accessible names are PRECOMPUTED, serializable strings keyed by family id — NOT a formatter
+// function. A Server Component caller (RequestsTab) cannot pass a function across the RSC boundary, so
+// the `badgeLabels` prop must stay plain data (see the regression test below).
+const labels = { a: "3 pending", b: "5 pending" };
 
 describe("FamilyChips count badges (#140)", () => {
   it("renders a count badge only on families with a positive count (designator mode)", () => {
@@ -30,13 +33,13 @@ describe("FamilyChips count badges (#140)", () => {
         value="a"
         onSelect={() => {}}
         badges={{ a: 3 }}
-        badgeLabel={label}
+        badgeLabels={labels}
       />,
     );
     // Alpha carries a badge of 3 with the accessible name; Beta (count 0/absent) carries none.
     const badge = screen.getByLabelText("3 pending");
     expect(badge.textContent).toBe("3");
-    expect(screen.queryByLabelText("0 pending")).toBeNull();
+    expect(screen.queryByLabelText("5 pending")).toBeNull();
     // The badge sits INSIDE the Alpha chip, not the Beta chip.
     expect(screen.getByText("Alpha").closest("button")).toBe(badge.closest("button"));
     expect(screen.getByText("Beta").closest("button")).not.toBe(badge.closest("button"));
@@ -49,13 +52,13 @@ describe("FamilyChips count badges (#140)", () => {
   });
 
   it("also supports badges in filter mode", () => {
-    render(<FamilyChips families={FAMILIES} selected="all" badges={{ b: 5 }} badgeLabel={label} />);
+    render(<FamilyChips families={FAMILIES} selected="all" badges={{ b: 5 }} badgeLabels={labels} />);
     const badge = screen.getByLabelText("5 pending");
     expect(badge.textContent).toBe("5");
     expect(screen.getByText("Beta").closest("button")).toBe(badge.closest("button"));
   });
 
-  it("falls back to the raw count as the accessible name when no badgeLabel is given", () => {
+  it("falls back to the raw count as the accessible name when no matching label is given", () => {
     render(<FamilyChips families={FAMILIES} value="a" onSelect={() => {}} badges={{ a: 2 }} />);
     expect(screen.getByLabelText("2")).toBeTruthy();
   });

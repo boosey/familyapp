@@ -168,7 +168,7 @@ describe("FamilyChips", () => {
           families={FAMILIES}
           selected={["fam-a"]}
           badges={{ "fam-a": 2, "fam-b": 1 }}
-          badgeLabel={(n) => `${n} pending`}
+          badgeLabels={{ "fam-a": "2 pending", "fam-b": "1 pending" }}
         />,
       );
       expect(screen.getByLabelText("2 pending").textContent).toBe("2");
