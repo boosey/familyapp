@@ -68,12 +68,13 @@ export const hub = {
     empty:
       "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
     // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
-    // for ask-less drafts still in review. Playful mockup (Direction D): the invite card leads with a
-    // QUESTION heading, a warm reassurance body, and a pill action.
-    tellTitle: "Something you want to remember?",
+    // for ask-less drafts still in review. Playful mockup (Direction D): the invite card leads with an
+    // action heading, a warm reassurance body, and a pill affordance (arrow only — the heading carries
+    // the label, so the pill stays decorative and aria-hidden).
+    tellTitle: "Tell a story",
     tellBlurb:
       "Start it whenever it comes to you — a sentence is enough. We'll help you shape the rest.",
-    tellAction: "Tell a story →",
+    tellAction: "→",
     resumeHeading: "Finish what you started",
     resume: "Finish",
     // Family filter (ADR-0021, #47): every chip toggled OFF (an explicit empty selection) — an honest
