@@ -159,21 +159,25 @@ export async function AlbumSurface({
   // The shared uploader element — the add/import flow, ALWAYS present for a viewer with ≥1 family
   // (ADR-0021). Rendered here once so BOTH the all-off (`none`) branch below and the main return can
   // mount the same designator-seeded control (the filter and the designator are separate state).
-  const uploaderElement = showUploader ? (
-    <div style={{ margin: "0 0 24px" }}>
-      <AlbumUploader
-        families={active}
-        currentFamilyId={currentFamilyId}
-        scope={uploaderScope}
-        defaultSelected={defaultSelectedFamilyIds}
-        showFileUpload={showFileUpload}
-        googlePhotosConfigured={googleConfigured}
-        googlePhotosConnected={googleConn !== null}
-        googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
-        googlePhotosOauthConnected={googlePhotosOauthConnected}
-        googlePhotosOauthError={googlePhotosOauthError}
-      />
-    </div>
+  const uploaderControl = showUploader ? (
+    <AlbumUploader
+      families={active}
+      currentFamilyId={currentFamilyId}
+      scope={uploaderScope}
+      defaultSelected={defaultSelectedFamilyIds}
+      showFileUpload={showFileUpload}
+      googlePhotosConfigured={googleConfigured}
+      googlePhotosConnected={googleConn !== null}
+      googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
+      googlePhotosOauthConnected={googlePhotosOauthConnected}
+      googlePhotosOauthError={googlePhotosOauthError}
+    />
+  ) : null;
+  // Standalone wrapper (its own trailing margin) for the empty / all-off (`none`) branches, where no
+  // AlbumGrid mounts to host the uploader inline. On the populated path (#143) the SAME control rides
+  // the grid's consolidated control row via `addSlot` instead — see the main return below.
+  const uploaderElement = uploaderControl ? (
+    <div style={{ margin: "0 0 24px" }}>{uploaderControl}</div>
   ) : null;
 
   // Explicit empty selection (`none`): an honest empty state for the GRID (ADR-0021) — not a silent
@@ -227,27 +231,30 @@ export async function AlbumSurface({
 
   return (
     <>
-      {/* The browse Family chips ride INSIDE AlbumGrid's control row when there are photos to show; on
-          the empty-album path (a `<p>`, no AlbumGrid) they render standalone below so a ≥2-family viewer
-          can still toggle families. */}
-      {gridPhotos.length === 0 ? chips : null}
-      {uploaderElement}
-
       {gridPhotos.length === 0 ? (
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui)",
-            color: "var(--text-meta)",
-            margin: 0,
-          }}
-        >
-          {/* Pending-only viewer (member of no family) → the coherent hub-wide empty state; an
-              actual member with an empty album → the album-specific prompt (Task 4.6). */}
-          {active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
-        </p>
+        // Empty album (no AlbumGrid mounts): the browse chips + the uploader render standalone above the
+        // welcoming empty note, so a ≥2-family viewer can still toggle families and add the first photo.
+        <>
+          {chips}
+          {uploaderElement}
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-ui)",
+              color: "var(--text-meta)",
+              margin: 0,
+            }}
+          >
+            {/* Pending-only viewer (member of no family) → the coherent hub-wide empty state; an
+                actual member with an empty album → the album-specific prompt (Task 4.6). */}
+            {active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
+          </p>
+        </>
       ) : (
-        <AlbumGrid photos={gridPhotos} familyChips={chipsInline} />
+        // #143: with photos to show, the "Add Photos" affordance rides the grid's consolidated control
+        // row (right-justified, on the SAME row as the When/Search filters) via `addSlot` — so the
+        // uploader is NOT rendered standalone above the grid. The browse chips ride the same row too.
+        <AlbumGrid photos={gridPhotos} familyChips={chipsInline} addSlot={uploaderControl} />
       )}
     </>
   );

@@ -24,12 +24,17 @@ vi.mock("@/app/hub/album/AlbumGrid", () => ({
   AlbumGrid: ({
     photos,
     familyChips,
+    addSlot,
   }: {
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
     familyChips?: ReactNode;
+    addSlot?: ReactNode;
   }) => (
     <div data-testid="album-grid">
       {familyChips}
+      {/* #143: the uploader now rides the grid's control row via `addSlot` on the populated path —
+          echo it so the surface's uploader wiring stays assertable through the stub. */}
+      {addSlot}
       {photos.map((p) => (
         <div key={p.id} data-photo-id={p.id} data-can-manage={String(p.canManage)}>
           {`/api/album-photo/${p.id}`}
