@@ -17,8 +17,8 @@
  *
  * Self-contained: fetches the asker's visible album photos via `loadAskPhotoOptionsAction` on mount
  * (auth re-resolved server-side). Elder-friendly: each photo is a large toggle button with an
- * accessible label; no drag, no native dialogs; errors surface inline in the modal. Design tokens
- * only (see AskPhotoPicker.module.css).
+ * accessible label; no drag, no native dialogs; a load error surfaces inline on the CLOSED form (and
+ * again inside the modal). Design tokens only (see AskPhotoPicker.module.css).
  */
 import { useEffect, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
@@ -97,6 +97,14 @@ export function AskPhotoPicker({
           setOpen(true);
         }}
       />
+
+      {/* A failed album load surfaces HERE on the closed form (not only inside the modal) — the
+          asker learns photos couldn't load without having to click "Add photos" first. */}
+      {error ? (
+        <p aria-live="polite" className={s.error}>
+          {error}
+        </p>
+      ) : null}
 
       {/* Lightweight readout of the current selection on the closed form: thumbnails + a count. */}
       {selectedPhotos.length > 0 ? (
@@ -229,8 +237,6 @@ function AskPhotoModal({
           <p aria-live="polite" className={s.error}>
             {error}
           </p>
-        ) : album.length === 0 ? (
-          <p className={s.help}>{hub.ask.noAlbumPhotos}</p>
         ) : (
           <ul className={s.grid}>
             {album.map((p) => {

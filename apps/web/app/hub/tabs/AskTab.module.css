@@ -1,8 +1,9 @@
 /* AskTab (#204) — the redesigned Ask a Question panel. Field labels are ~1.5× the global
  * --text-label (the app-side --text-label-lg token), scoped HERE so the global .kin-form-label
  * (used by other forms) is untouched. The question textarea wears the album toolbar's `control`
- * styling (AlbumFilterBar) in multiline form. Tokens for design values, raw px for layout,
- * per _skins/CSS-MODULES.md. */
+ * styling (AlbumFilterBar) in multiline form. Colors, type, radius, and spacing come from tokens;
+ * the raw px below are the one-off layout sizes (panel max-width, control padding) matching the
+ * existing album controls they mirror. */
 
 .panel {
   max-width: 600px;

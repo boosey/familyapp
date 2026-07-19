@@ -137,6 +137,8 @@ export const hub = {
     // designator (asks submit FAMILYLESS now). The person selector is a type-ahead combobox.
     forLabel: "For",
     forPlaceholder: "Type a name…",
+    // Custom-validity message on the person combobox: blocks submit until a real option is chosen.
+    forInvalid: "Choose someone from the list.",
     // ADR-0006 marker suffixing pending invitees in the person selector.
     invitedNote: "(invited)",
     noPersonMatches: "No one by that name.",
@@ -153,7 +155,6 @@ export const hub = {
     photosHelp: "Ask about a specific photo — they'll see it when they answer.",
     photosDone: "Done",
     photoPickerLoadError: "Couldn't load your album photos. You can still send the question.",
-    noAlbumPhotos: "No album photos yet.",
     attachPhotoAria: (caption: string | null) =>
       caption ? `Ask about “${caption}”` : "Ask about this photo",
     removePhotoAria: (caption: string | null) =>

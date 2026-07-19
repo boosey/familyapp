@@ -26,6 +26,7 @@ function renderCombobox() {
       ariaLabel="For"
       placeholder="Type a name…"
       noMatchesText="No one by that name."
+      invalidText="Choose someone from the list."
       required
     />,
   );
@@ -112,5 +113,43 @@ describe("KindredCombobox — selection", () => {
     expect(input.value).toBe("Sofia Boudreaux");
     expect(hiddenId()).toBe("p-sofia");
     expect(screen.queryByRole("listbox")).toBeNull();
+  });
+});
+
+describe("KindredCombobox — client-side validation", () => {
+  it("blocks the form while the text names no valid option, clears once one is chosen", () => {
+    renderCombobox();
+    const input = combobox();
+
+    // Empty field: native `required` catches this, but the custom error rides along too.
+    expect(input.checkValidity()).toBe(false);
+
+    // A typed name that matches nothing would pass native `required` — the custom-validity
+    // error is what stops it submitting with NO hidden id (createAsk would throw server-side).
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "someone else" } });
+    expect(input.validity.customError).toBe(true);
+    expect(input.validationMessage).toBe("Choose someone from the list.");
+    expect(input.checkValidity()).toBe(false);
+    expect(hiddenId()).toBeNull();
+
+    // Choosing a real option clears the error and lets the form submit (clearing the text first
+    // so the full list re-opens).
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.mouseDown(screen.getByRole("option", { name: /Sofia/ }));
+    expect(input.checkValidity()).toBe(true);
+    expect(hiddenId()).toBe("p-sofia");
+  });
+
+  it("re-blocks when the chosen name is edited away", () => {
+    renderCombobox();
+    const input = combobox();
+    fireEvent.focus(input);
+    fireEvent.mouseDown(screen.getByRole("option", { name: /Sofia/ }));
+    expect(input.checkValidity()).toBe(true);
+
+    fireEvent.change(input, { target: { value: "Sofia B" } });
+    expect(input.checkValidity()).toBe(false);
+    expect(hiddenId()).toBeNull();
   });
 });

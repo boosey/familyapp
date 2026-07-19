@@ -1,7 +1,7 @@
 /* KindredCombobox (#204) — single-select type-ahead. The input is sized to the album toolbar's
  * Time <select> (the `control` style in AlbumFilterBar): 40px min-height, 6px/10px padding,
- * --text-ui-sm on --font-ui, small radius. Tokens for design values, raw px for layout,
- * per _skins/CSS-MODULES.md. */
+ * --text-ui-sm on --font-ui, small radius. Colors, type, radius, and borders come from tokens;
+ * the raw px below are the one-off layout sizes that match those existing toolbar controls. */
 
 .root {
   position: relative;

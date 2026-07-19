@@ -1,6 +1,7 @@
 /* AskPhotoPicker (#204) — the "Add photos" button + selection readout on the closed Ask form, and
  * the MODAL album picker (toggle grid) the button opens. Modal chrome mirrors AlbumDestinationModal.
- * Tokens for design values, raw px for layout, per _skins/CSS-MODULES.md. */
+ * Colors, type, radius, and spacing come from tokens; the raw px below are one-off layout sizes
+ * (thumbnail/tile dimensions, modal chrome) matching the existing album patterns they mirror. */
 
 .root {
   display: grid;

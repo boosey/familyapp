@@ -123,6 +123,7 @@ export async function AskTab({
             ariaLabel={hub.ask.forLabel}
             placeholder={hub.ask.forPlaceholder}
             noMatchesText={hub.ask.noPersonMatches}
+            invalidText={hub.ask.forInvalid}
             required
           />
         </div>

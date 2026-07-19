@@ -14,7 +14,10 @@
  *
  * Selection integrity: the hidden input only exists while the visible text EXACTLY matches the
  * chosen option's name — editing the text afterwards clears the selection (never a stale id), and
- * closing the popup snaps the text back to the chosen name so the two can never disagree.
+ * closing the popup snaps the text back to the chosen name so the two can never disagree. And while
+ * `required`, the visible input carries a custom-validity error until a real option is CHOSEN — so
+ * typing a name that matches nothing can never slip the form past HTML validation with no id (the
+ * old `<select required>` could never submit an invalid target; neither can this).
  */
 import { useEffect, useId, useRef, useState } from "react";
 import s from "./KindredCombobox.module.css";
@@ -32,6 +35,7 @@ export function KindredCombobox({
   ariaLabel,
   placeholder,
   noMatchesText,
+  invalidText,
   required = false,
 }: {
   options: KindredComboboxOption[];
@@ -42,10 +46,14 @@ export function KindredCombobox({
   placeholder?: string;
   /** Shown inside the open popup when the typed text matches nothing. */
   noMatchesText: string;
+  /** Custom-validity message shown while `required` and no valid option is chosen yet — blocks the
+   *  form submit when the text doesn't name a real option. */
+  invalidText: string;
   required?: boolean;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -68,6 +76,12 @@ export function KindredCombobox({
     document.getElementById(optionId(active))?.scrollIntoView?.({ block: "nearest" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- optionId derives from listId+index.
   }, [active, open]);
+
+  // While `required`, hold a custom-validity error on the visible input until a real option is
+  // chosen — native `required` alone only catches an EMPTY field, not a typed non-match.
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(required && submittedId === null ? invalidText : "");
+  }, [required, submittedId, invalidText]);
 
   const choose = (option: KindredComboboxOption) => {
     setSelectedId(option.id);
@@ -94,6 +108,7 @@ export function KindredCombobox({
     >
       {submittedId ? <input type="hidden" name={name} value={submittedId} /> : null}
       <input
+        ref={inputRef}
         type="text"
         role="combobox"
         aria-expanded={open}

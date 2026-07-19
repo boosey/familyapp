@@ -108,4 +108,81 @@ describe("AskPhotoPicker modal picker", () => {
     expect(hiddenSubjectIds()).toEqual(["photo-1"]);
     expect(screen.getByText("1 photo selected")).toBeTruthy();
   });
+
+  it("closes on Escape", async () => {
+    loadAskPhotoOptionsAction.mockResolvedValue(ALBUM);
+    render(<AskPhotoPicker />);
+    await waitForLoad();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add photos" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes on a backdrop click (but not on a click inside the dialog)", async () => {
+    loadAskPhotoOptionsAction.mockResolvedValue(ALBUM);
+    render(<AskPhotoPicker />);
+    await waitForLoad();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add photos" }));
+    // A click bubbling up from INSIDE the dialog must not close it.
+    fireEvent.click(screen.getByRole("dialog"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    // Clicking the backdrop itself (target === currentTarget) closes.
+    fireEvent.click(screen.getByTestId("ask-photo-backdrop"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("moves focus into the dialog on open and restores it to the 'Add photos' trigger on close", async () => {
+    loadAskPhotoOptionsAction.mockResolvedValue(ALBUM);
+    render(<AskPhotoPicker />);
+    await waitForLoad();
+
+    const trigger = screen.getByRole("button", { name: "Add photos" });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    // Focus moved into the dialog on open...
+    const dialog = screen.getByRole("dialog");
+    expect(document.activeElement).toBe(dialog);
+
+    // ...and returns to the trigger when the modal closes.
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("traps Tab inside the dialog (last focusable wraps to the first)", async () => {
+    loadAskPhotoOptionsAction.mockResolvedValue(ALBUM);
+    render(<AskPhotoPicker />);
+    await waitForLoad();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add photos" }));
+    const dialog = screen.getByRole("dialog");
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>("button:not([disabled])"),
+    );
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    expect(last).toBe(screen.getByRole("button", { name: "Done" }));
+
+    // Tabbing past the last focusable wraps back to the first instead of escaping the modal.
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+  });
+
+  it("surfaces a load error inline on the closed form (no modal click needed)", async () => {
+    loadAskPhotoOptionsAction.mockResolvedValue({
+      error: "Couldn't load your album photos. You can still send the question.",
+    });
+    render(<AskPhotoPicker />);
+
+    // The error is visible without opening the modal — and repeated inside the modal too.
+    await waitFor(() => {
+      expect(screen.getByText(/couldn't load your album photos/i)).toBeTruthy();
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
 });
