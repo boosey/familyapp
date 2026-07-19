@@ -36,6 +36,7 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 
 | Seq | Epic | /100 | What it is |
 |:-:|---|:-:|---|
+| **P0** | **Mobile-web responsive layouts** | 74 | *Preempting-defect override* (2026-07-19). The `/s` narrator capture surface and every `/hub` tab ship with **zero `@media` breakpoints** — desktop-first fixed widths that overflow/wrap on a phone. This is a regression against the wedge's founding premise (zero-app, elder taps a link on their phone), so it preempts #1: every downstream loop bet (ask-back, receipt, onboarding, interviewer) would otherwise be validated on an unusable surface. Build order within it: `/s` capture → `/hub` tabs → onboarding/Ask. |
 | **1** | **Clerk go-live** | 77 | Live auth (acceptance + live keys). *Prerequisite override* — without it no real family exists to validate with. |
 | **2** | **Follow-up questions on published stories** | 89 | The "asks-back" arm of the core loop; the Roadmap's highest-leverage trigger. |
 | **3** | **Basic story receipt / payoff** | 83 | The family receives and *feels* the story — the "family is moved" hypothesis. |
@@ -46,7 +47,7 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 | **8** | **Loop-event pings** | 74 | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
 | **9** | **Album & upload hardening** | 60 | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
 
-**Two sequencing overrides** the raw score doesn't capture: **Clerk go-live** jumps to #1 as a hard prerequisite (nothing downstream is learnable without live families, despite its low *learning* score); **notification-delivery** precedes its higher-scoring **loop-event pings** on the capability edge.
+**Three sequencing overrides** the raw score doesn't capture: **mobile-web responsive layouts** preempts everything (P0) — it scores only 74 but is a hard precondition for validating *any* loop bet on the phone-first surface families actually use, the same logic that lifts Clerk go-live above its score; **Clerk go-live** jumps to #1 as a hard prerequisite (nothing downstream is learnable without live families, despite its low *learning* score); **notification-delivery** precedes its higher-scoring **loop-event pings** on the capability edge.
 
 **The story the sequence tells:** turn auth on → close the ask-back loop → make receipt land → onboard narrators → deepen the interviewer → harden capture → wire the notification heartbeat that brings families back.
 
