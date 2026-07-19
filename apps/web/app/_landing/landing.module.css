@@ -405,9 +405,23 @@
 :global(:root[data-reduce-motion="on"]) .progressRail {
   display: none;
 }
+/* Bulletproof fallback for the parallax layers if JS fails to load, is blocked,
+ * or during initial hydration (the JS scroll handler already parks their custom
+ * properties at 0px). */
+:global(:root[data-reduce-motion="on"]) .driftSlowUp,
+:global(:root[data-reduce-motion="on"]) .driftMediumDown,
+:global(:root[data-reduce-motion="on"]) .driftFastUp,
+:global([data-tone="solemn"]) .driftSlowUp,
+:global([data-tone="solemn"]) .driftMediumDown,
+:global([data-tone="solemn"]) .driftFastUp {
+  transform: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
   .hero { opacity: 1; transform: none; }
   .stepCard { transform: none; }
   .progressRail { display: none; }
   .scrollChevron { animation: none; }
+  .driftSlowUp,
+  .driftMediumDown,
+  .driftFastUp { transform: none !important; }
 }

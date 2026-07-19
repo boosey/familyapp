@@ -41,16 +41,6 @@ function LandingCta() {
   );
 }
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  const mqReduced =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const toggled =
-    document.documentElement.getAttribute("data-reduce-motion") === "on";
-  return mqReduced || toggled;
-}
-
 export function LandingExperience() {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -67,13 +57,32 @@ export function LandingExperience() {
       set("--hero", "0");
     };
 
+    const mq =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+
+    // Motion state is cached here and updated reactively (media-query `change` + a
+    // MutationObserver on `data-reduce-motion`), so scroll frames never re-query it and
+    // the page responds immediately to either toggle.
+    let isReducedMotion = false;
+
+    const updateMotionState = () => {
+      const mqReduced = mq?.matches ?? false;
+      const toggled =
+        document.documentElement.getAttribute("data-reduce-motion") === "on";
+      isReducedMotion = mqReduced || toggled;
+      if (isReducedMotion) {
+        rest();
+      } else {
+        apply();
+      }
+    };
+
     let frame = 0;
     const apply = () => {
       frame = 0;
-      if (prefersReducedMotion()) {
-        rest();
-        return;
-      }
+      if (isReducedMotion) return;
       const sy = window.scrollY;
       const vh = window.innerHeight;
       set("--py-slow", `${parallaxOffset(sy, SCROLL_SPEEDS.slow)}px`);
@@ -84,22 +93,30 @@ export function LandingExperience() {
     };
 
     const onScroll = () => {
+      if (isReducedMotion) return;
       if (!frame) frame = window.requestAnimationFrame(apply);
     };
 
-    apply();
+    updateMotionState();
+
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
-    const mq =
-      typeof window.matchMedia === "function"
-        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    mq?.addEventListener?.("change", updateMotionState);
+
+    const observer =
+      typeof MutationObserver !== "undefined"
+        ? new MutationObserver(updateMotionState)
         : null;
-    mq?.addEventListener?.("change", apply);
+    observer?.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-reduce-motion"],
+    });
 
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
-      mq?.removeEventListener?.("change", apply);
+      mq?.removeEventListener?.("change", updateMotionState);
+      observer?.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
