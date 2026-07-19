@@ -47,7 +47,7 @@ export function AddRelativeModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.4)",
+        background: "var(--overlay-scrim)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
