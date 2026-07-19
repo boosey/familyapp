@@ -169,6 +169,23 @@ export async function createAlbumPhoto(
   });
 }
 
+/**
+ * EVERY `family_photos.storage_key` — INCLUDING soft-deleted rows, whose bytes are deliberately
+ * retained today (soft delete removes the photo from every surface but does not destroy the
+ * object), so they still count as references. This is the orphaned-object reaper's (#90)
+ * referenced-keys read: a system-actor content read with no `AuthContext`, deliberately exported
+ * ONLY via the `@chronicle/core/pipeline` subpath (never the package root), same discipline as
+ * the pipeline's other system-actor reads.
+ */
+export async function listAlbumPhotoStorageKeys(
+  db: Pick<Database, "select">,
+): Promise<string[]> {
+  const rows = await db
+    .select({ storageKey: familyPhotos.storageKey })
+    .from(familyPhotos);
+  return rows.map((r) => r.storageKey);
+}
+
 /** A photo as shown in an album grid — the fields the grid + bytes route need, no more. */
 export interface AlbumPhotoView {
   id: string;

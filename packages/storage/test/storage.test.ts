@@ -67,6 +67,43 @@ function runContract(name: string, make: () => MediaStorage) {
       expect(target.url).toBe(`${DEV_UPLOAD_BASE}/family-photos%2Fabc-123`);
       expect(target.headers).toEqual({ "Content-Type": "image/jpeg" });
     });
+
+    // issue #90 — the orphaned-object reaper enumerates a keyspace via `list`. Only keys under
+    // the prefix come back, each carrying the write time the reaper's age window compares against.
+    it("list returns only objects under the prefix, each with a lastModified", async () => {
+      const s = make();
+      await s.put({
+        key: "family-photos/a",
+        bytes: new Uint8Array([1]),
+        contentType: "image/jpeg",
+      });
+      await s.put({
+        key: "family-photos/b",
+        bytes: new Uint8Array([2]),
+        contentType: "image/jpeg",
+      });
+      await s.put({
+        key: "story-audio/c",
+        bytes: new Uint8Array([3]),
+        contentType: "audio/webm",
+      });
+      const listed = await s.list({ prefix: "family-photos/" });
+      expect(listed.map((o) => o.key).sort()).toEqual([
+        "family-photos/a",
+        "family-photos/b",
+      ]);
+      for (const o of listed) expect(o.lastModified).toBeInstanceOf(Date);
+    });
+
+    it("list returns an empty array when nothing matches the prefix", async () => {
+      const s = make();
+      await s.put({
+        key: "family-photos/a",
+        bytes: new Uint8Array([1]),
+        contentType: "image/jpeg",
+      });
+      expect(await s.list({ prefix: "nope/" })).toEqual([]);
+    });
   });
 }
 
@@ -84,3 +121,17 @@ runContract(
 );
 
 // R2MediaStorage is exercised with a mocked S3 client in r2.test.ts.
+
+describe("InMemoryMediaStorage — injected clock (issue #90)", () => {
+  it("records each object's lastModified from the injected clock", async () => {
+    const writtenAt = new Date("2026-01-01T00:00:00Z");
+    const s = new InMemoryMediaStorage({ now: () => writtenAt });
+    await s.put({
+      key: "family-photos/old",
+      bytes: new Uint8Array([1]),
+      contentType: "image/jpeg",
+    });
+    const [o] = await s.list({ prefix: "family-photos/" });
+    expect(o!.lastModified).toEqual(writtenAt);
+  });
+});

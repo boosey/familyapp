@@ -38,13 +38,14 @@ const ALLOWLIST = new Set<string>([
  * The pipeline orchestrator needs a system-actor read of story+canonical-recording metadata to
  * do its job. That helper (`getStoryAndRecordingForPipeline`) lives in `story-repository.ts`
  * (already audited above) and is re-exported only via the `@chronicle/core/pipeline` subpath.
- * This second guard pins that the subpath is used by exactly one file — preventing any future
- * `apps/web` route from importing the same helper and silently bypassing the authorization
- * function. Same exact-membership canary discipline as the content-tables allowlist.
+ * This second guard pins the EXACT set of files that may import that subpath — preventing any
+ * future `apps/web` route from importing the same helpers and silently bypassing the
+ * authorization function. Same exact-membership canary discipline as the content-tables allowlist.
  */
 const PIPELINE_HELPER_ALLOWLIST = new Set<string>([
   "packages/pipeline/src/orchestrator.ts",
   "packages/pipeline/src/multi-take.ts",
+  "packages/pipeline/src/reap-orphaned-photos.ts", // the #90 reaper's referenced-keys read
 ]);
 
 /**
@@ -151,6 +152,7 @@ describe("single front door (architecture guard)", () => {
     expect([...PIPELINE_HELPER_ALLOWLIST].sort()).toEqual([
       "packages/pipeline/src/multi-take.ts",
       "packages/pipeline/src/orchestrator.ts",
+      "packages/pipeline/src/reap-orphaned-photos.ts",
     ]);
   });
 

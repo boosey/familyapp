@@ -103,6 +103,7 @@ describe("ingestIntakeRecording", () => {
         headers: { "Content-Type": contentType },
       }),
       delete: async () => {},
+      list: async () => [],
     };
 
     await expect(

@@ -304,3 +304,55 @@ describe("canonicalJson — key-sort invariant", () => {
     expect(a).toBe('{"outer":{"a":1,"b":2},"z":9}');
   });
 });
+
+// issue #90 — scheduled (cron) functions. The JobQueue contract is event-shaped; a cron trigger is
+// an Inngest-only capability, so it lives on the adapter as `registerCron` and its function rides
+// the same `functions` snapshot the serve route mounts.
+describe("createInngestJobQueue — registerCron", () => {
+  it("creates a cron-triggered function with the chronicle- prefixed id", () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.registerCron("reap-orphaned-photos", "23 * * * *", async () => ({ reaped: 0 }));
+
+    expect(createFunction).toHaveBeenCalledTimes(1);
+    const [opts, trigger] = createFunction.mock.calls[0]! as unknown as [
+      { id: string },
+      { cron: string },
+    ];
+    expect(opts.id).toBe("chronicle-reap-orphaned-photos");
+    expect(trigger).toEqual({ cron: "23 * * * *" });
+    expect(q.functions).toHaveLength(1);
+  });
+
+  it("the cron handler's return value is the function's run output (observability)", async () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.registerCron("reap-orphaned-photos", "23 * * * *", async () => ({
+      scanned: 5,
+      reaped: 2,
+      failed: 0,
+    }));
+
+    const handler = createFunction.mock.calls[0]![2] as () => Promise<unknown>;
+    await expect(handler()).resolves.toEqual({ scanned: 5, reaped: 2, failed: 0 });
+  });
+
+  it("cron functions coexist with event registrations in the functions snapshot", () => {
+    const { client } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.register("transcribe", async () => {});
+    q.registerCron("reap-orphaned-photos", "23 * * * *", async () => {});
+    expect(q.functions).toHaveLength(2);
+  });
+
+  it("re-registering the same cron name REPLACES — never two functions with one id", () => {
+    const { client, createFunction } = stubClient();
+    const q = createInngestJobQueue({ client });
+    q.registerCron("reap-orphaned-photos", "23 * * * *", async () => {});
+    q.registerCron("reap-orphaned-photos", "41 * * * *", async () => {});
+    // Inngest rejects a serve sync carrying duplicate function ids — taking down EVERY function,
+    // not just the cron — so the adapter must dedupe by name exactly like event register does.
+    expect(createFunction).toHaveBeenCalledTimes(2);
+    expect(q.functions).toHaveLength(1);
+  });
+});

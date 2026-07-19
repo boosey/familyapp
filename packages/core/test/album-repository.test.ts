@@ -20,6 +20,7 @@ import {
   softDeleteAlbumPhoto,
   type AuthContext,
 } from "../src/index";
+import { listAlbumPhotoStorageKeys } from "../src/pipeline";
 import {
   addMembership,
   forceEndMembership,
@@ -720,5 +721,35 @@ describe("getAlbumPhotoForViewer (bytes-route front door)", () => {
     const forOwner = await getAlbumPhotoForViewer(db, account(contributor.id), photo.id);
     expect(forOwner?.storageKey).toBe("family-photos/bytes");
     expect(await getAlbumPhotoForViewer(db, account(stranger.id), photo.id)).toBeNull();
+  });
+});
+
+// issue #90 — the orphaned-object reaper's referenced-keys read. It must see EVERY storage key,
+// soft-deleted rows included: their bytes are deliberately retained today, so they still count as
+// references (reaping them would destroy bytes the product still intends to keep).
+describe("listAlbumPhotoStorageKeys (reaper system-actor read)", () => {
+  it("returns every storage key, INCLUDING soft-deleted rows", async () => {
+    const contributor = await makePerson(db, "Rosa");
+    const fam = await makeFamilyWithMember("Esposito", contributor.id);
+    const softDeleted = await createAlbumPhoto(db, {
+      contributorPersonId: contributor.id,
+      familyIds: [fam.id],
+      source: "upload",
+      storageKey: "family-photos/deleted",
+    });
+    await createAlbumPhoto(db, {
+      contributorPersonId: contributor.id,
+      familyIds: [fam.id],
+      source: "upload",
+      storageKey: "family-photos/live",
+    });
+    await softDelete(softDeleted.id);
+
+    const keys = await listAlbumPhotoStorageKeys(db);
+    expect(keys.sort()).toEqual(["family-photos/deleted", "family-photos/live"]);
+  });
+
+  it("returns an empty array when the album is empty", async () => {
+    expect(await listAlbumPhotoStorageKeys(db)).toEqual([]);
   });
 });

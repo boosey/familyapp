@@ -38,13 +38,11 @@ import {
 // planted `?marker=` family is the definitive isolation fingerprint, and a raw-SQL bypass whose
 // result shape differs between PGlite and the Neon driver is not worth the fragility.)
 import { accounts, families } from "@chronicle/db/schema";
+import { ALBUM_PHOTO_KEY_PREFIX } from "@chronicle/storage";
 import { getRuntime } from "@/lib/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** The album keyspace the bytes route serves from — mirrors ALBUM_PHOTO_KEY_PREFIX in album/actions. */
-const ALBUM_PHOTO_KEY_PREFIX = "family-photos/";
 
 /** A distinct solid color per demo photo so the seeded tiles are visually distinguishable. */
 const DEMO_COLORS: ReadonlyArray<readonly [number, number, number]> = [

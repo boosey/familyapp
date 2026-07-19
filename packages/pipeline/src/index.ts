@@ -36,6 +36,13 @@ export {
 export { InProcessJobQueue } from "./job-queue";
 
 export {
+  reapOrphanedPhotos,
+  REAP_MIN_AGE_MS,
+  type ReapOrphanedPhotosDeps,
+  type ReapOrphanedPhotosResult,
+} from "./reap-orphaned-photos";
+
+export {
   ScriptedTranscriber,
   ScriptedLanguageModel,
   ScriptedPhotoUnderstanding,
