@@ -7,7 +7,7 @@
  * Follow-up (Phase 2+): derive this list by scanning `var(--…)` usage across the src tree. */
 export const REQUIRED_SKIN_TOKENS = [
   "--surface-page","--surface-card","--surface-sunken",
-  "--text-body","--text-muted","--text-meta",
+  "--text-body","--text-muted","--text-meta","--text-danger",
   "--accent","--accent-strong","--accent-soft","--accent-on",
   "--support","--support-soft","--border","--border-strong","--focus-ring",
   "--shadow-sm","--shadow-card","--shadow-lift",

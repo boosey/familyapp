@@ -743,7 +743,7 @@ const connectLink: React.CSSProperties = {
 const modalOverlay: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0, 0, 0, 0.4)",
+  background: "var(--overlay-scrim)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -755,7 +755,7 @@ const modalCard: React.CSSProperties = {
   background: "var(--surface-card)",
   borderRadius: "var(--radius-lg, 12px)",
   border: "1px solid var(--border)",
-  boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+  boxShadow: "var(--shadow-lift)",
   padding: 24,
   width: "100%",
   maxWidth: 520,

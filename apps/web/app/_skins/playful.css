@@ -37,6 +37,11 @@
   /* lines / focus */
   --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #D85F39;
 
+  /* Error/danger ink — a clear tomato red, deeper & more saturated than the coral --accent (#EF7A54)
+   * so error text never blurs into the brand accent, yet still AA on the bright playful surfaces
+   * (guarded in _skins/contrast.test.ts). */
+  --text-danger: #C4362B;
+
   /* shape — rounder, chunkier */
   --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 26px; --radius-pill: 999px;
   --border-width: 2px;

@@ -362,7 +362,7 @@ export function StoryDetailClient({
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0, 0, 0, 0.4)",
+            background: "var(--overlay-scrim)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -379,7 +379,7 @@ export function StoryDetailClient({
               maxWidth: 400,
               display: "grid",
               gap: 16,
-              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+              boxShadow: "var(--shadow-lift)",
               border: "1px solid var(--border)",
             }}
           >
