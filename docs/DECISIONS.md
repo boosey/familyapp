@@ -708,3 +708,27 @@ Decided 2026-07-17. Spec: `docs/superpowers/specs/2026-07-17-invite-delivery-ema
     for this iteration as added complexity (key management for a payload-level envelope) not
     justified yet; noted here so it's a conscious, revisitable deferral rather than an
     overlooked gap.
+
+## Family-tree cards stay plain — no Playful decorative signature (issue #223, 2026-07-19)
+
+Decided 2026-07-19 by the owner after reviewing rendered options (interactive specimen of Plain /
+Restrained / Full-scrapbook treatments in the real Playful palette). Split from #210; sibling
+onboarding decision is #222; folds into the exclusion review #206.
+
+- **The tree cards (`hub/tree/person-node.tsx`, `hub/tree/person-details.tsx`) keep their
+  token-driven-but-flat state as the intended end state. No tape, tilt, sticker chips, highlighter,
+  or shadow-shelf.** This is a deliberate design decision, NOT a missed Phase-2 migration. The 2026-07-19
+  playful-skin audit correctly flagged them as taste-sensitive; the owner's call is that on this surface
+  **readability wins over decorative warmth.**
+  - The tree is a dense, information-first surface: every card is a *person* (many deceased, shown as
+    `1924–2009`), and the cards are wired together by a descent-connector grid that carries meaning.
+  - **Tilt** rotates cards off their connector lines — it fights the grid rather than decorating it.
+  - **Tape** lands on the card's top edge exactly where the sex bar already lives (a collision).
+  - Applying the StoryCard "scrapbook" energy to memorial cards risked reading flippant.
+  - The cards remain fully token-driven, so they still reskin with the active skin; they simply carry
+    no Phase-2 *decorative* signature. `data-reduce-motion` / `data-tone="solemn"` suppression is moot
+    because there is nothing to suppress.
+- **Rejected alternative — a restrained subset** (sticker relation chips + focus shadow-shelf +
+  highlighter, no tilt/tape). Genuinely available and lower-risk, but the owner judged even the muted
+  set less readable than plain on this surface. Recorded so a future audit doesn't re-litigate it as a
+  gap: it was offered, rendered, and declined.
