@@ -58,6 +58,15 @@ const BODY_TEXT_PAIRS = [
   ["--text-body", "--highlighter"],
 ] as const;
 
+// Error/validation text (--text-danger) MUST meet AA on both card and page surfaces on every skin.
+// This is the regression guard for the bug where --text-danger was undefined and a hardcoded #b00
+// fallback always rendered (off-palette, non-reskinning). Defining the token AND holding it to AA
+// here means the dull-red fallback can never silently come back.
+const DANGER_TEXT_PAIRS = [
+  ["--text-danger", "--surface-card"],
+  ["--text-danger", "--surface-page"],
+] as const;
+
 // Heirloom is the AA-safe skin; keep its accent pairs held to AA (its coral is the darker terracotta).
 const HEIRLOOM_ACCENT_PAIRS = [
   ["--accent-on", "--accent-strong"],
@@ -94,6 +103,9 @@ describe("skin contrast", () => {
     });
     it(`${name}: solemn-tone fallback text stays legible (AA)`, () => {
       for (const [fg, bg] of SOLEMN_FALLBACK_PAIRS) assertAA(css, fg, bg);
+    });
+    it(`${name}: danger/error text meets AA`, () => {
+      for (const [fg, bg] of DANGER_TEXT_PAIRS) assertAA(css, fg, bg);
     });
   }
 

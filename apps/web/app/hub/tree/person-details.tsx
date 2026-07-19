@@ -487,7 +487,7 @@ function PersonEditForm({
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "0.75rem",
-            color: "var(--danger, #b3261e)",
+            color: "var(--text-danger)",
             margin: 0,
           }}
         >
