@@ -63,7 +63,7 @@ it("honors initialSection=photos and renders photo tiles from the audited byte r
   renderShell("photos");
   expect(screen.getByTestId("person-section-photos")).toBeTruthy();
   const img = screen.getByRole("img") as HTMLImageElement;
-  expect(img.getAttribute("src")).toBe("/api/album-photo/ph1");
+  expect(img.getAttribute("src")).toBe("/api/album-photo/ph1?variant=thumb");
   expect(img.getAttribute("alt")).toBe("On the porch");
   expect(screen.queryByTestId("person-section-stories")).toBeNull();
 });

@@ -16,7 +16,9 @@
  * Column view is uniform and passes no layout (defaults to `top`).
  *
  * Same data wiring throughout: cover + non-cover thumbnails via the audited /api/album-photo/[photoId]
- * byte route, `isNew` badge, content + family tags. All styling lives in StoryCard.module.css
+ * byte route — the downscaled `?variant=thumb` everywhere EXCEPT the masonry `top` cover, which renders
+ * as a full-width hero and keeps the original bytes. `isNew` badge, content + family tags. All styling
+ * lives in StoryCard.module.css
  * (token-driven). Signatures are skin-scoped via `:global` and suppressed under reduce-motion / solemn.
  * See apps/web/app/_skins/CSS-MODULES.md.
  */
@@ -26,9 +28,8 @@ import { hub, common } from "@/app/_copy";
 import type { StoryItem } from "./story-browse-types";
 import type { StoryLayout } from "./story-layout";
 import { initials } from "./story-browse-helpers";
+import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import styles from "./StoryCard.module.css";
-
-const PHOTO_SRC = (id: string) => `/api/album-photo/${id}`;
 
 export function StoryCard({
   item,
@@ -126,7 +127,7 @@ export function StoryCard({
             // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
             <img
               key={pid}
-              src={PHOTO_SRC(pid)}
+              src={albumPhotoSrc(pid, { thumb: true })}
               alt=""
               data-testid="card-photo-thumb"
               className={styles.thumb}
@@ -150,7 +151,7 @@ export function StoryCard({
       {effectiveLayout === "wrap" && item.coverPhotoId ? (
         <div className={styles.body}>
           {/* eslint-disable-next-line @next/next/no-img-element -- audited auth byte route */}
-          <img src={PHOTO_SRC(item.coverPhotoId)} alt="" className={styles.wrapPhoto} loading="lazy" />
+          <img src={albumPhotoSrc(item.coverPhotoId, { thumb: true })} alt="" className={styles.wrapPhoto} loading="lazy" />
           {bodyInner}
         </div>
       ) : null}
@@ -163,7 +164,7 @@ export function StoryCard({
               // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route
               <img
                 key={pid}
-                src={PHOTO_SRC(pid)}
+                src={albumPhotoSrc(pid, { thumb: true })}
                 alt=""
                 data-testid="card-photo-thumb"
                 className={[styles.collageCell, i === 0 ? styles.collageTall : null].filter(Boolean).join(" ")}
@@ -176,12 +177,19 @@ export function StoryCard({
       ) : null}
 
       {/* TOP (default) and LEFT: the cover sits outside the body — above it in `top` (full width), or
-          down the left side in `left`. Text-only renders no photo at all. */}
+          down the left side in `left`. Text-only renders no photo at all. The masonry `top` cover is
+          the feed's one hero image (full card width, up to 320px tall) and keeps full-resolution
+          bytes; the column view's 120px cover and the narrow `left` cover use the thumbnail variant. */}
       {(effectiveLayout === "top" || effectiveLayout === "left") && item.coverPhotoId ? (
         <span className={styles.photoWrap}>
           {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth
               route (/api/album-photo/[photoId]), not a static asset; next/image would proxy/optimize it. */}
-          <img src={PHOTO_SRC(item.coverPhotoId)} alt="" className={styles.cover} loading="lazy" />
+          <img
+            src={albumPhotoSrc(item.coverPhotoId, { thumb: !(masonry && effectiveLayout === "top") })}
+            alt=""
+            className={styles.cover}
+            loading="lazy"
+          />
         </span>
       ) : null}
 

@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { getRuntime } from "@/lib/runtime";
 import { getAskForNarrator } from "@/lib/answer-data";
 import { hub } from "@/app/_copy";
+import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import { StoryComposer } from "../../StoryComposer";
 import type { DraftInfo } from "../../StoryComposer";
 
@@ -206,7 +207,7 @@ export default async function AnswerPage({
                 <li key={photoId} style={{ margin: 0, width: "100%" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
                   <img
-                    src={`/api/album-photo/${photoId}`}
+                    src={albumPhotoSrc(photoId, { thumb: subjectPhotoIds.length > 1 })}
                     alt={hub.album.photoAlt(null)}
                     style={{
                       width: "100%",

@@ -15,6 +15,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
+import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import hubTabStyles from "@/app/hub/HubTabs.module.css";
 
 export type PersonSection = "stories" | "photos" | "mentions";
@@ -187,7 +188,7 @@ function PhotoGrid({ items, testId }: { items: PersonPhotoCard[]; testId: string
       {items.map((p) => (
         <li key={p.id}>
           <img
-            src={`/api/album-photo/${p.id}`}
+            src={albumPhotoSrc(p.id, { thumb: true })}
             alt={hub.personPage.photoAlt(p.caption)}
             style={{
               width: "100%",

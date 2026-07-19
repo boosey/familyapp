@@ -11,6 +11,7 @@ import { StoryReadBody } from "./StoryReadBody";
 import { StoryEditor } from "./StoryEditor";
 import { FamilyChoiceChips } from "../../FamilyChoiceChips";
 import { hub } from "@/app/_copy";
+import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import type { FavoriteState, LikeState } from "@chronicle/core";
 import type { TagSuggestions } from "@/app/hub/tag-input-types";
 
@@ -466,7 +467,7 @@ export function StoryDetailClient({
             // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
             <img
               key={img.id}
-              src={`/api/album-photo/${img.familyPhotoId}`}
+              src={albumPhotoSrc(img.familyPhotoId, { thumb: true })}
               alt={hub.storyImages.galleryAlt(img.caption)}
               style={{
                 width: 96,
