@@ -11,10 +11,11 @@
  * Mocks next/navigation, direct-upload, the google-photos-actions module, and prepare-photo.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AlbumBoard } from "@/app/hub/album/AlbumBoard";
 import { hub } from "@/app/_copy";
 import { IMPORT_POOL_CONCURRENCY } from "@/app/hub/album/import-progress";
+import toolbarStyles from "@/app/hub/HubToolbar.module.css";
 
 const refresh = vi.fn();
 const replace = vi.fn();
@@ -106,6 +107,13 @@ function renderBoard(props?: Partial<React.ComponentProps<typeof AlbumBoard>>) {
   );
 }
 
+/** The rendered HubToolbar rows (in order) — the shared toolbarRows(container) pattern (#190). */
+function toolbarRows(container: HTMLElement): HTMLElement[] {
+  const toolbar = container.querySelector(`.${toolbarStyles.toolbar}`) as HTMLElement | null;
+  if (!toolbar) return [];
+  return Array.from(toolbar.querySelectorAll(`.${toolbarStyles.row}`)) as HTMLElement[];
+}
+
 function chooseFiles(names: string[]) {
   const fileInput = screen.getByLabelText(/add a photo/i) as HTMLInputElement;
   fireEvent.change(fileInput, { target: { files: names.map(makeFile) } });
@@ -131,6 +139,26 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+// The controls hoist: the board path (the live, flag-ON path) must compose the SAME two-row toolbar as
+// the flag-off path — the "Add Photos ▾" affordance on the SAME row as the When/Search filters (R1),
+// not a separate block above/outside the toolbar. This is the regression the whole change fixes.
+describe("AlbumBoard controls hoist (Add Photos shares the When/Search row)", () => {
+  const withOnePhoto = { photos: [{ id: "p1", caption: null, canManage: true }] };
+
+  it("puts the Add Photos ▾ trigger on the SAME toolbar row as the When filter (R1)", () => {
+    const { container } = renderBoard(withOnePhoto);
+    const rows = toolbarRows(container);
+    // Strictly two rows.
+    expect(rows.length).toBe(2);
+    const r1 = rows[0]!;
+    // R1 hosts BOTH the When/period filter AND the Add Photos affordance.
+    const when = within(r1).getByRole("combobox", { name: hub.album.filterPeriodLabel });
+    const add = within(r1).getByRole("button", { name: hub.album.addPhotosMenu });
+    expect(when).toBeTruthy();
+    expect(add).toBeTruthy();
+  });
+});
 
 describe("AlbumBoard file upload (exact-N per-item pool)", () => {
   it("choosing K files creates exactly K placeholder tiles and calls the per-item action K times", async () => {

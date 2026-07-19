@@ -143,27 +143,25 @@ describe("AlbumGrid hover mini-toolbar (item 2)", () => {
   });
 });
 
-describe("AlbumGrid view selector + size slider (items 7 + 8)", () => {
-  it("renders the view selector radiogroup with Grid / Masonry / List", () => {
-    render(<AlbumGrid photos={[MANAGEABLE]} />);
-    const group = screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria });
-    expect(within(group).getByRole("radio", { name: hub.album.viewGrid })).toBeTruthy();
-    expect(within(group).getByRole("radio", { name: hub.album.viewMasonry })).toBeTruthy();
-    expect(within(group).getByRole("radio", { name: hub.album.viewList })).toBeTruthy();
+// The view/size CONTROLS now live in AlbumControls (see album-controls.test.tsx). AlbumGrid is the
+// body — it renders whatever `view`/`thumbPx` it is handed. These pin the controlled `view` prop → the
+// right layout container / table.
+describe("AlbumGrid renders the controlled view (body only)", () => {
+  it("defaults to Masonry when rendered uncontrolled", () => {
+    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
+    expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
+    expect(container.querySelector('ul[data-view="grid"]')).toBeNull();
   });
 
-  it("renders the thumbnail-size slider with its aria-label", () => {
-    render(<AlbumGrid photos={[MANAGEABLE]} />);
-    const slider = screen.getByRole("slider", { name: hub.album.thumbnailSizeLabel });
-    expect(slider).toBeTruthy();
-    expect((slider as HTMLInputElement).type).toBe("range");
+  it("renders the CSS grid container for view='grid'", () => {
+    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} view="grid" />);
+    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
+    expect(container.querySelector('ul[data-view="masonry"]')).toBeNull();
   });
 
-  it("switching to List renders a table with the five column headers", () => {
-    render(<AlbumGrid photos={[MANAGEABLE, READ_ONLY]} />);
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+  it("renders the List table (with the five column headers) for view='list'", () => {
+    render(<AlbumGrid photos={[MANAGEABLE, READ_ONLY]} view="list" />);
     const table = screen.getByRole("table");
-    expect(table).toBeTruthy();
     for (const col of [
       hub.album.listColPhoto,
       hub.album.listColCaption,
@@ -173,58 +171,6 @@ describe("AlbumGrid view selector + size slider (items 7 + 8)", () => {
     ]) {
       expect(within(table).getByRole("columnheader", { name: col })).toBeTruthy();
     }
-  });
-
-  it("switching to Grid changes the layout container (data-view=grid, no masonry)", () => {
-    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
-    // Default is now Masonry.
-    expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
-    expect(container.querySelector('ul[data-view="grid"]')).toBeNull();
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewGrid }));
-    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
-    expect(container.querySelector('ul[data-view="masonry"]')).toBeNull();
-  });
-
-  it("defaults to Masonry for a fresh viewer with no stored preference", () => {
-    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
-    expect(
-      screen.getByRole("radio", { name: hub.album.viewMasonry }).getAttribute("aria-checked"),
-    ).toBe("true");
-    expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
-  });
-
-  it("a stored album:view of 'grid' still wins over the Masonry default", () => {
-    window.localStorage.setItem("album:view", "grid");
-    const { container } = render(<AlbumGrid photos={[MANAGEABLE]} />);
-    expect(
-      screen.getByRole("radio", { name: hub.album.viewGrid }).getAttribute("aria-checked"),
-    ).toBe("true");
-    expect(container.querySelector('ul[data-view="grid"]')).toBeTruthy();
-  });
-
-  it("renders the passed familyChips inside the consolidated filter/control row", () => {
-    render(
-      <AlbumGrid
-        photos={[MANAGEABLE]}
-        familyChips={<div data-testid="fam-chips">chips</div>}
-      />,
-    );
-    const group = screen.getByRole("group", { name: hub.album.filterBarAria });
-    expect(within(group).getByTestId("fam-chips")).toBeTruthy();
-  });
-
-  it("persists the chosen view to localStorage and restores it on remount", () => {
-    const { unmount } = render(<AlbumGrid photos={[MANAGEABLE]} />);
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
-    expect(window.localStorage.getItem("album:view")).toBe("list");
-    unmount();
-    cleanup();
-    render(<AlbumGrid photos={[MANAGEABLE]} />);
-    // Restored: List is checked and a table renders.
-    expect(screen.getByRole("radio", { name: hub.album.viewList }).getAttribute("aria-checked")).toBe(
-      "true",
-    );
-    expect(screen.getByRole("table")).toBeTruthy();
   });
 });
 
@@ -301,115 +247,6 @@ const OLD = {
   capturedAt: `${THIS_YEAR - 20}-06-01T00:00:00.000Z`,
 };
 const ENRICHED = [ADA, BABBAGE, OLD];
-
-/** Count the rendered photo tiles by their "View …" trigger buttons (Grid view, image trigger). */
-function renderedPhotoIds(): string[] {
-  // Each tile's image trigger + toolbar Edit share the "View …" label; scope to alt text is simpler.
-  return screen
-    .queryAllByRole("img")
-    .map((img) => (img as HTMLImageElement).getAttribute("src") ?? "")
-    .filter((src) => src.startsWith("/api/album-photo/"))
-    // Grid tiles request the thumbnail variant (issue #139) — strip the `?variant=thumb` query to
-    // recover the bare photo id this helper asserts on.
-    .map((src) => src.replace("/api/album-photo/", "").replace(/\?.*$/, ""));
-}
-
-describe("AlbumGrid filtering (item 9)", () => {
-  it("filtering by a person narrows the rendered set; clearing restores", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
-
-    // Toggle the Ada chip in the People filter — only photos with Ada (subject OR appears-in) remain.
-    const people = screen.getByRole("group", { name: hub.album.filterPeopleLabel });
-    fireEvent.click(within(people).getByRole("button", { name: "Ada", pressed: false }));
-    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage"]);
-
-    // Clear restores all three.
-    fireEvent.click(screen.getByRole("button", { name: hub.album.filterClear }));
-    expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
-  });
-
-  it("filtering by a place narrows to photos in that place", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    const places = screen.getByRole("group", { name: hub.album.filterPlacesLabel });
-    fireEvent.click(within(places).getByRole("button", { name: "Paris" }));
-    expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
-  });
-
-  it("filtering by period (This year) narrows to this-year captures", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    const period = screen.getByRole("combobox", { name: hub.album.filterPeriodLabel });
-    fireEvent.change(period, { target: { value: "thisYear" } });
-    expect(renderedPhotoIds().sort()).toEqual(["ada"]);
-  });
-
-  it("filtering by caption text narrows to matching captions/tags (case-insensitive)", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    const text = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
-    fireEvent.change(text, { target: { value: "engine" } });
-    expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
-  });
-
-  it("shows a no-matches note when the filter excludes every photo", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    const text = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
-    fireEvent.change(text, { target: { value: "zzzznomatch" } });
-    expect(screen.getByText(hub.album.filterNoMatches)).toBeTruthy();
-    expect(renderedPhotoIds()).toEqual([]);
-  });
-
-  // #143 — the "Add Photos" affordance rides the control row via `addSlot`.
-  it("renders the addSlot (Add Photos) on the control row", () => {
-    render(<AlbumGrid photos={ENRICHED} addSlot={<button type="button">Add Photos</button>} />);
-    expect(screen.getByRole("button", { name: "Add Photos" })).toBeTruthy();
-  });
-
-  // #143 — the visible When/Search labels are dropped; the controls keep their accessible names (via
-  // aria-label) and in-control hints (the select's default option + the input's placeholder).
-  it("drops the visible When/Search labels but keeps accessible names + in-control hints", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    const period = screen.getByRole("combobox", { name: hub.album.filterPeriodLabel });
-    const search = screen.getByRole("searchbox", { name: hub.album.filterTextLabel });
-    // In-control hints carry the purpose without a visible label.
-    expect(search.getAttribute("placeholder")).toBe(hub.album.filterTextPlaceholder);
-    expect(within(period).getByRole("option", { name: hub.album.filterPeriodAll })).toBeTruthy();
-    // The label STRINGS never render as visible text (they live only as aria-labels now).
-    expect(screen.queryByText(hub.album.filterPeriodLabel)).toBeNull();
-    expect(screen.queryByText(hub.album.filterTextLabel)).toBeNull();
-  });
-});
-
-// #191 — the album's controls are laid out through the shared HubToolbar: R1 = [When·Search … Add],
-// R2 = [Family selector … size slider + view layout]. These assert the pieces land, and that the
-// R2-left slot collapses when there are no family chips (HubToolbar's empty-row rule at the call site).
-describe("AlbumGrid HubToolbar layout (#191)", () => {
-  it("renders the When/Search filters, the view controls, and (when passed) Add + family chips", () => {
-    render(
-      <AlbumGrid
-        photos={ENRICHED}
-        familyChips={<div data-testid="fam-chips">chips</div>}
-        addSlot={<button type="button">Add Photos</button>}
-      />,
-    );
-    // R1-left: the filter cluster (period select + caption/tag search).
-    expect(screen.getByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeTruthy();
-    expect(screen.getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
-    // R1-right: the Add Photos affordance.
-    expect(screen.getByRole("button", { name: "Add Photos" })).toBeTruthy();
-    // R2-left: the shared family selector chips.
-    expect(screen.getByTestId("fam-chips")).toBeTruthy();
-    // R2-right: the view/layout controls (size slider + view selector).
-    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
-    expect(screen.getByRole("slider", { name: hub.album.thumbnailSizeLabel })).toBeTruthy();
-  });
-
-  it("omits the family chips entirely when none are passed (no reserved R2-left slot)", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    // No family chips passed ⇒ the test marker is absent; the view controls still render (R2-right).
-    expect(screen.queryByTestId("fam-chips")).toBeNull();
-    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
-  });
-});
 
 describe("AlbumGrid multi-select + bulk actions (item 6)", () => {
   // #191 — the standing "Select" toggle is GONE; selection mode is entered by long-pressing a tile.
@@ -607,8 +444,7 @@ describe("AlbumGrid long-press + Esc entry (item 3)", () => {
 
 describe("AlbumListView columns (item 7)", () => {
   it("shows real uploader / families / tags for an enriched photo", () => {
-    render(<AlbumGrid photos={[BABBAGE]} />);
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+    render(<AlbumGrid photos={[BABBAGE]} view="list" />);
     const table = screen.getByRole("table");
     const rows = within(table).getAllByRole("row");
     // Header + one body row.
@@ -627,8 +463,7 @@ describe("AlbumListView columns (item 7)", () => {
   it("long-pressing a List row thumbnail enters selection mode with a checkbox column", () => {
     vi.useFakeTimers();
     try {
-      render(<AlbumGrid photos={[BABBAGE]} />);
-      fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+      render(<AlbumGrid photos={[BABBAGE]} view="list" />);
       expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
       const row = screen.getByRole("button", { name: hub.album.viewPhoto("Charles by the engine") });
       fireEvent.pointerDown(row);
@@ -648,8 +483,7 @@ describe("AlbumListView columns (item 7)", () => {
   it("suppresses the per-row action toolbar in the List view while selecting", () => {
     vi.useFakeTimers();
     try {
-      render(<AlbumGrid photos={[BABBAGE]} />);
-      fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+      render(<AlbumGrid photos={[BABBAGE]} view="list" />);
       const charlesActions = hub.album.photoActionsAria("Charles by the engine");
       expect(screen.getAllByRole("group", { name: charlesActions }).length).toBeGreaterThanOrEqual(1);
       const row = screen.getByRole("button", { name: hub.album.viewPhoto("Charles by the engine") });

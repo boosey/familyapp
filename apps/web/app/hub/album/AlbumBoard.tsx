@@ -22,7 +22,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlbumUploader, type AlbumFamilyOption } from "./AlbumUploader";
-import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
+import { AlbumControls } from "./AlbumControls";
+import { type AlbumGridPhoto } from "./AlbumGrid";
 import {
   importOneGooglePhotoAction,
   listGooglePhotosImportAction,
@@ -76,12 +77,10 @@ export function AlbumBoard(props: {
   googlePhotosOauthConnected: boolean;
   googlePhotosOauthError: string | null;
   photos: AlbumGridPhoto[];
-  /** The shared browse Family filter chips (ADR-0021), forwarded into the grid's control row (inline,
-   *  no bottom margin — it bottom-aligns with the row's sibling controls). */
+  /** The shared browse Family filter chips (ADR-0021), forwarded into the toolbar's R2-left slot
+   *  (inline, no bottom margin — it aligns with the row's sibling controls). AlbumControls hosts them on
+   *  both the populated and empty paths, so no separate standalone variant is needed. */
   familyChips?: React.ReactNode;
-  /** The STANDALONE variant of the same chips (its own bottom margin) for the empty state, where there
-   *  is no grid control row to host them and the inline (margin-less) variant would crowd the note. */
-  familyChipsStandalone?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -326,23 +325,31 @@ export function AlbumBoard(props: {
     .map((e) => ({ tempId: e.tempId, status: e.status, photoId: e.photoId }));
   const importing = entries.some((e) => e.status === "importing");
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <AlbumUploader
-        families={props.families}
-        currentFamilyId={props.currentFamilyId}
-        scope={props.uploaderScope}
-        defaultSelected={props.defaultSelected}
-        showFileUpload={props.showFileUpload}
-        googlePhotosConfigured={props.googlePhotosConfigured}
-        googlePhotosConnected={props.googlePhotosConnected}
-        googlePhotosEmail={props.googlePhotosEmail}
-        googlePhotosOauthConnected={props.googlePhotosOauthConnected}
-        googlePhotosOauthError={props.googlePhotosOauthError}
-        onImportFiles={handleImportFiles}
-        onImportGoogle={(sessionId, familyIds) => void handleImportGoogle(sessionId, familyIds)}
-      />
+  // The delegate-wired uploader — the SAME "Add Photos ▾" control, but in board mode it hands import
+  // EXECUTION to this component (per-item pool + pending tiles) via onImportFiles/onImportGoogle. It
+  // rides the toolbar's R1-right slot (via AlbumControls' addSlot), on the SAME row as the When/Search
+  // filters — the whole point of the controls hoist.
+  const uploader = (
+    <AlbumUploader
+      families={props.families}
+      currentFamilyId={props.currentFamilyId}
+      scope={props.uploaderScope}
+      defaultSelected={props.defaultSelected}
+      showFileUpload={props.showFileUpload}
+      googlePhotosConfigured={props.googlePhotosConfigured}
+      googlePhotosConnected={props.googlePhotosConnected}
+      googlePhotosEmail={props.googlePhotosEmail}
+      googlePhotosOauthConnected={props.googlePhotosOauthConnected}
+      googlePhotosOauthError={props.googlePhotosOauthError}
+      onImportFiles={handleImportFiles}
+      onImportGoogle={(sessionId, familyIds) => void handleImportGoogle(sessionId, familyIds)}
+    />
+  );
 
+  // Board-only status lines (live "X of N", a list-step error, a "nothing imported" note). Rendered by
+  // AlbumControls BELOW the toolbar and above the grid body.
+  const notices = (
+    <>
       {importing ? (
         <p
           role="status"
@@ -388,32 +395,18 @@ export function AlbumBoard(props: {
           {note}
         </p>
       ) : null}
+    </>
+  );
 
-      {props.photos.length > 0 || tiles.length > 0 ? (
-        <AlbumGrid
-          photos={props.photos}
-          pendingTiles={tiles}
-          onRetryTile={retry}
-          familyChips={props.familyChips}
-        />
-      ) : (
-        // Empty album (no photos, no in-flight tiles): there's no AlbumGrid to host the browse Family
-        // chips, so render the STANDALONE variant (its own bottom margin) above the empty note so a
-        // ≥2-family viewer can still toggle — the inline variant would crowd the note with no spacing.
-        <>
-          {props.familyChipsStandalone}
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-meta)",
-              margin: 0,
-            }}
-          >
-            {hub.album.empty}
-          </p>
-        </>
-      )}
-    </div>
+  return (
+    <AlbumControls
+      photos={props.photos}
+      pendingTiles={tiles}
+      onRetryTile={retry}
+      addSlot={uploader}
+      familyChips={props.familyChips}
+      notices={notices}
+      emptyNote={hub.album.empty}
+    />
   );
 }

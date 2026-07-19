@@ -16,18 +16,19 @@
  * Every tile's bytes come from the audited auth route (`/api/album-photo/[photoId]`), which re-checks
  * read authorization on every request. `canManage` only decides whether a control SHOWS, never grants.
  *
- * View + size are persisted to localStorage (SSR-guarded: only read/written inside effects on the
- * client), so the choice survives navigation and reload.
+ * Filter / view / size are CONTROLLED props now: the shared {@link AlbumControls} owns that state (and
+ * the toolbar that drives it) above this body, so both album mount paths compose the same toolbar in
+ * one place. This component is the body — it filters `photos` by the controlled `filter` and renders
+ * the tiles in the controlled `view` at `thumbPx` — plus its own selection / bulk / delete / viewer.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { AlbumPhotoViewer } from "./AlbumPhotoViewer";
 import { PhotoActionBar } from "./PhotoActionBar";
-import { AlbumViewControls, THUMB_MIN, THUMB_MAX, type AlbumView } from "./AlbumViewControls";
+import { DEFAULT_THUMB, type AlbumView } from "./AlbumViewControls";
 import { AlbumListView } from "./AlbumListView";
 import {
-  AlbumFilterBar,
   EMPTY_FILTER,
   isFilterActive,
   type AlbumFilterValue,
@@ -52,19 +53,6 @@ export interface AlbumGridPhoto {
   places?: { id: string; name: string }[];
   /** ISO string of capturedAt ?? createdAt (from the detailed read); undefined ⇒ never matches a period. */
   capturedAt?: string | null;
-}
-
-const VIEW_KEY = "album:view";
-const THUMB_KEY = "album:thumbPx";
-const DEFAULT_THUMB = 140;
-
-function clampThumb(px: number): number {
-  if (!Number.isFinite(px)) return DEFAULT_THUMB;
-  return Math.min(THUMB_MAX, Math.max(THUMB_MIN, Math.round(px)));
-}
-
-function isView(v: string | null): v is AlbumView {
-  return v === "grid" || v === "masonry" || v === "list";
 }
 
 /** All person-facet ids on a photo — subjects ∪ appears-in people. */
@@ -121,22 +109,25 @@ function passesFilter(p: AlbumGridPhoto, f: AlbumFilterValue, now: Date): boolea
 
 export function AlbumGrid({
   photos,
+  filter = EMPTY_FILTER,
+  view = "masonry",
+  thumbPx = DEFAULT_THUMB,
   pendingTiles = [],
   onRetryTile,
-  familyChips,
-  addSlot,
 }: {
   photos: AlbumGridPhoto[];
+  /** The caption/tag/facet/period filter — CONTROLLED by {@link AlbumControls} (the toolbar owner);
+   *  defaults to EMPTY_FILTER so a bare `<AlbumGrid photos>` (tests / uncontrolled) shows everything. */
+  filter?: AlbumFilterValue;
+  /** The layout — CONTROLLED by AlbumControls; defaults to Masonry when rendered uncontrolled. */
+  view?: AlbumView;
+  /** The thumbnail size (px) — CONTROLLED by AlbumControls; defaults to DEFAULT_THUMB uncontrolled. */
+  thumbPx?: number;
   /** ADR-0015 · F2 — in-flight/failed placeholder tiles rendered BEFORE the real photos. Default []
    *  so flag-off callers (which pass only `photos`) are unaffected. */
   pendingTiles?: PendingTile[];
   /** Called with a failed tile's `tempId` when its retry affordance is tapped. */
   onRetryTile?: (tempId: string) => void;
-  /** The shared browse Family filter chips (ADR-0021), consolidated into the one control row. */
-  familyChips?: React.ReactNode;
-  /** The "Add Photos" affordance (#143) — rendered right-justified on the SAME control row as the
-   *  When/Search filters and the view controls. Omit when the caller renders the uploader elsewhere. */
-  addSlot?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -145,45 +136,8 @@ export function AlbumGrid({
   const [openId, setOpenId] = useState<string | null>(null);
   const openPhoto = photos.find((p) => p.id === openId) ?? null;
 
-  // Layout + thumbnail-size state. Start at the SSR-safe defaults (Masonry / 140px) — never touch
-  // localStorage during render — then hydrate the stored choice in a client-only effect below.
-  const [view, setView] = useState<AlbumView>("masonry");
-  const [thumbPx, setThumbPx] = useState<number>(DEFAULT_THUMB);
-
-  // Hydrate persisted choices on mount (client only). Guarded in a try/catch: a locked-down or
-  // unavailable localStorage must never break the album.
-  useEffect(() => {
-    try {
-      const storedView = window.localStorage.getItem(VIEW_KEY);
-      if (isView(storedView)) setView(storedView);
-      const storedThumb = window.localStorage.getItem(THUMB_KEY);
-      if (storedThumb !== null) setThumbPx(clampThumb(Number(storedThumb)));
-    } catch {
-      /* localStorage unavailable — keep defaults. */
-    }
-  }, []);
-
-  function changeView(v: AlbumView) {
-    setView(v);
-    try {
-      window.localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* ignore persistence failure */
-    }
-  }
-  function changeThumb(px: number) {
-    const next = clampThumb(px);
-    setThumbPx(next);
-    try {
-      window.localStorage.setItem(THUMB_KEY, String(next));
-    } catch {
-      /* ignore persistence failure */
-    }
-  }
-
-  // ---- Phase C: filter state (client-side, over `photos`) ---------------------------------------
-  const [filter, setFilter] = useState<AlbumFilterValue>(EMPTY_FILTER);
-  // `now` is captured once per render for the period boundaries — stable within a render pass.
+  // Filtering runs over the CONTROLLED `filter` prop. `now` is captured once per render for the period
+  // boundaries — stable within a render pass.
   const now = new Date();
   const filtered = useMemo(
     () => photos.filter((p) => passesFilter(p, filter, now)),
@@ -191,22 +145,6 @@ export function AlbumGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [photos, filter],
   );
-
-  // Filter-menu options: the UNION of people (subjects ∪ appears-in) and of places across the CURRENT
-  // photos, deduped by id, sorted by name for a stable menu.
-  const peopleOptions = useMemo(() => {
-    const by = new Map<string, string>();
-    for (const p of photos) {
-      for (const s of p.subjects ?? []) by.set(s.id, s.name);
-      for (const pp of p.people ?? []) by.set(pp.id, pp.name);
-    }
-    return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [photos]);
-  const placeOptions = useMemo(() => {
-    const by = new Map<string, string>();
-    for (const p of photos) for (const pl of p.places ?? []) by.set(pl.id, pl.name);
-    return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [photos]);
 
   // ---- Phase C: multi-select state --------------------------------------------------------------
   const [selecting, setSelecting] = useState(false);
@@ -306,26 +244,9 @@ export function AlbumGrid({
 
   return (
     <>
-      {/* Search / filter controls, laid out through the shared HubToolbar (#191). People/Places chips get
-          their own row above; the toolbar's R1 is [When·Search·Clear … Add Photos] and its R2 is
-          [Family selector … size slider + view layout]. The standalone "Select" toggle was removed
-          (#191): multi-select is entered by LONG-PRESSING a photo (see AlbumTile), and Esc cancels it. */}
-      <AlbumFilterBar
-        people={peopleOptions}
-        places={placeOptions}
-        value={filter}
-        onChange={setFilter}
-        familyChips={familyChips}
-        addSlot={addSlot}
-        rightSlot={
-          <AlbumViewControls
-            view={view}
-            onView={changeView}
-            thumbPx={thumbPx}
-            onThumbPx={changeThumb}
-          />
-        }
-      />
+      {/* Body only — the filter/view/size CONTROLS live in AlbumControls above this. The standalone
+          "Select" toggle was removed (#191): multi-select is entered by LONG-PRESSING a photo (see
+          AlbumTile), and Esc cancels it. */}
 
       {/* Sticky bulk action bar — only while in selection mode with ≥1 photo picked. */}
       {selecting && selected.size > 0 ? (
