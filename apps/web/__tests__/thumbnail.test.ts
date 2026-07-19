@@ -89,7 +89,7 @@ describe("warmThumbnail", () => {
     expect(storage.size).toBe(2);
   });
 
-  it("returns null and stores nothing for non-image bytes (never throws)", async () => {
+  it("returns null and stores a 0-byte sentinel for non-image bytes (never throws)", async () => {
     const storage = new InMemoryMediaStorage();
     const key = "family-photos/broken";
     const junk = new Uint8Array([9, 9, 9, 9]);
@@ -97,7 +97,10 @@ describe("warmThumbnail", () => {
 
     const thumb = await warmThumbnail(storage, key, junk);
     expect(thumb).toBeNull();
-    expect(await storage.getBytes(thumbnailStorageKey(key))).toBeNull();
+    // Sentinel (issue #176): the failure is cached so no later request re-runs sharp.
+    const sentinel = await storage.getBytes(thumbnailStorageKey(key));
+    expect(sentinel).not.toBeNull();
+    expect(sentinel!.byteLength).toBe(0);
   });
 
   it("encodes with the declared thumbnail content type", () => {

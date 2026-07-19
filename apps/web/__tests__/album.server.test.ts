@@ -183,8 +183,9 @@ describe("recordAlbumPhotoAction (issue #20 — step 3: record the stored photo)
     expect(album[0]!.storageKey).toBe(key);
     expect(album[0]!.source).toBe("upload");
     expect(await runtimeStorage.getBytes(key)).toEqual(PNG_BYTES);
-    // Exactly one object — the browser PUT (simulated) is the only write.
-    expect(runtimeStorage.size).toBe(1);
+    // The browser PUT (simulated) plus the 0-byte thumbnail-failure sentinel (issue #176 — the
+    // fake PNG bytes are not a decodable image, so warm caches the failure instead of a thumb).
+    expect(runtimeStorage.size).toBe(2);
   });
 
   it("resolves the sole family for a solo contributor with no selection", async () => {
@@ -407,7 +408,9 @@ describe("recordAlbumPhotoAction (issue #20 — step 3: record the stored photo)
     const albumB = await listAlbumPhotos(runtimeDb, account(contributor), famB);
     expect(albumA).toHaveLength(1);
     expect(albumB.map((p) => p.id)).toEqual([albumA[0]!.id]);
-    expect(runtimeStorage.size).toBe(1);
+    // One object, two album placements — plus the thumbnail-failure sentinel (issue #176), since
+    // the fake PNG bytes are not a decodable image.
+    expect(runtimeStorage.size).toBe(2);
   });
 });
 
