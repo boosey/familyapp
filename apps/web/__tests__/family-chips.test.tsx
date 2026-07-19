@@ -10,6 +10,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FamilyChips } from "@/app/hub/FamilyChips";
+import segStyles from "@/app/_kindred/SegmentedControl.module.css";
 
 const push = vi.fn();
 let currentSearch = "";
@@ -111,6 +112,19 @@ describe("FamilyChips", () => {
   it("exposes the group with the family-filter aria label", () => {
     render(<FamilyChips families={FAMILIES} selected="all" />);
     expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
+  });
+
+  // #2/#6: the family selector wears the SAME shared pill look as every other selector — a selected
+  // chip is the raised `.chipOn` pill (single-sourced in SegmentedControl.module.css), never a bespoke
+  // per-chip inline style.
+  it("selected chips wear the shared raised-pill look (.chipOn); unselected wear the bare .chip", () => {
+    render(<FamilyChips families={FAMILIES} selected={["fam-b"]} />);
+    const on = screen.getByRole("button", { name: "Marino" });
+    const off = screen.getByRole("button", { name: "Esposito" });
+    expect(on.className).toContain(segStyles.chip);
+    expect(on.className).toContain(segStyles.chipOn);
+    expect(off.className).toContain(segStyles.chip);
+    expect(off.className).not.toContain(segStyles.chipOn);
   });
 
   // ── Single-select mode (ADR-0021 §Tree, #48): the tree shows exactly ONE family. ──────────────

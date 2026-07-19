@@ -32,6 +32,7 @@ import { relativeShortDate } from "@/lib/relative-time";
 import { HubToolbar } from "../HubToolbar";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { FamilyChips } from "../FamilyChips";
 import { StoryBrowse } from "./StoryBrowse";
 import {
@@ -186,9 +187,7 @@ export function StoriesSurface({
         </Link>
       ) : null}
 
-      <Link href="/hub/tell" className={styles.tellButton}>
-        {hub.stories.tellTitle}
-      </Link>
+      <ActionButton href="/hub/tell">{hub.stories.tellTitle}</ActionButton>
     </div>
   );
 

@@ -148,10 +148,10 @@
   --dur-fade: 0.15s; --dur-settle: 0.28s; --dur-pulse: 2.4s;
 
   /* Sex accent bar + focus badge on tree node cards (ADR-0016 pedigree-nav). FamilySearch palette
-   * (community-sourced): blue = male, red = female. Card color only, never a relation label.
-   * Unknown/null draws no bar; the focus badge falls back to --border-strong for unknown sex. */
-  --sex-male: #436b95;
-  --sex-female: #ba412f;
+   * Soft nursery palette: light blue = male, light pink = female. Card color only, never a relation
+   * label. Unknown/null draws no bar; the focus badge falls back to --border-strong for unknown sex. */
+  --sex-male: #8FBEE8;
+  --sex-female: #F0AEC6;
 }
 
 @keyframes kindred-listening {

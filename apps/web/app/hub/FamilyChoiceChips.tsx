@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties } from "react";
-import { familyChipStyle } from "./family-chip-style";
+import seg from "@/app/_kindred/SegmentedControl.module.css";
 
 /**
  * FamilyChoiceChips — the action-flow family AUDIENCE / PLACEMENT picker (ADR-0021), rendered as the
@@ -59,7 +59,7 @@ export function FamilyChoiceChips({
             type="button"
             aria-pressed={on}
             disabled={disabled}
-            style={familyChipStyle(on, { disabled })}
+            className={on ? `${seg.chip} ${seg.chipOn}` : seg.chip}
             onClick={() => onToggle(f.id)}
           >
             {f.shortName || f.name}

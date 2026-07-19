@@ -36,11 +36,13 @@
   background: var(--surface-sunken);
 }
 
-/* Playful mockup Direction D: active tab is a SOLID coral pill (white ink), not accent-soft. */
+/* The active tab wears the SAME raised, filled look as the primary "Tell a story" ActionButton (#8):
+ * the tell-card fill + card shadow + white ink, so the current tab reads as a solid, lifted pill. */
 .tab[aria-selected="true"] {
-  background: var(--accent);
+  background: var(--tell-card-bg);
   color: var(--accent-on);
   font-weight: 600;
+  box-shadow: var(--shadow-card);
 }
 
 .tab:focus-visible {
