@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoryBrowse } from "@/app/hub/tabs/StoryBrowse";
+import { StoriesSurface } from "@/app/hub/tabs/StoriesSurface";
 import { StoriesTab } from "@/app/hub/tabs/StoriesTab";
 import type { FamilyFilter } from "@/lib/family-filter";
 import type { MemberWithStories } from "@/lib/hub-data";
@@ -62,16 +63,26 @@ const onlyA = makeItem({ id: "s-A", title: "Story A only", families: [famA], era
 const onlyB = makeItem({ id: "s-B", title: "Story B only", families: [famB], eraYear: 1988, summary: "the move" });
 const items = [both, onlyA, onlyB];
 
-/** Render StoryBrowse with an explicit selected-id set (mode is switched via the sub-nav tabs). */
+/**
+ * Render the browse surface with an explicit selected-id set. Driven through StoriesSurface (#190) so
+ * the Feed/Timeline/Search mode pills + the Search field — hoisted into the shared toolbar — are present
+ * to switch/type. Two families → the family chips mount (they need next/navigation, mocked above).
+ */
 function renderBrowse(selectedIds: string[], allSelected: boolean) {
   return render(
-    <StoryBrowse
+    <StoriesSurface
       items={items}
       viewerFamilies={[famA, famB]}
       viewerPersonId="p1"
       viewerName="You"
       selectedIds={selectedIds}
       allSelected={allSelected}
+      activeFamilies={[famA, famB]}
+      chipSelected={allSelected ? "all" : selectedIds}
+      selfDrafts={[]}
+      intakeIncomplete={false}
+      body="browse"
+      emptyCopy=""
     />,
   );
 }
@@ -86,7 +97,8 @@ function shownTitles(): string[] {
 
 function switchMode(mode: "timeline" | "search") {
   const name = mode === "timeline" ? hub.browse.modeTimeline : hub.browse.modeSearch;
-  fireEvent.click(screen.getByRole("tab", { name }));
+  // Mode pills are shared HubSubNav BUTTONS now (#190), not the old bespoke tablist.
+  fireEvent.click(screen.getByRole("button", { name }));
 }
 
 // The Search mode only lists results once a query is typed; type a substring that all three summaries
@@ -107,6 +119,9 @@ describe("StoryBrowse — family tag labels", () => {
         viewerName="You"
         selectedIds={[shortFam.id]}
         allSelected
+        mode="feed"
+        feedView="masonry"
+        query=""
       />,
     );
     expect(screen.getByText("Espositos")).toBeTruthy();
@@ -156,6 +171,9 @@ describe("StoryBrowse — multi-select family narrowing (Feed)", () => {
         viewerName="You"
         selectedIds={[famA.id, famB.id]}
         allSelected={false}
+        mode="feed"
+        feedView="masonry"
+        query=""
       />,
     );
     expect(screen.getByText(hub.browse.feedEmpty(hub.browse.scopeNameAll))).toBeTruthy();

@@ -629,10 +629,9 @@ export const hub = {
     filterClear: "Clear filters",
     // Shown when the active filters exclude every photo (a real album that isn't empty).
     filterNoMatches: "No photos match those filters.",
-    // Phase C — multi-select + bulk actions. A "Select" toggle enters selection mode (checkboxes on
-    // every tile / row); a sticky action bar appears once anything is picked.
-    selectMode: "Select",
-    selectModeDone: "Done",
+    // Phase C — multi-select + bulk actions. Selection mode is entered by LONG-PRESSING a photo (#191
+    // removed the standing "Select" toggle): checkboxes appear on every tile / row and a sticky action
+    // bar appears once anything is picked. Esc — or the bulk bar's Clear — leaves selection mode.
     selectPhotoAria: (caption: string | null) =>
       caption ? `Select “${caption}”` : "Select photo",
     bulkBarAria: "Actions for the selected photos",

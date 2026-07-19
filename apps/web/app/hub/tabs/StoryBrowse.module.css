@@ -7,18 +7,12 @@
  * Playful structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
-/* ── View-options secondary row ─────────────────────────────────────────────────
-   Quieter than the primary hub tabs: right-aligned, smaller pills. Holds the mode control
-   (Feed/Timeline/Search) and, in Feed mode, the Masonry/Column toggle. */
-.viewOptions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 4px 0 18px;
-  flex-wrap: wrap;
-}
-
+/* ── Feed-view selector (Masonry/Column) ────────────────────────────────────────
+   The segmented Masonry/Column control now rides the shared HubToolbar's R2-right slot (#190). The
+   Feed/Timeline/Search MODE toggle moved to the shared HubSubNav pill row in R1 — its old bespoke
+   `.viewOptions` row and tablist pills are retired; `.segmentGroup`/`.modePill` remain only for the
+   Masonry/Column radio group (and the timeline's own widen group). `.searchInput` is reused by the
+   toolbar's hoisted Search field. */
 .segmentGroup {
   display: inline-flex;
   gap: 4px;

@@ -8,6 +8,17 @@
  * docs/design-system/.../HANDOFF-browse-and-family-flows.md.
  */
 
+/**
+ * A self-initiated (ask-less) draft still in review — resumable from the Stories tab's "Finish what
+ * you started" list. `recordedAt` is an ISO string (serialized by the server producer, matching the
+ * answer-drafts serialization) so this whole shape crosses the server→client boundary unchanged.
+ */
+export interface SelfDraft {
+  storyId: string;
+  kind: "voice" | "text";
+  recordedAt: string;
+}
+
 /** One of the viewer's active families — the options for the family-scope filter. */
 export interface ViewerFamily {
   id: string;
