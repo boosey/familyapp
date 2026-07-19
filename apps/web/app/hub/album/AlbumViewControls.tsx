@@ -46,18 +46,9 @@ export function AlbumViewControls({
         margin: 0,
       }}
     >
-      {/* Segmented Grid / Masonry / List — the shared SegmentedControl (radio variant): one boxed pill
-          look with arrow-key movement and roving tabindex, matching every other view selector (#1/#5). */}
-      <SegmentedControl
-        variant="radio"
-        ariaLabel={hub.album.viewSelectorAria}
-        active={view}
-        onSelect={(k) => onView(k as AlbumView)}
-        items={VIEWS.map((v) => ({ key: v.value, label: v.label }))}
-      />
-
-      {/* Thumbnail-size slider — one control that drives tile size across all three views. The label
-          is programmatically associated via aria-label; the ⊟/⊞ glyphs are decorative size hints. */}
+      {/* Order (#): the thumbnail-size slider comes FIRST, then the Grid/Masonry/List selector is pinned
+          hard-right. One control drives tile size across all three views; the label is programmatically
+          associated via aria-label; the ▪ glyphs are decorative size hints. */}
       <label
         style={{
           display: "inline-flex",
@@ -86,6 +77,17 @@ export function AlbumViewControls({
           ▪
         </span>
       </label>
+
+      {/* Segmented Grid / Masonry / List — the shared SegmentedControl (radio variant): one boxed pill
+          look with arrow-key movement and roving tabindex, matching every other view selector (#1/#5).
+          Rendered LAST in this flex-end slot so it sits right-justified (rj), after the size slider. */}
+      <SegmentedControl
+        variant="radio"
+        ariaLabel={hub.album.viewSelectorAria}
+        active={view}
+        onSelect={(k) => onView(k as AlbumView)}
+        items={VIEWS.map((v) => ({ key: v.value, label: v.label }))}
+      />
     </div>
   );
 }

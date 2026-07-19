@@ -168,11 +168,15 @@
   max-width: 760px;
 }
 
+/* The persistent search field (#3) sits INLINE beside the Feed/Timeline pills in the toolbar's R1-left.
+   It is NOT full-width (that pushed it onto its own line below the pills) and its padding matches the
+   ActionButton so the two are the same height: 10px block + 1.5px border ≈ the button's 12px block. */
 .searchInput {
-  width: 100%;
-  padding: 16px 20px;
+  width: 240px;
+  max-width: 100%;
+  padding: 10px 14px;
   font-family: var(--font-ui);
-  font-size: var(--text-ui);
+  font-size: var(--text-ui-sm);
   color: var(--text-body);
   background: var(--surface-card);
   border: var(--border-width) solid var(--border-strong);
