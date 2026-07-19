@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useEffect, useRef } from "react";
 import { deleteStoryAction } from "./actions";
 import { hub } from "@/app/_copy";
+import styles from "./OwnerActionMenu.module.css";
 
 export interface OwnerActionMenuProps {
   storyId: string;
@@ -92,66 +93,8 @@ export function OwnerActionMenu({
     }
   };
 
-  const triggerStyle: CSSProperties = {
-    background: "transparent",
-    border: "none",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: "24px",
-    padding: "8px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "50%",
-    width: "44px",
-    height: "44px",
-    outline: "none",
-    transition: "background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet)",
-  };
-
-  const dropdownStyle: CSSProperties = {
-    position: "absolute",
-    top: "100%",
-    right: 0,
-    width: 240,
-    background: "var(--surface-card)",
-    border: "1.5px solid var(--border)",
-    borderRadius: "var(--radius-lg)",
-    boxShadow: "var(--shadow-lift)",
-    padding: 8,
-    zIndex: 20,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  };
-
-  const itemBaseStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "var(--radius-md)",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: 500,
-    color: "var(--text-body)",
-    textDecoration: "none",
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "background var(--dur-fade) var(--ease-quiet)",
-    outline: "none",
-  };
-
-  const dangerItemStyle: CSSProperties = {
-    ...itemBaseStyle,
-    color: "var(--accent-strong, #BD5B3D)",
-  };
-
   return (
-    <div ref={containerRef} style={{ position: "relative", display: "inline-block" }}>
+    <div ref={containerRef} className={styles.container}>
       <button
         type="button"
         aria-label={hub.storyDetail.optionsLabel}
@@ -164,37 +107,13 @@ export function OwnerActionMenu({
           setConfirmDelete(false);
           setError(null);
         }}
-        style={{
-          ...triggerStyle,
-          opacity: disabled ? 0.5 : 1,
-          cursor: disabled ? "default" : "pointer",
-        }}
-        onFocus={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.background = "var(--accent-soft)";
-          e.currentTarget.style.color = "var(--accent-strong)";
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = "var(--text-muted)";
-        }}
-        onMouseEnter={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.background = "var(--accent-soft)";
-          e.currentTarget.style.color = "var(--accent-strong)";
-        }}
-        onMouseLeave={(e) => {
-          if (!open) {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--text-muted)";
-          }
-        }}
+        className={styles.trigger}
       >
         ⋮
       </button>
 
       {open && !disabled && (
-        <div style={dropdownStyle} role="menu" aria-label={hub.storyDetail.optionsMenuLabel}>
+        <div className={styles.dropdown} role="menu" aria-label={hub.storyDetail.optionsMenuLabel}>
           {!confirmDelete ? (
             <>
               <button
@@ -204,13 +123,7 @@ export function OwnerActionMenu({
                   setOpen(false);
                   onEditStory();
                 }}
-                style={itemBaseStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
+                className={styles.item}
               >
                 📝 Edit story
               </button>
@@ -221,13 +134,7 @@ export function OwnerActionMenu({
                   setOpen(false);
                   onAddPhotos();
                 }}
-                style={itemBaseStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
+                className={styles.item}
               >
                 🖼️ Add photos
               </button>
@@ -238,13 +145,7 @@ export function OwnerActionMenu({
                   setOpen(false);
                   onManageSharing();
                 }}
-                style={itemBaseStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
+                className={styles.item}
               >
                 👥 Manage sharing
               </button>
@@ -252,45 +153,19 @@ export function OwnerActionMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => setConfirmDelete(true)}
-                style={dangerItemStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
+                className={styles.itemDanger}
               >
                 🗑️ Delete story
               </button>
             </>
           ) : (
-            <form onSubmit={handleDeleteSubmit} style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontFamily: "var(--font-ui)", fontSize: "0.875rem", color: "var(--text-body)", fontWeight: 600 }}>
+            <form onSubmit={handleDeleteSubmit} className={styles.confirmForm}>
+              <div className={styles.confirmPrompt}>
                 Are you sure you want to permanently delete this story? This cannot be undone.
               </div>
-              {error && (
-                <div style={{ fontFamily: "var(--font-ui)", fontSize: "0.8rem", color: "var(--accent-strong)", fontWeight: 500 }}>
-                  {error}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  style={{
-                    flex: 1,
-                    background: "var(--accent-strong, #BD5B3D)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "var(--radius-sm, 4px)",
-                    padding: "6px 8px",
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    cursor: pending ? "not-allowed" : "pointer",
-                    opacity: pending ? 0.7 : 1,
-                  }}
-                >
+              {error && <div className={styles.confirmError}>{error}</div>}
+              <div className={styles.confirmActions}>
+                <button type="submit" disabled={pending} className={styles.btnConfirm}>
                   {pending ? "Deleting..." : "Confirm"}
                 </button>
                 <button
@@ -300,18 +175,7 @@ export function OwnerActionMenu({
                     setConfirmDelete(false);
                     setError(null);
                   }}
-                  style={{
-                    flex: 1,
-                    background: "var(--surface-sunken)",
-                    color: "var(--text-body)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-sm, 4px)",
-                    padding: "6px 8px",
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    cursor: pending ? "not-allowed" : "pointer",
-                  }}
+                  className={styles.btnCancel}
                 >
                   Cancel
                 </button>

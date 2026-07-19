@@ -1,0 +1,155 @@
+/*
+ * FollowUpButton — the "Ask a follow-up" affordance + inline panel (#77). LIGHT PLAYFUL: warmth
+ * only — a rounder pill trigger, gentle depth on the panel and primary button, a warm hover/focus.
+ * NO stickers / tape / tilt (this is a form, not a decorative surface). Token-driven; the primary
+ * button picks up the warm coral→amber gradient under Playful. See _skins/CSS-MODULES.md.
+ */
+
+/* Pill trigger — reads as a friendly chip; warms on hover/focus. */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  background: transparent;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fade) var(--ease-quiet),
+    border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+  outline: none;
+}
+.trigger:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.triggerIcon {
+  font-size: 1.1rem;
+}
+
+/* The success confirmation line. */
+.sent {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--accent-strong);
+  margin: 0;
+}
+
+/* Inline panel — a soft card with gentle depth. */
+.panel {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  padding: 16px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.heading {
+  font-family: var(--font-story);
+  font-size: var(--text-story-lg);
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.intro {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.errText {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-danger);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btnGhost {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  transition: background var(--dur-fade) var(--ease-quiet),
+    border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+.btnGhost:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.btnGhost:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.btnPrimary {
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur-fade) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .btnPrimary {
+  background: var(--accent-gradient);
+}
+.btnPrimary:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+}
+.btnPrimary:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.btnGhost:focus-visible,
+.btnPrimary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Decorative depth collapses under reduce-motion / solemn. */
+:global(:root[data-reduce-motion="on"]) .btnPrimary,
+:global([data-tone="solemn"]) .btnPrimary {
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .btnPrimary:hover,
+:global([data-tone="solemn"]) .btnPrimary:hover {
+  box-shadow: none;
+}
+/* The gradient is a playful COLOR signature (not motion): revert to the solid accent under solemn
+   only. The prefix `:root[data-skin="playful"]` (specificity 0,4,0) out-specifies the playful gradient
+   rule above (`:root[data-skin="playful"] .btnPrimary`, 0,3,0) and matches container-applied solemn;
+   a bare `[data-tone="solemn"]` (0,2,0) would lose the cascade. Left intact under reduce-motion. */
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .btnPrimary {
+  background: var(--accent);
+}

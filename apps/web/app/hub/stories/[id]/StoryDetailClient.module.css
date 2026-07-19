@@ -1,0 +1,377 @@
+/*
+ * StoryDetailClient — the story READ surface. Base is token-driven and skin-neutral (it reproduces
+ * the former inline styles 1:1, values already tokenized); the Playful structural signatures are
+ * skin-scoped via :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * The signature mirrors StoryCard (highlighter title, sticker tags, tape+tilt+hover-lift) but the
+ * tilt/tape/lift ride the MEDIA block only — the page itself is full-width and static, so a wobbling
+ * page would read as a bug. The reactions row gets warmth (a soft panel), never tilt. See
+ * apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 40px) clamp(20px, 5vw, 56px) 80px;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+.actionError {
+  padding: 12px 16px;
+  background: var(--surface-sunken);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-danger);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  margin-bottom: 20px;
+}
+
+/* ---- Narrative / timeline header ------------------------------------------------------------- */
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.byline {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+}
+
+.metaDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.eraLabel {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-mono);
+  color: var(--support);
+}
+
+.treeLink {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+/* ---- Title + tags ---------------------------------------------------------------------------- */
+.title {
+  font-family: var(--font-story);
+  font-weight: 400;
+  font-size: clamp(var(--text-display), 5.5vw, var(--text-display-lg));
+  line-height: var(--leading-tight);
+  color: var(--text-body);
+  margin: 16px 0 20px;
+  /* The highlighter wash is skin-scoped below; the base leaves the title clean. */
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+/* Sticker content tags — the four-palette candy rotation, cycled i % 4, matching StoryCard. Skin-
+   neutral falls back to the sunken backing (no hard border). */
+.sticker {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+}
+.sticker0 { background: var(--sticker-coral-bg); color: var(--sticker-coral-ink); }
+.sticker1 { background: var(--sticker-sky-bg);   color: var(--sticker-sky-ink); }
+.sticker2 { background: var(--sticker-leaf-bg);  color: var(--sticker-leaf-ink); }
+.sticker3 { background: var(--sticker-gold-bg);  color: var(--sticker-gold-ink); }
+
+.familyTag {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+}
+
+/* ---- Reactions row — warmed panel (no tilt) -------------------------------------------------- */
+.reactions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+/* ---- Media / photo block — carries the tape + tilt + hover-lift ------------------------------ */
+.mediaBlock {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.photo {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  display: block;
+}
+
+/* ---- Audio ----------------------------------------------------------------------------------- */
+.audioRow {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  height: 38px;
+  margin-bottom: 20px;
+}
+.audio {
+  width: 100%;
+  height: 100%;
+}
+
+.readBody {
+  margin-top: 12px;
+}
+
+/* ---- Manage-sharing modal (light playful: warmth only, no stickers/tape/tilt) ---------------- */
+.modalScrim {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalCard {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  display: grid;
+  gap: 16px;
+  box-shadow: var(--shadow-lift);
+  border: var(--border-width) solid var(--border);
+}
+
+.modalTitle {
+  font-family: var(--font-story);
+  font-size: var(--text-story-lg);
+  margin: 0;
+}
+
+.modalIntro {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* Shared light-playful buttons: gentle depth, warm focus, rounder — NO tilt/tape/stickers. */
+.btnGhost {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  transition: background var(--dur-fade) var(--ease-quiet),
+    border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+.btnGhost:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.btnGhost:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.btnPrimary {
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur-fade) var(--ease-quiet), transform var(--dur-fade) var(--ease-quiet);
+}
+/* Light playful: the primary CTA carries the warm coral→amber gradient + a soft lift on hover. */
+:global(:root[data-skin="playful"]) .btnPrimary {
+  background: var(--accent-gradient);
+}
+.btnPrimary:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+}
+.btnPrimary:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.btnGhost:focus-visible,
+.btnPrimary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The lift on the primary button is decorative motion — collapse it under reduce-motion / solemn. */
+:global(:root[data-reduce-motion="on"]) .btnPrimary,
+:global([data-tone="solemn"]) .btnPrimary {
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .btnPrimary:hover,
+:global([data-tone="solemn"]) .btnPrimary:hover {
+  box-shadow: none;
+}
+
+/* ===========================================================================================
+   Playful structural signatures — skin-scoped, suppressed under reduce-motion / solemn below.
+   =========================================================================================== */
+
+/* Highlighter wash behind the title (text stays --text-body). */
+:global(:root[data-skin="playful"]) .title {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 82%;
+  background-size: 100% 38%;
+}
+
+/* Warmer reactions row — a soft card panel with the shelf shadow so the actions feel tactile
+   rather than floating flat on the page. Reuses existing surface/shadow/radius tokens. */
+:global(:root[data-skin="playful"]) .reactions {
+  padding: 10px 14px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-card);
+}
+
+/* Tape strip + tilt + hover-lift on the MEDIA block (the one card-like element on the page). The
+   tilt reads from the inline --tilt custom property (parity math stays in TS, per convention). */
+:global(:root[data-skin="playful"]) .mediaBlock {
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+  border-radius: var(--radius-md);
+}
+:global(:root[data-skin="playful"]) .mediaBlock:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+:global(:root[data-skin="playful"]) .mediaBlock::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+/* ---- Suppress ALL structural signatures under reduce-motion OR solemn ------------------------
+   The solemn suppressors carry the `:root[data-skin="playful"]` prefix DELIBERATELY: the playful
+   rules above are `:root[data-skin="playful"] .x` (specificity 0,3,0), and `data-tone="solemn"` is
+   applied on a CONTAINER (never on <html>), so a bare `[data-tone="solemn"] .x` (0,2,0) would LOSE
+   the cascade and fail to suppress. Prefixing with the always-present root skin attribute makes the
+   suppressor `:root[data-skin="playful"] [data-tone="solemn"] .x` (0,4,0) — it out-specifies the
+   playful rule and matches container-applied solemn. Reduce-motion suppressors already win (they use
+   `:root`, tie 0,3,0, and come later in source). Guarded by light-playful-suppression.test.ts. */
+:global(:root[data-reduce-motion="on"]) .title,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .title {
+  background-image: none;
+}
+:global(:root[data-reduce-motion="on"]) .reactions,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .reactions {
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .mediaBlock,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock {
+  transform: none;
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .mediaBlock:hover,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock:hover {
+  transform: none;
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .mediaBlock::before,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock::before {
+  display: none;
+}
+/* The primary CTA's gradient is a playful color signature (not motion): revert it to the solid accent
+   under solemn only. Left intact under reduce-motion (a gradient is not motion). */
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .btnPrimary {
+  background: var(--accent);
+}

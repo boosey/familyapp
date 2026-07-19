@@ -19,6 +19,7 @@ import {
   untagStorySubjectAction,
   retargetStoryFamiliesAction,
 } from "./actions";
+import styles from "./StoryEditor.module.css";
 
 /** A family this story is (or will be) shared with. `shortName` (ADR-0021) is the chip's display
  *  label when set; `name` is the formal fallback. */
@@ -207,8 +208,8 @@ export function StoryEditor(props: StoryEditorProps) {
   };
 
   return (
-    <div style={{ display: "grid", gap: 20, marginTop: 20 }}>
-      <label style={fieldLabel}>
+    <div className={styles.form}>
+      <label className={styles.fieldLabel}>
         Title
         <input
           type="text"
@@ -216,14 +217,14 @@ export function StoryEditor(props: StoryEditorProps) {
           onChange={(e) => setTitle(e.target.value)}
           disabled={pending}
           required
-          style={textField}
+          className={styles.textField}
         />
       </label>
-      {titleError && <p role="alert" style={errText}>{titleError}</p>}
+      {titleError && <p role="alert" className={styles.errText}>{titleError}</p>}
 
-      <div style={{ display: "grid", gap: 6 }}>
-        <span style={fieldLabel}>{hub.tagInput.label}</span>
-        <p style={helpText}>{hub.tagInput.help}</p>
+      <div className={styles.tagField}>
+        <span className={styles.fieldLabel}>{hub.tagInput.label}</span>
+        <p className={styles.helpText}>{hub.tagInput.help}</p>
         <TagInput
           tokens={tokens}
           suggestions={suggestions}
@@ -234,14 +235,14 @@ export function StoryEditor(props: StoryEditorProps) {
         />
       </div>
 
-      <label style={fieldLabel}>
+      <label className={styles.fieldLabel}>
         Story
         <textarea
           value={prose}
           onChange={(e) => setProse(e.target.value)}
           disabled={pending}
           rows={12}
-          style={{ ...textField, fontFamily: "var(--font-story)", resize: "vertical" }}
+          className={styles.textArea}
         />
       </label>
 
@@ -249,9 +250,9 @@ export function StoryEditor(props: StoryEditorProps) {
         <StoryPhotosEditor storyId={storyId} />
       </div>
 
-      {error && <p role="alert" style={errText}>{error}</p>}
+      {error && <p role="alert" className={styles.errText}>{error}</p>}
 
-      <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+      <div className={styles.actions}>
         <KindredButton
           type="button"
           label={hub.storyDetail.cancel}
@@ -269,19 +270,3 @@ export function StoryEditor(props: StoryEditorProps) {
     </div>
   );
 }
-
-const fieldLabel: React.CSSProperties = {
-  display: "grid", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", fontWeight: 600,
-  color: "var(--text-body)",
-};
-const helpText: React.CSSProperties = {
-  fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-muted)", margin: 0,
-};
-const textField: React.CSSProperties = {
-  padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)",
-  background: "var(--surface-card)", fontSize: "var(--text-ui)", color: "var(--text-body)",
-  width: "100%", boxSizing: "border-box",
-};
-const errText: React.CSSProperties = {
-  fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger)", margin: 0,
-};
