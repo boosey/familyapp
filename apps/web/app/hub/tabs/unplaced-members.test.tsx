@@ -102,6 +102,8 @@ it("renders unplaced members as rows in the List view", () => {
       unplaced={MEMBERS}
       viewerIsSteward={false}
       view="list"
+      // #189: FamilyTab now renders the shared toolbar; R1's data is threaded through `surface`.
+      surface={{ active: "list", familiesParam: null, showRequests: false }}
     />,
   );
   const panel = screen.getByTestId("unplaced-members");
@@ -121,6 +123,8 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
       unplaced={MEMBERS}
       viewerIsSteward={false}
       view="tree"
+      // #189: FamilyTab now renders the shared toolbar; R1's data is threaded through `surface`.
+      surface={{ active: "tree", familiesParam: null, showRequests: false }}
     />,
   );
   // The tray is present in the tree view (variant "tray" adds the section testid) and lists the members.

@@ -24,6 +24,7 @@ import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
+import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
 import styles from "./FamilyTab.module.css";
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
@@ -58,6 +59,20 @@ export interface FamilyTabProps {
    * chip bar just reflects `[scopeId]` — no client-side "first of set" logic needed here.
    */
   scopeId?: string;
+  /**
+   * R1 slot data for the shared {@link FamilySurfaceNav}/HubToolbar (#189). The Family CONTENT tabs
+   * render the full two-row toolbar here (R1 = selector + Invite, R2 = this component's family selector
+   * + zoom controls) so it's ONE toolbar block, not a page-level R1 above a separate in-tab R2. These
+   * are the same values the page hands the standalone FamilySurfaceNav on the Requests / no-family path.
+   */
+  surface: {
+    /** Which selector item is active — `"tree"`/`"list"` here (Requests is never the content tab). */
+    active: FamilySurfaceView;
+    familiesParam: string | null;
+    showRequests: boolean;
+    requestsBadge?: number;
+    inviteHref?: string;
+  };
 }
 
 export function FamilyTab({
@@ -71,6 +86,7 @@ export function FamilyTab({
   viewerIsSteward = false,
   families = [],
   scopeId,
+  surface,
 }: FamilyTabProps) {
   const router = useRouter();
 
@@ -96,57 +112,68 @@ export function FamilyTab({
   const atMin = scale <= ZOOM_MIN + 0.001;
   const atMax = scale >= ZOOM_MAX - 0.001;
 
-  // The family-selector row carries the chip bar (>=2 families) and, in the tree view, the zoom
-  // controls. Skip it entirely when it would be empty — i.e. the List view with a self-hiding chip bar
-  // (<2 families) — so a single-family relatives list doesn't gain a stray empty gap above it.
-  const showFamilyRow = view === "tree" || families.length >= 2;
+  // R2 (the family-selector row) content, handed to the shared HubToolbar via FamilySurfaceNav. Compute
+  // EMPTINESS here rather than letting the toolbar guess: FamilyChips self-renders null for <2 families,
+  // but a <FamilyChips/> element is still a truthy node — so gate on families.length so the toolbar's
+  // empty-row rule fires. This preserves the old `showFamilyRow = tree || >=2 families` behaviour exactly
+  // (List view + <2 families → no R2 → content flush, no stray gap).
+  const familyChips =
+    families.length >= 2 ? (
+      <FamilyChips singleSelect inline families={families} selected={[scopeId ?? familyId]} />
+    ) : null;
+
+  // The tree's Fit / − / + controls — tree view only (null in the list view → no R2-right content).
+  const zoomControls =
+    view === "tree" ? (
+      <div className={styles.zoomControls} data-testid="tree-controls">
+        <button
+          type="button"
+          onClick={() => canvasRef.current?.fit()}
+          data-testid="tree-fit"
+          className={styles.controlPill}
+        >
+          {hub.tree.fit}
+        </button>
+        <div className={styles.zoomPair}>
+          <button
+            type="button"
+            onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
+            data-testid="tree-zoom-out"
+            aria-label={hub.tree.zoomOut}
+            disabled={atMin}
+            className={styles.zoomBtn}
+          >
+            <span aria-hidden="true">−</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
+            data-testid="tree-zoom-in"
+            aria-label={hub.tree.zoomIn}
+            disabled={atMax}
+            className={styles.zoomBtn}
+          >
+            <span aria-hidden="true">+</span>
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div>
-      {/* Family-selector row (#159): the single-select family chips on the LEFT (ADR-0021 §Tree #48),
-          and the tree's Fit / − / + controls right-justified on the SAME row (tree view only). In the
-          tree view the row renders even when the chip bar self-hides (<2 families) so the tree still
-          gets its zoom controls; `margin-left:auto` on the controls keeps them hard-right regardless. */}
-      {showFamilyRow && (
-      <div className={styles.familyRow}>
-        <FamilyChips singleSelect inline families={families} selected={[scopeId ?? familyId]} />
-
-        {view === "tree" && (
-          <div className={styles.zoomControls} data-testid="tree-controls">
-            <button
-              type="button"
-              onClick={() => canvasRef.current?.fit()}
-              data-testid="tree-fit"
-              className={styles.controlPill}
-            >
-              {hub.tree.fit}
-            </button>
-            <div className={styles.zoomPair}>
-              <button
-                type="button"
-                onClick={() => setScale((s) => clampScale(s / ZOOM_STEP))}
-                data-testid="tree-zoom-out"
-                aria-label={hub.tree.zoomOut}
-                disabled={atMin}
-                className={styles.zoomBtn}
-              >
-                <span aria-hidden="true">−</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setScale((s) => clampScale(s * ZOOM_STEP))}
-                data-testid="tree-zoom-in"
-                aria-label={hub.tree.zoomIn}
-                disabled={atMax}
-                className={styles.zoomBtn}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
+      {/* The full shared two-row toolbar (#189): R1 = the Family selector + Invite (FamilySurfaceNav),
+          R2 = the single-select family chips (left) and the tree's Fit/−/+ controls (right). When R2
+          would be empty (List view + <2 families) HubToolbar's empty-row rule drops it, so the content
+          below stays flush — the old `showFamilyRow` behaviour, now centralized in the toolbar. */}
+      <FamilySurfaceNav
+        active={surface.active}
+        familiesParam={surface.familiesParam}
+        showRequests={surface.showRequests}
+        requestsBadge={surface.requestsBadge}
+        inviteHref={surface.inviteHref}
+        row2Left={familyChips}
+        row2Right={zoomControls}
+      />
 
       {view === "tree" ? (
         <>

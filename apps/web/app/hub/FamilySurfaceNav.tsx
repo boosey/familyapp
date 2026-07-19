@@ -1,7 +1,8 @@
-import Link from "next/link";
+import type { ReactNode } from "react";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
-import hubTabStyles from "./HubTabs.module.css";
+import { HubToolbar } from "./HubToolbar";
+import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
 import styles from "./FamilySurfaceNav.module.css";
 
 /** The active Family-surface view the selector highlights. */
@@ -20,9 +21,17 @@ interface FamilySurfaceNavProps {
    *  Requests item; absent/0 hides the badge. Deliberately the aggregate (not the scoped subset) so a
    *  steward still sees that requests exist in a family they haven't selected (#159). */
   requestsBadge?: number;
-  /** The member-only Invite entry point (`/hub?tab=invite[&families=…]`), right-justified on the row and
+  /** The member-only Invite entry point (`/hub?tab=invite[&families=…]`), right-justified on R1 and
    *  present on every sub-tab. `undefined` (a pending-only / gated viewer) renders no button. */
   inviteHref?: string;
+  /**
+   * Optional second-row slots (#189). The Family CONTENT tabs (tree/list) pass the single-select
+   * FamilyChips here (`row2Left`) and, in the tree view, the Fit/−/+ zoom controls (`row2Right`) — both
+   * built inside the client FamilyTab, so they're threaded through as ready-made nodes. Omitting both
+   * (Requests tab, no-family) collapses the toolbar to R1 only via HubToolbar's empty-row rule.
+   */
+  row2Left?: ReactNode;
+  row2Right?: ReactNode;
 }
 
 const SELECTOR: { key: FamilySurfaceView; label: string; tab: string; view?: string }[] = [
@@ -32,15 +41,16 @@ const SELECTOR: { key: FamilySurfaceView; label: string; tab: string; view?: str
 ];
 
 /**
- * FamilySurfaceNav (#158) — the single selector row shared by all three Family sub-tabs: Family tree ·
- * List · Requests, with the member-only Invite button right-justified on the same row. It replaces two
- * older controls at once — the page-level two-way sub-nav (`FamilySubNav`) and the in-tree `Tree | List`
- * pill (which lived inside `FamilyTab` and toggled via localStorage).
+ * FamilySurfaceNav (#158, #189) — the Family surface's adoption of the shared two-row {@link HubToolbar}
+ * (the reference migration in #189). R1 carries the `Family tree · List · Requests` selector (a shared
+ * {@link HubSubNav} pill row) on the left and the member-only Invite button right-justified. R2 carries
+ * the family selector + view controls the content tabs hand in (`row2Left`/`row2Right`) — omitted on the
+ * Requests tab and the no-family case, where HubToolbar's empty-row rule drops R2 entirely (content
+ * stays flush, no reserved gap).
  *
- * Selection is URL-driven so each item is a real Next.js `<Link>` (middle-click / open-in-new-tab /
- * prefetch for free, no client boundary): Family tree → `?tab=family&view=tree`, List →
- * `?tab=family&view=list`, Requests → `?tab=requests`. `?families=` is preserved on every navigation
- * (omitted when absent), the same way HubTabsNav / QuestionsSubNav do.
+ * Selection is URL-driven so each selector item is a real Next.js `<Link>` (middle-click / open-in-new-
+ * tab / prefetch for free): Family tree → `?tab=family&view=tree`, List → `?tab=family&view=list`,
+ * Requests → `?tab=requests`. `?families=` is preserved on every navigation (omitted when absent).
  */
 export function FamilySurfaceNav({
   active,
@@ -48,8 +58,10 @@ export function FamilySurfaceNav({
   showRequests,
   requestsBadge,
   inviteHref,
+  row2Left,
+  row2Right,
 }: FamilySurfaceNavProps) {
-  const items = showRequests ? SELECTOR : SELECTOR.filter((i) => i.key !== "requests");
+  const selector = showRequests ? SELECTOR : SELECTOR.filter((i) => i.key !== "requests");
 
   function hrefFor(item: (typeof SELECTOR)[number]): string {
     const params = new URLSearchParams({ tab: item.tab });
@@ -58,31 +70,24 @@ export function FamilySurfaceNav({
     return `/hub?${params.toString()}`;
   }
 
-  return (
-    <div className={styles.row}>
-      <nav className={styles.selectorNav} aria-label={hub.shell.familySubNavAria}>
-        {items.map((item) => (
-          <Link
-            key={item.key}
-            href={hrefFor(item)}
-            className={hubTabStyles.subLink}
-            aria-current={item.key === active ? "page" : undefined}
-          >
-            {item.label}
-            {item.key === "requests" && requestsBadge != null && requestsBadge > 0 && (
-              <span className={hubTabStyles.badge} aria-label={hub.shell.unreadAria(requestsBadge)}>
-                {requestsBadge}
-              </span>
-            )}
-          </Link>
-        ))}
-      </nav>
+  const items: HubSubNavItem[] = selector.map((item) => ({
+    key: item.key,
+    label: item.label,
+    href: hrefFor(item),
+    ...(item.key === "requests" && requestsBadge != null && requestsBadge > 0
+      ? { badge: requestsBadge, badgeLabel: hub.shell.unreadAria(requestsBadge) }
+      : {}),
+  }));
 
-      {inviteHref ? (
-        <a className={styles.inviteButton} href={inviteHref}>
-          {hub.shell.tabInvite}
-        </a>
-      ) : null}
-    </div>
+  const nav = <HubSubNav ariaLabel={hub.shell.familySubNavAria} items={items} active={active} />;
+
+  const invite = inviteHref ? (
+    <a className={styles.inviteButton} href={inviteHref}>
+      {hub.shell.tabInvite}
+    </a>
+  ) : null;
+
+  return (
+    <HubToolbar row1Left={nav} row1Right={invite} row2Left={row2Left} row2Right={row2Right} />
   );
 }

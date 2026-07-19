@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
 /**
- * Story tab feed layout toggle — a right-justified Masonry / Column control on the same row as the
- * Feed/Timeline/Search mode pills. "Masonry" lays the cards out as a CSS multi-column (the new-viewer
- * default, listed first per ADR-0021); "Column" is a single stacked column of wide cards. The toggle
- * is Feed-only (Timeline/Search own their layouts) and its choice persists to localStorage — a stored
- * preference still wins over the default.
+ * Story tab feed layout toggle — a right-justified Masonry / Column control that (post-#190) rides the
+ * shared HubToolbar's R2-right slot, alongside the Feed/Timeline/Search mode pills in R1. "Masonry"
+ * lays the cards out as a CSS multi-column (the new-viewer default, listed first per ADR-0021);
+ * "Column" is a single stacked column of wide cards. The toggle is Feed-only (Timeline/Search own their
+ * layouts) and its choice persists to localStorage — a stored preference still wins over the default.
+ *
+ * These controls live in StoriesSurface now (it owns the mode/feedView/query state that drives the
+ * toolbar), so we drive them through StoriesSurface in its browse body.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StoryBrowse } from "@/app/hub/tabs/StoryBrowse";
+import { StoriesSurface } from "@/app/hub/tabs/StoriesSurface";
 import { hub } from "@/app/_copy";
 import type { StoryItem, ViewerFamily } from "@/app/hub/tabs/story-browse-types";
 
+// StoriesSurface reads ?mode= via useSearchParams; a single-family viewer never mounts FamilyChips, so
+// the router/pathname hooks are not needed here.
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
 }));
@@ -49,13 +54,19 @@ function makeItem(id: string): StoryItem {
 
 function renderBrowse() {
   return render(
-    <StoryBrowse
+    <StoriesSurface
       items={[makeItem("s1"), makeItem("s2")]}
       viewerFamilies={[famA]}
       viewerPersonId="p1"
       viewerName="You"
       selectedIds={[famA.id]}
       allSelected={true}
+      activeFamilies={[famA]}
+      chipSelected="all"
+      selfDrafts={[]}
+      intakeIncomplete={false}
+      body="browse"
+      emptyCopy=""
     />,
   );
 }
@@ -95,10 +106,10 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     renderBrowse();
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: hub.browse.modeTimeline }));
+    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeTimeline }));
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: hub.browse.modeSearch }));
+    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeSearch }));
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 

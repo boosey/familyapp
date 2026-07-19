@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
-import styles from "./HubTabs.module.css";
+import { HubToolbar } from "./HubToolbar";
+import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
 
 interface QuestionsSubNavProps {
   /** The active ask surface key: "questions" (To answer), "ask", or "asks". */
@@ -23,36 +24,41 @@ const SUB_TABS = [
 ] as const;
 
 /**
- * Task 3 (Playful de-clutter): the secondary sub-nav inside the consolidated Questions primary tab.
- * The three ask surfaces (To answer = `questions`, Ask a question = `ask`, Your asks = `asks`) now
- * live under one primary tab; this row switches among them. Presentation only — it routes to the
- * SAME existing `?tab=questions|ask|asks` keys, preserving `?families=` the same way HubTabsNav does
- * (omitted when absent). The per-key content in page.tsx is unchanged.
+ * QuestionsSubNav (Task 3, #189, #192) — the Questions surface's adoption of the shared two-row
+ * {@link HubToolbar}. The three ask surfaces (To answer = `questions`, Ask a question = `ask`, Your asks
+ * = `asks`) live under one primary tab; this row switches among them. It renders as an R1-left
+ * {@link HubSubNav} pill row (the single-sourced pill style) — with NO R1-right action and NO R2 row, so
+ * HubToolbar's empty-row rule drops the second row entirely (no reserved vertical space) and the pills
+ * sit flush against the list below.
+ *
+ * Behaviour is unchanged: selection is client-driven (`router.push`) to the SAME existing
+ * `?tab=questions|ask|asks` keys, preserving `?families=` the way HubTabsNav does (omitted when absent).
+ * The per-key content in page.tsx is unchanged. The #142 pending-ask badge on "To answer" is preserved.
  */
 export function QuestionsSubNav({ active, familiesParam, toAnswerBadge }: QuestionsSubNavProps) {
   const router = useRouter();
-  return (
-    <nav className={styles.subNav} aria-label={hub.shell.questionsSubNavAria}>
-      {SUB_TABS.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          className={styles.subLink}
-          aria-current={tab.key === active ? "page" : undefined}
-          onClick={() => {
-            const params = new URLSearchParams({ tab: tab.key });
-            if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
-            router.push(`/hub?${params.toString()}`);
-          }}
-        >
-          {tab.label}
-          {tab.key === "questions" && toAnswerBadge != null && toAnswerBadge > 0 && (
-            <span className={styles.badge} aria-label={hub.shell.unreadAria(toAnswerBadge)}>
-              {toAnswerBadge}
-            </span>
-          )}
-        </button>
-      ))}
-    </nav>
+
+  const items: HubSubNavItem[] = SUB_TABS.map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    ...(tab.key === "questions" && toAnswerBadge != null && toAnswerBadge > 0
+      ? { badge: toAnswerBadge, badgeLabel: hub.shell.unreadAria(toAnswerBadge) }
+      : {}),
+  }));
+
+  const nav = (
+    <HubSubNav
+      ariaLabel={hub.shell.questionsSubNavAria}
+      items={items}
+      active={active}
+      onSelect={(key) => {
+        const params = new URLSearchParams({ tab: key });
+        if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
+        router.push(`/hub?${params.toString()}`);
+      }}
+    />
   );
+
+  // R1-left only: no R1-right action, and both R2 slots omitted so the second row never renders.
+  return <HubToolbar row1Left={nav} />;
 }

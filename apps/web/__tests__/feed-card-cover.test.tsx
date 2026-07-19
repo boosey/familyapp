@@ -10,8 +10,9 @@ import { cleanup, render } from "@testing-library/react";
 import { StoryBrowse } from "@/app/hub/tabs/StoryBrowse";
 import type { StoryItem } from "@/app/hub/tabs/story-browse-types";
 
-// StoryBrowse reads the initial mode/scope from the URL via useSearchParams — mock it to an empty
-// query so it lands in the default "feed" mode with scope "all".
+// StoryBrowse is now a controlled body (#190) — mode/feedView/query are props (the toolbar owns them),
+// so it no longer reads next/navigation. The mock is kept as a harmless no-op guard for any transitive
+// import that might reach for the hooks.
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
 }));
@@ -49,6 +50,9 @@ function renderFeed(items: StoryItem[]) {
       viewerName="You"
       selectedIds={[]}
       allSelected={true}
+      mode="feed"
+      feedView="masonry"
+      query=""
     />,
   );
 }

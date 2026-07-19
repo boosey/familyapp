@@ -71,6 +71,9 @@ function renderTab(view: "tree" | "list" = "tree") {
       tree={data}
       kin={[]}
       view={view}
+      // #189: FamilyTab renders the full shared toolbar; R1's data comes via `surface`. Irrelevant to
+      // the zoom/camera assertions here, so a minimal single-family (no chips), no-invite surface.
+      surface={{ active: view, familiesParam: null, showRequests: false }}
     />,
   );
 }

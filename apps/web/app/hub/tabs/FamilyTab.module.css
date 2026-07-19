@@ -4,21 +4,13 @@
  * `.inviteButton` moved to FamilySurfaceNav.module.css when the Invite entry point relocated onto the
  * shared selector row. */
 
-.familyRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
+/* The `.familyRow` layout moved to the shared HubToolbar (#189) — R2's row is the toolbar's second row
+ * now. This module keeps only the zoom-control pieces the toolbar's R2-right slot renders. */
 
 .zoomControls {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  /* Keep the controls hard-right even when the chip bar self-hides (<2 families) or wraps. */
-  margin-left: auto;
 }
 
 .zoomPair {

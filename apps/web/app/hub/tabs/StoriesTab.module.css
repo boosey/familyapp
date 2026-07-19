@@ -1,7 +1,8 @@
 /*
- * StoriesTab — the resume list ("Finish what you started") + empty states for the Stories tab.
- * A straight 1:1 port of the former inline `style={{}}` objects (values already token-driven). No
- * Playful structural signatures — pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
+ * StoriesTab — the Stories surface chrome: the toolbar's R1-left mode group + R1-right actions cluster
+ * (#190), plus the resume list ("Finish what you started") + empty states. The two-row layout itself is
+ * the shared HubToolbar (#189); this file styles only the SLOT content. No Playful structural
+ * signatures — pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
 .wrap {
@@ -10,25 +11,25 @@
   gap: 28px;
 }
 
-/* The single control row (#125, #138): family-filter chips on the left; a right-justified actions
-   cluster (compact reminders + the "Tell a story" button) on the right. One compact row directly below
-   the tab bar, above every feed/empty branch. Spacing/tokens track the sibling controls in this file. */
-.controlRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-/* The right-justified actions cluster (#138): both compact reminders (draft + intake) sit BESIDE the
-   "Tell a story" button. `margin-left: auto` pushes the whole cluster right (it used to live on
-   .tellButton alone); the cluster wraps as a unit on narrow viewports. */
-.controlRowActions {
+/* R1-left group (#190): the Feed/Timeline/Search pill nav (shared HubSubNav) with the Search field
+   beside it (Search mode only). A quiet inline row that wraps on narrow viewports; the toolbar's `.left`
+   slot owns the outer spacing. */
+.modeGroup {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-left: auto;
+  min-width: 0;
+}
+
+/* R1-right actions cluster (#138, #190): both compact reminders (draft + intake) sit BESIDE the "Tell a
+   story" button. The toolbar's `.right` slot already right-justifies this cluster; here we only lay its
+   children out and let it wrap as a unit on narrow viewports. */
+.actionsCluster {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 /* Compact reminder button — shared by the draft-reminder (a toggle <button>) and the intake reminder

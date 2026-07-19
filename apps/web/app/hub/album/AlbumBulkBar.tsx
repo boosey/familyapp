@@ -8,7 +8,8 @@
  *   - Tell → deep-links the tell composer with the selection (first = cover, rest = accompaniment).
  *   - Delete selected → two-tap confirm owned HERE; the confirmed tap calls `onDelete` (the caller runs
  *     the bulk server action + refresh + result note).
- *   - Clear → drop the selection (stays in selection mode).
+ *   - Clear → drop the selection and leave selection mode (#191 — the visible exit now the standing
+ *     "Select" toggle is gone; the caller wires it to its exit-select handler).
  *
  * Purely presentational apart from the local two-tap arming state. Token-styled, elder-friendly targets.
  */
