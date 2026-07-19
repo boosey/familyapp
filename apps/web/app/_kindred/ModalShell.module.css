@@ -1,0 +1,43 @@
+/* ModalShell (ADR-0024 Round A) — the ONE shared mobile-dialog contract every bespoke inline-styled
+ * modal (album viewer/uploader/destination, tree add-relative/person-details, kebab, …) will adopt in
+ * Round B. It centralizes the overlay + surface geometry the modals hand-rolled, and adds the three
+ * things they all lacked at phone width: a `max-height` cap, internal `overflow-y` scroll, and edge
+ * inset with `env(safe-area-inset-*)` so a tall dialog no longer runs off-screen.
+ *
+ * Presentational only: it renders whatever children it is handed and reports overlay clicks. It does
+ * NOT own open/close state, a heading, or a close button — every adopting modal already has its own.
+ *
+ * Values are tokens (per _skins/CSS-MODULES.md); the geometry numbers live in tokens.css. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-scrim);
+  /* Edge inset + safe-area: keep the surface off the screen edges and clear of the notch / home
+   * indicator on a full-bleed phone dialog. The base inset is a token; each side adds its own inset. */
+  padding-top: calc(var(--modal-edge-inset) + env(safe-area-inset-top));
+  padding-right: calc(var(--modal-edge-inset) + env(safe-area-inset-right));
+  padding-bottom: calc(var(--modal-edge-inset) + env(safe-area-inset-bottom));
+  padding-left: calc(var(--modal-edge-inset) + env(safe-area-inset-left));
+}
+
+.surface {
+  /* Full-width up to the per-modal `maxWidth` (set inline via the `--modal-shell-max-width` custom
+   * property so each adopting modal keeps its own 420/440/480 width). */
+  width: 100%;
+  max-width: var(--modal-shell-max-width, 480px);
+  /* The cap + internal scroll: a tall dialog (e.g. the person-details edit form) grows only to this
+   * height, then scrolls its own content instead of pushing off-screen. `overscroll-behavior: contain`
+   * stops the scroll chaining to the page behind the scrim. */
+  max-height: var(--modal-max-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+}

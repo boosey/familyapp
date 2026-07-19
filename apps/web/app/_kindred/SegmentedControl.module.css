@@ -5,8 +5,14 @@
  * pill drift. Design values are tokens; layout dims are raw px per _skins/CSS-MODULES.md. Every
  * interactive element carries a :focus-visible outline (rule 7). */
 
+/* MOBILE-FIRST (base = phone, floor 360px): the control spans the full width of its container and its
+ * segments flex to fill equally. This fixes baseline #2 — the intrinsic-width control sat narrow/left
+ * and the 3-segment Questions nav nearly clipped the right edge at 393px. `display: flex` (not inline)
+ * + `width: 100%` claims the row; each pill gets `flex: 1 1 0; min-width: 0` below so three segments
+ * share the width evenly and shrink gracefully. Desktop's intrinsic auto width is restored at `sm`. */
 .group {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 4px;
   padding: 4px;
@@ -19,6 +25,10 @@
 
 .pill {
   display: inline-flex;
+  /* At phone each segment fills an equal share of the full-width group and may shrink (min-width:0). */
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
@@ -29,7 +39,9 @@
   font-family: var(--font-ui);
   font-size: var(--text-label);
   font-weight: 600;
-  white-space: nowrap;
+  /* Phone: labels may wrap to two lines rather than clip/overflow the equal-width flex segment. Kept
+   * centered so a wrapped two-word label still reads tidily. `nowrap` is restored at `sm`. */
+  text-align: center;
   cursor: pointer;
   text-decoration: none;
   transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
@@ -37,6 +49,24 @@
 
 .pill:hover {
   color: var(--text-body);
+}
+
+/* ── Desktop / small-tablet (≥ sm 40rem): restore today's intrinsic auto-width control verbatim — an
+ *    inline-flex box hugging its pills, each pill natural-width and non-wrapping. Desktop unchanged. ── */
+@media (min-width: 40rem) {
+  .group {
+    display: inline-flex;
+    width: auto;
+    /* Restore verbatim: an intrinsic-width inline-flex pill box never wrapped pre-pass. Without this
+     * the base `flex-wrap: wrap` leaks into desktop and a width-constrained row (e.g. a ~640px window)
+     * could drop a pill to a second line. */
+    flex-wrap: nowrap;
+  }
+
+  .pill {
+    flex: 0 1 auto;
+    white-space: nowrap;
+  }
 }
 
 /* Selected — a raised white pill. Every selection semantic maps here: aria-selected (tabs), aria-checked

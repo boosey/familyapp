@@ -24,6 +24,7 @@
 import { useEffect, useRef } from "react";
 import { FamilyChoiceChips } from "../FamilyChoiceChips";
 import { KindredButton } from "@/app/_kindred";
+import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import type { AlbumFamilyOption } from "./AlbumUploader";
 
@@ -117,40 +118,18 @@ export function AlbumDestinationModal({
   const addDisabled = selected.size === 0 || preparing;
 
   return (
-    <div
-      data-testid="album-destination-backdrop"
-      // Backdrop click cancels, but only when the backdrop ITSELF is the target (not a click bubbling
-      // up from the dialog card) — the robust alternative to stopPropagation used across the album.
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "clamp(12px, 4vw, 32px)",
-        background: "var(--scrim)",
-      }}
+    <ModalShell
+      onOverlayClick={onCancel}
+      maxWidth={420}
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
         style={{
-          background: "var(--surface-card)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-lift)",
-          maxWidth: 420,
-          width: "100%",
-          maxHeight: "90dvh",
-          overflowY: "auto",
           padding: "clamp(16px, 4vw, 24px)",
-          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           gap: 20,
@@ -228,6 +207,6 @@ export function AlbumDestinationModal({
           </KindredButton>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

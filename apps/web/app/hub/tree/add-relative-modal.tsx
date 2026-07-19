@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 import type { AddRelativeRelation } from "@chronicle/core";
 import { AddRelativeForm } from "../kin/add-relative-form";
+import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 
 export interface AddRelativeModalProps {
@@ -41,38 +42,15 @@ export function AddRelativeModal({
   }, [onClose]);
 
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "var(--overlay-scrim)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        zIndex: 1000,
-      }}
+    <ModalShell
+      onOverlayClick={onClose}
+      maxWidth={440}
+      role="dialog"
+      aria-modal="true"
+      aria-label={hub.tree.addRelativeHeading}
+      data-testid="tree-add-relative-modal"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={hub.tree.addRelativeHeading}
-        data-testid="tree-add-relative-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "var(--surface-card)",
-          border: "var(--border-width) solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-lift, 0 10px 25px rgba(0,0,0,0.18))",
-          padding: 24,
-          width: "100%",
-          maxWidth: 440,
-          maxHeight: "85vh",
-          overflowY: "auto",
-        }}
-      >
+      <div style={{ padding: 24 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
           <h2
             style={{
@@ -111,6 +89,6 @@ export function AddRelativeModal({
           onSuccess={onSuccess}
         />
       </div>
-    </div>
+    </ModalShell>
   );
 }

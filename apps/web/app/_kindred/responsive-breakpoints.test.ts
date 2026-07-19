@@ -76,3 +76,37 @@ describe("responsive breakpoints are single-sourced", () => {
     }
   });
 });
+
+// ADR-0024 mobile pass regressions. The three shared primitives are mobile-first (base = phone,
+// desktop re-layered at `min-width: 40rem`). These string-scan bonds fail if a base rule silently
+// reverts to the old desktop-first shape — the exact regression the pass fixed. Kept deliberately
+// coarse (presence of the load-bearing declaration in the right block), not pixel-exact.
+describe("ADR-0024 mobile-first layout is single-sourced (regression)", () => {
+  it("HubToolbar row is a stacked column at base and a row only at ≥ sm", () => {
+    const css = readFileSync(join(APP_DIR, "hub", "HubToolbar.module.css"), "utf8");
+    // Base `.row` must stack (mobile-first). A regression to desktop-first would set row here.
+    expect(ruleBlock(css, ".row")).toContain("flex-direction: column");
+    // The horizontal row is restored inside the sm layer, not at base.
+    const smLayer = css.slice(css.indexOf("@media (min-width: 40rem)"));
+    expect(smLayer).toContain("flex-direction: row");
+  });
+
+  it("SegmentedControl group is full-width at base and never wraps at ≥ sm", () => {
+    const css = readFileSync(join(APP_DIR, "_kindred", "SegmentedControl.module.css"), "utf8");
+    // Base `.group` claims the full row (mobile-first equal segments).
+    expect(ruleBlock(css, ".group")).toContain("width: 100%");
+    // The sm layer must re-assert `nowrap` so an intrinsic-width desktop pill box can't drop a
+    // second row (the Round-A cold-review fix).
+    const smLayer = css.slice(css.indexOf("@media (min-width: 40rem)"));
+    expect(smLayer).toContain("flex-wrap: nowrap");
+  });
+
+  it("ModalShell surface keeps the cap + scroll + safe-area contract", () => {
+    const css = readFileSync(join(APP_DIR, "_kindred", "ModalShell.module.css"), "utf8");
+    const surface = ruleBlock(css, ".surface");
+    expect(surface).toContain("max-height");
+    expect(surface).toContain("overflow-y: auto");
+    // The overlay carries the safe-area insets so a full-bleed phone dialog clears the notch/home bar.
+    expect(css).toContain("env(safe-area-inset-top)");
+  });
+});

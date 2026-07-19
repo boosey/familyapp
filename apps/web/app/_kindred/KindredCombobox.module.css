@@ -5,9 +5,19 @@
 
 .root {
   position: relative;
-  display: inline-block;
-  width: 240px;
-  max-width: 100%;
+  /* Mobile-first: fill the container at phone width so the field never renders half-width in a narrow
+   * form (ADR-0024 baseline #3). From 40rem up it takes its intrinsic 240px, matching the album Time
+   * <select> it was sized to sit beside. */
+  display: block;
+  width: 100%;
+}
+
+@media (min-width: 40rem) {
+  .root {
+    display: inline-block;
+    width: 240px;
+    max-width: 100%;
+  }
 }
 
 .input {

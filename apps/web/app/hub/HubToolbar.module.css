@@ -16,15 +16,18 @@
   font-family: var(--font-ui);
 }
 
+/* MOBILE-FIRST (base = phone, floor 360px): the row stacks to a single full-width column. This kills
+ * the baseline #1 offender — at phone width the wrapping right slot was floating hard-right on its own
+ * line with a dead left gutter. Stacked full-width blocks read as intentional and are thumb-reachable.
+ * Desktop's horizontal row is layered back on at `sm` below, EXACTLY as it was before this pass. */
 .row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
 }
 
-/* Left slot: the natural-order group (pills, chips, search). Allowed to shrink/wrap first. */
+/* Left slot: the natural-order group (pills, chips, search). Full-width at phone; wraps internally. */
 .left {
   display: flex;
   align-items: center;
@@ -33,11 +36,30 @@
   min-width: 0;
 }
 
-/* Right slot: right-justified. `margin-left:auto` keeps it hard-right even when the left slot wraps to
- * its own line (the old .inviteButton / .zoomControls hard-right behaviour, now centralized). */
+/* Right slot: at phone it is a full-width block whose action buttons stretch to fill (no hard-right
+ * pin, no dead gutter). `align-items: stretch` lets buttons/controls in this slot go full-width. */
 .right {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
-  margin-left: auto;
+}
+
+/* ── Desktop / small-tablet (≥ sm 40rem): restore the ORIGINAL horizontal two-slot row verbatim, so
+ *    desktop and iPad are unchanged from before this pass. ── */
+@media (min-width: 40rem) {
+  .row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .right {
+    flex-direction: row;
+    align-items: center;
+    /* `margin-left:auto` keeps the right slot hard-right even when the left slot wraps to its own line
+     * (the old .inviteButton / .zoomControls hard-right behaviour, centralized here). */
+    margin-left: auto;
+  }
 }

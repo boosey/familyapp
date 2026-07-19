@@ -174,6 +174,14 @@
 
   /* Modal backdrop scrim (skin-neutral warm dark, shared by every modal dialog). */
   --scrim: rgba(46, 38, 32, 0.55);
+
+  /* ── Shared mobile-dialog (ModalShell) design values (ADR-0024 Round A) ──────
+   * The overlay pads its surface away from the screen edges by this inset, combined per-side with
+   * `env(safe-area-inset-*)` so a full-bleed phone dialog clears the notch/home-indicator. The cap is
+   * how tall the surface may grow before it scrolls internally (dvh tracks the *dynamic* viewport so a
+   * mobile URL bar can't push the dialog off-screen). Both are pure design values — no JS math. */
+  --modal-edge-inset: var(--space-5);
+  --modal-max-height: 90dvh;
 }
 
 @keyframes kindred-listening {
