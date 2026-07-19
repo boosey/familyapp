@@ -17,6 +17,7 @@ import {
   correctEdge,
   createInvitation,
   denyEdge,
+  endMembership,
   hideEdge,
   resolveKinshipProjection,
   type AuthContext,
@@ -287,5 +288,34 @@ describe("regression: an invite that said 'son' places the member on the tree at
       (e) => e.edgeType === "parent_of" && e.personAId === steward.id && e.personBId === alex.id,
     );
     expect(placed).toBe(true);
+  });
+});
+
+// Regression (#173): accepting an invite where inviter and invitee resolve to the SAME Person used
+// to write a self-edge (insertParentOf/insertPartneredWith with both endpoints equal), tripping the
+// kinship_assertions_no_self_ck constraint and rolling back the ENTIRE accept transaction —
+// membership insert included — so the invite could never be accepted. The fix: placement no-ops on
+// the self-edge (no edge, no sex write) and the accept completes.
+describe("regression: self-accept (inviter == invitee) completes with no self-edge (#173)", () => {
+  it("the accept completes, no edge is written, and sex is untouched", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const inviter = await makePerson(db, "Sam Self");
+    await addMembership(db, { personId: inviter.id, familyId: fam.id, role: "member" });
+    const { token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: inviter.id,
+      inviteeName: "Sam Self",
+      relationship: "son",
+    });
+    // The re-join edge case from the issue: the inviter's active membership ended, so the accept's
+    // membership insert passes and placement runs with inviterPersonId === acceptedPersonId.
+    await endMembership(db, account(steward.id), { familyId: fam.id, personId: inviter.id });
+
+    // Before the fix this threw the self-edge check-constraint violation and rolled back.
+    await acceptInvitation(db, { token, acceptedPersonId: inviter.id });
+
+    const edges = await edgesOf(fam.id, steward.id);
+    expect(edges).toHaveLength(0); // no self-edge written
+    expect(await inviteeSex(inviter.id)).toBe("unknown"); // sex write skipped too
   });
 });

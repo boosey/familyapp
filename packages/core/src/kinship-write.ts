@@ -559,6 +559,13 @@ export async function placeInvitedMemberOnAccept(
   },
 ): Promise<PlaceInvitedMemberResult> {
   const { familyId, inviterPersonId: me, inviteePersonId } = input;
+  // Self-accept guard (#173): when inviter and invitee resolve to the same Person (e.g. a member
+  // accepts their own invite link), every placement would write a self-edge and trip
+  // `kinship_assertions_no_self_ck` — rolling back the ENTIRE accept transaction, membership insert
+  // included, so the invite could never be accepted. No-op instead: no edge, no sex write.
+  if (me === inviteePersonId) {
+    return { edgeId: null, sexSet: null };
+  }
   // `INVITE_PLACEMENT` is total over the six direct values; the lookup is `T | undefined` only under
   // `noUncheckedIndexedAccess`, so the guard is a type-narrowing formality (unreachable at runtime).
   const plan = INVITE_PLACEMENT[input.relationship];
