@@ -89,14 +89,14 @@
 
 /* The destructive remove — same shape, danger-tinted so it reads as governance. */
 .actionDanger {
-  color: var(--text-danger, #b00);
-  border-color: var(--text-danger, #b00);
+  color: var(--text-danger);
+  border-color: var(--text-danger);
 }
 
 .error {
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
-  color: var(--text-danger, #b00);
+  color: var(--text-danger);
   margin: 6px 0 0;
   width: 100%;
 }

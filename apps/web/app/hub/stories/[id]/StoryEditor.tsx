@@ -283,5 +283,5 @@ const textField: React.CSSProperties = {
   width: "100%", boxSizing: "border-box",
 };
 const errText: React.CSSProperties = {
-  fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger, #b00)", margin: 0,
+  fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger)", margin: 0,
 };
