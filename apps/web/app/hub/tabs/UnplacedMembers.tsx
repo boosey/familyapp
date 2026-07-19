@@ -408,7 +408,10 @@ function PlaceMemberModal({
         ) : hasAnchors ? (
           <form
             className={styles.form}
-            action={onSubmit}
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit();
+            }}
           >
             <label className="kin-form-label">
               {hub.unplaced.anchorFieldLabel}
