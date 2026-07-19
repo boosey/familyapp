@@ -342,11 +342,13 @@ export default async function HubPage({
               toAnswerBadge={pendingAsks.length}
             />
           )}
-          {/* #158: family + requests share one primary tab (Family). A single selector row (Family tree ·
-              List · Requests) with a right-justified Invite renders ABOVE whichever surface is active, on
-              all three sub-tabs. The Requests badge is the AGGREGATE pending count across every stewarded
-              family (#159) — so a steward still sees requests exist in a family they haven't selected. */}
-          {showFamilySelector && (
+          {/* #158/#189: family + requests share one primary tab (Family), fronted by the shared two-row
+              HubToolbar. R1 is the `Family tree · List · Requests` selector + right-justified Invite; R2
+              is the family selector + view controls. On the Requests tab (and the no-family case) there is
+              no R2 content, so the toolbar is R1 only — rendered HERE. On the family CONTENT tabs
+              (tree/list) FamilyTab renders the FULL toolbar (R1 threaded in + its own R2), so we must NOT
+              also render an R1-only copy here — that would double the selector row. */}
+          {showFamilySelector && !(activeTab === "family" && familyTabData) && (
             <FamilySurfaceNav
               active={familySelectorActive}
               familiesParam={familiesRaw}
@@ -393,6 +395,16 @@ export default async function HubPage({
                     : []
                 }
                 scopeId={familyTabFamilyId ?? undefined}
+                // #189: FamilyTab renders the FULL shared toolbar (R1 selector + Invite, R2 chips +
+                // zoom). Thread R1's data through — the same values the standalone FamilySurfaceNav gets
+                // on the Requests / no-family path. `active` is the resolved tree/list view here.
+                surface={{
+                  active: familyView,
+                  familiesParam: familiesRaw,
+                  showRequests: showRequestsItem,
+                  requestsBadge: pendingRequests.length,
+                  inviteHref: familyInviteHref,
+                }}
               />
             ) : (
               <div className={styles.emptyCard}>

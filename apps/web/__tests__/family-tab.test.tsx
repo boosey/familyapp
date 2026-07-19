@@ -30,6 +30,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
+// The toolbar's row class — used to assert the empty-row rule fires at the FamilyTab CALL SITE (not
+// just in the isolated HubToolbar unit test): the List view with <2 families must collapse R2 so only
+// ONE row (R1) renders, guarding the `<FamilyChips/>`-element-vs-null truthiness trap from regressing.
+import toolbarStyles from "@/app/hub/HubToolbar.module.css";
 
 const TREE: KinshipTreeData = { familyId: "F", rootPersonId: "p1", nodes: [], edges: [] };
 
@@ -51,6 +55,10 @@ function renderTab(
       {...(view ? { view } : {})}
       {...(extra?.families ? { families: extra.families } : {})}
       {...(extra?.scopeId ? { scopeId: extra.scopeId } : {})}
+      // #189: FamilyTab now renders the full shared toolbar; R1's data is threaded through `surface`.
+      // The active view mirrors the resolved `view` (defaults to tree). No family filter/invite needed
+      // for these content/chip assertions.
+      surface={{ active: view ?? "tree", familiesParam: null, showRequests: false }}
     />,
   );
 }
@@ -123,5 +131,35 @@ describe("FamilyTab family filter chip bar (ADR-0021 §Tree, #48)", () => {
 
     renderTab(undefined, { families: TWO_FAMILIES, scopeId: "fam-b", familyId: "fam-b" });
     expect(screen.getByTestId("mock-tree").getAttribute("data-family")).toBe("fam-b");
+  });
+});
+
+// #189: the load-bearing empty-row rule, asserted at the FamilyTab CALL SITE (the isolated HubToolbar
+// test proves the rule; these prove FamilyTab actually TRIPS it by passing `null` — not a truthy
+// <FamilyChips/> element — for the empty R2 slots). A rendered toolbar row = a `.row` element.
+describe("FamilyTab shared-toolbar empty-row rule (#189)", () => {
+  it("List view + <2 families → R2 empty → only ONE toolbar row (R1), flush with content", () => {
+    const { container } = renderTab("list"); // default families=[] (single-family viewer)
+    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(1);
+    // Neither chip bar nor zoom controls → R2 truly absent.
+    expect(screen.queryByRole("group", { name: "Filter by family" })).toBeNull();
+    expect(screen.queryByTestId("tree-controls")).toBeNull();
+  });
+
+  it("Tree view (even <2 families) → R2 has zoom controls → BOTH rows render", () => {
+    const { container } = renderTab("tree"); // single-family: no chips, but tree still gets zoom
+    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(2);
+    expect(screen.getByTestId("tree-controls")).toBeTruthy();
+  });
+
+  it("List view + >=2 families → R2 has the chip bar → BOTH rows render", () => {
+    const { container } = renderTab("list", {
+      families: TWO_FAMILIES,
+      scopeId: "fam-a",
+      familyId: "fam-a",
+    });
+    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(2);
+    expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
+    expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 });

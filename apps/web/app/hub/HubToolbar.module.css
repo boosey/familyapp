@@ -1,0 +1,43 @@
+/* HubToolbar (#189) — the shared two-row control block every hub sub-tab composes. Layout + tokens
+ * only (per _skins/CSS-MODULES.md); the slot CONTENT (pills, chips, actions) styles itself. A row that
+ * isn't rendered (both slots empty) contributes nothing — the empty-row rule is enforced in the
+ * component, so there is no `:empty` CSS crutch and no reserved space. */
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  /* Gap between R1 and R2 when both render — matches the old FamilySurfaceNav row's bottom margin
+   * (var(--space-5)), the space that sat between the selector row and the family-selector row. */
+  gap: var(--space-5);
+  /* Space before the tab content below. In the no-R2 case this is the ONLY trailing space and is
+   * pixel-identical to the old FamilySurfaceNav row (var(--space-5)), keeping a single-row toolbar
+   * flush with the content — the load-bearing empty-row behaviour. */
+  margin-bottom: var(--space-5);
+  font-family: var(--font-ui);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Left slot: the natural-order group (pills, chips, search). Allowed to shrink/wrap first. */
+.left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Right slot: right-justified. `margin-left:auto` keeps it hard-right even when the left slot wraps to
+ * its own line (the old .inviteButton / .zoomControls hard-right behaviour, now centralized). */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
