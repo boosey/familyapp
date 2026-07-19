@@ -5,6 +5,17 @@
 /** Default page size for pending asks returned to the interviewer. */
 export const PENDING_ASKS_DEFAULT_LIMIT = 20;
 
+/**
+ * Defensive upper bound on how many photos ANY single album read returns to a caller (issue #217).
+ * The album grid and the two photo pickers load and render EVERY visible photo with no pagination or
+ * virtualization; this cap keeps a runaway album (hundreds/thousands of photos) from linearly blowing
+ * up the query payload, the DOM node count, and the client-side filter cost. It is a SAFETY NET, not
+ * pagination — the reads keep the most-recent rows and drop the tail. Set generously: a real family
+ * is nowhere near it today, so it only ever trips defensively. Real pagination / server-side filtering
+ * / virtualization are the follow-ups (#218, #219) that will retire the "keep most-recent N" behavior.
+ */
+export const ALBUM_PHOTO_QUERY_CAP = 500;
+
 /** Family-search scoring weights (name highest → member lowest). */
 export const FAMILY_SEARCH_WEIGHT_NAME = 4;
 export const FAMILY_SEARCH_WEIGHT_STEWARD = 3;

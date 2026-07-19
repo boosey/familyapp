@@ -172,4 +172,28 @@ describe("listAlbumPhotosDetailed", () => {
     const rows = await listAlbumPhotosDetailed(db, account(rosa.id), [fam.id]);
     expect(rows.map((r) => r.id)).toEqual([second.id, first.id]);
   });
+
+  // #217: defensive cap. The detailed read returns at most `opts.limit` DISTINCT photos, keeping the
+  // most-recent — even for a photo placed in several authorized families (deduped before the cap).
+  it("caps at opts.limit, keeping the most-recent distinct photos", async () => {
+    const rosa = await makePerson(db, "Rosa");
+    const famA = await makeFamilyWithMember("Esposito", rosa.id);
+    const famB = await makeFamilyWithMember("Carney", rosa.id);
+    const base = Date.now();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      // Each photo is placed in BOTH families → two placement rows apiece; the cap must count the
+      // DISTINCT photo, not the placement rows.
+      const p = await photoIn([famA.id, famB.id], rosa.id, `k/cap-${i}`);
+      await db
+        .update(familyPhotos)
+        .set({ createdAt: new Date(base + i * 60_000) })
+        .where(eq(familyPhotos.id, p.id));
+      ids.push(p.id);
+    }
+    const rows = await listAlbumPhotosDetailed(db, account(rosa.id), [famA.id, famB.id], { limit: 2 });
+    expect(rows.map((r) => r.id)).toEqual([ids[2], ids[1]]);
+    // The kept rows still carry BOTH authorized placements (cap doesn't corrupt the join).
+    expect(rows[0]!.families.map((f) => f.familyName)).toEqual(["Carney", "Esposito"]);
+  });
 });
