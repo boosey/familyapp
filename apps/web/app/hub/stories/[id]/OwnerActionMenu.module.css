@@ -1,0 +1,177 @@
+/*
+ * OwnerActionMenu — the story-owner kebab menu + dropdown (edit / add photos / manage sharing /
+ * delete). LIGHT PLAYFUL: warmth only — warm hover + focus on the trigger and menu items, gentle
+ * depth on the dropdown card and the primary confirm button. NO stickers / tape / tilt (this is a
+ * control surface). Token-driven; hover/focus states move to CSS (were inline JS handlers). See
+ * _skins/CSS-MODULES.md.
+ */
+
+.container {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 24px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  outline: none;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+.trigger:hover:not(:disabled),
+.trigger:focus-visible:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 240px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  padding: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  color: var(--text-body);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-fade) var(--ease-quiet);
+  outline: none;
+}
+.item:hover,
+.item:focus-visible {
+  background: var(--accent-soft);
+}
+.item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.itemDanger {
+  composes: item;
+  color: var(--text-danger);
+}
+
+/* ---- Delete confirm ------------------------------------------------------------------------- */
+.confirmForm {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirmPrompt {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+.confirmError {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-danger);
+  font-weight: 500;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btnConfirm {
+  flex: 1;
+  background: var(--text-danger);
+  color: var(--accent-on);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur-fade) var(--ease-quiet);
+}
+.btnConfirm:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+}
+.btnConfirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btnCancel {
+  flex: 1;
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fade) var(--ease-quiet);
+}
+.btnCancel:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.btnCancel:disabled {
+  cursor: not-allowed;
+}
+
+.btnConfirm:focus-visible,
+.btnCancel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Decorative depth collapses under reduce-motion / solemn. */
+:global(:root[data-reduce-motion="on"]) .btnConfirm,
+:global([data-tone="solemn"]) .btnConfirm {
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .btnConfirm:hover,
+:global([data-tone="solemn"]) .btnConfirm:hover {
+  box-shadow: none;
+}
