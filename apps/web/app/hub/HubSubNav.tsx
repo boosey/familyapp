@@ -31,10 +31,10 @@ export interface HubSubNavProps {
 }
 
 /**
- * HubSubNav (#189) — the shared sub-tab pill row lifted from Family's `.subLink`/`.badge` styling.
- * Renders a set of pills (link OR button) with a single active pill and optional per-item badge,
- * so no tab re-implements the pill mapping. Wrapped in a labelled <nav>. Layout of the pills is the
- * shared `.subNav` flex row (also in HubTabs.module.css); the toolbar owns the outer spacing.
+ * HubSubNav (#189) — the shared sub-tab pill row. Renders a set of pills (link OR button) with a
+ * single active pill and optional per-item badge, so no tab re-implements the pill mapping. Wrapped
+ * in a labelled <nav>. The pill look is the shared _kindred/SegmentedControl `.group`/`.pill` (#1/#5)
+ * and the count `.badge` is HubTabs.module.css; the toolbar owns the outer spacing.
  */
 export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps) {
   return (

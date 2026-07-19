@@ -69,25 +69,8 @@
   color: var(--support);
 }
 
-/* "Tell a story" button — the tab's single Tell-a-story affordance, rightmost in the actions cluster. */
-.tellButton {
-  display: inline-flex;
-  align-items: center;
-  padding: 12px 22px;
-  border-radius: var(--radius-md);
-  background: var(--tell-card-bg);
-  color: var(--accent-on);
-  font-family: var(--font-ui);
-  font-size: var(--text-ui-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration: none;
-  box-shadow: var(--shadow-card);
-}
-.tellButton:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+/* The "Tell a story" button now uses the shared _kindred/ActionButton (#7); its former bespoke
+   `.tellButton` class was removed here as dead CSS (#9). */
 
 .resumeList {
   list-style: none;

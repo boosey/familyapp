@@ -57,7 +57,9 @@
 }
 
 .tabContent {
-  padding: 28px 0;
+  /* Top padding tightened 28px → 20px (#9) to shrink the gap between the primary tab bar and the
+   * sub-tab toolbar directly below it; bottom padding unchanged. */
+  padding: 20px 0 28px;
 }
 
 .emptyCard {

@@ -1,7 +1,7 @@
 /* HubTabs — primary hub nav (Playful skin; #124 de-clutter).
  *
  * First CSS module with interactive elements: it is the worked example for rule 7 of
- * `_skins/CSS-MODULES.md` — every interactive element (.tab, .subLink) carries a visible
+ * `_skins/CSS-MODULES.md` — every interactive element (e.g. .tab) carries a visible
  * :focus-visible outline. Design values (color/radius/shadow/motion) are tokens; layout dims (gaps,
  * paddings, badge box) use raw px per CSS-MODULES.md rule 3 — a faithful port of the old inline
  * values, consistent with page.module.css house style. */
@@ -66,57 +66,6 @@
   line-height: 1;
 }
 
-/* Secondary sub-nav inside a primary tab — Questions (To answer / Ask / Your asks) and Family (Family
- * tree / Requests). */
-.subNav {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: var(--space-5);
-  font-family: var(--font-ui);
-}
-
-/* Margin-free pill-row for a sub-nav that lives INSIDE a HubToolbar slot (#189). Same flex layout as
- * `.subNav` minus its standalone `margin-bottom` — the toolbar owns the spacing between rows and before
- * the content, so a nested nav must not add its own trailing gap (the drift the old FamilySurfaceNav
- * `.selectorNav` note warned about, now centralized here for the shared HubSubNav). */
-.subNavRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  font-family: var(--font-ui);
-}
-
-.subLink {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  border: var(--border-width) solid transparent;
-  background: transparent;
-  color: var(--text-meta);
-  font-family: var(--font-ui);
-  font-size: var(--text-ui-sm);
-  font-weight: 500;
-  min-height: var(--touch-min);
-  cursor: pointer;
-  text-decoration: none;
-  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
-}
-
-.subLink:hover {
-  background: var(--surface-sunken);
-}
-
-.subLink[aria-current="page"] {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-weight: 600;
-}
-
-.subLink:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+/* The sub-nav pill row (Questions, Family, Stories, Album) is now the shared _kindred/SegmentedControl
+   rendered via HubSubNav (#1/#5/#189); the former `.subNav`/`.subNavRow`/`.subLink` classes here were
+   removed as dead CSS (#9). Only `.badge` above is still shared (the count-pill). */

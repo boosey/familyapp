@@ -6,13 +6,13 @@
 .toolbar {
   display: flex;
   flex-direction: column;
-  /* Gap between R1 and R2 when both render — matches the old FamilySurfaceNav row's bottom margin
-   * (var(--space-5)), the space that sat between the selector row and the family-selector row. */
-  gap: var(--space-5);
-  /* Space before the tab content below. In the no-R2 case this is the ONLY trailing space and is
-   * pixel-identical to the old FamilySurfaceNav row (var(--space-5)), keeping a single-row toolbar
-   * flush with the content — the load-bearing empty-row behaviour. */
-  margin-bottom: var(--space-5);
+  /* Gap between R1 and R2 when both render. Tightened to var(--space-4) (#9) so the two control rows
+   * read as one compact block rather than two loosely-stacked bars. */
+  gap: var(--space-4);
+  /* Space before the tab content below. In the no-R2 case this is the ONLY trailing space; tightened
+   * to var(--space-4) (#9) to sit the content closer under a single-row toolbar. The empty-row rule
+   * (a row with no content doesn't render) is enforced in the component, not here. */
+  margin-bottom: var(--space-4);
   font-family: var(--font-ui);
 }
 
