@@ -7,8 +7,8 @@
  */
 
 /* The former bespoke `.segmentGroup`/`.modePill` view/mode pills were removed once every selector moved
-   to the shared _kindred/SegmentedControl (#1/#5). `.searchInput` (below) is reused by the toolbar's
-   persistent Search field (#3). */
+   to the shared _kindred/SegmentedControl (#1/#5); the search input moved to the shared
+   _kindred/SearchField. This file no longer styles any top-of-tab control. */
 
 /* ── Feed layouts ────────────────────────────────────────────────────────────── */
 .masonry {
@@ -168,25 +168,6 @@
   max-width: 760px;
 }
 
-/* The persistent search field (#3) sits INLINE beside the Feed/Timeline pills in the toolbar's R1-left.
-   It is NOT full-width (that pushed it onto its own line below the pills) and its padding matches the
-   ActionButton so the two are the same height: 10px block + 1.5px border ≈ the button's 12px block. */
-.searchInput {
-  width: 240px;
-  max-width: 100%;
-  padding: 10px 14px;
-  font-family: var(--font-ui);
-  font-size: var(--text-ui-sm);
-  color: var(--text-body);
-  background: var(--surface-card);
-  border: var(--border-width) solid var(--border-strong);
-  border-radius: var(--radius-md);
-  outline: none;
-}
-.searchInput:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
 
 .searchIdle {
   font-family: var(--font-ui);

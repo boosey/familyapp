@@ -34,6 +34,7 @@ import { HubToolbar } from "../HubToolbar";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { ActionButton } from "@/app/_kindred/ActionButton";
+import { SearchField } from "@/app/_kindred/SearchField";
 import { FamilyChips } from "../FamilyChips";
 import { StoryBrowse } from "./StoryBrowse";
 import {
@@ -44,7 +45,6 @@ import {
   type FeedView,
 } from "./stories-browse-controls";
 import type { SelfDraft, StoryItem, ViewerFamily } from "./story-browse-types";
-import browseStyles from "./StoryBrowse.module.css";
 import styles from "./StoriesTab.module.css";
 
 export interface StoriesSurfaceProps {
@@ -150,18 +150,16 @@ export function StoriesSurface({
     <HubSubNav ariaLabel={hub.shell.tabStories} items={modeItems} active={mode} onSelect={(k) => setMode(k as BrowseMode)} />
   ) : null;
   // Persistent search field (#3): always beside the pills while browsing; a non-empty query replaces
-  // the feed/timeline body with results (handled in StoryBrowse), so it is no longer a mode.
-  const searchField =
-    browsing ? (
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={hub.browse.searchPlaceholder}
-        aria-label={hub.browse.searchPlaceholder}
-        className={browseStyles.searchInput}
-      />
-    ) : null;
+  // the feed/timeline body with results (handled in StoryBrowse), so it is no longer a mode. The ONE
+  // shared SearchField primitive — the same field the Album filter uses.
+  const searchField = browsing ? (
+    <SearchField
+      value={query}
+      onChange={setQuery}
+      placeholder={hub.browse.searchPlaceholder}
+      ariaLabel={hub.browse.searchPlaceholder}
+    />
+  ) : null;
   const row1Left =
     modeNav || searchField ? (
       <div className={styles.modeGroup}>

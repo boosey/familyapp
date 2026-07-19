@@ -116,7 +116,7 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeTruthy();
 
     // Typing in the persistent field replaces the feed body with search results → toggle hides.
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "x" } });
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 

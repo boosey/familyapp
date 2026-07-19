@@ -1,0 +1,22 @@
+/* SearchField — the ONE reusable search input (Stories browse + Album filter). Sized DOWN to match the
+ * primary ActionButton's height: 10px block padding + 1.5px border ≈ the button's 12px block. Not
+ * full-width (that pushed the Stories field onto its own line below the pills); a fixed field width that
+ * caps at the container. Tokens for design values, raw px for layout, per _skins/CSS-MODULES.md. */
+
+.field {
+  width: 240px;
+  max-width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

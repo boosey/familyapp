@@ -157,14 +157,14 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
   it("shows the persistent search field beside the pills in R1 whenever browsing (not a mode)", () => {
     const { container } = renderPopulated();
     // The field is ALWAYS present while browsing — no mode click needed.
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("searchbox");
     // The search input rides R1 (beside the pills), NOT the content body below the toolbar.
     expect(toolbarRows(container)[0]!.contains(input)).toBe(true);
   });
 
   it("typing in the persistent field filters the pool (search replaces the feed/timeline body)", () => {
     renderPopulated();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "storm" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "storm" } });
     const titles = screen
       .queryAllByRole("link")
       .map((el) => el.textContent ?? "")
@@ -189,7 +189,7 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     const { container } = renderPopulated({ activeFamilies: [famA] });
     // Feed mode, single family: the Masonry/Column selector keeps R2 alive.
     expect(toolbarRows(container).length).toBe(2);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "storm" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "storm" } });
     // Searching replaces the feed body → the layout selector hides; single family → no chips → R2 gone.
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
     expect(toolbarRows(container).length).toBe(1);

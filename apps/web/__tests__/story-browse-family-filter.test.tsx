@@ -104,7 +104,7 @@ function switchToTimeline() {
 // results over the already-family-narrowed pool. "the" appears in both onlyA ("the storm") and onlyB
 // ("the move"), so it exercises the pool narrowing directly.
 function typeSearch(q: string) {
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: q } });
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: q } });
 }
 
 describe("StoryBrowse — family tag labels", () => {

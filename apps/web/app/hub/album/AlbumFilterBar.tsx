@@ -23,6 +23,7 @@
  */
 import { hub } from "@/app/_copy";
 import { HubToolbar } from "../HubToolbar";
+import { SearchField } from "@/app/_kindred/SearchField";
 
 /** Coarse capture-time buckets over each photo's `capturedAt` ISO string. */
 export type AlbumPeriod = "all" | "thisYear" | "fiveYears" | "older";
@@ -122,14 +123,13 @@ export function AlbumFilterBar({
         ))}
       </select>
 
-      {/* Caption / tag text search — label dropped (#143); placeholder + aria-label carry it. */}
-      <input
-        type="search"
-        aria-label={hub.album.filterTextLabel}
-        placeholder={hub.album.filterTextPlaceholder}
+      {/* Caption / tag text search — the ONE shared _kindred/SearchField (same field the Stories browse
+          toolbar uses); label dropped (#143), placeholder + aria-label carry it. */}
+      <SearchField
         value={value.text}
-        onChange={(e) => onChange({ ...value, text: e.currentTarget.value })}
-        style={{ ...control, minWidth: 180 }}
+        onChange={(text) => onChange({ ...value, text })}
+        ariaLabel={hub.album.filterTextLabel}
+        placeholder={hub.album.filterTextPlaceholder}
       />
 
       {isFilterActive(value) ? (
