@@ -27,6 +27,7 @@ import type {
   KinshipNature,
   KinshipState,
   LifeStatus,
+  MembershipRole,
   PersonSex,
 } from "@chronicle/db";
 import { AuthorizationError } from "./errors";
@@ -297,6 +298,118 @@ export async function listMyKin(
       (a.personId < b.personId ? -1 : a.personId > b.personId ? 1 : 0),
   );
   return entries;
+}
+
+// ---------------------------------------------------------------------------
+// listUnplacedMembers (#161, ADR-0023) — active members who are an endpoint of
+// NO visible kinship edge (and are not curated "non-family"), so the Family tab
+// can surface them instead of leaving them invisible in the graph-only view.
+// ---------------------------------------------------------------------------
+
+/** An active member of the family who is not yet placed in the kinship tree. */
+export interface UnplacedMember {
+  personId: string;
+  /** Null only for the (unreachable-here) placeholder mention case — members are named persons. */
+  displayName: string | null;
+  role: MembershipRole;
+}
+
+/**
+ * List a family's active members who are NOT placed in its kinship tree (#161, ADR-0023). "Placed"
+ * means being an endpoint of at least one VISIBLE kinship edge (reusing `resolveKinshipProjection`,
+ * so denied/hidden edges do NOT count as placed). A member is unplaced iff they touch no visible
+ * edge AND their membership's `non_family` flag is false (a member curated "non-family" is
+ * intentionally excluded — they belong to the family but are not meant to appear as a tree node).
+ * Auth flows through `resolveKinshipProjection` (viewer must be an active member; anonymous
+ * rejected). Sorted by displayName then id for a deterministic list.
+ */
+export async function listUnplacedMembers(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+): Promise<UnplacedMember[]> {
+  // Auth + the visible edge set in one call (throws for a non-member / anonymous viewer).
+  const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+
+  // The set of persons touched by SOME visible edge — i.e. "placed" in the tree.
+  const placed = new Set<string>();
+  for (const e of edges) {
+    placed.add(e.personAId);
+    placed.add(e.personBId);
+  }
+
+  // Active members of this family that are NOT curated non-family, with name + role.
+  const rows = await db
+    .select({
+      personId: persons.id,
+      displayName: persons.displayName,
+      role: memberships.role,
+    })
+    .from(memberships)
+    .innerJoin(persons, eq(persons.id, memberships.personId))
+    .where(
+      and(
+        eq(memberships.familyId, familyId),
+        eq(memberships.status, "active"),
+        eq(memberships.nonFamily, false),
+      ),
+    );
+
+  const unplaced = rows.filter((r) => !placed.has(r.personId));
+  unplaced.sort(
+    (a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "") ||
+      (a.personId < b.personId ? -1 : a.personId > b.personId ? 1 : 0),
+  );
+  return unplaced;
+}
+
+// ---------------------------------------------------------------------------
+// listPlacedPersons (#169) — every person who is an endpoint of at least one
+// visible kinship edge in the family, i.e. "already placed in the tree".
+// Used by the unplaced-member placement UX so the anchor picker offers the
+// FULL set of placed relatives, not just the ones inside the current bounded
+// tree window. Returns displayName for rendering a searchable list.
+// ---------------------------------------------------------------------------
+
+export interface PlacedPersonView {
+  personId: string;
+  displayName: string | null;
+}
+
+/**
+ * List every person who is an endpoint of at least one VISIBLE kinship edge in `familyId` (#169).
+ * "Placed" means touched by a visible edge (same definition as `listUnplacedMembers` uses for the
+ * complement set). Auth flows through `resolveKinshipProjection` (active-membership required,
+ * anonymous rejected). Sorted by displayName then id for a deterministic, searchable list.
+ */
+export async function listPlacedPersons(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+): Promise<PlacedPersonView[]> {
+  const { edges } = await resolveKinshipProjection(db, ctx, familyId);
+  const placed = new Set<string>();
+  for (const e of edges) {
+    placed.add(e.personAId);
+    placed.add(e.personBId);
+  }
+  if (placed.size === 0) return [];
+
+  const rows = await db
+    .select({
+      id: persons.id,
+      displayName: persons.displayName,
+    })
+    .from(persons)
+    .where(inArray(persons.id, Array.from(placed)));
+
+  rows.sort(
+    (a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "") ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return rows.map((r) => ({ personId: r.id, displayName: r.displayName }));
 }
 
 // ---------------------------------------------------------------------------

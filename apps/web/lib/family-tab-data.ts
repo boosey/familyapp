@@ -12,11 +12,14 @@
  */
 import {
   listMyKin,
+  listUnplacedMembers,
+  listFamiliesStewardedBy,
   resolveKinshipTree,
   AuthorizationError,
   type AuthContext,
   type KinListEntry,
   type KinshipTreeData,
+  type UnplacedMember,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 
@@ -26,6 +29,17 @@ export interface FamilyTabData {
   focusPersonId: string;
   tree: KinshipTreeData;
   kin: KinListEntry[];
+  /**
+   * #161/ADR-0023 — active members of this family placed in NO visible kinship edge (and not curated
+   * "non-family"). They're invisible in the graph-only tree, so the Family tab surfaces them in a "not
+   * yet connected" tray/section with place/leave-as-non-family/remove actions.
+   */
+  unplaced: UnplacedMember[];
+  /**
+   * Whether the viewer is this family's STEWARD — gates the destructive "remove member" affordance in
+   * the unplaced surface (computed server-side so the button never flashes). The write path re-checks.
+   */
+  viewerIsSteward: boolean;
 }
 
 /**
@@ -68,6 +82,11 @@ export async function loadFamilyTabData(
   }
   if (!tree) return null;
 
-  const kin = await listMyKin(db, ctx, familyId);
-  return { familyId, focusPersonId, tree, kin };
+  const [kin, unplaced, stewarded] = await Promise.all([
+    listMyKin(db, ctx, familyId),
+    listUnplacedMembers(db, ctx, familyId),
+    listFamiliesStewardedBy(db, ctx.personId),
+  ]);
+  const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
+  return { familyId, focusPersonId, tree, kin, unplaced, viewerIsSteward };
 }

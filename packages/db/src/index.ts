@@ -54,6 +54,7 @@ export type {
   ConsentAction,
   AskStatus,
   InvitationStatus,
+  InviteRelationship,
   JoinRequestStatus,
   BiographicalProfile,
   ProseRevision,

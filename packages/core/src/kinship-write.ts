@@ -15,8 +15,15 @@
 import { and, eq } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
-import type { Database, KinshipEdgeType, KinshipNature, PersonSex } from "@chronicle/db";
+import type {
+  Database,
+  InviteRelationship,
+  KinshipEdgeType,
+  KinshipNature,
+  PersonSex,
+} from "@chronicle/db";
 import type { AuthContext } from "./authorization";
+import { InvariantViolation } from "./errors";
 import { isActiveMember } from "./memberships";
 import { normalizeEdgeEndpoints, resolveKinshipProjection } from "./kinship-repository";
 
@@ -282,6 +289,119 @@ async function currentPartnerIdsOf(
 }
 
 /**
+ * Write the primitive edge(s) that express `relation` between `anchor` and `targetPersonId`, inside
+ * an open transaction, first-asserter-wins. This is the SHARED edge-writing core of both
+ * `addRelative` (where `targetPersonId` is a freshly-minted mention) and `linkExistingMember` (where
+ * it is an EXISTING active member) — it never mints the target itself, only the ADR-0017
+ * bridges/placeholders a relation needs. `me` is the actor of every edge. Returns the ids of the
+ * appended edges and every placeholder minted. Mirrors ADR-0016/ADR-0017 exactly (see `addRelative`).
+ */
+async function writeRelationEdges(
+  tx: DbOrTx,
+  opts: {
+    familyId: string;
+    me: string;
+    anchor: string;
+    targetPersonId: string;
+    relation: AddRelativeRelation;
+    nature: KinshipNature;
+    coParentPersonId?: string;
+  },
+): Promise<{ edgeIds: string[]; bridgePersonIds: string[] }> {
+  const { familyId, me, anchor, targetPersonId, relation, nature, coParentPersonId } = opts;
+  const edgeIds: string[] = [];
+  const bridgePersonIds: string[] = [];
+
+  // Every relation attaches to `anchor`; `me` remains the actor of every edge.
+  switch (relation) {
+    case "parent": {
+      edgeIds.push(await insertParentOf(tx, familyId, me, targetPersonId, anchor, nature));
+      break;
+    }
+    case "child": {
+      edgeIds.push(await insertParentOf(tx, familyId, me, anchor, targetPersonId, nature));
+      if (coParentPersonId !== undefined) {
+        edgeIds.push(await insertParentOf(tx, familyId, me, coParentPersonId, targetPersonId, nature));
+      }
+      break;
+    }
+    case "partner": {
+      edgeIds.push(await insertPartneredWith(tx, familyId, me, anchor, targetPersonId));
+      break;
+    }
+    case "grandparent": {
+      const parents = await currentParentIdsOf(tx, familyId, anchor);
+      if (parents.length > 0) {
+        // Attach the grandparent above each existing parent (R is parent of each P).
+        for (const p of parents) {
+          edgeIds.push(await insertParentOf(tx, familyId, me, targetPersonId, p, nature));
+        }
+      } else {
+        // No parent yet: mint one anonymous bridge parent B, then B->anchor and R->B.
+        const bridge = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
+        bridgePersonIds.push(bridge);
+        edgeIds.push(await insertParentOf(tx, familyId, me, bridge, anchor, nature));
+        edgeIds.push(await insertParentOf(tx, familyId, me, targetPersonId, bridge, nature));
+      }
+      break;
+    }
+    case "sibling": {
+      // ADR-0017: a v1 sibling shares BOTH parents (a single shared parent is a *half*-sibling,
+      // deferred). So we TOP the anchor's parents up to a couple and share BOTH with the new
+      // sibling. Every parent_of edge written HERE is an INFERRED sibling-scaffold link (to a ghost,
+      // or a top-up completing the couple), whose nature we do not know — so per ADR-0017 all carry
+      // `nature = "unknown"`, NOT the caller's nature. All writes are in this tx.
+      const SIBLING_NATURE: KinshipNature = "unknown";
+      const parents = await currentParentIdsOf(tx, familyId, anchor);
+
+      // Bring the anchor's parent set to exactly two, then share BOTH with the target.
+      const couple = [...parents];
+      if (couple.length === 0) {
+        // 0 recorded parents → mint TWO placeholders, partner them, both parent_of anchor.
+        const b1 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
+        const b2 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
+        bridgePersonIds.push(b1, b2);
+        edgeIds.push(await insertPartneredWith(tx, familyId, me, b1, b2));
+        edgeIds.push(await insertParentOf(tx, familyId, me, b1, anchor, SIBLING_NATURE));
+        edgeIds.push(await insertParentOf(tx, familyId, me, b2, anchor, SIBLING_NATURE));
+        couple.push(b1, b2);
+      } else if (couple.length === 1) {
+        // 1 recorded parent P → complete the couple to {P, R}. If P ALREADY has a recorded partner R
+        // in this family, REUSE R (v1 is single-partner — never mint a second partnership for P);
+        // otherwise mint a ghost Q to be P's partner.
+        const p = couple[0]!;
+        const partners = await currentPartnerIdsOf(tx, familyId, p);
+        const r = partners[0];
+        if (r !== undefined) {
+          // Reuse P's real partner R as the second parent. R may not yet be recorded as anchor's
+          // parent, so assert R -> anchor to complete the pair (idempotent). Mint NO ghost.
+          edgeIds.push(await insertParentOf(tx, familyId, me, r, anchor, SIBLING_NATURE));
+          couple.push(r);
+        } else {
+          // P has no partner → mint ghost Q, partner(P,Q), Q is a new parent_of anchor.
+          const q = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
+          bridgePersonIds.push(q);
+          edgeIds.push(await insertPartneredWith(tx, familyId, me, p, q));
+          edgeIds.push(await insertParentOf(tx, familyId, me, q, anchor, SIBLING_NATURE));
+          couple.push(q);
+        }
+      }
+      // couple.length === 2 → reuse it as-is; mint nothing.
+      // couple.length >= 3 → first-asserter-wins can leave 3+ recorded parents; we DON'T reduce them.
+      //   A sibling shares ALL of the anchor's existing parents (loop below), minting nothing.
+
+      // Share EACH parent of the (topped-up or over-full) set with the target sibling.
+      for (const p of couple) {
+        edgeIds.push(await insertParentOf(tx, familyId, me, p, targetPersonId, SIBLING_NATURE));
+      }
+      break;
+    }
+  }
+
+  return { edgeIds, bridgePersonIds };
+}
+
+/**
  * Add a relative of the signed-in Person to a family, first-asserter-wins. Re-resolves auth and
  * active membership server-side (never trusts the client). Creates the relative Person as a
  * `mention` (identified iff a real name is given) and appends the primitive edge(s) that express the
@@ -351,103 +471,247 @@ export async function addRelative(
       createdByPersonId: me,
     });
 
-    const edgeIds: string[] = [];
-    const bridgePersonIds: string[] = [];
-
-    // Every relation attaches to `anchor` (defaults to `me`); `me` remains the actor of every edge.
-    switch (input.relation) {
-      case "parent": {
-        edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, anchor, nature));
-        break;
-      }
-      case "child": {
-        edgeIds.push(await insertParentOf(tx, familyId, me, anchor, createdPersonId, nature));
-        if (coParentPersonId !== undefined) {
-          edgeIds.push(await insertParentOf(tx, familyId, me, coParentPersonId, createdPersonId, nature));
-        }
-        break;
-      }
-      case "partner": {
-        edgeIds.push(await insertPartneredWith(tx, familyId, me, anchor, createdPersonId));
-        break;
-      }
-      case "grandparent": {
-        const parents = await currentParentIdsOf(tx, familyId, anchor);
-        if (parents.length > 0) {
-          // Attach the grandparent above each existing parent (R is parent of each P).
-          for (const p of parents) {
-            edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, p, nature));
-          }
-        } else {
-          // No parent yet: mint one anonymous bridge parent B, then B->anchor and R->B.
-          const bridge = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
-          bridgePersonIds.push(bridge);
-          edgeIds.push(await insertParentOf(tx, familyId, me, bridge, anchor, nature));
-          edgeIds.push(await insertParentOf(tx, familyId, me, createdPersonId, bridge, nature));
-        }
-        break;
-      }
-      case "sibling": {
-        // ADR-0017: a v1 sibling shares BOTH parents (a single shared parent is a *half*-sibling,
-        // deferred). So we TOP the anchor's parents up to a couple and share BOTH with the new
-        // sibling B. Every parent_of edge written HERE is an INFERRED sibling-scaffold link (to a
-        // ghost, or a top-up completing the couple), whose nature we do not know — so per ADR-0017 all
-        // carry `nature = "unknown"`, NOT the caller's `input.nature`. All writes are in this tx.
-        const SIBLING_NATURE: KinshipNature = "unknown";
-        const parents = await currentParentIdsOf(tx, familyId, anchor);
-
-        // Bring the anchor's parent set to exactly two, then share BOTH with B — so the anchor and B
-        // end up with the SAME parents (never a half-sibling).
-        const couple = [...parents];
-        if (couple.length === 0) {
-          // 0 recorded parents → mint TWO placeholders, partner them, both parent_of anchor.
-          const b1 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
-          const b2 = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
-          bridgePersonIds.push(b1, b2);
-          edgeIds.push(await insertPartneredWith(tx, familyId, me, b1, b2));
-          edgeIds.push(await insertParentOf(tx, familyId, me, b1, anchor, SIBLING_NATURE));
-          edgeIds.push(await insertParentOf(tx, familyId, me, b2, anchor, SIBLING_NATURE));
-          couple.push(b1, b2);
-        } else if (couple.length === 1) {
-          // 1 recorded parent P → complete the couple to {P, R}. If P ALREADY has a recorded partner R
-          // in this family, REUSE R (v1 is single-partner — never mint a second partnership for P);
-          // otherwise mint a ghost Q to be P's partner.
-          const p = couple[0]!;
-          const partners = await currentPartnerIdsOf(tx, familyId, p);
-          const r = partners[0];
-          if (r !== undefined) {
-            // Reuse P's real partner R as the second parent. R may not yet be recorded as A's parent,
-            // so assert R -> anchor to complete the pair (idempotent: first-asserter-wins, and if it
-            // already exists this simply appends a superseding assertion). Mint NO ghost.
-            edgeIds.push(await insertParentOf(tx, familyId, me, r, anchor, SIBLING_NATURE));
-            couple.push(r);
-          } else {
-            // P has no partner → mint ghost Q, partner(P,Q), Q is a new parent_of anchor.
-            const q = await insertMentionPerson(tx, { displayName: null, lifeStatus: "living", createdByPersonId: me });
-            bridgePersonIds.push(q);
-            edgeIds.push(await insertPartneredWith(tx, familyId, me, p, q));
-            edgeIds.push(await insertParentOf(tx, familyId, me, q, anchor, SIBLING_NATURE));
-            couple.push(q);
-          }
-        }
-        // couple.length === 2 → reuse it as-is; mint nothing.
-        // couple.length >= 3 → first-asserter-wins can leave 3+ recorded parents; we DON'T reduce them.
-        //   A sibling shares ALL of the anchor's existing parents (loop below), minting nothing. This
-        //   is intentional (documented): with an over-full parent set there is no ghost to add.
-
-        // Share EACH parent of the (topped-up or over-full) set with the new sibling B.
-        for (const p of couple) {
-          edgeIds.push(await insertParentOf(tx, familyId, me, p, createdPersonId, SIBLING_NATURE));
-        }
-        break;
-      }
-    }
+    // Write the relation's edges (shared with `linkExistingMember`). The target is the freshly-minted
+    // mention; bridges/placeholders are minted inside as ADR-0017 requires.
+    const { edgeIds, bridgePersonIds } = await writeRelationEdges(tx, {
+      familyId,
+      me,
+      anchor,
+      targetPersonId: createdPersonId,
+      relation: input.relation,
+      nature,
+      coParentPersonId,
+    });
 
     const result: AddRelativeResult = { allowed: true, createdPersonId, edgeIds };
     if (bridgePersonIds.length > 0) {
       result.bridgePersonId = bridgePersonIds[0];
       result.bridgePersonIds = bridgePersonIds;
     }
+    return result;
+  });
+}
+
+// ===========================================================================
+// Accept-time auto-placement from a structured invite relationship (#164, ADR-0023).
+//
+// When an invitation carried a STRUCTURED relationship (the fixed invite vocabulary) and is
+// accepted, the new member should appear in the family's tree the instant they join — the exact
+// fact needed to place them was collected at invite time (the production incident that motivated
+// this: an invite that said "Son" was discarded on accept, leaving the member invisible). Only the
+// six DIRECT primitives auto-place; `other` records "no auto-edge" and the member is left unplaced
+// for #161 — a sibling/grandparent/in-law needs a bridge node (ADR-0017) and is NEVER guessed here.
+//
+// The auto-written edge is NOT privileged: it is a normal `asserted` edge, actor = the inviter, so
+// it flows through the SAME governance overlay as any manual assertion — first-asserter-wins, the
+// subject hide-veto (#34), and steward deny/correct (#33). Lives in this allowlisted kinship file so
+// `acceptInvitation` (invitations.ts) drives it WITHOUT importing the guarded kinship tables itself.
+// ===========================================================================
+
+/** A tx/db handle that can read, insert edges, and update the invitee's `sex`. */
+type PlacementTx = DbOrTx & Pick<Database, "update">;
+
+/**
+ * The invite-picker vocabulary → (edge to write, invitee sex) placement table (#164). The value
+ * names the INVITEE's role relative to the INVITER (the actor): `son` ⇒ the invitee is the inviter's
+ * son ⇒ the inviter is a parent of the invitee; `mother` ⇒ the invitee is the inviter's mother ⇒ the
+ * invitee is a parent of the inviter. `other` is absent — it writes no edge and touches no sex.
+ */
+const INVITE_PLACEMENT: Record<
+  Exclude<InviteRelationship, "other">,
+  { edge: "partner" | "inviteeIsParent" | "inviterIsParent"; sex: PersonSex }
+> = {
+  wife: { edge: "partner", sex: "female" },
+  husband: { edge: "partner", sex: "male" },
+  mother: { edge: "inviteeIsParent", sex: "female" },
+  father: { edge: "inviteeIsParent", sex: "male" },
+  son: { edge: "inviterIsParent", sex: "male" },
+  daughter: { edge: "inviterIsParent", sex: "female" },
+};
+
+export interface PlaceInvitedMemberResult {
+  /** The appended kinship edge id, or null when the relationship was `other` (no auto-edge). */
+  edgeId: string | null;
+  /** The invitee `sex` written, or null when none was set (no gendered pick, or already set). */
+  sexSet: PersonSex | null;
+}
+
+/**
+ * Auto-place a just-accepted member from the invite's structured relationship (#164). MUST run
+ * inside `acceptInvitation`'s transaction so the membership, merge, and edge commit atomically.
+ * `inviterPersonId` is the actor (and the anchor the edge attaches to); `inviteePersonId` is the
+ * REAL accepting Person (the provisional has already been merged away by the caller). Writes exactly
+ * ONE primitive edge for a direct relationship and matches the invitee's `sex` to the gendered pick;
+ * `other` (and any nullish relationship — handled by the caller) writes nothing.
+ *
+ * The `sex` write is CONSERVATIVE — only when the invitee's sex is currently unset (`null`/`unknown`)
+ * — so accepting a second-family invite can never clobber a sex the member set themselves. The
+ * common path (a freshly JIT-provisioned account, sex `unknown`) still gets labelled with no extra
+ * data entry (user story #6). Mirrors `reconcileMentionIntoAccount`'s carry-when-unset rule.
+ */
+export async function placeInvitedMemberOnAccept(
+  tx: PlacementTx,
+  input: {
+    familyId: string;
+    inviterPersonId: string;
+    inviteePersonId: string;
+    relationship: Exclude<InviteRelationship, "other">;
+  },
+): Promise<PlaceInvitedMemberResult> {
+  const { familyId, inviterPersonId: me, inviteePersonId } = input;
+  // `INVITE_PLACEMENT` is total over the six direct values; the lookup is `T | undefined` only under
+  // `noUncheckedIndexedAccess`, so the guard is a type-narrowing formality (unreachable at runtime).
+  const plan = INVITE_PLACEMENT[input.relationship];
+  if (plan === undefined) {
+    throw new InvariantViolation(`no placement for invite relationship '${input.relationship}'`);
+  }
+
+  let edgeId: string;
+  switch (plan.edge) {
+    case "partner":
+      edgeId = await insertPartneredWith(tx, familyId, me, me, inviteePersonId);
+      break;
+    case "inviteeIsParent":
+      // The invitee is a parent of the inviter (mother/father).
+      edgeId = await insertParentOf(tx, familyId, me, inviteePersonId, me, "unknown");
+      break;
+    case "inviterIsParent":
+      // The inviter is a parent of the invitee (son/daughter).
+      edgeId = await insertParentOf(tx, familyId, me, me, inviteePersonId, "unknown");
+      break;
+  }
+
+  // Match the invitee's sex to the gendered pick — but only fill an unset value (see doc above).
+  let sexSet: PersonSex | null = null;
+  const [invitee] = await tx
+    .select({ sex: persons.sex })
+    .from(persons)
+    .where(eq(persons.id, inviteePersonId))
+    .limit(1);
+  const sexUnset = invitee === undefined || invitee.sex === null || invitee.sex === "unknown";
+  if (sexUnset) {
+    await tx
+      .update(persons)
+      .set({ sex: plan.sex, updatedAt: new Date() })
+      .where(eq(persons.id, inviteePersonId));
+    sexSet = plan.sex;
+  }
+
+  return { edgeId, sexSet };
+}
+
+// ===========================================================================
+// linkExistingMember (#161, ADR-0023) — place an EXISTING active member into the
+// kinship tree. Same edge topology as `addRelative`, but attaches the member the
+// caller names instead of minting a fresh mention. This is the "place in tree"
+// cure for an unplaced member (a member with no kinship edge is invisible in the
+// graph-only Family tab). Bridges/placeholders (ADR-0017) are still minted — they
+// are not duplicates of the member.
+// ===========================================================================
+
+export interface LinkExistingMemberInput {
+  familyId: string;
+  relation: AddRelativeRelation;
+  /** The person the member attaches TO. Defaults to the viewer. Same attachability rule as
+   *  `addRelative`: an active member OR a person visible in the family's kinship projection. */
+  anchorPersonId?: string;
+  /** The EXISTING active member to place — attached, never minted. */
+  existingPersonId: string;
+  /** For parent_of edges; default "unknown". */
+  nature?: KinshipNature;
+  /** ONLY for relation="child": also record this person as a second parent of the child. Must be
+   *  attachable in the family. Ignored for every other relation. */
+  coParentPersonId?: string;
+}
+
+export interface LinkExistingMemberResult {
+  allowed: boolean;
+  reason?: string;
+  /** Every anonymous placeholder minted (ADR-0017 bridges) — never a duplicate of the linked member. */
+  bridgePersonIds?: string[];
+  /** Ids of the appended kinshipAssertions rows. */
+  edgeIds?: string[];
+}
+
+/**
+ * Place an EXISTING active member (`existingPersonId`) into a family's kinship tree, first-asserter-
+ * wins (#161, ADR-0023). Mirrors `addRelative`'s edge logic (via the shared `writeRelationEdges`) but
+ * attaches the named member rather than minting a new Person — so it NEVER creates a duplicate of the
+ * member (ADR-0017 bridges/placeholders may still be minted; those are not the member). Auth: the
+ * actor must be an active member; `existingPersonId` must be an active member of THIS family; the
+ * anchor must be attachable (active member OR visible in the projection); and a member cannot be
+ * linked to itself (`existingPersonId !== anchor`). Re-resolves everything server-side.
+ */
+export async function linkExistingMember(
+  db: Database,
+  ctx: AuthContext,
+  input: LinkExistingMemberInput,
+): Promise<LinkExistingMemberResult> {
+  if (ctx.kind !== "account") {
+    return { allowed: false, reason: "not signed in" };
+  }
+  const me = ctx.personId;
+
+  if (!(await isActiveMember(db, me, input.familyId))) {
+    return { allowed: false, reason: "not a member of this family" };
+  }
+
+  // The linked member must be an ACTIVE member of THIS family (never mint, never link a non-member).
+  if (!(await isActiveMember(db, input.existingPersonId, input.familyId))) {
+    return { allowed: false, reason: "person to link is not an active member of this family" };
+  }
+
+  // Resolve + validate the anchor (defaults to the viewer). Same attachability rule as `addRelative`.
+  const anchor = input.anchorPersonId ?? me;
+  if (anchor !== me) {
+    if (!(await isAttachableInFamily(db, ctx, input.familyId, anchor))) {
+      return { allowed: false, reason: "anchor person is not in this family" };
+    }
+  }
+
+  // A member cannot be linked to itself.
+  if (input.existingPersonId === anchor) {
+    return { allowed: false, reason: "cannot link a member to the same person (self-link)" };
+  }
+
+  // Co-parent (relation=child only): validate up-front like `addRelative`.
+  let coParentPersonId: string | undefined;
+  if (input.relation === "child" && input.coParentPersonId !== undefined) {
+    const candidate = input.coParentPersonId;
+    // A co-parent that IS the linked child would write parent_of(child, child) — a self-loop the DB
+    // CHECK `kinship_assertions_no_self_ck` rejects as a raw exception. Reject cleanly here instead.
+    // (`addRelative` cannot hit this: its child is a freshly-minted person, never a caller id.)
+    if (candidate === input.existingPersonId) {
+      return {
+        allowed: false,
+        reason: "co-parent cannot be the linked child (a person cannot be their own parent)",
+      };
+    }
+    if (candidate !== anchor) {
+      if (!(await isAttachableInFamily(db, ctx, input.familyId, candidate))) {
+        return { allowed: false, reason: "co-parent person is not in this family" };
+      }
+      coParentPersonId = candidate;
+    }
+    // candidate === anchor: same person as the primary parent, so no second edge is added.
+  }
+
+  const familyId = input.familyId;
+  const nature: KinshipNature = input.nature ?? "unknown";
+
+  return db.transaction(async (tx) => {
+    const { edgeIds, bridgePersonIds } = await writeRelationEdges(tx, {
+      familyId,
+      me,
+      anchor,
+      targetPersonId: input.existingPersonId,
+      relation: input.relation,
+      nature,
+      coParentPersonId,
+    });
+
+    const result: LinkExistingMemberResult = { allowed: true, edgeIds };
+    if (bridgePersonIds.length > 0) result.bridgePersonIds = bridgePersonIds;
     return result;
   });
 }

@@ -106,6 +106,16 @@ export async function RequestsTab({
     acc[r.familyId] = (acc[r.familyId] ?? 0) + 1;
     return acc;
   }, {});
+  // Precompute the badge accessible-name STRINGS here (in the server component) rather than passing the
+  // `pendingCountAria` copy fn down: <FamilyChips> is a client component, and a plain function can't
+  // cross the RSC boundary ("Functions cannot be passed directly to Client Components…") — doing so
+  // 500'd this tab. Strings serialize; the fn does not.
+  const pendingCountLabels = Object.fromEntries(
+    Object.entries(pendingCountByFamily).map(([familyId, count]) => [
+      familyId,
+      hub.requests.pendingCountAria(count),
+    ]),
+  );
 
   // Scope the already-authorized rows to the selected family via the shared pure helper (the SAME the
   // browse filter uses), so the URL filter and the rendered list stay in lockstep.
@@ -121,7 +131,7 @@ export async function RequestsTab({
         families={families}
         selected={[scopeFamilyId]}
         badges={pendingCountByFamily}
-        badgeLabel={hub.requests.pendingCountAria}
+        badgeLabels={pendingCountLabels}
       />
 
       <h2

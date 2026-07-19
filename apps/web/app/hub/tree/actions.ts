@@ -15,14 +15,21 @@
 import {
   AuthorizationError,
   canEditPerson,
+  endMembership,
+  linkExistingMember,
   listActiveFamiliesForPerson,
+  listPlacedPersons,
   resolveKinshipTree,
+  setMemberNonFamily,
   updatePersonIdentityAsEditor,
+  type AddRelativeRelation,
   type EditPersonPatch,
   type KinshipTreeData,
+  type PlacedPersonView,
   type TreeWindow,
 } from "@chronicle/core";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
+import { revalidatePath } from "next/cache";
 import { getRuntime } from "@/lib/runtime";
 
 export type FetchSubtreeResult =
@@ -155,6 +162,186 @@ export async function savePersonEditAction(
       return { ok: false, error: "bad-input" };
     }
     plogError("tree", "savePersonEdit: error", {
+      family: familyId,
+      person: personId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unplaced-member curation (#161, ADR-0023). Three server actions backing the
+// Family tab's "unplaced members" surface (tray on the tree, section in the
+// list). Each RE-VALIDATES the family against the viewer's OWN active families
+// before calling core — a forged/foreign scope never reaches the write path —
+// mirroring fetchSubtreeAction. Core re-checks every gate on top (active
+// member for link/non-family, steward for remove), so these projections never
+// widen authority; they just spare the client a round-trip to a rejected call.
+// ---------------------------------------------------------------------------
+
+/** The five relations the place-in-tree flow offers (mirrors core's AddRelativeRelation). */
+const VALID_LINK_RELATIONS: ReadonlySet<AddRelativeRelation> = new Set<AddRelativeRelation>([
+  "parent",
+  "child",
+  "partner",
+  "grandparent",
+  "sibling",
+]);
+
+/** Resolve auth + re-validate `familyId` against the viewer's active families. */
+async function resolveFamilyScopedActor(
+  familyId: string,
+): Promise<
+  | { ok: true; db: Awaited<ReturnType<typeof getRuntime>>["db"]; ctx: { kind: "account"; personId: string } }
+  | { ok: false; error: "unauthorized" | "invalid" }
+> {
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") return { ok: false, error: "unauthorized" };
+  if (typeof familyId !== "string" || !familyId) return { ok: false, error: "invalid" };
+  const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  if (!activeFamilies.some((f) => f.familyId === familyId)) return { ok: false, error: "invalid" };
+  return { ok: true, db, ctx };
+}
+
+export type PlacedPersonsResult =
+  | { ok: true; persons: PlacedPersonView[] }
+  | { ok: false; error: "unauthorized" | "invalid" | "failed" };
+
+/**
+ * List every person already placed in the family's kinship tree (#169). Used by the unplaced-member
+ * placement UX so the anchor picker offers the FULL family-wide set, not just the ones inside the
+ * current bounded tree window. Re-validates the family against the viewer's active families.
+ */
+export async function listPlacedPersonsAction(
+  familyId: string,
+): Promise<PlacedPersonsResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  try {
+    const persons = await listPlacedPersons(scoped.db, scoped.ctx, familyId);
+    plog("tree", "listPlacedPersons: success", { family: familyId, count: persons.length });
+    return { ok: true, persons };
+  } catch (err) {
+    plogError("tree", "listPlacedPersons: error", {
+      family: familyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
+}
+
+export type LinkExistingMemberActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "invalid" | "not-allowed" | "failed" };
+
+/**
+ * Place an EXISTING unplaced member into the tree by attaching them to an anchor with a chosen relation
+ * (#161). `existingPersonId` is the member being placed; `anchorPersonId` is the person they attach to.
+ * All ids are UNTRUSTED — core's `linkExistingMember` re-validates membership/attachability and NEVER
+ * mints a duplicate of the member. Returns `not-allowed` for a rejected link (with no leak of why).
+ */
+export async function linkExistingMemberAction(
+  familyId: string,
+  existingPersonId: string,
+  relation: AddRelativeRelation,
+  anchorPersonId?: string,
+): Promise<LinkExistingMemberActionResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  if (typeof existingPersonId !== "string" || !existingPersonId) {
+    return { ok: false, error: "invalid" };
+  }
+  if (!VALID_LINK_RELATIONS.has(relation)) {
+    return { ok: false, error: "invalid" };
+  }
+  const anchor =
+    typeof anchorPersonId === "string" && anchorPersonId.trim() ? anchorPersonId.trim() : undefined;
+  try {
+    const result = await linkExistingMember(scoped.db, scoped.ctx, {
+      familyId,
+      relation,
+      existingPersonId,
+      ...(anchor ? { anchorPersonId: anchor } : {}),
+    });
+    if (!result.allowed) {
+      plogError("tree", "linkExistingMember: not allowed", { family: familyId, reason: result.reason });
+      return { ok: false, error: "not-allowed" };
+    }
+    plog("tree", "linkExistingMember: success", { family: familyId, person: existingPersonId, relation });
+    revalidatePath("/hub");
+    return { ok: true };
+  } catch (err) {
+    plogError("tree", "linkExistingMember: error", {
+      family: familyId,
+      person: existingPersonId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
+}
+
+export type MemberCurationActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "invalid" | "not-allowed" | "failed" };
+
+/**
+ * Toggle a member's `non_family` flag (#161). `nonFamily:true` removes them from the unplaced surface;
+ * `false` restores them. Any active member may curate (core enforces this). Reversible.
+ */
+export async function setMemberNonFamilyAction(
+  familyId: string,
+  personId: string,
+  nonFamily: boolean,
+): Promise<MemberCurationActionResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  if (typeof personId !== "string" || !personId || typeof nonFamily !== "boolean") {
+    return { ok: false, error: "invalid" };
+  }
+  try {
+    await setMemberNonFamily(scoped.db, scoped.ctx, { familyId, personId, nonFamily });
+    plog("tree", "setMemberNonFamily: success", { family: familyId, person: personId, nonFamily });
+    revalidatePath("/hub");
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof AuthorizationError) return { ok: false, error: "not-allowed" };
+    plogError("tree", "setMemberNonFamily: error", {
+      family: familyId,
+      person: personId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
+}
+
+/**
+ * End a member's active membership (#161) — STEWARD-ONLY (core re-checks). Access revocation is
+ * automatic; authored stories and kinship edges are untouched. A non-steward caller is rejected with
+ * `not-allowed` (core throws `AuthorizationError`).
+ */
+export async function endMembershipAction(
+  familyId: string,
+  personId: string,
+): Promise<MemberCurationActionResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  if (typeof personId !== "string" || !personId) {
+    return { ok: false, error: "invalid" };
+  }
+  try {
+    await endMembership(scoped.db, scoped.ctx, { familyId, personId });
+    plog("tree", "endMembership: success", { family: familyId, person: personId });
+    revalidatePath("/hub");
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof AuthorizationError) return { ok: false, error: "not-allowed" };
+    plogError("tree", "endMembership: error", {
       family: familyId,
       person: personId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),

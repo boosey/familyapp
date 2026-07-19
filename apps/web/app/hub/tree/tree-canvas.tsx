@@ -72,7 +72,7 @@ import {
 import { PersonDetails } from "./person-details";
 import { KebabMenu } from "./kebab-menu";
 import { TreeInviteProvider } from "./invite-context";
-import { mergeEdges, mergeNodes } from "./merge";
+import { edgeKey, mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
 import { TreeAddProvider, type OpenAddRelative } from "./add-relative-context";
 import { TreeFocusProvider } from "./focus-context";
@@ -137,6 +137,43 @@ function adjacencyCounts(edges: readonly ResolvedKinshipEdge[]): Map<string, Adj
     }
   }
   return m;
+}
+
+// Field separators for the content signature — control chars that never appear in names/ids, so a
+// value can't be mistaken for a delimiter.
+const SIG_FIELD = "␟";
+const SIG_ITEM = "␞";
+const SIG_SECTION = "␝";
+
+/**
+ * A stable, order-independent content signature of a tree payload: every node's id + rendered mutable
+ * fields, plus the set of normalized edge keys. Two `initial` props with the same signature carry the
+ * same data. It gates the same-family reconcile effect (#161): `initial` gets a new object identity on
+ * every render, so without this gate `mergeNodes`' fresh array would drive an endless setState loop —
+ * with it, the merge fires only when a mutation actually changed the server data. `relationToRoot` is
+ * intentionally excluded: `mergeNodes` freezes it for already-seen nodes, so it can never change on a
+ * merge, and it only shifts on a re-root (handled by the focus effect, not here).
+ */
+function treeContentSignature(data: KinshipTreeData): string {
+  const nodes = data.nodes
+    .map((n) =>
+      [
+        n.personId,
+        n.displayName ?? "",
+        n.identified ? 1 : 0,
+        n.sex,
+        n.lifeStatus,
+        n.birthYear ?? "",
+        n.deathYear ?? "",
+        n.hasHiddenParents ? 1 : 0,
+        n.hasHiddenChildren ? 1 : 0,
+        n.inviteStatus,
+      ].join(SIG_FIELD),
+    )
+    .sort()
+    .join(SIG_ITEM);
+  const edges = data.edges.map(edgeKey).sort().join(SIG_ITEM);
+  return `${nodes}${SIG_SECTION}${edges}`;
 }
 
 // Drag/zoom/fit knobs live in ./tree-constants (imported above).
@@ -301,24 +338,57 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reset all internal state when the FAMILY changes (#141). The canvas seeds nodes/edges/expansion/
-  // focus from props on MOUNT only; switching families via the chip bar hands NEW `familyId` + `initial`
-  // props to the SAME mounted component, so without this the previous family's tree persisted until a
-  // List<->Tree toggle forced a remount (the "fix" users found). On a genuine family change we reload
-  // from the new props, clear the background top-up dedupe set, and re-center the camera (reset-on-
-  // switch is acceptable per #141). Guarded by a ref so a re-render that merely hands a new `initial`
-  // identity for the SAME family never blows away in-session expansion/focus/camera state.
-  const prevFamilyIdRef = useRef(familyId);
-  useEffect(() => {
-    if (prevFamilyIdRef.current === familyId) return;
-    prevFamilyIdRef.current = familyId;
+  // Reconcile the `initial` prop after mount — two regimes, keyed on whether the FAMILY changed. Both
+  // adjust state DURING RENDER (React's "store previous prop, setState during render" pattern), so React
+  // discards the stale render and re-renders with the corrected state before painting — no flash.
+  //
+  //   • Family SWITCH (#141) — full RESET. The canvas seeds nodes/edges/expansion/focus from props on
+  //     MOUNT only; switching families via the chip bar hands NEW `familyId` + `initial` to the SAME
+  //     mounted component, so without this the previous family's tree persisted until a List<->Tree
+  //     toggle forced a remount (the "fix" users found). We reload from the new props + re-seed focus
+  //     here, and (in the effect below) clear the top-up dedupe set + re-center — none of the old
+  //     family's in-session state is meaningful for the new one.
+  //
+  //   • SAME family, fresh data (#161) — MERGE. A mutation (place an unplaced member, add a relative,
+  //     edit a person) revalidates /hub and `router.refresh()` hands a fresh same-family `initial`. We
+  //     merge it into current state (additive + incoming-wins via mergeNodes/mergeEdges) so the new/
+  //     edited node shows WITHOUT a manual reload, while preserving in-session expansion/focus/camera:
+  //     the loaded set is a SUPERSET of the bounded `initial` window, and merge never prunes it.
+  //
+  // The merge is gated on a CONTENT signature (not `initial`'s per-render object identity), so it fires
+  // only when the server data actually changed — otherwise mergeNodes' fresh array would loop setState.
+  const [prevFamilyId, setPrevFamilyId] = useState(familyId);
+  const [prevInitialSig, setPrevInitialSig] = useState<string | null>(null);
+  // Memoized so it recomputes only when `initial` changes identity — not on every hot pan/zoom frame
+  // (those re-render with the SAME `initial` reference).
+  const initialSig = useMemo(() => treeContentSignature(initial), [initial]);
+  if (familyId !== prevFamilyId) {
+    setPrevFamilyId(familyId);
+    setPrevInitialSig(initialSig);
     setNodes(initial.nodes);
     setEdges(initial.edges);
     setExpansion(EMPTY_EXPANSION);
     setFocusPersonId(initialFocusPersonId);
-    toppedUp.current = new Set();
-    centerCamera();
-  }, [familyId, initial, initialFocusPersonId, centerCamera]);
+  } else if (prevInitialSig === null) {
+    // First render after mount: record the mounted signature (state already came from useState(initial)).
+    setPrevInitialSig(initialSig);
+  } else if (prevInitialSig !== initialSig) {
+    setPrevInitialSig(initialSig);
+    setNodes((prev) => mergeNodes(prev, initial.nodes));
+    setEdges((prev) => mergeEdges(prev, initial.edges));
+  }
+
+  // Camera centering reads DOM refs (viewportRef.current?.clientHeight) and may update parent-controlled
+  // state, so it is a genuine side effect and stays in a useEffect, guarded by a ref. Only a FAMILY
+  // switch clears the top-up dedupe set + re-centers; a same-family merge leaves the camera untouched.
+  const prevFamilyIdRef = useRef(familyId);
+  useEffect(() => {
+    if (prevFamilyIdRef.current !== familyId) {
+      prevFamilyIdRef.current = familyId;
+      toppedUp.current = new Set();
+      centerCamera();
+    }
+  }, [familyId, centerCamera]);
 
   // --- Background top-up: keep one layer past the frontier loaded (spec §7) -----------------------
   // After every render, look at drawn nodes whose kin flags say more exists at the boundary

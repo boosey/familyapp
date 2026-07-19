@@ -3,11 +3,11 @@
  * Tree Slice A regression tests (spec §8):
  *   1. A drag STARTING ON A CARD pans the canvas (does not open the details sheet).
  *   2. A double-click on a card opens the read-only details sheet; a single click does not.
- *   3. Re-focus via the kebab Focus action changes relation chips + the ring but leaves the camera
+ *   3. Re-focus via the kebab Focus action changes relation chips + the badge but leaves the camera
  *      put — the newly-focused card keeps its on-screen position (pan-delta cancels the anchor jump;
  *      scale is untouched). A fake fetchSubtree is injected.
  *   4. The relation chip renders `relationToRoot`; the focus card is blank; the viewer card = "You".
- *   5. The focus ring renders in the focus person's sex color and MOVES on re-focus; unknown → neutral.
+ *   5. The focus badge renders in the focus person's sex color and MOVES on re-focus; unknown → neutral.
  *
  * (Item 6 — Fit/zoom controls live in the selector row and the list view hides them — is covered in
  * __tests__/tree-zoom.test.tsx, which drives them through FamilyTab.)
@@ -245,30 +245,38 @@ it("renders relationToRoot as the chip; focus card is blank; viewer card reads '
   expect(screen.getByTestId("tree-node-chip-vguy").textContent).toBe(hub.tree.youLabel);
 });
 
-// ---- 5. Focus ring color + it moves; unknown → neutral -----------------------------------------
-function ringShadowOf(personId: string): string {
+// ---- 5. Focus badge color + it moves; unknown → neutral ----------------------------------------
+// The focus marker is now a badge pinned to the avatar (was an outer ring box-shadow, which detached
+// from the card in the Playful skin). It lives ONLY on the focus card and carries the sex color.
+function badgeOf(personId: string): HTMLElement | null {
+  return screen.queryByTestId(`tree-node-focus-badge-${personId}`);
+}
+/** Regression guard: the old ring was a box-shadow on the card button — it must be gone. */
+function cardBoxShadowOf(personId: string): string {
   return (screen.getByTestId(`tree-node-${personId}`) as HTMLElement).style.boxShadow;
 }
 
-it("the focus ring renders in the focus person's sex color and moves on re-focus; unknown → neutral", async () => {
-  // Focus (male) with a female child. The focus card carries a ring in --sex-male; marco has none.
+it("the focus badge renders in the focus person's sex color and moves on re-focus; unknown → neutral", async () => {
+  // Focus (male) with a female child. The focus card carries a badge in --sex-male; marco has none.
   const data = selfWithChild({ self: { sex: "male" }, child: { sex: "female" } });
   render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={data} fetchSubtree={vi.fn(noFetch)} />);
 
-  expect(ringShadowOf(FOCUS)).toContain("var(--sex-male)");
-  expect(ringShadowOf("marco")).toBe(""); // no ring on a non-focus card
+  expect(badgeOf(FOCUS)?.style.background).toContain("var(--sex-male)");
+  expect(badgeOf("marco")).toBeNull(); // no badge on a non-focus card
+  // The marker no longer rides on the card as a box-shadow ring.
+  expect(cardBoxShadowOf(FOCUS)).toBe("");
 
-  // Re-focus onto marco (female) → the ring moves to marco in --sex-female; the old focus loses it.
+  // Re-focus onto marco (female) → the badge moves to marco in --sex-female; the old focus loses it.
   const kebabTrigger = screen.getByTestId("tree-node-pos-marco").querySelector('[data-testid="tree-kebab-trigger"]')!;
   await act(async () => fireEvent.click(kebabTrigger));
   await act(async () => fireEvent.click(screen.getByTestId("tree-kebab-focus")));
 
-  await waitFor(() => expect(ringShadowOf("marco")).toContain("var(--sex-female)"));
-  expect(ringShadowOf(FOCUS)).toBe("");
+  await waitFor(() => expect(badgeOf("marco")?.style.background).toContain("var(--sex-female)"));
+  expect(badgeOf(FOCUS)).toBeNull();
 });
 
-it("an unknown-sex focus person gets a neutral ring (--border-strong)", () => {
+it("an unknown-sex focus person gets a neutral badge (--border-strong)", () => {
   const data = selfWithChild({ self: { sex: "unknown" } });
   render(<TreeCanvas familyId="F" focusPersonId={FOCUS} viewerPersonId={FOCUS} initial={data} fetchSubtree={vi.fn(noFetch)} />);
-  expect(ringShadowOf(FOCUS)).toContain("var(--border-strong)");
+  expect(badgeOf(FOCUS)?.style.background).toContain("var(--border-strong)");
 });

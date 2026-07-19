@@ -7,7 +7,7 @@
  * not).
  *
  * The FIRST item is **Focus** (tree Slice A #2) — it re-roots the tree on this card (via
- * TreeFocusProvider's `onFocus`), recomputing relation chips + the focus ring without moving the
+ * TreeFocusProvider's `onFocus`), recomputing relation chips + the focus badge without moving the
  * camera. It is OMITTED on the card that is already the focus person. (Slice B will insert Stories
  * contributed / Photos contributed / Mentions above Focus.)
  *

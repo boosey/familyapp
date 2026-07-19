@@ -10,7 +10,7 @@
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { canViewerSeePerson, type AuthContext } from "../src/index";
-import { addMembership, endMembership, makeFamily, makePerson } from "./helpers";
+import { addMembership, forceEndMembership, makeFamily, makePerson } from "./helpers";
 
 let db: Database;
 beforeEach(async () => {
@@ -64,7 +64,7 @@ describe("canViewerSeePerson — person reachability gate", () => {
     expect(await canViewerSeePerson(db, account(viewer.id), other.id)).toBe(true);
 
     // The other person leaves the family — they are no longer reachable.
-    await endMembership(db, m.id);
+    await forceEndMembership(db, m.id);
     expect(await canViewerSeePerson(db, account(viewer.id), other.id)).toBe(false);
   });
 
@@ -75,7 +75,7 @@ describe("canViewerSeePerson — person reachability gate", () => {
     const vm = await addMembership(db, viewer.id, fam.id);
     await addMembership(db, other.id, fam.id);
 
-    await endMembership(db, vm.id);
+    await forceEndMembership(db, vm.id);
     expect(await canViewerSeePerson(db, account(viewer.id), other.id)).toBe(false);
   });
 

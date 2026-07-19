@@ -1,0 +1,2 @@
+CREATE TYPE "public"."invite_relationship" AS ENUM('wife', 'husband', 'mother', 'father', 'son', 'daughter', 'other');--> statement-breakpoint
+ALTER TABLE "invitations" ADD COLUMN "invite_relationship" "invite_relationship";
