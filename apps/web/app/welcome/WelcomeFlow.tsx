@@ -25,6 +25,7 @@ import {
 } from "./actions";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
 import { common, welcome } from "@/app/_copy";
+import styles from "@/app/_onboarding/onboarding-card.module.css";
 
 type Step = "welcome" | "name" | "dob";
 
@@ -159,49 +160,10 @@ export function WelcomeFlow({
   }
 
   /* ── Layout primitives ─────────────────────────────────────────────────── */
-  const page: CSSProperties = {
-    minHeight: "100dvh",
-    background: "var(--surface-page)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "clamp(24px, 5vw, 56px) 16px",
-  };
-  const card: CSSProperties = {
-    maxWidth: 560,
-    width: "100%",
-    background: "var(--surface-card)",
-    border: "var(--border-width) solid var(--border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-lift)",
-    padding: "clamp(28px, 5vw, 48px)",
-  };
-  const serifHeadline: CSSProperties = {
-    fontFamily: "var(--font-story)",
-    fontSize: "var(--text-display)",
-    fontWeight: 500,
-    color: "var(--text-body)",
-    margin: 0,
-    lineHeight: "var(--leading-tight)",
-  };
-  const sub: CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    color: "var(--text-muted)",
-    lineHeight: "var(--leading-body)",
-    margin: "12px 0 0",
-  };
-  const errorBox: CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    color: "var(--accent-strong)",
-    background: "var(--accent-soft)",
-    border: "var(--border-width) solid var(--accent)",
-    borderRadius: "var(--radius-md)",
-    padding: "12px 16px",
-    margin: "20px 0 0",
-  };
+  // page/card/headline/sub/errorBox moved to _onboarding/onboarding-card.module.css (classes carry
+  // the Playful signature; inline styles would out-specify [data-skin]). The serif headline keeps its
+  // per-step font-size as an inline override on top of the module's .headline. voiceHint stays inline
+  // (not part of the signature).
   const voiceHint: CSSProperties = {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-label)",
@@ -213,13 +175,13 @@ export function WelcomeFlow({
   /* ── Welcome ───────────────────────────────────────────────────────────── */
   if (step === "welcome") {
     return (
-      <main style={page}>
-        <div style={card}>
-          <div className="kin-eyebrow">{invited ? welcome.introEyebrowInvited : welcome.introEyebrowDefault}</div>
-          <h1 style={{ ...serifHeadline, marginTop: 12 }}>
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.eyebrow}>{invited ? welcome.introEyebrowInvited : welcome.introEyebrowDefault}</div>
+          <h1 className={styles.headline} style={{ fontSize: "var(--text-display)", marginTop: 12 }}>
             {invited ? welcome.greetingInvited : welcome.greetingDefault}
           </h1>
-          <p style={sub}>
+          <p className={styles.sub}>
             {welcome.introBody}
           </p>
           <div style={{ marginTop: 28 }}>
@@ -237,10 +199,10 @@ export function WelcomeFlow({
   /* ── Name (asked before DOB — guarantees a real, user-entered name) ──────── */
   if (step === "name") {
     return (
-      <main style={page}>
-        <div style={card}>
-          <h1 style={serifHeadline}>{welcome.nameTitle}</h1>
-          <p style={sub}>{welcome.nameBody}</p>
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <h1 className={styles.headline} style={{ fontSize: "var(--text-display)" }}>{welcome.nameTitle}</h1>
+          <p className={styles.sub}>{welcome.nameBody}</p>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "28px 0 20px" }}>
             <KindredVoiceButton
@@ -286,10 +248,10 @@ export function WelcomeFlow({
   /* ── DOB (the one required step) ───────────────────────────────────────── */
   if (step === "dob") {
     return (
-      <main style={page}>
-        <div style={card}>
-          <h1 style={serifHeadline}>{welcome.birthdayTitle}</h1>
-          <p style={sub}>
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <h1 className={styles.headline} style={{ fontSize: "var(--text-display)" }}>{welcome.birthdayTitle}</h1>
+          <p className={styles.sub}>
             {welcome.birthdayBody}
           </p>
 
@@ -359,7 +321,7 @@ export function WelcomeFlow({
             </label>
           </div>
 
-          {error ? <p style={errorBox}>{error}</p> : null}
+          {error ? <p className={styles.errorBox}>{error}</p> : null}
 
           <div style={{ marginTop: 28 }}>
             <KindredButton
