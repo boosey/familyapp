@@ -6,11 +6,14 @@
  * (which renders it) can never disagree — a single source of truth per CLAUDE.md's centralization rule.
  */
 
-/** The three browse modes of the Stories surface. */
-export type BrowseMode = "feed" | "timeline" | "search";
+/**
+ * The two browse modes of the Stories surface. Search is NOT a mode — it's a persistent field beside
+ * the pills whose non-empty query REPLACES whichever body (feed/timeline) is active (#3).
+ */
+export type BrowseMode = "feed" | "timeline";
 
 /** Every browse mode, in display/pill order. */
-export const BROWSE_MODES: BrowseMode[] = ["feed", "timeline", "search"];
+export const BROWSE_MODES: BrowseMode[] = ["feed", "timeline"];
 
 /** Feed layout (Feed mode only): a single stacked column of wide cards, or a masonry of cards. */
 export type FeedView = "column" | "masonry";

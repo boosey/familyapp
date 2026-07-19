@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
  * Story tab feed layout toggle — a right-justified Masonry / Column control that (post-#190) rides the
- * shared HubToolbar's R2-right slot, alongside the Feed/Timeline/Search mode pills in R1. "Masonry"
+ * shared HubToolbar's R2-right slot, alongside the Feed/Timeline mode pills in R1. "Masonry"
  * lays the cards out as a CSS multi-column (the new-viewer default, listed first per ADR-0021);
- * "Column" is a single stacked column of wide cards. The toggle is Feed-only (Timeline/Search own their
- * layouts) and its choice persists to localStorage — a stored preference still wins over the default.
+ * "Column" is a single stacked column of wide cards. The toggle is Feed-only (Timeline owns its own
+ * layout; a live search replaces the feed body) and its choice persists to localStorage — a stored
+ * preference still wins over the default.
  *
  * These controls live in StoriesSurface now (it owns the mode/feedView/query state that drives the
  * toolbar), so we drive them through StoriesSurface in its browse body.
@@ -102,14 +103,20 @@ describe("StoryBrowse — Column/Masonry feed view toggle", () => {
     expect(window.localStorage.getItem("hub:feedView")).toBe("column");
   });
 
-  it("hides the layout toggle outside Feed mode (Timeline / Search own their layouts)", () => {
+  it("hides the layout toggle outside Feed mode and while searching (each owns its own layout)", () => {
     renderBrowse();
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeTruthy();
 
+    // Timeline owns its own layout.
     fireEvent.click(screen.getByRole("button", { name: hub.browse.modeTimeline }));
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeSearch }));
+    // Back to Feed → the toggle returns.
+    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeFeed }));
+    expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeTruthy();
+
+    // Typing in the persistent field replaces the feed body with search results → toggle hides.
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } });
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
   });
 

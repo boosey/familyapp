@@ -6,7 +6,7 @@
  * StoryBrowse narrows its already-deduped, already-authorized pool by a `selectedIds` set (a story is
  * shown when ANY of its families is selected) with an `allSelected` short-circuit; the empty selection
  * (`none`) is handled UPSTREAM in StoriesTab (an honest empty state, not the full pool). These tests
- * cover the narrowing ACROSS all three browse modes (Feed / Timeline / Search), plus the StoriesTab
+ * cover the narrowing ACROSS the Feed / Timeline bodies and the persistent Search field, plus the StoriesTab
  * chip-bar gating (present for ≥2 families, absent for <2) and the all-off empty state.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -95,14 +95,14 @@ function shownTitles(): string[] {
     .filter((t) => t.includes("Story"));
 }
 
-function switchMode(mode: "timeline" | "search") {
-  const name = mode === "timeline" ? hub.browse.modeTimeline : hub.browse.modeSearch;
+function switchToTimeline() {
   // Mode pills are shared HubSubNav BUTTONS now (#190), not the old bespoke tablist.
-  fireEvent.click(screen.getByRole("button", { name }));
+  fireEvent.click(screen.getByRole("button", { name: hub.browse.modeTimeline }));
 }
 
-// The Search mode only lists results once a query is typed; type a substring that all three summaries
-// contain via the shared word "the" would over-match, so search each explicitly by title token below.
+// Search is a PERSISTENT field now (not a mode): typing a query REPLACES the feed/timeline body with
+// results over the already-family-narrowed pool. "the" appears in both onlyA ("the storm") and onlyB
+// ("the move"), so it exercises the pool narrowing directly.
 function typeSearch(q: string) {
   fireEvent.change(screen.getByRole("textbox"), { target: { value: q } });
 }
@@ -186,7 +186,7 @@ describe("StoryBrowse — multi-select family narrowing (Feed)", () => {
 describe("StoryBrowse — multi-select family narrowing (Timeline)", () => {
   it("only A selected hides the B-only story in the timeline", () => {
     renderBrowse([famA.id], false);
-    switchMode("timeline");
+    switchToTimeline();
     const titles = shownTitles();
     expect(titles.some((t) => t.includes("Story AB"))).toBe(true);
     expect(titles.some((t) => t.includes("Story A only"))).toBe(true);
@@ -195,7 +195,7 @@ describe("StoryBrowse — multi-select family narrowing (Timeline)", () => {
 
   it("all selected shows every story in the timeline", () => {
     renderBrowse([famA.id, famB.id], true);
-    switchMode("timeline");
+    switchToTimeline();
     const titles = shownTitles();
     expect(titles.some((t) => t.includes("Story B only"))).toBe(true);
   });
@@ -204,9 +204,9 @@ describe("StoryBrowse — multi-select family narrowing (Timeline)", () => {
 describe("StoryBrowse — multi-select family narrowing (Search)", () => {
   it("only A selected: the B-only story is not searchable, the A-only story is", () => {
     renderBrowse([famA.id], false);
-    switchMode("search");
-    // "the" appears in both onlyA ("the storm") and onlyB ("the move") summaries — the pool is narrowed
-    // BEFORE search, so a B-only match must not surface under an A-only selection.
+    // The persistent field narrows over the already-family-narrowed pool — no mode switch needed.
+    // "the" appears in both onlyA ("the storm") and onlyB ("the move") summaries, so a B-only match
+    // must not surface under an A-only selection.
     typeSearch("the");
     const titles = shownTitles();
     expect(titles.some((t) => t.includes("Story A only"))).toBe(true);
@@ -215,7 +215,6 @@ describe("StoryBrowse — multi-select family narrowing (Search)", () => {
 
   it("all selected: both the A-only and B-only stories are searchable", () => {
     renderBrowse([famA.id, famB.id], true);
-    switchMode("search");
     typeSearch("the");
     const titles = shownTitles();
     expect(titles.some((t) => t.includes("Story A only"))).toBe(true);

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Story Browse (Hub) — the Stories tab body, three modes of one surface (Feed / Timeline / Search)
- * plus a reusable family-scope filter. Faithful to
+ * Story Browse (Hub) — the Stories tab body: a Feed / Timeline surface with a persistent Search field
+ * (a non-empty query replaces whichever body is active) plus a reusable family-scope filter. Faithful to
  * docs/design-system/.../HANDOFF-browse-and-family-flows.md ("Prototype 1 — Story Browse (Hub)").
  *
  * Everything here is CLIENT-SIDE over an already-authorized, pre-sorted pool (`items`): every item
@@ -11,10 +11,11 @@
  * /hub/stories/[id] route (restyled separately). Reading size is owned by the hub header's
  * KindredFontScale — not duplicated here.
  *
- * #190: the mode toggle (Feed/Timeline/Search), the Search input, and the Masonry/Column feed-view
- * selector were HOISTED into the shared two-row {@link HubToolbar} (owned by the client
- * {@link StoriesSurface} wrapper). So `mode`, `query`, and `feedView` are now CONTROLLED props threaded
- * down from that wrapper — this component renders only the body for whichever mode is active. Only the
+ * #190: the mode toggle (Feed/Timeline), the Search input, and the Masonry/Column feed-view selector
+ * were HOISTED into the shared two-row {@link HubToolbar} (owned by the client {@link StoriesSurface}
+ * wrapper). So `mode`, `query`, and `feedView` are now CONTROLLED props threaded down from that wrapper
+ * — this component renders the search results when `query` is non-empty, else the active mode's body.
+ * Only the
  * Timeline's own "Whole family / Just {viewer}" widen toggle stays local here (it's a per-body control,
  * not a top-of-tab one).
  */
@@ -89,11 +90,16 @@ export function StoryBrowse({
     [items, allSelected, selectedSet],
   );
 
-  const href = (item: StoryItem) => `${item.href}?from=${mode}`;
+  // A non-empty query REPLACES the active feed/timeline body with search results (#3): search is a
+  // persistent field now, not a mode. `from` records "search" so the Read view's Back returns correctly.
+  const searching = query.trim() !== "";
+  const href = (item: StoryItem) => `${item.href}?from=${searching ? "search" : mode}`;
 
   return (
     <div>
-      {mode === "feed" ? (
+      {searching ? (
+        <Search items={scoped} query={query} href={href} />
+      ) : mode === "feed" ? (
         <Feed
           items={scoped}
           allSelected={allSelected}
@@ -102,8 +108,7 @@ export function StoryBrowse({
           href={href}
           view={feedView}
         />
-      ) : null}
-      {mode === "timeline" ? (
+      ) : (
         <Timeline
           items={scoped}
           wholeFamily={wholeFamily}
@@ -112,8 +117,7 @@ export function StoryBrowse({
           viewerName={viewerName}
           href={href}
         />
-      ) : null}
-      {mode === "search" ? <Search items={scoped} query={query} href={href} /> : null}
+      )}
     </div>
   );
 }

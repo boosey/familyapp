@@ -6,13 +6,14 @@
  * inline "view options" row: everything top-of-tab now lives in ONE toolbar, and this component owns
  * the client state that drives it.
  *
- *   R1:  [Feed / Timeline / Search pills] [search field]  ·······  [reminders + Tell a story]
- *   R2:  [Family selector chips]                          ·······  [Masonry / Column]
+ *   R1:  [Feed / Timeline pills] [search field]  ·······  [reminders + Tell a story]
+ *   R2:  [Family selector chips]                  ·······  [Masonry / Column]
  *
  * State owned here (was scattered across StoryBrowse + StoriesControls before #190):
- *  - `mode` (Feed/Timeline/Search) — the R1-left pill toggle; seeded from `?mode=` so the Read view's
- *    Back can restore it, then local for instant switching.
- *  - `query` — the Search field (R1-left, Search mode only); threaded to the browse body.
+ *  - `mode` (Feed/Timeline) — the R1-left pill toggle; seeded from `?mode=` so the Read view's Back can
+ *    restore it, then local for instant switching.
+ *  - `query` — the persistent R1-left Search field; a non-empty query replaces the feed/timeline body
+ *    with results (#3), so Search is no longer a mode. Threaded to the browse body.
  *  - `feedView` (Masonry/Column) — the R2-right selector (Feed mode only); persisted to localStorage.
  *  - `expanded` — the draft-reminder's in-place resume list toggle.
  *
@@ -106,6 +107,10 @@ export function StoriesSurface({
     : "feed";
   const [mode, setMode] = useState<BrowseMode>(initialMode);
   const [query, setQuery] = useState("");
+  // A non-empty query REPLACES the feed/timeline body with search results (#3): the search field is
+  // persistent (always beside the pills while browsing), not a mode. This flag also hides the
+  // Masonry/Column selector while searching — the feed body it steers isn't on screen.
+  const searching = query.trim() !== "";
 
   // Feed layout (Feed mode only). SSR-safe default ("masonry" — the new-viewer default per ADR-0021);
   // a stored preference is hydrated in a client-only effect so it wins without a hydration mismatch.
@@ -134,18 +139,20 @@ export function StoriesSurface({
 
   const browsing = body === "browse";
 
-  /* ── R1-left: the mode pills (shared HubSubNav) + the Search field (Search mode only) ─────────── */
-  // The pills only steer the browse body — hide them in the empty states (no body to steer), matching
-  // the old behaviour where the mode toggle lived inside StoryBrowse (present only when browsing).
+  /* ── R1-left: the mode pills (shared HubSubNav) + the persistent Search field ─────────────────── */
+  // The pills + field only steer the browse body — hide them in the empty states (no body to steer),
+  // matching the old behaviour where the mode toggle lived inside StoryBrowse (present only when browsing).
   const modeItems: HubSubNavItem[] = BROWSE_MODES.map((m) => ({
     key: m,
-    label: m === "feed" ? hub.browse.modeFeed : m === "timeline" ? hub.browse.modeTimeline : hub.browse.modeSearch,
+    label: m === "feed" ? hub.browse.modeFeed : hub.browse.modeTimeline,
   }));
   const modeNav = browsing ? (
     <HubSubNav ariaLabel={hub.shell.tabStories} items={modeItems} active={mode} onSelect={(k) => setMode(k as BrowseMode)} />
   ) : null;
+  // Persistent search field (#3): always beside the pills while browsing; a non-empty query replaces
+  // the feed/timeline body with results (handled in StoryBrowse), so it is no longer a mode.
   const searchField =
-    browsing && mode === "search" ? (
+    browsing ? (
       <input
         type="text"
         value={query}
@@ -197,9 +204,9 @@ export function StoriesSurface({
       <FamilyChips inline families={activeFamilies} selected={chipSelected} />
     ) : null;
 
-  /* ── R2-right: the Masonry/Column feed-view selector (Feed mode only) ──────────────────────────── */
+  /* ── R2-right: the Masonry/Column feed-view selector (Feed mode, not while searching) ──────────── */
   const viewSelector =
-    browsing && mode === "feed" ? (
+    browsing && mode === "feed" && !searching ? (
       <SegmentedControl
         variant="radio"
         ariaLabel={hub.browse.viewSelectorAria}

@@ -2,11 +2,11 @@
 /**
  * Issue #190 — the Stories tab is normalized onto the shared two-row HubToolbar (#189):
  *
- *   R1:  [Feed/Timeline/Search pills] [search field]  ·······  [Tell a Story ▸ + reminders]
- *   R2:  [Family selector]                            ·······  [Masonry/Column]
+ *   R1:  [Feed/Timeline pills] [search field]  ·······  [Tell a Story ▸ + reminders]
+ *   R2:  [Family selector]                     ·······  [Masonry/Column]
  *
- * These tests pin the HOIST: the Feed/Timeline/Search mode toggle + search field live in R1-left of
- * the toolbar (shared HubSubNav pill style, no bespoke Stories pill), "Tell a story" + draft/intake
+ * These tests pin the HOIST: the Feed/Timeline mode toggle + a PERSISTENT search field live in R1-left
+ * of the toolbar (shared HubSubNav pill style, no bespoke Stories pill), "Tell a story" + draft/intake
  * reminders sit right-justified in R1, the family selector chips move to R2-left, and the
  * Masonry/Column feed-view selector moves to R2-right. Behaviour (search filtering, view toggle,
  * family narrowing) is unchanged — only placement moves — and the empty-row rule holds (a row with no
@@ -111,17 +111,19 @@ function toolbarRows(container: HTMLElement): HTMLElement[] {
 }
 
 describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
-  it("renders the browse mode pills as shared HubSubNav pills (Feed/Timeline/Search) in R1", () => {
+  it("renders the browse mode pills as shared HubSubNav pills (Feed/Timeline only) in R1", () => {
     const { container } = renderPopulated();
     const rows = toolbarRows(container);
     expect(rows.length).toBeGreaterThanOrEqual(1);
     const r1 = rows[0]!;
-    // All three mode pills present, in R1, using the shared pill nav (labelled region).
+    // Only Feed/Timeline are modes now, in R1, using the shared pill nav (labelled region).
     const nav = r1.querySelector('nav[aria-label]');
     expect(nav).toBeTruthy();
-    for (const label of [hub.browse.modeFeed, hub.browse.modeTimeline, hub.browse.modeSearch]) {
+    for (const label of [hub.browse.modeFeed, hub.browse.modeTimeline]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
+    // Search is no longer a mode pill — it's a persistent field (asserted below).
+    expect(screen.queryByRole("button", { name: hub.browse.modeSearch })).toBeNull();
   });
 
   it("puts 'Tell a story' right-justified in R1 (the toolbar's right slot)", () => {
@@ -152,19 +154,16 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     expect(viewSel.closest(`.${toolbarStyles.right}`)).toBeTruthy();
   });
 
-  it("shows the search field beside the pills in R1 only when Search mode is active", () => {
+  it("shows the persistent search field beside the pills in R1 whenever browsing (not a mode)", () => {
     const { container } = renderPopulated();
-    // Not in Feed mode.
-    expect(screen.queryByRole("textbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeSearch }));
+    // The field is ALWAYS present while browsing — no mode click needed.
     const input = screen.getByRole("textbox");
     // The search input rides R1 (beside the pills), NOT the content body below the toolbar.
     expect(toolbarRows(container)[0]!.contains(input)).toBe(true);
   });
 
-  it("search still filters the pool as before (behaviour unchanged after the hoist)", () => {
+  it("typing in the persistent field filters the pool (search replaces the feed/timeline body)", () => {
     renderPopulated();
-    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeSearch }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "storm" } });
     const titles = screen
       .queryAllByRole("link")
@@ -186,10 +185,13 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     expect(rows.length).toBe(1);
   });
 
-  it("does not render R2 at all for a single-family viewer in a mode without a view selector", () => {
+  it("collapses R2 for a single-family viewer while searching (view selector hidden, no chips)", () => {
     const { container } = renderPopulated({ activeFamilies: [famA] });
-    fireEvent.click(screen.getByRole("button", { name: hub.browse.modeSearch }));
-    // Search mode: no view selector; single family: no chips → R2 empty → collapsed.
+    // Feed mode, single family: the Masonry/Column selector keeps R2 alive.
+    expect(toolbarRows(container).length).toBe(2);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "storm" } });
+    // Searching replaces the feed body → the layout selector hides; single family → no chips → R2 gone.
+    expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
     expect(toolbarRows(container).length).toBe(1);
   });
 
