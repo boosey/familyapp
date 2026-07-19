@@ -133,26 +133,28 @@ export const hub = {
   },
   ask: {
     signedOut: "Sign in to ask a question.",
-    heading: "Ask a question",
-    // Single-select family designator (ADR-0021, #49): which family this question belongs to. Shown
-    // only when the asker is in >1 family (a single-family asker auto-resolves; see submitAsk).
-    familiesLabel: "Which family?",
-    familiesRequired: "Choose a family before sending.",
-    intro:
-      "Your question goes into the queue. It will be asked next time they sit down to talk — never as an interruption.",
-    promptEyebrow: "What would you love to hear?",
-    promptQuestion: "A good ask is small and human — a name, a smell, a feeling, a Sunday.",
+    // #204: the panel leads straight with the form — no heading/intro/prompt card, no family
+    // designator (asks submit FAMILYLESS now). The person selector is a type-ahead combobox.
     forLabel: "For",
+    forPlaceholder: "Type a name…",
+    // Custom-validity message on the person combobox: blocks submit until a real option is chosen.
+    forInvalid: "Choose someone from the list.",
+    // ADR-0006 marker suffixing pending invitees in the person selector.
+    invitedNote: "(invited)",
+    noPersonMatches: "No one by that name.",
     questionLabel: "Your question",
     questionPlaceholder: "e.g. What was your mother singing on Sunday mornings?",
-    submit: "Send to the queue",
-    // ADR-0009 Phase 3 — an optional photo picker so an ask can be ABOUT one or more album photos
-    // ("tell the story of THIS photo"). Only photos the asker can already see are offered.
-    photosLabel: "Add a photo (optional)",
+    submit: "Send Question",
+    // ADR-0009 Phase 3 + #204 — an optional MODAL photo picker so an ask can be ABOUT one or more
+    // album photos ("tell the story of THIS photo"). Only photos the asker can already see are
+    // offered; the closed form shows a lightweight count + thumbnails of the current selection.
+    photosAdd: "Add photos",
+    photosSelected: (count: number) =>
+      count === 1 ? "1 photo selected" : `${count} photos selected`,
+    photosModalTitle: "Choose photos",
     photosHelp: "Ask about a specific photo — they'll see it when they answer.",
+    photosDone: "Done",
     photoPickerLoadError: "Couldn't load your album photos. You can still send the question.",
-    noAlbumPhotos: "No album photos yet.",
-    selectedHeading: "About these photos",
     attachPhotoAria: (caption: string | null) =>
       caption ? `Ask about “${caption}”` : "Ask about this photo",
     removePhotoAria: (caption: string | null) =>

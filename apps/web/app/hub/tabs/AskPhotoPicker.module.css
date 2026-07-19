@@ -1,0 +1,138 @@
+/* AskPhotoPicker (#204) — the "Add photos" button + selection readout on the closed Ask form, and
+ * the MODAL album picker (toggle grid) the button opens. Modal chrome mirrors AlbumDestinationModal.
+ * Colors, type, radius, and spacing come from tokens; the raw px below are one-off layout sizes
+ * (thumbnail/tile dimensions, modal chrome) matching the existing album patterns they mirror. */
+
+.root {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+/* Selection readout on the closed form: small thumbnails + a count. */
+.selection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.thumbs {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+  background: var(--surface-sunken);
+}
+
+.count {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+}
+
+/* ── modal ─────────────────────────────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 4vw, 32px);
+  background: var(--scrim);
+}
+
+.dialog {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  max-width: 560px;
+  width: 100%;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: clamp(16px, 4vw, 24px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  outline: none;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.help {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-danger, #b00);
+}
+
+.grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.grid li {
+  margin: 0;
+}
+
+.tile {
+  padding: 0;
+  border: 3px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.tile[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.tileImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+  background: var(--surface-sunken);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

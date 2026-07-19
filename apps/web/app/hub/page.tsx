@@ -361,7 +361,6 @@ export default async function HubPage({
           {activeTab === "ask" && (
             <AskTab
               families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
-              filter={filter}
               initialSubjectPhotoIds={subjectPhotoIds}
             />
           )}
