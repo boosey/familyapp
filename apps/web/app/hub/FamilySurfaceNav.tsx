@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
 import { HubToolbar } from "./HubToolbar";
@@ -82,9 +83,9 @@ export function FamilySurfaceNav({
   const nav = <HubSubNav ariaLabel={hub.shell.familySubNavAria} items={items} active={active} />;
 
   const invite = inviteHref ? (
-    <a className={styles.inviteButton} href={inviteHref}>
+    <Link className={styles.inviteButton} href={inviteHref}>
       {hub.shell.tabInvite}
-    </a>
+    </Link>
   ) : null;
 
   return (
