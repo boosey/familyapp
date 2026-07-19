@@ -203,6 +203,30 @@ describe("listAlbumPhotos", () => {
     const view = await listAlbumPhotos(db, account(contributor.id), fam.id);
     expect(view.map((p) => p.id)).toEqual([kept.id]);
   });
+
+  // #217: defensive cap. `listAlbumPhotos` returns at most `opts.limit` rows, keeping the most-recent.
+  it("caps at opts.limit, keeping the most-recent photos", async () => {
+    const contributor = await makePerson(db, "Rosa");
+    const fam = await makeFamilyWithMember("Esposito", contributor.id);
+    const base = Date.now();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const p = await createAlbumPhoto(db, {
+        contributorPersonId: contributor.id,
+        familyIds: [fam.id],
+        source: "upload",
+        storageKey: `family-photos/cap-${i}`,
+      });
+      // Strictly increasing createdAt so recency order is deterministic (i=2 newest).
+      await db
+        .update(familyPhotos)
+        .set({ createdAt: new Date(base + i * 60_000) })
+        .where(eq(familyPhotos.id, p.id));
+      ids.push(p.id);
+    }
+    const view = await listAlbumPhotos(db, account(contributor.id), fam.id, { limit: 2 });
+    expect(view.map((p) => p.id)).toEqual([ids[2], ids[1]]);
+  });
 });
 
 describe("authorizeAlbumPhotoRead", () => {
