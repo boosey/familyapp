@@ -14,9 +14,12 @@ import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 
 export type AlbumView = "grid" | "masonry" | "list";
 
-/** Slider bounds (px). Default ~140 lives in AlbumGrid. */
+/** Slider bounds (px) + the SSR-safe default. Single-sourced here (the slider's natural home) so the
+ *  same numbers never live in two files — AlbumControls seeds its state from DEFAULT_THUMB and clamps
+ *  to [THUMB_MIN, THUMB_MAX]; AlbumGrid falls back to DEFAULT_THUMB when rendered uncontrolled. */
 export const THUMB_MIN = 96;
 export const THUMB_MAX = 260;
+export const DEFAULT_THUMB = 140;
 
 const VIEWS: ReadonlyArray<{ value: AlbumView; label: string }> = [
   { value: "masonry", label: hub.album.viewMasonry },

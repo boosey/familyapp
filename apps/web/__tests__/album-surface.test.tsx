@@ -18,28 +18,31 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("@/app/hub/album/AlbumGrid", () => ({
-  // The browse Family chips now ride INSIDE AlbumGrid's consolidated control row (issue #52), passed
-  // via `familyChips`. Echo that node so the surface's chip wiring stays assertable through the stub.
-  AlbumGrid: ({
+// The flag-off path now funnels through AlbumControls (the toolbar owner), which renders the family
+// chips + the "Add Photos" uploader via the shared toolbar and mounts AlbumGrid as a body-only child.
+// Stub AlbumControls to echo the chips + addSlot + photos it composes so the surface's wiring stays
+// assertable without the real toolbar's client hooks.
+vi.mock("@/app/hub/album/AlbumControls", () => ({
+  AlbumControls: ({
     photos,
     familyChips,
     addSlot,
+    emptyNote,
   }: {
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
     familyChips?: ReactNode;
     addSlot?: ReactNode;
+    emptyNote?: string;
   }) => (
     <div data-testid="album-grid">
       {familyChips}
-      {/* #143: the uploader now rides the grid's control row via `addSlot` on the populated path —
-          echo it so the surface's uploader wiring stays assertable through the stub. */}
       {addSlot}
       {photos.map((p) => (
         <div key={p.id} data-photo-id={p.id} data-can-manage={String(p.canManage)}>
           {`/api/album-photo/${p.id}`}
         </div>
       ))}
+      {photos.length === 0 ? <p data-testid="album-empty-note">{emptyNote}</p> : null}
     </div>
   ),
 }));
@@ -53,14 +56,12 @@ vi.mock("@/app/hub/album/AlbumBoard", () => ({
     showFileUpload,
     photos,
     familyChips,
-    familyChipsStandalone,
   }: {
     currentFamilyId: string;
     defaultSelected?: string[];
     showFileUpload?: boolean;
     photos: Array<{ id: string; caption: string | null; canManage: boolean }>;
     familyChips?: ReactNode;
-    familyChipsStandalone?: ReactNode;
   }) => (
     <div
       data-testid="album-board"
@@ -69,7 +70,6 @@ vi.mock("@/app/hub/album/AlbumBoard", () => ({
       data-show-file-upload={String(showFileUpload ?? true)}
     >
       {familyChips}
-      {familyChipsStandalone}
       {photos.map((p) => (
         <div key={p.id} data-board-photo-id={p.id}>
           {`/api/album-photo/${p.id}`}
@@ -339,7 +339,7 @@ describe("AlbumSurface", () => {
     expect(html).toContain(`data-selected="${famA},${famC}"`);
   });
 
-  it("none (all chips off) shows the explicit empty grid state but STILL shows the uploader (ADR-0021)", async () => {
+  it("none (all chips off) routes through AlbumControls: unified toolbar (Add Photos + chips) above the empty note", async () => {
     const db = await createTestDatabase();
     const viewer = await makePerson(db, "Rosa");
     const famA = await makeFamily(db, "Esposito", viewer);
@@ -350,15 +350,18 @@ describe("AlbumSurface", () => {
 
     const html = await render(db, account(viewer), "none");
 
-    // The honest empty state for the GRID (ADR-0021) — not a silent "show all".
+    // The honest empty state (ADR-0021) — not a silent "show all". It renders through AlbumControls (the
+    // SAME unified path as every other state), so no bespoke stacked-block render: the empty note carries
+    // the "no families selected" copy inside the AlbumControls region.
     expect(html).toContain(hub.album.noFamiliesSelected);
-    expect(html).not.toContain('data-testid="album-grid"');
-    // The add/import flow is DECOUPLED from the filter: the uploader shows even in the all-off case.
-    // The target is ambiguous (>1 family, filter names none) → the designator pre-selects nothing.
+    expect(html).toContain('data-testid="album-empty-note"');
+    // The add/import flow is DECOUPLED from the filter: the uploader shows even in the all-off case (in
+    // the toolbar's R1-right via addSlot). The target is ambiguous (>1 family, filter names none) → the
+    // designator pre-selects nothing.
     expect(html).toContain('data-testid="album-uploader"');
     expect(html).toContain('data-default-selected=""');
     expect(html).toContain('data-show-file-upload="true"');
-    // The chip bar stays so a family can be turned back on; all chips OFF.
+    // The chip bar stays so a family can be turned back on (R2-left); all chips OFF.
     expect(html).toContain('data-testid="family-chips"');
     expect(html).toContain('data-selected=""');
   });

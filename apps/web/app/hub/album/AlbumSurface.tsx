@@ -28,7 +28,7 @@ import { hub } from "@/app/_copy";
 import { parseFamilyFilter, selectedIdList, deriveSingleScope } from "@/lib/family-filter";
 import { FamilyChips } from "../FamilyChips";
 import { AlbumUploader } from "./AlbumUploader";
-import { AlbumGrid } from "./AlbumGrid";
+import { AlbumControls } from "./AlbumControls";
 import { AlbumBoard } from "./AlbumBoard";
 import { isAlbumImportProgressEnabled } from "@/lib/album-import-progress-config";
 import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
@@ -134,23 +134,18 @@ export async function AlbumSurface({
   // target. Kept as a prop so AlbumUploader/AlbumBoard's shape is unchanged.
   const showFileUpload = true;
 
-  // The shared browse-filter chip bar sits ABOVE the grid/uploader on every path — but only for a
-  // viewer with ≥2 families (one family has nothing to filter). Gating the MOUNT here (rather than
-  // relying on FamilyChips' own self-hide) keeps the client widget's next/navigation hooks out of the
-  // server render for the 0/1-family case (e.g. a pending-only viewer under renderToStaticMarkup).
-  // Two flavors of the same bar: `chips` is standalone (its own trailing margin) for the empty-state
-  // paths where no AlbumGrid mounts; `chipsInline` drops that margin so it bottom-aligns with the
-  // sibling When/Search controls when it rides INSIDE AlbumGrid's consolidated control row (#52).
+  // The shared browse-filter chip bar — but only for a viewer with ≥2 families (one family has nothing
+  // to filter). Gating the MOUNT here (rather than relying on FamilyChips' own self-hide) keeps the
+  // client widget's next/navigation hooks out of the server render for the 0/1-family case (e.g. a
+  // pending-only viewer under renderToStaticMarkup). `inline` (no trailing margin) is the only flavor
+  // now: the chips always ride INSIDE the AlbumControls toolbar's R2-left slot (on EVERY path), which
+  // owns the spacing — there is no standalone stacked chip block anymore.
   const chipFamilies = active.map((f) => ({
     id: f.familyId,
     name: f.familyName,
     shortName: f.familyShortName,
   }));
   const chipSelected = filter.kind === "all" ? ("all" as const) : selectedIds;
-  const chips =
-    active.length >= 2 ? (
-      <FamilyChips families={chipFamilies} selected={chipSelected} />
-    ) : null;
   const chipsInline =
     active.length >= 2 ? (
       <FamilyChips families={chipFamilies} selected={chipSelected} inline />
@@ -158,7 +153,8 @@ export async function AlbumSurface({
 
   // The shared uploader element — the add/import flow, ALWAYS present for a viewer with ≥1 family
   // (ADR-0021). Rendered here once so BOTH the all-off (`none`) branch below and the main return can
-  // mount the same designator-seeded control (the filter and the designator are separate state).
+  // hand the SAME designator-seeded control to AlbumControls' `addSlot` (the filter and the designator
+  // are separate state). AlbumControls places it in the toolbar's R1-right on every path.
   const uploaderControl = showUploader ? (
     <AlbumUploader
       families={active}
@@ -173,32 +169,19 @@ export async function AlbumSurface({
       googlePhotosOauthError={googlePhotosOauthError}
     />
   ) : null;
-  // Standalone wrapper (its own trailing margin) for the empty / all-off (`none`) branches, where no
-  // AlbumGrid mounts to host the uploader inline. On the populated path (#143) the SAME control rides
-  // the grid's consolidated control row via `addSlot` instead — see the main return below.
-  const uploaderElement = uploaderControl ? (
-    <div style={{ margin: "0 0 24px" }}>{uploaderControl}</div>
-  ) : null;
 
-  // Explicit empty selection (`none`): an honest empty state for the GRID (ADR-0021) — not a silent
-  // "show all". The uploader still shows (decoupled from the filter), sitting ABOVE the "no families
-  // selected" note; the chip bar stays so the viewer can turn a family back on.
+  // Explicit empty selection (`none`): an honest empty state (ADR-0021) — not a silent "show all". It
+  // routes through AlbumControls like every other path (no bespoke stacked-block render), so a ≥2-family
+  // viewer sees the SAME two-row toolbar — Add Photos (R1-right) + the chips they can turn back on
+  // (R2-left) — above the "no families selected" note. gridPhotos is empty here (nothing selected).
   if (filter.kind === "none") {
     return (
-      <>
-        {chips}
-        {uploaderElement}
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui)",
-            color: "var(--text-meta)",
-            margin: 0,
-          }}
-        >
-          {hub.album.noFamiliesSelected}
-        </p>
-      </>
+      <AlbumControls
+        photos={gridPhotos}
+        addSlot={uploaderControl}
+        familyChips={chipsInline}
+        emptyNote={hub.album.noFamiliesSelected}
+      />
     );
   }
 
@@ -224,38 +207,21 @@ export async function AlbumSurface({
         googlePhotosOauthError={googlePhotosOauthError}
         photos={gridPhotos}
         familyChips={chipsInline}
-        familyChipsStandalone={chips}
       />
     );
   }
 
+  // The flag-off path funnels through AlbumControls too, so BOTH album paths compose the SAME two-row
+  // toolbar (the "Add Photos" affordance on the SAME row as the When/Search filters). AlbumControls owns
+  // the populated-vs-empty decision: with photos it renders the full toolbar + grid body; with an empty
+  // album it renders a minimal toolbar (Add Photos + family chips) above the welcoming note. A
+  // pending-only viewer (member of no family) gets the coherent hub-wide empty state.
   return (
-    <>
-      {gridPhotos.length === 0 ? (
-        // Empty album (no AlbumGrid mounts): the browse chips + the uploader render standalone above the
-        // welcoming empty note, so a ≥2-family viewer can still toggle families and add the first photo.
-        <>
-          {chips}
-          {uploaderElement}
-          <p
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui)",
-              color: "var(--text-meta)",
-              margin: 0,
-            }}
-          >
-            {/* Pending-only viewer (member of no family) → the coherent hub-wide empty state; an
-                actual member with an empty album → the album-specific prompt (Task 4.6). */}
-            {active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
-          </p>
-        </>
-      ) : (
-        // #143: with photos to show, the "Add Photos" affordance rides the grid's consolidated control
-        // row (right-justified, on the SAME row as the When/Search filters) via `addSlot` — so the
-        // uploader is NOT rendered standalone above the grid. The browse chips ride the same row too.
-        <AlbumGrid photos={gridPhotos} familyChips={chipsInline} addSlot={uploaderControl} />
-      )}
-    </>
+    <AlbumControls
+      photos={gridPhotos}
+      addSlot={uploaderControl}
+      familyChips={chipsInline}
+      emptyNote={active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
+    />
   );
 }

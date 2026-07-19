@@ -1,20 +1,18 @@
 "use client";
 
 /**
- * AlbumFilterBar (Phase C · item 9 · album layout 2026-07-14 · toolbar normalization #191) — the
- * album's search / filter controls, now laid out through the shared `HubToolbar` (#189) so the album's
- * toolbar can't drift from the other hub sub-tabs. It renders:
- *   - a facet-chips row (People / Places toggle chips) ABOVE the toolbar, rendered only when the current
- *     photos actually carry those facets (kept out of the four-slot toolbar since it is its own row and
- *     has no fixed left/right home), and
- *   - the shared two-row `HubToolbar`:
- *       R1: [When · Search · Clear]                ·······  [Add Photos ▸ (addSlot)]
- *       R2: [Family selector (familyChips)]        ·······  [size slider + view layout (rightSlot)]
+ * AlbumFilterBar (Phase C · item 9 · album layout 2026-07-14 · toolbar normalization #191 · controls
+ * hoist) — the album's search / filter controls, laid out through the shared `HubToolbar` (#189) so the
+ * album's toolbar can't drift from the other hub sub-tabs. STRICTLY two rows — there is no third facet
+ * row; the People / Places facet chips ride INLINE in R1-left, between the When filter and the Search
+ * field:
+ *       R1: [When ▾ · People/Places chips · Search · Clear]  ·······  [Add Photos ▸ (addSlot)]
+ *       R2: [Family selector (familyChips)]                  ·······  [size slider + view layout (rightSlot)]
  *
- * Purely presentational — `AlbumGrid` owns the `AlbumFilterValue` state AND does the filtering; this
- * component only renders the current value and reports changes. Slot content decides its own presence:
- * an absent `addSlot` / `familyChips` / `rightSlot` collapses that toolbar slot (HubToolbar's empty-row
- * rule), so e.g. a <2-family viewer (no `familyChips`) reserves no R2-left space.
+ * Purely presentational — {@link AlbumControls} owns the `AlbumFilterValue` state (and derives the facet
+ * options); this only renders the current value and reports changes. Slot content decides its own
+ * presence: an absent `addSlot` / `familyChips` / `rightSlot` collapses that toolbar slot (HubToolbar's
+ * empty-row rule), so e.g. a <2-family viewer (no `familyChips`) reserves no R2-left space.
  *
  * The People / Places chip options are the UNION of the facet across the current photos, deduped by id,
  * so the chips only ever offer values that could actually match something. Each chip is a real
@@ -102,11 +100,10 @@ export function AlbumFilterBar({
     return next;
   };
 
-  const hasFacetChips = people.length > 0 || places.length > 0;
-
-  // R1-left: the When · Search · Clear cluster. The When/Search visible labels are dropped (#143): the
-  // select's default option ("Any time") and the input's placeholder ("Search…") carry the meaning;
-  // each control keeps an aria-label so its accessible name is unchanged.
+  // R1-left: the When · (facets) · Search · Clear cluster. The When/Search visible labels are dropped
+  // (#143): the select's default option ("Any time") and the input's placeholder ("Search…") carry the
+  // meaning; each control keeps an aria-label so its accessible name is unchanged. The People/Places
+  // facet chips ride INLINE here (between When and Search) — never a separate third row.
   const filterCluster = (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, minWidth: 0 }}>
       {/* Capture-time preset — label dropped (#143); "Any time" is the hint, aria-label names it. */}
@@ -122,6 +119,25 @@ export function AlbumFilterBar({
           </option>
         ))}
       </select>
+
+      {/* People / Places facet chips — inline between When and Search (only when the current photos
+          carry those facets, so the chips only ever offer values that could match something). */}
+      {people.length > 0 ? (
+        <FacetChips
+          label={hub.album.filterPeopleLabel}
+          options={people}
+          selected={value.personIds}
+          onToggle={(id) => onChange({ ...value, personIds: toggleIn(value.personIds, id) })}
+        />
+      ) : null}
+      {places.length > 0 ? (
+        <FacetChips
+          label={hub.album.filterPlacesLabel}
+          options={places}
+          selected={value.placeIds}
+          onToggle={(id) => onChange({ ...value, placeIds: toggleIn(value.placeIds, id) })}
+        />
+      ) : null}
 
       {/* Caption / tag text search — the ONE shared _kindred/SearchField (same field the Stories browse
           toolbar uses); label dropped (#143), placeholder + aria-label carry it. */}
@@ -157,39 +173,9 @@ export function AlbumFilterBar({
 
   return (
     <div role="group" aria-label={hub.album.filterBarAria}>
-      {/* Facet row — small tag-size People / Places toggle chips (only when the photos carry those
-          facets). Sits ABOVE the toolbar; kept compact so the facets never dominate the controls area. */}
-      {hasFacetChips ? (
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 20,
-            alignItems: "flex-start",
-            margin: "0 0 var(--space-5)",
-          }}
-        >
-          {people.length > 0 ? (
-            <FacetChips
-              label={hub.album.filterPeopleLabel}
-              options={people}
-              selected={value.personIds}
-              onToggle={(id) => onChange({ ...value, personIds: toggleIn(value.personIds, id) })}
-            />
-          ) : null}
-          {places.length > 0 ? (
-            <FacetChips
-              label={hub.album.filterPlacesLabel}
-              options={places}
-              selected={value.placeIds}
-              onToggle={(id) => onChange({ ...value, placeIds: toggleIn(value.placeIds, id) })}
-            />
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* The shared two-row toolbar (#189/#191). Each slot gates its own presence: pass `null` for an
-          absent affordance so its row/slot collapses (HubToolbar's empty-row rule). */}
+      {/* The shared two-row toolbar (#189/#191) — STRICTLY two rows (the facet chips ride inside R1-left,
+          not a third row). Each slot gates its own presence: pass `null` for an absent affordance so its
+          row/slot collapses (HubToolbar's empty-row rule). */}
       <HubToolbar
         row1Left={filterCluster}
         row1Right={addSlot ?? null}
