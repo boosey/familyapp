@@ -5,9 +5,18 @@
  * resume item links to /hub/tell/[storyId]. Both surfaces render regardless of whether the feed is
  * empty (they sit above the browse). selfDrafts carry ISO recordedAt strings (serialized upstream).
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoriesTab } from "@/app/hub/tabs/StoriesTab";
+
+// #190: the Stories body is the client StoriesSurface, which reads the initial browse mode from `?mode=`
+// via useSearchParams (and mounts FamilyChips for ≥2 families). These tests use 0 families, so only the
+// search-params hook is exercised; mock it to an empty query (default "feed" mode).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => "/hub",
+  useSearchParams: () => new URLSearchParams(""),
+}));
 
 const baseProps = {
   feed: [],

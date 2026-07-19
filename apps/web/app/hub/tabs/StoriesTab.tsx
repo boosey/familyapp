@@ -1,12 +1,10 @@
 import { Suspense } from "react";
-import { StoryBrowse } from "./StoryBrowse";
-import { StoriesControls, type SelfDraft } from "./StoriesControls";
+import { StoriesSurface } from "./StoriesSurface";
 import { resolveCoverPhotoId, resolveGalleryPhotoIds } from "./story-browse-helpers";
-import type { StoryItem, ViewerFamily } from "./story-browse-types";
+import type { SelfDraft, StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { selectedIdList, type FamilyFilter } from "@/lib/family-filter";
-import styles from "./StoriesTab.module.css";
 
 interface StoriesTabProps {
   feed: MemberWithStories[];
@@ -117,44 +115,35 @@ export function StoriesTab({
   const activeIds = activeFamilies.map((f) => f.id);
   const selectedIds = selectedIdList(filter, activeIds);
 
+  // Which body the client surface renders below the shared toolbar (#190). The toolbar itself (family
+  // chips, reminders, Tell) shows above EVERY branch — the family selector especially must stay in the
+  // all-off case so the viewer can turn a family back on.
+  const body: "none" | "empty" | "browse" =
+    filter.kind === "none" ? "none" : items.length === 0 ? "empty" : "browse";
+  // Empty-note copy: a pending-only viewer (member of no family yet) reaches the hub with an empty feed
+  // since Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than the
+  // generic "when someone shares…" copy that assumes they already have a family.
+  const emptyCopy = viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty;
+
   return (
-    <div className={styles.wrap}>
-      {/* The single control row (#125): family-filter chips (≥2 families), a compact draft-reminder,
-          and the right-justified "Tell a story" button. Sits above every branch so it shows even in
-          the empty state. The chip `selected` value matches the parse basis (all → "all"; else ids). */}
-      <StoriesControls
+    // The shared two-row HubToolbar (#190) + the browse/empty body, all owned by the client
+    // StoriesSurface (it holds the mode/search/feed-view/reminder state that drives the toolbar). It
+    // reads `?mode=` via useSearchParams, so it sits under a Suspense boundary like the old StoryBrowse.
+    <Suspense>
+      <StoriesSurface
+        items={items}
+        viewerFamilies={viewerFamilies}
+        viewerPersonId={viewerPersonId}
+        viewerName={viewerName}
+        selectedIds={selectedIds}
+        allSelected={filter.kind === "all"}
         activeFamilies={activeFamilies}
-        selected={filter.kind === "all" ? "all" : selectedIds}
+        chipSelected={filter.kind === "all" ? "all" : selectedIds}
         selfDrafts={selfDrafts}
         intakeIncomplete={intakeIncomplete}
+        body={body}
+        emptyCopy={emptyCopy}
       />
-
-      {filter.kind === "none" ? (
-        // Explicit empty selection (ADR-0021): every chip toggled OFF is an honest empty state — no
-        // browse pool — rather than a silent "show all". The chip bar stays (above) so the viewer can
-        // turn a family back on. Mirrors AlbumSurface's `none` short-circuit.
-        <p className={styles.emptyText}>{hub.stories.noFamiliesSelected}</p>
-      ) : items.length === 0 ? (
-        // No stories yet — the control row's "Tell a story" button is the entry point; here we keep
-        // only the welcoming empty note.
-        <p className={styles.emptyTextMuted}>
-          {/* A pending-only viewer (member of no family yet) reaches the hub with an empty feed since
-              Gate C was retired — give them a coherent, welcoming empty state (Task 4.6) rather than
-              the generic "when someone shares…" copy that assumes they already have a family. */}
-          {viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty}
-        </p>
-      ) : (
-        <Suspense>
-          <StoryBrowse
-            items={items}
-            viewerFamilies={viewerFamilies}
-            viewerPersonId={viewerPersonId}
-            viewerName={viewerName}
-            selectedIds={selectedIds}
-            allSelected={filter.kind === "all"}
-          />
-        </Suspense>
-      )}
-    </div>
+    </Suspense>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Story Browse (Hub) — the Stories tab, rebuilt in place as three modes of one surface (Feed /
- * Timeline / Search) plus a reusable family-scope filter. Faithful to
+ * Story Browse (Hub) — the Stories tab body, three modes of one surface (Feed / Timeline / Search)
+ * plus a reusable family-scope filter. Faithful to
  * docs/design-system/.../HANDOFF-browse-and-family-flows.md ("Prototype 1 — Story Browse (Hub)").
  *
  * Everything here is CLIENT-SIDE over an already-authorized, pre-sorted pool (`items`): every item
@@ -10,14 +10,21 @@
  * filtering only narrows what is displayed. Cards open the Read view via the existing
  * /hub/stories/[id] route (restyled separately). Reading size is owned by the hub header's
  * KindredFontScale — not duplicated here.
+ *
+ * #190: the mode toggle (Feed/Timeline/Search), the Search input, and the Masonry/Column feed-view
+ * selector were HOISTED into the shared two-row {@link HubToolbar} (owned by the client
+ * {@link StoriesSurface} wrapper). So `mode`, `query`, and `feedView` are now CONTROLLED props threaded
+ * down from that wrapper — this component renders only the body for whichever mode is active. Only the
+ * Timeline's own "Whole family / Just {viewer}" widen toggle stays local here (it's a per-body control,
+ * not a top-of-tab one).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { StoryCard } from "./StoryCard";
 import { pickStoryLayout } from "./story-layout";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
+import type { BrowseMode, FeedView } from "./stories-browse-controls";
 import {
   groupByDecade,
   highlightMatch,
@@ -36,8 +43,8 @@ interface StoryBrowseProps {
   /**
    * The selected family ids for the shared `?families=` multi-select browse filter (ADR-0021, #47).
    * A story is shown when ANY of its families is in this set. CONTROLLED by the chip bar (a server
-   * navigation) mounted by StoriesTab; this surface no longer owns a family-scope control. The empty
-   * selection (`none`) never reaches here — StoriesTab short-circuits it to an empty state upstream.
+   * navigation) mounted by StoriesSurface; this surface no longer owns a family-scope control. The
+   * empty selection (`none`) never reaches here — StoriesTab short-circuits it to an empty state.
    */
   selectedIds: string[];
   /**
@@ -45,57 +52,28 @@ interface StoryBrowseProps {
    * narrowing. Distinct from `selectedIds` naming every id, and drives the Feed empty-state copy.
    */
   allSelected: boolean;
+  /** Active browse mode — CONTROLLED by StoriesSurface's toolbar pills (#190). */
+  mode: BrowseMode;
+  /** Feed layout — CONTROLLED by StoriesSurface's toolbar Masonry/Column selector (#190). */
+  feedView: FeedView;
+  /** Search query — CONTROLLED by StoriesSurface's toolbar search field (Search mode, #190). */
+  query: string;
 }
 
-type Mode = "feed" | "timeline" | "search";
-
-const MODES: Mode[] = ["feed", "timeline", "search"];
-
-/** Feed layout (Feed mode only): today's single-column stacked cards, or a masonry of cards. */
-type FeedView = "column" | "masonry";
-
-const FEED_VIEW_KEY = "hub:feedView";
-
-function isFeedView(v: string | null): v is FeedView {
-  return v === "column" || v === "masonry";
-}
-
-export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName, selectedIds, allSelected }: StoryBrowseProps) {
-  const searchParams = useSearchParams();
-
-  // Initial mode comes from the URL (?mode=) so the Read view's Back can restore it; thereafter it is
-  // local state for instant, no-server-roundtrip switching. Family filter is NOT local — it is the
-  // controlled `selectedIds`/`allSelected` props, driven by the chip bar (a server navigation).
-  const initialMode: Mode = MODES.includes(searchParams.get("mode") as Mode)
-    ? (searchParams.get("mode") as Mode)
-    : "feed";
-
-  const [mode, setMode] = useState<Mode>(initialMode);
-  // Timeline: default "Whole family" (all in-scope stories by era); toggle to "Just {viewer}".
+export function StoryBrowse({
+  items,
+  viewerFamilies,
+  viewerPersonId,
+  viewerName,
+  selectedIds,
+  allSelected,
+  mode,
+  feedView,
+  query,
+}: StoryBrowseProps) {
+  // Timeline: default "Whole family" (all in-scope stories by era); toggle to "Just {viewer}". This is
+  // the one browse control that stays local to the body (it's a per-timeline widen, not a tab-level one).
   const [wholeFamily, setWholeFamily] = useState(true);
-  const [query, setQuery] = useState("");
-
-  // Feed layout (Feed mode only). Start at the SSR-safe default ("masonry" — the new-viewer default
-  // per ADR-0021) and hydrate the persisted choice in a client-only effect, so a stored preference
-  // still wins and the choice survives navigation/reload without a hydration mismatch (the SSR default
-  // and the client's first render agree; the effect only *overrides* when localStorage has a value).
-  const [feedView, setFeedView] = useState<FeedView>("masonry");
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(FEED_VIEW_KEY);
-      if (isFeedView(stored)) setFeedView(stored);
-    } catch {
-      /* localStorage unavailable — keep the default. */
-    }
-  }, []);
-  function changeFeedView(v: FeedView) {
-    setFeedView(v);
-    try {
-      window.localStorage.setItem(FEED_VIEW_KEY, v);
-    } catch {
-      /* ignore persistence failure */
-    }
-  }
 
   // Multi-select family narrowing over the authorized pool (ADR-0021, #47). "all" keeps everything;
   // otherwise a story is kept when ANY of its families is in the selected set (a story tagged to N of
@@ -114,74 +92,27 @@ export function StoryBrowse({ items, viewerFamilies, viewerPersonId, viewerName,
 
   return (
     <div>
-      {/* Secondary "view options" row: browse modes + (Feed only) the layout toggle, kept quiet and
-          right-aligned above the grid — not front-and-center (spec). Family scope is owned by the hub
-          header selector now — this surface no longer renders a duplicate per-family control. */}
-      <div className={styles.viewOptions}>
-        <div className={styles.segmentGroup} role="tablist" aria-label={hub.shell.tabStories}>
-          {MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => setMode(m)}
-              className={styles.modePill}
-            >
-              {m === "feed"
-                ? hub.browse.modeFeed
-                : m === "timeline"
-                  ? hub.browse.modeTimeline
-                  : hub.browse.modeSearch}
-            </button>
-          ))}
-        </div>
-
-        {/* Feed layout toggle — only shown in Feed mode (Timeline and Search own their own layouts;
-            Column/Masonry only describe the card feed). */}
-        {mode === "feed" ? (
-          <div className={styles.segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
-            {(["masonry", "column"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                role="radio"
-                aria-checked={feedView === v}
-                onClick={() => changeFeedView(v)}
-                className={styles.modePill}
-              >
-                {v === "column" ? hub.browse.viewColumn : hub.browse.viewMasonry}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div>
-        {mode === "feed" ? (
-          <Feed
-            items={scoped}
-            allSelected={allSelected}
-            selectedIds={selectedIds}
-            viewerFamilies={viewerFamilies}
-            href={href}
-            view={feedView}
-          />
-        ) : null}
-        {mode === "timeline" ? (
-          <Timeline
-            items={scoped}
-            wholeFamily={wholeFamily}
-            onWiden={setWholeFamily}
-            viewerPersonId={viewerPersonId}
-            viewerName={viewerName}
-            href={href}
-          />
-        ) : null}
-        {mode === "search" ? (
-          <Search items={scoped} query={query} onQuery={setQuery} href={href} />
-        ) : null}
-      </div>
+      {mode === "feed" ? (
+        <Feed
+          items={scoped}
+          allSelected={allSelected}
+          selectedIds={selectedIds}
+          viewerFamilies={viewerFamilies}
+          href={href}
+          view={feedView}
+        />
+      ) : null}
+      {mode === "timeline" ? (
+        <Timeline
+          items={scoped}
+          wholeFamily={wholeFamily}
+          onWiden={setWholeFamily}
+          viewerPersonId={viewerPersonId}
+          viewerName={viewerName}
+          href={href}
+        />
+      ) : null}
+      {mode === "search" ? <Search items={scoped} query={query} href={href} /> : null}
     </div>
   );
 }
@@ -361,15 +292,15 @@ function TimelineRow({
 }
 
 /* ── Search ───────────────────────────────────────────────────────────────────── */
+/** The Search BODY only — the query input itself was hoisted into the toolbar (StoriesSurface, #190),
+ *  so this renders results / idle / no-results over the CONTROLLED `query`. */
 function Search({
   items,
   query,
-  onQuery,
   href,
 }: {
   items: StoryItem[];
   query: string;
-  onQuery: (v: string) => void;
   href: (item: StoryItem) => string;
 }) {
   const trimmed = query.trim();
@@ -380,15 +311,6 @@ function Search({
 
   return (
     <div className={styles.searchWrap}>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => onQuery(e.target.value)}
-        placeholder={hub.browse.searchPlaceholder}
-        aria-label={hub.browse.searchPlaceholder}
-        className={styles.searchInput}
-      />
-
       {!trimmed ? (
         <p className={styles.searchIdle}>{hub.browse.searchIdle}</p>
       ) : results.length === 0 ? (
