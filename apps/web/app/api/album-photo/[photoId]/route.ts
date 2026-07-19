@@ -97,16 +97,27 @@ export async function GET(
     // this also serves it on every request after the first lazy generation).
     const thumbKey = thumbnailStorageKey(photo.storageKey);
     const cached = await storage.getBytes(thumbKey);
-    if (cached) return byteResponse(cached, THUMBNAIL_CONTENT_TYPE);
+    if (cached) {
+      if (cached.byteLength === 0) {
+        // Failure sentinel (issue #176): generation already failed for these bytes — do NOT re-run
+        // `sharp`. Degrade straight to the full-res original, sniffed, exactly like the first time.
+        const original = await storage.getBytes(photo.storageKey);
+        if (!original) return new NextResponse(null, { status: 404 });
+        return byteResponse(original, sniffImageContentType(original));
+      }
+      return byteResponse(cached, THUMBNAIL_CONTENT_TYPE);
+    }
 
-    // Lazy generation (BACKFILL): a photo predating this feature, or one whose warm failed, gets its
-    // thumbnail made here on first grid request and cached for next time.
+    // Lazy generation (BACKFILL): a photo predating this feature (or one whose warm raced a store
+    // error before the sentinel existed) gets its thumbnail made here on first grid request and
+    // cached for next time. A warm that failed post-#176 left a sentinel, handled above.
     const original = await storage.getBytes(photo.storageKey);
     if (!original) return new NextResponse(null, { status: 404 });
     const thumb = await warmThumbnail(storage, photo.storageKey, original);
     if (thumb) return byteResponse(thumb, THUMBNAIL_CONTENT_TYPE);
     // sharp could not decode the bytes (non-image / corrupt): degrade to the full-res original,
-    // sniffed, uncached — the tile still renders rather than breaking.
+    // sniffed — the tile still renders rather than breaking, and `warmThumbnail` has now cached
+    // the failure as a sentinel so this regeneration never happens again.
     return byteResponse(original, sniffImageContentType(original));
   }
 

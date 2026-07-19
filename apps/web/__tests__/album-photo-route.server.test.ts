@@ -124,13 +124,32 @@ describe("GET /api/album-photo/[photoId]?variant=thumb — lazy generation + cac
     expect((await call("photo-1", "thumb")).status).toBe(404);
   });
 
-  it("falls back to the full-res original (uncached) when the bytes are not a decodable image", async () => {
+  it("falls back to the full-res original when the bytes are not a decodable image", async () => {
     const junk = new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3]); // "%PDF" — not an image
     await runtimeStorage.put({ key: KEY, bytes: junk, contentType: "image/jpeg" });
     const res = await call("photo-1", "thumb");
     expect(res.status).toBe(200);
-    // No thumbnail was cached (sharp could not process it).
-    expect(await runtimeStorage.getBytes(thumbnailStorageKey(KEY))).toBeNull();
+    // The failure is cached as a 0-byte sentinel (issue #176) — sharp could not process it.
+    const sentinel = await runtimeStorage.getBytes(thumbnailStorageKey(KEY));
+    expect(sentinel).not.toBeNull();
+    expect(sentinel!.byteLength).toBe(0);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(junk);
+  });
+
+  it("serves the original on later requests without re-running sharp once the sentinel exists", async () => {
+    const junk = new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3]); // "%PDF" — not an image
+    await runtimeStorage.put({ key: KEY, bytes: junk, contentType: "image/jpeg" });
+    expect((await call("photo-1", "thumb")).status).toBe(200); // fails, writes the sentinel
+
+    // Swap the original for a VALID image: if the route re-attempted generation, sharp would now
+    // succeed and return a JPEG thumbnail. The sentinel path must serve the original bytes as-is.
+    await runtimeStorage.delete(KEY);
+    const png = await bigPng(64, 64);
+    await runtimeStorage.put({ key: KEY, bytes: png, contentType: "image/png" });
+
+    const res = await call("photo-1", "thumb");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/png"); // sniffed original, not the JPEG thumb
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(png);
   });
 });
