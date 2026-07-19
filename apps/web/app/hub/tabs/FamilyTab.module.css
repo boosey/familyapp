@@ -7,6 +7,36 @@
 /* The `.familyRow` layout moved to the shared HubToolbar (#189) — R2's row is the toolbar's second row
  * now. This module keeps only the zoom-control pieces the toolbar's R2-right slot renders. */
 
+/* ADR-0024 mobile pass — the Family selector chips as a horizontal-scroll strip on a phone. Family's
+   only secondary control is these chips (sub-nav + Invite + zoom stay visible), so it does NOT get a
+   "Filters & view" sheet; instead the chip row scrolls sideways at base rather than bloating into
+   ragged wrapped rows. Wrapping is restored at ≥ sm so desktop is unchanged. This class OWNS the row
+   layout (passed to FamilyChips' `rowClassName`, which then drops its inline flex-wrap). */
+.familyChipsScroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  /* Don't let a horizontal chip-scroll chain into the page behind it. */
+  overscroll-behavior-x: contain;
+  /* Trailing space before the tree/list content below (matches the standalone chip-bar's bottom gap). */
+  margin: 0 0 20px;
+  /* Keep chips from being squeezed; each keeps its natural width and the row scrolls instead. */
+  scrollbar-width: thin;
+}
+
+.familyChipsScroll > * {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 40rem) {
+  /* Desktop: restore the wrapping inline row (no sideways scroll) so the selector row is unchanged. */
+  .familyChipsScroll {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
 .zoomControls {
   display: inline-flex;
   align-items: center;

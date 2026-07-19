@@ -11,6 +11,27 @@
   gap: 28px;
 }
 
+/* ADR-0024 mobile pass — the compact PRIMARY row shown only on a phone (< 40rem, gated by useIsCompact
+   in StoriesSurface). It keeps the sub-nav (Feed/Timeline) + the Tell-a-story action + the "⚙ Filters &
+   view" trigger visible; everything else (search, family chips, view selector) moves into the sheet.
+   The desktop branch renders the unchanged inline HubToolbar instead, so this row never affects it. */
+.mobilePrimaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* The reminders + Tell-a-story cluster + the Filters trigger are pushed hard-right on the primary row. */
+.mobilePrimaryRight {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
 /* R1-left group (#190): the Feed/Timeline/Search pill nav (shared HubSubNav) with the Search field
    beside it (Search mode only). A quiet inline row that wraps on narrow viewports; the toolbar's `.left`
    slot owns the outer spacing. */

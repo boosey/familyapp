@@ -21,6 +21,7 @@
  */
 import { hub } from "@/app/_copy";
 import { HubToolbar } from "../HubToolbar";
+import { MobileControlSheet } from "../MobileControlSheet";
 import { SearchField } from "@/app/_kindred/SearchField";
 
 /** Coarse capture-time buckets over each photo's `capturedAt` ISO string. */
@@ -65,6 +66,8 @@ export function AlbumFilterBar({
   rightSlot,
   addSlot,
   familyChips,
+  compact = false,
+  activeCount = 0,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -80,6 +83,12 @@ export function AlbumFilterBar({
   /** The shared browse Family filter chips (ADR-0021) — HubToolbar's R2-left, on the same row as the
    *  view/layout controls. Omit (e.g. <2 families) and the R2-left slot collapses. */
   familyChips?: React.ReactNode;
+  /** ADR-0024: on a phone the filter cluster + chips + view controls move into a "⚙ Filters & view"
+   *  bottom sheet; only "Add Photos" stays on the primary row. Desktop (false) renders the inline
+   *  two-row HubToolbar unchanged. AlbumControls decides this via useIsCompact. */
+  compact?: boolean;
+  /** Number of non-default filters/view options — drives the mobile trigger's count badge (compact only). */
+  activeCount?: number;
 }) {
   const control: React.CSSProperties = {
     minHeight: 40,
@@ -170,6 +179,33 @@ export function AlbumFilterBar({
       ) : null}
     </div>
   );
+
+  // ADR-0024 mobile branch: keep only "Add Photos" on the primary row and tuck the filter cluster +
+  // family chips + view controls into the "⚙ Filters & view" sheet. The primary row right-justifies the
+  // Add Photos affordance beside the Filters trigger.
+  if (compact) {
+    return (
+      <div role="group" aria-label={hub.album.filterBarAria}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "var(--space-2)",
+          }}
+        >
+          {addSlot ?? null}
+          <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <MobileControlSheet activeCount={activeCount}>
+              {filterCluster}
+              {familyChips ?? null}
+              {rightSlot ?? null}
+            </MobileControlSheet>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div role="group" aria-label={hub.album.filterBarAria}>

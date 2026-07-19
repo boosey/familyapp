@@ -26,10 +26,12 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { HubToolbar } from "../HubToolbar";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
 import {
   AlbumFilterBar,
   EMPTY_FILTER,
+  isFilterActive,
   type AlbumFilterValue,
 } from "./AlbumFilterBar";
 import {
@@ -59,6 +61,7 @@ export function AlbumControls({
   onRetryTile,
   addSlot,
   familyChips,
+  familyFilterActive = false,
   notices,
   emptyNote,
 }: {
@@ -73,6 +76,10 @@ export function AlbumControls({
   /** The shared browse Family filter chips (ADR-0021) — HubToolbar's R2-left. Omit (<2 families) and
    *  the slot collapses (HubToolbar's empty-row rule). */
   familyChips?: React.ReactNode;
+  /** Whether the `?families=` chip filter is narrowed to a subset (computed upstream in AlbumSurface,
+   *  which owns the selection). On mobile the chips move INSIDE the closed "Filters & view" sheet, so
+   *  this must feed the trigger badge — otherwise a family-narrowed grid shows with no indication. */
+  familyFilterActive?: boolean;
   /** Board-only status lines (import "X of N", a list-step error, a "nothing imported" note),
    *  rendered BELOW the toolbar and above the grid body. */
   notices?: React.ReactNode;
@@ -131,11 +138,27 @@ export function AlbumControls({
     }
   }
 
+  // ADR-0024: on a phone (< 40rem) the album's filter cluster + family chips + view controls move into a
+  // "⚙ Filters & view" bottom sheet, leaving only "Add Photos" on the primary row. Desktop is unchanged.
+  const compact = useIsCompact();
+
+  // Active-count for the mobile trigger badge: one for an engaged filter (period/people/places/text —
+  // isFilterActive already collapses the four facets) + one for a non-default view + one for a narrowed
+  // family-chip filter. The family chip subset is opaque here (an upstream ReactNode), so AlbumSurface
+  // passes `familyFilterActive` down: on mobile the chips are hidden inside the closed sheet, so an
+  // un-counted family filter would leave the grid narrowed with no visible indication.
+  const activeCount =
+    (isFilterActive(filter) ? 1 : 0) + (view !== "masonry" ? 1 : 0) + (familyFilterActive ? 1 : 0);
+
   const hasBody = photos.length > 0 || pendingTiles.length > 0;
 
   // Empty album: no grid to host the full filter toolbar, so render a MINIMAL toolbar carrying only the
   // Add Photos affordance (R1-right) + the family chips (R2-left) above the empty note. The filters and
   // view controls would steer nothing here, so they are omitted (their slots collapse).
+  // DELIBERATELY EXEMPT from the mobile "Filters & view" sheet (`compact` is unused on this path): there
+  // is no photo grid below to protect from vertical bloat, and the chips are the one useful control here
+  // (switch which family's empty album you're looking at) — hiding them behind a gear on an empty screen
+  // is worse UX than leaving them inline. So no sheet, no badge, chips stay visible.
   if (!hasBody) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -167,6 +190,8 @@ export function AlbumControls({
         onChange={setFilter}
         familyChips={familyChips}
         addSlot={addSlot}
+        compact={compact}
+        activeCount={activeCount}
         rightSlot={
           <AlbumViewControls
             view={view}

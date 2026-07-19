@@ -46,6 +46,13 @@ interface FamilyChipsFilterProps {
    * trailing space before the next block on the stories/tree browse surfaces.
    */
   inline?: boolean;
+  /**
+   * ADR-0024: when set, this className OWNS the chip-row layout (flex direction/wrap/gap/scroll) instead
+   * of the built-in inline `rowStyle`. The Family tab passes a CSS-module class that makes the row a
+   * horizontal-scroll strip on a phone (`nowrap` + `overflow-x:auto`) and restores wrapping at ≥ sm —
+   * responsive behaviour an inline style can't express. Absent (default) keeps the inline row verbatim.
+   */
+  rowClassName?: string;
   /** Optional per-family count badge (e.g. pending join-requests, #140): a chip whose id maps to a
    *  positive count renders the shared count-pill; 0/absent shows no badge. */
   badges?: Record<string, number>;
@@ -110,6 +117,9 @@ export function FamilyChips(props: FamilyChipsProps) {
   // mode narrowing below.
   const badges = props.badges;
   const badgeLabels = props.badgeLabels;
+  // Optional CSS-module class that OWNS the row layout (ADR-0024 Family-tab horizontal-scroll strip).
+  // Filter-mode-only prop; a designator caller never passes it.
+  const rowClassName = props.value === undefined ? props.rowClassName : undefined;
   // Discriminate the two modes ONCE, narrowing `props` for the whole body.
   const designatorProps = props.value !== undefined ? props : null;
   const filterProps = props.value === undefined ? props : null;
@@ -171,19 +181,24 @@ export function FamilyChips(props: FamilyChipsProps) {
   // FILTER-mode click handler: the tree collapses to one family; the album toggles the set.
   const onFilterChip = filterProps?.singleSelect ? collapseTo : toggle;
 
-  const rowStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    // Standalone: trailing space before the next block. Inline (consolidated album row): no margin so
-    // the chips bottom-align with the sibling When/Search controls (ADR-0021 · #52).
-    margin: inline ? 0 : "0 0 20px",
-  };
+  // When a `rowClassName` is supplied it OWNS the row layout (flex/wrap/gap/scroll/margin) — the inline
+  // style is dropped entirely so the class's responsive rules aren't out-specified by inline props.
+  const rowStyle: CSSProperties | undefined = rowClassName
+    ? undefined
+    : {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+        // Standalone: trailing space before the next block. Inline (consolidated album row): no margin so
+        // the chips bottom-align with the sibling When/Search controls (ADR-0021 · #52).
+        margin: inline ? 0 : "0 0 20px",
+      };
 
   return (
     <div
       role="group"
       aria-label={designator ? hub.shell.familyDesignatorAria : hub.shell.familyFilterAria}
+      className={rowClassName}
       style={rowStyle}
     >
       {families.map((f) => {

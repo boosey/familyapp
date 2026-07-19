@@ -11,7 +11,7 @@
  * Mocks next/navigation and the server-action module; the real AlbumFilterBar / AlbumViewControls /
  * HubToolbar / AlbumGrid mount, so this exercises the whole composed toolbar + body.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AlbumControls } from "@/app/hub/album/AlbumControls";
 import { hub } from "@/app/_copy";
@@ -305,6 +305,58 @@ describe("AlbumControls HubToolbar layout (controls hoist — strictly two rows)
     const r1 = rows[0]!;
     expect(within(r1).getByRole("group", { name: hub.album.filterPeopleLabel })).toBeTruthy();
     expect(within(r1).getByRole("group", { name: hub.album.filterPlacesLabel })).toBeTruthy();
+  });
+});
+
+// ADR-0024 mobile pass: on a phone (< 40rem) the album's filters/chips/view move into the closed
+// "⚙ Filters & view" sheet. A narrowed family-chip filter is then invisible, so it MUST feed the
+// trigger's active-count badge — the exact undercount the cold review caught. These tests force the
+// compact branch by mocking matchMedia (jsdom leaves it undefined → desktop otherwise).
+describe("AlbumControls mobile 'Filters & view' badge counts the family filter (blocker regression)", () => {
+  const realMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    // A compact viewport: the query matches, so useIsCompact() → true.
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
+  it("badges the trigger when the family filter is narrowed to a subset", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive
+        emptyNote="(empty)"
+      />,
+    );
+    // The mobile layout collapses to the single "Filters & view" trigger…
+    const trigger = screen.getByRole("button", { name: new RegExp(hub.mobileControls.label) });
+    // …carrying an active-count badge of 1 (the narrowed family filter, no other filters, default view).
+    expect(trigger.textContent).toContain("1");
+  });
+
+  it("shows NO badge when nothing (incl. the family filter) is narrowed", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive={false}
+        emptyNote="(empty)"
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: new RegExp(hub.mobileControls.label) });
+    expect(trigger.textContent).not.toMatch(/\d/);
   });
 });
 

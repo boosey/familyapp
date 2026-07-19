@@ -1,0 +1,58 @@
+/* MobileControlSheet (ADR-0024 mobile pass) — the "⚙ Filters & view" trigger the hub tabs render on a
+ * phone to open the shared BottomSheet of their secondary controls. Tokens only (per CSS-MODULES.md).
+ * This is only ever mounted on the mobile branch (the tab gates on useIsCompact), so it carries no
+ * desktop media layer. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border-strong);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.trigger:hover {
+  background: var(--surface-sunken);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.gear {
+  font-size: var(--text-ui);
+  line-height: 1;
+}
+
+/* The active-count badge — the SAME accent pill as HubTabs .badge (shared count-pill look), local so
+ * this component doesn't cross-import a hub CSS module for one class. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The sheet body stacks its grouped controls vertically with comfortable spacing. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}

@@ -61,6 +61,17 @@ export const hub = {
     familyEyebrow: (n: number) =>
       `YOUR FAMILY · ${n} ${n === 1 ? "FAMILY" : "FAMILIES"}`,
   },
+  // ADR-0024 mobile pass — the "Filters & view" bottom sheet that hides secondary hub-toolbar controls
+  // (search, family chips, view/layout toggles, album date/facet filters + size slider) behind one
+  // button on a phone (< 40rem). Desktop is unchanged (the inline HubToolbar renders as today).
+  mobileControls: {
+    // The trigger button (a ⚙ gear glyph precedes this in JSX) + its sheet's title.
+    label: "Filters & view",
+    // Accessible name for the count badge on the trigger (n = number of active secondary filters).
+    activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
+    // The bottom sheet's ✕ close control.
+    close: "Close",
+  },
   stories: {
     untitled: "Untitled",
     empty:

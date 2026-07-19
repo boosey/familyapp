@@ -158,6 +158,11 @@ export async function AlbumSurface({
     active.length >= 2 ? (
       <FamilyChips families={chipFamilies} selected={chipSelected} inline />
     ) : null;
+  // Whether the family chip filter is narrowed to a subset (mirrors StoriesSurface's `chipsFiltered`).
+  // On mobile the chips hide inside the closed "Filters & view" sheet, so AlbumControls needs this to
+  // badge the trigger — otherwise a family-narrowed grid shows with no visible indication.
+  const familyFilterActive =
+    active.length >= 2 && chipSelected !== "all" && chipSelected.length !== active.length;
 
   // The shared uploader element — the add/import flow, ALWAYS present for a viewer with ≥1 family
   // (ADR-0021). Rendered here once so BOTH the all-off (`none`) branch below and the main return can
@@ -215,6 +220,7 @@ export async function AlbumSurface({
         googlePhotosOauthError={googlePhotosOauthError}
         photos={gridPhotos}
         familyChips={chipsInline}
+        familyFilterActive={familyFilterActive}
       />
     );
   }
@@ -229,6 +235,7 @@ export async function AlbumSurface({
       photos={gridPhotos}
       addSlot={uploaderControl}
       familyChips={chipsInline}
+      familyFilterActive={familyFilterActive}
       emptyNote={active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
     />
   );

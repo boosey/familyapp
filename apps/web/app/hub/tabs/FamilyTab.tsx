@@ -119,7 +119,15 @@ export function FamilyTab({
   // (List view + <2 families → no R2 → content flush, no stray gap).
   const familyChips =
     families.length >= 2 ? (
-      <FamilyChips singleSelect inline families={families} selected={[scopeId ?? familyId]} />
+      <FamilyChips
+        singleSelect
+        inline
+        families={families}
+        selected={[scopeId ?? familyId]}
+        // ADR-0024: the chip row is a horizontal-scroll strip on a phone (wrapping restored at ≥ sm) so
+        // it never bloats into ragged rows. Family's only secondary control — no "Filters & view" sheet.
+        rowClassName={styles.familyChipsScroll}
+      />
     ) : null;
 
   // The tree's Fit / − / + controls — tree view only (null in the list view → no R2-right content).

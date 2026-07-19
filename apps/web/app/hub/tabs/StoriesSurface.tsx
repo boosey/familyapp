@@ -31,6 +31,8 @@ import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import { HubToolbar } from "../HubToolbar";
+import { MobileControlSheet } from "../MobileControlSheet";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { ActionButton } from "@/app/_kindred/ActionButton";
@@ -98,6 +100,11 @@ export function StoriesSurface({
   // `useSearchParams()` can be null during SSR / static generation (no router context) — guard the read
   // so a server/static render of an empty-state body doesn't throw (mirrors FamilyChips' null handling).
   const searchParams = useSearchParams();
+
+  // ADR-0024: on a phone (< 40rem) the secondary controls (search, family chips, view selector) move
+  // into a "⚙ Filters & view" bottom sheet; the sub-nav + Tell-a-story stay on a compact primary row.
+  // Desktop (≥ 40rem) renders the existing inline HubToolbar unchanged. SSR/first-paint = desktop.
+  const compact = useIsCompact();
 
   // Initial mode from the URL (?mode=) so the Read view's Back can restore it; then local state for
   // instant, no-server-roundtrip switching.
@@ -217,9 +224,41 @@ export function StoriesSurface({
       />
     ) : null;
 
+  // ── Mobile "Filters & view" active-count (ADR-0024) ──────────────────────────────────────────────
+  // How many secondary filters are narrowing the view: a non-empty search, a non-default feed layout,
+  // and a family-chip subset (some — not all — families selected). Drives the trigger's badge so the
+  // viewer knows something is filtering even while it's tucked in the sheet.
+  const chipsFiltered =
+    activeFamilies.length >= 2 &&
+    chipSelected !== "all" &&
+    chipSelected.length !== activeFamilies.length;
+  const controlActiveCount =
+    (searching ? 1 : 0) + (feedView !== "masonry" ? 1 : 0) + (chipsFiltered ? 1 : 0);
+
+  // The mobile branch keeps the sub-nav (modeNav) + the actions cluster visible and pushes search +
+  // family chips + view selector into the sheet. Only render the trigger when there's something to put
+  // in the sheet (any of the three secondary controls is present) — otherwise a bare gear opens nothing.
+  const sheetHasControls = Boolean(searchField || familyChips || viewSelector);
+
   return (
     <div className={styles.wrap}>
-      <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />
+      {compact ? (
+        <div className={styles.mobilePrimaryRow}>
+          {modeNav}
+          <div className={styles.mobilePrimaryRight}>
+            {row1Right}
+            {sheetHasControls ? (
+              <MobileControlSheet activeCount={controlActiveCount}>
+                {searchField}
+                {familyChips}
+                {viewSelector}
+              </MobileControlSheet>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />
+      )}
 
       {/* Resume: the viewer's own ask-less drafts still in review, revealed by the draft reminder. Each
           links to /hub/tell/[storyId]. Full-width BELOW the toolbar (not inside a toolbar slot). */}
