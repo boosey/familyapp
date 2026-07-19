@@ -217,6 +217,7 @@ describe("captureApproval (voice-only approval gate)", () => {
         headers: { "Content-Type": contentType },
       }),
       delete: async () => {},
+      list: async () => [],
     };
     await expect(
       captureApproval(db, failing, {

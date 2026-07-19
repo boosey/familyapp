@@ -20,7 +20,7 @@
  */
 import "server-only";
 import sharp from "sharp";
-import type { MediaStorage } from "@chronicle/storage";
+import { THUMBNAIL_KEY_SUFFIX, type MediaStorage } from "@chronicle/storage";
 
 /**
  * Longest edge of a generated thumbnail, in px. The grid renders tiles up to ~280px wide (the size
@@ -32,9 +32,6 @@ export const THUMBNAIL_MAX_EDGE_PX = 480;
 export const THUMBNAIL_JPEG_QUALITY = 72;
 /** The content type every generated thumbnail is encoded as (sharp `.jpeg()` below). */
 export const THUMBNAIL_CONTENT_TYPE = "image/jpeg";
-
-/** Suffix appended to the original storage key to derive its thumbnail's key (same keyspace). */
-const THUMBNAIL_KEY_SUFFIX = ".thumb";
 
 /**
  * The storage key a photo's thumbnail lives at, derived deterministically from the original key. The

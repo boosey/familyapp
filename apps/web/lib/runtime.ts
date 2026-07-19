@@ -28,6 +28,7 @@ import {
   withTranscriberLogging,
   withLanguageModelLogging,
   plog,
+  reapOrphanedPhotos,
   type Pipeline,
   type LanguageModel,
   type Transcriber,
@@ -471,6 +472,17 @@ async function build(): Promise<Runtime> {
         channels: p.channels,
         link: `${origin}/join/${token}`,
       });
+    });
+    // Orphaned album-object reaper (issue #90) — the app's ONLY scheduled job. The upload path is
+    // put-then-record, so abandoned direct uploads leave write-once `family-photos/` objects with
+    // no DB row; this hourly sweep hard-deletes any that are older than the safety window. Cron is
+    // an Inngest-only capability (the JobQueue contract is event-shaped), so it registers on the
+    // adapter, not the pipeline. Dev/CI never reach this block (no Inngest keys) — dev orphans are
+    // harmless files under .media. The returned counts are the Inngest run output (observability).
+    jobQueue.registerCron("reap-orphaned-photos", "23 * * * *", async () => {
+      // Counts ride home two ways: the Inngest run output (prod dashboard) and the reaper's own
+      // plog line (dev console) — no third console.info here.
+      return reapOrphanedPhotos({ db, storage });
     });
     inngest = { client, functions: jobQueue.functions };
   }

@@ -311,6 +311,7 @@ describe("ingestRecording (capture path)", () => {
         headers: { "Content-Type": contentType },
       }),
       delete: async () => {},
+      list: async () => [],
     };
 
     await expect(

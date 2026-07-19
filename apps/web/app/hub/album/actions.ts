@@ -42,7 +42,11 @@ import {
   viewerPersonId,
   type AlbumPhotoDetailView,
 } from "@chronicle/core";
-import { isAllowedImageContentType, type UploadTarget } from "@chronicle/storage";
+import {
+  ALBUM_PHOTO_KEY_PREFIX,
+  isAllowedImageContentType,
+  type UploadTarget,
+} from "@chronicle/storage";
 import { getRuntime } from "@/lib/runtime";
 import { createUploadTicket, verifyUploadTicket } from "@/lib/upload-ticket";
 import { warmThumbnail } from "@/lib/thumbnail";
@@ -55,9 +59,6 @@ export type AlbumManageResult = { ok: true } | { error: string };
 
 /** The longest caption we accept (it doubles as alt text — a label, not prose). */
 const MAX_CAPTION_LENGTH = 500;
-
-/** The storage keyspace album photos live in (issue #20 — mint + validate against this prefix). */
-const ALBUM_PHOTO_KEY_PREFIX = "family-photos/";
 
 /** Safe, short error token for the UI — never include secrets or full stack traces. */
 function sanitizeStorageErrorDetail(err: unknown): string {

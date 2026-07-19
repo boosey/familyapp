@@ -15,6 +15,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
@@ -25,6 +26,8 @@ import {
   ObjectAlreadyExistsError,
   UPLOAD_TARGET_EXPIRY_SECONDS,
   type CreateUploadTargetInput,
+  type ListObjectsInput,
+  type ListedObject,
   type MediaStorage,
   type PutObjectInput,
   type UploadTarget,
@@ -245,6 +248,32 @@ export class R2MediaStorage implements MediaStorage {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  /**
+   * Enumerate every object under `prefix` (issue #90) via ListObjectsV2, following the
+   * continuation token until the keyspace is exhausted (1000 objects/page). An entry with no
+   * `LastModified` is stamped as just-written — an object R2 can't date must NEVER look stale
+   * to the reaper's age window.
+   */
+  async list({ prefix }: ListObjectsInput): Promise<ListedObject[]> {
+    const out: ListedObject[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const res = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ...(continuationToken ? { ContinuationToken: continuationToken } : {}),
+        }),
+      );
+      for (const obj of res.Contents ?? []) {
+        if (!obj.Key) continue;
+        out.push({ key: obj.Key, lastModified: obj.LastModified ?? new Date() });
+      }
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return out;
   }
 }
 

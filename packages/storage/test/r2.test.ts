@@ -11,6 +11,7 @@ import { sdkStreamMixin } from "@smithy/util-stream";
 import {
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -229,5 +230,51 @@ describe("R2MediaStorage", () => {
     });
     expect(target.headers["If-None-Match"]).toBe("*");
     expect(target.url.toLowerCase()).toContain("if-none-match");
+  });
+
+  // issue #90 — the reaper's enumerate seam. Pagination is handled INSIDE the adapter (the caller
+  // gets one flat array), and every entry carries the LastModified the age window compares against.
+  it("list paginates ListObjectsV2 and maps Key/LastModified", async () => {
+    s3Mock
+      .on(ListObjectsV2Command)
+      .resolvesOnce({
+        Contents: [
+          { Key: "family-photos/a", LastModified: new Date("2026-01-01T00:00:00Z") },
+        ],
+        IsTruncated: true,
+        NextContinuationToken: "tok-1",
+      })
+      .resolvesOnce({
+        Contents: [
+          { Key: "family-photos/b", LastModified: new Date("2026-01-02T00:00:00Z") },
+        ],
+        IsTruncated: false,
+      });
+    const storage = makeStorage();
+    const listed = await storage.list({ prefix: "family-photos/" });
+    expect(listed).toEqual([
+      { key: "family-photos/a", lastModified: new Date("2026-01-01T00:00:00Z") },
+      { key: "family-photos/b", lastModified: new Date("2026-01-02T00:00:00Z") },
+    ]);
+    const calls = s3Mock.commandCalls(ListObjectsV2Command);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.args[0]!.input.Bucket).toBe("chronicle-media");
+    expect(calls[0]!.args[0]!.input.Prefix).toBe("family-photos/");
+    expect(calls[1]!.args[0]!.input.ContinuationToken).toBe("tok-1");
+  });
+
+  it("list skips keyless entries and dates a missing LastModified as just-written (never stale)", async () => {
+    s3Mock.on(ListObjectsV2Command).resolves({
+      Contents: [{ Key: "family-photos/undated" }, { LastModified: new Date() }],
+      IsTruncated: false,
+    });
+    const storage = makeStorage();
+    const before = Date.now();
+    const listed = await storage.list({ prefix: "family-photos/" });
+    // The keyless entry is dropped; the undated one is kept but stamped ~now, so the reaper's
+    // age window treats it as in-flight rather than instantly reaping it.
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.key).toBe("family-photos/undated");
+    expect(listed[0]!.lastModified.getTime()).toBeGreaterThanOrEqual(before);
   });
 });

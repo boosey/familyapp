@@ -1,10 +1,12 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   ObjectAlreadyExistsError,
   UPLOAD_TARGET_EXPIRY_SECONDS,
   type CreateUploadTargetInput,
+  type ListObjectsInput,
+  type ListedObject,
   type MediaStorage,
   type PutObjectInput,
   type UploadTarget,
@@ -78,5 +80,38 @@ export class FilesystemMediaStorage implements MediaStorage {
   /** Idempotent hard-delete. `force: true` makes a missing path a no-op (not an error). */
   async delete(key: string): Promise<void> {
     await rm(this.pathFor(key), { force: true });
+  }
+
+  /**
+   * Walk `baseDir` and return every object under `prefix` (issue #90), stamped with the file's
+   * mtime — for this store the mtime IS the write time (`put` is the only writer and write-once
+   * means nothing ever modifies an existing object). A missing baseDir lists as empty.
+   */
+  async list({ prefix }: ListObjectsInput): Promise<ListedObject[]> {
+    const out: ListedObject[] = [];
+    const walk = async (dir: string, rel: string): Promise<void> => {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return; // directory doesn't exist (yet) ⇒ no objects under it
+      }
+      for (const e of entries) {
+        const childRel = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) {
+          await walk(join(dir, e.name), childRel);
+        } else if (childRel.startsWith(prefix)) {
+          try {
+            const s = await stat(join(dir, e.name));
+            out.push({ key: childRel, lastModified: s.mtime });
+          } catch {
+            // Vanished between readdir and stat (concurrent sweep / manual cleanup) — skip it
+            // rather than rejecting the whole listing and aborting the reaper's run.
+          }
+        }
+      }
+    };
+    await walk(this.baseDir, "");
+    return out;
   }
 }

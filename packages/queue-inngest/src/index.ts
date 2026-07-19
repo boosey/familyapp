@@ -105,6 +105,16 @@ export interface InngestJobQueue extends JobQueue {
   readonly functions: InngestFunction.Any[];
   /** The underlying Inngest client (handy for tests / advanced wiring). */
   readonly client: InngestLike;
+  /**
+   * Register a SCHEDULED function (issue #90). The `JobQueue` contract is event-shaped — there
+   * is no honest cron mapping for the in-process impl — so cron is an Inngest-only capability
+   * living on this adapter, not the shared contract. `name` is a bare slug (the adapter applies
+   * the same `chronicle-` id prefix as event functions); `cron` is a standard 5-field expression
+   * (UTC). The handler's return value becomes the Inngest run output — return the job's counts
+   * so the dashboard carries the observability. The function is included in the `functions`
+   * snapshot alongside event registrations.
+   */
+  registerCron(name: string, cron: string, handler: () => Promise<unknown>): void;
 }
 
 export function createInngestJobQueue(
@@ -120,12 +130,16 @@ export function createInngestJobQueue(
   // Keyed by our internal `JobName` so replace-on-re-register is structurally correct,
   // independent of how the real `InngestFunction.id()` formats the (prefixed) id string.
   const functionsByName = new Map<JobName, InngestFunction.Any>();
+  // Cron-triggered functions (issue #90) have no JobName — keyed by their bare slug so a
+  // re-register REPLACES (same discipline as event register): a duplicate function id would make
+  // Inngest reject the whole serve sync, taking every function down with it.
+  const cronFunctionsByName = new Map<string, InngestFunction.Any>();
 
   return {
     client,
     get functions(): InngestFunction.Any[] {
       // Fresh array per call — see interface docstring.
-      return Array.from(functionsByName.values());
+      return [...functionsByName.values(), ...cronFunctionsByName.values()];
     },
 
     async enqueue<N extends JobName>(name: N, payload: JobPayloadMap[N]): Promise<string> {
@@ -175,6 +189,17 @@ export function createInngestJobQueue(
       );
       // Map.set is the replace — no fragile string compare against `.id()` needed.
       functionsByName.set(name, fn);
+    },
+
+    registerCron(name: string, cron: string, handler: () => Promise<unknown>): void {
+      // No event/dedupe id concerns here — Inngest's scheduler is the only trigger, and the
+      // handler's return value is captured as the run output (the reaper's counts, issue #90).
+      const fn = client.createFunction(
+        { id: functionId(name) },
+        { cron },
+        async () => handler(),
+      );
+      cronFunctionsByName.set(name, fn);
     },
 
     /**
@@ -237,8 +262,8 @@ function eventName(name: JobName): string {
   return `${EVENT_PREFIX}/${name}`;
 }
 
-/** Stable function id per stage — survives re-register. */
-function functionId(name: JobName): string {
+/** Stable function id per stage/cron slug — survives re-register. */
+function functionId(name: string): string {
   return `chronicle-${name}`;
 }
 

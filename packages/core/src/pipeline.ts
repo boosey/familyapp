@@ -19,3 +19,6 @@ export {
   getStoryRecordingForPipeline,
   type PipelineStoryView,
 } from "./story-repository";
+// The orphaned-object reaper's (#90) referenced-keys read — a raw dump of every album storage
+// key, so it lives behind this subpath too, never the package root.
+export { listAlbumPhotoStorageKeys } from "./album-repository";

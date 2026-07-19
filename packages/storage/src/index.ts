@@ -39,6 +39,22 @@ export interface CreateUploadTargetInput {
   expirySeconds?: number;
 }
 
+/** An object in the store, as enumerated by `list` (issue #90). */
+export interface ListedObject {
+  key: string;
+  /**
+   * When the object was written (R2 `LastModified`, filesystem mtime, in-memory put time). The
+   * reaper's age window compares against this — an adapter that cannot date an object MUST stamp
+   * it as just-written, never as old, so an undated object is treated as in-flight, not stale.
+   */
+  lastModified: Date;
+}
+
+export interface ListObjectsInput {
+  /** Only keys starting with this prefix are returned (e.g. ALBUM_PHOTO_KEY_PREFIX). */
+  prefix: string;
+}
+
 export interface MediaStorage {
   /** Write bytes at `key`. MUST reject if the key already exists (write-once / immutable). */
   put(input: PutObjectInput): Promise<{ key: string }>;
@@ -63,6 +79,13 @@ export interface MediaStorage {
    * or whose Story has one) is never routed here — the DB trigger raises on its DELETE regardless.
    */
   delete(key: string): Promise<void>;
+  /**
+   * Enumerate every object under `prefix` with its write time (issue #90). Exists ONLY for the
+   * orphaned-object reaper, which reconciles a keyspace against the DB rows that reference it —
+   * it is not a general browse API (no caller-facing surface lists storage). Pagination, where
+   * the backend has any (R2 lists 1000/page), is the adapter's problem: callers get one flat array.
+   */
+  list(input: ListObjectsInput): Promise<ListedObject[]>;
 }
 
 /**
@@ -72,6 +95,22 @@ export interface MediaStorage {
  * not time out mid-transfer. Single source of truth for every adapter + the ticket util.
  */
 export const UPLOAD_TARGET_EXPIRY_SECONDS = 600;
+
+/**
+ * The album keyspace prefix — every album photo (original or derived) lives at
+ * `family-photos/<uuid>[.thumb]` (issue #20). Single source of truth shared by the upload actions
+ * that mint keys, the dev receiver + seed routes that gate on the prefix, and the orphaned-object
+ * reaper (#90) that enumerates it.
+ */
+export const ALBUM_PHOTO_KEY_PREFIX = "family-photos/";
+
+/**
+ * Suffix appended to an album photo's storage key to derive its thumbnail's key (issue #139) —
+ * `family-photos/<uuid>.thumb` sits beside the original in the same keyspace, with NO DB row of
+ * its own. Shared with the reaper (#90), which treats a `.thumb` object as referenced iff its
+ * BASE key (suffix stripped) has a `family_photos` row.
+ */
+export const THUMBNAIL_KEY_SUFFIX = ".thumb";
 
 /**
  * The image content types the album accepts for a direct upload (issue #20). The server validates

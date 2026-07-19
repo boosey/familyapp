@@ -16,14 +16,16 @@
  * contains a slash); we decode it back.
  */
 import { NextResponse } from "next/server";
-import { ObjectAlreadyExistsError, isAllowedImageContentType } from "@chronicle/storage";
+import {
+  ALBUM_PHOTO_KEY_PREFIX,
+  ObjectAlreadyExistsError,
+  isAllowedImageContentType,
+} from "@chronicle/storage";
 import { getRuntime, isDurableDeploy } from "@/lib/runtime";
 import { verifyUploadTicket } from "@/lib/upload-ticket";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ALBUM_PHOTO_KEY_PREFIX = "family-photos/";
 
 export async function PUT(
   request: Request,
