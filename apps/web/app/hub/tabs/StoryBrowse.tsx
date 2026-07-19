@@ -21,6 +21,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
+import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { StoryCard } from "./StoryCard";
 import { pickStoryLayout } from "./story-layout";
 import type { StoryItem, ViewerFamily } from "./story-browse-types";
@@ -216,24 +217,16 @@ function Timeline({
     <div>
       <div className={styles.timelineHeaderRow}>
         <h2 className={styles.timelineHeading}>{heading}</h2>
-        <div className={styles.segmentGroup} role="group" aria-label={heading}>
-          <button
-            type="button"
-            aria-pressed={wholeFamily}
-            onClick={() => onWiden(true)}
-            className={styles.modePill}
-          >
-            {hub.browse.widenWhole}
-          </button>
-          <button
-            type="button"
-            aria-pressed={!wholeFamily}
-            onClick={() => onWiden(false)}
-            className={styles.modePill}
-          >
-            {hub.browse.widenNarrator(viewerName)}
-          </button>
-        </div>
+        <SegmentedControl
+          variant="toggle"
+          ariaLabel={heading}
+          active={wholeFamily ? "whole" : "narrator"}
+          onSelect={(k) => onWiden(k === "whole")}
+          items={[
+            { key: "whole", label: hub.browse.widenWhole },
+            { key: "narrator", label: hub.browse.widenNarrator(viewerName) },
+          ]}
+        />
       </div>
 
       <div className={styles.timelineGroups}>

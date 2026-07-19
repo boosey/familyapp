@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-// The pill + count-badge look is single-sourced in HubTabs.module.css (`.subLink`/`.badge`) — the
-// same classes the Family selector already used. HubSubNav is the SHARED renderer of that look so
-// Stories/Album/Family/Questions map a pill set the same way instead of each re-declaring it.
+// The pill look is single-sourced in the shared SegmentedControl module (`.group` box + `.pill`), the
+// SAME classes the SegmentedControl view/mode selectors use — so sub-tabs and view controls wear ONE
+// boxed pill and can't drift (#1/#5). The count-badge stays the shared `.badge` in HubTabs.module.css.
+import seg from "@/app/_kindred/SegmentedControl.module.css";
 import hubTabStyles from "./HubTabs.module.css";
 
 /** One pill in a HubSubNav. A `href` renders a <Link> (<a>); otherwise it's a <button>. */
@@ -37,7 +38,7 @@ export interface HubSubNavProps {
  */
 export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps) {
   return (
-    <nav className={hubTabStyles.subNavRow} aria-label={ariaLabel}>
+    <nav className={seg.group} aria-label={ariaLabel}>
       {items.map((item) => {
         const isActive = item.key === active;
         const badge =
@@ -52,7 +53,7 @@ export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps
             <Link
               key={item.key}
               href={item.href}
-              className={hubTabStyles.subLink}
+              className={seg.pill}
               aria-current={isActive ? "page" : undefined}
             >
               {item.label}
@@ -65,7 +66,7 @@ export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps
           <button
             key={item.key}
             type="button"
-            className={hubTabStyles.subLink}
+            className={seg.pill}
             aria-current={isActive ? "page" : undefined}
             onClick={() => onSelect?.(item.key)}
           >

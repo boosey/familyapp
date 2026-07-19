@@ -31,6 +31,7 @@ import { hub } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
 import { HubToolbar } from "../HubToolbar";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
+import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { FamilyChips } from "../FamilyChips";
 import { StoryBrowse } from "./StoryBrowse";
 import {
@@ -200,20 +201,16 @@ export function StoriesSurface({
   /* ── R2-right: the Masonry/Column feed-view selector (Feed mode only) ──────────────────────────── */
   const viewSelector =
     browsing && mode === "feed" ? (
-      <div className={browseStyles.segmentGroup} role="radiogroup" aria-label={hub.browse.viewSelectorAria}>
-        {(["masonry", "column"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="radio"
-            aria-checked={feedView === v}
-            onClick={() => changeFeedView(v)}
-            className={browseStyles.modePill}
-          >
-            {v === "column" ? hub.browse.viewColumn : hub.browse.viewMasonry}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        variant="radio"
+        ariaLabel={hub.browse.viewSelectorAria}
+        active={feedView}
+        onSelect={(k) => changeFeedView(k as FeedView)}
+        items={[
+          { key: "masonry", label: hub.browse.viewMasonry },
+          { key: "column", label: hub.browse.viewColumn },
+        ]}
+      />
     ) : null;
 
   return (

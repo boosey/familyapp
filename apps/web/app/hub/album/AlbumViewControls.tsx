@@ -10,6 +10,7 @@
  * and reports changes. Token-styled with elder-friendly targets.
  */
 import { hub } from "@/app/_copy";
+import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 
 export type AlbumView = "grid" | "masonry" | "list";
 
@@ -45,61 +46,15 @@ export function AlbumViewControls({
         margin: 0,
       }}
     >
-      {/* Segmented Grid / Masonry / List. A radiogroup: arrow keys move between options, and the
-          selected one is the sole tab stop. `aria-checked` carries the current selection. */}
-      <div
-        role="radiogroup"
-        aria-label={hub.album.viewSelectorAria}
-        style={{
-          display: "inline-flex",
-          padding: 3,
-          gap: 2,
-          borderRadius: "var(--radius-pill)",
-          background: "var(--surface-sunken)",
-          border: "var(--border-width) solid var(--border)",
-        }}
-      >
-        {VIEWS.map((v) => {
-          const selected = v.value === view;
-          return (
-            <button
-              key={v.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              tabIndex={selected ? 0 : -1}
-              onClick={() => onView(v.value)}
-              onKeyDown={(e) => {
-                // Arrow-key movement within the radiogroup (wrap-around).
-                if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-                  e.preventDefault();
-                  const i = VIEWS.findIndex((x) => x.value === view);
-                  onView(VIEWS[(i + 1) % VIEWS.length]!.value);
-                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-                  e.preventDefault();
-                  const i = VIEWS.findIndex((x) => x.value === view);
-                  onView(VIEWS[(i - 1 + VIEWS.length) % VIEWS.length]!.value);
-                }
-              }}
-              style={{
-                minHeight: 40,
-                padding: "8px 18px",
-                border: "none",
-                borderRadius: "var(--radius-pill)",
-                background: selected ? "var(--surface-card)" : "transparent",
-                boxShadow: selected ? "var(--shadow-lift)" : "none",
-                color: selected ? "var(--text-heading)" : "var(--text-meta)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                fontWeight: selected ? 600 : 500,
-                cursor: "pointer",
-              }}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Segmented Grid / Masonry / List — the shared SegmentedControl (radio variant): one boxed pill
+          look with arrow-key movement and roving tabindex, matching every other view selector (#1/#5). */}
+      <SegmentedControl
+        variant="radio"
+        ariaLabel={hub.album.viewSelectorAria}
+        active={view}
+        onSelect={(k) => onView(k as AlbumView)}
+        items={VIEWS.map((v) => ({ key: v.value, label: v.label }))}
+      />
 
       {/* Thumbnail-size slider — one control that drives tile size across all three views. The label
           is programmatically associated via aria-label; the ⊟/⊞ glyphs are decorative size hints. */}

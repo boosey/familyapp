@@ -17,7 +17,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoriesTab } from "@/app/hub/tabs/StoriesTab";
 import { hub } from "@/app/_copy";
 import toolbarStyles from "@/app/hub/HubToolbar.module.css";
-import hubTabStyles from "@/app/hub/HubTabs.module.css";
+import segStyles from "@/app/_kindred/SegmentedControl.module.css";
 import type { MemberWithStories } from "@/lib/hub-data";
 import type { ViewerFamily } from "@/app/hub/tabs/story-browse-types";
 
@@ -246,9 +246,11 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
 
   it("uses the shared toolbar/pill CSS, not a bespoke Stories pill row", () => {
     renderPopulated();
-    // The mode nav is a shared HubSubNav pill row (subLink class), inside a HubToolbar row.
+    // The mode nav is a shared HubSubNav pill row using the ONE boxed pill look (segStyles.pill inside
+    // a segStyles.group box — single-sourced with the SegmentedControl view selectors), in a toolbar row.
     const pill = screen.getByRole("button", { name: hub.browse.modeFeed });
-    expect(pill.className).toContain(hubTabStyles.subLink);
+    expect(pill.className).toContain(segStyles.pill);
+    expect(pill.closest(`.${segStyles.group}`)).toBeTruthy();
     expect(pill.closest(`.${toolbarStyles.row}`)).toBeTruthy();
   });
 });
