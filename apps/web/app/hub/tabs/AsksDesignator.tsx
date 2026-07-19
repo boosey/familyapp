@@ -14,11 +14,17 @@
  * Rather than hide it under every designator (a designator always resolves exactly one family, so a
  * family-less ask would otherwise never appear and silently vanish), we keep such asks visible under
  * EVERY designated family — they belong to the asker regardless of family context. See the filter below.
+ *
+ * Styling lives in AsksDesignator.module.css (token-driven base + skin-scoped Playful signatures:
+ * tilt/tape/highlighter/sticker status pill/hover-lift, suppressed under reduce-motion / solemn).
+ * Tilt math stays in TS (card-tilt). See apps/web/app/_skins/CSS-MODULES.md.
  */
 import { useState } from "react";
 import Link from "next/link";
 import { FamilyChips } from "@/app/hub/FamilyChips";
 import { hub } from "@/app/_copy";
+import { cardTilt } from "./card-tilt";
+import styles from "./AsksDesignator.module.css";
 
 export interface AsksDesignatorAsk {
   id: string;
@@ -56,38 +62,14 @@ export function AsksDesignator({ families, seedFamilyId, asks }: AsksDesignatorP
 
   const heading = (
     <>
-      <h2
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-story-lg)",
-          fontWeight: 500,
-          color: "var(--text-body)",
-          margin: 0,
-        }}
-      >
-        {hub.asks.title}
-      </h2>
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-sm)",
-          lineHeight: "var(--leading-body)",
-          color: "var(--text-muted)",
-          margin: "12px 0 0",
-        }}
-      >
-        {hub.asks.intro}
-      </p>
+      <h2 className={styles.title}>{hub.asks.title}</h2>
+      <p className={styles.intro}>{hub.asks.intro}</p>
     </>
   );
 
   const chips = showChips ? (
-    <div style={{ margin: "20px 0 0" }}>
-      <FamilyChips
-        families={families}
-        value={selected}
-        onSelect={setSelected}
-      />
+    <div className={styles.chips}>
+      <FamilyChips families={families} value={selected} onSelect={setSelected} />
     </div>
   ) : null;
 
@@ -96,26 +78,8 @@ export function AsksDesignator({ families, seedFamilyId, asks }: AsksDesignatorP
       <div>
         {heading}
         {chips}
-        <div
-          style={{
-            marginTop: 24,
-            background: "var(--surface-card)",
-            border: "var(--border-width) solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            padding: 30,
-            textAlign: "center",
-          }}
-        >
-          <p
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "var(--text-story)",
-              color: "var(--text-muted)",
-              margin: 0,
-            }}
-          >
-            {hub.asks.empty}
-          </p>
+        <div className={styles.empty} style={cardTilt(0)}>
+          <p className={styles.emptyText}>{hub.asks.empty}</p>
         </div>
       </div>
     );
@@ -125,93 +89,26 @@ export function AsksDesignator({ families, seedFamilyId, asks }: AsksDesignatorP
     <div>
       {heading}
       {chips}
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: "24px 0 0",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
-        {visible.map((a) => {
+      <ul className={styles.list}>
+        {visible.map((a, i) => {
           const answeredVisible = a.status === "answered" && a.storyVisible && a.storyId;
           return (
-            <li
-              key={a.id}
-              style={{
-                background: "var(--surface-card)",
-                border: "var(--border-width) solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-card)",
-                padding: "20px 24px",
-                display: "flex",
-                alignItems: "center",
-                gap: 20,
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-ui-sm)",
-                    lineHeight: "var(--leading-snug)",
-                    color: "var(--text-body)",
-                    margin: 0,
-                  }}
-                >
-                  <span style={{ color: "var(--text-meta)" }}>
-                    {hub.asks.forTarget(a.targetSpokenName)}
-                  </span>{" "}
+            <li key={a.id} className={styles.card} style={cardTilt(i)}>
+              <div className={styles.cardBody}>
+                <p className={styles.question}>
+                  <span className={styles.forTarget}>{hub.asks.forTarget(a.targetSpokenName)}</span>{" "}
                   {a.questionText}
                 </p>
               </div>
 
               {answeredVisible ? (
-                <Link
-                  href={`/hub/stories/${a.storyId}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-ui-sm)",
-                    fontWeight: 600,
-                    color: "var(--accent-strong)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
+                <Link href={`/hub/stories/${a.storyId}`} className={styles.storyLink}>
                   ▶ {a.storyTitle ?? hub.asks.listen}
                 </Link>
               ) : a.status === "answered" ? (
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    letterSpacing: "var(--tracking-mono)",
-                    color: "var(--support)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {hub.asks.answeredPrivate}
-                </span>
+                <span className={styles.status}>{hub.asks.answeredPrivate}</span>
               ) : (
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    letterSpacing: "var(--tracking-mono)",
-                    color: "var(--support)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {hub.asks.inQueue}
-                </span>
+                <span className={styles.status}>{hub.asks.inQueue}</span>
               )}
             </li>
           );
