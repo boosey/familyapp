@@ -81,11 +81,13 @@
   color: var(--text-body);
 }
 
-/* Applied ALONGSIDE `.chip` when it is ON — the raised white pill, matching `.pill` selected. */
+/* Applied ALONGSIDE `.chip` when it is ON — the raised white pill, matching `.pill` selected. The
+   border is the SAME color as the label text (--accent-strong) so a selected family chip reads as a
+   crisp outlined pill, not a borderless fill. */
 .chipOn {
   background: var(--surface-card);
   color: var(--accent-strong);
-  border-color: transparent;
+  border-color: var(--accent-strong);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
 }
