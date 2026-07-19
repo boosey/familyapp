@@ -20,10 +20,11 @@ Two unrelated things were both called "focus"; Slice A splits them so they can n
 
 ## Anchor
 Legacy term for the focus person. Unlike the earlier design, the anchor is now **re-rootable** (via
-the kebab Focus action) and **carries a visual marker** — a solid ring in the focus person's sex color
-(`--sex-male`/`--sex-female`, or `--border-strong` when sex is unknown; width `--tree-focus-ring-width`).
-The ring moves with the focus person on re-focus. Prefer **focus person** / **camera** (above) in new
-interaction rules.
+the kebab Focus action) and **carries a visual marker** — a small badge pinned to the avatar's
+lower-right corner (a white target glyph on the focus person's sex color: `--sex-male`/`--sex-female`,
+or `--border-strong` when sex is unknown). The badge moves with the focus person on re-focus. It
+replaced an earlier outer ring (a box-shadow), which detached from the card at the Playful skin's
+thick border + large corner radius. Prefer **focus person** / **camera** (above) in new interaction rules.
 
 ## Relation chip
 A small chip on every card showing its **relation to the focus person** (`relationToRoot`, mapped via

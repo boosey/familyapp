@@ -92,6 +92,14 @@ export const FIT_MAX_SCALE = 1.2;
 
 /** Avatar / monogram diameter (px). */
 export const AVATAR_SIZE_PX = 52;
+/**
+ * Focus-person badge (Slice A #8): a small disc pinned to the avatar's lower-right corner that marks
+ * the card the tree is currently rooted on. Replaced the earlier outer focus RING, which detached
+ * from the card at the Playful skin's thick border + large corner radius. `_SIZE_PX` is the badge
+ * diameter; `_GLYPH_PX` is the white target glyph inside it.
+ */
+export const FOCUS_BADGE_SIZE_PX = 22;
+export const FOCUS_BADGE_GLYPH_PX = 12;
 /** Height (px) of the top-edge sex accent bar. */
 export const SEX_BAR_HEIGHT_PX = 6;
 /** Inset (px) of the per-card ⋮ kebab from the top-right corner. */
