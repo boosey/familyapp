@@ -1482,7 +1482,7 @@ function ErrorLine({ message }: { message: string }) {
   return (
     <p
       aria-live="polite"
-      style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger, #b00)", margin: "0 0 16px", textAlign: "center" }}
+      style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger)", margin: "0 0 16px", textAlign: "center" }}
     >
       {message}
     </p>

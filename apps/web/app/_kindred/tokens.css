@@ -52,7 +52,8 @@
   /* Error/danger ink — a deep brick red that reads clearly on the warm paper surfaces and harmonizes
    * with the terracotta family. AA-guarded on surface-card/page by _skins/contrast.test.ts. Consumed by
    * form/validation error text across the app (was previously an UNDEFINED token with a hardcoded #b00
-   * fallback that always rendered — see the contrast guard). Playful overrides with a brighter red. */
+   * fallback that always rendered — see the contrast guard). Playful overrides with a brighter red;
+   * the archive/hearth theme variants override with hue-matched reds. */
   --text-danger: #A4291B;
   /* Neutral modal/dialog backdrop scrim — theme- and skin-neutral (both skins inherit this base value).
    * Replaces hand-rolled rgba(0,0,0,0.4) scrims so overlays are single-sourced. */
@@ -85,6 +86,9 @@
   --accent: #45707C; --accent-strong: #355864; --accent-soft: #D2E0E4; --accent-soft-0: rgba(210, 224, 228, 0); --accent-on: #FFFFFF;
   --support: #8A8270; --support-soft: #E0DED2; --border: var(--line-200); --border-strong: var(--line-300);
   --focus-ring: #45707C;
+  /* Cool-leaning crimson danger ink — the base warm brick red would clash with this blue-grey
+   * palette. AA-guarded on this theme's surfaces by _skins/contrast.test.ts. */
+  --text-danger: #9B2C3D;
   --shadow-sm: 0 1px 2px rgba(30, 45, 55, 0.08);
   --shadow-card: 0 2px 10px rgba(30, 45, 55, 0.10);
   --shadow-lift: 0 8px 28px rgba(30, 45, 55, 0.16);
@@ -99,6 +103,9 @@
   --accent: #B5524C; --accent-strong: #97403B; --accent-soft: #F1D2CC; --accent-soft-0: rgba(241, 210, 204, 0); --accent-on: #FFFFFF;
   --support: #A8745C; --support-soft: #EFD8C9; --border: var(--line-200); --border-strong: var(--line-300);
   --focus-ring: #B5524C;
+  /* Rose-leaning danger ink — deeper and more magenta than --accent-strong so error text never
+   * blurs into the rose accent. AA-guarded on this theme's surfaces by _skins/contrast.test.ts. */
+  --text-danger: #93314A;
   --shadow-sm: 0 1px 2px rgba(80, 40, 30, 0.09);
   --shadow-card: 0 2px 10px rgba(80, 40, 30, 0.12);
   --shadow-lift: 0 8px 28px rgba(80, 40, 30, 0.18);

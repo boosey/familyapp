@@ -624,7 +624,7 @@ const subLabel: React.CSSProperties = {
 const errorText: React.CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-ui-sm)",
-  color: "var(--text-danger, #b00)",
+  color: "var(--text-danger)",
   margin: "0 0 14px",
 };
 
@@ -727,7 +727,7 @@ const toolBtn: React.CSSProperties = {
 };
 
 const toolBtnDanger: React.CSSProperties = {
-  color: "var(--text-danger, #b00)",
+  color: "var(--text-danger)",
 };
 
 const connectLink: React.CSSProperties = {

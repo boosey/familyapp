@@ -204,7 +204,7 @@ export function StoryDetailClient({
             background: "rgba(220, 50, 50, 0.1)",
             border: "1px solid rgba(220, 50, 50, 0.3)",
             borderRadius: "var(--radius-md, 8px)",
-            color: "var(--text-danger, #d32f2f)",
+            color: "var(--text-danger)",
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui-sm)",
             marginBottom: 20,

@@ -170,7 +170,7 @@ export function FollowUpButton({ storyId, targetPersonId, narratorName }: Follow
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui-sm)",
-            color: "var(--text-danger, #d32f2f)",
+            color: "var(--text-danger)",
             margin: 0,
           }}
         >

@@ -113,7 +113,7 @@ export function KinEdgeControls({
             width: "100%",
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-ui-sm)",
-            color: "var(--text-danger, #b00)",
+            color: "var(--text-danger)",
             margin: "4px 0 0",
           }}
         >

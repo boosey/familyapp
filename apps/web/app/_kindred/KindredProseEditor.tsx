@@ -174,7 +174,7 @@ export function KindredProseEditor({
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: "var(--text-label)",
-            color: "var(--text-danger, #b00)",
+            color: "var(--text-danger)",
             margin: 0,
           }}
         >

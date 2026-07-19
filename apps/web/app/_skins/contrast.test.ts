@@ -14,6 +14,19 @@ const read = (p: string) => readFileSync(join(here, p), "utf8");
 const playful = read("./playful.css");
 const heirloom = read("../_kindred/tokens.css"); // heirloom = the base/default skin (see tokens.css)
 
+/**
+ * A theme variant (`[data-theme="archive"]` / `"hearth"`) cascades over the base `:root` block, so
+ * its effective tokens = its block's overrides, falling back to the base file. Concatenating the
+ * block BEFORE the base reproduces that for `tokenHex` (which takes the first declared value).
+ */
+function themeVariant(theme: string): string {
+  const m = heirloom.match(new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([^}]*)\\}`));
+  if (!m) throw new Error(`theme block [data-theme="${theme}"] not found in tokens.css`);
+  return m[1]! + heirloom;
+}
+const archive = themeVariant("archive");
+const hearth = themeVariant("hearth");
+
 /** First declared value of a CSS custom property, resolving one level of `var(--x)` to a hex. */
 function tokenHex(css: string, name: string): string {
   const re = new RegExp(`${name}\\s*:\\s*([^;]+);`);
@@ -112,6 +125,15 @@ describe("skin contrast", () => {
   it("heirloom: accent pairs meet AA", () => {
     for (const [fg, bg] of HEIRLOOM_ACCENT_PAIRS) assertAA(heirloom, fg, bg);
   });
+
+  // The archive/hearth theme variants aren't wired to a UI selector yet, but their danger tokens
+  // are held to AA on their own surfaces now so activating a variant can never ship illegible
+  // error text. Resolution cascades block-over-base, so this also guards the shared fallback.
+  for (const [name, css] of [["archive", archive], ["hearth", hearth]] as const) {
+    it(`${name}: danger/error text meets AA on the variant's surfaces`, () => {
+      for (const [fg, bg] of DANGER_TEXT_PAIRS) assertAA(css, fg, bg);
+    });
+  }
 
   it("playful: bright brand pairs stay above the legibility floor (below AA by owner choice)", () => {
     for (const [fg, bg] of PLAYFUL_BRAND_PAIRS) {
