@@ -37,6 +37,7 @@ import {
   viewerPersonId,
 } from "./authorization";
 import { InvariantViolation } from "./errors";
+import { ALBUM_PHOTO_QUERY_CAP } from "./constants";
 
 const DENY = (reason: string): AuthDecision => ({ allowed: false, reason });
 const ALLOW: AuthDecision = { allowed: true };
@@ -197,15 +198,26 @@ export interface AlbumPhotoView {
   createdAt: Date;
 }
 
+/** Options for the album reads (issue #217). */
+export interface ListAlbumPhotosOptions {
+  /**
+   * Defensive cap on rows returned (most-recent first). Defaults to `ALBUM_PHOTO_QUERY_CAP`. This is
+   * a safety net against a runaway album, not pagination — the tail is silently dropped.
+   */
+  limit?: number;
+}
+
 /**
- * The photos in `familyId`'s album, most-recent first, EXCLUDING soft-deleted rows. The viewer must
- * hold an ACTIVE membership in `familyId`; a non-member (or anonymous) viewer gets an empty list
- * (an album never leaks to someone who isn't in the family).
+ * The photos in `familyId`'s album, most-recent first, EXCLUDING soft-deleted rows, capped at
+ * `opts.limit` (default `ALBUM_PHOTO_QUERY_CAP`, #217). The viewer must hold an ACTIVE membership in
+ * `familyId`; a non-member (or anonymous) viewer gets an empty list (an album never leaks to someone
+ * who isn't in the family).
  */
 export async function listAlbumPhotos(
   db: Database,
   ctx: AuthContext,
   familyId: string,
+  opts: ListAlbumPhotosOptions = {},
 ): Promise<AlbumPhotoView[]> {
   const viewer = viewerPersonId(ctx);
   if (viewer === null) return [];
@@ -233,7 +245,8 @@ export async function listAlbumPhotos(
         isNull(familyPhotos.deletedAt),
       ),
     )
-    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
+    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id))
+    .limit(opts.limit ?? ALBUM_PHOTO_QUERY_CAP);
 }
 
 /**
@@ -273,11 +286,20 @@ export interface AlbumPhotoDetailedRow {
  * families (yielding the photo id set + each photo's authorized placements). Then a fixed number of
  * GROUPED queries (photos, contributor names, family names, subjects, people, places) filtered by
  * `IN (photoIds)` are stitched in memory. Total ≈ 7 queries regardless of photo count.
+ *
+ * Defensively capped at `opts.limit` (default `ALBUM_PHOTO_QUERY_CAP`, #217): the most-recent N
+ * distinct photos, tail dropped. A safety net against a runaway album, not pagination.
  */
+export interface ListAlbumPhotosDetailedOptions {
+  /** Defensive cap on distinct photos returned (most-recent first). Defaults to `ALBUM_PHOTO_QUERY_CAP`. */
+  limit?: number;
+}
+
 export async function listAlbumPhotosDetailed(
   db: Database,
   ctx: AuthContext,
   familyIds: string[],
+  opts: ListAlbumPhotosDetailedOptions = {},
 ): Promise<AlbumPhotoDetailedRow[]> {
   const viewer = viewerPersonId(ctx);
   if (viewer === null) return [];
@@ -289,13 +311,15 @@ export async function listAlbumPhotosDetailed(
   if (authorizedFamilies.length === 0) return [];
 
   // (1) Placement rows for the authorized families, joined to non-deleted photos. Yields the photo id
-  // set AND each photo's authorized placements (family id + name) in one pass.
+  // set AND each photo's authorized placements (family id + name) in one pass. Ordered most-recent
+  // first (by the photo's createdAt, id as tiebreak) so the #217 cap below keeps the newest photos.
   const placementRows = await db
     .select({
       photoId: familyPhotoFamilies.photoId,
       familyId: families.id,
       familyName: families.name,
       familyShortName: families.shortName,
+      photoCreatedAt: familyPhotos.createdAt,
     })
     .from(familyPhotoFamilies)
     .innerJoin(families, eq(families.id, familyPhotoFamilies.familyId))
@@ -305,17 +329,32 @@ export async function listAlbumPhotosDetailed(
         inArray(familyPhotoFamilies.familyId, authorizedFamilies),
         isNull(familyPhotos.deletedAt),
       ),
-    );
+    )
+    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
 
-  const photoIds = [...new Set(placementRows.map((r) => r.photoId))];
+  // Distinct photo ids in most-recent-first order, then DEFENSIVELY CAPPED (#217): a runaway album
+  // never sends more than `limit` rows downstream (grouped queries + payload + DOM). The tail is
+  // dropped, matching `photoRows`' `createdAt desc, id desc` ordering exactly so the kept set is
+  // stable. Under the cap (every real album today) this is identical to the old dedup.
+  const limit = opts.limit ?? ALBUM_PHOTO_QUERY_CAP;
+  const orderedPhotoIds: string[] = [];
+  const seenPhotoIds = new Set<string>();
+  for (const r of placementRows) {
+    if (seenPhotoIds.has(r.photoId)) continue;
+    seenPhotoIds.add(r.photoId);
+    orderedPhotoIds.push(r.photoId);
+  }
+  const photoIds = orderedPhotoIds.slice(0, limit);
   if (photoIds.length === 0) return [];
+  const keptPhotoIds = new Set(photoIds);
 
-  // Authorized placements per photo (sorted by family name for stable ordering).
+  // Authorized placements per (kept) photo (sorted by family name for stable ordering).
   const familiesByPhoto = new Map<
     string,
     { familyId: string; familyName: string; familyShortName: string | null }[]
   >();
   for (const r of placementRows) {
+    if (!keptPhotoIds.has(r.photoId)) continue;
     const list = familiesByPhoto.get(r.photoId) ?? [];
     list.push({ familyId: r.familyId, familyName: r.familyName, familyShortName: r.familyShortName });
     familiesByPhoto.set(r.photoId, list);

@@ -1,0 +1,205 @@
+/*
+ * QuestionsTab — the to-answer inbox. Base card is token-driven & skin-neutral (reproduces the former
+ * inline values 1:1); the Playful structural signatures (tilt, tape, sticker, highlighter, hover-lift)
+ * are skin-scoped via :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * Mirrors StoryCard.module.css. See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+.title {
+  font-family: var(--font-story);
+  font-size: var(--text-story-lg);
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.intro {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  line-height: var(--leading-body);
+  color: var(--text-muted);
+  margin: 12px 0 0;
+}
+
+/* Empty state — the "caught up" card. */
+.empty {
+  margin-top: 24px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 30px;
+  text-align: center;
+  position: relative;
+}
+
+.emptyText {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px 24px;
+  position: relative;
+}
+
+/* A recorded-but-unapproved draft outlines the card with the accent. */
+.cardDraft {
+  border-color: var(--accent);
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.askedBy {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+  letter-spacing: var(--tracking-mono);
+}
+
+.question {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  margin: 6px 0 0;
+  /* highlighter target: a block so the wash sits behind the whole line */
+  display: inline-block;
+}
+
+.recorded {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--support);
+  letter-spacing: var(--tracking-mono);
+  margin: 6px 0 0;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.actionDraft {
+  border: 1.5px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* ---- Playful structural signatures ----------------------------------------------------------
+   Hook the hashed classes via :global; suppressed under reduce-motion / solemn below. */
+
+/* Tilt: odd/even lean via the inline `--tilt` custom property (math stays in TS). */
+:global(:root[data-skin="playful"]) .card,
+:global(:root[data-skin="playful"]) .empty {
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .card:hover,
+:global(:root[data-skin="playful"]) .empty:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Tape strip — these cards have no photo, so anchor the tape to the CARD itself (top-center). */
+:global(:root[data-skin="playful"]) .card::before,
+:global(:root[data-skin="playful"]) .empty::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+/* Highlighter wash behind the question text (text stays --text-body; AA-guarded). */
+:global(:root[data-skin="playful"]) .question {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 78%;
+  background-size: 100% 42%;
+}
+
+/* Sticker the recorded-at sub-label (the most chip-like meta element on a draft card). */
+:global(:root[data-skin="playful"]) .recorded {
+  background: var(--sticker-gold-bg);
+  color: var(--sticker-gold-ink);
+  border-radius: var(--radius-pill);
+  padding: 3px 11px;
+  display: inline-block;
+  letter-spacing: 0;
+}
+
+/* Suppress ALL structural signatures under reduce-motion OR solemn. */
+:global(:root[data-reduce-motion="on"]) .card,
+:global(:root[data-reduce-motion="on"]) .empty,
+:global([data-tone="solemn"]) .card,
+:global([data-tone="solemn"]) .empty {
+  transform: none;
+}
+:global(:root[data-reduce-motion="on"]) .card:hover,
+:global(:root[data-reduce-motion="on"]) .empty:hover,
+:global([data-tone="solemn"]) .card:hover,
+:global([data-tone="solemn"]) .empty:hover {
+  transform: none;
+  box-shadow: var(--shadow-card);
+}
+:global(:root[data-reduce-motion="on"]) .card::before,
+:global(:root[data-reduce-motion="on"]) .empty::before,
+:global([data-tone="solemn"]) .card::before,
+:global([data-tone="solemn"]) .empty::before {
+  display: none;
+}
+:global(:root[data-reduce-motion="on"]) .question,
+:global([data-tone="solemn"]) .question {
+  background-image: none;
+}
+:global(:root[data-reduce-motion="on"]) .recorded,
+:global([data-tone="solemn"]) .recorded {
+  background: none;
+  color: var(--support);
+  padding: 0;
+  letter-spacing: var(--tracking-mono);
+}

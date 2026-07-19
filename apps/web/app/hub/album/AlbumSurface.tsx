@@ -21,10 +21,12 @@ import {
   getStewardPersonId,
   listActiveFamiliesForPerson,
   listAlbumPhotosDetailed,
+  ALBUM_PHOTO_QUERY_CAP,
   type AuthContext,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
 import { hub } from "@/app/_copy";
+import { warnAlbumCapHit } from "@/lib/album-cap";
 import { parseFamilyFilter, selectedIdList, deriveSingleScope } from "@/lib/family-filter";
 import { FamilyChips } from "../FamilyChips";
 import { AlbumUploader } from "./AlbumUploader";
@@ -77,6 +79,12 @@ export async function AlbumSurface({
   // people, places, and capture time so the client can filter + fill the List columns without more reads.
   const shownFamilyIds = shownFamilies.map((f) => f.familyId);
   const detailed = viewer ? await listAlbumPhotosDetailed(db, ctx, shownFamilyIds) : [];
+  // #217 defensive-cap breadcrumb. The core read TRUNCATES at the cap, so from here we can't see the
+  // overflow — hitting the ceiling exactly is the (approximate) signal that the tail may be hidden.
+  // A false positive at exactly-cap-and-no-more is a harmless log line; a real family is nowhere near.
+  if (detailed.length >= ALBUM_PHOTO_QUERY_CAP) {
+    warnAlbumCapHit("album-grid", ALBUM_PHOTO_QUERY_CAP, detailed.length);
+  }
 
   // `canManage` is #18's visibility hint: the viewer is the photo's CONTRIBUTOR, or the STEWARD of ANY
   // family the photo is shown under. Fetch steward ids per shown family (as before) and test membership

@@ -25,6 +25,7 @@ import { hub } from "@/app/_copy";
 import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import { StoryComposer } from "../../StoryComposer";
 import type { DraftInfo } from "../../StoryComposer";
+import photoStyles from "./AnswerPhotos.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -209,14 +210,7 @@ export default async function AnswerPage({
                   <img
                     src={albumPhotoSrc(photoId, { thumb: subjectPhotoIds.length > 1 })}
                     alt={hub.album.photoAlt(null)}
-                    style={{
-                      width: "100%",
-                      maxHeight: "40dvh",
-                      objectFit: "contain",
-                      borderRadius: "var(--radius-md)",
-                      display: "block",
-                      background: "var(--surface-sunken)",
-                    }}
+                    className={photoStyles.cell}
                   />
                 </li>
               ))}

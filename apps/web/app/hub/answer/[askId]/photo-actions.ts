@@ -22,12 +22,14 @@ import {
   detachStoryImage,
   setStoryCover,
   reorderStoryImages,
+  ALBUM_PHOTO_QUERY_CAP,
   type AuthContext,
 } from "@chronicle/core";
 import type { Database, Story } from "@chronicle/db";
 import { rankPhotosForStory, pickPhotoNudge } from "@chronicle/pipeline";
 import type { PhotoCandidate, StorySignals } from "@chronicle/pipeline";
 import { getRuntime } from "@/lib/runtime";
+import { capAlbumUnion, warnAlbumCapHit } from "@/lib/album-cap";
 import { hub } from "@/app/_copy";
 import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
 import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection";
@@ -132,17 +134,25 @@ export async function loadStoryPhotoEditorAction(
     // RE-ORDERS it — it opens no new read path and never widens the candidate set.
     const families = await listActiveFamiliesForPerson(db, personId);
     const seen = new Set<string>();
-    const candidates: PhotoCandidate[] = [];
+    // `createdAt` rides along ONLY so the union can be defensively capped most-recent-first (#217)
+    // BEFORE ranking; like `exifCapturedAt` it stays server-side (the emitted `EditorAlbumPhoto`
+    // carries only photoId + caption). Capping pre-rank keeps the ranker over a bounded pool.
+    const candidates: (PhotoCandidate & { createdAt: Date })[] = [];
     for (const fam of families) {
       const photos = await listAlbumPhotos(db, ctx, fam.familyId);
       for (const p of photos) {
         if (seen.has(p.id) || attachedPhotoIds.has(p.id)) continue;
         seen.add(p.id);
-        // `exifCapturedAt` is used ONLY here, server-side, by the ranker — it never rides to the
-        // client (the emitted `EditorAlbumPhoto` carries only photoId + caption).
-        candidates.push({ id: p.id, caption: p.caption, exifCapturedAt: p.exifCapturedAt });
+        candidates.push({
+          id: p.id,
+          caption: p.caption,
+          exifCapturedAt: p.exifCapturedAt,
+          createdAt: p.createdAt,
+        });
       }
     }
+    const { rows: cappedCandidates, capped } = capAlbumUnion(candidates);
+    if (capped) warnAlbumCapHit("story-photo-editor", ALBUM_PHOTO_QUERY_CAP, candidates.length);
 
     // Silent, deterministic ranking (ADR-0009 Phase 4 · Slice A): caption-overlap ∪ era-year
     // proximity. Usually there is no signal (eraYear/exif null) → recency order is preserved, so the
@@ -161,7 +171,7 @@ export async function loadStoryPhotoEditorAction(
         .join(" "),
       eraYear: story.eraYear,
     };
-    const ranked = rankPhotosForStory(signals, candidates);
+    const ranked = rankPhotosForStory(signals, cappedCandidates);
     const album: EditorAlbumPhoto[] = ranked.map((r) => ({ photoId: r.id, caption: r.caption }));
     const nudge = pickPhotoNudge(ranked);
 

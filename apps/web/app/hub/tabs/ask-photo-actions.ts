@@ -15,8 +15,10 @@
 import {
   listActiveFamiliesForPerson,
   listAlbumPhotos,
+  ALBUM_PHOTO_QUERY_CAP,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { capAlbumUnion, warnAlbumCapHit } from "@/lib/album-cap";
 import { hub } from "@/app/_copy";
 
 /** One album photo the asker may attach to a question. */
@@ -37,15 +39,20 @@ export async function loadAskPhotoOptionsAction(): Promise<AskPhotoOptions> {
   try {
     const families = await listActiveFamiliesForPerson(db, ctx.personId);
     const seen = new Set<string>();
-    const album: AskAlbumPhoto[] = [];
+    // Collect createdAt too so the union can be capped most-recent-first (#217). Each per-family read
+    // is already DB-capped; this bounds the DEDUPED UNION that crosses to the picker.
+    const collected: { photoId: string; caption: string | null; createdAt: Date }[] = [];
     for (const fam of families) {
       const photos = await listAlbumPhotos(db, ctx, fam.familyId);
       for (const p of photos) {
         if (seen.has(p.id)) continue;
         seen.add(p.id);
-        album.push({ photoId: p.id, caption: p.caption });
+        collected.push({ photoId: p.id, caption: p.caption, createdAt: p.createdAt });
       }
     }
+    const { rows, capped } = capAlbumUnion(collected);
+    if (capped) warnAlbumCapHit("ask-photo-picker", ALBUM_PHOTO_QUERY_CAP, collected.length);
+    const album: AskAlbumPhoto[] = rows.map((r) => ({ photoId: r.photoId, caption: r.caption }));
     return { ok: true, album };
   } catch {
     return { error: hub.ask.photoPickerLoadError };

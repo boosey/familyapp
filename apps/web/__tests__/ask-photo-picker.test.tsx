@@ -59,8 +59,10 @@ describe("AskPhotoPicker deep-link preselection", () => {
     await waitForLoad();
 
     // The seeded id rides the ask form as a hidden input, the un-seeded photo-2 does not, and the
-    // closed form shows the selection readout — all without opening the modal.
-    expect(hiddenSubjectIds()).toEqual(["photo-1"]);
+    // closed form shows the selection readout — all without opening the modal. The seed is applied in
+    // the load effect's microtask (which resolves AFTER the "Add photos" button first renders, since
+    // the button is present pre-load), so wait for the settled selection rather than asserting eagerly.
+    await waitFor(() => expect(hiddenSubjectIds()).toEqual(["photo-1"]));
     expect(screen.getByText("1 photo selected")).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -72,8 +74,10 @@ describe("AskPhotoPicker deep-link preselection", () => {
     );
     await waitForLoad();
 
-    // Only the real, visible id is selected; the phantom is silently dropped.
-    expect(hiddenSubjectIds()).toEqual(["photo-1"]);
+    // Only the real, visible id is selected; the phantom is silently dropped. Wait for the seed to
+    // settle (see the load-microtask note above) — the button renders pre-load, so waitForLoad alone
+    // does not guarantee the selection has been applied.
+    await waitFor(() => expect(hiddenSubjectIds()).toEqual(["photo-1"]));
   });
 
   it("preselects nothing when no seed is provided", async () => {

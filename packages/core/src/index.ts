@@ -315,7 +315,12 @@ export {
   type TagPhotoPlaceInput,
   type TagPhotoPlaceResult,
   type AlbumPhotoDetailView,
+  type ListAlbumPhotosOptions,
+  type ListAlbumPhotosDetailedOptions,
 } from "./album-repository";
+// The album-read defensive cap (#217) — the web pickers import it to bound their deduped union and
+// to label the cap-hit telemetry breadcrumb with the same ceiling the core reads enforce.
+export { ALBUM_PHOTO_QUERY_CAP } from "./constants";
 export {
   type PlaceSuggester,
   nullPlaceSuggester,

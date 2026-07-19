@@ -1,0 +1,82 @@
+/*
+ * StoryEditor — the consolidated story edit form (title · tags · prose · photos). LIGHT PLAYFUL:
+ * warmth only — rounder fields, a warm focus ring, gentle depth on inputs. NO stickers / tape /
+ * tilt (an edit form is not a decorative surface). Token-driven and skin-neutral; the only
+ * skin-scoped touch is a slightly warmer focus glow under Playful. See _skins/CSS-MODULES.md.
+ */
+
+.form {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.fieldLabel {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.helpText {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.errText {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-danger);
+  margin: 0;
+}
+
+.textField {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-card);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--dur-fade) var(--ease-quiet), box-shadow var(--dur-fade) var(--ease-quiet);
+}
+
+.textArea {
+  composes: textField;
+  font-family: var(--font-story);
+  resize: vertical;
+}
+
+/* Warm focus: the field draws a soft accent ring instead of the flat browser outline. */
+.textField:focus-visible,
+.textArea:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tagField {
+  display: grid;
+  gap: 6px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* The focus glow is a static state change (not motion), so it stays under reduce-motion; solemn
+   drops the warm ring back to a plain accent outline. */
+:global([data-tone="solemn"]) .textField:focus-visible,
+:global([data-tone="solemn"]) .textArea:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

@@ -11,6 +11,8 @@ import { getStoryForViewer, listAsksByAsker } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 import { AsksDesignator, type AsksDesignatorAsk } from "./AsksDesignator";
+import { cardTilt } from "./card-tilt";
+import styles from "./AsksDesignator.module.css";
 
 export async function AsksTab({
   families = [],
@@ -25,17 +27,7 @@ export async function AsksTab({
   const ctx = await auth.getCurrentAuthContext();
 
   if (ctx.kind !== "account") {
-    return (
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui)",
-          color: "var(--text-muted)",
-        }}
-      >
-        {hub.asks.signedOut}
-      </p>
-    );
+    return <p className={styles.signedOut}>{hub.asks.signedOut}</p>;
   }
 
   // Fetch EVERY ask the viewer sent (no server-side family narrowing — the designator narrows on the
@@ -71,48 +63,10 @@ export async function AsksTab({
   if (!hasFamily && enriched.length === 0) {
     return (
       <div>
-        <h2
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "var(--text-story-lg)",
-            fontWeight: 500,
-            color: "var(--text-body)",
-            margin: 0,
-          }}
-        >
-          {hub.asks.title}
-        </h2>
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            lineHeight: "var(--leading-body)",
-            color: "var(--text-muted)",
-            margin: "12px 0 0",
-          }}
-        >
-          {hub.asks.intro}
-        </p>
-        <div
-          style={{
-            marginTop: 24,
-            background: "var(--surface-card)",
-            border: "var(--border-width) solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            padding: 30,
-            textAlign: "center",
-          }}
-        >
-          <p
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "var(--text-story)",
-              color: "var(--text-muted)",
-              margin: 0,
-            }}
-          >
-            {hub.shell.pendingEmpty}
-          </p>
+        <h2 className={styles.title}>{hub.asks.title}</h2>
+        <p className={styles.intro}>{hub.asks.intro}</p>
+        <div className={styles.empty} style={cardTilt(0)}>
+          <p className={styles.emptyText}>{hub.shell.pendingEmpty}</p>
         </div>
       </div>
     );

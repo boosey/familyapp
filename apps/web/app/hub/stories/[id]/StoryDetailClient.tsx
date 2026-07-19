@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback } from "react";
+import { useState, useTransition, useMemo, useCallback, type CSSProperties } from "react";
+// NB: `CSSProperties` is still used below for the per-item `--tilt` custom property on the media block
+// (JS sets the CSS var, CSS consumes it — see StoryDetailClient.module.css).
 import Link from "next/link";
 import { retargetStoryFamiliesAction, setStoryLikeAction } from "./actions";
+import styles from "./StoryDetailClient.module.css";
 import { FavoriteButton } from "./FavoriteButton";
 import { FollowUpButton } from "./FollowUpButton";
 import { LikeButton } from "./LikeButton";
@@ -153,27 +156,9 @@ export function StoryDetailClient({
   };
 
   return (
-    <div
-      style={{
-        maxWidth: 760,
-        margin: "0 auto",
-        padding: "clamp(20px, 5vw, 40px) clamp(20px, 5vw, 56px) 80px",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <Link
-          href={backHref}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            fontWeight: 600,
-            color: "var(--accent-strong)",
-            textDecoration: "none",
-          }}
-        >
+    <div className={styles.page}>
+      <div className={styles.topBar}>
+        <Link href={backHref} className={styles.backLink}>
           ‹ {hub.browse.back}
         </Link>
         {isOwner && (
@@ -198,81 +183,25 @@ export function StoryDetailClient({
       </div>
 
       {actionError && (
-        <div
-          style={{
-            padding: "12px 16px",
-            background: "rgba(220, 50, 50, 0.1)",
-            border: "1px solid rgba(220, 50, 50, 0.3)",
-            borderRadius: "var(--radius-md, 8px)",
-            color: "var(--text-danger)",
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            marginBottom: 20,
-          }}
-        >
+        <div className={styles.actionError}>
           {actionError}
         </div>
       )}
 
       {/* Narrative & Timeline Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <span
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            background: "var(--accent-soft)",
-            color: "var(--accent-strong)",
-            fontFamily: "var(--font-story)",
-            fontSize: 18,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flex: "0 0 auto",
-          }}
-        >
+      <div className={styles.metaRow}>
+        <span className={styles.avatar}>
           {initialsOf(narratorName)}
         </span>
-        <span
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-label)",
-            color: "var(--text-meta)",
-          }}
-        >
+        <span className={styles.byline}>
           {hub.browse.toldBy(narratorName)}
         </span>
-        <span
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: "50%",
-            background: "var(--border-strong)",
-          }}
-        />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--text-label)",
-            letterSpacing: "var(--tracking-mono)",
-            color: "var(--support)",
-          }}
-        >
+        <span className={styles.metaDot} aria-hidden="true" />
+        <span className={styles.eraLabel}>
           {eraLabelStr}
         </span>
         {authorTreeHref && (
-          <Link
-            href={authorTreeHref}
-            data-testid="story-tree-link"
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--text-ui-sm)",
-              fontWeight: 600,
-              color: "var(--accent-strong)",
-              textDecoration: "none",
-            }}
-          >
+          <Link href={authorTreeHref} data-testid="story-tree-link" className={styles.treeLink}>
             {hub.tree.openInTree}
           </Link>
         )}
@@ -299,53 +228,23 @@ export function StoryDetailClient({
         />
       ) : (
         <>
-          <h1
-            style={{
-              fontFamily: "var(--font-story)",
-              fontWeight: 400,
-              fontSize: "clamp(var(--text-display), 5.5vw, var(--text-display-lg))",
-              lineHeight: 1.15,
-              color: "var(--text-body)",
-              margin: "16px 0 20px",
-            }}
-          >
+          <h1 className={styles.title}>
             {title || hub.stories.untitled}
           </h1>
 
-          {/* Tags and Targeting Pills */}
+          {/* Tags (sticker candy palette, i % 4) and family-targeting pills. */}
           {(tags.length > 0 || targetFamilies.length > 0) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-              {tags.map((tag) => (
+            <div className={styles.tags}>
+              {tags.map((tag, i) => (
                 <span
-                  key={`t-${tag}`}
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: "var(--text-label)",
-                    fontWeight: 500,
-                    color: "var(--text-muted)",
-                    border: "1.5px solid var(--border-strong)",
-                    borderRadius: "var(--radius-pill)",
-                    padding: "5px 13px",
-                  }}
+                  key={`t-${tag}-${i}`}
+                  className={[styles.sticker, styles[`sticker${i % 4}` as const]].join(" ")}
                 >
                   {tag}
                 </span>
               ))}
               {targetFamilies.map((fam) => (
-                <span
-                  key={`f-${fam.id}`}
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-label)",
-                    fontWeight: 500,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    color: "var(--accent-strong)",
-                    background: "var(--accent-soft)",
-                    borderRadius: "var(--radius-pill)",
-                    padding: "5px 13px",
-                  }}
-                >
+                <span key={`f-${fam.id}`} className={styles.familyTag}>
                   {fam.shortName || fam.name}
                 </span>
               ))}
@@ -356,38 +255,12 @@ export function StoryDetailClient({
 
       {/* Manage Sharing Picker Dialog overlay */}
       {isEditingSharing && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "var(--overlay-scrim)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <form
-            onSubmit={handleSharingSubmit}
-            style={{
-              background: "var(--surface-card)",
-              borderRadius: "var(--radius-lg, 12px)",
-              padding: 24,
-              width: "100%",
-              maxWidth: 400,
-              display: "grid",
-              gap: 16,
-              boxShadow: "var(--shadow-lift)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <h3 style={{ fontFamily: "var(--font-story)", fontSize: "1.25rem", margin: 0 }}>
+        <div className={styles.modalScrim}>
+          <form onSubmit={handleSharingSubmit} className={styles.modalCard}>
+            <h3 className={styles.modalTitle}>
               Share with families
             </h3>
-            <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-muted)", margin: "0 0 8px" }}>
+            <p className={styles.modalIntro}>
               Select which family archives this story should appear in.
             </p>
             <FamilyChoiceChips
@@ -395,36 +268,16 @@ export function StoryDetailClient({
               selected={editSelectedFamilies}
               onToggle={toggleFamilySelection}
             />
-            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
+            <div className={styles.modalActions}>
               <button
                 type="button"
                 onClick={() => setIsEditingSharing(false)}
                 disabled={isPending}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "var(--radius-pill, 999px)",
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
+                className={styles.btnGhost}
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "var(--radius-pill, 999px)",
-                  border: "none",
-                  background: "var(--accent-strong)",
-                  color: "white",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
+              <button type="submit" disabled={isPending} className={styles.btnPrimary}>
                 {isPending ? "Saving..." : "Save sharing"}
               </button>
             </div>
@@ -435,7 +288,7 @@ export function StoryDetailClient({
       {/* Reactions Row (Bookmarks and Likes) — hidden while the consolidated editor is open: editing
           is not a reacting context, so the reaction affordances don't belong on the edit surface. */}
       {!editorOpen && (
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 28, flexWrap: "wrap" }}>
+        <div className={styles.reactions}>
           <FavoriteButton storyId={storyId} initialState={favoriteState} canFavorite={canReact} />
           <LikeButton storyId={storyId} initialState={likeState} canLike={canReact} />
           {canAskFollowUp && (
@@ -456,12 +309,9 @@ export function StoryDetailClient({
           data-testid="story-photo-row"
           role="group"
           aria-label={hub.storyImages.galleryHeading}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
-            marginBottom: 28,
-          }}
+          className={styles.mediaBlock}
+          // The Playful tilt reads this parity-driven value (math stays in TS, per the token convention).
+          style={{ "--tilt": "0.55deg" } as CSSProperties}
         >
           {storyImages.map((img) => (
             // eslint-disable-next-line @next/next/no-img-element -- audited auth byte route, not a static asset
@@ -469,15 +319,7 @@ export function StoryDetailClient({
               key={img.id}
               src={albumPhotoSrc(img.familyPhotoId, { thumb: true })}
               alt={hub.storyImages.galleryAlt(img.caption)}
-              style={{
-                width: 96,
-                height: 96,
-                flex: "0 0 auto",
-                objectFit: "cover",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--surface-sunken)",
-                display: "block",
-              }}
+              className={styles.photo}
             />
           ))}
         </div>
@@ -485,18 +327,14 @@ export function StoryDetailClient({
 
       {/* Audio Playback Seam */}
       {recordingMediaId && (
-        <div style={{ display: "flex", gap: 12, width: "100%", height: 38, marginBottom: 20 }}>
-          <audio
-            controls
-            src={`/api/media/${recordingMediaId}`}
-            style={{ width: "100%", height: "100%" }}
-          />
+        <div className={styles.audioRow}>
+          <audio controls src={`/api/media/${recordingMediaId}`} className={styles.audio} />
         </div>
       )}
 
       {/* Reading Body (hidden while the consolidated editor owns prose editing) */}
       {!editorOpen && (
-        <div style={{ marginTop: 12 }}>
+        <div className={styles.readBody}>
           <StoryReadBody
             prose={prose || initialSummary || null}
             transcript={initialTranscript}
