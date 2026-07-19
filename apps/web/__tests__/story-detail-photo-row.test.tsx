@@ -80,9 +80,9 @@ describe("StoryDetailClient — photo row below reactions", () => {
       />,
     );
     expect(rowSrcs()).toEqual([
-      "/api/album-photo/cover",
-      "/api/album-photo/p2",
-      "/api/album-photo/p3",
+      "/api/album-photo/cover?variant=thumb",
+      "/api/album-photo/p2?variant=thumb",
+      "/api/album-photo/p3?variant=thumb",
     ]);
   });
 
@@ -111,6 +111,6 @@ describe("StoryDetailClient — photo row below reactions", () => {
       />,
     );
     const img = screen.getByAltText("Wedding, 1961");
-    expect(img.getAttribute("src")).toBe("/api/album-photo/p1");
+    expect(img.getAttribute("src")).toBe("/api/album-photo/p1?variant=thumb");
   });
 });

@@ -23,6 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
 import { KindredButton } from "@/app/_kindred";
+import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import { loadAskPhotoOptionsAction, type AskAlbumPhoto } from "./ask-photo-actions";
 import s from "./AskPhotoPicker.module.css";
 
@@ -114,7 +115,7 @@ export function AskPhotoPicker({
               <li key={p.photoId}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
                 <img
-                  src={`/api/album-photo/${p.photoId}`}
+                  src={albumPhotoSrc(p.photoId, { thumb: true })}
                   alt={hub.album.photoAlt(p.caption)}
                   className={s.thumb}
                 />
@@ -256,7 +257,7 @@ function AskPhotoModal({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
                     <img
-                      src={`/api/album-photo/${p.photoId}`}
+                      src={albumPhotoSrc(p.photoId, { thumb: true })}
                       alt={hub.album.photoAlt(p.caption)}
                       className={s.tileImg}
                     />

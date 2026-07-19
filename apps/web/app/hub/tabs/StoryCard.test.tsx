@@ -72,7 +72,7 @@ describe("StoryCard", () => {
 
     const thumbs = screen.getAllByTestId("card-photo-thumb");
     expect(thumbs).toHaveLength(1);
-    expect(thumbs[0]?.getAttribute("src")).toBe("/api/album-photo/ph2");
+    expect(thumbs[0]?.getAttribute("src")).toBe("/api/album-photo/ph2?variant=thumb");
   });
 
   it("sets an inline --tilt custom property from the index parity", () => {
@@ -104,7 +104,7 @@ describe("StoryCard", () => {
     const link = container.querySelector("a") as HTMLElement;
     expect(link.className).toContain(styles.layLeft);
     const imgs = container.querySelectorAll("img");
-    expect(imgs[0]?.getAttribute("src")).toBe("/api/album-photo/ph1");
+    expect(imgs[0]?.getAttribute("src")).toBe("/api/album-photo/ph1?variant=thumb");
   });
 
   it("layout=wrap floats the cover inside the body via the wrapPhoto class", () => {
@@ -114,7 +114,7 @@ describe("StoryCard", () => {
     const link = container.querySelector("a") as HTMLElement;
     expect(link.className).toContain(styles.layWrap);
     const wrap = container.querySelector(`.${styles.wrapPhoto}`);
-    expect(wrap?.getAttribute("src")).toBe("/api/album-photo/ph1");
+    expect(wrap?.getAttribute("src")).toBe("/api/album-photo/ph1?variant=thumb");
   });
 
   it("layout=collage renders the cover plus extra photos in the collage grid", () => {
@@ -129,7 +129,7 @@ describe("StoryCard", () => {
     // Cover + up to two extras (ph1, ph2, ph3).
     const cells = collage.querySelectorAll("img");
     expect(cells).toHaveLength(3);
-    expect(cells[0]?.getAttribute("src")).toBe("/api/album-photo/ph1");
+    expect(cells[0]?.getAttribute("src")).toBe("/api/album-photo/ph1?variant=thumb");
     // The first collage cell is the tall one.
     expect(cells[0]?.className).toContain(styles.collageTall);
   });

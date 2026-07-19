@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "./FamilyChoiceChips";
+import { albumPhotoSrc } from "./album/photo-src";
 import { prepareAlbumPhoto } from "./album/prepare-photo";
 import {
   PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
@@ -391,7 +392,7 @@ export function StoryPhotosEditor({
                 <div style={{ position: "relative" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
                   <img
-                    src={`/api/album-photo/${img.familyPhotoId}`}
+                    src={albumPhotoSrc(img.familyPhotoId, { thumb: true })}
                     alt={hub.storyImages.imageAlt(img.caption)}
                     style={tileImg}
                   />
@@ -450,7 +451,7 @@ export function StoryPhotosEditor({
         <div role="note" aria-label={hub.compose.photoNudgeAria} style={nudgeBanner}>
           {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
           <img
-            src={`/api/album-photo/${nudge.photoId}`}
+            src={albumPhotoSrc(nudge.photoId, { thumb: true })}
             alt={hub.storyImages.imageAlt(nudge.caption)}
             style={nudgeThumb}
           />
@@ -578,7 +579,7 @@ export function StoryPhotosEditor({
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
                         <img
-                          src={`/api/album-photo/${p.photoId}`}
+                          src={albumPhotoSrc(p.photoId, { thumb: true })}
                           alt={hub.storyImages.imageAlt(p.caption)}
                           style={tileImg}
                         />
