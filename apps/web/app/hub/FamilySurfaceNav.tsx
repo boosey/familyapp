@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
 import { HubToolbar } from "./HubToolbar";
 import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
-import styles from "./FamilySurfaceNav.module.css";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 
 /** The active Family-surface view the selector highlights. */
 export type FamilySurfaceView = "tree" | "list" | "requests";
@@ -83,9 +82,7 @@ export function FamilySurfaceNav({
   const nav = <HubSubNav ariaLabel={hub.shell.familySubNavAria} items={items} active={active} />;
 
   const invite = inviteHref ? (
-    <Link className={styles.inviteButton} href={inviteHref}>
-      {hub.shell.tabInvite}
-    </Link>
+    <ActionButton href={inviteHref}>{hub.shell.tabInvite}</ActionButton>
   ) : null;
 
   return (

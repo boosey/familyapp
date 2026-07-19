@@ -1,0 +1,33 @@
+/* ActionButton (#7) — the ONE canonical primary action button (Playful skin), lifted from the Stories
+ * tab's "Tell a story" button. Used app-wide for a surface's primary CTA: Tell a story, Add Photos,
+ * Invite. Solid fill + card shadow; renders as a link or a button. Tokens for design values, raw px for
+ * layout, per _skins/CSS-MODULES.md. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--tell-card-bg);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

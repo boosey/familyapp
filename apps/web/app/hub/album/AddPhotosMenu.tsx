@@ -18,6 +18,7 @@
  * configured, so that case cannot arise.
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import actionButtonStyles from "@/app/_kindred/ActionButton.module.css";
 
 export interface AddPhotosMenuProps {
   /** Trigger label + aria-label (e.g. "Add Photos"). */
@@ -73,23 +74,6 @@ export function AddPhotosMenu({ label, triggerRef, device, google, manage }: Add
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
-
-  const triggerStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    background: "var(--accent)",
-    border: "1.5px solid var(--accent)",
-    borderRadius: "var(--radius-md)",
-    color: "var(--on-accent, #fff)",
-    cursor: "pointer",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: 600,
-    padding: "8px 14px",
-    outline: "none",
-    transition: "filter var(--dur-fade) var(--ease-quiet)",
-  };
 
   const dropdownStyle: CSSProperties = {
     position: "absolute",
@@ -157,6 +141,10 @@ export function AddPhotosMenu({ label, triggerRef, device, google, manage }: Add
       ref={containerRef}
       style={{ position: "relative", display: "inline-block", marginLeft: "auto" }}
     >
+      {/* #4 — the trigger wears the ONE canonical primary CTA look (shared ActionButton class),
+          single-sourced with Tell a story / Invite. It stays a native <button> (not <ActionButton>)
+          because a menu trigger needs the ref + aria-haspopup/aria-expanded the component doesn't
+          forward; sharing the .button class keeps the LOOK single-sourced without forking the primitive. */}
       <button
         ref={triggerRef}
         type="button"
@@ -164,13 +152,7 @@ export function AddPhotosMenu({ label, triggerRef, device, google, manage }: Add
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        style={triggerStyle}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.filter = "brightness(0.95)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.filter = "none";
-        }}
+        className={actionButtonStyles.button}
       >
         {label} <span aria-hidden="true">▾</span>
       </button>

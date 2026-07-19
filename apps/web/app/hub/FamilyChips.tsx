@@ -3,7 +3,9 @@
 import { type CSSProperties } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { FAMILIES_PARAM, serializeSelection } from "@/lib/family-filter";
-import { familyChipStyle } from "./family-chip-style";
+// The family selector wears the SAME shared pill look as every other selector (#2/#6): the bare
+// `.chip`/`.chipOn` variant single-sourced in SegmentedControl.module.css (no per-chip inline style).
+import seg from "@/app/_kindred/SegmentedControl.module.css";
 import { hub } from "@/app/_copy";
 // The count-pill lives as ONE shared class in HubTabs.module.css (centralization convention) — the
 // hub tabs and the Family selector row already reuse it (see FamilySurfaceNav), so a per-family count
@@ -192,7 +194,7 @@ export function FamilyChips(props: FamilyChipsProps) {
             key={f.id}
             type="button"
             aria-pressed={on}
-            style={familyChipStyle(on)}
+            className={on ? `${seg.chip} ${seg.chipOn}` : seg.chip}
             onClick={() => (designator ? select(f.id) : onFilterChip(f.id))}
           >
             {chipLabel(f)}

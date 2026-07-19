@@ -1,53 +1,14 @@
 /*
- * StoryBrowse — feed/timeline/search chrome (mode segmented control, feed-view toggle, timeline
- * rows, search input, empty states). Mostly a 1:1 port of the former inline `CSSProperties` objects
- * (values already token-driven), plus the `.viewOptions` secondary row that relocates the mode +
- * feed-view controls into a quieter, right-aligned row above the grid. The mode/view PILLS were
- * DELIBERATELY down-sized for that secondary row (see `.modePill`) — the rest is a faithful port. No
- * Playful structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
+ * StoryBrowse — feed/timeline/search chrome (timeline rows, search input, empty states). Mostly a 1:1
+ * port of the former inline `CSSProperties` objects (values already token-driven). The Masonry/Column
+ * feed-view selector, the Feed/Timeline mode toggle, and the timeline's widen toggle now all route
+ * through the shared _kindred/SegmentedControl (#1/#5), so this file no longer carries any pill styling.
+ * No Playful structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
-/* ── Feed-view selector (Masonry/Column) ────────────────────────────────────────
-   The segmented Masonry/Column control now rides the shared HubToolbar's R2-right slot (#190). The
-   Feed/Timeline/Search MODE toggle moved to the shared HubSubNav pill row in R1 — its old bespoke
-   `.viewOptions` row and tablist pills are retired; `.segmentGroup`/`.modePill` remain only for the
-   Masonry/Column radio group (and the timeline's own widen group). `.searchInput` is reused by the
-   toolbar's hoisted Search field. */
-.segmentGroup {
-  display: inline-flex;
-  gap: 4px;
-  background: var(--surface-sunken);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 4px;
-}
-
-/* Intentionally smaller than the former inline pills (was 10px 22px / --text-ui-sm) — down-sized to
-   read as a quieter SECONDARY control in the view-options row, per the Task 5 plan. Do NOT "restore"
-   the old sizing; the shrink is deliberate, not a porting slip. */
-.modePill {
-  padding: 8px 16px;
-  border: none;
-  cursor: pointer;
-  border-radius: var(--radius-pill);
-  font-family: var(--font-ui);
-  font-size: var(--text-label);
-  font-weight: 600;
-  white-space: nowrap;
-  background: transparent;
-  color: var(--text-muted);
-}
-.modePill[aria-selected="true"],
-.modePill[aria-checked="true"],
-.modePill[aria-pressed="true"] {
-  background: var(--surface-card);
-  color: var(--accent-strong);
-  box-shadow: var(--shadow-sm);
-}
-.modePill:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+/* The former bespoke `.segmentGroup`/`.modePill` view/mode pills were removed once every selector moved
+   to the shared _kindred/SegmentedControl (#1/#5); the search input moved to the shared
+   _kindred/SearchField. This file no longer styles any top-of-tab control. */
 
 /* ── Feed layouts ────────────────────────────────────────────────────────────── */
 .masonry {
@@ -207,21 +168,6 @@
   max-width: 760px;
 }
 
-.searchInput {
-  width: 100%;
-  padding: 16px 20px;
-  font-family: var(--font-ui);
-  font-size: var(--text-ui);
-  color: var(--text-body);
-  background: var(--surface-card);
-  border: var(--border-width) solid var(--border-strong);
-  border-radius: var(--radius-md);
-  outline: none;
-}
-.searchInput:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
 
 .searchIdle {
   font-family: var(--font-ui);

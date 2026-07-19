@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AlbumUploader } from "@/app/hub/album/AlbumUploader";
 import { hub } from "@/app/_copy";
+import actionButtonStyles from "@/app/_kindred/ActionButton.module.css";
 
 const refresh = vi.fn();
 const replace = vi.fn();
@@ -256,6 +257,14 @@ describe("AlbumUploader files-first destination modal (#94)", () => {
     expect(modal()).not.toBeNull();
     fireEvent.click(cancelBtn());
     expect(document.activeElement).toBe(trigger);
+  });
+
+  // #4 — the "Add Photos" trigger wears the ONE canonical primary CTA look (shared ActionButton
+  // class), single-sourced with Tell a story / Invite so the primary buttons can't drift apart.
+  it("styles the Add Photos trigger with the shared primary ActionButton look", () => {
+    render(<AlbumUploader families={[FAM_A]} currentFamilyId={FAM_A.familyId} />);
+    const trigger = screen.getByRole("button", { name: hub.album.addPhotosMenu });
+    expect(trigger.className).toContain(actionButtonStyles.button);
   });
 
   // #93: the "Add from your device" menuitem opens the hidden OS file picker — it does NOT show a

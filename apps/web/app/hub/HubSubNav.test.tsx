@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { HubSubNav } from "./HubSubNav";
 import hubTabStyles from "./HubTabs.module.css";
+import segStyles from "../_kindred/SegmentedControl.module.css";
 
 afterEach(() => cleanup());
 
@@ -29,7 +30,10 @@ describe("HubSubNav", () => {
     );
     const alpha = screen.getByText("Alpha").closest("a")!;
     expect(alpha.getAttribute("href")).toBe("/x?a");
-    expect(alpha.className).toContain(hubTabStyles.subLink);
+    // The shared boxed-pill look: pills carry `.pill` inside a `.group` box (single-sourced with the
+    // SegmentedControl view/mode selectors so sub-tabs and view controls can't drift apart).
+    expect(alpha.className).toContain(segStyles.pill);
+    expect(alpha.closest("nav")!.className).toContain(segStyles.group);
     expect(alpha.getAttribute("aria-current")).toBe("page");
     expect(screen.getByText("Beta").closest("a")!.getAttribute("aria-current")).toBeNull();
   });
@@ -48,7 +52,7 @@ describe("HubSubNav", () => {
       />,
     );
     const beta = screen.getByText("Beta").closest("button")!;
-    expect(beta.className).toContain(hubTabStyles.subLink);
+    expect(beta.className).toContain(segStyles.pill);
     fireEvent.click(beta);
     expect(onSelect).toHaveBeenCalledWith("b");
   });

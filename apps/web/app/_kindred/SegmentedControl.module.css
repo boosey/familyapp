@@ -1,0 +1,103 @@
+/* SegmentedControl (#1/#5) — the ONE canonical boxed pill selector, adopted from the look the Stories
+ * Masonry/Column control already had (`.segmentGroup`/`.modePill`): a quiet sunken rounded box holding
+ * pills, where the SELECTED pill is a raised white pill (surface-card + shadow-sm + accent-strong ink).
+ * Sub-tab navs and the radiogroup view/mode selectors both render through this, ending the three-way
+ * pill drift. Design values are tokens; layout dims are raw px per _skins/CSS-MODULES.md. Every
+ * interactive element carries a :focus-visible outline (rule 7). */
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  border: var(--border-width) solid var(--border);
+  font-family: var(--font-ui);
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.pill:hover {
+  color: var(--text-body);
+}
+
+/* Selected — a raised white pill. Every selection semantic maps here: aria-selected (tabs), aria-checked
+   (radio), aria-pressed (toggle), aria-current (link sub-navs). */
+.pill[aria-selected="true"],
+.pill[aria-checked="true"],
+.pill[aria-pressed="true"],
+.pill[aria-current="page"] {
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Bare chip variant (family selector — multi-select filter + single-select designator, #2/#6) ──
+   The SAME raised-white selected look as `.pill`, but WITHOUT the enclosing box (a boxed multi-active
+   group reads wrong). Off-state carries a quiet border so a standalone chip still reads as tappable. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.chip:hover {
+  color: var(--text-body);
+}
+
+/* Applied ALONGSIDE `.chip` when it is ON — the raised white pill, matching `.pill` selected. The
+   border is the SAME color as the label text (--accent-strong) so a selected family chip reads as a
+   crisp outlined pill, not a borderless fill. */
+.chipOn {
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
