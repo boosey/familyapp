@@ -32,6 +32,7 @@ import {
 import { useMicRecorder } from "@/lib/use-mic-recorder";
 import { useProseHistory } from "@/lib/use-prose-history";
 import { ProseBlock } from "@/app/hub/_composing/ProseBlock";
+import styles from "@/app/_onboarding/onboarding-card.module.css";
 
 export function AboutYouFlow({
   initialQuestion,
@@ -136,52 +137,8 @@ export function AboutYouFlow({
   }
 
   /* ── Layout primitives (mirrors WelcomeFlow) ───────────────────────────── */
-  const page: CSSProperties = {
-    minHeight: "100dvh",
-    background: "var(--surface-page)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: "clamp(24px, 5vw, 56px)",
-    paddingBottom: "clamp(24px, 5vw, 56px)",
-    paddingLeft: 16,
-    paddingRight: 16,
-  };
-  const card: CSSProperties = {
-    maxWidth: 560,
-    width: "100%",
-    background: "var(--surface-card)",
-    border: "var(--border-width) solid var(--border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-lift)",
-    padding: "clamp(28px, 5vw, 48px)",
-  };
-  const serifHeadline: CSSProperties = {
-    fontFamily: "var(--font-story)",
-    fontSize: "var(--text-display)",
-    fontWeight: 500,
-    color: "var(--text-body)",
-    margin: 0,
-    lineHeight: "var(--leading-tight)",
-  };
-  const sub: CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    color: "var(--text-muted)",
-    lineHeight: "var(--leading-body)",
-    margin: "12px 0 0",
-  };
-  const errorBox: CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    color: "var(--accent-strong)",
-    background: "var(--accent-soft)",
-    border: "var(--border-width) solid var(--accent)",
-    borderRadius: "var(--radius-md)",
-    padding: "12px 16px",
-    margin: "20px 0 0",
-  };
+  // page/card/headline/sub/errorBox moved to _onboarding/onboarding-card.module.css (classes carry
+  // the Playful signature). monoEyebrow (the progress line) stays inline — it's not an eyebrow chip.
   const monoEyebrow: CSSProperties = {
     fontFamily: "var(--font-mono)",
     fontSize: "var(--text-label)",
@@ -193,11 +150,11 @@ export function AboutYouFlow({
   /* ── Done (brief thank-you while routing to the hub) ───────────────────── */
   if (done || !current) {
     return (
-      <main style={page}>
-        <div style={{ ...card, textAlign: "center" }}>
-          <div className="kin-eyebrow">{hub.aboutYou.doneEyebrow}</div>
-          <h1 style={{ ...serifHeadline, marginTop: 12 }}>{hub.aboutYou.doneTitle}</h1>
-          <p style={{ ...sub, maxWidth: "42ch", margin: "12px auto 0" }}>{hub.aboutYou.doneBody}</p>
+      <main className={styles.page}>
+        <div className={styles.card} style={{ textAlign: "center" }}>
+          <div className={styles.eyebrow}>{hub.aboutYou.doneEyebrow}</div>
+          <h1 className={styles.headline} style={{ fontSize: "var(--text-display)", marginTop: 12 }}>{hub.aboutYou.doneTitle}</h1>
+          <p className={styles.sub} style={{ maxWidth: "42ch", margin: "12px auto 0" }}>{hub.aboutYou.doneBody}</p>
           {/* Fallback control: we router.push to the hub on completion, but if that navigation
               stalls the user must not be stranded on a buttonless card. */}
           <Link
@@ -220,8 +177,10 @@ export function AboutYouFlow({
   }
 
   /* ── Question ──────────────────────────────────────────────────────────── */
+  // NON-card step: no bordered .card, so only the sticker eyebrow + highlighter headline apply
+  // (no tape/shelf). The .page class sets the shared wrapper; this step top-aligns + tightens top pad.
   return (
-    <main style={{ ...page, justifyContent: "flex-start", paddingTop: "clamp(20px, 4vw, 40px)" }}>
+    <main className={styles.page} style={{ justifyContent: "flex-start", paddingTop: "clamp(20px, 4vw, 40px)" }}>
       <div style={{ maxWidth: 620, width: "100%" }}>
         {/* Top bar: eyebrow + exit */}
         <div
@@ -234,7 +193,7 @@ export function AboutYouFlow({
             marginBottom: 36,
           }}
         >
-          <div className="kin-eyebrow">{hub.aboutYou.eyebrow}</div>
+          <div className={styles.eyebrow}>{hub.aboutYou.eyebrow}</div>
           <KindredButton
             label={hub.aboutYou.takeMeToHub}
             variant="ghost"
@@ -244,7 +203,7 @@ export function AboutYouFlow({
         </div>
 
         <p style={monoEyebrow}>{hub.aboutYou.progress}</p>
-        <h1 style={{ ...serifHeadline, fontSize: "var(--text-prompt)" }}>{current.text}</h1>
+        <h1 className={styles.headline} style={{ fontSize: "var(--text-prompt)" }}>{current.text}</h1>
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "32px 0 20px" }}>
           <KindredVoiceButton
@@ -270,7 +229,7 @@ export function AboutYouFlow({
           label={hub.aboutYou.typeInstead}
         />
 
-        {error ? <p style={errorBox}>{error}</p> : null}
+        {error ? <p className={styles.errorBox}>{error}</p> : null}
 
         <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
           <KindredButton

@@ -1,0 +1,131 @@
+/*
+ * Shared onboarding-card module — base primitives (token-driven, skin-neutral) + the Playful
+ * "full signature" (shadow-shelf, tape strip, highlighter wash, sticker eyebrow). The base classes
+ * reproduce the former inline WelcomeFlow / AboutYouFlow / join primitives 1:1, so nothing changes
+ * under the neutral skin; the signatures are skin-scoped via :global(:root[data-skin="playful"]) and
+ * suppressed under reduce-motion / solemn. Mirrors StoryCard.module.css. See _skins/CSS-MODULES.md.
+ */
+
+.page {
+  min-height: 100dvh;
+  background: var(--surface-page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 56px) 16px;
+}
+
+/* Card max-width differs per surface (welcome/about-you 560, join 480). Callers pass it inline as
+   --card-max (a one-off layout number per CSS-MODULES rule 6); the default keeps 560. `position:
+   relative` is load-bearing for the tape ::before. */
+.card {
+  max-width: var(--card-max, 560px);
+  width: 100%;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lift);
+  padding: clamp(28px, 5vw, 48px);
+  position: relative;
+}
+
+/* Reproduces the global .kin-eyebrow (mono, accent, 12px, .06em). */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+/* Serif headline — everything EXCEPT font-size, which callers keep as an inline override
+   (welcome → --text-display, join → --text-story-lg, about-you question → --text-prompt). An inline
+   font-size does not conflict with the highlighter background-image below. */
+.headline {
+  font-family: var(--font-story);
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 0;
+  line-height: var(--leading-tight);
+}
+
+.sub {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-body);
+  margin: 12px 0 0;
+}
+
+.errorBox {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: var(--border-width) solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 20px 0 0;
+}
+
+/* ---- Playful "full signature" ------------------------------------------------------------------
+   All hook the hashed classes via :global and are suppressed under reduce-motion / solemn below. */
+
+/* Chunky shadow-shelf replacing the soft float. */
+:global(:root[data-skin="playful"]) .card {
+  box-shadow: var(--shadow-card);
+}
+
+/* Tape strip — decorative bright coral fill, no text ever sits on it (mirrors StoryCard geometry). */
+:global(:root[data-skin="playful"]) .card::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+/* Highlighter wash behind the headline (text stays --text-body). */
+:global(:root[data-skin="playful"]) .headline {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 78%;
+  background-size: 100% 42%;
+}
+
+/* Sticker eyebrow — coral pill. */
+:global(:root[data-skin="playful"]) .eyebrow {
+  background: var(--sticker-coral-bg);
+  color: var(--sticker-coral-ink);
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+  display: inline-block;
+}
+
+/* Suppress ALL structural signatures under reduce-motion OR solemn. */
+:global(:root[data-reduce-motion="on"]) .card,
+:global([data-tone="solemn"]) .card {
+  box-shadow: var(--shadow-lift);
+}
+:global(:root[data-reduce-motion="on"]) .card::before,
+:global([data-tone="solemn"]) .card::before {
+  display: none;
+}
+:global(:root[data-reduce-motion="on"]) .headline,
+:global([data-tone="solemn"]) .headline {
+  background-image: none;
+}
+:global(:root[data-reduce-motion="on"]) .eyebrow,
+:global([data-tone="solemn"]) .eyebrow {
+  background: none;
+  padding: 0;
+  /* Revert the sticker ink + shrink-wrap too, or a suppressed eyebrow keeps the pill's rust color
+     (--sticker-coral-ink) and inline-block sizing instead of the plain --accent block eyebrow. */
+  color: var(--accent);
+  display: block;
+}

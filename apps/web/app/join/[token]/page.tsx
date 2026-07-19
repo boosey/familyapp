@@ -15,6 +15,7 @@ import { mockSignUp } from "@/lib/auth-mock";
 import { beginClerkJoinAction } from "@/lib/join-actions";
 import { KindredButton } from "@/app/_kindred";
 import { join } from "@/app/_copy";
+import styles from "@/app/_onboarding/onboarding-card.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,28 +78,11 @@ const SIGNUP_ERRORS: Record<string, string> = {
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
+  // The join card is narrower than the 560px onboarding default; --card-max is a one-off layout number
+  // (CSS-MODULES rule 6) consumed by .card as max-width.
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--surface-page)",
-        padding: "clamp(24px, 5vw, 48px) 16px",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 480,
-          width: "100%",
-          padding: "clamp(28px, 5vw, 48px)",
-          background: "var(--surface-card)",
-          border: "var(--border-width) solid var(--border)",
-          borderRadius: "var(--radius-xl)",
-          boxShadow: "var(--shadow-lift)",
-        }}
-      >
+    <main className={styles.page}>
+      <div className={styles.card} style={{ "--card-max": "480px" } as React.CSSProperties}>
         {children}
       </div>
     </main>
@@ -123,25 +107,12 @@ export default async function JoinPage({
     return (
       <Shell>
         <h1
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "var(--text-story-lg)",
-            fontWeight: 500,
-            color: "var(--text-body)",
-            margin: "0 0 10px",
-          }}
+          className={styles.headline}
+          style={{ fontSize: "var(--text-story-lg)", margin: "0 0 10px" }}
         >
           {join.invalidTitle}
         </h1>
-        <p
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-muted)",
-            lineHeight: "var(--leading-body)",
-            margin: "0 0 24px",
-          }}
-        >
+        <p className={styles.sub} style={{ margin: "0 0 24px" }}>
           {join.invalidBody}
         </p>
         <Link href="/sign-in" style={{ textDecoration: "none" }}>
@@ -213,47 +184,21 @@ export default async function JoinPage({
 
   const heading = (
     <>
-      <div className="kin-eyebrow">{join.invitationEyebrow}</div>
+      <div className={styles.eyebrow}>{join.invitationEyebrow}</div>
       <h1
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-story-lg)",
-          fontWeight: 500,
-          color: "var(--text-body)",
-          margin: "12px 0 6px",
-          lineHeight: "var(--leading-snug)",
-        }}
+        className={styles.headline}
+        style={{ fontSize: "var(--text-story-lg)", margin: "12px 0 6px", lineHeight: "var(--leading-snug)" }}
       >
         {join.invitedYou(invite.inviterName, invite.familyName)}
       </h1>
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-sm)",
-          color: "var(--text-muted)",
-          lineHeight: "var(--leading-body)",
-          margin: "0 0 22px",
-        }}
-      >
+      <p className={styles.sub} style={{ margin: "0 0 22px" }}>
         {join.confirm}
       </p>
     </>
   );
 
   const errorBox = error ? (
-    <p
-      role="alert"
-      style={{
-        fontFamily: "var(--font-ui)",
-        fontSize: "var(--text-ui-sm)",
-        color: "var(--accent-strong)",
-        background: "var(--accent-soft)",
-        border: "var(--border-width) solid var(--accent)",
-        borderRadius: "var(--radius-md)",
-        padding: "12px 16px",
-        margin: "0 0 20px",
-      }}
-    >
+    <p role="alert" className={styles.errorBox} style={{ margin: "0 0 20px" }}>
       {SIGNUP_ERRORS[error] ?? join.genericError}
     </p>
   ) : null;
