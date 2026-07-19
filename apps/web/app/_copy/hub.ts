@@ -9,7 +9,7 @@ export const hub = {
   shell: {
     // Signed-out visitors are redirected to the root landing (the sign-in/sign-up front door),
     // so the hub shell itself has no anonymous copy.
-    chronicle: "Your Chronicle",
+    chronicle: "Your Stories",
     tabStories: "Stories",
     // Sits between Stories and Questions — the hub's home for the Family album (#19).
     tabAlbum: "Album",
@@ -57,14 +57,14 @@ export const hub = {
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
     // Playful mockup (Direction D): mono eyebrow above the family name in the hub header. `n` is the
-    // number of active families the viewer chronicles across; singular/plural handled.
+    // number of active families the viewer has stories across; singular/plural handled.
     familyEyebrow: (n: number) =>
-      `YOUR FAMILY · ${n} CHRONICLING`,
+      `YOUR FAMILY · ${n} ${n === 1 ? "FAMILY" : "FAMILIES"}`,
   },
   stories: {
     untitled: "Untitled",
     empty:
-      "No stories yet. When someone shares a chronicle with you, their stories will appear here.",
+      "No stories yet. When someone shares their stories with you, they'll appear here.",
     // Self-initiated telling (ADR-0007): the Stories-tab entry into /hub/tell, plus the resume list
     // for ask-less drafts still in review. `tellTitle` labels the right-justified control-row button
     // (#125 — the single Tell-a-story affordance); `resume` is the per-draft link in the expanded list.
@@ -309,7 +309,7 @@ export const hub = {
     widenWhole: "Whole family",
     widenNarrator: (name: string) => `Just ${name}`,
     undated: "Undated",
-    // Chronicle Search
+    // Story Search
     searchPlaceholder: "Search titles, places, moments…",
     searchIdle:
       "Search across everything shared with you — titles, summaries, places, and tags.",
@@ -779,7 +779,7 @@ export const hub = {
     textSizeHeading: "Text size",
     textSizeIntro: "Makes everything on the screen a little larger or smaller.",
     paletteHeading: "Color palette",
-    paletteIntro: "Choose the mood of the chronicle on this device.",
+    paletteIntro: "Choose the mood of Tell Me Again on this device.",
     paletteAria: "Color palette",
     paletteShort: {
       heirloom: "Heirloom",
