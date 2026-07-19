@@ -116,6 +116,9 @@
   --font-read: var(--font-newsreader, 'Newsreader'), Georgia, 'Times New Roman', serif;
 
   --text-label: 0.875rem;
+  /* App-side addition (#204): ~1.5× --text-label for the Ask panel's elder-friendly field labels.
+   * Scoped to that panel (the global .kin-form-label keeps --text-label for other forms). */
+  --text-label-lg: 1.3125rem; /* 21px */
   --text-ui-sm: 1.125rem;
   /* --text-ui-md / --text-display-md are APP-SIDE additions (not in the canonical _ds export):
    * they fill the 19px / 52px steps the narrator capture header + hello sizes need. */
@@ -152,6 +155,9 @@
    * label. Unknown/null draws no bar; the focus badge falls back to --border-strong for unknown sex. */
   --sex-male: #8FBEE8;
   --sex-female: #F0AEC6;
+
+  /* Modal backdrop scrim (skin-neutral warm dark, shared by every modal dialog). */
+  --scrim: rgba(46, 38, 32, 0.55);
 }
 
 @keyframes kindred-listening {

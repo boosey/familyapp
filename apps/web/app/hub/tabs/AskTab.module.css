@@ -1,0 +1,54 @@
+/* AskTab (#204) — the redesigned Ask a Question panel. Field labels are ~1.5× the global
+ * --text-label (the app-side --text-label-lg token), scoped HERE so the global .kin-form-label
+ * (used by other forms) is untouched. The question textarea wears the album toolbar's `control`
+ * styling (AlbumFilterBar) in multiline form. Tokens for design values, raw px for layout,
+ * per _skins/CSS-MODULES.md. */
+
+.panel {
+  max-width: 600px;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-5);
+  justify-items: start;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-size: var(--text-label-lg);
+  font-weight: 600;
+  color: var(--text-meta);
+}
+
+.questionField {
+  width: 100%;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  outline: none;
+}
+
+.questionField:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.signedOut {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-muted);
+}

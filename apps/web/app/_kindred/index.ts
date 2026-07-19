@@ -22,3 +22,5 @@ export { KindredSkinPicker } from "./KindredSkinPicker";
 export { KindredMotionToggle } from "./KindredMotionToggle";
 export { KindredProseEditor } from "./KindredProseEditor";
 export type { KindredProseEditorProps } from "./KindredProseEditor";
+export { KindredCombobox } from "./KindredCombobox";
+export type { KindredComboboxOption } from "./KindredCombobox";

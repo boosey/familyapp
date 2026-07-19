@@ -132,7 +132,7 @@ export function AlbumDestinationModal({
         alignItems: "center",
         justifyContent: "center",
         padding: "clamp(12px, 4vw, 32px)",
-        background: "rgba(46, 38, 32, 0.55)",
+        background: "var(--scrim)",
       }}
     >
       <div

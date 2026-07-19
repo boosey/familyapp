@@ -1,20 +1,30 @@
 "use client";
 
 /**
- * Optional photo picker for the Ask form (ADR-0009 Phase 3). Lets the asker attach one or more album
- * photos the question is ABOUT — "tell the story of THIS photo". It renders INSIDE the Ask `<form>`:
- * the selected photo ids ride out as hidden `subjectPhotoIds` inputs on the SAME form submit, so the
- * server action (`submitAsk` → `createAsk`) receives them via `formData.getAll("subjectPhotoIds")`.
- * `createAsk` re-runs the album-access gate per id server-side, so a tampered selection is rejected
- * there — this component only decides what to OFFER and what the user has ticked.
+ * Optional photo picker for the Ask form (ADR-0009 Phase 3, redesigned as a MODAL in #204). Lets
+ * the asker attach one or more album photos the question is ABOUT — "tell the story of THIS photo".
+ * The closed form shows only an "Add photos" button plus a lightweight readout of the current
+ * selection (small thumbnails + a count); the toggle grid lives inside a modal dialog that follows
+ * the repo's modal pattern (AlbumDestinationModal): `role="dialog"` + `aria-modal`, Escape or a
+ * backdrop click closes, Tab is trapped inside, and focus returns to the trigger on close.
+ *
+ * It renders INSIDE the Ask `<form>`: the selected photo ids ride out as hidden `subjectPhotoIds`
+ * inputs on the SAME form submit (rendered on the closed form, so they submit whether or not the
+ * modal was ever opened), so the server action (`submitAsk` → `createAsk`) receives them via
+ * `formData.getAll("subjectPhotoIds")`. `createAsk` re-runs the album-access gate per id
+ * server-side, so a tampered selection is rejected there — this component only decides what to
+ * OFFER and what the user has ticked.
  *
  * Self-contained: fetches the asker's visible album photos via `loadAskPhotoOptionsAction` on mount
  * (auth re-resolved server-side). Elder-friendly: each photo is a large toggle button with an
- * accessible label; no drag, no native dialogs; errors surface inline. Real design tokens only.
+ * accessible label; no drag, no native dialogs; errors surface inline in the modal. Design tokens
+ * only (see AskPhotoPicker.module.css).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
+import { KindredButton } from "@/app/_kindred";
 import { loadAskPhotoOptionsAction, type AskAlbumPhoto } from "./ask-photo-actions";
+import s from "./AskPhotoPicker.module.css";
 
 export function AskPhotoPicker({
   initialSelectedPhotoIds = [],
@@ -23,6 +33,10 @@ export function AskPhotoPicker({
   const [selected, setSelected] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  // The element that opened the modal, captured at open time so focus can be restored on close
+  // (the trigger persists, unlike a dropdown menuitem — document.activeElement is safe here).
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,105 +76,195 @@ export function AskPhotoPicker({
   // Nothing to offer (and no error) → render nothing, keeping the ask form uncluttered.
   if (loaded && album.length === 0 && !error) return null;
 
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <p style={label}>{hub.ask.photosLabel}</p>
-      <p style={help}>{hub.ask.photosHelp}</p>
+  const selectedPhotos = selected
+    .map((id) => album.find((p) => p.photoId === id))
+    .filter((p): p is AskAlbumPhoto => p !== undefined);
 
-      {/* Selected ids ride the ask form submit as repeated hidden inputs. */}
+  return (
+    <div className={s.root}>
+      {/* Selected ids ride the ask form submit as repeated hidden inputs — on the CLOSED form, so
+          they submit even if the modal is never opened (e.g. a deep-link seeded selection). */}
       {selected.map((id) => (
         <input key={id} type="hidden" name="subjectPhotoIds" value={id} />
       ))}
 
-      {error ? (
-        <p aria-live="polite" style={errorText}>
-          {error}
-        </p>
+      <KindredButton
+        variant="secondary"
+        size="small"
+        label={hub.ask.photosAdd}
+        onClick={() => {
+          triggerRef.current = document.activeElement as HTMLElement | null;
+          setOpen(true);
+        }}
+      />
+
+      {/* Lightweight readout of the current selection on the closed form: thumbnails + a count. */}
+      {selectedPhotos.length > 0 ? (
+        <div className={s.selection}>
+          <ul className={s.thumbs}>
+            {selectedPhotos.map((p) => (
+              <li key={p.photoId}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
+                <img
+                  src={`/api/album-photo/${p.photoId}`}
+                  alt={hub.album.photoAlt(p.caption)}
+                  className={s.thumb}
+                />
+              </li>
+            ))}
+          </ul>
+          <p className={s.count}>{hub.ask.photosSelected(selectedPhotos.length)}</p>
+        </div>
       ) : null}
 
-      {!loaded ? null : album.length === 0 ? (
-        <p style={help}>{hub.ask.noAlbumPhotos}</p>
-      ) : (
-        <ul style={grid}>
-          {album.map((p) => {
-            const isSelected = selected.includes(p.photoId);
-            return (
-              <li key={p.photoId} style={{ margin: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => toggle(p.photoId)}
-                  aria-pressed={isSelected}
-                  aria-label={
-                    isSelected
-                      ? hub.ask.removePhotoAria(p.caption)
-                      : hub.ask.attachPhotoAria(p.caption)
-                  }
-                  style={{
-                    padding: 0,
-                    border: isSelected
-                      ? "3px solid var(--accent)"
-                      : "3px solid transparent",
-                    background: "transparent",
-                    borderRadius: "var(--radius-md)",
-                    cursor: "pointer",
-                    display: "block",
-                    width: "100%",
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
-                  <img
-                    src={`/api/album-photo/${p.photoId}`}
-                    alt={hub.album.photoAlt(p.caption)}
-                    style={tileImg}
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {open ? (
+        <AskPhotoModal
+          album={album}
+          selected={selected}
+          error={error}
+          onToggle={toggle}
+          onClose={() => setOpen(false)}
+          triggerRef={triggerRef}
+        />
+      ) : null}
     </div>
   );
 }
 
-/* ── styles (real design tokens only) ─────────────────────────────────────── */
-const label: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-label)",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "var(--support)",
-  margin: 0,
-};
+/**
+ * The modal album picker. Edits are LIVE (toggling updates the asker's selection immediately);
+ * Done / Escape / a backdrop click all simply close. Mirrors AlbumDestinationModal's dialog idiom.
+ */
+function AskPhotoModal({
+  album,
+  selected,
+  error,
+  onToggle,
+  onClose,
+  triggerRef,
+}: {
+  album: AskAlbumPhoto[];
+  selected: string[];
+  error: string | null;
+  onToggle: (photoId: string) => void;
+  onClose: () => void;
+  /** The "Add photos" trigger, focused again when the modal unmounts. */
+  triggerRef: React.RefObject<HTMLElement | null>;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = "ask-photo-modal-title";
 
-const help: React.CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: 0,
-};
+  // Move focus into the dialog on open; restore it to the trigger on close (unmount).
+  useEffect(() => {
+    dialogRef.current?.focus();
+    return () => triggerRef.current?.focus?.();
+  }, [triggerRef]);
 
-const errorText: React.CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-danger, #b00)",
-  margin: 0,
-};
+  // Focusable descendants of the dialog in DOM order — re-queried per keydown, mirroring
+  // AlbumDestinationModal.
+  function getFocusable(): HTMLElement[] {
+    const root = dialogRef.current;
+    if (!root) return [];
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(root.querySelectorAll<HTMLElement>(selector));
+  }
 
-const grid: React.CSSProperties = {
-  listStyle: "none",
-  padding: 0,
-  margin: "4px 0 0",
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
-  gap: 10,
-};
+  // Escape = close; Tab/Shift+Tab trapped inside so a keyboard user can't reach the form behind it.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        e.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const active = document.activeElement as HTMLElement | null;
+      const activeIndex = active ? focusable.indexOf(active) : -1;
+      if (e.shiftKey) {
+        if (activeIndex <= 0) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (activeIndex === -1 || activeIndex === focusable.length - 1) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
-const tileImg: React.CSSProperties = {
-  width: "100%",
-  aspectRatio: "1 / 1",
-  objectFit: "cover",
-  borderRadius: "var(--radius-sm)",
-  display: "block",
-  background: "var(--surface-sunken)",
-};
+  return (
+    <div
+      data-testid="ask-photo-backdrop"
+      // Backdrop click closes, but only when the backdrop ITSELF is the target (not a click
+      // bubbling up from the dialog card) — the same idiom the album modals use.
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className={s.backdrop}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={s.dialog}
+      >
+        <h2 id={titleId} className={s.title}>
+          {hub.ask.photosModalTitle}
+        </h2>
+        <p className={s.help}>{hub.ask.photosHelp}</p>
+
+        {error ? (
+          <p aria-live="polite" className={s.error}>
+            {error}
+          </p>
+        ) : album.length === 0 ? (
+          <p className={s.help}>{hub.ask.noAlbumPhotos}</p>
+        ) : (
+          <ul className={s.grid}>
+            {album.map((p) => {
+              const isSelected = selected.includes(p.photoId);
+              return (
+                <li key={p.photoId}>
+                  <button
+                    type="button"
+                    onClick={() => onToggle(p.photoId)}
+                    aria-pressed={isSelected}
+                    aria-label={
+                      isSelected
+                        ? hub.ask.removePhotoAria(p.caption)
+                        : hub.ask.attachPhotoAria(p.caption)
+                    }
+                    className={s.tile}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- audited byte route. */}
+                    <img
+                      src={`/api/album-photo/${p.photoId}`}
+                      alt={hub.album.photoAlt(p.caption)}
+                      className={s.tileImg}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className={s.actions}>
+          <KindredButton variant="primary" size="small" onClick={onClose} label={hub.ask.photosDone} />
+        </div>
+      </div>
+    </div>
+  );
+}
