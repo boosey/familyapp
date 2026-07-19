@@ -59,9 +59,13 @@ describe("AskPhotoPicker deep-link preselection", () => {
     await waitForLoad();
 
     // The seeded id rides the ask form as a hidden input, the un-seeded photo-2 does not, and the
-    // closed form shows the selection readout — all without opening the modal.
-    expect(hiddenSubjectIds()).toEqual(["photo-1"]);
-    expect(screen.getByText("1 photo selected")).toBeTruthy();
+    // closed form shows the selection readout — all without opening the modal. The preselection
+    // reconciliation lands a tick AFTER the album load resolves (the "Add photos" button that
+    // waitForLoad awaits renders first), so poll for it — asserting synchronously flakes under CI load.
+    await waitFor(() => {
+      expect(hiddenSubjectIds()).toEqual(["photo-1"]);
+      expect(screen.getByText("1 photo selected")).toBeTruthy();
+    });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -72,8 +76,12 @@ describe("AskPhotoPicker deep-link preselection", () => {
     );
     await waitForLoad();
 
-    // Only the real, visible id is selected; the phantom is silently dropped.
-    expect(hiddenSubjectIds()).toEqual(["photo-1"]);
+    // Only the real, visible id is selected; the phantom is silently dropped. Poll: the preselection
+    // reconciliation applies a tick after the load settles (waitForLoad's button renders first), so a
+    // synchronous assertion here races the effect and intermittently reads [] on CI under load.
+    await waitFor(() => {
+      expect(hiddenSubjectIds()).toEqual(["photo-1"]);
+    });
   });
 
   it("preselects nothing when no seed is provided", async () => {
