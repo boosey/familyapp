@@ -9,12 +9,22 @@
   padding: 0 clamp(16px, 4vw, 32px);
 }
 
+/* MOBILE-FIRST: the header is compact on a phone so the tab content isn't pushed below the fold —
+ * tighter top padding and a smaller gap between the title and the tab row. Desktop's roomier header
+ * is restored at `sm`. */
 .header {
-  padding: 28px 0 0;
+  padding: 14px 0 0;
   border-bottom: var(--border-width) solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+}
+
+@media (min-width: 40rem) {
+  .header {
+    padding: 28px 0 0;
+    gap: 16px;
+  }
 }
 
 .titleRow {
@@ -58,8 +68,15 @@
 
 .tabContent {
   /* Top padding tightened 28px → 20px (#9) to shrink the gap between the primary tab bar and the
-   * sub-tab toolbar directly below it; bottom padding unchanged. */
-  padding: 20px 0 28px;
+   * sub-tab toolbar directly below it; bottom padding unchanged. Mobile tightens further (10px) so the
+   * toolbar sits close under the tabs and content reaches the fold sooner. */
+  padding: 10px 0 28px;
+}
+
+@media (min-width: 40rem) {
+  .tabContent {
+    padding: 20px 0 28px;
+  }
 }
 
 .emptyCard {

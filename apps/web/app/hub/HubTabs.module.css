@@ -6,30 +6,56 @@
  * paddings, badge box) use raw px per CSS-MODULES.md rule 3 — a faithful port of the old inline
  * values, consistent with page.module.css house style. */
 
+/* MOBILE-FIRST (base = phone): the four primary tabs MUST stay on ONE line (never wrap — a wrapped
+ * primary nav reads as broken and steals vertical space above the fold). `nowrap` + `space-between`
+ * spreads them edge-to-edge; each tab shrinks its font (0.9375rem) and padding (6/8px) from the
+ * desktop values so all four — including the badged "Questions" — fit with slack even at the 360px
+ * floor (measured worst-case ≈310px against ≈328px available). No `overflow-x` here on purpose: with
+ * four fixed short labels that provably fit, a scroll container is unnecessary AND `overflow-x` would
+ * force `overflow-y` to compute to `auto`, clipping the active tab's raised-pill shadow and the
+ * focus-visible outline. Desktop's roomy tabs are restored at `sm`. */
 .nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 2px;
   font-family: var(--font-ui);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .tab {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 16px;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 6px 8px;
   border-radius: var(--radius-md);
   border: none;
   background: transparent;
   color: var(--text-meta);
   font-family: var(--font-ui);
-  font-size: var(--text-ui-sm);
+  font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
   min-height: var(--touch-min);
   transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+/* Desktop / small-tablet (≥ sm): restore the roomy left-aligned tab row verbatim. */
+@media (min-width: 40rem) {
+  .nav {
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: var(--text-ui-sm);
+  }
 }
 
 .tab:hover {

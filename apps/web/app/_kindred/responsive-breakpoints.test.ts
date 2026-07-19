@@ -101,6 +101,19 @@ describe("ADR-0024 mobile-first layout is single-sourced (regression)", () => {
     expect(smLayer).toContain("flex-wrap: nowrap");
   });
 
+  it("HubTabs primary nav stays on one line at phone (no wrap) and roomy at ≥ sm", () => {
+    const css = readFileSync(join(APP_DIR, "hub", "HubTabs.module.css"), "utf8");
+    const nav = ruleBlock(css, ".nav");
+    // Base (phone) must never wrap the four primary tabs to a second row — the real-device regression.
+    expect(nav).toContain("flex-wrap: nowrap");
+    // And it must NOT introduce an overflow scroller (which would force overflow-y:auto and clip the
+    // active pill's shadow / focus ring). If a future change adds scroll, it must handle that.
+    expect(nav).not.toContain("overflow-x");
+    // Desktop restores the roomy left-aligned row.
+    const smLayer = css.slice(css.indexOf("@media (min-width: 40rem)"));
+    expect(smLayer).toContain("justify-content: flex-start");
+  });
+
   it("ModalShell surface keeps the cap + scroll + safe-area contract", () => {
     const css = readFileSync(join(APP_DIR, "_kindred", "ModalShell.module.css"), "utf8");
     const surface = ruleBlock(css, ".surface");
