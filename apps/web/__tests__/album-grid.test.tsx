@@ -379,20 +379,80 @@ describe("AlbumGrid filtering (item 9)", () => {
   });
 });
 
+// #191 — the album's controls are laid out through the shared HubToolbar: R1 = [When·Search … Add],
+// R2 = [Family selector … size slider + view layout]. These assert the pieces land, and that the
+// R2-left slot collapses when there are no family chips (HubToolbar's empty-row rule at the call site).
+describe("AlbumGrid HubToolbar layout (#191)", () => {
+  it("renders the When/Search filters, the view controls, and (when passed) Add + family chips", () => {
+    render(
+      <AlbumGrid
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        addSlot={<button type="button">Add Photos</button>}
+      />,
+    );
+    // R1-left: the filter cluster (period select + caption/tag search).
+    expect(screen.getByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
+    // R1-right: the Add Photos affordance.
+    expect(screen.getByRole("button", { name: "Add Photos" })).toBeTruthy();
+    // R2-left: the shared family selector chips.
+    expect(screen.getByTestId("fam-chips")).toBeTruthy();
+    // R2-right: the view/layout controls (size slider + view selector).
+    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: hub.album.thumbnailSizeLabel })).toBeTruthy();
+  });
+
+  it("omits the family chips entirely when none are passed (no reserved R2-left slot)", () => {
+    render(<AlbumGrid photos={ENRICHED} />);
+    // No family chips passed ⇒ the test marker is absent; the view controls still render (R2-right).
+    expect(screen.queryByTestId("fam-chips")).toBeNull();
+    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
+  });
+});
+
 describe("AlbumGrid multi-select + bulk actions (item 6)", () => {
+  // #191 — the standing "Select" toggle is GONE; selection mode is entered by long-pressing a tile.
+  // Enter via a long-press on the first tile, then (still in select mode) tick a second checkbox. Fake
+  // timers are scoped to JUST the long-press so the surrounding test keeps real timers for its awaits.
   function enterSelectionAndPickTwo() {
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
+    const first = screen.getAllByRole("button", { name: /^view /i })[0]!;
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(first);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
     const checks = screen.getAllByRole("checkbox");
-    // Pick the first two tiles.
-    fireEvent.click(checks[0]!);
-    fireEvent.click(checks[1]!);
+    // The long-pressed tile is already checked; add ONE more so exactly two are selected.
+    const secondUnchecked = checks.find((c) => !(c as HTMLInputElement).checked)!;
+    fireEvent.click(secondUnchecked);
   }
 
-  it("entering selection mode shows a checkbox per tile", () => {
+  // #191 — the standing "Select" toggle button no longer exists anywhere in the grid.
+  it("does NOT render a standing 'Select' toggle button", () => {
     render(<AlbumGrid photos={ENRICHED} />);
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: /^select$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^done$/i })).toBeNull();
+  });
+
+  it("entering selection mode (long-press) shows a checkbox per tile", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+      const first = screen.getAllByRole("button", { name: /^view /i })[0]!;
+      fireEvent.pointerDown(first);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("selecting 2 + Ask pushes the ask multi-URL with both subjectPhotoIds", () => {
@@ -428,15 +488,41 @@ describe("AlbumGrid multi-select + bulk actions (item 6)", () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it("suppresses the per-tile hover toolbar while in selection mode", () => {
+  // #191 regression: after a successful bulk delete the grid must LEAVE selection mode (not just empty
+  // the selection). With the standing "Select"/"Done" toggle gone and the bulk bar hidden once the
+  // selection empties, keeping `selecting` true would strand the viewer with checkboxes and no visible
+  // exit. The result note must survive, but the checkboxes must be gone.
+  it("leaves selection mode after a successful bulk delete (no stranded checkboxes; note kept)", async () => {
+    bulkSoftDeleteAlbumPhotosAction.mockResolvedValueOnce({ deleted: 2, failed: 0 });
     render(<AlbumGrid photos={ENRICHED} />);
-    // The compact PhotoActionBar group is present out of selection mode…
-    expect(
-      screen.getAllByRole("group", { name: /Actions for/ }).length,
-    ).toBeGreaterThanOrEqual(1);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
-    // …and gone once selecting.
-    expect(screen.queryAllByRole("group", { name: /Actions for/ })).toHaveLength(0);
+    enterSelectionAndPickTwo();
+    // In selection mode with a bulk bar present.
+    expect(screen.getAllByRole("checkbox").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: hub.album.bulkDelete })); // arm
+    fireEvent.click(screen.getByRole("button", { name: hub.album.bulkDeleteConfirm })); // confirm
+    // Once the action resolves: selection mode is exited (no checkboxes) but the result note remains.
+    await vi.waitFor(() => expect(screen.queryAllByRole("checkbox")).toHaveLength(0));
+    expect(screen.getByText(hub.album.bulkDeleteResult(2, 0))).toBeTruthy();
+  });
+
+  it("suppresses the per-tile hover toolbar while in selection mode", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      // The compact PhotoActionBar group for a specific photo is present out of selection mode…
+      const adaActions = hub.album.photoActionsAria("Ada at the lab");
+      expect(screen.getAllByRole("group", { name: adaActions }).length).toBeGreaterThanOrEqual(1);
+      const first = screen.getAllByRole("button", { name: /^view /i })[0]!;
+      fireEvent.pointerDown(first);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      // …and gone once selecting (the bulk bar's own "Actions for the selected photos" group is a
+      // DIFFERENT label and is expected to appear; we assert only the per-photo toolbars are gone).
+      expect(screen.queryAllByRole("group", { name: adaActions })).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -481,11 +567,41 @@ describe("AlbumGrid long-press + Esc entry (item 3)", () => {
   });
 
   it("Escape cancels selection mode", () => {
-    render(<AlbumGrid photos={ENRICHED} />);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      const first = screen.getAllByRole("button", { name: /^view /i })[0]!;
+      fireEvent.pointerDown(first);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // #191 — with the standing "Select" toggle gone, the bulk bar's Clear is the visible exit from
+  // selection mode (it drops the selection AND leaves select mode; the checkboxes disappear).
+  it("the bulk bar's Clear leaves selection mode (checkboxes disappear)", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={ENRICHED} />);
+      const first = screen.getAllByRole("button", { name: /^view /i })[0]!;
+      fireEvent.pointerDown(first);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      // One photo picked ⇒ the bulk bar (with Clear) is present.
+      expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+      fireEvent.click(screen.getByRole("button", { name: hub.album.bulkClear }));
+      // Selection mode exited: no checkboxes remain.
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -507,23 +623,44 @@ describe("AlbumListView columns (item 7)", () => {
     expect(cells.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("shows a selection checkbox column in the List view when selecting", () => {
-    render(<AlbumGrid photos={[BABBAGE]} />);
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
-    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  // #191 — long-pressing a List row's thumbnail enters selection mode (the Select toggle is gone).
+  it("long-pressing a List row thumbnail enters selection mode with a checkbox column", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={[BABBAGE]} />);
+      fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+      expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+      const row = screen.getByRole("button", { name: hub.album.viewPhoto("Charles by the engine") });
+      fireEvent.pointerDown(row);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+      // The long-pressed row is already picked.
+      expect((screen.getAllByRole("checkbox")[0] as HTMLInputElement).checked).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Cold-review regression (Phase C): the List row's live action toolbar must ALSO be suppressed in
   // selection mode (as the grid tile is), so a tap meant to select can't fire Delete/Ask/Tell.
   it("suppresses the per-row action toolbar in the List view while selecting", () => {
-    render(<AlbumGrid photos={[BABBAGE]} />);
-    fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
-    expect(
-      screen.getAllByRole("group", { name: /Actions for/ }).length,
-    ).toBeGreaterThanOrEqual(1);
-    fireEvent.click(screen.getByRole("button", { name: hub.album.selectMode }));
-    expect(screen.queryAllByRole("group", { name: /Actions for/ })).toHaveLength(0);
+    vi.useFakeTimers();
+    try {
+      render(<AlbumGrid photos={[BABBAGE]} />);
+      fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
+      const charlesActions = hub.album.photoActionsAria("Charles by the engine");
+      expect(screen.getAllByRole("group", { name: charlesActions }).length).toBeGreaterThanOrEqual(1);
+      const row = screen.getByRole("button", { name: hub.album.viewPhoto("Charles by the engine") });
+      fireEvent.pointerDown(row);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      // The per-row toolbar is gone; the bulk bar's own group (a different label) may appear.
+      expect(screen.queryAllByRole("group", { name: charlesActions })).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

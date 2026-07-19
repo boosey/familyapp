@@ -222,17 +222,14 @@ export function AlbumGrid({
       return next;
     });
   }
-  function clearSelection() {
-    setSelected(new Set());
-  }
   function exitSelectMode() {
     setSelecting(false);
     setSelected(new Set());
     setBulkNote(null);
   }
   // Long-press entry (item 3): enter selection mode with this one photo already picked. A no-op if
-  // already selecting (a normal tap toggles then). The visible "Select" toggle does the same, keeping
-  // the affordance discoverable.
+  // already selecting (a normal tap toggles then). This is now the SOLE entry — the standing "Select"
+  // toggle was removed (#191); Esc or the bulk bar's Clear are the way back out.
   function enterSelectAndSelect(id: string) {
     if (selecting) return;
     setSelecting(true);
@@ -273,7 +270,12 @@ export function AlbumGrid({
         return;
       }
       setBulkNote(hub.album.bulkDeleteResult(result.deleted, result.failed));
-      clearSelection();
+      // Leave selection mode entirely once the bulk delete lands (#191). The standing "Select"/"Done"
+      // toggle that used to offer a way out is gone, and the bulk bar hides the moment the selection
+      // empties — so clearing only `selected` (keeping `selecting`) would strand the viewer with empty
+      // checkboxes and no visible exit. Drop BOTH here (but keep the result note we just set).
+      setSelecting(false);
+      setSelected(new Set());
       router.refresh();
     } catch {
       setBulkNote(hub.album.bulkDeleteError);
@@ -304,10 +306,10 @@ export function AlbumGrid({
 
   return (
     <>
-      {/* Search / filter controls. People/Places chips get their own row; When·Search·Clear share ONE
-          row (left) with the view selector, size slider, and a small Select toggle (right, via rightSlot).
-          Multi-select is ALSO reachable by long-pressing a photo (see AlbumTile) — the toggle keeps the
-          affordance discoverable, and Esc cancels selection mode. */}
+      {/* Search / filter controls, laid out through the shared HubToolbar (#191). People/Places chips get
+          their own row above; the toolbar's R1 is [When·Search·Clear … Add Photos] and its R2 is
+          [Family selector … size slider + view layout]. The standalone "Select" toggle was removed
+          (#191): multi-select is entered by LONG-PRESSING a photo (see AlbumTile), and Esc cancels it. */}
       <AlbumFilterBar
         people={peopleOptions}
         places={placeOptions}
@@ -316,33 +318,12 @@ export function AlbumGrid({
         familyChips={familyChips}
         addSlot={addSlot}
         rightSlot={
-          <>
-            <AlbumViewControls
-              view={view}
-              onView={changeView}
-              thumbPx={thumbPx}
-              onThumbPx={changeThumb}
-            />
-            <button
-              type="button"
-              onClick={() => (selecting ? exitSelectMode() : setSelecting(true))}
-              aria-pressed={selecting}
-              style={{
-                minHeight: 40,
-                padding: "6px 14px",
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                fontWeight: 500,
-                color: selecting ? "var(--text-heading)" : "var(--text-body)",
-                background: selecting ? "var(--surface-sunken)" : "transparent",
-                border: "var(--border-width) solid var(--border-strong)",
-                borderRadius: "var(--radius-pill)",
-                cursor: "pointer",
-              }}
-            >
-              {selecting ? hub.album.selectModeDone : hub.album.selectMode}
-            </button>
-          </>
+          <AlbumViewControls
+            view={view}
+            onView={changeView}
+            thumbPx={thumbPx}
+            onThumbPx={changeThumb}
+          />
         }
       />
 
@@ -353,7 +334,10 @@ export function AlbumGrid({
           onAsk={bulkAsk}
           onTell={bulkTell}
           onDelete={bulkDelete}
-          onClear={clearSelection}
+          // #191 — with the standing "Select" toggle removed, the bulk bar's Clear is now the visible
+          // way OUT of selection mode (Esc still works): it drops the selection AND leaves select mode,
+          // so a viewer is never stranded with empty checkboxes and no exit affordance.
+          onClear={exitSelectMode}
           deleting={bulkDeleting}
         />
       ) : null}
@@ -408,6 +392,7 @@ export function AlbumGrid({
           selecting={selecting}
           selectedIds={selected}
           onToggleSelected={toggleSelected}
+          onLongPress={enterSelectAndSelect}
         />
       ) : view === "masonry" ? (
         // Masonry — CSS multi-column so images keep their NATURAL aspect ratio (not forced 1:1). Column
