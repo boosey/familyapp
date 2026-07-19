@@ -14,9 +14,13 @@
  * next/navigation is mocked the same way family-chips.test.tsx does so FamilyChips (a client component
  * using useRouter/usePathname/useSearchParams) renders; `push` doubles as the no-write-back sentinel.
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AsksDesignator, type AsksDesignatorAsk } from "@/app/hub/tabs/AsksDesignator";
+import askStyles from "@/app/hub/tabs/AsksDesignator.module.css";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -118,5 +122,50 @@ describe("AsksDesignator — seed + list scoping (no write-back)", () => {
     );
     expect(screen.queryByRole("group", { name: "Choose a family" })).toBeNull();
     expect(screen.queryByText(/Q about Esposito/)).toBeTruthy();
+  });
+});
+
+describe("AsksDesignator — playful signature (issue #208)", () => {
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../app/hub/tabs/AsksDesignator.module.css"),
+    "utf8",
+  );
+
+  it("renders ask cards with the module card + question classes and an inline --tilt", () => {
+    const { container } = render(
+      <AsksDesignator
+        families={[FAMILIES[0]!]}
+        seedFamilyId="fam-a"
+        asks={[ask("a1", ["fam-a"], "Q about Esposito")]}
+      />,
+    );
+    const card = container.querySelector("li") as HTMLElement;
+    expect(card.className).toContain(askStyles.card);
+    expect(card.style.getPropertyValue("--tilt")).toBe("0.55deg");
+    expect(container.querySelector(`.${askStyles.question}`)).toBeTruthy();
+  });
+
+  it("stickerizes the status pill on a not-yet-listenable ask", () => {
+    const { container } = render(
+      <AsksDesignator
+        families={[FAMILIES[0]!]}
+        seedFamilyId="fam-a"
+        asks={[ask("a1", ["fam-a"], "Q about Esposito")]}
+      />,
+    );
+    expect(container.querySelector(`.${askStyles.status}`)).toBeTruthy();
+  });
+
+  it("module CSS declares the playful signature + suppression blocks", () => {
+    expect(css).toContain(':global(:root[data-skin="playful"])');
+    expect(css).toMatch(/rotate\(var\(--tilt/);
+    expect(css).toContain("var(--tape-bg)");
+    expect(css).toContain("var(--highlighter)");
+    expect(css).toContain("var(--shadow-lift)");
+    // Suppression under reduce-motion OR solemn.
+    expect(css).toContain(':global(:root[data-reduce-motion="on"])');
+    expect(css).toContain(':global([data-tone="solemn"])');
+    expect(css).toMatch(/transform:\s*none/);
+    expect(css).toMatch(/background-image:\s*none/);
   });
 });

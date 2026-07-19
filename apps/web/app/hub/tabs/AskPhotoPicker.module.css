@@ -136,3 +136,20 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* ---- Playful: light-touch hover-lift on the picker tiles (mirrors album thumbnails). Skin-scoped
+   and suppressed under reduce-motion / solemn. No tilt/tape here — a modal grid, not a card list. */
+:global(:root[data-skin="playful"]) .tile {
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+:global(:root[data-reduce-motion="on"]) .tile:hover,
+:global([data-tone="solemn"]) .tile:hover {
+  transform: none;
+  box-shadow: none;
+}
