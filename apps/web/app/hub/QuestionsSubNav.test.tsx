@@ -1,25 +1,31 @@
 // @vitest-environment jsdom
 /**
- * #192 — <QuestionsSubNav> is the Questions surface's adoption of the shared two-row {@link HubToolbar}:
- * the three ask sub-tabs (To answer / Ask / Your asks) render as a shared {@link HubSubNav} pill row in
- * R1-left, with NO R1-right action and NO R2 row (both R2 slots null → HubToolbar's empty-row rule drops
- * the second row entirely, no reserved vertical space). #142's pending-ask badge on "To answer" is
- * preserved, and the routing behaviour (client `router.push`, preserving `?families=`) is unchanged;
- * `useRouter` is mocked to assert the target.
+ * #192 — <QuestionsSubNav> renders the three ask sub-tabs (To answer / Ask / Your asks) as a shared
+ * {@link HubSubNav} pill row. On DESKTOP it sits in the inline {@link HubToolbar} R1-left (no R1-right,
+ * no R2 row). On a PHONE (ADR-0025 device round) it renders in the shared HubControlStrip layout — the
+ * same container Stories' Feed/Timeline modeNav uses — so the two selectors read identically, and the
+ * shortened "Ask" label keeps the three equal-width pills on ONE line. #142's pending-ask badge on "To
+ * answer" and the routing (`router.push`, preserving `?families=`) are unchanged. `useRouter` +
+ * `useIsCompact` are mocked.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { hub } from "@/app/_copy";
+import strip from "./HubControlStrip.module.css";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
+let compact = false;
+vi.mock("@/app/_kindred/useIsCompact", () => ({ useIsCompact: () => compact }));
+
 afterEach(() => {
   cleanup();
   push.mockClear();
+  compact = false;
 });
 
 describe("QuestionsSubNav", () => {
@@ -33,6 +39,33 @@ describe("QuestionsSubNav", () => {
     expect(screen.getByText(hub.shell.questionsSubYourAsks)).toBeTruthy();
     // Button-mode pills (client onSelect nav), not links.
     expect(screen.getByText(hub.shell.questionsSubToAnswer).closest("button")).toBeTruthy();
+  });
+
+  it("uses the short 'Ask' label (not the long 'Ask a question') for the middle pill", () => {
+    render(<QuestionsSubNav active="questions" familiesParam={null} />);
+    expect(hub.shell.questionsSubAsk).toBe("Ask");
+    expect(screen.getByText("Ask")).toBeTruthy();
+    // The long primary-tab label is NOT used here.
+    expect(screen.queryByText("Ask a question")).toBeNull();
+  });
+
+  it("renders in the shared control-strip layout on a phone (matches Stories' modeNav container)", () => {
+    compact = true;
+    const { container } = render(<QuestionsSubNav active="questions" familiesParam={null} />);
+    // The outer element is the shared strip; the pills live in its full-width `.pills` wrapper.
+    const stripEl = container.querySelector(`.${strip.strip}`);
+    expect(stripEl).not.toBeNull();
+    const pills = stripEl!.querySelector(`.${strip.pills}`);
+    expect(pills).not.toBeNull();
+    // The HubSubNav (its three pill buttons) sits inside the pills wrapper.
+    expect(pills!.querySelector("nav")).not.toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+  });
+
+  it("desktop keeps the inline HubToolbar (NOT the strip)", () => {
+    compact = false;
+    const { container } = render(<QuestionsSubNav active="questions" familiesParam={null} />);
+    expect(container.querySelector(`.${strip.strip}`)).toBeNull();
   });
 
   it("renders R1 only — NO R1-right action and NO R2 row", () => {

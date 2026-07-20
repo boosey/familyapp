@@ -25,8 +25,10 @@ export const hub = {
     tabInvite: "Invite",
     tabRequests: "Requests",
     // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
+    // "Ask" (not "Ask a question") so the three equal-width pills fit ONE line at 360px — the long label
+    // wrapped the middle segment to two lines. The primary-tab `tabAsk` keeps the full "Ask a question".
     questionsSubToAnswer: "To answer",
-    questionsSubAsk: "Ask a question",
+    questionsSubAsk: "Ask",
     questionsSubYourAsks: "Your asks",
     questionsSubNavAria: "Question sections",
     // Issue #124 (Playful de-clutter): secondary sub-nav inside the Family primary tab — the tree/
