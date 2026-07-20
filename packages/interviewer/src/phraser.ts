@@ -128,10 +128,19 @@ Curious and warm, never clinical or form-like. Never yes/no.`;
         // Gap-driven follow-up (issue #80): the seed names a SPECIFIC missing fact the narrator
         // did not supply. Still ONE warm question, still non-leading — we ask about the gap, we do
         // NOT assert the missing fact exists. The gapKind hints the angle (when/who/where/why/what).
+        // Temporal gaps (issue #244, ADR-0026) carry extra wording discipline: the question must
+        // explicitly welcome a fuzzy answer and never pressure for an exact date.
+        const temporalGuidance =
+          intent.gapKind === "temporal"
+            ? `\nThis is a WHEN question. Phrase it so an approximate answer is explicitly welcome — a
+year, a season, or a rough period ("sometime in the late forties") is a perfectly good answer,
+along the lines of: "Do you remember about when that was? A year, or even a rough period, is
+fine." NEVER ask for, or imply you need, an exact date.`
+            : "";
         return `Type: FOLLOW-UP that gently fills in a detail the narrator did not mention.
 The missing detail to ask about (a ${intent.gapKind ?? "factual"} gap — do NOT assume the answer,
 just invite it): """${intent.threadSeed}"""
-Ask ONE short, open-ended question that draws out this detail. Reflect their own words where you can.`;
+Ask ONE short, open-ended question that draws out this detail. Reflect their own words where you can.${temporalGuidance}`;
       }
       return `Type: FOLLOW-UP on what the narrator just said.
 The narrator's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):

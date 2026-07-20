@@ -169,7 +169,8 @@ export interface AnchorSource {
 // occurrence is handed to this seam, which persists it (with its user-visible provenance note)
 // through the story repository's `updateDerivedFields` write seam. The loop stays DB-free: prod
 // plugs `createCoreStoryDateSink(db)`; tests use the in-memory mock. An UNRESOLVABLE telling
-// produces no call — and no question (the temporal follow-up is a separate ticket).
+// produces no call — instead the loop proposes its ONE temporal follow-up (issue #244), which is
+// always skippable and never re-asked.
 // ---------------------------------------------------------------------------
 
 export interface PersistResolvedStoryDateInput {

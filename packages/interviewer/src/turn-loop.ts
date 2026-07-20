@@ -10,7 +10,13 @@
  * surface (Phase 1: a thin web page) drives pacing; this module is the brain it consults.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
-import type { BiographicalProfile, FollowUpPolicy, FollowUpType, OccurredKind } from "@chronicle/db";
+import type {
+  BiographicalProfile,
+  FollowUpCandidate,
+  FollowUpPolicy,
+  FollowUpType,
+  OccurredKind,
+} from "@chronicle/db";
 import { resolveStoryDate } from "@chronicle/core";
 import type {
   AnchorSource,
@@ -35,6 +41,7 @@ import {
 } from "./behavior";
 import {
   GAP_DETECTION_MIN_ANSWER_WORDS,
+  GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE,
   MEMORY_LOOKBACK_COUNT,
   RAPPORT_THRESHOLD_TURNS,
 } from "./constants";
@@ -94,6 +101,15 @@ const FOLLOW_UP_TYPE_TO_GAP_KIND: Record<FollowUpType, GapKind> = {
  * nothing and is not persisted.
  */
 const OCCURRENCE_PRECISION_RANK: Record<OccurredKind, number> = { circa: 1, period: 2, date: 3 };
+
+/**
+ * The thread seed of the ONE temporal follow-up the loop may ask for a story whose telling carries
+ * no derivable date (issue #244, ADR-0026). Constant on purpose: once asked, the seed lands in
+ * `askedGapSeeds`, so the existing anti-repeat gate vetoes any re-proposal as a duplicate — the
+ * at-most-once guarantee rides the SAME dispose gates as every other follow-up, with the loop's
+ * own latch (`temporalFollowUpAsked`) as the primary, explicit enforcement.
+ */
+const STORY_DATE_FOLLOW_UP_SEED = "about when this happened";
 
 export interface InterviewSessionOptions {
   narratorPersonId: string;
@@ -160,6 +176,10 @@ export async function createInterviewSession(
   // `lastSpokenText` — the derivation snapshot resets with the session, same as the anchors.
   const tellingParts: string[] = [];
   let persistedDateRank = 0;
+  // The temporal follow-up latch (issue #244): true once a temporal gap follow-up has been ASKED
+  // this session. The session is bound to one activeStoryId, so this is the "at most one per
+  // story" guarantee — a skip or "I don't know" is terminal, the question is never re-asked.
+  let temporalFollowUpAsked = false;
 
   async function nextTurn(): Promise<Turn> {
     const intent = pickNextIntent({ state, pendingAsks, priorStories, anchors, targetAskId: opts.targetAskId });
@@ -176,6 +196,12 @@ export async function createInterviewSession(
     });
     lastSpokenText = phrased.spokenText;
     recordTurnCompleted(state, intent);
+    // Latch the temporal follow-up the moment it is ASKED (issue #244). Any temporal gap follow-up
+    // counts — including one the LLM gap detector (#80) proposed — because asking "when" twice for
+    // the same story is exactly the badgering the at-most-one rule exists to prevent.
+    if (intent.kind === "follow_up" && intent.origin === "gap" && intent.gapKind === "temporal") {
+      temporalFollowUpAsked = true;
+    }
     // Close the relay's first half: notify the source that this Ask has been routed (queued
     // → routed). The DB adapter flips the row so the asker's hub view stops showing
     // `queued`; the in-memory mock no-ops. Best-effort — a failure here must NOT erase the
@@ -289,10 +315,10 @@ export async function createInterviewSession(
   }
 
   /**
-   * Live Story date derivation (issue #243, ADR-0026). Thin and deliberately question-free:
+   * Live Story date derivation (issue #243, ADR-0026). Thin:
    *   - no sink configured, or no activeStoryId bound      → skip (derivation lands dark).
-   *   - resolver returns unresolvable                       → persist nothing, ask nothing (the
-   *                                                           temporal follow-up is a later ticket).
+   *   - resolver returns unresolvable                       → persist nothing; instead propose the
+   *                                                           ONE temporal follow-up (issue #244).
    *   - resolution no more precise than what's persisted    → skip (never downgrade).
    * Otherwise the resolved occurrence is persisted with its provenance note through the sink.
    * The resolver is pure (no LLM, no clock, never throws), but the sink is I/O — so the whole
@@ -309,7 +335,10 @@ export async function createInterviewSession(
         birthDate: anchors?.birthDate ?? null,
         lifeEvents: anchors?.lifeEvents ?? [],
       });
-      if (resolution.status !== "resolved") return;
+      if (resolution.status !== "resolved") {
+        proposeTemporalFollowUp(utterance);
+        return;
+      }
       const rank = OCCURRENCE_PRECISION_RANK[resolution.occurrence.kind];
       if (rank <= persistedDateRank) return;
       await sink.persistResolvedStoryDate({ storyId, occurrence: resolution.occurrence });
@@ -317,6 +346,51 @@ export async function createInterviewSession(
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("story-date derivation failed (narrator=%s):", state.narratorPersonId, e);
+    }
+  }
+
+  /**
+   * The temporal follow-up (issue #244, ADR-0026): when nothing in the telling so far yields a
+   * Story date, the loop may ask — ONCE — "about when was that", phrased to accept a year or a
+   * rough period and never demanding an exact date. The proposal is deterministic (the resolver's
+   * `unresolvable` IS the temporal gap — no LLM call is spent detecting it), but the candidate
+   * rides the ADR-0013 propose-then-dispose gates UNCHANGED: `decideFollowUp` applies the thin-
+   * answer, distress/off-ramp, anti-repeat, confidence, and cap gates like any other candidate.
+   *   - already asked (latched)         → never proposed again; skip / "I don't know" is terminal.
+   *   - a gap follow-up already queued  → the earlier winner keeps the slot; we re-propose on the
+   *     (by this response)                next unresolvable response instead of overriding it.
+   * A usable answer resolves through the normal derivation pass on the next `recordResponse` (the
+   * answer joins the story text so far) and persists with its provenance; an unusable one leaves
+   * the story undated for the pipeline backstop (#246).
+   */
+  function proposeTemporalFollowUp(utterance: string): void {
+    if (temporalFollowUpAsked) return;
+    if (state.pendingGapFollowUp) return;
+    const candidate: FollowUpCandidate = {
+      threadSeed: STORY_DATE_FOLLOW_UP_SEED,
+      type: "temporal",
+      // Low sensitivity so the rapport gate cannot suppress the story's one dating chance; the
+      // confidence is the shared gap-candidate constant (a deterministic gap carries no numeric
+      // self-assessment, exactly like an LLM-detected one).
+      sensitivity: "low",
+      confidence: GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE,
+      narratorOpened: false,
+    };
+    const policy = resolveFollowUpPolicy({ enabled: true, ...deps.followUpPolicy });
+    const decision = decideFollowUp({
+      evaluation: { candidates: [candidate], modelId: "story-date-derivation" },
+      policy,
+      answerWordCount: utterance.trim().split(/\s+/).filter(Boolean).length,
+      // Same deliberate thread/session cap collapse as the gap-detection path above.
+      followUpsAskedInThread: state.gapFollowUpsAskedInSession,
+      followUpsAskedInSession: state.gapFollowUpsAskedInSession,
+      distressed: state.distressed,
+      offRampRequested: state.offRampRequested,
+      rapportEstablished: state.turnCount >= RAPPORT_THRESHOLD_TURNS,
+      alreadyAskedSeeds: state.askedGapSeeds,
+    });
+    if (decision.selected) {
+      state.pendingGapFollowUp = { candidate: decision.selected, gapKind: "temporal" };
     }
   }
 
