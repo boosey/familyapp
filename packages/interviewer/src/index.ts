@@ -9,6 +9,8 @@ export type {
   AnchorSource,
   BiographicalAnchors,
   BiographicalProfile,
+  StoryDateSink,
+  PersistResolvedStoryDateInput,
 } from "./contracts";
 
 export {
@@ -16,6 +18,7 @@ export {
   InMemoryAskSource,
   InMemoryMemorySource,
   InMemoryAnchorSource,
+  InMemoryStoryDateSink,
   ScriptedFollowUpEvaluator,
 } from "./mocks";
 
@@ -69,6 +72,7 @@ export {
   createCoreMemorySource,
   createCoreAnchorSource,
   createCoreAskSource,
+  createCoreStoryDateSink,
 } from "./core-adapters";
 
 export {

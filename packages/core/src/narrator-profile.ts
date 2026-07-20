@@ -46,6 +46,11 @@ export interface NarratorBiographicalContext {
   personId: string;
   spokenName: string;
   birthYear: number | null;
+  /**
+   * Full birth date (ISO YYYY-MM-DD) when known — the primary anchor the Story date resolver
+   * derives age/grade references against (ADR-0026). Nullable; `birthYear` is the coarse mirror.
+   */
+  birthDate: string | null;
   /** `persons.biographical_anchors` jsonb — the typed `BiographicalProfile` fields (hometown,
    *  siblingContext, currentLocation, occupationSummary, hasChildren, hasGrandchildren); read here
    *  as a loose record because this projection predates the typed profile. */
@@ -60,6 +65,7 @@ export async function getNarratorBiographicalContext(
     .select({
       spokenName: persons.spokenName,
       birthYear: persons.birthYear,
+      birthDate: persons.birthDate,
       anchors: persons.biographicalAnchors,
     })
     .from(persons)
@@ -70,6 +76,7 @@ export async function getNarratorBiographicalContext(
     personId,
     spokenName: row.spokenName ?? "",
     birthYear: row.birthYear,
+    birthDate: row.birthDate,
     anchors: (row.anchors ?? {}) as Record<string, unknown>,
   };
 }

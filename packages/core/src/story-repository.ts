@@ -57,6 +57,7 @@ import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
 import { PROCESSING_ERROR_MAX_CHARS } from "./constants";
 import { isRealCalendarDate } from "./person-dob";
+import type { StoryDateOccurrence } from "./resolve-story-date";
 import {
   type AuthContext,
   getStoryForViewer,
@@ -292,6 +293,27 @@ export async function updateDerivedFields(
     .returning();
   if (!row) throw new Error(`story not found: ${storyId}`);
   return row;
+}
+
+/**
+ * Persist a resolver-derived Story date (ADR-0026) through the `updateDerivedFields` write
+ * seam. This is the derivation path's one write shape — the interviewer's live pass and the
+ * pipeline backstop both call it, so a derived value always lands with its user-visible
+ * provenance note. Unlike `editStoryDate` (a human correction), derivation carries no actor and
+ * appends no revision row: the value is derived/regenerable metadata, and the provenance note
+ * IS the audit trail ("age 8 at Christmas, from birthdate").
+ */
+export async function applyResolvedStoryDate(
+  db: Database,
+  storyId: string,
+  occurrence: StoryDateOccurrence,
+): Promise<Story> {
+  return updateDerivedFields(db, storyId, {
+    occurredKind: occurrence.kind,
+    occurredDate: occurrence.date,
+    occurredEndDate: occurrence.endDate,
+    occurredProvenance: occurrence.provenance,
+  });
 }
 
 /**

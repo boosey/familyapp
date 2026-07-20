@@ -39,7 +39,14 @@ const COMPLETE_PROFILE: BiographicalProfile = {
 // Anchors with a fully-populated profile so the picker has NO intake field to collect and — with no
 // pending Asks / prior stories — falls through to the follow_up slot, where a queued gap surfaces.
 function completeAnchors(): BiographicalAnchors {
-  return { personId: NARRATOR, spokenName: "Eleanor", birthYear: 1942, profile: { ...COMPLETE_PROFILE } };
+  return {
+    personId: NARRATOR,
+    spokenName: "Eleanor",
+    birthYear: 1942,
+    birthDate: null,
+    lifeEvents: [],
+    profile: { ...COMPLETE_PROFILE },
+  };
 }
 
 const cand = (over: Partial<FollowUpCandidate> = {}): FollowUpCandidate => ({
@@ -245,6 +252,8 @@ describe("gap-driven follow-up in the controlled loop", () => {
       personId: NARRATOR,
       spokenName: "Eleanor",
       birthYear: 1942,
+      birthDate: null,
+      lifeEvents: [],
       profile: {
         hometown: null,
         siblingContext: null,

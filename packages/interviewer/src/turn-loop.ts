@@ -10,7 +10,8 @@
  * surface (Phase 1: a thin web page) drives pacing; this module is the brain it consults.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
-import type { BiographicalProfile, FollowUpPolicy, FollowUpType } from "@chronicle/db";
+import type { BiographicalProfile, FollowUpPolicy, FollowUpType, OccurredKind } from "@chronicle/db";
+import { resolveStoryDate } from "@chronicle/core";
 import type {
   AnchorSource,
   AskSource,
@@ -18,6 +19,7 @@ import type {
   FollowUpEvaluator,
   MemorySource,
   PriorStoryMemory,
+  StoryDateSink,
   Voice,
   VoiceSpeakResult,
 } from "./contracts";
@@ -58,6 +60,14 @@ export interface InterviewerDeps {
   followUpEvaluator?: FollowUpEvaluator;
   /** Optional policy override for gap follow-ups; defaults to `resolveFollowUpPolicy({enabled:true})`. */
   followUpPolicy?: Partial<FollowUpPolicy>;
+  /**
+   * Optional persistence seam for live Story date derivation (issue #243). When present AND the
+   * session was opened with `activeStoryId`, every non-intake response is run through the pure
+   * `resolveStoryDate` (over the story text so far, against the anchors' birthDate + lifeEvents)
+   * and a resolved occurrence is persisted with its provenance note. Omit either to keep the
+   * session derivation-free (the feature lands dark by default, like the gap evaluator).
+   */
+  storyDateSink?: StoryDateSink;
   /** Optional fixed voice id, so the persona is the same every session (a dignity requirement). */
   voiceId?: string;
 }
@@ -77,10 +87,24 @@ const FOLLOW_UP_TYPE_TO_GAP_KIND: Record<FollowUpType, GapKind> = {
   emotional: "identity",
 };
 
+/**
+ * Precision rank of a Story date form (ADR-0026 precedence: date > period > circa). Live
+ * derivation persists monotonically: a later take may REFINE the date (period → date) but never
+ * downgrade it — the resolver never invents precision, so a less precise later resolution adds
+ * nothing and is not persisted.
+ */
+const OCCURRENCE_PRECISION_RANK: Record<OccurredKind, number> = { circa: 1, period: 2, date: 3 };
+
 export interface InterviewSessionOptions {
   narratorPersonId: string;
   /** When set, the session was opened via a notification deeplink for this specific Ask. */
   targetAskId?: string;
+  /**
+   * The draft Story this session's tellings are contributing to (issue #243). Required for live
+   * date derivation: a resolved Story date is persisted against this id through the
+   * `storyDateSink` seam. Omit for sessions that are not telling into a draft.
+   */
+  activeStoryId?: string;
 }
 
 export interface Turn {
@@ -130,6 +154,12 @@ export async function createInterviewSession(
   // The question the last served turn actually spoke — the prompt context gap detection reads so it
   // knows what the narrator was answering. Null until the first turn is served.
   let lastSpokenText: string | null = null;
+
+  // Live Story date derivation (issue #243): the story text so far, and the precision rank of the
+  // best occurrence already persisted this session (0 = nothing persisted). Session-scoped like
+  // `lastSpokenText` — the derivation snapshot resets with the session, same as the anchors.
+  const tellingParts: string[] = [];
+  let persistedDateRank = 0;
 
   async function nextTurn(): Promise<Turn> {
     const intent = pickNextIntent({ state, pendingAsks, priorStories, anchors, targetAskId: opts.targetAskId });
@@ -181,6 +211,7 @@ export async function createInterviewSession(
     const key = pendingIntakeKey;
     if (key === null) {
       await detectAndQueueGapFollowUp(utterance);
+      await deriveAndPersistStoryDate(utterance);
     }
 
     pendingIntakeKey = null;
@@ -254,6 +285,38 @@ export async function createInterviewSession(
       // Gap detection is best-effort — a failure or timeout must never break the session.
       // eslint-disable-next-line no-console
       console.warn("gap-detection follow-up failed (narrator=%s):", state.narratorPersonId, e);
+    }
+  }
+
+  /**
+   * Live Story date derivation (issue #243, ADR-0026). Thin and deliberately question-free:
+   *   - no sink configured, or no activeStoryId bound      → skip (derivation lands dark).
+   *   - resolver returns unresolvable                       → persist nothing, ask nothing (the
+   *                                                           temporal follow-up is a later ticket).
+   *   - resolution no more precise than what's persisted    → skip (never downgrade).
+   * Otherwise the resolved occurrence is persisted with its provenance note through the sink.
+   * The resolver is pure (no LLM, no clock, never throws), but the sink is I/O — so the whole
+   * step is best-effort: a failure must never break the session.
+   */
+  async function deriveAndPersistStoryDate(utterance: string): Promise<void> {
+    const sink = deps.storyDateSink;
+    const storyId = opts.activeStoryId;
+    if (!sink || !storyId) return;
+    tellingParts.push(utterance);
+    try {
+      const resolution = resolveStoryDate({
+        text: tellingParts.join("\n"),
+        birthDate: anchors?.birthDate ?? null,
+        lifeEvents: anchors?.lifeEvents ?? [],
+      });
+      if (resolution.status !== "resolved") return;
+      const rank = OCCURRENCE_PRECISION_RANK[resolution.occurrence.kind];
+      if (rank <= persistedDateRank) return;
+      await sink.persistResolvedStoryDate({ storyId, occurrence: resolution.occurrence });
+      persistedDateRank = rank;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("story-date derivation failed (narrator=%s):", state.narratorPersonId, e);
     }
   }
 

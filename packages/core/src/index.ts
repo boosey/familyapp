@@ -37,6 +37,7 @@ export {
   persistRecordingAndCreateDraft,
   createTextDraft,
   updateDerivedFields,
+  applyResolvedStoryDate,
   transitionStoryState,
   markStoryProcessingFailed,
   beginStoryRetry,
@@ -92,6 +93,9 @@ export {
   type StoryDateResolution,
   type LifeEventAnchor,
 } from "./resolve-story-date";
+// ADR-0026: the Life event read side — the reusable anchors derivation resolves against. The
+// write side lands with life-event capture from tellings (#245).
+export { listLifeEventsForPerson } from "./life-events";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";
 // ADR-0016 (tree renderer): card color only, mirrors `TreeNode.sex`.

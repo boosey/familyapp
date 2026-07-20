@@ -12,7 +12,9 @@ import type {
   FollowUpEvaluator,
   MemorySource,
   PendingAsk,
+  PersistResolvedStoryDateInput,
   PriorStoryMemory,
+  StoryDateSink,
   Voice,
   VoiceSpeakInput,
   VoiceSpeakResult,
@@ -114,5 +116,18 @@ export class ScriptedFollowUpEvaluator implements FollowUpEvaluator {
     const idx = this.calls.length;
     this.calls.push(input);
     return { candidates: this.script[idx] ?? [], modelId: this.modelId };
+  }
+}
+
+/**
+ * Records every resolved Story date the loop persists, in order — the assertion point for live
+ * date derivation (issue #243): a self-dating telling lands here with its occurrence and
+ * provenance note; an unresolvable telling never produces a call.
+ */
+export class InMemoryStoryDateSink implements StoryDateSink {
+  readonly persisted: PersistResolvedStoryDateInput[] = [];
+
+  async persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void> {
+    this.persisted.push(input);
   }
 }

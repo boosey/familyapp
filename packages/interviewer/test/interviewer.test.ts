@@ -45,6 +45,8 @@ function makeAnchors(): BiographicalAnchors {
     personId: NARRATOR,
     spokenName: "Eleanor",
     birthYear: 1942,
+    birthDate: null,
+    lifeEvents: [],
     profile: { ...EMPTY_PROFILE, hometown: "Iowa" },
   };
 }
@@ -54,6 +56,8 @@ function anchorsWith(profile: Partial<BiographicalProfile> = {}): BiographicalAn
     personId: "p1",
     spokenName: "Eleanor",
     birthYear: 1943,
+    birthDate: null,
+    lifeEvents: [],
     profile: { ...EMPTY_PROFILE, ...profile },
   };
 }
@@ -67,6 +71,8 @@ const COMPLETE_ANCHORS: BiographicalAnchors = {
   personId: NARRATOR,
   spokenName: "Eleanor",
   birthYear: 1942,
+  birthDate: null,
+  lifeEvents: [],
   profile: { hometown: "Iowa", siblingContext: "Oldest of three", currentLocation: "Des Moines", occupationSummary: "Schoolteacher", hasChildren: false, hasGrandchildren: null },
 };
 
@@ -425,6 +431,8 @@ describe("BiographicalAnchors — typed profile", () => {
       personId: "p1",
       spokenName: "Eleanor",
       birthYear: 1943,
+      birthDate: null,
+      lifeEvents: [],
       profile: { ...EMPTY_PROFILE, hometown: "New Orleans", hasChildren: true },
     });
     const anchors = await source.loadForNarrator("p1");
@@ -439,6 +447,8 @@ describe("BiographicalAnchors — typed profile", () => {
       personId: "p1",
       spokenName: "Eleanor",
       birthYear: 1943,
+      birthDate: null,
+      lifeEvents: [],
       profile: { ...EMPTY_PROFILE, hometown: "New Orleans" },
     });
     await source.writeProfileField("p1", "siblingContext", "Youngest of three");
@@ -612,7 +622,7 @@ describe("extractIntakeAnswer", () => {
 describe("Turn loop — deeplink + intake extraction", () => {
   function freshAnchors() {
     const a = new InMemoryAnchorSource();
-    a.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943, profile: EMPTY_PROFILE });
+    a.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943, birthDate: null, lifeEvents: [], profile: EMPTY_PROFILE });
     return a;
   }
   it("serves deeplink ask on turn 0 even with prior stories", async () => {
@@ -650,7 +660,7 @@ describe("Turn loop — deeplink + intake extraction", () => {
 
   it("recordResponse after a non-intake turn does not invoke the extractor", async () => {
     const anchors = new InMemoryAnchorSource();
-    anchors.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943,
+    anchors.set({ personId: "p1", spokenName: "Eleanor", birthYear: 1943, birthDate: null, lifeEvents: [],
       profile: { hometown: "a", siblingContext: "b", currentLocation: "c", occupationSummary: "d", hasChildren: false, hasGrandchildren: null } });
     const llm = new ScriptedLanguageModel({ respond: "Tell me about a childhood meal." });
     const s = await createInterviewSession(
