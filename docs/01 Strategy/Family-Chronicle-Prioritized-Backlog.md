@@ -34,18 +34,20 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 
 ## The sequenced backlog (build in this order)
 
-| Seq | Epic | /100 | What it is |
-|:-:|---|:-:|---|
-| **P0** | **Mobile-web responsive layouts** | 74 | *Preempting-defect override* (2026-07-19). The `/s` narrator capture surface and every `/hub` tab ship with **zero `@media` breakpoints** — desktop-first fixed widths that overflow/wrap on a phone. This is a regression against the wedge's founding premise (zero-app, elder taps a link on their phone), so it preempts #1: every downstream loop bet (ask-back, receipt, onboarding, interviewer) would otherwise be validated on an unusable surface. Build order within it: `/s` capture → `/hub` tabs → onboarding/Ask. |
-| **1** | **Clerk go-live** | 77 | Live auth (acceptance + live keys). *Prerequisite override* — without it no real family exists to validate with. |
-| **2** | **Follow-up questions on published stories** | 89 | The "asks-back" arm of the core loop; the Roadmap's highest-leverage trigger. |
-| **3** | **Basic story receipt / payoff** | 83 | The family receives and *feels* the story — the "family is moved" hypothesis. |
-| **4** | **Narrator onboarding / setup-by-a-relative** | 80 | Getting the elder set up — the first adoption barrier. |
-| **5** | **Richer AI interviewer + gap-detection** | 80 | Deeper sessions so stories are "good enough that family cares." |
-| **6** | **Capture reliability & job-failure recovery** | 66 | A failed recording kills trust in the wedge. |
-| **7** | **Notification-delivery capability** | 60 | The enabler for loop-event pings (→ 8). |
-| **8** | **Loop-event pings** | 74 | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
-| **9** | **Album & upload hardening** | 60 | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
+*Status refresh 2026-07-20: P0 (mobile-web v1) declared complete by the owner — ADR-0025 Phases A+B merged (PRs #226/#231/#232), issue #230 closed. Items 1–7 had already shipped; **the front of the queue is now #8, loop-event pings.***
+
+| Seq | Epic | /100 | Status (2026-07-20) | What it is |
+|:-:|---|:-:|---|---|
+| **P0** | **Mobile-web responsive layouts** | 74 | ✅ Shipped (ADR-0025 A+B, PRs #226/#231/#232) | *Preempting-defect override* (2026-07-19). The `/s` narrator capture surface and every `/hub` tab ship with **zero `@media` breakpoints** — desktop-first fixed widths that overflow/wrap on a phone. This is a regression against the wedge's founding premise (zero-app, elder taps a link on their phone), so it preempts #1: every downstream loop bet (ask-back, receipt, onboarding, interviewer) would otherwise be validated on an unusable surface. Build order within it: `/s` capture → `/hub` tabs → onboarding/Ask. |
+| **1** | **Clerk go-live** | 77 | ✅ Shipped | Live auth (acceptance + live keys). *Prerequisite override* — without it no real family exists to validate with. |
+| **2** | **Follow-up questions on published stories** | 89 | ✅ Shipped (#77) | The "asks-back" arm of the core loop; the Roadmap's highest-leverage trigger. |
+| **3** | **Basic story receipt / payoff** | 83 | ✅ Shipped (#78) | The family receives and *feels* the story — the "family is moved" hypothesis. |
+| **4** | **Narrator onboarding / setup-by-a-relative** | 80 | ✅ Shipped (#79) | Getting the elder set up — the first adoption barrier. |
+| **5** | **Richer AI interviewer + gap-detection** | 80 | ✅ Shipped (#80) | Deeper sessions so stories are "good enough that family cares." |
+| **6** | **Capture reliability & job-failure recovery** | 66 | ✅ Shipped (#11) | A failed recording kills trust in the wedge. |
+| **7** | **Notification-delivery capability** | 60 | ✅ Shipped for invites (`@chronicle/notifications`, PR #102); loop events not yet wired | The enabler for loop-event pings (→ 8). |
+| **8** | **Loop-event pings** | 74 | ⬅ **NEXT** | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
+| **9** | **Album & upload hardening** | 60 | Mostly shipped (EXIF #17/#21, thumbnails #139); residual perf items #218/#219 open | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
 
 **Three sequencing overrides** the raw score doesn't capture: **mobile-web responsive layouts** preempts everything (P0) — it scores only 74 but is a hard precondition for validating *any* loop bet on the phone-first surface families actually use, the same logic that lifts Clerk go-live above its score; **Clerk go-live** jumps to #1 as a hard prerequisite (nothing downstream is learnable without live families, despite its low *learning* score); **notification-delivery** precedes its higher-scoring **loop-event pings** on the capability edge.
 
