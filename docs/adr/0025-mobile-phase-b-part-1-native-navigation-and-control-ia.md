@@ -59,9 +59,16 @@ Load-bearing choices (in dependency order):
   action label is what yields.
 
 - **Collapse-on-scroll top bar.** A slim top app-bar (small family name + account avatar) shows at
-  scroll-top and slides away as the viewer scrolls into content; the control strip stays sticky. This
-  is what actually delivers reclaimed vertical space rather than relocating chrome. The family name is
-  NOT dropped entirely — it still orients multi-family (`·`-joined) viewers when they land.
+  scroll-top and slides away as the viewer scrolls into content. This is what actually delivers
+  reclaimed vertical space rather than relocating chrome. The family name is NOT dropped entirely — it
+  still orients multi-family (`·`-joined) viewers when they land.
+  - **Amendment (2026-07-20, post Increment-2 device rounds): the control strip is NON-sticky** — it is
+    normal top-matter that scrolls away with the content (scroll back up to reach filters/sub-tabs).
+    The original "strip stays sticky" was reversed by the owner: a second sticky element coexisting with
+    the `transform`-collapsing header is exactly the interaction that caused two of Increment 2's three
+    on-device bugs (a `transform` ancestor becomes the containing block for `position:fixed`/sticky
+    descendants; two `top:0` stickies fight). Primary nav (the fixed bottom bar) is always reachable, so
+    the strip need not be. Revisit stickiness as a later polish once the icon sheets are proven.
 
 - **Icon set: `lucide-react`.** Already installed and already the `_kindred` icon primitive
   (`KindredListenBar`, `KindredVoiceButton`). Inline SVG React components, stroked with `currentColor`

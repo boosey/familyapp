@@ -46,15 +46,16 @@ layered at `min-width`). Devtools-green is NOT done.
 - **Guard test:** extend `responsive-breakpoints.test.ts` / add a structural test that the bottom bar
   mounts only compact and carries all 4 tab keys.
 
-## Increment 2 — collapse-on-scroll top app-bar
+## Increment 2 — collapse-on-scroll top app-bar — DONE (device-verified 2026-07-20)
 
-- **Goal:** slim top bar (small family name + account avatar) visible at scroll-top, slides away on
-  scroll-down, control strip stays sticky.
-- **Approach:** scroll-direction hook (throttled; respects `prefers-reduced-motion` → no animate, just
-  present); family name uses the existing `·`-joined multi-family string. Account avatar reuses the
-  global `AccountMenuMount` (already fixed top-right) — reconcile so they don't double up.
-- **Watch:** scroll-trap / rubber-band on iOS; the sticky control strip must not jump when the bar
-  collapses (reserve/animate height).
+- **Goal:** slim top bar (small family name) visible at scroll-top, slides away on scroll-down.
+- **Shipped as:** `CollapsingHeader` (owns the whole `<header>`, sticky top:0, hides via transform) +
+  pure `scroll-direction.ts` reducer + `useScrollDirection`. Two device-round fixes: (1) portal the
+  fixed `BottomTabBar` to `document.body` — the header's `transform`/`will-change` made it the
+  containing block for the fixed bar; (2) asymmetric hysteresis (hide 8px, reveal 64px from deepest
+  point) — the symmetric 6px reveal false-fired on iOS momentum settle-back / toolbar re-expand.
+- **Control strip decision (amended):** the strip is **NON-sticky** (see ADR-0025 amendment). No sticky
+  coexistence with the transformed header.
 
 ## Increment 3 — control strip (per-icon sheets + iconified action)
 
@@ -70,6 +71,14 @@ layered at `min-width`). Devtools-green is NOT done.
     - Filter ← `SearchField` + album date/facet/size + any per-tab facets.
   - Icons render only when their sheet has content (Questions → no View/Filter).
   - Action button: iconified on the compact branch (`✎`/`＋`/`👤+`), labeled on desktop.
+- **Sequencing (build reference-tab-first, not all four blind):** Step A — build the shared `IconSheet`
+  primitive + the non-sticky control-strip layout, wired into **Stories only** (it exercises all three
+  icons + the Tell action). Device-verify. Step B — replicate to Album, Family, Questions once the
+  contract is proven. During Step A the other tabs keep the existing single `⚙` gear (a coherent
+  intermediate); the set must be uniform before #232 merges.
+- **Non-sticky (amended):** the strip scrolls away with content — no sticky/fixed element under the
+  transformed header (that's what caused Inc-2 bugs). If any sheet trigger ever needs fixed/sticky, it
+  must portal out (see the coupling landmine in `HubPrimaryNav`/`page.module.css`).
 - **Watch:** the 360px budget — pills + 3 labeled icons + icon-action must not overflow (the reason the
   action label yields); Family main-tab vs Family-selector glyph must differ.
 
