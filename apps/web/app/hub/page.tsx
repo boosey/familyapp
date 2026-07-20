@@ -280,9 +280,6 @@ export default async function HubPage({
           <div className={styles.titleRow}>
             <div className={styles.titleGroup}>
               <div>
-                <p className={styles.familyEyebrow}>
-                  {hub.shell.familyEyebrow(activeFamilies.length)}
-                </p>
                 <h1 className={styles.familyName}>
                   {familyName}
                 </h1>

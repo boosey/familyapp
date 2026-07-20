@@ -56,10 +56,6 @@ export const hub = {
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
-    // Playful mockup (Direction D): mono eyebrow above the family name in the hub header. `n` is the
-    // number of active families the viewer has stories across; singular/plural handled.
-    familyEyebrow: (n: number) =>
-      `YOUR FAMILY · ${n} ${n === 1 ? "FAMILY" : "FAMILIES"}`,
   },
   // ADR-0024 mobile pass — the "Filters & view" bottom sheet that hides secondary hub-toolbar controls
   // (search, family chips, view/layout toggles, album date/facet filters + size slider) behind one
