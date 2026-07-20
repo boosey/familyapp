@@ -81,6 +81,15 @@ export {
   type TagStorySubjectInput,
   type TagStorySubjectResult,
 } from "./story-repository";
+// ADR-0026: the pure Story date resolver — (story text, narrator birthdate, known life events)
+// → resolved occurrence | unresolvable. Shared by the interviewer and the pipeline backstop.
+export {
+  resolveStoryDate,
+  type ResolveStoryDateInput,
+  type StoryDateOccurrence,
+  type StoryDateResolution,
+  type LifeEventAnchor,
+} from "./resolve-story-date";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";
 // ADR-0016 (tree renderer): card color only, mirrors `TreeNode.sex`.
