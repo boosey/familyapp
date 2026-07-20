@@ -1,8 +1,7 @@
 "use client";
 
-import type { ComponentType } from "react";
-import { BookOpen, Images, Users, MessageCircleQuestion } from "lucide-react";
 import { hub } from "@/app/_copy";
+import { TAB_ICONS } from "./HubTabs";
 import type { HubTab } from "./HubTabs";
 import { AccountSheet, type AccountSheetProps } from "./AccountSheet";
 import styles from "./BottomTabBar.module.css";
@@ -18,14 +17,6 @@ import { BOTTOM_BAR_ICON_SIZE } from "./bottom-tab-bar-constants";
  *
  * Presentational: tab navigation is delegated to `onChange` (the wrapper maps it to `router.push`).
  */
-
-// lucide glyph per primary tab key (ADR-0025). Icons stroke with `currentColor`.
-const TAB_ICONS: Record<string, ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>> = {
-  stories: BookOpen,
-  album: Images,
-  family: Users,
-  questions: MessageCircleQuestion,
-};
 
 export interface BottomTabBarProps {
   /** The four primary tabs (Stories · Album · Family · Questions) — same array HubTabs receives. */

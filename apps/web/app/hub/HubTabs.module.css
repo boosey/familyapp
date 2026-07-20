@@ -10,10 +10,11 @@
  * primary nav reads as broken and steals vertical space above the fold). `nowrap` + `space-between`
  * spreads them edge-to-edge; each tab shrinks its font (0.9375rem) and padding (6/8px) from the
  * desktop values so all four — including the badged "Questions" — fit with slack even at the 360px
- * floor (measured worst-case ≈310px against ≈328px available). No `overflow-x` here on purpose: with
- * four fixed short labels that provably fit, a scroll container is unnecessary AND `overflow-x` would
- * force `overflow-y` to compute to `auto`, clipping the active tab's raised-pill shadow and the
- * focus-visible outline. Desktop's roomy tabs are restored at `sm`. */
+ * floor. No `overflow-x` here on purpose: with four fixed short labels that provably fit, a scroll
+ * container is unnecessary AND `overflow-x` would force `overflow-y` to compute to `auto`, clipping
+ * the active tab's raised-pill shadow and the focus-visible outline. Desktop's roomy tabs are
+ * restored at `sm`. (In practice the phone never sees this row: the compact branch of HubPrimaryNav
+ * portals the BottomTabBar instead — these base styles only cover the SSR/first-paint snapshot.) */
 .nav {
   display: flex;
   align-items: center;
@@ -74,6 +75,12 @@
 .tab:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* The tab glyph (lucide, shared with BottomTabBar via TAB_ICONS). `flex: none` so the icon never
+ * shrinks when the tab's `min-width: 0` flex-shrinking kicks in on a tight row. */
+.icon {
+  flex: none;
 }
 
 .badge {
