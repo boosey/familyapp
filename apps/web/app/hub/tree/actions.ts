@@ -248,6 +248,8 @@ export async function linkExistingMemberAction(
   existingPersonId: string,
   relation: AddRelativeRelation,
   anchorPersonId?: string,
+  /** Optional second parent when relation=child (same semantics as addRelative). */
+  coParentPersonId?: string,
 ): Promise<LinkExistingMemberActionResult> {
   beginLogContext();
   const scoped = await resolveFamilyScopedActor(familyId);
@@ -260,12 +262,17 @@ export async function linkExistingMemberAction(
   }
   const anchor =
     typeof anchorPersonId === "string" && anchorPersonId.trim() ? anchorPersonId.trim() : undefined;
+  const coParent =
+    relation === "child" && typeof coParentPersonId === "string" && coParentPersonId.trim()
+      ? coParentPersonId.trim()
+      : undefined;
   try {
     const result = await linkExistingMember(scoped.db, scoped.ctx, {
       familyId,
       relation,
       existingPersonId,
       ...(anchor ? { anchorPersonId: anchor } : {}),
+      ...(coParent ? { coParentPersonId: coParent } : {}),
     });
     if (!result.allowed) {
       plogError("tree", "linkExistingMember: not allowed", { family: familyId, reason: result.reason });

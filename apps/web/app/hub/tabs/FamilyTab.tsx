@@ -210,6 +210,8 @@ export function FamilyTab({
               // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
               // its DEFAULT so it stays mountable without a router in unit tests.
               navigate={(url) => router.push(url)}
+              unplacedMembers={unplaced}
+              onFamilyMutation={() => router.refresh()}
             />
             {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
           </div>
