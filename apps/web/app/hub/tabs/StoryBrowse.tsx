@@ -246,7 +246,7 @@ function Timeline({
                   key={item.id}
                   item={item}
                   href={href(item)}
-                  year={item.occurredLabel ?? String(item.eraYear)}
+                  year={item.occurredLabel ?? hub.browse.undated}
                 />
               ))}
             </div>
@@ -348,7 +348,7 @@ function SearchResult({ item, href, query }: { item: StoryItem; href: string; qu
       <div className={styles.searchResultHead}>
         <span className={styles.searchResultTitle}>{item.title}</span>
         <span className={styles.searchResultEra}>
-          {item.occurredLabel ?? item.eventLabel ?? hub.browse.undated}
+          {item.eventLabel ?? hub.browse.undated}
         </span>
       </div>
       {item.summary ? (

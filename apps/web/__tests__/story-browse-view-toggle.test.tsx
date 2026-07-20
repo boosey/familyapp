@@ -42,7 +42,7 @@ function makeItem(id: string): StoryItem {
     tags: [],
     personId: "p1",
     personName: "Eleanor",
-    eraYear: null,
+    occurredDate: null,
     eraLabel: null,
     eventLabel: null,
     occurredLabel: null,

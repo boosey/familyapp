@@ -13,7 +13,7 @@ function makeItem(id: string, coverPhotoId: string | null, photoIds: string[]): 
     tags: [],
     personId: "p",
     personName: "P",
-    eraYear: null,
+    occurredDate: null,
     eraLabel: null,
     eventLabel: null,
     occurredLabel: null,

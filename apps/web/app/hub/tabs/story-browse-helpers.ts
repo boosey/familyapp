@@ -11,12 +11,12 @@ import type { StoryItem } from "./story-browse-types";
 export interface DecadeGroup {
   /** Mono uppercase decade label, e.g. "1950s". */
   label: string;
-  /** Stories about that decade, ascending by era year (chronological within the decade). */
+  /** Stories about that decade, ascending by Story date (chronological within the decade). */
   items: StoryItem[];
 }
 
 /** The Timeline split: dated stories grouped by decade (ascending, empty decades dropped) and the
- *  always-shown Undated bucket (stories with `eraYear === null`). */
+ *  always-shown Undated bucket (stories with `occurredDate === null`). */
 export interface TimelineGroups {
   groups: DecadeGroup[];
   undated: StoryItem[];
@@ -142,27 +142,29 @@ export function resolveGalleryPhotoIds(
   return storyPhotos.get(storyId) ?? [];
 }
 
-/** The decade label a story's era falls in, e.g. 1958 → "1950s". */
-function decadeLabelOf(eraYear: number): string {
-  return `${Math.floor(eraYear / 10) * 10}s`;
+/** The decade label a Story date falls in, e.g. 1958 → "1950s". */
+function decadeLabelOf(year: number): string {
+  return `${Math.floor(year / 10) * 10}s`;
 }
 
 /**
  * Split `items` into decade groups (dated) and the Undated bucket. Dated stories are grouped by the
- * decade of `eraYear`, groups are ordered ascending, empty decades are dropped, and stories within a
- * decade are ordered ascending by era year. Undated stories (`eraYear === null`) keep their incoming
- * order (the feed's reverse-chronological order).
+ * decade of their Story date (`occurredDate` — ADR-0026: always the sort key), groups are ordered
+ * ascending, empty decades are dropped, and stories within a decade are ordered ascending by the
+ * ISO date (lexicographic = chronological). Undated stories (`occurredDate === null`, or an
+ * unparseable value) keep their incoming order (the feed's reverse-chronological order).
  */
 export function groupByDecade(items: StoryItem[]): TimelineGroups {
   const undated: StoryItem[] = [];
   const byDecade = new Map<string, StoryItem[]>();
 
   for (const item of items) {
-    if (item.eraYear === null) {
+    const year = item.occurredDate ? parseIsoDate(item.occurredDate)?.y : undefined;
+    if (year === undefined) {
       undated.push(item);
       continue;
     }
-    const label = decadeLabelOf(item.eraYear);
+    const label = decadeLabelOf(year);
     const bucket = byDecade.get(label);
     if (bucket) bucket.push(item);
     else byDecade.set(label, [item]);
@@ -173,8 +175,8 @@ export function groupByDecade(items: StoryItem[]): TimelineGroups {
     .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10))
     .map(([label, bucket]) => ({
       label,
-      // Non-null era years within a dated bucket; ascending, stable for equal years.
-      items: [...bucket].sort((a, b) => (a.eraYear ?? 0) - (b.eraYear ?? 0)),
+      // Non-null ISO dates within a dated bucket; ascending, stable for equal dates.
+      items: [...bucket].sort((a, b) => (a.occurredDate ?? "").localeCompare(b.occurredDate ?? "")),
     }));
 
   return { groups, undated };

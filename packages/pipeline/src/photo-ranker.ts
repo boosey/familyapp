@@ -2,13 +2,14 @@
  * Story Imagery — deterministic photo-suggestion ranker (ADR-0009, Phase 4 · Slice A).
  *
  * A cheap, PURE engine that ranks a draft story's candidate album photos by
- * (caption-text overlap ∪ EXIF-capture-date proximity to the story's era year), plus a
+ * (caption-text overlap ∪ EXIF-capture-date proximity to the story's occurred date), plus a
  * caption-driven "add this photo?" nudge decision. No DB, no AI, no vendor SDKs, no clock,
  * no randomness — same inputs always produce identical output.
  *
- * Degradation is the COMMON case: `eraYear` is frequently null (nothing auto-derives it) and
- * `exifCapturedAt` is commonly null (EXIF often stripped). Both arms must no-op gracefully; when
- * nothing scores, the output preserves the input (recency) order with `score: 0`.
+ * Degradation is the COMMON case: `occurredDate` is frequently null (a story can be Undated — a
+ * first-class state) and `exifCapturedAt` is commonly null (EXIF often stripped). Both arms must
+ * no-op gracefully; when nothing scores, the output preserves the input (recency) order with
+ * `score: 0`.
  *
  * The reserved `PhotoUnderstanding` vision seam (contracts.ts) is deliberately NOT consumed here —
  * a future subscription-gated ranker will use it; the v1 ranker is deterministic-only.
@@ -16,7 +17,7 @@
 
 export const PHOTO_RANK_CAPTION_WEIGHT = 1.0;
 export const PHOTO_RANK_YEAR_WEIGHT = 0.5;
-/** Years of EXIF-vs-era distance beyond which the year arm contributes nothing. */
+/** Years of EXIF-vs-story-date distance beyond which the year arm contributes nothing. */
 export const PHOTO_RANK_YEAR_WINDOW = 10;
 /** Minimum caption-token overlap for `pickPhotoNudge` to surface a suggestion. */
 export const PHOTO_NUDGE_MIN_OVERLAP = 1;
@@ -29,7 +30,12 @@ export interface PhotoCandidate {
 
 export interface StorySignals {
   text: string;
-  eraYear: number | null;
+  /**
+   * The story's occurred date (ADR-0026) as an ISO calendar date (YYYY-MM-DD) — the point for
+   * `date`/`circa`, the span start for `period`. Null when the story is Undated: the year arm is
+   * then inert. Only its YEAR is compared against EXIF capture years.
+   */
+  occurredDate: string | null;
 }
 
 export interface RankedPhoto {
@@ -39,7 +45,7 @@ export interface RankedPhoto {
   score: number;
   /** Count of shared meaningful tokens between story text and caption. */
   captionOverlap: number;
-  /** 0..1 closeness of EXIF year to era year, or null when no usable date signal. */
+  /** 0..1 closeness of EXIF year to the story date's year, or null when no usable date signal. */
   yearProximity: number | null;
 }
 
@@ -78,6 +84,14 @@ function captionOverlapCount(queryTokens: Set<string>, caption: string | null): 
   return n;
 }
 
+/** The year an ISO calendar date (YYYY-MM-DD) carries, or null when absent/malformed. Parsed by
+ *  hand so no Date/timezone conversion can shift it. */
+function yearOf(iso: string | null): number | null {
+  if (!iso) return null;
+  const match = /^(\d{4})-\d{2}-\d{2}$/.exec(iso);
+  return match ? Number(match[1]) : null;
+}
+
 /**
  * Rank candidate photos for a draft story. Output length ALWAYS equals input length (no candidate
  * is ever dropped). Sorted by `score` DESC; ties broken by original input index ASC (candidates
@@ -88,14 +102,14 @@ export function rankPhotosForStory(
   candidates: PhotoCandidate[],
 ): RankedPhoto[] {
   const queryTokens = tokenize(signals.text);
-  const eraYear = signals.eraYear;
+  const occurredYear = yearOf(signals.occurredDate);
 
   const ranked = candidates.map((c, idx) => {
     const captionOverlap = captionOverlapCount(queryTokens, c.caption);
 
     let yearProximity: number | null = null;
-    if (eraYear != null && c.exifCapturedAt != null) {
-      const distance = Math.abs(c.exifCapturedAt.getUTCFullYear() - eraYear);
+    if (occurredYear != null && c.exifCapturedAt != null) {
+      const distance = Math.abs(c.exifCapturedAt.getUTCFullYear() - occurredYear);
       yearProximity = Math.max(0, 1 - distance / PHOTO_RANK_YEAR_WINDOW);
     }
 

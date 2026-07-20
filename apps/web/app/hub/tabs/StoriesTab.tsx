@@ -43,11 +43,12 @@ interface StoriesTabProps {
   intakeIncomplete?: boolean;
 }
 
-/** The era a story is ABOUT, when known: "1962 · MARCH" with a place note, else "1962". Null when
- *  the story has no era year (it becomes an Undated Timeline entry). */
-function eventLabelOf(eraYear: number | null, eraLabel: string | null): string | null {
-  if (eraYear === null) return null;
-  return eraLabel ? `${eraYear} · ${eraLabel.toUpperCase()}` : `${eraYear}`;
+/** The card/search display label: the Story date's smart label ("1962", "c. 1949", "Sep 1951 –
+ *  Jun 1955") with the narrator's place note appended, uppercased ("1962 · NAPLES"). Null when the
+ *  story is Undated. */
+function eventLabelOf(occurredLabel: string | null, eraLabel: string | null): string | null {
+  if (occurredLabel === null) return null;
+  return eraLabel ? `${occurredLabel} · ${eraLabel.toUpperCase()}` : occurredLabel;
 }
 
 /**
@@ -74,7 +75,15 @@ export function StoriesTab({
     slot.stories.map((story) => {
       // Recency for the reverse-chronological feed order: most-recently approved (or created) first.
       const sortDate = story.approvedAt ?? story.createdAt;
-      const eraYear = story.eraYear ?? null;
+      // The Story date (ADR-0026) drives every date read on this surface: the smart label, the
+      // date·place event label, and the Timeline sort/bucket key.
+      const occurredLabel = story.occurredKind
+        ? formatStoryDate({
+            kind: story.occurredKind,
+            date: story.occurredDate ?? "",
+            endDate: story.occurredEndDate,
+          })
+        : null;
       const item: StoryItem = {
         id: story.id,
         title: story.title ?? hub.stories.untitled,
@@ -83,16 +92,10 @@ export function StoriesTab({
         tags: story.tags ?? [],
         personId: slot.person.id,
         personName: slot.person.spokenName ?? "",
-        eraYear,
+        occurredDate: story.occurredKind ? (story.occurredDate ?? null) : null,
         eraLabel: story.eraLabel ?? null,
-        eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),
-        occurredLabel: story.occurredKind
-          ? formatStoryDate({
-              kind: story.occurredKind,
-              date: story.occurredDate ?? "",
-              endDate: story.occurredEndDate,
-            })
-          : null,
+        eventLabel: eventLabelOf(occurredLabel, story.eraLabel ?? null),
+        occurredLabel,
         families: familyTargets.get(story.id) ?? [],
         coverPhotoId: resolveCoverPhotoId(storyCovers, story.id),
         photoIds: resolveGalleryPhotoIds(storyPhotos, story.id),

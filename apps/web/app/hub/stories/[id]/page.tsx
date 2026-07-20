@@ -26,30 +26,24 @@ function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function eraLabel(eraYear: number | null, eraPlace: string | null): string {
-  if (eraYear != null && eraPlace) return `${eraYear} · ${eraPlace}`;
-  if (eraYear != null) return String(eraYear);
-  return hub.browse.undated;
-}
-
 /**
- * The header date line: the ADR-0026 Story date (smart-display via `formatStoryDate`) when the
- * story carries one, else the legacy eraYear/eraLabel display until the read switchover (#247).
+ * The header date line: the ADR-0026 Story date (smart-display via `formatStoryDate`), with the
+ * narrator's place note (`era_label`, untouched by the migration) appended when one was given —
+ * "1962 · Naples". A story with no Story date is Undated (a first-class state).
  */
 function storyDateLabel(
-  story: Pick<
-    Story,
-    "occurredKind" | "occurredDate" | "occurredEndDate" | "eraYear" | "eraLabel"
-  >,
+  story: Pick<Story, "occurredKind" | "occurredDate" | "occurredEndDate" | "eraLabel">,
 ): string {
+  const place = story.eraLabel ?? null;
   if (story.occurredKind) {
-    return formatStoryDate({
+    const date = formatStoryDate({
       kind: story.occurredKind,
       date: story.occurredDate ?? "",
       endDate: story.occurredEndDate,
     });
+    return place ? `${date} · ${place}` : date;
   }
-  return eraLabel(story.eraYear ?? null, story.eraLabel ?? null);
+  return hub.browse.undated;
 }
 
 export default async function StoryDetailPage({

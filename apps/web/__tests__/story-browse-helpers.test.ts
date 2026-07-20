@@ -25,7 +25,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     tags: over.tags ?? [],
     personId: over.personId ?? "p1",
     personName: over.personName ?? "Someone",
-    eraYear: over.eraYear ?? null,
+    occurredDate: over.occurredDate ?? null,
     eraLabel: over.eraLabel ?? null,
     eventLabel: over.eventLabel ?? null,
     occurredLabel: over.occurredLabel ?? null,
@@ -110,10 +110,10 @@ describe("formatStoryDate (ADR-0026 smart display)", () => {
 describe("groupByDecade", () => {
   it("groups dated stories by decade ascending, drops empty decades, and separates the undated", () => {
     const items = [
-      makeItem({ id: "a", eraYear: 1958 }),
-      makeItem({ id: "b", eraYear: 2005 }),
-      makeItem({ id: "c", eraYear: 1963 }),
-      makeItem({ id: "u1", eraYear: null }),
+      makeItem({ id: "a", occurredDate: "1958-01-01" }),
+      makeItem({ id: "b", occurredDate: "2005-01-01" }),
+      makeItem({ id: "c", occurredDate: "1963-01-01" }),
+      makeItem({ id: "u1", occurredDate: null }),
     ];
     const { groups, undated } = groupByDecade(items);
 
@@ -124,11 +124,12 @@ describe("groupByDecade", () => {
     expect(undated.map((i) => i.id)).toEqual(["u1"]);
   });
 
-  it("orders stories within a decade ascending by era year", () => {
+  it("orders stories within a decade ascending by Story date (the occurred_date sort key)", () => {
     const items = [
-      makeItem({ id: "later", eraYear: 1968 }),
-      makeItem({ id: "earlier", eraYear: 1961 }),
-      makeItem({ id: "mid", eraYear: 1965 }),
+      makeItem({ id: "later", occurredDate: "1968-01-01" }),
+      makeItem({ id: "earlier", occurredDate: "1961-01-01" }),
+      // A true period sorts on its start (ADR-0026: occurred_date is always the sort key).
+      makeItem({ id: "mid", occurredDate: "1965-09-05" }),
     ];
     const { groups } = groupByDecade(items);
     expect(groups).toHaveLength(1);
@@ -136,18 +137,24 @@ describe("groupByDecade", () => {
   });
 
   it("returns an empty undated bucket (not undefined) when every story is dated", () => {
-    const { groups, undated } = groupByDecade([makeItem({ id: "a", eraYear: 1980 })]);
+    const { groups, undated } = groupByDecade([makeItem({ id: "a", occurredDate: "1980-01-01" })]);
     expect(groups).toHaveLength(1);
     expect(undated).toEqual([]);
   });
 
   it("returns no groups but keeps the undated stories when nothing is dated", () => {
     const { groups, undated } = groupByDecade([
-      makeItem({ id: "u1", eraYear: null }),
-      makeItem({ id: "u2", eraYear: null }),
+      makeItem({ id: "u1", occurredDate: null }),
+      makeItem({ id: "u2", occurredDate: null }),
     ]);
     expect(groups).toEqual([]);
     expect(undated.map((i) => i.id)).toEqual(["u1", "u2"]);
+  });
+
+  it("treats an unparseable occurredDate as Undated (never throws)", () => {
+    const { groups, undated } = groupByDecade([makeItem({ id: "bad", occurredDate: "not-a-date" })]);
+    expect(groups).toEqual([]);
+    expect(undated.map((i) => i.id)).toEqual(["bad"]);
   });
 });
 

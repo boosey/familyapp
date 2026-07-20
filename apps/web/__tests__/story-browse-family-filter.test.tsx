@@ -45,7 +45,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     tags: over.tags ?? [],
     personId: over.personId ?? "p1",
     personName: over.personName ?? "Eleanor",
-    eraYear: over.eraYear ?? null,
+    occurredDate: over.occurredDate ?? null,
     eraLabel: over.eraLabel ?? null,
     eventLabel: over.eventLabel ?? null,
     occurredLabel: over.occurredLabel ?? null,
@@ -57,11 +57,11 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
   };
 }
 
-/** A story targeting BOTH families, one targeting only A, one targeting only B — with era years so
- *  they land in the dated Timeline sections (not the always-present Undated section). */
-const both = makeItem({ id: "s-AB", title: "Story AB", families: [famA, famB], eraYear: 1962, summary: "wedding" });
-const onlyA = makeItem({ id: "s-A", title: "Story A only", families: [famA], eraYear: 1971, summary: "the storm" });
-const onlyB = makeItem({ id: "s-B", title: "Story B only", families: [famB], eraYear: 1988, summary: "the move" });
+/** A story targeting BOTH families, one targeting only A, one targeting only B — with Story dates
+ *  so they land in the dated Timeline sections (not the always-present Undated section). */
+const both = makeItem({ id: "s-AB", title: "Story AB", families: [famA, famB], occurredDate: "1962-01-01", summary: "wedding" });
+const onlyA = makeItem({ id: "s-A", title: "Story A only", families: [famA], occurredDate: "1971-01-01", summary: "the storm" });
+const onlyB = makeItem({ id: "s-B", title: "Story B only", families: [famB], occurredDate: "1988-01-01", summary: "the move" });
 const items = [both, onlyA, onlyB];
 
 /**
@@ -111,7 +111,7 @@ function typeSearch(q: string) {
 describe("StoryBrowse — family tag labels", () => {
   it("a story card's family tag shows the steward-set short name in place of the formal name (ADR-0021)", () => {
     const shortFam: ViewerFamily = { id: "fam-s", name: "The Esposito Family", shortName: "Espositos" };
-    const item = makeItem({ id: "s-short", title: "Story short", families: [shortFam], eraYear: 1962 });
+    const item = makeItem({ id: "s-short", title: "Story short", families: [shortFam], occurredDate: "1962-01-01" });
     render(
       <StoryBrowse
         items={[item]}

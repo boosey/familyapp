@@ -204,6 +204,13 @@
       "when": 1784575561691,
       "tag": "0028_past_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784586000000,
+      "tag": "0029_era_year_backfill",
+      "breakpoints": true
     }
   ]
 }

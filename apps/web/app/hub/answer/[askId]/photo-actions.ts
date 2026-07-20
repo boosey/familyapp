@@ -154,9 +154,9 @@ export async function loadStoryPhotoEditorAction(
     const { rows: cappedCandidates, capped } = capAlbumUnion(candidates);
     if (capped) warnAlbumCapHit("story-photo-editor", ALBUM_PHOTO_QUERY_CAP, candidates.length);
 
-    // Silent, deterministic ranking (ADR-0009 Phase 4 · Slice A): caption-overlap ∪ era-year
-    // proximity. Usually there is no signal (eraYear/exif null) → recency order is preserved, so the
-    // picker looks exactly as it did before and `nudge` is null.
+    // Silent, deterministic ranking (ADR-0009 Phase 4 · Slice A): caption-overlap ∪ story-date
+    // proximity. Usually there is no signal (story Undated / EXIF null) → recency order is
+    // preserved, so the picker looks exactly as it did before and `nudge` is null.
     const signals: StorySignals = {
       text: [
         story.title,
@@ -169,7 +169,7 @@ export async function loadStoryPhotoEditorAction(
       ]
         .filter(Boolean)
         .join(" "),
-      eraYear: story.eraYear,
+      occurredDate: story.occurredDate ?? null,
     };
     const ranked = rankPhotosForStory(signals, cappedCandidates);
     const album: EditorAlbumPhoto[] = ranked.map((r) => ({ photoId: r.id, caption: r.caption }));

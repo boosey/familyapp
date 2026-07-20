@@ -41,17 +41,24 @@ export interface StoryItem {
   tags: string[];
   personId: string;
   personName: string;
-  /** The year the story is ABOUT. Null → the story is Undated (its own Timeline section). */
-  eraYear: number | null;
+  /**
+   * The Story date's ISO calendar date (YYYY-MM-DD) — the point for `date`/`circa`, the span start
+   * for `period` (ADR-0026: always the sort key). Null → the story is Undated (its own Timeline
+   * section). The Timeline buckets and orders on this; it never claims more precision than the
+   * story's `occurredLabel` carries.
+   */
+  occurredDate: string | null;
   /** Optional place/era note the narrator gave, e.g. "Naples" / "Cherry Street". */
   eraLabel: string | null;
-  /** Combined era·place display label, e.g. "1962 · MARCH". Null when the story is undated. */
+  /**
+   * Combined date·place display label, e.g. "1962 · MARCH": the `occurredLabel` plus the uppercased
+   * `eraLabel` place note when one was given. Null when the story is undated.
+   */
   eventLabel: string | null;
   /**
    * The Story date smart-display label (ADR-0026) via `formatStoryDate` — "1943", "December 1943",
-   * "the 1940s", "Sep 1951 – Jun 1955", "c. 1949". Null when the story has no `occurred_*` value;
-   * renderers then fall back to the legacy `eventLabel`/`eraYear` display until the read
-   * switchover (#247).
+   * "the 1940s", "Sep 1951 – Jun 1955", "c. 1949". Null when the story has no `occurred_*` value
+   * (Undated). The Timeline row's year column shows this.
    */
   occurredLabel: string | null;
   /**

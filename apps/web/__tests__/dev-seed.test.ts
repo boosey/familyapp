@@ -32,6 +32,7 @@ import {
 import { listOutstandingAnswerDrafts } from "@chronicle/core";
 import { InMemoryMediaStorage } from "@chronicle/storage";
 import { seedInto } from "../lib/dev-seed";
+import { formatStoryDate } from "../app/hub/tabs/story-browse-helpers";
 
 async function seededDb() {
   const db = await createTestDatabase();
@@ -166,6 +167,58 @@ describe("dev seed — Eleanor's question queue", () => {
       .where(eq(stories.id, result.draftStoryId!));
     expect(typeof row?.prose).toBe("string");
     expect((row?.prose ?? "").length).toBeGreaterThan(0);
+  });
+});
+
+describe("dev seed — Story date spread (ADR-0026, #247)", () => {
+  it("seeds a date/period/circa/undated spread so the Timeline is demonstrable", async () => {
+    const { db } = await seededDb();
+    const rows = await db
+      .select({
+        kind: stories.occurredKind,
+        date: stories.occurredDate,
+        endDate: stories.occurredEndDate,
+        provenance: stories.occurredProvenance,
+        eraYear: stories.eraYear,
+      })
+      .from(stories);
+
+    const dated = rows.filter((r) => r.kind !== null);
+    const kinds = new Set(dated.map((r) => r.kind));
+    // One of each form…
+    expect(kinds).toEqual(new Set(["date", "circa", "period"]));
+    // …including a TRUE period (a span, not a year-aligned one)…
+    expect(
+      dated.some((r) => r.kind === "period" && r.endDate !== null && r.endDate!.slice(0, 4) !== r.date!.slice(0, 4)),
+    ).toBe(true);
+    // …and at least one first-class Undated story.
+    expect(rows.some((r) => r.kind === null)).toBe(true);
+    // Every derived seed date records its provenance (user-visible, ADR-0026).
+    expect(dated.every((r) => typeof r.provenance === "string" && r.provenance.length > 0)).toBe(true);
+    // The legacy era_year column is no longer populated by the seed (reads switched over; the
+    // column itself retires in the contract ticket).
+    expect(rows.every((r) => r.eraYear === null)).toBe(true);
+  });
+
+  it("seeded dates smart-display as their forms (year period → the bare year)", async () => {
+    const { db } = await seededDb();
+    const rows = await db
+      .select({
+        kind: stories.occurredKind,
+        date: stories.occurredDate,
+        endDate: stories.occurredEndDate,
+      })
+      .from(stories);
+
+    const labels = rows
+      .filter((r) => r.kind !== null)
+      .map((r) => formatStoryDate({ kind: r.kind!, date: r.date!, endDate: r.endDate }));
+    expect(labels).toContain("April 6, 1979"); // exact date
+    expect(labels).toContain("1977"); // year-aligned period displays as the year
+    expect(labels).toContain("1981"); // year-aligned period displays as the year
+    expect(labels).toContain("Jan 1987 – Dec 1991"); // true period
+    expect(labels).toContain("c. 1961"); // circa
+    expect(labels).not.toContain("Undated");
   });
 });
 

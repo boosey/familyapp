@@ -30,7 +30,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     tags: over.tags ?? [],
     personId: over.personId ?? "p1",
     personName: over.personName ?? "Eleanor",
-    eraYear: over.eraYear ?? null,
+    occurredDate: over.occurredDate ?? null,
     eraLabel: over.eraLabel ?? null,
     eventLabel: over.eventLabel ?? null,
     occurredLabel: over.occurredLabel ?? null,
