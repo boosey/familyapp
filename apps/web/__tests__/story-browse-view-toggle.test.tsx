@@ -45,6 +45,7 @@ function makeItem(id: string): StoryItem {
     eraYear: null,
     eraLabel: null,
     eventLabel: null,
+    occurredLabel: null,
     families: [famA],
     isNew: false,
     coverPhotoId: null,

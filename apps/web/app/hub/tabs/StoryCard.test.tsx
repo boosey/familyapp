@@ -16,6 +16,7 @@ const item: StoryItem = {
   eraYear: 1962,
   eraLabel: "Naples",
   eventLabel: "1962 · NAPLES",
+  occurredLabel: null,
   families: [{ id: "f1", name: "Boudreaux", shortName: "B" }],
   isNew: true,
   coverPhotoId: "ph1",

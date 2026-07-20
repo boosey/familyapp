@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { StoriesSurface } from "./StoriesSurface";
-import { resolveCoverPhotoId, resolveGalleryPhotoIds } from "./story-browse-helpers";
+import { formatStoryDate, resolveCoverPhotoId, resolveGalleryPhotoIds } from "./story-browse-helpers";
 import type { SelfDraft, StoryItem, ViewerFamily } from "./story-browse-types";
 import type { MemberWithStories } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
@@ -86,6 +86,13 @@ export function StoriesTab({
         eraYear,
         eraLabel: story.eraLabel ?? null,
         eventLabel: eventLabelOf(eraYear, story.eraLabel ?? null),
+        occurredLabel: story.occurredKind
+          ? formatStoryDate({
+              kind: story.occurredKind,
+              date: story.occurredDate ?? "",
+              endDate: story.occurredEndDate,
+            })
+          : null,
         families: familyTargets.get(story.id) ?? [],
         coverPhotoId: resolveCoverPhotoId(storyCovers, story.id),
         photoIds: resolveGalleryPhotoIds(storyPhotos, story.id),

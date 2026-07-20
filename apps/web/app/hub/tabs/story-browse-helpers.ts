@@ -3,6 +3,8 @@
  * any DOM/query dependency so they can be unit-tested in isolation (see
  * apps/web/__tests__/story-browse-helpers.test.ts).
  */
+import type { OccurredKind } from "@chronicle/db";
+import { hub } from "@/app/_copy";
 import type { StoryItem } from "./story-browse-types";
 
 /** A decade bucket for the Timeline, e.g. label "1950s" holding the stories about that decade. */
@@ -25,6 +27,80 @@ export interface Highlight {
   before: string;
   match: string;
   after: string;
+}
+
+// ---------------------------------------------------------------------------
+// Story date display (ADR-0026)
+// ---------------------------------------------------------------------------
+
+/** A Story date as the read path carries it: the form plus ISO calendar dates (YYYY-MM-DD). */
+export interface StoryDate {
+  kind: OccurredKind;
+  /** The point for `date`/`circa`; the span start for `period`. */
+  date: string;
+  /** The span end — set only for `period`. */
+  endDate?: string | null;
+}
+
+const MONTH_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+const MONTH_SHORT = MONTH_LONG.map((m) => m.slice(0, 3));
+
+/** Parse an ISO calendar date (YYYY-MM-DD) into parts, or null when malformed. Parsed by hand so
+ *  no Date/timezone conversion can shift the day. */
+function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const parts = { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
+  if (parts.m < 1 || parts.m > 12 || parts.d < 1 || parts.d > 31) return null;
+  return parts;
+}
+
+function lastDayOfMonth(y: number, m: number): number {
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/** "December 25, 1943" — the full point form. */
+function formatPoint(p: { y: number; m: number; d: number }): string {
+  return `${MONTH_LONG[p.m - 1]} ${p.d}, ${p.y}`;
+}
+
+/**
+ * The smart-display label for a Story date (ADR-0026): never claims more precision than the form
+ * carries. Exact date → "December 25, 1943"; period aligned to a year → "1943", to a month →
+ * "December 1943", to a decade → "the 1940s", any other span → "Sep 1951 – Jun 1955"; circa →
+ * "c. 1949"; null (or an unparseable value) → Undated.
+ */
+export function formatStoryDate(occurred: StoryDate | null): string {
+  if (!occurred) return hub.browse.undated;
+  const start = parseIsoDate(occurred.date);
+  if (!start) return hub.browse.undated;
+
+  if (occurred.kind === "date") return formatPoint(start);
+  if (occurred.kind === "circa") return `c. ${start.y}`;
+
+  // period
+  const end = occurred.endDate ? parseIsoDate(occurred.endDate) : null;
+  if (!end || end.y < start.y || (end.y === start.y && (end.m < start.m || (end.m === start.m && end.d < start.d)))) {
+    // Defensive: a period without a usable end renders as its start point.
+    return formatPoint(start);
+  }
+  if (start.y === end.y && start.m === end.m && start.d === end.d) return formatPoint(start);
+  if (start.m === 1 && start.d === 1 && end.m === 12 && end.d === 31) {
+    if (start.y === end.y) return `${start.y}`;
+    if (start.y % 10 === 0 && end.y === start.y + 9) return `the ${start.y}s`;
+  }
+  if (
+    start.y === end.y &&
+    start.m === end.m &&
+    start.d === 1 &&
+    end.d === lastDayOfMonth(end.y, end.m)
+  ) {
+    return `${MONTH_LONG[start.m - 1]} ${start.y}`;
+  }
+  return `${MONTH_SHORT[start.m - 1]} ${start.y} – ${MONTH_SHORT[end.m - 1]} ${end.y}`;
 }
 
 /** Up to two leading initials, uppercased, e.g. "Eleanor Boudreaux" → "EB". Falls back to "?". */

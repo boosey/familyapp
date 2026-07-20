@@ -192,6 +192,23 @@ export const proseRevisionLevelEnum = pgEnum("prose_revision_level", [
   "human_metadata_edit",
 ]);
 
+/**
+ * ADR-0026: the three forms a Story date (when the events took place) can take. `date` is a
+ * stated or derived point; `period` is a true span with start and end (a bare year, month, or
+ * decade is a period aligned to that calendar boundary); `circa` is an approximate point. NULL on
+ * the column means Undated — a first-class state, never a fabricated date.
+ */
+export const occurredKindEnum = pgEnum("occurred_kind", ["date", "circa", "period"]);
+
+/** ADR-0026: the milestone kinds a Life event can be — the reusable anchors for date derivation. */
+export const lifeEventKindEnum = pgEnum("life_event_kind", [
+  "wedding",
+  "graduation",
+  "military_service",
+  "move",
+  "other",
+]);
+
 // ---------------------------------------------------------------------------
 // BiographicalProfile — compile-time type for persons.biographical_anchors (JSONB).
 // ---------------------------------------------------------------------------
@@ -612,6 +629,18 @@ export const stories = pgTable(
     eraYear: integer("era_year"),
     /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
     eraLabel: text("era_label"),
+    // --- Story date (ADR-0026): when the story's events took place, in one of three forms ---
+    /** The form of the Story date. NULL = Undated (a first-class state). */
+    occurredKind: occurredKindEnum("occurred_kind"),
+    /** The point for `date`/`circa`; the span start for `period`. Always the sort key. */
+    occurredDate: date("occurred_date"),
+    /** The span end. Set only for `period`. */
+    occurredEndDate: date("occurred_end_date"),
+    /**
+     * Human-readable note recording HOW the date was derived, e.g. "age 8 at Christmas, from
+     * birthdate". User-visible — a wrong inference is a displayed, correctable fact, not a hidden one.
+     */
+    occurredProvenance: text("occurred_provenance"),
     // --- provenance ---
     /** The question that prompted this story. */
     promptQuestion: text("prompt_question"),
@@ -665,6 +694,42 @@ export const stories = pgTable(
     index("stories_owner_idx").on(t.ownerPersonId),
     index("stories_state_idx").on(t.state),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// LifeEvent — a dated milestone in a Person's life (wedding, graduation, military service, move,
+// other) in the same three-form occurrence shape as the Story date (ADR-0026). Life events are the
+// reusable ANCHORS the interviewer resolves relative date references against ("ten years after we
+// married" → wedding + 10y); `persons.birth_date` is the primary anchor, these cover the rest.
+// Written ONLY as a by-product of story-date capture (no profile/onboarding entry surface in v1).
+// Person-adjacent biographical data — like the persons table itself, it lives in the OPEN schema.
+// ---------------------------------------------------------------------------
+
+export const lifeEvents = pgTable(
+  "life_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The Person whose milestone this is. Recorded on the narrator who stated it (no mirroring). */
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    kind: lifeEventKindEnum("kind").notNull(),
+    /** The form of the event's date — same three forms as the Story date. */
+    occurredKind: occurredKindEnum("occurred_kind").notNull(),
+    /** The point for `date`/`circa`; the span start for `period`. */
+    occurredDate: date("occurred_date").notNull(),
+    /** The span end. Set only for `period`. */
+    occurredEndDate: date("occurred_end_date"),
+    /** Human-readable note recording how the date was derived, e.g. "stated in a story follow-up". */
+    occurredProvenance: text("occurred_provenance"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("life_events_person_idx").on(t.personId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -1843,6 +1908,8 @@ export type StoryRecording = typeof storyRecordings.$inferSelect;
 export type NewStoryRecording = typeof storyRecordings.$inferInsert;
 export type FollowUpDecisionRow = typeof followUpDecisions.$inferSelect;
 export type NewFollowUpDecisionRow = typeof followUpDecisions.$inferInsert;
+export type LifeEvent = typeof lifeEvents.$inferSelect;
+export type NewLifeEvent = typeof lifeEvents.$inferInsert;
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type PersonOrigin = (typeof personOriginEnum.enumValues)[number];
@@ -1851,6 +1918,8 @@ export type MembershipRole = (typeof membershipRoleEnum.enumValues)[number];
 export type MembershipStatus = (typeof membershipStatusEnum.enumValues)[number];
 export type StoryState = (typeof storyStateEnum.enumValues)[number];
 export type StoryKind = (typeof storyKindEnum.enumValues)[number];
+export type OccurredKind = (typeof occurredKindEnum.enumValues)[number];
+export type LifeEventKind = (typeof lifeEventKindEnum.enumValues)[number];
 export type AudienceTier = (typeof audienceTierEnum.enumValues)[number];
 export type MediaKind = (typeof mediaKindEnum.enumValues)[number];
 export type ConsentAction = (typeof consentActionEnum.enumValues)[number];

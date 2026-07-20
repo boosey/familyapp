@@ -16,6 +16,7 @@ function makeItem(id: string, coverPhotoId: string | null, photoIds: string[]): 
     eraYear: null,
     eraLabel: null,
     eventLabel: null,
+    occurredLabel: null,
     families: [],
     isNew: false,
     coverPhotoId,

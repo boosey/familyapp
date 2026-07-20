@@ -48,6 +48,13 @@ export interface StoryItem {
   /** Combined era·place display label, e.g. "1962 · MARCH". Null when the story is undated. */
   eventLabel: string | null;
   /**
+   * The Story date smart-display label (ADR-0026) via `formatStoryDate` — "1943", "December 1943",
+   * "the 1940s", "Sep 1951 – Jun 1955", "c. 1949". Null when the story has no `occurred_*` value;
+   * renderers then fall back to the legacy `eventLabel`/`eraYear` display until the read
+   * switchover (#247).
+   */
+  occurredLabel: string | null;
+  /**
    * Families this story is targeted to, ALREADY INTERSECTED with the viewer's active families
    * (display-safety — a card never names a family the viewer isn't in). May be empty.
    */

@@ -11,9 +11,11 @@ import {
   getFavoriteState,
   getLikeState,
 } from "@chronicle/core";
+import type { Story } from "@chronicle/db";
 import { getRuntime } from "@/lib/runtime";
 import { markStorySeen, loadStoryFamilyTargets, loadViewerFamilies } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
+import { formatStoryDate } from "@/app/hub/tabs/story-browse-helpers";
 import { StoryDetailClient } from "./StoryDetailClient";
 import { loadTagSuggestionsAction } from "@/app/hub/tag-suggestions-actions";
 
@@ -28,6 +30,26 @@ function eraLabel(eraYear: number | null, eraPlace: string | null): string {
   if (eraYear != null && eraPlace) return `${eraYear} · ${eraPlace}`;
   if (eraYear != null) return String(eraYear);
   return hub.browse.undated;
+}
+
+/**
+ * The header date line: the ADR-0026 Story date (smart-display via `formatStoryDate`) when the
+ * story carries one, else the legacy eraYear/eraLabel display until the read switchover (#247).
+ */
+function storyDateLabel(
+  story: Pick<
+    Story,
+    "occurredKind" | "occurredDate" | "occurredEndDate" | "eraYear" | "eraLabel"
+  >,
+): string {
+  if (story.occurredKind) {
+    return formatStoryDate({
+      kind: story.occurredKind,
+      date: story.occurredDate ?? "",
+      endDate: story.occurredEndDate,
+    });
+  }
+  return eraLabel(story.eraYear ?? null, story.eraLabel ?? null);
 }
 
 export default async function StoryDetailPage({
@@ -117,7 +139,7 @@ export default async function StoryDetailPage({
         audienceTier={story.audienceTier}
         updatedAt={story.updatedAt ? story.updatedAt.toISOString() : ""}
         narratorName={narratorName}
-        eraLabelStr={eraLabel(story.eraYear ?? null, story.eraLabel ?? null)}
+        eraLabelStr={storyDateLabel(story)}
         recordingMediaId={story.recordingMediaId}
         viewerFamilies={viewerFamilies}
         initialTargetFamilies={targets}

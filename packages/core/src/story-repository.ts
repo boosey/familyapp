@@ -45,6 +45,7 @@ import type {
   ConsentRecord,
   Database,
   Media,
+  OccurredKind,
   ProseRevision,
   ProseRevisionLevel,
   Story,
@@ -250,6 +251,15 @@ export interface DerivedFields {
   eraYear?: number | null;
   /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
   eraLabel?: string | null;
+  // --- Story date (ADR-0026): when the story's events took place, in one of three forms ---
+  /** The form of the Story date (`date` | `circa` | `period`); null marks the story Undated. */
+  occurredKind?: OccurredKind | null;
+  /** ISO calendar date (YYYY-MM-DD): the point for `date`/`circa`, the span start for `period`. */
+  occurredDate?: string | null;
+  /** ISO calendar date — the span end. Set only for `period`. */
+  occurredEndDate?: string | null;
+  /** Human-readable note recording HOW the date was derived (user-visible, ADR-0026). */
+  occurredProvenance?: string | null;
 }
 
 /** Update derived fields on a Story. Only the audited write surface touches the table. */
@@ -268,6 +278,11 @@ export async function updateDerivedFields(
   if (fields.tags !== undefined) patch.tags = fields.tags;
   if (fields.eraYear !== undefined) patch.eraYear = fields.eraYear;
   if (fields.eraLabel !== undefined) patch.eraLabel = fields.eraLabel;
+  if (fields.occurredKind !== undefined) patch.occurredKind = fields.occurredKind;
+  if (fields.occurredDate !== undefined) patch.occurredDate = fields.occurredDate;
+  if (fields.occurredEndDate !== undefined) patch.occurredEndDate = fields.occurredEndDate;
+  if (fields.occurredProvenance !== undefined)
+    patch.occurredProvenance = fields.occurredProvenance;
 
   const [row] = await db
     .update(stories)

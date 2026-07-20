@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  formatStoryDate,
   groupByDecade,
   highlightMatch,
   initials,
@@ -11,6 +12,7 @@ import {
   resolveCoverPhotoId,
   resolveGalleryPhotoIds,
   timelineBase,
+  type StoryDate,
 } from "../app/hub/tabs/story-browse-helpers";
 import type { StoryItem } from "../app/hub/tabs/story-browse-types";
 
@@ -26,6 +28,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     eraYear: over.eraYear ?? null,
     eraLabel: over.eraLabel ?? null,
     eventLabel: over.eventLabel ?? null,
+    occurredLabel: over.occurredLabel ?? null,
     families: over.families ?? [],
     isNew: over.isNew ?? false,
     coverPhotoId: over.coverPhotoId ?? null,
@@ -33,6 +36,76 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     href: over.href ?? `/hub/stories/${over.id}`,
   };
 }
+
+describe("formatStoryDate (ADR-0026 smart display)", () => {
+  const cases: Array<{ name: string; input: StoryDate | null; expected: string }> = [
+    { name: "undated (null) → Undated", input: null, expected: "Undated" },
+    {
+      name: "exact date → formatted date",
+      input: { kind: "date", date: "1943-12-25" },
+      expected: "December 25, 1943",
+    },
+    {
+      name: "exact date, single-digit month/day → no padding artifacts",
+      input: { kind: "date", date: "1943-02-05" },
+      expected: "February 5, 1943",
+    },
+    {
+      name: "circa → c. year",
+      input: { kind: "circa", date: "1949-06-15" },
+      expected: "c. 1949",
+    },
+    {
+      name: "year-aligned period → bare year",
+      input: { kind: "period", date: "1943-01-01", endDate: "1943-12-31" },
+      expected: "1943",
+    },
+    {
+      name: "month-aligned period (31-day month) → Month YYYY",
+      input: { kind: "period", date: "1943-12-01", endDate: "1943-12-31" },
+      expected: "December 1943",
+    },
+    {
+      name: "month-aligned period (30-day month) → Month YYYY",
+      input: { kind: "period", date: "1951-09-01", endDate: "1951-09-30" },
+      expected: "September 1951",
+    },
+    {
+      name: "month-aligned period (leap February) → Month YYYY",
+      input: { kind: "period", date: "1944-02-01", endDate: "1944-02-29" },
+      expected: "February 1944",
+    },
+    {
+      name: "decade-aligned period → the YYY0s",
+      input: { kind: "period", date: "1940-01-01", endDate: "1949-12-31" },
+      expected: "the 1940s",
+    },
+    {
+      name: "unaligned period → Mon YYYY – Mon YYYY",
+      input: { kind: "period", date: "1951-09-05", endDate: "1955-06-15" },
+      expected: "Sep 1951 – Jun 1955",
+    },
+    {
+      name: "period spanning one day renders as that date",
+      input: { kind: "period", date: "1943-12-25", endDate: "1943-12-25" },
+      expected: "December 25, 1943",
+    },
+    {
+      name: "period without an end date degrades to its start point",
+      input: { kind: "period", date: "1943-12-25", endDate: null },
+      expected: "December 25, 1943",
+    },
+    {
+      name: "malformed date → Undated (never throws)",
+      input: { kind: "date", date: "not-a-date" },
+      expected: "Undated",
+    },
+  ];
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(formatStoryDate(input)).toBe(expected);
+  });
+});
 
 describe("groupByDecade", () => {
   it("groups dated stories by decade ascending, drops empty decades, and separates the undated", () => {

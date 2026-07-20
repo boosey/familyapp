@@ -33,6 +33,7 @@ function makeItem(over: Partial<StoryItem> & { id: string }): StoryItem {
     eraYear: over.eraYear ?? null,
     eraLabel: over.eraLabel ?? null,
     eventLabel: over.eventLabel ?? null,
+    occurredLabel: over.occurredLabel ?? null,
     families: over.families ?? [],
     isNew: over.isNew ?? false,
     coverPhotoId: over.coverPhotoId ?? null,

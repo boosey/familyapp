@@ -99,7 +99,9 @@ export function StoryCard({
         </span>
         <span className={styles.personName}>{item.personName}</span>
         <span className={styles.metaDot} aria-hidden="true" />
-        <span className={styles.eventLabel}>{item.eventLabel ?? hub.browse.undated}</span>
+        <span className={styles.eventLabel}>
+          {item.occurredLabel ?? item.eventLabel ?? hub.browse.undated}
+        </span>
       </div>
 
       <p className={styles.title}>{item.title}</p>
