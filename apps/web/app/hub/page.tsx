@@ -174,8 +174,10 @@ export default async function HubPage({
     // #120: live pending invites addressed to this account's verified contacts — the confirm
     // cards rendered above the tabs until Join / "Not me".
     listPendingInvitationsForPerson(db, ctx.personId),
-    // #233 (ADR-0025 device round): the account menu, resolved once and handed to the bottom bar's 5th
-    // "Account" item on a phone. Same entries as the desktop top-right avatar dropdown (shared loader).
+    // #233 (ADR-0025 device round): the account menu, resolved once here and shared by BOTH
+    // presentations — the desktop avatar dropdown (rendered by HubPrimaryNav at the right end of
+    // the tabs row) and the bottom bar's 5th "Account" item on a phone. This is the ONLY
+    // loadAccountMenu call — the duplicate global root-layout mount was removed in #234.
     loadAccountMenu(db, ctx.personId),
   ]);
 
@@ -286,12 +288,19 @@ export default async function HubPage({
         <CollapsingHeader familyName={familyName}>
           {/* Tabs row (ADR-0025): HubPrimaryNav renders the top pill row on desktop and swaps to a fixed
               BottomTabBar on a phone (mobile-only, via useIsCompact) — it owns `styles.tabsRow` itself so
-              the compact branch leaves no empty bordered gap here. */}
+              the compact branch leaves no empty bordered gap here. On desktop it also renders the
+              account avatar at the row's right end (#234), fed by the SAME single loadAccountMenu call
+              above that feeds the phone bottom bar. */}
           <HubPrimaryNav
             primaryTabs={primaryTabs}
             active={primaryActive}
             familiesParam={familiesRaw}
-            account={{ items: accountMenu.items, clerkSignOut: accountMenu.clerkSignOut }}
+            account={{
+              initials: accountMenu.initials,
+              viewerName: accountMenu.viewerName,
+              items: accountMenu.items,
+              clerkSignOut: accountMenu.clerkSignOut,
+            }}
           />
         </CollapsingHeader>
 

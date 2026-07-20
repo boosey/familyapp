@@ -4,7 +4,6 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isClerkConfigured } from "../lib/clerk-config";
 import { kindredClerkAppearance } from "../lib/clerk-appearance";
-import { AccountMenuMount } from "./_kindred/AccountMenuMount";
 import { ALL_PREFERENCES, buildPrePaintScript } from "./_kindred/preferences/registry";
 import { DEFAULT_SKIN_ID } from "./_kindred/skin-constants";
 
@@ -95,10 +94,6 @@ export default async function RootLayout({
   const body = (
     <body>
       {children}
-      {/* Global account menu — self-gates to signed-in account holders, so it renders on every
-          authenticated screen and nothing on the landing / auth / link-session surfaces. Sits inside
-          <body> so it is within ClerkProvider (needed for the Clerk sign-out path). */}
-      <AccountMenuMount />
       <Analytics />
     </body>
   );

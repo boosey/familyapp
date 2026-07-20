@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
  *    marked with 'use client'".
  *
  * This test scans every module re-exported from the barrel and fails if any of them
- * declares `server-only`. Server-only helpers (like AccountMenuMount) must be imported
+ * declares `server-only`. Server-only helpers (like load-account-menu) must be imported
  * directly from their own module by server components, never surfaced through this barrel.
  */
 const barrelDir = dirname(fileURLToPath(import.meta.url));

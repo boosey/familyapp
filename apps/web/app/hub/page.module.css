@@ -106,6 +106,13 @@
 
 .tabsRow {
   margin-bottom: -1px; /* overlap the border */
+  /* #234: flex row so the desktop account avatar sits at the right end — vertically centered with
+   * the tabs, right edge on the container boundary (the same edge the tab pills start from). Only
+   * rendered on desktop; the compact branch portals the bottom bar to <body> instead. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .tabContent {

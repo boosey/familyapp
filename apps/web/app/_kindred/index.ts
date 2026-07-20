@@ -11,11 +11,6 @@ export { KindredListenBar } from "./KindredListenBar";
 export type { KindredListenBarProps } from "./KindredListenBar";
 export { KindredAccountMenu } from "./KindredAccountMenu";
 export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
-// NOTE: AccountMenuMount is intentionally NOT re-exported here. It is a server-only
-// module (`import "server-only"` + DB/auth access); pulling it into this barrel drags
-// it into every client component that imports a Kindred UI primitive (e.g.
-// CreateFamilyForm importing KindredButton), which fails the Next build. Import it
-// directly from "./AccountMenuMount" in the (server-only) root layout instead.
 export { KindredFontScale } from "./KindredFontScale";
 export { KindredThemePicker } from "./KindredThemePicker";
 export { KindredSkinPicker } from "./KindredSkinPicker";
