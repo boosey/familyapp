@@ -164,6 +164,47 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   expect(onLink).toHaveBeenCalledWith("F", "u1", "child", "elena");
 });
 
+it("place-in-tree excludes the member being placed from seed anchors (#250)", async () => {
+  // Zero-edge seed fallback returns every active member, including the one being placed.
+  // The modal must not offer a self-link — only the other seed person remains.
+  renderPanel({
+    onFetchAnchors: vi.fn(async () => ({
+      ok: true as const,
+      persons: [
+        { personId: "u1", displayName: "Rosa Esposito" },
+        { personId: "john", displayName: "John" },
+      ],
+    })),
+  });
+  act(() => screen.getByTestId("unplaced-place-u1").click());
+
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  const anchor = screen.getByTestId("place-member-anchor") as HTMLSelectElement;
+  const options = Array.from(anchor.options).map((o) => o.value);
+  expect(options).toEqual(["john"]);
+  expect(screen.queryByTestId("place-member-no-anchors")).toBeNull();
+});
+
+it("place-in-tree shows no-anchors when the only seed person is the member (#250)", async () => {
+  renderPanel({
+    onFetchAnchors: vi.fn(async () => ({
+      ok: true as const,
+      persons: [{ personId: "u1", displayName: "Rosa Esposito" }],
+    })),
+  });
+  act(() => screen.getByTestId("unplaced-place-u1").click());
+
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  expect(screen.getByTestId("place-member-no-anchors")).toBeTruthy();
+  expect(screen.queryByTestId("place-member-anchor")).toBeNull();
+});
+
 it("'Not family' calls setMemberNonFamily(true) and offers a Move-back undo", async () => {
   const { onSetNonFamily } = renderPanel();
   await act(async () => {
