@@ -47,7 +47,13 @@
  *
  * Increment 3 note: the sticky control strip lands as a SIBLING below (first child of `.tabContent`),
  * sticking at `top: 0` once this header slides away — they stack cleanly because this header is in-flow
- * sticky. Only ever applied on compact, so no desktop @media layer and no max-width query. */
+ * sticky. Only ever applied on compact, so no desktop @media layer and no max-width query.
+ *
+ * COUPLING LANDMINE: `transform` + `will-change: transform` here make this element the CONTAINING BLOCK
+ * for `position: fixed` descendants (CSS spec). Any fixed element rendered INSIDE this header (e.g. the
+ * BottomTabBar, or Increment 3's fixed controls) would be positioned relative to THIS header, not the
+ * viewport — so it must be portaled to `document.body` to escape. HubPrimaryNav already portals the
+ * bottom bar out for exactly this reason; see its header comment. */
 .headerSticky {
   position: sticky;
   top: 0;

@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { HubTabs } from "./HubTabs";
 import type { HubTab } from "./HubTabs";
@@ -33,6 +34,16 @@ interface HubPrimaryNavProps {
  * This replaces the former inline top-tabs wrapper in page.tsx; the desktop router-push behaviour is
  * subsumed here so the compact/desktop swap lives in one place, consistent with the `useIsCompact`
  * swap pattern used elsewhere in the hub tabs.
+ *
+ * COUPLING LANDMINE (ADR-0025 Inc 2): the collapse-on-scroll header (`.headerSticky` in page.module.css)
+ * uses `transform` + `will-change: transform`, which per CSS spec makes it the CONTAINING BLOCK for
+ * `position: fixed` descendants. HubPrimaryNav renders inside that header (page.tsx: CollapsingHeader
+ * children). So the compact `BottomTabBar` — which is `position: fixed; bottom: 0` — MUST be portaled to
+ * `document.body` to escape the transformed header and be truly viewport-relative; rendered in place it
+ * would be positioned relative to the header (top of screen, sliding away with it). This is the same
+ * viewport-level treatment as the global fixed `AccountMenuMount`. Increment 3's sticky control strip
+ * faces the identical trap: any `position: fixed` element nested under a transformed sticky ancestor
+ * must portal out.
  */
 export function HubPrimaryNav({ primaryTabs, active, familiesParam }: HubPrimaryNavProps) {
   const router = useRouter();
@@ -45,7 +56,13 @@ export function HubPrimaryNav({ primaryTabs, active, familiesParam }: HubPrimary
   };
 
   if (compact) {
-    return <BottomTabBar primaryTabs={primaryTabs} active={active} onChange={onChange} />;
+    // useIsCompact is false on the server + first paint, so this branch only executes client-side;
+    // still guard `document` so a stray SSR/first-paint eval can't throw on createPortal.
+    if (typeof document === "undefined") return null;
+    return createPortal(
+      <BottomTabBar primaryTabs={primaryTabs} active={active} onChange={onChange} />,
+      document.body,
+    );
   }
 
   return (
