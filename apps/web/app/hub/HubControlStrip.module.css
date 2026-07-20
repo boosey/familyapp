@@ -1,0 +1,51 @@
+/* HubControlStrip (ADR-0025 Phase B, Increment 3) — the SHARED compact control-strip layout, imported by
+ * every tab that renders the mobile IconSheet strip (Stories, Album, later Family) so the strip layout
+ * lives ONCE and the tabs can't diverge. Only ever mounted on a tab's compact branch (gated by
+ * useIsCompact), so no desktop @media layer and no max-width query. Tokens only (per _skins/CSS-MODULES.md).
+ *
+ * Layout: optional sub-tab pills LEFT, the [View][Family][Filter] icon-sheets + iconified action RIGHT.
+ * NON-STICKY (ADR-0025 2026-07-20 amendment) — normal top-matter. ONE row.
+ *
+ * 360px fit is EXPLICIT: the strip is `nowrap`, but the horizontal deficit is steered onto the pills
+ * wrapper (`.pills` = the ONLY flexible child: `flex: 1 1 auto; min-width: 0`) while the icon cluster
+ * (`.right` = `flex: 0 0 auto`, never shrinks/wraps) stays intact. A tab with NO pills (e.g. Album) has
+ * only `.right`, right-aligned via `margin-left: auto`. No avatar clearance is needed — the account
+ * avatar moved OFF the top-right INTO the bottom nav bar (ADR-0025 device round; #233), freeing the top.
+ * The Step-A one-row strip (device-verified good) is restored now that nothing floats over the top. */
+
+.strip {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* The pills wrapper — the sole shrink valve. Takes the horizontal deficit so the icon cluster never has
+ * to; `min-width: 0` lets it shrink (SegmentedControl's equal segments compress gracefully). Absent on
+ * tabs with no sub-tab pills. */
+.pills {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The icon-sheet cluster + iconified action, pushed hard-right. `flex: 0 0 auto` + `nowrap` = it never
+ * shrinks or wraps; the compact icon-over-label controls fit three-plus-action at 360px. */
+.right {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+/* A full-width row BELOW the strip for content that doesn't fit inline at 360px (e.g. Stories' draft +
+ * intake reminders). Reachable, wraps as needed. */
+.belowRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: var(--space-2);
+}

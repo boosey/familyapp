@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editAlbumCaptionAction, deleteAlbumPhotoAction } from "./actions";
 import { KindredButton } from "@/app/_kindred";
+import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import type { AlbumGridPhoto } from "./AlbumGrid";
 import { PhotoActionBar } from "./PhotoActionBar";
@@ -148,40 +149,18 @@ export function AlbumPhotoViewer({
   }
 
   return (
-    <div
-      data-testid="album-viewer-backdrop"
-      // Backdrop click closes, but only when the backdrop ITSELF is the click target (not a click
-      // that bubbled up from the dialog card) — a robust alternative to stopPropagation.
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "clamp(12px, 4vw, 32px)",
-        background: "var(--scrim)",
-      }}
+    <ModalShell
+      onOverlayClick={onClose}
+      maxWidth={560}
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={hub.album.viewerAria(caption)}
+      tabIndex={-1}
     >
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={hub.album.viewerAria(caption)}
-        tabIndex={-1}
         style={{
-          background: "var(--surface-card)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-lift)",
-          maxWidth: 560,
-          width: "100%",
-          maxHeight: "90dvh",
-          overflowY: "auto",
           padding: "clamp(16px, 4vw, 24px)",
-          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           gap: 16,
@@ -315,6 +294,6 @@ export function AlbumPhotoViewer({
           </>
         )}
       </div>
-    </div>
+    </ModalShell>
   );
 }

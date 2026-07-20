@@ -37,3 +37,15 @@ export const PHOTO_PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Google Photos picker polling: delay between poll attempts (ms). */
 export const PHOTO_PICKER_POLL_INTERVAL_MS = 2000;
+
+/**
+ * Canonical responsive breakpoints (min-width, in rem) for the web app's mobile-first @media layers.
+ * SINGLE SOURCE OF TRUTH: every `@media (min-width: …)` under apps/web/app must use exactly one of
+ * these values. Enforced by app/_kindred/responsive-breakpoints.test.ts, which scans the CSS tree and
+ * fails on any min-width outside this set (px are normalized to rem at 16px/rem). Kept minimal on
+ * purpose — intrinsic layout (clamp/auto-fill/flex-wrap) already handles most reflow; a width
+ * breakpoint is a last resort, not the default tool.
+ *   sm (40rem / 640px)  — phone → small tablet
+ *   lg (64rem / 1024px) — tablet → desktop
+ */
+export const RESPONSIVE_BREAKPOINTS_REM = { sm: 40, lg: 64 } as const;

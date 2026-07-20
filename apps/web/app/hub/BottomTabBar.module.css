@@ -1,0 +1,116 @@
+/* BottomTabBar (ADR-0025 Phase B, Increment 1) — the fixed bottom primary-nav bar, phone only.
+ *
+ * This surface is only ever mounted on the compact branch (HubPrimaryNav gates it behind useIsCompact),
+ * so it has no desktop @media layer — and it uses NO `max-width` query either (the ONE allowed
+ * max-width is the JS matchMedia in useIsCompact). Design values are tokens (per _skins/CSS-MODULES.md);
+ * layout dims mirror the HubTabs house style. */
+
+.bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--bottom-bar-z);
+  display: flex;
+  align-items: stretch;
+  gap: var(--bottom-bar-gap);
+  /* The bar's own height, plus the home-indicator safe area padded BELOW it so the icons+labels sit
+   * above the indicator (env is 0 on non-notch devices, so the bar is just its own height there). */
+  height: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface-card);
+  border-top: var(--border-width) solid var(--border);
+  font-family: var(--font-ui);
+}
+
+/* The tablist is a REAL flex box (NOT `display: contents`) so its `role="tablist"` survives in the a11y
+ * tree on iOS Safari/VoiceOver — a boxless element with an explicit ARIA role is the exact case some
+ * screen readers drop. `flex: 4 1 0` gives it 4/5 of the bar for its four tabs (each `.tab` is `flex: 1
+ * 1 0` inside → 1/5 of the bar), and the sibling account cell (`.tab`, `flex: 1 1 0`) takes the last
+ * 1/5 — all five cells stay equal width. */
+.tablist {
+  display: flex;
+  flex: 4 1 0;
+  min-width: 0;
+  align-items: stretch;
+  gap: var(--bottom-bar-gap);
+}
+
+/* The account cell mirrors the tablist's flex box for ONE cell (flex: 1 1 0 → the last 1/5 of the bar),
+ * so all five cells size evenly across the tablist boundary (a bare account button competing at flex:1
+ * against the tablist's flex:4 rounds ~5px wider). */
+.accountCell {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  /* Reserve the full bar height (minus safe area) as the tap target — a comfortable, thumb-sized hit. */
+  min-height: var(--bottom-bar-height);
+  transition: color var(--dur-fade) var(--ease-quiet);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--accent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* Wraps the icon so the count badge can anchor to the icon's top-right (not the whole tab). */
+.iconWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.label {
+  font-size: 0.6875rem; /* 11px — a tiny caption under the glyph; matches native bottom-bar labels */
+  font-weight: 600;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Count badge — the same count-pill as HubTabs (.badge), anchored to the icon's top-right corner. */
+.badge {
+  position: absolute;
+  top: -6px;
+  left: 100%;
+  transform: translateX(-40%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}

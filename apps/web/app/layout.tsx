@@ -74,6 +74,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Let narrators pinch-zoom; never trap them.
   maximumScale: 5,
+  // ADR-0025 mobile Phase B: `cover` is REQUIRED for `env(safe-area-inset-*)` to report non-zero on
+  // iOS — the fixed bottom tab bar reads `safe-area-inset-bottom` to clear the home indicator. Without
+  // it the insets are 0 and the bar collides with the indicator. Content already draws inside the safe
+  // area (the app has no full-bleed edge chrome besides that bar), so cover is safe here.
+  viewportFit: "cover",
 };
 
 /**

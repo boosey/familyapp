@@ -23,6 +23,10 @@ import actionButtonStyles from "@/app/_kindred/ActionButton.module.css";
 export interface AddPhotosMenuProps {
   /** Trigger label + aria-label (e.g. "Add Photos"). */
   label: string;
+  /** ADR-0025 Increment 3 Step B — when set, the trigger renders this icon INSTEAD of the "{label} ▾"
+   *  text (the compact strip iconifies the action). `label` still supplies the button's aria-label, so
+   *  the accessible name and the whole menu behavior are unchanged; only the glyph replaces the text. */
+  icon?: React.ReactNode;
   /** Ref to the trigger button, so a caller (the #94 destination modal) can restore focus to it when
    *  the modal it opened via a menuitem closes — the menuitem itself has unmounted by then. */
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
@@ -49,7 +53,7 @@ export interface AddPhotosMenuProps {
   };
 }
 
-export function AddPhotosMenu({ label, triggerRef, device, google, manage }: AddPhotosMenuProps) {
+export function AddPhotosMenu({ label, icon, triggerRef, device, google, manage }: AddPhotosMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -154,7 +158,7 @@ export function AddPhotosMenu({ label, triggerRef, device, google, manage }: Add
         onClick={() => setOpen((prev) => !prev)}
         className={actionButtonStyles.button}
       >
-        {label} <span aria-hidden="true">▾</span>
+        {icon ? icon : (<>{label} <span aria-hidden="true">▾</span></>)}
       </button>
 
       {open && (

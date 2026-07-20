@@ -24,6 +24,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
+import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "./FamilyChoiceChips";
 import { albumPhotoSrc } from "./album/photo-src";
@@ -519,14 +520,16 @@ export function StoryPhotosEditor({
 
       {/* "Add from album" modal: existing-photo picker + device upload + (multi-family) placement. */}
       {modalOpen ? (
-        <div
+        <ModalShell
+          onOverlayClick={() => {
+            if (!busy) setModalOpen(false);
+          }}
+          maxWidth={520}
           role="dialog"
           aria-modal="true"
           aria-label={hub.storyImages.pickModalTitle}
-          style={modalOverlay}
-          onClick={() => !busy && setModalOpen(false)}
         >
-          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+          <div style={modalCard}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <h3 style={modalTitle}>{hub.storyImages.pickModalTitle}</h3>
               <KindredButton
@@ -590,7 +593,7 @@ export function StoryPhotosEditor({
               )}
             </div>
           </div>
-        </div>
+        </ModalShell>
       ) : null}
     </section>
   );
@@ -741,27 +744,10 @@ const connectLink: React.CSSProperties = {
   padding: "8px 4px",
 };
 
-const modalOverlay: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "var(--overlay-scrim)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 20,
-  zIndex: 1000,
-};
-
+// The overlay + surface box (bg / border / radius / shadow / width / max-height / overflow / safe-area)
+// is now owned by ModalShell (ADR-0024). This is only the modal's INNER content padding + layout.
 const modalCard: React.CSSProperties = {
-  background: "var(--surface-card)",
-  borderRadius: "var(--radius-lg, 12px)",
-  border: "1px solid var(--border)",
-  boxShadow: "var(--shadow-lift)",
   padding: 24,
-  width: "100%",
-  maxWidth: 520,
-  maxHeight: "85vh",
-  overflowY: "auto",
   display: "grid",
   gap: 16,
 };

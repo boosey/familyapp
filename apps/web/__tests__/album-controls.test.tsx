@@ -11,7 +11,7 @@
  * Mocks next/navigation and the server-action module; the real AlbumFilterBar / AlbumViewControls /
  * HubToolbar / AlbumGrid mount, so this exercises the whole composed toolbar + body.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AlbumControls } from "@/app/hub/album/AlbumControls";
 import { hub } from "@/app/_copy";
@@ -305,6 +305,127 @@ describe("AlbumControls HubToolbar layout (controls hoist — strictly two rows)
     const r1 = rows[0]!;
     expect(within(r1).getByRole("group", { name: hub.album.filterPeopleLabel })).toBeTruthy();
     expect(within(r1).getByRole("group", { name: hub.album.filterPlacesLabel })).toBeTruthy();
+  });
+});
+
+// ADR-0025 Increment 3 Step B: on a phone (< 40rem) the album's single "⚙ Filters & view" gear splits
+// into the shared IconSheet strip — [View][Family][Filter] labeled icon-sheets + the iconified
+// Add-Photos action. Each icon renders only when it has content; the Family chips are reached by tapping
+// the Family icon. These tests force the compact branch by mocking matchMedia (jsdom leaves it undefined
+// → desktop otherwise).
+describe("AlbumControls mobile IconSheet strip (Increment 3 Step B)", () => {
+  const realMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    // A compact viewport: the query matches, so useIsCompact() → true.
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
+  it("renders the three per-concern View + Family + Filter icon-sheet triggers", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        emptyNote="(empty)"
+      />,
+    );
+    // The compact strip is the three per-concern icon-sheets (the old single ⚙ gear is gone).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.familyLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
+  });
+
+  it("hides the Family icon for a single-family viewer (no familyChips)", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    expect(screen.queryByRole("button", { name: hub.mobileControls.familyLabel })).toBeNull();
+    // View + Filter remain (always have content when there's a grid).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
+  });
+
+  it("tapping the Family icon opens a sheet holding the family chips", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        emptyNote="(empty)"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.familyLabel }));
+    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.familyLabel });
+    expect(within(dialog).getByTestId("fam-chips")).toBeTruthy();
+  });
+
+  it("tapping the Filter icon opens a sheet holding the album's search field", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
+    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.filterLabel });
+    expect(within(dialog).getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
+  });
+
+  // ── ADR-0025 Increment 4 — per-icon active badges ──────────────────────────────────────────────
+  // A badged IconSheet trigger's accessible NAME gains the active-count phrase (e.g. "Filter, 1 filter
+  // active"); unbadged it is just the label. So "is it badged?" = its aria-label contains the phrase.
+  const badgePhrase = hub.mobileControls.activeCountAria(1);
+  const iconByLabel = (label: string) => screen.getByRole("button", { name: new RegExp(label) });
+
+  it("badges the Filter icon when a When/facets/search filter is active, and not otherwise", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    // Idle: no filter badge.
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+    // Type a caption/tag search inside the Filter sheet → the Filter icon badges.
+    fireEvent.click(iconByLabel(hub.mobileControls.filterLabel));
+    fireEvent.change(screen.getByRole("searchbox", { name: hub.album.filterTextLabel }), {
+      target: { value: "wedding" },
+    });
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+  });
+
+  it("badges the Family icon when the family filter is a subset (familyFilterActive), not otherwise", () => {
+    const { rerender } = render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive
+        emptyNote="(empty)"
+      />,
+    );
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+    rerender(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive={false}
+        emptyNote="(empty)"
+      />,
+    );
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+  });
+
+  it("never badges the View icon", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    // View is never badged, so its trigger's accessible name is EXACTLY "View" (exact match — a loose
+    // /View/ regex would also hit the Grid/Masonry/List controls inside the sheet).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
   });
 });
 

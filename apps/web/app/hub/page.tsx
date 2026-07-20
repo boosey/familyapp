@@ -3,7 +3,8 @@
  *
  * Reads active tab from ?tab= searchParam (Next 15: searchParams is a Promise).
  * Loads feed + pending questions in parallel, then delegates to tab sub-components.
- * Navigation between tabs is handled by HubTabsNav (client wrapper around HubTabs).
+ * Navigation between tabs is handled by HubPrimaryNav (client wrapper: top HubTabs on desktop, a
+ * fixed BottomTabBar on a phone).
  */
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -28,7 +29,9 @@ import {
 } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
-import { HubTabsNav } from "./HubTabsNav";
+import { HubPrimaryNav } from "./HubPrimaryNav";
+import { CollapsingHeader } from "./CollapsingHeader";
+import { loadAccountMenu } from "@/app/_kindred/load-account-menu";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
@@ -123,7 +126,7 @@ export default async function HubPage({
   // active families (a client-crafted value is never trusted — unknown ids drop, absent = all, `none`
   // = the empty set). The browse surfaces multi-select; the tabs not yet multi-aware derive a single
   // `scope` from it, byte-for-byte the old behaviour. The RAW families value (normalized to a single
-  // string | null) is threaded to HubTabsNav so a tab switch preserves the filter.
+  // string | null) is threaded to HubPrimaryNav so a tab switch preserves the filter.
   const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
   const activeIds = activeFamilies.map((f) => f.familyId);
   const filter = parseFamilyFilter(familiesParam, activeIds);
@@ -153,7 +156,7 @@ export default async function HubPage({
     ? `/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`
     : undefined;
 
-  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches, accountMenu] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
@@ -171,6 +174,9 @@ export default async function HubPage({
     // #120: live pending invites addressed to this account's verified contacts — the confirm
     // cards rendered above the tabs until Join / "Not me".
     listPendingInvitationsForPerson(db, ctx.personId),
+    // #233 (ADR-0025 device round): the account menu, resolved once and handed to the bottom bar's 5th
+    // "Account" item on a phone. Same entries as the desktop top-right avatar dropdown (shared loader).
+    loadAccountMenu(db, ctx.personId),
   ]);
 
   // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
@@ -274,33 +280,20 @@ export default async function HubPage({
   return (
     <main className={styles.main}>
       <div className={styles.container}>
-        {/* Header */}
-        <header className={styles.header}>
-          {/* Title row */}
-          <div className={styles.titleRow}>
-            <div className={styles.titleGroup}>
-              <div>
-                <p className={styles.familyEyebrow}>
-                  {hub.shell.familyEyebrow(activeFamilies.length)}
-                </p>
-                <h1 className={styles.familyName}>
-                  {familyName}
-                </h1>
-              </div>
-            </div>
-            {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root
-                layout, so the hub no longer inlines its own copy in the header. */}
-          </div>
-
-          {/* Tabs row */}
-          <div className={styles.tabsRow}>
-            <HubTabsNav
-              primaryTabs={primaryTabs}
-              active={primaryActive}
-              familiesParam={familiesRaw}
-            />
-          </div>
-        </header>
+        {/* Header (ADR-0025 Inc 2): CollapsingHeader OWNS the <header> so it can make the whole header
+            sticky + collapse-on-scroll on a phone (desktop renders it byte-for-byte as before). It wraps
+            the family name + the tabs row. */}
+        <CollapsingHeader familyName={familyName}>
+          {/* Tabs row (ADR-0025): HubPrimaryNav renders the top pill row on desktop and swaps to a fixed
+              BottomTabBar on a phone (mobile-only, via useIsCompact) — it owns `styles.tabsRow` itself so
+              the compact branch leaves no empty bordered gap here. */}
+          <HubPrimaryNav
+            primaryTabs={primaryTabs}
+            active={primaryActive}
+            familiesParam={familiesRaw}
+            account={{ items: accountMenu.items, clerkSignOut: accountMenu.clerkSignOut }}
+          />
+        </CollapsingHeader>
 
         {/* Tab content */}
         <section className={styles.tabContent}>

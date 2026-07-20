@@ -1,0 +1,106 @@
+/* BottomSheet (ADR-0024 "approach B" seam) — a reusable bottom-anchored sheet for grouping mobile
+ * controls (the hub tabs' "Filters & view"). Presentational: the component owns open/close + a11y; this
+ * owns geometry. Values are tokens (per _skins/CSS-MODULES.md); the shared scrim + safe-area + cap
+ * mirror ModalShell. This surface is only ever mounted on the mobile branch, so it has no desktop
+ * media layer — but it uses no `max-width` query either (the ONE allowed max-width is the JS matchMedia
+ * in useIsCompact). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  /* Anchor the panel to the BOTTOM of the viewport (the "sheet" affordance). */
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--overlay-scrim);
+}
+
+.panel {
+  width: 100%;
+  /* Grow to the content, then cap + scroll internally so a long control list never runs off the top of
+   * the screen. `dvh` tracks the *dynamic* viewport so a mobile URL bar can't push the sheet off. */
+  max-height: min(85dvh, 90dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-card);
+  /* Rounded TOP corners only — the bottom edge is flush with the screen edge (a sheet, not a card). */
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  /* Clear the home indicator: the sheet is flush to the bottom edge, so its own bottom padding must
+   * include the safe-area inset. Side + top padding frame the content. */
+  padding: var(--space-3) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+  /* Gentle slide-up. Suppressed under reduce-motion below (no transform animation). */
+  animation: kindred-sheet-up var(--dur-settle) var(--ease-quiet);
+}
+
+/* Visual-only drag handle (a "grab bar" affordance; the sheet is tap-dismissed, not draggable — real
+ * drag is the parked approach-B work). */
+.handle {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-size: var(--text-ui-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-sunken);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes kindred-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Respect reduced motion (both the OS query and the app's data-attribute switch): no transform slide. */
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+:global(:root[data-reduce-motion="on"]) .panel {
+  animation: none;
+}

@@ -23,16 +23,25 @@ export const hub = {
     // The family surface (tree + relatives list) — a real in-hub tab now, not a standalone route.
     tabFamily: "Family",
     tabInvite: "Invite",
+    // ADR-0025 Increment 3 Step B — on the compact Family strip the Invite action is iconified
+    // (UserRoundPlus glyph); this is its accessible name (menu/target unchanged, only the trigger icon).
+    inviteAria: "Invite",
     tabRequests: "Requests",
     // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
+    // "Ask" (not "Ask a question") so the three equal-width pills fit ONE line at 360px — the long label
+    // wrapped the middle segment to two lines. The primary-tab `tabAsk` keeps the full "Ask a question".
     questionsSubToAnswer: "To answer",
-    questionsSubAsk: "Ask a question",
+    questionsSubAsk: "Ask",
     questionsSubYourAsks: "Your asks",
     questionsSubNavAria: "Question sections",
     // Issue #124 (Playful de-clutter): secondary sub-nav inside the Family primary tab — the tree/
     // relatives view and the steward's Requests queue (which used to be a "More ▾" overflow entry).
     // The Requests sub-label reuses `tabRequests`.
     familySubTree: "Family tree",
+    // ADR-0025 device round: the compact Family strip uses the SHORT "Tree" for the tree pill so the
+    // three equal-width pills (Tree/List/Requests) fit ONE line beside the Family icon + Invite at 360px
+    // (the long "Family tree" wrapped the pill to two lines). Desktop keeps "Family tree" (roomy toolbar).
+    familySubTreeShort: "Tree",
     familySubNavAria: "Family sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",
@@ -46,6 +55,14 @@ export const hub = {
     menuFamilySettings: "Family settings",
     menuFamilySettingsNamed: (name: string) => `${name} settings`,
     sectionsAria: "Hub sections",
+    // ADR-0025 mobile Phase B: accessible name for the fixed bottom tab bar (the mobile counterpart to
+    // the top `sectionsAria` nav). Distinct wording so the two navs never read as the same landmark.
+    bottomNavAria: "Primary sections",
+    // ADR-0025 device round (#233): the bottom bar's 5th item — the account/profile entry (a menu
+    // trigger, NOT a hub tab). `tabAccount` is its tiny label; `accountSheetTitle` titles the sheet it
+    // opens (the same profile/settings/switch-user/log-out menu the desktop avatar dropdown shows).
+    tabAccount: "Account",
+    accountSheetTitle: "Your account",
     unreadAria: (badge: number) => `${badge} unread`,
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
     // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.
@@ -56,10 +73,25 @@ export const hub = {
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
-    // Playful mockup (Direction D): mono eyebrow above the family name in the hub header. `n` is the
-    // number of active families the viewer has stories across; singular/plural handled.
-    familyEyebrow: (n: number) =>
-      `YOUR FAMILY · ${n} ${n === 1 ? "FAMILY" : "FAMILIES"}`,
+  },
+  // ADR-0025 Phase B mobile control sheets — the per-concern IconSheet triggers (View/Family/Filter)
+  // that open a shared BottomSheet on a phone (< 40rem). Desktop is unchanged (the inline HubToolbar
+  // renders as today). (The former single "⚙ Filters & view" gear + MobileControlSheet were removed in
+  // Increment 3 once every tab moved to the per-concern icon strip.)
+  mobileControls: {
+    // Accessible name for an IconSheet's active-filter count badge (n = active filters for that icon).
+    activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
+    // The bottom sheet's ✕ close control (BottomSheet.tsx).
+    close: "Close",
+    // ADR-0025 Phase B Increment 3 — the single "⚙ Filters & view" gear splits into per-concern labeled
+    // icon-sheets on a phone: View (layout options), Family (the family selector), Filter (search +
+    // facets). Each string is BOTH the tiny icon label and its bottom-sheet title.
+    viewLabel: "View",
+    familyLabel: "Family",
+    filterLabel: "Filter",
+    // The primary action (Tell a story) is iconified on the compact strip (labeled on desktop). This is
+    // the icon button's accessible name.
+    tellAria: "Tell a story",
   },
   stories: {
     untitled: "Untitled",
@@ -560,6 +592,8 @@ export const hub = {
     googlePhotosDisconnect: "Disconnect Google Photos",
     // Trigger for the right-justified "Add Photos ▾" dropdown that consolidates every album entry
     // point (#93): the device picker, Google connect/import, and — below a divider — Manage connections.
+    // On the compact strip the trigger is iconified (ImagePlus); `addPhotosMenu` still supplies its
+    // aria-label (accessible name unchanged across the icon/label swap), so no separate key is needed.
     addPhotosMenu: "Add Photos",
     // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
     // is available (#93 — replaced the old standalone "Add to album" button).

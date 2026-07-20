@@ -4,9 +4,10 @@
  * ClerkSignOutItem — the ONLY place @clerk/nextjs is imported on the client.
  *
  * This file must never be imported with a static `import` statement. It is loaded
- * exclusively via `next/dynamic` in KindredAccountMenu so that the @clerk/nextjs
- * chunk is code-split and never fetched in mock/dev mode (where ClerkProvider is
- * absent and useClerk() would throw).
+ * exclusively via `next/dynamic` in AccountMenuList (the shared item list rendered by
+ * BOTH the desktop KindredAccountMenu dropdown and the mobile bottom-bar AccountSheet)
+ * so that the @clerk/nextjs chunk is code-split and never fetched in mock/dev mode
+ * (where ClerkProvider is absent and useClerk() would throw).
  */
 import { useClerk } from "@clerk/nextjs";
 import type { CSSProperties } from "react";

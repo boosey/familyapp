@@ -19,8 +19,11 @@
  * `aria-pressed` toggle button (keyboard-operable, elder-friendly). The period is a native <select>; the
  * text is a search input. A single "Clear filters" button resets everything.
  */
+import { LayoutGrid, UsersRound, ListFilter } from "lucide-react";
 import { hub } from "@/app/_copy";
 import { HubToolbar } from "../HubToolbar";
+import { IconSheet } from "../IconSheet";
+import strip from "../HubControlStrip.module.css";
 import { SearchField } from "@/app/_kindred/SearchField";
 
 /** Coarse capture-time buckets over each photo's `capturedAt` ISO string. */
@@ -65,6 +68,8 @@ export function AlbumFilterBar({
   rightSlot,
   addSlot,
   familyChips,
+  compact = false,
+  familyFilterActive = false,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -80,6 +85,15 @@ export function AlbumFilterBar({
   /** The shared browse Family filter chips (ADR-0021) — HubToolbar's R2-left, on the same row as the
    *  view/layout controls. Omit (e.g. <2 families) and the R2-left slot collapses. */
   familyChips?: React.ReactNode;
+  /** ADR-0024: on a phone the filter cluster + chips + view controls move into a "⚙ Filters & view"
+   *  bottom sheet; only "Add Photos" stays on the primary row. Desktop (false) renders the inline
+   *  two-row HubToolbar unchanged. AlbumControls decides this via useIsCompact. */
+  compact?: boolean;
+  /** ADR-0025 Increment 4 — whether the family-chip filter is narrowed to a SUBSET (computed upstream in
+   *  AlbumSurface, which owns the selection). Badges the Family icon on the compact strip; the chips are
+   *  opaque inside the sheet, so this feeds the badge. The Filter icon's badge is derived HERE from the
+   *  filter value (isFilterActive), and View is never badged. */
+  familyFilterActive?: boolean;
 }) {
   const control: React.CSSProperties = {
     minHeight: 40,
@@ -170,6 +184,54 @@ export function AlbumFilterBar({
       ) : null}
     </div>
   );
+
+  // ADR-0025 Increment 3/4 — the compact control strip (shared HubControlStrip layout). The single "⚙
+  // Filters & view" gear split into per-concern labeled icon-sheets: View ← the view/layout controls
+  // (rightSlot); Family ← the family chips (≥2 families); Filter ← the When/facets/Search cluster. Album
+  // has NO sub-tab pills, so the strip's left side is empty and the icon cluster + iconified Add-Photos
+  // action right-align. Each icon renders ONLY when its content exists. NON-STICKY. Increment 4: the
+  // Filter icon badges an engaged When/facets/search filter (isFilterActive over the value); the Family
+  // icon badges a narrowed family subset (familyFilterActive); View is never badged.
+  if (compact) {
+    return (
+      <div role="group" aria-label={hub.album.filterBarAria}>
+        <div className={strip.strip}>
+          {/* No pills group on Album — the icon cluster + action right-align via margin-left:auto. */}
+          <div className={strip.right}>
+            {rightSlot ? (
+              <IconSheet
+                icon={LayoutGrid}
+                label={hub.mobileControls.viewLabel}
+                sheetTitle={hub.mobileControls.viewLabel}
+              >
+                {rightSlot}
+              </IconSheet>
+            ) : null}
+            {familyChips ? (
+              <IconSheet
+                icon={UsersRound}
+                label={hub.mobileControls.familyLabel}
+                sheetTitle={hub.mobileControls.familyLabel}
+                badgeCount={familyFilterActive ? 1 : 0}
+              >
+                {familyChips}
+              </IconSheet>
+            ) : null}
+            <IconSheet
+              icon={ListFilter}
+              label={hub.mobileControls.filterLabel}
+              sheetTitle={hub.mobileControls.filterLabel}
+              badgeCount={isFilterActive(value) ? 1 : 0}
+            >
+              {filterCluster}
+            </IconSheet>
+            {/* Add-Photos — iconified by AlbumUploader on the compact branch (menu behavior unchanged). */}
+            {addSlot ?? null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div role="group" aria-label={hub.album.filterBarAria}>

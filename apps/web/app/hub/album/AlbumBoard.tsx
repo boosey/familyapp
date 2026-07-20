@@ -81,6 +81,9 @@ export function AlbumBoard(props: {
    *  (inline, no bottom margin — it aligns with the row's sibling controls). AlbumControls hosts them on
    *  both the populated and empty paths, so no separate standalone variant is needed. */
   familyChips?: React.ReactNode;
+  /** Whether the `?families=` chip filter is narrowed (forwarded to AlbumControls for the mobile
+   *  "Filters & view" trigger badge — the chips hide inside the closed sheet on a phone). */
+  familyFilterActive?: boolean;
 }) {
   const router = useRouter();
 
@@ -405,6 +408,7 @@ export function AlbumBoard(props: {
       onRetryTile={retry}
       addSlot={uploader}
       familyChips={props.familyChips}
+      familyFilterActive={props.familyFilterActive}
       notices={notices}
       emptyNote={hub.album.empty}
     />

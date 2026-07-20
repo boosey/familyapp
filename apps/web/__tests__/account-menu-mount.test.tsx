@@ -72,9 +72,9 @@ describe("AccountMenuMount self-gating", () => {
     const result = (await AccountMenuMount()) as ReactElement;
     expect(result).not.toBeNull();
 
-    // Fixed-position wrapper <div> → <KindredAccountMenu> child.
-    const menu = (result.props as { children: ReactElement }).children;
-    const props = menu.props as {
+    // AccountMenuMount now returns <AccountMenuClient …/> directly (it decides desktop dropdown vs the
+    // bottom-bar entry via useIsCompact); the resolved menu is on its props.
+    const props = result.props as {
       initials: string;
       items: Array<{ key: string }>;
       clerkSignOut: boolean;
@@ -92,8 +92,7 @@ describe("AccountMenuMount steward edit entries", () => {
 
   async function menuItems(): Promise<MenuItem[]> {
     const result = (await AccountMenuMount()) as ReactElement;
-    const menu = (result.props as { children: ReactElement }).children;
-    return (menu.props as { items: MenuItem[] }).items;
+    return (result.props as { items: MenuItem[] }).items;
   }
 
   it("renders NO family-settings entry when the account stewards no family", async () => {

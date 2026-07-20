@@ -11,6 +11,11 @@
   gap: 28px;
 }
 
+/* ADR-0025 Increment 3 — the compact control STRIP layout (Stories' pills + [View][Family][Filter]
+   icon-sheets + iconified Tell, reminders below) now lives in the SHARED ../HubControlStrip.module.css
+   (imported as `strip` in StoriesSurface), so Stories/Album/Family can't diverge. The classes formerly
+   here (.mobileStrip/.mobileStripPills/.mobileStripRight/.mobileReminders) moved there verbatim. */
+
 /* R1-left group (#190): the Feed/Timeline/Search pill nav (shared HubSubNav) with the Search field
    beside it (Search mode only). A quiet inline row that wraps on narrow viewports; the toolbar's `.left`
    slot owns the outer spacing. */

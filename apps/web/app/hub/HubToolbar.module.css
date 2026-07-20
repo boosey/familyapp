@@ -3,41 +3,71 @@
  * isn't rendered (both slots empty) contributes nothing — the empty-row rule is enforced in the
  * component, so there is no `:empty` CSS crutch and no reserved space. */
 
+/* MOBILE-FIRST (base = phone, floor 360px): the toolbar is COMPACT so it doesn't push content below
+ * the fold. Rows and slots are tight (var(--space-2)) and — crucially — the action slot is a wrapping
+ * row of NATURAL-WIDTH controls, not a column of full-width stretched buttons (the earlier pass made
+ * every action full-height/full-width, which turned the chrome into a vertical wall). No `margin-left:
+ * auto` at phone, so there's no dead gutter either. Desktop's roomier two-slot row returns at `sm`. */
 .toolbar {
   display: flex;
   flex-direction: column;
-  /* Gap between R1 and R2 when both render. Tightened to var(--space-4) (#9) so the two control rows
-   * read as one compact block rather than two loosely-stacked bars. */
-  gap: var(--space-4);
-  /* Space before the tab content below. In the no-R2 case this is the ONLY trailing space; tightened
-   * to var(--space-4) (#9) to sit the content closer under a single-row toolbar. The empty-row rule
-   * (a row with no content doesn't render) is enforced in the component, not here. */
-  margin-bottom: var(--space-4);
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
   font-family: var(--font-ui);
 }
 
 .row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
 }
 
-/* Left slot: the natural-order group (pills, chips, search). Allowed to shrink/wrap first. */
+/* Left slot: natural-order group (sub-nav pills, chips, search). Wraps internally, tight gap. */
 .left {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
-/* Right slot: right-justified. `margin-left:auto` keeps it hard-right even when the left slot wraps to
- * its own line (the old .inviteButton / .zoomControls hard-right behaviour, now centralized). */
+/* Right slot: a wrapping ROW of natural-width actions (Tell a story / Invite / Add Photos), NOT a
+ * column of full-width buttons. Left-aligned (no dead gutter). */
 .right {
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-left: auto;
+  gap: 8px;
+}
+
+/* ── Desktop / small-tablet (≥ sm 40rem): restore the ORIGINAL horizontal two-slot row verbatim, so
+ *    desktop and iPad are unchanged from before this pass. ── */
+@media (min-width: 40rem) {
+  .toolbar {
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .left {
+    gap: 4px;
+  }
+
+  .right {
+    /* Already `flex-direction: row` at base; desktop only re-adds the hard-right pin + roomier gap.
+     * `margin-left:auto` keeps the right slot hard-right even when the left slot wraps to its own line
+     * (the old .inviteButton / .zoomControls hard-right behaviour, centralized here). */
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+  }
 }

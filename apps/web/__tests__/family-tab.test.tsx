@@ -29,11 +29,18 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("tab=family"),
 }));
 
+// useIsCompact drives BOTH FamilyTab (where the zoom controls go) and FamilySurfaceNav (toolbar vs
+// strip). Default false = desktop (the existing toolbar-row assertions below rely on it).
+let compact = false;
+vi.mock("@/app/_kindred/useIsCompact", () => ({ useIsCompact: () => compact }));
+
 import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
 // The toolbar's row class — used to assert the empty-row rule fires at the FamilyTab CALL SITE (not
 // just in the isolated HubToolbar unit test): the List view with <2 families must collapse R2 so only
 // ONE row (R1) renders, guarding the `<FamilyChips/>`-element-vs-null truthiness trap from regressing.
 import toolbarStyles from "@/app/hub/HubToolbar.module.css";
+import familyStyles from "@/app/hub/tabs/FamilyTab.module.css";
+import { hub } from "@/app/_copy";
 
 const TREE: KinshipTreeData = { familyId: "F", rootPersonId: "p1", nodes: [], edges: [] };
 
@@ -66,6 +73,7 @@ function renderTab(
 afterEach(() => {
   cleanup();
   push.mockClear();
+  compact = false;
 });
 
 const TWO_FAMILIES = [
@@ -160,6 +168,30 @@ describe("FamilyTab shared-toolbar empty-row rule (#189)", () => {
     });
     expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(2);
     expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
+    expect(screen.queryByTestId("tree-controls")).toBeNull();
+  });
+});
+
+// ADR-0025 device round (Pass 2): on a PHONE the tree's Fit/−/+ zoom controls FLOAT on the tree canvas
+// (a bottom sheet would cover the tree being zoomed), NOT in the toolbar. The strip has no View icon.
+describe("FamilyTab compact — zoom floats on the tree, not in a sheet", () => {
+  it("tree view: the zoom controls render inside the floating .zoomFloat overlay on the canvas", () => {
+    compact = true;
+    const { container } = renderTab("tree");
+    const float = container.querySelector(`.${familyStyles.zoomFloat}`);
+    expect(float).not.toBeNull();
+    // The Fit/−/+ controls live inside the float overlay (not in a toolbar row).
+    expect(float!.querySelector('[data-testid="tree-controls"]')).not.toBeNull();
+    // No desktop toolbar rows on the compact branch (FamilySurfaceNav renders the strip, not HubToolbar).
+    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(0);
+    // And no View icon-sheet on the Family strip.
+    expect(screen.queryByRole("button", { name: hub.mobileControls.viewLabel })).toBeNull();
+  });
+
+  it("list view: no zoom float (the tree isn't shown)", () => {
+    compact = true;
+    const { container } = renderTab("list");
+    expect(container.querySelector(`.${familyStyles.zoomFloat}`)).toBeNull();
     expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 });

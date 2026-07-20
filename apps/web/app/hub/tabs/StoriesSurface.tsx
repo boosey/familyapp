@@ -30,7 +30,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
+import { LayoutGrid, UsersRound, ListFilter, SquarePen } from "lucide-react";
 import { HubToolbar } from "../HubToolbar";
+import { IconSheet } from "../IconSheet";
+import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
+import strip from "../HubControlStrip.module.css";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { ActionButton } from "@/app/_kindred/ActionButton";
@@ -98,6 +103,11 @@ export function StoriesSurface({
   // `useSearchParams()` can be null during SSR / static generation (no router context) — guard the read
   // so a server/static render of an empty-state body doesn't throw (mirrors FamilyChips' null handling).
   const searchParams = useSearchParams();
+
+  // ADR-0024: on a phone (< 40rem) the secondary controls (search, family chips, view selector) move
+  // into a "⚙ Filters & view" bottom sheet; the sub-nav + Tell-a-story stay on a compact primary row.
+  // Desktop (≥ 40rem) renders the existing inline HubToolbar unchanged. SSR/first-paint = desktop.
+  const compact = useIsCompact();
 
   // Initial mode from the URL (?mode=) so the Read view's Back can restore it; then local state for
   // instant, no-server-roundtrip switching.
@@ -169,30 +179,48 @@ export function StoriesSurface({
     ) : null;
 
   /* ── R1-right: draft + intake reminders, then the Tell-a-story button ─────────────────────────── */
+  // The two compact reminders (draft + intake) are extracted so the compact strip can move them to a
+  // full-width row BELOW the icon strip (they don't fit inline beside the pills + 3 icons + action at
+  // 360px); desktop keeps them inline beside the Tell button exactly as before.
+  const reminders =
+    hasDrafts || intakeIncomplete ? (
+      <>
+        {hasDrafts ? (
+          <button
+            type="button"
+            className={styles.reminderButton}
+            aria-expanded={expanded}
+            // Point aria-controls at the list only once it's rendered — a dangling ref is an a11y bug.
+            aria-controls={expanded ? listId : undefined}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <span className={styles.reminderTop}>{hub.stories.draftReminder(selfDrafts.length)}</span>
+            <span className={styles.reminderAction}>{hub.stories.draftReminderAction}</span>
+          </button>
+        ) : null}
+
+        {intakeIncomplete ? (
+          <Link href="/hub/about-you" className={styles.reminderButton} aria-label={hub.intake.aria}>
+            <span className={styles.reminderTop}>{hub.intake.reminderTop}</span>
+            <span className={styles.reminderAction}>{hub.intake.reminderAction}</span>
+          </Link>
+        ) : null}
+      </>
+    ) : null;
+
+  // Desktop: labeled Tell button. Compact: iconified (label yields to fit the 360px budget alongside the
+  // visible pills + up to three labeled icons), keeping its accessible name via aria-label.
+  const tellButtonDesktop = <ActionButton href="/hub/tell">{hub.stories.tellTitle}</ActionButton>;
+  const tellButtonCompact = (
+    <ActionButton href="/hub/tell" aria-label={hub.mobileControls.tellAria}>
+      <SquarePen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+    </ActionButton>
+  );
+
   const row1Right = (
     <div className={styles.actionsCluster}>
-      {hasDrafts ? (
-        <button
-          type="button"
-          className={styles.reminderButton}
-          aria-expanded={expanded}
-          // Point aria-controls at the list only once it's rendered — a dangling ref is an a11y bug.
-          aria-controls={expanded ? listId : undefined}
-          onClick={() => setExpanded((v) => !v)}
-        >
-          <span className={styles.reminderTop}>{hub.stories.draftReminder(selfDrafts.length)}</span>
-          <span className={styles.reminderAction}>{hub.stories.draftReminderAction}</span>
-        </button>
-      ) : null}
-
-      {intakeIncomplete ? (
-        <Link href="/hub/about-you" className={styles.reminderButton} aria-label={hub.intake.aria}>
-          <span className={styles.reminderTop}>{hub.intake.reminderTop}</span>
-          <span className={styles.reminderAction}>{hub.intake.reminderAction}</span>
-        </Link>
-      ) : null}
-
-      <ActionButton href="/hub/tell">{hub.stories.tellTitle}</ActionButton>
+      {reminders}
+      {tellButtonDesktop}
     </div>
   );
 
@@ -201,6 +229,17 @@ export function StoriesSurface({
     activeFamilies.length >= 2 ? (
       <FamilyChips inline families={activeFamilies} selected={chipSelected} />
     ) : null;
+
+  // ADR-0025 Increment 4 — per-icon active badges on the compact strip. Reuses the SAME detection the
+  // single "⚙" gear's summed count used (searching / chip subset), now split per icon: the Filter icon
+  // badges an active search, the Family icon badges a family SUBSET (some — not all — selected). The
+  // View icon is NEVER badged (a Masonry/Column layout choice hides no content). Each is a 0/1 count so
+  // the accent badge shows a "1" (single-source: these same signals drive nothing else here).
+  const filterActive = searching; // the only thing in the Stories Filter sheet is the search field
+  const chipsFiltered =
+    activeFamilies.length >= 2 &&
+    chipSelected !== "all" &&
+    chipSelected.length !== activeFamilies.length;
 
   /* ── R2-right: the Masonry/Column feed-view selector (Feed mode, not while searching) ──────────── */
   const viewSelector =
@@ -217,9 +256,62 @@ export function StoriesSurface({
       />
     ) : null;
 
+  // ADR-0025 Increment 3/4 — the compact control strip. The single "⚙ Filters & view" gear split into
+  // per-concern labeled icon-sheets: View ← the Masonry/Column selector (feed mode, not searching);
+  // Family ← the family chips (≥2 families); Filter ← the search field. Each icon renders ONLY when its
+  // content exists (a 1-family viewer has no Family icon; searching hides the View icon). Increment 4:
+  // the Family + Filter icons badge when they're narrowing the view (chip subset / active search); View
+  // is never badged (a layout choice hides no content).
+  // NON-STICKY (ADR-0025 2026-07-20 amendment): this is normal top-matter that scrolls away with content.
   return (
     <div className={styles.wrap}>
-      <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />
+      {compact ? (
+        <>
+          <div className={strip.strip}>
+            {/* Sub-tab pills stay VISIBLE inline (primary wayfinding, never behind an icon). The wrapper
+                is the strip's explicit shrink valve (flex:1 1 auto; min-width:0) so the pills absorb any
+                horizontal deficit and the icon cluster never has to shrink/wrap at 360px. */}
+            <div className={strip.pills}>{modeNav}</div>
+            <div className={strip.right}>
+              {viewSelector ? (
+                <IconSheet
+                  icon={LayoutGrid}
+                  label={hub.mobileControls.viewLabel}
+                  sheetTitle={hub.mobileControls.viewLabel}
+                >
+                  {viewSelector}
+                </IconSheet>
+              ) : null}
+              {familyChips ? (
+                <IconSheet
+                  icon={UsersRound}
+                  label={hub.mobileControls.familyLabel}
+                  sheetTitle={hub.mobileControls.familyLabel}
+                  badgeCount={chipsFiltered ? 1 : 0}
+                >
+                  {familyChips}
+                </IconSheet>
+              ) : null}
+              {searchField ? (
+                <IconSheet
+                  icon={ListFilter}
+                  label={hub.mobileControls.filterLabel}
+                  sheetTitle={hub.mobileControls.filterLabel}
+                  badgeCount={filterActive ? 1 : 0}
+                >
+                  {searchField}
+                </IconSheet>
+              ) : null}
+              {tellButtonCompact}
+            </div>
+          </div>
+          {/* Reminders don't fit inline at 360px beside pills + 3 icons + action — full-width row below,
+              still reachable. Absent when there are no drafts and intake is complete. */}
+          {reminders ? <div className={strip.belowRow}>{reminders}</div> : null}
+        </>
+      ) : (
+        <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />
+      )}
 
       {/* Resume: the viewer's own ask-less drafts still in review, revealed by the draft reminder. Each
           links to /hub/tell/[storyId]. Full-width BELOW the toolbar (not inside a toolbar slot). */}

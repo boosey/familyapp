@@ -37,7 +37,10 @@ import {
 } from "./google-photos-actions";
 import { prepareAlbumPhoto } from "./prepare-photo";
 import { uploadPhotoDirect } from "./direct-upload";
+import { ImagePlus } from "lucide-react";
 import { hub } from "@/app/_copy";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
+import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
 import { AddPhotosMenu } from "./AddPhotosMenu";
 import { AlbumDestinationModal } from "./AlbumDestinationModal";
 import { seedComposeFamilies } from "@/lib/compose-scope";
@@ -130,6 +133,9 @@ export function AlbumUploader({
   onImportGoogle?: (sessionId: string, familyIds: string[]) => void;
 }) {
   const router = useRouter();
+  // ADR-0025 Increment 3 Step B: iconify the Add-Photos trigger on the compact strip (labeled on
+  // desktop). SSR/first-paint = desktop (labeled), so no hydration mismatch; behavior/menu unchanged.
+  const compact = useIsCompact();
   const fileInputRef = useRef<HTMLInputElement>(null);
   // The Add Photos trigger — the destination modal restores focus here when it closes (#94), since the
   // menuitem that opened it has unmounted with the dropdown.
@@ -649,6 +655,11 @@ export function AlbumUploader({
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <AddPhotosMenu
             label={hub.album.addPhotosMenu}
+            icon={
+              compact ? (
+                <ImagePlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+              ) : undefined
+            }
             triggerRef={addMenuTriggerRef}
             device={
               showFileUpload

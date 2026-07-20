@@ -144,6 +144,12 @@ export function PersonDetails({
         right: 12,
         width: 280,
         maxWidth: "calc(100% - 24px)",
+        // Height cap (ADR-0024 Round B): this node-anchored side panel (NOT a centered modal — it stays
+        // a side panel this pass) needs its own cap so a tall edit form scrolls INSIDE the panel instead
+        // of running off the bottom of the canvas. Mirrors the tree canvas' 12px top/right inset.
+        maxHeight: "calc(100dvh - 24px)",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
         background: "var(--surface-card)",
         border: "var(--border-width) solid var(--border)",
         borderRadius: "var(--radius-lg)",

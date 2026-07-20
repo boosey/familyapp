@@ -145,11 +145,12 @@ describe("AlbumPhotoViewer", () => {
   it("closes on a backdrop click (but not on a click inside the dialog)", () => {
     const onClose = vi.fn();
     render(<AlbumPhotoViewer photo={READ_ONLY} onClose={onClose} />);
-    // A click that originates on the dialog card does not close...
+    // A click that originates on the dialog card does not close (ModalShell stops it bubbling to the
+    // overlay)...
     fireEvent.click(screen.getByRole("dialog"));
     expect(onClose).not.toHaveBeenCalled();
-    // ...a click on the backdrop itself does.
-    fireEvent.click(screen.getByTestId("album-viewer-backdrop"));
+    // ...a click on the ModalShell overlay (the scrim, role="presentation") does.
+    fireEvent.click(screen.getByRole("presentation"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
