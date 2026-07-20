@@ -22,6 +22,7 @@ vi.mock("@/app/hub/stories/[id]/LikeButton", () => ({ LikeButton: () => null }))
 vi.mock("@/app/hub/stories/[id]/FollowUpButton", () => ({ FollowUpButton: () => null }));
 vi.mock("@/app/hub/stories/[id]/OwnerActionMenu", () => ({ OwnerActionMenu: () => null }));
 vi.mock("@/app/hub/stories/[id]/StoryEditor", () => ({ StoryEditor: () => null }));
+vi.mock("@/app/hub/stories/[id]/StoryDateEditor", () => ({ StoryDateEditor: () => null }));
 // StoryReadBody is intentionally NOT mocked — it renders the prose, our anchor for "the row is ABOVE
 // the reading body" (i.e. it was relocated up, not left at the very bottom).
 
@@ -50,6 +51,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
     updatedAt: "2026-01-01T00:00:00.000Z",
     narratorName: "Eleanor",
     eraLabelStr: "1995",
+    storyDate: null,
+    storyDateProvenance: null,
     recordingMediaId: null,
     viewerFamilies: [],
     initialTargetFamilies: [],

@@ -140,6 +140,16 @@ export default async function StoryDetailPage({
         updatedAt={story.updatedAt ? story.updatedAt.toISOString() : ""}
         narratorName={narratorName}
         eraLabelStr={storyDateLabel(story)}
+        storyDate={
+          story.occurredKind
+            ? {
+                kind: story.occurredKind,
+                date: story.occurredDate ?? "",
+                endDate: story.occurredEndDate ?? null,
+              }
+            : null
+        }
+        storyDateProvenance={story.occurredProvenance ?? null}
         recordingMediaId={story.recordingMediaId}
         viewerFamilies={viewerFamilies}
         initialTargetFamilies={targets}

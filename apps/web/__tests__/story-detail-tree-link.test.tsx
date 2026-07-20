@@ -25,6 +25,7 @@ vi.mock("@/app/hub/stories/[id]/FollowUpButton", () => ({ FollowUpButton: () => 
 vi.mock("@/app/hub/stories/[id]/OwnerActionMenu", () => ({ OwnerActionMenu: () => null }));
 vi.mock("@/app/hub/stories/[id]/StoryReadBody", () => ({ StoryReadBody: () => null }));
 vi.mock("@/app/hub/stories/[id]/StoryEditor", () => ({ StoryEditor: () => null }));
+vi.mock("@/app/hub/stories/[id]/StoryDateEditor", () => ({ StoryDateEditor: () => null }));
 
 afterEach(() => {
   cleanup();
@@ -45,6 +46,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
     updatedAt: "2026-01-01T00:00:00.000Z",
     narratorName: "Eleanor",
     eraLabelStr: "1995",
+    storyDate: null,
+    storyDateProvenance: null,
     recordingMediaId: null,
     viewerFamilies: [],
     initialTargetFamilies: [],
