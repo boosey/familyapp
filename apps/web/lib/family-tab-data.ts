@@ -14,9 +14,11 @@ import {
   listMyKin,
   listUnplacedMembers,
   listFamiliesStewardedBy,
+  listGovernableKinEdges,
   resolveKinshipTree,
   AuthorizationError,
   type AuthContext,
+  type GovernableKinEdge,
   type KinListEntry,
   type KinshipTreeData,
   type UnplacedMember,
@@ -40,6 +42,12 @@ export interface FamilyTabData {
    * the unplaced surface (computed server-side so the button never flashes). The write path re-checks.
    */
   viewerIsSteward: boolean;
+  /**
+   * #254 — family's currently-visible edges with per-edge capability flags (steward Remove / subject
+   * Hide). Loaded separately from the windowed tree projection so the governance UI never relies on
+   * `KinshipTreeData.edges` (which lacks those flags).
+   */
+  governableEdges: GovernableKinEdge[];
 }
 
 /**
@@ -82,11 +90,12 @@ export async function loadFamilyTabData(
   }
   if (!tree) return null;
 
-  const [kin, unplaced, stewarded] = await Promise.all([
+  const [kin, unplaced, stewarded, governableEdges] = await Promise.all([
     listMyKin(db, ctx, familyId),
     listUnplacedMembers(db, ctx, familyId),
     listFamiliesStewardedBy(db, ctx.personId),
+    listGovernableKinEdges(db, ctx, familyId),
   ]);
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
-  return { familyId, focusPersonId, tree, kin, unplaced, viewerIsSteward };
+  return { familyId, focusPersonId, tree, kin, unplaced, viewerIsSteward, governableEdges };
 }

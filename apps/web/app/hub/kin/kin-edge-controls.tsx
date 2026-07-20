@@ -6,8 +6,9 @@
  * the audited read composition computed): steward → Endorse / Remove; a self-endpoint subject → Hide.
  * The server actions re-check every gate, so these flags are affordances, not the authorization.
  *
- * Minimal, matching the Kindred conventions used by the rest of /hub/kin (`<KindredButton>`, inline
- * error copy). Each control is its own tiny form carrying the edge identity in hidden fields.
+ * Re-homed onto the Family tree (#254): PersonDetails + the List-view relationships section. On
+ * success, `onSuccess` lets the mount point refresh client tree state (TreeCanvas merge is additive
+ * and won't drop a denied edge on its own) and call `router.refresh()`.
  */
 import { useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
@@ -39,6 +40,7 @@ function ActionButton({
   label,
   pendingLabel,
   onError,
+  onSuccess,
 }: {
   familyId: string;
   edge: GovernableKinEdge;
@@ -46,19 +48,29 @@ function ActionButton({
   label: string;
   pendingLabel: string;
   onError: (msg: string | null) => void;
+  onSuccess?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   function onSubmit(formData: FormData) {
     onError(null);
     startTransition(async () => {
       const result = await action(formData);
-      if (result?.error) onError(result.error);
+      if (result?.error) {
+        onError(result.error);
+        return;
+      }
+      onSuccess?.();
     });
   }
   return (
     <form action={onSubmit} style={{ display: "inline" }}>
       <EdgeFields familyId={familyId} edge={edge} />
-      <KindredButton type="submit" label={pending ? pendingLabel : label} disabled={pending} />
+      <KindredButton
+        type="submit"
+        size="small"
+        label={pending ? pendingLabel : label}
+        disabled={pending}
+      />
     </form>
   );
 }
@@ -66,16 +78,22 @@ function ActionButton({
 export function KinEdgeControls({
   familyId,
   edge,
+  onSuccess,
 }: {
   familyId: string;
   edge: GovernableKinEdge;
+  /** Fired after a successful affirm/deny/hide so the mount can refresh projection + client state. */
+  onSuccess?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
 
   if (!edge.viewerIsSteward && !edge.viewerCanHide) return null;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
+    <div
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}
+      data-testid="kin-edge-controls"
+    >
       {edge.viewerIsSteward && edge.state !== "affirmed" ? (
         <ActionButton
           familyId={familyId}
@@ -84,6 +102,7 @@ export function KinEdgeControls({
           label={hub.kin.affirm}
           pendingLabel={hub.kin.affirming}
           onError={setError}
+          onSuccess={onSuccess}
         />
       ) : null}
       {edge.viewerIsSteward ? (
@@ -94,6 +113,7 @@ export function KinEdgeControls({
           label={hub.kin.deny}
           pendingLabel={hub.kin.denying}
           onError={setError}
+          onSuccess={onSuccess}
         />
       ) : null}
       {edge.viewerCanHide ? (
@@ -104,6 +124,7 @@ export function KinEdgeControls({
           label={hub.kin.hide}
           pendingLabel={hub.kin.hiding}
           onError={setError}
+          onSuccess={onSuccess}
         />
       ) : null}
       {error ? (

@@ -43,6 +43,7 @@ import {
 import { hub } from "@/app/_copy";
 import type {
   AddRelativeRelation,
+  GovernableKinEdge,
   KinshipTreeData,
   ResolvedKinshipEdge,
   TreeNode,
@@ -120,6 +121,11 @@ export interface TreeCanvasProps {
    * FamilyTab passes `router.refresh()`. Optional so bare test mounts stay router-free.
    */
   onFamilyMutation?: () => void;
+  /**
+   * #254 — visible edges with stewardship/hide capability flags. Threaded into PersonDetails so
+   * Remove/Hide are reachable from the tree (not the windowed `initial.edges`, which lack flags).
+   */
+  governableEdges?: readonly GovernableKinEdge[];
 }
 
 
@@ -212,6 +218,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     navigate = defaultNavigate,
     unplacedMembers = [],
     onFamilyMutation,
+    governableEdges = [],
   }: TreeCanvasProps,
   ref,
 ) {
@@ -789,6 +796,14 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           onClose={() => setDetails(null)}
           onSaved={(personId) => void refetchAnchor(personId)}
           onInvite={onInvite}
+          governableEdges={governableEdges}
+          onEdgeGoverned={(edge) => {
+            // Same-family merge is additive — a denied/hidden edge would otherwise linger in client
+            // state after router.refresh(). Drop it locally, then refresh server props (unplaced, etc.).
+            const key = `${edge.edgeType}:${edge.personAId}:${edge.personBId}`;
+            setEdges((prev) => prev.filter((e) => edgeKey(e) !== key));
+            onFamilyMutation?.();
+          }}
         />
       )}
 

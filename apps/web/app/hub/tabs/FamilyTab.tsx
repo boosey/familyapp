@@ -17,12 +17,13 @@
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { KinListEntry, KinshipTreeData, UnplacedMember } from "@chronicle/core";
+import type { GovernableKinEdge, KinListEntry, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
+import { GovernableEdgesSection } from "./GovernableEdgesSection";
 import { FamilyChips } from "../FamilyChips";
 import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
@@ -47,6 +48,11 @@ export interface FamilyTabProps {
   unplaced?: UnplacedMember[];
   /** Steward-only: gates the destructive "remove member" action in the unplaced surface. */
   viewerIsSteward?: boolean;
+  /**
+   * #254 — visible edges with Remove/Hide capability flags (from `listGovernableKinEdges`). Threaded
+   * into the tree's PersonDetails and the List-view relationships section.
+   */
+  governableEdges?: GovernableKinEdge[];
   /**
    * The viewer's active families (chip data for the shared `?families=` filter, ADR-0021 §Tree #48).
    * The server gates the MOUNT on `families.length >= 2`, so this only carries chips when a chip bar is
@@ -85,6 +91,7 @@ export function FamilyTab({
   view = "tree",
   unplaced = [],
   viewerIsSteward = false,
+  governableEdges = [],
   families = [],
   scopeId,
   surface,
@@ -212,6 +219,7 @@ export function FamilyTab({
               navigate={(url) => router.push(url)}
               unplacedMembers={unplaced}
               onFamilyMutation={() => router.refresh()}
+              governableEdges={governableEdges}
             />
             {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
           </div>
@@ -223,6 +231,8 @@ export function FamilyTab({
       ) : (
         <>
           <KinList kin={kin} />
+          {/* #254: steward Remove / subject Hide for actable edges (same controls as PersonDetails). */}
+          <GovernableEdgesSection familyId={familyId} edges={governableEdges} />
           {unplacedPanel}
         </>
       )}
