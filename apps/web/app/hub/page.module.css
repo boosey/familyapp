@@ -37,6 +37,42 @@
   }
 }
 
+/* Collapse-on-scroll header (ADR-0025 Inc 2, phone only) — the compact branch adds these to `.header`.
+ * `sticky; top: 0` keeps the header in flow (no content offset to compensate) and pins it to the top of
+ * the viewport across the WHOLE page scroll: `.header` is a direct child of the tall `.container`, so it
+ * is its own containing block's full height (a sticky element nested inside a SHORT parent would un-stick
+ * almost immediately — that's why CollapsingHeader owns the <header> rather than wrapping an inner band).
+ * `.headerHidden` slides it up out of view. The header carries the page background (via `.header` below /
+ * the page) so content scrolling underneath never shows through the pinned header.
+ *
+ * Increment 3 note: the sticky control strip lands as a SIBLING below (first child of `.tabContent`),
+ * sticking at `top: 0` once this header slides away — they stack cleanly because this header is in-flow
+ * sticky. Only ever applied on compact, so no desktop @media layer and no max-width query. */
+.headerSticky {
+  position: sticky;
+  top: 0;
+  z-index: 1; /* above scrolling content, below any overlay — a local stacking bump, not a global z */
+  background: var(--surface-page);
+  transition: transform var(--dur-settle) var(--ease-quiet);
+  will-change: transform;
+}
+
+.headerHidden {
+  transform: translateY(-100%);
+}
+
+/* Reduced motion: the header still hides/shows, but instantly (no slide). Honors BOTH the OS query and
+ * the app's data-attribute switch (tokens.css already zeroes --dur-settle for the OS query, but the
+ * data-attribute path needs its own belt-and-suspenders here). */
+@media (prefers-reduced-motion: reduce) {
+  .headerSticky {
+    transition: none;
+  }
+}
+:global(:root[data-reduce-motion="on"]) .headerSticky {
+  transition: none;
+}
+
 .titleRow {
   display: flex;
   align-items: center;

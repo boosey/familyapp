@@ -30,6 +30,7 @@ import {
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubPrimaryNav } from "./HubPrimaryNav";
+import { CollapsingHeader } from "./CollapsingHeader";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
@@ -275,21 +276,10 @@ export default async function HubPage({
   return (
     <main className={styles.main}>
       <div className={styles.container}>
-        {/* Header */}
-        <header className={styles.header}>
-          {/* Title row */}
-          <div className={styles.titleRow}>
-            <div className={styles.titleGroup}>
-              <div>
-                <h1 className={styles.familyName}>
-                  {familyName}
-                </h1>
-              </div>
-            </div>
-            {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root
-                layout, so the hub no longer inlines its own copy in the header. */}
-          </div>
-
+        {/* Header (ADR-0025 Inc 2): CollapsingHeader OWNS the <header> so it can make the whole header
+            sticky + collapse-on-scroll on a phone (desktop renders it byte-for-byte as before). It wraps
+            the family name + the tabs row. */}
+        <CollapsingHeader familyName={familyName}>
           {/* Tabs row (ADR-0025): HubPrimaryNav renders the top pill row on desktop and swaps to a fixed
               BottomTabBar on a phone (mobile-only, via useIsCompact) — it owns `styles.tabsRow` itself so
               the compact branch leaves no empty bordered gap here. */}
@@ -298,7 +288,7 @@ export default async function HubPage({
             active={primaryActive}
             familiesParam={familiesRaw}
           />
-        </header>
+        </CollapsingHeader>
 
         {/* Tab content */}
         <section className={styles.tabContent}>
