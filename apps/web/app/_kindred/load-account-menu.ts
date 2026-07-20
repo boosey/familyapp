@@ -8,12 +8,16 @@ import type { AccountMenuItem } from "./KindredAccountMenu";
 import { logOut } from "./account-menu-actions";
 
 /**
- * The resolved account-menu model — everything the account UI needs, computed ONCE on the server so it
- * can be handed to BOTH presentations without duplicating the auth/steward resolution:
- *  - {@link AccountMenuMount}'s fixed top-right dropdown (desktop), and
- *  - the bottom nav bar's 5th "Account" item (mobile, ADR-0025 device round — the avatar moved off the
- *    top-right into the bottom bar so the control strip reclaims one full-width row; issue #233).
- * `null` when the viewer is not a signed-in account holder (anonymous / link-session).
+ * The resolved account-menu model — everything the account UI needs, computed ONCE on the server by
+ * the hub page and handed to BOTH presentations without duplicating the steward/person queries:
+ *  - the desktop avatar dropdown (`AccountMenuClient`, rendered by HubPrimaryNav at the right end of
+ *    the hub's tabs row), and
+ *  - the bottom nav bar's 5th "Account" item on a phone (ADR-0025 device round — the avatar moved off
+ *    the top-right into the bottom bar so the control strip reclaims one full-width row; issue #233).
+ *
+ * The former global {@link AccountMenuMount} (a root-layout copy of this load) was removed in #234 —
+ * it duplicated every query on each `/hub` render. Note this means non-hub authenticated screens no
+ * longer render an account menu; re-adding one there means calling this loader in that screen.
  */
 export interface AccountMenu {
   /** Up-to-two-letter monogram for the avatar disc. */
@@ -26,8 +30,8 @@ export interface AccountMenu {
   clerkSignOut: boolean;
 }
 
-/** Resolve the account menu for the current viewer. Mirrors the logic that lived inline in
- *  AccountMenuMount, now shared so the bottom-bar account item renders the SAME entries. */
+/** Resolve the account menu for the current viewer. The logic originally lived inline in the
+ *  (since removed) global AccountMenuMount; it now serves the bottom-bar account item only. */
 export async function loadAccountMenu(
   db: Parameters<typeof listFamiliesStewardedBy>[0],
   personId: string,

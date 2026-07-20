@@ -28,8 +28,7 @@ interface CollapsingHeaderProps {
  * Phone: the header gains `styles.headerSticky` (`sticky; top: 0`) and slides up
  * (`translateY(-100%)`) when the viewer scrolls DOWN into content, revealing again on scroll-UP —
  * reclaiming the header height while reading. The slide is CSS-only (a toggled class), suppressed under
- * `prefers-reduced-motion`. Scope is ONLY the family name + the (bottom-bar) nav; the account menu is a
- * separate global fixed element (AccountMenuMount) and is untouched.
+ * `prefers-reduced-motion`. Scope is ONLY the family name + the (bottom-bar) nav.
  *
  * Increment 3 note: the sticky control strip lands as the FIRST child of `.tabContent` (a sibling of
  * this header). Once this header slides away, the strip sticks at `top: 0` — they stack cleanly because
@@ -53,8 +52,6 @@ export function CollapsingHeader({ familyName, children }: CollapsingHeaderProps
             <h1 className={styles.familyName}>{familyName}</h1>
           </div>
         </div>
-        {/* Account menu is rendered globally (fixed top-right) by <AccountMenuMount> in the root layout,
-            so the hub does not inline its own copy here. */}
       </div>
       {children}
     </header>

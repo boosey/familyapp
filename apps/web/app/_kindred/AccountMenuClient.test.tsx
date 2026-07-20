@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * ADR-0025 device round (#233) — <AccountMenuClient> gates the account presentation by viewport:
- *  - desktop (useIsCompact === false, the server + first-paint contract) → the fixed top-right avatar +
- *    dropdown (KindredAccountMenu), exactly as before;
+ *  - desktop (useIsCompact === false, the server + first-paint contract) → the avatar + dropdown
+ *    (KindredAccountMenu), rendered in flow at the right end of the hub's tabs row (#234);
  *  - phone (true) → NOTHING (the bottom nav bar owns the account entry, so there's no duplicate).
  * useIsCompact is mocked (mirroring hub-primary-nav.test.tsx) to drive each branch.
  */
@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("AccountMenuClient viewport branch", () => {
-  it("renders the fixed avatar trigger on desktop", () => {
+  it("renders the avatar trigger on desktop", () => {
     compact = false;
     render(<AccountMenuClient initials="AL" viewerName="Ada Lovelace" items={items} clerkSignOut={false} />);
     // The avatar button (its accessible name is common.account.yourAccount) is present.

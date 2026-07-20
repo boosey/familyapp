@@ -6,6 +6,7 @@ import { HubTabs } from "./HubTabs";
 import type { HubTab } from "./HubTabs";
 import { BottomTabBar } from "./BottomTabBar";
 import type { AccountSheetProps } from "./AccountSheet";
+import { AccountMenuClient } from "@/app/_kindred/AccountMenuClient";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
 import pageStyles from "./page.module.css";
@@ -19,9 +20,11 @@ interface HubPrimaryNavProps {
   /** The raw current `?families=` browse-filter value (or null when absent) — preserved across tab
    *  switches. Threaded through, never re-derived, so a tab switch never loses the filter. */
   familiesParam: string | null;
-  /** The resolved account menu (#233) — passed to the bottom bar's 5th "Account" item on a phone. The
-   *  DESKTOP branch ignores it (the fixed top-right AccountMenuMount dropdown still serves desktop). */
-  account?: AccountSheetProps;
+  /** The resolved account menu (#233), shared by BOTH presentations from page.tsx's single
+   *  loadAccountMenu call (#234): the bottom bar's 5th "Account" item on a phone (uses items +
+   *  clerkSignOut only), and the DESKTOP avatar dropdown rendered at the right end of the tabs row
+   *  below (uses initials + viewerName too). */
+  account?: AccountSheetProps & { initials: string; viewerName: string | null };
 }
 
 /**
@@ -30,8 +33,9 @@ interface HubPrimaryNavProps {
  * Owns the SINGLE shared navigation behaviour (the `?tab=` push that preserves `?families=`) and swaps
  * only its skin by viewport:
  *  - desktop (`useIsCompact() === false`, incl. the server + first-paint snapshot) → the existing top
- *    {@link HubTabs} pill row inside `styles.tabsRow` — byte-for-byte what the hub rendered before, so
- *    desktop never regresses and there is no hydration mismatch;
+ *    {@link HubTabs} pill row inside `styles.tabsRow`, with the account avatar dropdown
+ *    ({@link AccountMenuClient}) at the row's right end (#234) — vertically centered with the tabs,
+ *    right edge on the container boundary;
  *  - phone (`true`, corrected once after hydration) → the fixed {@link BottomTabBar}, and the top row is
  *    NOT rendered at all (no empty bordered gap left behind).
  *
@@ -44,10 +48,9 @@ interface HubPrimaryNavProps {
  * `position: fixed` descendants. HubPrimaryNav renders inside that header (page.tsx: CollapsingHeader
  * children). So the compact `BottomTabBar` — which is `position: fixed; bottom: 0` — MUST be portaled to
  * `document.body` to escape the transformed header and be truly viewport-relative; rendered in place it
- * would be positioned relative to the header (top of screen, sliding away with it). This is the same
- * viewport-level treatment as the global fixed `AccountMenuMount`. Increment 3's sticky control strip
- * faces the identical trap: any `position: fixed` element nested under a transformed sticky ancestor
- * must portal out.
+ * would be positioned relative to the header (top of screen, sliding away with it). Increment 3's
+ * sticky control strip faces the identical trap: any `position: fixed` element nested under a
+ * transformed sticky ancestor must portal out.
  */
 export function HubPrimaryNav({ primaryTabs, active, familiesParam, account }: HubPrimaryNavProps) {
   const router = useRouter();
@@ -72,6 +75,17 @@ export function HubPrimaryNav({ primaryTabs, active, familiesParam, account }: H
   return (
     <div className={pageStyles.tabsRow}>
       <HubTabs primaryTabs={primaryTabs} active={active} onChange={onChange} />
+      {/* Desktop account avatar (#234): right end of the tabs row, fed by the same single
+          loadAccountMenu call that feeds the phone bottom bar. AccountMenuClient's own compact
+          check never fires here — this branch only renders when compact is false. */}
+      {account && (
+        <AccountMenuClient
+          initials={account.initials}
+          viewerName={account.viewerName}
+          items={account.items}
+          clerkSignOut={account.clerkSignOut}
+        />
+      )}
     </div>
   );
 }
