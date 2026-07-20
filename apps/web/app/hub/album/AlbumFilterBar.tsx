@@ -69,6 +69,7 @@ export function AlbumFilterBar({
   addSlot,
   familyChips,
   compact = false,
+  familyFilterActive = false,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -88,9 +89,11 @@ export function AlbumFilterBar({
    *  bottom sheet; only "Add Photos" stays on the primary row. Desktop (false) renders the inline
    *  two-row HubToolbar unchanged. AlbumControls decides this via useIsCompact. */
   compact?: boolean;
-  /** Number of non-default filters/view options. Plumbed from AlbumControls for Increment 4's per-icon
-   *  active badges; NOT consumed yet in Step B (the single-gear badge was dropped). */
-  activeCount?: number;
+  /** ADR-0025 Increment 4 — whether the family-chip filter is narrowed to a SUBSET (computed upstream in
+   *  AlbumSurface, which owns the selection). Badges the Family icon on the compact strip; the chips are
+   *  opaque inside the sheet, so this feeds the badge. The Filter icon's badge is derived HERE from the
+   *  filter value (isFilterActive), and View is never badged. */
+  familyFilterActive?: boolean;
 }) {
   const control: React.CSSProperties = {
     minHeight: 40,
@@ -182,12 +185,13 @@ export function AlbumFilterBar({
     </div>
   );
 
-  // ADR-0025 Increment 3 Step B — the compact control strip (shared HubControlStrip layout). The single
-  // "⚙ Filters & view" gear splits into per-concern labeled icon-sheets: View ← the view/layout controls
+  // ADR-0025 Increment 3/4 — the compact control strip (shared HubControlStrip layout). The single "⚙
+  // Filters & view" gear split into per-concern labeled icon-sheets: View ← the view/layout controls
   // (rightSlot); Family ← the family chips (≥2 families); Filter ← the When/facets/Search cluster. Album
   // has NO sub-tab pills, so the strip's left side is empty and the icon cluster + iconified Add-Photos
-  // action right-align. Each icon renders ONLY when its content exists. NON-STICKY. Per-icon active
-  // badges are Increment 4 — `activeCount` is no longer consumed here (kept in the prop for that step).
+  // action right-align. Each icon renders ONLY when its content exists. NON-STICKY. Increment 4: the
+  // Filter icon badges an engaged When/facets/search filter (isFilterActive over the value); the Family
+  // icon badges a narrowed family subset (familyFilterActive); View is never badged.
   if (compact) {
     return (
       <div role="group" aria-label={hub.album.filterBarAria}>
@@ -208,6 +212,7 @@ export function AlbumFilterBar({
                 icon={UsersRound}
                 label={hub.mobileControls.familyLabel}
                 sheetTitle={hub.mobileControls.familyLabel}
+                badgeCount={familyFilterActive ? 1 : 0}
               >
                 {familyChips}
               </IconSheet>
@@ -216,6 +221,7 @@ export function AlbumFilterBar({
               icon={ListFilter}
               label={hub.mobileControls.filterLabel}
               sheetTitle={hub.mobileControls.filterLabel}
+              badgeCount={isFilterActive(value) ? 1 : 0}
             >
               {filterCluster}
             </IconSheet>

@@ -127,6 +127,17 @@ describe("FamilySurfaceNav", () => {
       expect(within(dialog).getByTestId("fam-chips")).toBeTruthy();
     });
 
+    it("NEVER badges the Family icon (Increment 4) — the chips are a single-select scope, not a filter", () => {
+      compact = true;
+      render(
+        <FamilySurfaceNav active="tree" familiesParam="fam-a" showRequests row2Left={CHIPS} />,
+      );
+      // A badged trigger's aria-label would gain the active-count phrase; the Family-tab icon never does.
+      const familyIcon = screen.getByRole("button", { name: new RegExp(hub.mobileControls.familyLabel) });
+      expect(familyIcon.getAttribute("aria-label")).not.toContain(hub.mobileControls.activeCountAria(1));
+      expect(familyIcon.getAttribute("aria-label")).toBe(hub.mobileControls.familyLabel);
+    });
+
     it("hides the Family icon when there are no chips (Requests tab / <2 families)", () => {
       compact = true;
       // The Requests/no-family path passes no row2Left.

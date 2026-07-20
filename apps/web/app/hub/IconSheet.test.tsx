@@ -40,28 +40,32 @@ describe("IconSheet", () => {
     expect(dialog.textContent).toContain("secondary controls");
   });
 
-  it("renders NO badge when badgeCount is 0 or undefined", () => {
+  it("renders NO badge when badgeCount is 0 or undefined (name is just the label)", () => {
     const { rerender } = render(
       <IconSheet icon={LayoutGrid} label="View" sheetTitle="View">
         <p>x</p>
       </IconSheet>,
     );
-    expect(screen.queryByLabelText(/filter.* active/)).toBeNull();
+    // Unbadged: the trigger's accessible name is exactly the label, with no active-count phrase.
+    expect(screen.getByRole("button", { name: "View" }).getAttribute("aria-label")).toBe("View");
     rerender(
       <IconSheet icon={LayoutGrid} label="View" sheetTitle="View" badgeCount={0}>
         <p>x</p>
       </IconSheet>,
     );
-    expect(screen.queryByLabelText(/filter.* active/)).toBeNull();
+    expect(screen.getByRole("button", { name: "View" }).getAttribute("aria-label")).toBe("View");
   });
 
-  it("renders the accent count badge (with its count) when badgeCount > 0", () => {
+  it("badges when badgeCount > 0 — the visible count + the active-count phrase in the accessible name", () => {
     render(
       <IconSheet icon={LayoutGrid} label="Filter" sheetTitle="Filter" badgeCount={2}>
         <p>x</p>
       </IconSheet>,
     );
-    const badge = screen.getByLabelText("2 filters active");
-    expect(badge.textContent).toBe("2");
+    // The visible count pill shows "2"…
+    expect(screen.getByText("2")).toBeTruthy();
+    // …and the trigger's accessible name is label-first with the active-count phrase appended.
+    const trigger = screen.getByRole("button", { name: /Filter/ });
+    expect(trigger.getAttribute("aria-label")).toBe("Filter, 2 filters active");
   });
 });

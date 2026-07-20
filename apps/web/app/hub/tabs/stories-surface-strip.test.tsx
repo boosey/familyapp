@@ -100,14 +100,15 @@ describe("StoriesSurface compact strip (Increment 3 Step A)", () => {
   it("compact hides the View icon once the viewer is searching", () => {
     compact = true;
     render(<StoriesSurface {...twoFamily} />);
-    // Type into the Filter sheet's search field → searching → the View icon disappears.
-    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
+    // Type into the Filter sheet's search field → searching → the View icon disappears. (Regex name:
+    // the Filter icon gains a badge suffix once searching, so match by label substring — Increment 4.)
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(hub.mobileControls.filterLabel) }));
     const searchbox = screen.getByRole("searchbox", { name: hub.browse.searchPlaceholder });
     fireEvent.change(searchbox, { target: { value: "naples" } });
-    expect(screen.queryByRole("button", { name: hub.mobileControls.viewLabel })).toBeNull();
+    expect(screen.queryByRole("button", { name: new RegExp(hub.mobileControls.viewLabel) })).toBeNull();
     // Family + Filter icons remain.
-    expect(screen.getByRole("button", { name: hub.mobileControls.familyLabel })).toBeTruthy();
-    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: new RegExp(hub.mobileControls.familyLabel) })).toBeTruthy();
+    expect(screen.getByRole("button", { name: new RegExp(hub.mobileControls.filterLabel) })).toBeTruthy();
   });
 
   // REGRESSION: reminders don't fit inline at 360px — they drop to a full-width row BELOW the strip but
@@ -122,5 +123,54 @@ describe("StoriesSurface compact strip (Increment 3 Step A)", () => {
     );
     // The draft reminder button is present (its top line names the draft count).
     expect(screen.getByRole("button", { name: /draft/i })).toBeTruthy();
+  });
+
+  // ── ADR-0025 Increment 4 — per-icon active badges ──────────────────────────────────────────────
+  // A badged IconSheet trigger's accessible NAME gains the active-count phrase (label-first, e.g.
+  // "Filter, 1 filter active"); unbadged it is just the label. So "is it badged?" = its name contains
+  // the activeCountAria phrase. View is NEVER badged.
+  const badgePhrase = hub.mobileControls.activeCountAria(1);
+  const iconByLabel = (label: string) =>
+    screen.getByRole("button", { name: new RegExp(label) });
+
+  it("badges the Filter icon only while searching, and never the View icon", () => {
+    compact = true;
+    render(<StoriesSurface {...twoFamily} />);
+    // Idle: the Filter icon name is just its label (no active-count phrase).
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+    // Search → the Filter icon badges (its name gains the phrase). View hides while searching.
+    fireEvent.click(iconByLabel(hub.mobileControls.filterLabel));
+    fireEvent.change(screen.getByRole("searchbox", { name: hub.browse.searchPlaceholder }), {
+      target: { value: "naples" },
+    });
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+    expect(screen.queryByRole("button", { name: new RegExp(hub.mobileControls.viewLabel) })).toBeNull();
+  });
+
+  it("badges the Family icon when the chip selection is a SUBSET, not when 'all'", () => {
+    compact = true;
+    // Subset: only f1 of the two families selected → Family badge.
+    const { rerender } = render(<StoriesSurface {...twoFamily} chipSelected={["f1"]} />);
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+    // All selected → no badge.
+    rerender(<StoriesSurface {...twoFamily} chipSelected={"all"} />);
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+  });
+
+  it("never badges the View icon (a layout choice hides no content)", () => {
+    compact = true;
+    render(<StoriesSurface {...twoFamily} />);
+    // View is never badged → its trigger's accessible name is EXACTLY the label (no active-count phrase).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel }).getAttribute("aria-label")).toBe(
+      hub.mobileControls.viewLabel,
+    );
   });
 });

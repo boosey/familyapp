@@ -230,6 +230,17 @@ export function StoriesSurface({
       <FamilyChips inline families={activeFamilies} selected={chipSelected} />
     ) : null;
 
+  // ADR-0025 Increment 4 — per-icon active badges on the compact strip. Reuses the SAME detection the
+  // single "⚙" gear's summed count used (searching / chip subset), now split per icon: the Filter icon
+  // badges an active search, the Family icon badges a family SUBSET (some — not all — selected). The
+  // View icon is NEVER badged (a Masonry/Column layout choice hides no content). Each is a 0/1 count so
+  // the accent badge shows a "1" (single-source: these same signals drive nothing else here).
+  const filterActive = searching; // the only thing in the Stories Filter sheet is the search field
+  const chipsFiltered =
+    activeFamilies.length >= 2 &&
+    chipSelected !== "all" &&
+    chipSelected.length !== activeFamilies.length;
+
   /* ── R2-right: the Masonry/Column feed-view selector (Feed mode, not while searching) ──────────── */
   const viewSelector =
     browsing && mode === "feed" && !searching ? (
@@ -245,11 +256,12 @@ export function StoriesSurface({
       />
     ) : null;
 
-  // ADR-0025 Increment 3 Step A — the compact control strip. The single "⚙ Filters & view" gear splits
-  // into per-concern labeled icon-sheets: View ← the Masonry/Column selector (feed mode, not searching);
+  // ADR-0025 Increment 3/4 — the compact control strip. The single "⚙ Filters & view" gear split into
+  // per-concern labeled icon-sheets: View ← the Masonry/Column selector (feed mode, not searching);
   // Family ← the family chips (≥2 families); Filter ← the search field. Each icon renders ONLY when its
-  // content exists (a 1-family viewer has no Family icon; searching hides the View icon), so no icon ever
-  // opens an empty sheet. Per-icon active badges are Increment 4 — Step A passes no badgeCount.
+  // content exists (a 1-family viewer has no Family icon; searching hides the View icon). Increment 4:
+  // the Family + Filter icons badge when they're narrowing the view (chip subset / active search); View
+  // is never badged (a layout choice hides no content).
   // NON-STICKY (ADR-0025 2026-07-20 amendment): this is normal top-matter that scrolls away with content.
   return (
     <div className={styles.wrap}>
@@ -275,6 +287,7 @@ export function StoriesSurface({
                   icon={UsersRound}
                   label={hub.mobileControls.familyLabel}
                   sheetTitle={hub.mobileControls.familyLabel}
+                  badgeCount={chipsFiltered ? 1 : 0}
                 >
                   {familyChips}
                 </IconSheet>
@@ -284,6 +297,7 @@ export function StoriesSurface({
                   icon={ListFilter}
                   label={hub.mobileControls.filterLabel}
                   sheetTitle={hub.mobileControls.filterLabel}
+                  badgeCount={filterActive ? 1 : 0}
                 >
                   {searchField}
                 </IconSheet>

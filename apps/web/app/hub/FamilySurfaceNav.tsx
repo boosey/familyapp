@@ -107,6 +107,9 @@ export function FamilySurfaceNav({
         <div className={strip.pills}>{nav}</div>
         <div className={strip.right}>
           {row2Left ? (
+            // Increment 4: NO badge here. The Family chips on this tab are a single-select SCOPE (always
+            // exactly one family's tree is shown), not a filter that hides content — a badge would be
+            // meaningless (there is no "narrowed subset" state; something is always selected).
             <IconSheet
               icon={UsersRound}
               label={hub.mobileControls.familyLabel}

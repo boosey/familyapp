@@ -36,19 +36,28 @@ export interface IconSheetProps {
 export function IconSheet({ icon: Icon, label, sheetTitle, badgeCount = 0, children }: IconSheetProps) {
   const [open, setOpen] = useState(false);
   const showBadge = badgeCount > 0;
+  // The button's accessible name is ALWAYS label-first, with the active-count appended when badged
+  // ("Filter" → "Filter, 1 filter active"). Set explicitly so the visible badge (aria-hidden below)
+  // doesn't reorder the computed name, and so a `getByRole("button", { name: /Filter/ })` still matches
+  // whether or not it's badged (the BottomTabBar badge convention).
+  const triggerLabel = showBadge
+    ? `${label}, ${hub.mobileControls.activeCountAria(badgeCount)}`
+    : label;
 
   return (
     <>
-      <button type="button" className={s.trigger} onClick={() => setOpen(true)}>
+      <button type="button" className={s.trigger} onClick={() => setOpen(true)} aria-label={triggerLabel}>
         <span className={s.iconWrap}>
           <Icon size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
           {showBadge ? (
-            <span className={s.badge} aria-label={hub.mobileControls.activeCountAria(badgeCount)}>
+            <span className={s.badge} aria-hidden="true">
               {badgeCount}
             </span>
           ) : null}
         </span>
-        <span className={s.label}>{label}</span>
+        <span className={s.label} aria-hidden="true">
+          {label}
+        </span>
       </button>
 
       <BottomSheet open={open} onClose={() => setOpen(false)} title={sheetTitle}>

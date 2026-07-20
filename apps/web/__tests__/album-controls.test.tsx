@@ -373,6 +373,60 @@ describe("AlbumControls mobile IconSheet strip (Increment 3 Step B)", () => {
     const dialog = screen.getByRole("dialog", { name: hub.mobileControls.filterLabel });
     expect(within(dialog).getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
   });
+
+  // ── ADR-0025 Increment 4 — per-icon active badges ──────────────────────────────────────────────
+  // A badged IconSheet trigger's accessible NAME gains the active-count phrase (e.g. "Filter, 1 filter
+  // active"); unbadged it is just the label. So "is it badged?" = its aria-label contains the phrase.
+  const badgePhrase = hub.mobileControls.activeCountAria(1);
+  const iconByLabel = (label: string) => screen.getByRole("button", { name: new RegExp(label) });
+
+  it("badges the Filter icon when a When/facets/search filter is active, and not otherwise", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    // Idle: no filter badge.
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+    // Type a caption/tag search inside the Filter sheet → the Filter icon badges.
+    fireEvent.click(iconByLabel(hub.mobileControls.filterLabel));
+    fireEvent.change(screen.getByRole("searchbox", { name: hub.album.filterTextLabel }), {
+      target: { value: "wedding" },
+    });
+    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+  });
+
+  it("badges the Family icon when the family filter is a subset (familyFilterActive), not otherwise", () => {
+    const { rerender } = render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive
+        emptyNote="(empty)"
+      />,
+    );
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).toContain(
+      badgePhrase,
+    );
+    rerender(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        familyFilterActive={false}
+        emptyNote="(empty)"
+      />,
+    );
+    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).not.toContain(
+      badgePhrase,
+    );
+  });
+
+  it("never badges the View icon", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    // View is never badged, so its trigger's accessible name is EXACTLY "View" (exact match — a loose
+    // /View/ regex would also hit the Grid/Masonry/List controls inside the sheet).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+  });
 });
 
 describe("AlbumControls empty album", () => {

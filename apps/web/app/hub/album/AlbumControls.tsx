@@ -31,7 +31,6 @@ import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
 import {
   AlbumFilterBar,
   EMPTY_FILTER,
-  isFilterActive,
   type AlbumFilterValue,
 } from "./AlbumFilterBar";
 import {
@@ -142,14 +141,11 @@ export function AlbumControls({
   // "⚙ Filters & view" bottom sheet, leaving only "Add Photos" on the primary row. Desktop is unchanged.
   const compact = useIsCompact();
 
-  // Active-count for the mobile trigger badge: one for an engaged filter (period/people/places/text —
-  // isFilterActive already collapses the four facets) + one for a non-default view + one for a narrowed
-  // family-chip filter. The family chip subset is opaque here (an upstream ReactNode), so AlbumSurface
-  // passes `familyFilterActive` down: on mobile the chips are hidden inside the closed sheet, so an
-  // un-counted family filter would leave the grid narrowed with no visible indication.
-  const activeCount =
-    (isFilterActive(filter) ? 1 : 0) + (view !== "masonry" ? 1 : 0) + (familyFilterActive ? 1 : 0);
-
+  // ADR-0025 Increment 4 — per-icon active badges. The Filter icon badges an engaged When/facets/search
+  // filter (AlbumFilterBar computes that itself via isFilterActive over the filter VALUE); the Family
+  // icon badges a narrowed family-chip subset — `familyFilterActive` (computed upstream in AlbumSurface,
+  // which owns the selection) is threaded through since the chips are opaque inside the sheet. The View
+  // icon is never badged (a layout choice hides no content), so `view` no longer feeds any badge.
   const hasBody = photos.length > 0 || pendingTiles.length > 0;
 
   // Empty album: no grid to host the full filter toolbar, so render a MINIMAL toolbar carrying only the
@@ -191,7 +187,7 @@ export function AlbumControls({
         familyChips={familyChips}
         addSlot={addSlot}
         compact={compact}
-        activeCount={activeCount}
+        familyFilterActive={familyFilterActive}
         rightSlot={
           <AlbumViewControls
             view={view}
