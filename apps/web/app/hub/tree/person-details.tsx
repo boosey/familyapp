@@ -71,10 +71,10 @@ export interface PersonDetailsProps {
    */
   governableEdges?: readonly GovernableKinEdge[];
   /**
-   * #254 — after a successful deny/hide/affirm: prune TreeCanvas client state + refresh server props.
-   * Identity of the acted-on edge is passed so the canvas can drop it (merge is additive-only).
+   * #254 — after a successful deny/hide/affirm. Canvas must prune client edges only for deny/hide
+   * (affirm keeps the edge; same-family merge won't restore a wrongly dropped edge when only state changed).
    */
-  onEdgeGoverned?: (edge: GovernableKinEdge) => void;
+  onEdgeGoverned?: (edge: GovernableKinEdge, kind: "affirm" | "deny" | "hide") => void;
   /** Overridable for tests; default to the real server actions. */
   checkEditable?: CheckEditableFn;
   saveEdit?: SaveEditFn;
@@ -325,7 +325,7 @@ export function PersonDetails({
                     <KinEdgeControls
                       familyId={familyId}
                       edge={edge}
-                      onSuccess={() => onEdgeGoverned?.(edge)}
+                      onSuccess={(kind) => onEdgeGoverned?.(edge, kind)}
                     />
                   </li>
                 ))}

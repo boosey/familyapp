@@ -7,8 +7,9 @@
  * The server actions re-check every gate, so these flags are affordances, not the authorization.
  *
  * Re-homed onto the Family tree (#254): PersonDetails + the List-view relationships section. On
- * success, `onSuccess` lets the mount point refresh client tree state (TreeCanvas merge is additive
- * and won't drop a denied edge on its own) and call `router.refresh()`.
+ * success, `onSuccess` reports which action ran so the mount can prune client tree state only for
+ * deny/hide (affirm must keep the edge visible — TreeCanvas merge won't restore a wrongly pruned
+ * edge when only `state` changed).
  */
 import { useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
@@ -20,6 +21,9 @@ import {
   hideEdgeAction,
   type ActionResult,
 } from "./actions";
+
+/** Which governance control succeeded — mount points prune the tree only for deny/hide. */
+export type KinEdgeGovernAction = "affirm" | "deny" | "hide";
 
 /** The hidden edge-identity fields every edge action reads server-side. */
 function EdgeFields({ familyId, edge }: { familyId: string; edge: GovernableKinEdge }) {
@@ -37,6 +41,7 @@ function ActionButton({
   familyId,
   edge,
   action,
+  kind,
   label,
   pendingLabel,
   onError,
@@ -45,10 +50,11 @@ function ActionButton({
   familyId: string;
   edge: GovernableKinEdge;
   action: (formData: FormData) => Promise<ActionResult>;
+  kind: KinEdgeGovernAction;
   label: string;
   pendingLabel: string;
   onError: (msg: string | null) => void;
-  onSuccess?: () => void;
+  onSuccess?: (kind: KinEdgeGovernAction) => void;
 }) {
   const [pending, startTransition] = useTransition();
   function onSubmit(formData: FormData) {
@@ -59,7 +65,7 @@ function ActionButton({
         onError(result.error);
         return;
       }
-      onSuccess?.();
+      onSuccess?.(kind);
     });
   }
   return (
@@ -83,7 +89,7 @@ export function KinEdgeControls({
   familyId: string;
   edge: GovernableKinEdge;
   /** Fired after a successful affirm/deny/hide so the mount can refresh projection + client state. */
-  onSuccess?: () => void;
+  onSuccess?: (kind: KinEdgeGovernAction) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +105,7 @@ export function KinEdgeControls({
           familyId={familyId}
           edge={edge}
           action={affirmEdgeAction}
+          kind="affirm"
           label={hub.kin.affirm}
           pendingLabel={hub.kin.affirming}
           onError={setError}
@@ -110,6 +117,7 @@ export function KinEdgeControls({
           familyId={familyId}
           edge={edge}
           action={denyEdgeAction}
+          kind="deny"
           label={hub.kin.deny}
           pendingLabel={hub.kin.denying}
           onError={setError}
@@ -121,6 +129,7 @@ export function KinEdgeControls({
           familyId={familyId}
           edge={edge}
           action={hideEdgeAction}
+          kind="hide"
           label={hub.kin.hide}
           pendingLabel={hub.kin.hiding}
           onError={setError}

@@ -19,7 +19,7 @@ vi.mock("../kin/actions", () => ({
   hideEdgeAction: vi.fn(async () => undefined),
 }));
 
-import { denyEdgeAction, hideEdgeAction } from "../kin/actions";
+import { affirmEdgeAction, denyEdgeAction, hideEdgeAction } from "../kin/actions";
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -130,18 +130,26 @@ it("ignores edges that do not touch the opened person", async () => {
   await waitFor(() => expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull());
 });
 
-it("calls onEdgeGoverned after a successful Remove", async () => {
+it("calls onEdgeGoverned with deny after a successful Remove", async () => {
   const e = edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true });
   const { onEdgeGoverned } = renderDetails([e]);
   fireEvent.click(await screen.findByRole("button", { name: hub.kin.deny }));
   await waitFor(() => expect(denyEdgeAction).toHaveBeenCalled());
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e));
+  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "deny"));
 });
 
-it("calls onEdgeGoverned after a successful Hide", async () => {
+it("calls onEdgeGoverned with hide after a successful Hide", async () => {
   const e = edge({ personAId: "alice", personBId: "bob", viewerCanHide: true });
   const { onEdgeGoverned } = renderDetails([e]);
   fireEvent.click(await screen.findByRole("button", { name: hub.kin.hide }));
   await waitFor(() => expect(hideEdgeAction).toHaveBeenCalled());
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e));
+  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "hide"));
+});
+
+it("calls onEdgeGoverned with affirm after Endorse (must not be treated as a prune)", async () => {
+  const e = edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true, state: "asserted" });
+  const { onEdgeGoverned } = renderDetails([e]);
+  fireEvent.click(await screen.findByRole("button", { name: hub.kin.affirm }));
+  await waitFor(() => expect(affirmEdgeAction).toHaveBeenCalled());
+  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "affirm"));
 });

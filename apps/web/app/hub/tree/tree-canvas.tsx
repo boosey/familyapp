@@ -797,11 +797,14 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           onSaved={(personId) => void refetchAnchor(personId)}
           onInvite={onInvite}
           governableEdges={governableEdges}
-          onEdgeGoverned={(edge) => {
+          onEdgeGoverned={(edge, kind) => {
             // Same-family merge is additive — a denied/hidden edge would otherwise linger in client
-            // state after router.refresh(). Drop it locally, then refresh server props (unplaced, etc.).
-            const key = `${edge.edgeType}:${edge.personAId}:${edge.personBId}`;
-            setEdges((prev) => prev.filter((e) => edgeKey(e) !== key));
+            // state after router.refresh(). Drop it locally for deny/hide only; affirm must keep the
+            // edge (content signature ignores state, so a pruned affirmed edge would not come back).
+            if (kind === "deny" || kind === "hide") {
+              const key = `${edge.edgeType}:${edge.personAId}:${edge.personBId}`;
+              setEdges((prev) => prev.filter((e) => edgeKey(e) !== key));
+            }
             onFamilyMutation?.();
           }}
         />

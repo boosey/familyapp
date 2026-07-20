@@ -75,7 +75,9 @@ export function GovernableEdgesSection({
             <KinEdgeControls
               familyId={familyId}
               edge={edge}
-              onSuccess={() => router.refresh()}
+              onSuccess={() => {
+                router.refresh();
+              }}
             />
           </li>
         ))}
