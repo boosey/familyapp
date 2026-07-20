@@ -182,6 +182,17 @@
    * mobile URL bar can't push the dialog off-screen). Both are pure design values — no JS math. */
   --modal-edge-inset: var(--space-5);
   --modal-max-height: 90dvh;
+
+  /* ── Mobile bottom tab bar (ADR-0025 Phase B, Increment 1) ───────────────────
+   * The fixed bottom primary-nav bar (phone only). `--bottom-bar-height` is the bar's OWN height,
+   * excluding the home-indicator safe area (that inset is added on top in the component's CSS). The
+   * hub content region reserves `--bottom-bar-height + safe-area-inset-bottom` of bottom padding so the
+   * last row never hides behind the bar. `--bottom-bar-z` sits ABOVE page content but BELOW the
+   * BottomSheet overlay (z 1000), so an open sheet always covers the bar — it matches the account
+   * menu's floating layer (they never overlap spatially). All pure design values (no JS math). */
+  --bottom-bar-height: 56px;
+  --bottom-bar-gap: 2px;
+  --bottom-bar-z: 50;
 }
 
 @keyframes kindred-listening {

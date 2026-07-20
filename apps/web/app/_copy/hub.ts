@@ -46,6 +46,9 @@ export const hub = {
     menuFamilySettings: "Family settings",
     menuFamilySettingsNamed: (name: string) => `${name} settings`,
     sectionsAria: "Hub sections",
+    // ADR-0025 mobile Phase B: accessible name for the fixed bottom tab bar (the mobile counterpart to
+    // the top `sectionsAria` nav). Distinct wording so the two navs never read as the same landmark.
+    bottomNavAria: "Primary sections",
     unreadAria: (badge: number) => `${badge} unread`,
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
     // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.

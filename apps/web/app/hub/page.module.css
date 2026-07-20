@@ -1,6 +1,16 @@
+/* MOBILE-FIRST (ADR-0025): reserve room at the bottom for the fixed BottomTabBar so the last row of
+ * content is never hidden behind it. The reserve is the bar's own height PLUS the home-indicator safe
+ * area (env is 0 on non-notch devices). Desktop has no bottom bar, so the reserve is dropped at ≥ sm. */
 .main {
   min-height: 100dvh;
   background: var(--surface-page);
+  padding-bottom: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 40rem) {
+  .main {
+    padding-bottom: 0;
+  }
 }
 
 .container {

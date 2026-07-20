@@ -12,7 +12,7 @@ interface FamilySurfaceNavProps {
   /** Which selector item is active (`aria-current="page"`). */
   active: FamilySurfaceView;
   /** The raw current `?families=` browse-filter value (or null when absent) — preserved on every
-   *  selector navigation, mirroring HubTabsNav / the old FamilySubNav. */
+   *  selector navigation, mirroring HubPrimaryNav / the old FamilySubNav. */
   familiesParam: string | null;
   /** Include the Requests item. Gated upstream to a steward with a live queue (or a Requests deep-link)
    *  so a plain member never sees a link into an empty steward surface. */

@@ -3,7 +3,8 @@
  *
  * Reads active tab from ?tab= searchParam (Next 15: searchParams is a Promise).
  * Loads feed + pending questions in parallel, then delegates to tab sub-components.
- * Navigation between tabs is handled by HubTabsNav (client wrapper around HubTabs).
+ * Navigation between tabs is handled by HubPrimaryNav (client wrapper: top HubTabs on desktop, a
+ * fixed BottomTabBar on a phone).
  */
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -28,7 +29,7 @@ import {
 } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
-import { HubTabsNav } from "./HubTabsNav";
+import { HubPrimaryNav } from "./HubPrimaryNav";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
@@ -123,7 +124,7 @@ export default async function HubPage({
   // active families (a client-crafted value is never trusted — unknown ids drop, absent = all, `none`
   // = the empty set). The browse surfaces multi-select; the tabs not yet multi-aware derive a single
   // `scope` from it, byte-for-byte the old behaviour. The RAW families value (normalized to a single
-  // string | null) is threaded to HubTabsNav so a tab switch preserves the filter.
+  // string | null) is threaded to HubPrimaryNav so a tab switch preserves the filter.
   const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
   const activeIds = activeFamilies.map((f) => f.familyId);
   const filter = parseFamilyFilter(familiesParam, activeIds);
@@ -289,14 +290,14 @@ export default async function HubPage({
                 layout, so the hub no longer inlines its own copy in the header. */}
           </div>
 
-          {/* Tabs row */}
-          <div className={styles.tabsRow}>
-            <HubTabsNav
-              primaryTabs={primaryTabs}
-              active={primaryActive}
-              familiesParam={familiesRaw}
-            />
-          </div>
+          {/* Tabs row (ADR-0025): HubPrimaryNav renders the top pill row on desktop and swaps to a fixed
+              BottomTabBar on a phone (mobile-only, via useIsCompact) — it owns `styles.tabsRow` itself so
+              the compact branch leaves no empty bordered gap here. */}
+          <HubPrimaryNav
+            primaryTabs={primaryTabs}
+            active={primaryActive}
+            familiesParam={familiesRaw}
+          />
         </header>
 
         {/* Tab content */}

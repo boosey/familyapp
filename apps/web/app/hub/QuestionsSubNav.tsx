@@ -10,7 +10,7 @@ interface QuestionsSubNavProps {
   /** The active ask surface key: "questions" (To answer), "ask", or "asks". */
   active: string;
   /** The raw current `?families=` browse-filter value (or null when absent) — preserved on switch,
-   *  mirroring HubTabsNav. */
+   *  mirroring HubPrimaryNav. */
   familiesParam: string | null;
   /** #142: the viewer's pending-ask count — badges the "To answer" sub-link; absent/0 hides the badge.
    *  Mirrors the top-level Questions tab badge (same `listPendingAsksForNarrator` count). */
@@ -32,7 +32,7 @@ const SUB_TABS = [
  * sit flush against the list below.
  *
  * Behaviour is unchanged: selection is client-driven (`router.push`) to the SAME existing
- * `?tab=questions|ask|asks` keys, preserving `?families=` the way HubTabsNav does (omitted when absent).
+ * `?tab=questions|ask|asks` keys, preserving `?families=` the way HubPrimaryNav does (omitted when absent).
  * The per-key content in page.tsx is unchanged. The #142 pending-ask badge on "To answer" is preserved.
  */
 export function QuestionsSubNav({ active, familiesParam, toAnswerBadge }: QuestionsSubNavProps) {
