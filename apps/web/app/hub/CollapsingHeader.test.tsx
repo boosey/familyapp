@@ -39,10 +39,12 @@ describe("CollapsingHeader viewport branch", () => {
       <CollapsingHeader familyName="The Marinos">{NAV}</CollapsingHeader>,
     );
     expect(container.querySelector("h1")?.textContent).toBe("The Marinos");
+    expect(container.querySelector(`.${styles.brandMark}`)).not.toBeNull();
     expect(getByTestId("nav-child")).toBeTruthy();
     compact = true;
     rerender(<CollapsingHeader familyName="The Marinos">{NAV}</CollapsingHeader>);
     expect(container.querySelector("h1")?.textContent).toBe("The Marinos");
+    expect(container.querySelector(`.${styles.brandMark}`)).not.toBeNull();
     expect(getByTestId("nav-child")).toBeTruthy();
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { BrandMark } from "@/app/_brand/BrandMark";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { useScrollDirection } from "./useScrollDirection";
 import styles from "./page.module.css";
@@ -48,9 +49,8 @@ export function CollapsingHeader({ familyName, children }: CollapsingHeaderProps
       {/* Title row */}
       <div className={styles.titleRow}>
         <div className={styles.titleGroup}>
-          <div>
-            <h1 className={styles.familyName}>{familyName}</h1>
-          </div>
+          <BrandMark size={40} className={styles.brandMark} />
+          <h1 className={styles.familyName}>{familyName}</h1>
         </div>
       </div>
       {children}

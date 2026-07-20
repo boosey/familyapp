@@ -88,11 +88,18 @@
 }
 
 .titleGroup {
-  /* holds the family name + future inline title actions — intentional extension seam */
+  /* holds the brand mark + family name (+ future inline title actions) */
   display: flex;
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.brandMark {
+  flex-shrink: 0;
+  display: block;
+  width: clamp(2rem, 4.5vw, 2.75rem);
+  height: clamp(2rem, 4.5vw, 2.75rem);
 }
 
 .familyName {
