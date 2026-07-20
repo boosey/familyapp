@@ -210,9 +210,9 @@ export type PlacedPersonsResult =
   | { ok: false; error: "unauthorized" | "invalid" | "failed" };
 
 /**
- * List every person already placed in the family's kinship tree (#169). Used by the unplaced-member
- * placement UX so the anchor picker offers the FULL family-wide set, not just the ones inside the
- * current bounded tree window. Re-validates the family against the viewer's active families.
+ * List people who may anchor an unplaced-member placement (#169, #250). Prefer endpoints of visible
+ * kinship edges; when the family has no edges yet, core falls back to active members so a lone
+ * tree person is still offered. Re-validates the family against the viewer's active families.
  */
 export async function listPlacedPersonsAction(
   familyId: string,

@@ -12,6 +12,7 @@ import {
   addRelative,
   deriveKin,
   listMyKin,
+  listPlacedPersons,
   listUnplacedMembers,
   normalizeEdgeEndpoints,
   resolveKinshipProjection,
@@ -390,6 +391,63 @@ describe("listUnplacedMembers (#161)", () => {
     await expect(
       listUnplacedMembers(db, account(stranger.id), fam.id),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
+describe("listPlacedPersons (#169, #250)", () => {
+  it("with no visible edges, returns active members as seed anchors (#250)", async () => {
+    // Brand-new family: steward is on the tree as a lone root, but touches no edge. An unplaced
+    // join (Kelly) must still be able to pick the steward as "partner of …".
+    const { member, fam } = await familyWithMember("John");
+    const kelly = await makePerson(db, "Kelly");
+    await addMembership(db, { personId: kelly.id, familyId: fam.id, role: "member" });
+
+    const placed = await listPlacedPersons(db, account(member.id), fam.id);
+    const ids = placed.map((p) => p.personId).sort();
+    expect(ids).toEqual([member.id, kelly.id].sort());
+    expect(placed.find((p) => p.personId === member.id)?.displayName).toBe("John");
+  });
+
+  it("excludes a non_family member from the zero-edge seed set", async () => {
+    const { member, fam } = await familyWithMember("John");
+    const caregiver = await makePerson(db, "Caregiver");
+    await addMembership(db, { personId: caregiver.id, familyId: fam.id, role: "member" });
+    await setMemberNonFamily(db, account(member.id), {
+      familyId: fam.id,
+      personId: caregiver.id,
+      nonFamily: true,
+    });
+
+    const placed = await listPlacedPersons(db, account(member.id), fam.id);
+    expect(placed.map((p) => p.personId)).toEqual([member.id]);
+  });
+
+  it("once edges exist, returns only visible edge endpoints (not other unplaced members)", async () => {
+    const { member, fam } = await familyWithMember("John");
+    const partner = await makePerson(db, "Partner");
+    const orphan = await makePerson(db, "Orphan");
+    await addMembership(db, { personId: partner.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: orphan.id, familyId: fam.id, role: "member" });
+    await assert(db, {
+      familyId: fam.id,
+      edgeType: "partnered_with",
+      a: member.id,
+      b: partner.id,
+      actor: member.id,
+    });
+
+    const placed = await listPlacedPersons(db, account(member.id), fam.id);
+    const ids = placed.map((p) => p.personId).sort();
+    expect(ids).toEqual([member.id, partner.id].sort());
+    expect(ids).not.toContain(orphan.id);
+  });
+
+  it("rejects a non-member (auth flows through resolveKinshipProjection)", async () => {
+    const { fam } = await familyWithMember("John");
+    const stranger = await makePerson(db, "Stranger");
+    await expect(listPlacedPersons(db, account(stranger.id), fam.id)).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
   });
 });
 
