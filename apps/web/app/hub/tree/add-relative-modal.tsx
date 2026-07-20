@@ -6,7 +6,7 @@
  * canvas refetches the anchor's subtree so the new relative appears, then closes).
  */
 import { useEffect } from "react";
-import type { AddRelativeRelation } from "@chronicle/core";
+import type { AddRelativeRelation, UnplacedMember } from "@chronicle/core";
 import { AddRelativeForm } from "../kin/add-relative-form";
 import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
@@ -19,6 +19,8 @@ export interface AddRelativeModalProps {
   coParentOptions: { id: string; name: string }[];
   /** Pre-selects the "Other parent" when the add came from a couple's seam "+" (predetermined parents). */
   preselectedCoParentId?: string;
+  /** #251 — unplaced members offered as connect-existing matches when the typed name collides. */
+  unplacedMembers?: readonly UnplacedMember[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -29,6 +31,7 @@ export function AddRelativeModal({
   initialRelation,
   coParentOptions,
   preselectedCoParentId,
+  unplacedMembers,
   onClose,
   onSuccess,
 }: AddRelativeModalProps) {
@@ -86,6 +89,7 @@ export function AddRelativeModal({
           initialRelation={initialRelation}
           coParentOptions={coParentOptions}
           preselectedCoParentId={preselectedCoParentId}
+          unplacedMembers={unplacedMembers}
           onSuccess={onSuccess}
         />
       </div>

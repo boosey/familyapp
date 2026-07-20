@@ -907,6 +907,15 @@ export const hub = {
     otherParentNone: "No other parent",
     submit: "Add relative",
     submitting: "Adding…",
+    // #251 — typed name matches an unplaced member; offer connect-existing before minting a duplicate.
+    existingMatchAria: "Existing family member with this name",
+    existingMatchPrompt: (name: string) =>
+      `${name} is already in this family but not yet connected to the tree. Connect them instead of creating a duplicate?`,
+    existingMatchPickLabel: "Which person?",
+    existingMatchUse: "Connect existing",
+    existingMatchConnecting: "Connecting…",
+    existingMatchCreateNew: "Add as someone new",
+    existingMatchFailed: "Couldn't connect them. Please try again.",
     // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
     govHeading: "Relationships in this family",
     govIntro:
