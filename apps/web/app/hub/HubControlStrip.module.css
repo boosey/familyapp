@@ -4,37 +4,33 @@
  * useIsCompact), so no desktop @media layer and no max-width query. Tokens only (per _skins/CSS-MODULES.md).
  *
  * Layout: optional sub-tab pills LEFT, the [View][Family][Filter] icon-sheets + iconified action RIGHT.
- * NON-STICKY (ADR-0025 2026-07-20 amendment) — normal top-matter.
+ * NON-STICKY (ADR-0025 2026-07-20 amendment) — normal top-matter. ONE row.
  *
- * The strip WRAPS (`flex-wrap: wrap`). The pills wrapper (`.pills`) has a real `min-width` (the sub-tab
- * SegmentedControl's natural 2-segment width) so it can NEVER shrink to the point the Feed/Timeline
- * toggle collapses into a vertical stack (the on-device regression #234). The icon cluster (`.right` =
- * `flex: 0 0 auto`, never shrinks/wraps) plus the avatar clearance can't fit beside a min-width pills
- * group at phone widths, so the cluster WRAPS to its own line below — pills on line 1 (full-width
- * horizontal toggle), icons + action on line 2 (right-aligned via `margin-left: auto`). A tab with NO
- * pills (e.g. Album) has only `.right`, which stays on ONE line — unaffected by the wrap.
- *
- * Avatar clearance (#233): `.right` reserves `--mobile-account-clearance` on its right so the top-right
- * action never sits under the GLOBAL fixed account avatar (AccountMenuMount, z 50 at `right: 20`). */
+ * 360px fit is EXPLICIT: the strip is `nowrap`, but the horizontal deficit is steered onto the pills
+ * wrapper (`.pills` = the ONLY flexible child: `flex: 1 1 auto; min-width: 0`) while the icon cluster
+ * (`.right` = `flex: 0 0 auto`, never shrinks/wraps) stays intact. A tab with NO pills (e.g. Album) has
+ * only `.right`, right-aligned via `margin-left: auto`. No avatar clearance is needed — the account
+ * avatar moved OFF the top-right INTO the bottom nav bar (ADR-0025 device round; #233), freeing the top.
+ * The Step-A one-row strip (device-verified good) is restored now that nothing floats over the top. */
 
 .strip {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
 }
 
-/* The pills wrapper. `flex: 1 1 auto` lets it grow to fill line 1; `min-width` (the SegmentedControl's
- * natural width) is the floor that keeps Feed/Timeline a HORIZONTAL toggle — it must never compress its
- * equal-flex segments into wrapped/stacked labels (#234). Absent on tabs with no sub-tab pills. */
+/* The pills wrapper — the sole shrink valve. Takes the horizontal deficit so the icon cluster never has
+ * to; `min-width: 0` lets it shrink (SegmentedControl's equal segments compress gracefully). Absent on
+ * tabs with no sub-tab pills. */
 .pills {
   flex: 1 1 auto;
-  min-width: var(--strip-pills-min);
+  min-width: 0;
 }
 
 /* The icon-sheet cluster + iconified action, pushed hard-right. `flex: 0 0 auto` + `nowrap` = it never
- * shrinks or wraps. `padding-right` reserves the account-avatar zone (#233) so the action clears it. */
+ * shrinks or wraps; the compact icon-over-label controls fit three-plus-action at 360px. */
 .right {
   display: inline-flex;
   flex: 0 0 auto;
@@ -42,7 +38,6 @@
   align-items: center;
   gap: var(--space-1);
   margin-left: auto;
-  padding-right: var(--mobile-account-clearance);
 }
 
 /* A full-width row BELOW the strip for content that doesn't fit inline at 360px (e.g. Stories' draft +

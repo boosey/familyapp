@@ -23,6 +23,29 @@
   font-family: var(--font-ui);
 }
 
+/* The tablist is a REAL flex box (NOT `display: contents`) so its `role="tablist"` survives in the a11y
+ * tree on iOS Safari/VoiceOver — a boxless element with an explicit ARIA role is the exact case some
+ * screen readers drop. `flex: 4 1 0` gives it 4/5 of the bar for its four tabs (each `.tab` is `flex: 1
+ * 1 0` inside → 1/5 of the bar), and the sibling account cell (`.tab`, `flex: 1 1 0`) takes the last
+ * 1/5 — all five cells stay equal width. */
+.tablist {
+  display: flex;
+  flex: 4 1 0;
+  min-width: 0;
+  align-items: stretch;
+  gap: var(--bottom-bar-gap);
+}
+
+/* The account cell mirrors the tablist's flex box for ONE cell (flex: 1 1 0 → the last 1/5 of the bar),
+ * so all five cells size evenly across the tablist boundary (a bare account button competing at flex:1
+ * against the tablist's flex:4 rounds ~5px wider). */
+.accountCell {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: stretch;
+}
+
 .tab {
   position: relative;
   flex: 1 1 0;

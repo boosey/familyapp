@@ -193,22 +193,6 @@
   --bottom-bar-height: 56px;
   --bottom-bar-gap: 2px;
   --bottom-bar-z: 50;
-
-  /* ── Mobile control strip (ADR-0025 Phase B, Increment 3) ────────────────────
-   * Right-side clearance reserved on the compact control strip so its top-right action/icon cluster
-   * never sits under the GLOBAL fixed account avatar (AccountMenuMount: 48px disc at `right: 20`, z 50 —
-   * issue #233). The avatar's left edge is 68px from the viewport's right edge (20 + 48); the hub
-   * container's content edge is ~16px in at phone widths, so the avatar intrudes ~52px into content —
-   * this token (that intrusion + a small gap) is the strip's right padding on the compact branch. Pure
-   * design value; single-sourced so Stories/Album/Family strips all clear the avatar identically. */
-  --mobile-account-clearance: 60px;
-
-  /* Minimum width of the control strip's sub-tab pills wrapper (Stories' Feed/Timeline SegmentedControl).
-   * It must NOT shrink below the 2-segment control's natural horizontal width (~167px measured) or the
-   * equal-flex segments compress and the labels wrap to a vertical stack (the on-device collapse #234).
-   * With `.strip` set to wrap, when pills(this min) + icon cluster + avatar clearance exceed the row the
-   * icon cluster wraps to its own line — the pills keep a horizontal toggle. Pure design value. */
-  --strip-pills-min: 168px;
 }
 
 @keyframes kindred-listening {

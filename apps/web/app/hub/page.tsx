@@ -31,6 +31,7 @@ import { hub } from "@/app/_copy";
 import { latestDraftPerAsk, questionsTabAnswerDrafts } from "./draft-dedup";
 import { HubPrimaryNav } from "./HubPrimaryNav";
 import { CollapsingHeader } from "./CollapsingHeader";
+import { loadAccountMenu } from "@/app/_kindred/load-account-menu";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
 import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
@@ -155,7 +156,7 @@ export default async function HubPage({
     ? `/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`
     : undefined;
 
-  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches] = await Promise.all([
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches, accountMenu] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
@@ -173,6 +174,9 @@ export default async function HubPage({
     // #120: live pending invites addressed to this account's verified contacts — the confirm
     // cards rendered above the tabs until Join / "Not me".
     listPendingInvitationsForPerson(db, ctx.personId),
+    // #233 (ADR-0025 device round): the account menu, resolved once and handed to the bottom bar's 5th
+    // "Account" item on a phone. Same entries as the desktop top-right avatar dropdown (shared loader).
+    loadAccountMenu(db, ctx.personId),
   ]);
 
   // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
@@ -287,6 +291,7 @@ export default async function HubPage({
             primaryTabs={primaryTabs}
             active={primaryActive}
             familiesParam={familiesRaw}
+            account={{ items: accountMenu.items, clerkSignOut: accountMenu.clerkSignOut }}
           />
         </CollapsingHeader>
 

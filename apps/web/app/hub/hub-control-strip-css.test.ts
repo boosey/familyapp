@@ -2,12 +2,10 @@
  * ADR-0025 Phase B, Increment 3 — CSS contract guards for the SHARED HubControlStrip layout (used by
  * Stories, Album, later Family). String-scans the CSS on disk (the module import is a class-name proxy)
  * to bond the two facts that only manifest on a real phone:
- *  (a) the no-collapse contract (#234) — the strip WRAPS, `.pills` has a real (non-zero) `min-width` so
- *      the Feed/Timeline SegmentedControl can't compress into a vertical stack, and `.right` is
- *      `flex: 0 0 auto` (never shrinks/wraps → it wraps to its own line instead);
- *  (b) the account-avatar clearance (#233) — `.right` reserves `--mobile-account-clearance` so the
- *      top-right action never sits under the global fixed avatar.
- * Coarse on purpose, matching the other *-css.test.ts guards.
+ *  the ONE-row shrink valve — `.strip` is `nowrap`, `.pills` is `flex: 1 1 auto; min-width: 0` (absorbs
+ *  the deficit), and `.right` is `flex: 0 0 auto` + `nowrap` (never shrinks/wraps, stays intact). There
+ *  is NO avatar clearance — the account avatar moved into the bottom nav bar (#233), so the strip has no
+ *  top-right element to clear. Coarse on purpose, matching the other *-css.test.ts guards.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,22 +24,19 @@ function ruleBlock(selector: string): string {
 }
 
 describe("HubControlStrip shared CSS contract (regression)", () => {
-  it("the strip wraps and the pills keep a real min-width so Feed/Timeline can't collapse (#234)", () => {
-    // The strip must wrap so the icon cluster drops to its own line rather than crushing the pills.
-    expect(ruleBlock(".strip")).toContain("flex-wrap: wrap");
+  it("is a ONE-row strip: pills are the shrink valve, the icon cluster never shrinks", () => {
+    // One row — the strip does not wrap (the account avatar moved to the bottom bar, so no clearance
+    // pushes the cluster onto a second line).
+    expect(ruleBlock(".strip")).toContain("flex-wrap: nowrap");
     const pills = ruleBlock(".pills");
     expect(pills).toContain("flex: 1 1 auto");
-    // A REAL min-width floor (the SegmentedControl's natural width) — NOT `min-width: 0`, which let the
-    // segments compress into a vertical stack on-device.
-    expect(pills).toContain("min-width: var(--strip-pills-min)");
-    expect(pills).not.toContain("min-width: 0");
-    // The icon cluster never shrinks/wraps internally — it wraps as a whole to the next line instead.
+    expect(pills).toContain("min-width: 0");
     const right = ruleBlock(".right");
     expect(right).toContain("flex: 0 0 auto");
     expect(right).toContain("flex-wrap: nowrap");
   });
 
-  it("the icon cluster reserves the account-avatar clearance (#233)", () => {
-    expect(ruleBlock(".right")).toContain("padding-right: var(--mobile-account-clearance)");
+  it("reserves NO account-avatar clearance (avatar moved into the bottom bar, #233)", () => {
+    expect(ruleBlock(".right")).not.toContain("--mobile-account-clearance");
   });
 });

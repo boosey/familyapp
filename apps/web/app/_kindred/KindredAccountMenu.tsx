@@ -1,19 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { common } from "@/app/_copy";
-
-/**
- * Dynamic import creates a code-split boundary: @clerk/nextjs lands in its own chunk
- * that the browser only fetches when <ClerkSignOutItemDynamic> actually renders — i.e.
- * when `clerkSignOut` is true. In mock/dev mode the component never mounts, so the
- * Clerk chunk is never requested even though this dynamic() call sits at module level.
- */
-const ClerkSignOutItemDynamic = dynamic(
-  () => import("./ClerkSignOutItem").then((m) => ({ default: m.ClerkSignOutItem })),
-  { ssr: false },
-);
+import { AccountMenuList } from "./AccountMenuList";
 
 export interface AccountMenuItem {
   key: string;
@@ -144,11 +133,6 @@ export function KindredAccountMenu({
     transition: "background var(--dur-fade) var(--ease-quiet)",
   };
 
-  function handleItemClick(item: AccountMenuItem) {
-    setOpen(false);
-    item.onSelect?.();
-  }
-
   return (
     <div ref={containerRef} style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -177,70 +161,12 @@ export function KindredAccountMenu({
             </div>
           )}
 
-          {items.map((item) => {
-            // In Clerk mode, the log-out row is handled by the dynamically-imported
-            // ClerkSignOutItemDynamic so useClerk() is only called when ClerkProvider
-            // is mounted. The item's onSelect (the mock server action) is not invoked.
-            if (clerkSignOut && item.key === "log-out") {
-              return (
-                <ClerkSignOutItemDynamic
-                  key={item.key}
-                  label={item.label}
-                  style={itemBaseStyle}
-                  onClose={() => setOpen(false)}
-                />
-              );
-            }
-
-            const content = (
-              <>
-                {item.icon && (
-                  <span aria-hidden="true" style={{ fontSize: "1rem", lineHeight: 1, width: 18, textAlign: "center" }}>
-                    {item.icon}
-                  </span>
-                )}
-                {item.label}
-              </>
-            );
-
-            if (item.href) {
-              return (
-                <a
-                  key={item.key}
-                  href={item.href}
-                  role="menuitem"
-                  style={itemBaseStyle}
-                  onClick={() => setOpen(false)}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.background = "var(--surface-sunken)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                  }}
-                >
-                  {content}
-                </a>
-              );
-            }
-
-            return (
-              <button
-                key={item.key}
-                type="button"
-                role="menuitem"
-                style={itemBaseStyle}
-                onClick={() => handleItemClick(item)}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-sunken)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                }}
-              >
-                {content}
-              </button>
-            );
-          })}
+          <AccountMenuList
+            items={items}
+            itemStyle={itemBaseStyle}
+            clerkSignOut={clerkSignOut}
+            onClose={() => setOpen(false)}
+          />
         </div>
       )}
     </div>

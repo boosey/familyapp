@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HubTabs } from "./HubTabs";
 import type { HubTab } from "./HubTabs";
 import { BottomTabBar } from "./BottomTabBar";
+import type { AccountSheetProps } from "./AccountSheet";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
 import pageStyles from "./page.module.css";
@@ -18,6 +19,9 @@ interface HubPrimaryNavProps {
   /** The raw current `?families=` browse-filter value (or null when absent) — preserved across tab
    *  switches. Threaded through, never re-derived, so a tab switch never loses the filter. */
   familiesParam: string | null;
+  /** The resolved account menu (#233) — passed to the bottom bar's 5th "Account" item on a phone. The
+   *  DESKTOP branch ignores it (the fixed top-right AccountMenuMount dropdown still serves desktop). */
+  account?: AccountSheetProps;
 }
 
 /**
@@ -45,7 +49,7 @@ interface HubPrimaryNavProps {
  * faces the identical trap: any `position: fixed` element nested under a transformed sticky ancestor
  * must portal out.
  */
-export function HubPrimaryNav({ primaryTabs, active, familiesParam }: HubPrimaryNavProps) {
+export function HubPrimaryNav({ primaryTabs, active, familiesParam, account }: HubPrimaryNavProps) {
   const router = useRouter();
   const compact = useIsCompact();
 
@@ -60,7 +64,7 @@ export function HubPrimaryNav({ primaryTabs, active, familiesParam }: HubPrimary
     // still guard `document` so a stray SSR/first-paint eval can't throw on createPortal.
     if (typeof document === "undefined") return null;
     return createPortal(
-      <BottomTabBar primaryTabs={primaryTabs} active={active} onChange={onChange} />,
+      <BottomTabBar primaryTabs={primaryTabs} active={active} onChange={onChange} account={account} />,
       document.body,
     );
   }

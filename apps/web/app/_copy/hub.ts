@@ -49,6 +49,11 @@ export const hub = {
     // ADR-0025 mobile Phase B: accessible name for the fixed bottom tab bar (the mobile counterpart to
     // the top `sectionsAria` nav). Distinct wording so the two navs never read as the same landmark.
     bottomNavAria: "Primary sections",
+    // ADR-0025 device round (#233): the bottom bar's 5th item — the account/profile entry (a menu
+    // trigger, NOT a hub tab). `tabAccount` is its tiny label; `accountSheetTitle` titles the sheet it
+    // opens (the same profile/settings/switch-user/log-out menu the desktop avatar dropdown shows).
+    tabAccount: "Account",
+    accountSheetTitle: "Your account",
     unreadAria: (badge: number) => `${badge} unread`,
     // Family filter (ADR-0021) — the shared chip bar's accessible group name. The bar renders only for
     // a viewer with ≥2 families; each chip toggles whether that family is included in the browse view.
