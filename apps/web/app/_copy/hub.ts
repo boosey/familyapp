@@ -23,6 +23,9 @@ export const hub = {
     // The family surface (tree + relatives list) — a real in-hub tab now, not a standalone route.
     tabFamily: "Family",
     tabInvite: "Invite",
+    // ADR-0025 Increment 3 Step B — on the compact Family strip the Invite action is iconified
+    // (UserRoundPlus glyph); this is its accessible name (menu/target unchanged, only the trigger icon).
+    inviteAria: "Invite",
     tabRequests: "Requests",
     // Secondary sub-nav inside the Questions primary tab — the three consolidated ask surfaces.
     // "Ask" (not "Ask a question") so the three equal-width pills fit ONE line at 360px — the long label
@@ -35,6 +38,10 @@ export const hub = {
     // relatives view and the steward's Requests queue (which used to be a "More ▾" overflow entry).
     // The Requests sub-label reuses `tabRequests`.
     familySubTree: "Family tree",
+    // ADR-0025 device round: the compact Family strip uses the SHORT "Tree" for the tree pill so the
+    // three equal-width pills (Tree/List/Requests) fit ONE line beside the Family icon + Invite at 360px
+    // (the long "Family tree" wrapped the pill to two lines). Desktop keeps "Family tree" (roomy toolbar).
+    familySubTreeShort: "Tree",
     familySubNavAria: "Family sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",

@@ -37,6 +37,28 @@
   }
 }
 
+/* ADR-0025 device round — the tree frame is the positioning context for the phone's floating zoom
+ * controls (the controls overlay the canvas, thumb-reachable, instead of sitting in a bottom sheet that
+ * would cover the tree). On desktop the frame just wraps the canvas (zoom lives in the toolbar). */
+.treeFrame {
+  position: relative;
+}
+
+/* Floating zoom controls (phone only) — pinned bottom-right of the tree frame, above the canvas, on a
+ * card ground so Fit/−/+ read clearly over the tree. Clears the iOS home indicator via safe-area inset
+ * (the bottom nav bar sits below, so a small lift keeps these off it). */
+.zoomFloat {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  z-index: 2;
+  padding: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
 .zoomControls {
   display: inline-flex;
   align-items: center;

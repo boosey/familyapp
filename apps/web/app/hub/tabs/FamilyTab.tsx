@@ -25,6 +25,7 @@ import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
 import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import styles from "./FamilyTab.module.css";
 
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
@@ -89,6 +90,10 @@ export function FamilyTab({
   surface,
 }: FamilyTabProps) {
   const router = useRouter();
+  // ADR-0025 device round: on a phone the zoom controls float ON the tree canvas (a bottom sheet would
+  // cover the tree being zoomed), and the family chips move into the strip's Family IconSheet — so we
+  // do NOT hand the zoom controls to FamilySurfaceNav on compact. SSR/first-paint = desktop.
+  const compact = useIsCompact();
 
   // #169: unplaced members fetch their anchor list family-wide (no longer limited to the tree
   // window), so the parent no longer needs to compute anchorOptions from tree.nodes.
@@ -173,6 +178,8 @@ export function FamilyTab({
           R2 = the single-select family chips (left) and the tree's Fit/−/+ controls (right). When R2
           would be empty (List view + <2 families) HubToolbar's empty-row rule drops it, so the content
           below stays flush — the old `showFamilyRow` behaviour, now centralized in the toolbar. */}
+      {/* Desktop hands the zoom controls to the toolbar's R2-right; on a phone we pass `undefined` there
+          and float them on the tree canvas below instead (see the tree branch). */}
       <FamilySurfaceNav
         active={surface.active}
         familiesParam={surface.familiesParam}
@@ -180,26 +187,32 @@ export function FamilyTab({
         requestsBadge={surface.requestsBadge}
         inviteHref={surface.inviteHref}
         row2Left={familyChips}
-        row2Right={zoomControls}
+        row2Right={compact ? undefined : zoomControls}
       />
 
       {view === "tree" ? (
         <>
-          <TreeCanvas
-            ref={canvasRef}
-            familyId={familyId}
-            focusPersonId={focusPersonId}
-            viewerPersonId={viewerPersonId}
-            initial={tree}
-            pan={pan}
-            onPanChange={(updater) => setPan(updater)}
-            scale={scale}
-            onScaleChange={(updater) => setScale(updater)}
-            // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
-            // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
-            // its DEFAULT so it stays mountable without a router in unit tests.
-            navigate={(url) => router.push(url)}
-          />
+          {/* On a phone the zoom controls float thumb-reachable over the canvas (ADR-0024 "tree controls
+              thumb-reachable"); the relative wrapper is their positioning context. On desktop they live
+              in the toolbar (above), so this wrapper just holds the canvas. */}
+          <div className={styles.treeFrame}>
+            <TreeCanvas
+              ref={canvasRef}
+              familyId={familyId}
+              focusPersonId={focusPersonId}
+              viewerPersonId={viewerPersonId}
+              initial={tree}
+              pan={pan}
+              onPanChange={(updater) => setPan(updater)}
+              scale={scale}
+              onScaleChange={(updater) => setScale(updater)}
+              // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
+              // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
+              // its DEFAULT so it stays mountable without a router in unit tests.
+              navigate={(url) => router.push(url)}
+            />
+            {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
+          </div>
           {/* #161: unplaced members as a "not yet connected" tray BELOW the canvas — a separate strip
               at the margin, deliberately OUTSIDE computeTreeLayout / the pan-zoom layer so it never
               destabilizes the pedigree layout engine. */}
