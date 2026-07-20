@@ -70,6 +70,15 @@ export const hub = {
     activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
     // The bottom sheet's ✕ close control.
     close: "Close",
+    // ADR-0025 Phase B Increment 3 — the single "⚙ Filters & view" gear splits into per-concern labeled
+    // icon-sheets on a phone: View (layout options), Family (the family selector), Filter (search +
+    // facets). Each string is BOTH the tiny icon label and its bottom-sheet title.
+    viewLabel: "View",
+    familyLabel: "Family",
+    filterLabel: "Filter",
+    // The primary action (Tell a story) is iconified on the compact strip (labeled on desktop). This is
+    // the icon button's accessible name.
+    tellAria: "Tell a story",
   },
   stories: {
     untitled: "Untitled",

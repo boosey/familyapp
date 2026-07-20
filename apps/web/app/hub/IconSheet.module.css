@@ -1,0 +1,75 @@
+/* IconSheet (ADR-0025 Phase B, Increment 3) — a labeled lucide-icon trigger opening the shared
+ * BottomSheet. Tokens only (per _skins/CSS-MODULES.md). Only ever mounted on a tab's compact branch, so
+ * no desktop media layer and no max-width query. The trigger is a compact icon-over-label control sized
+ * to fit three-across-plus-action at the 360px floor. */
+
+.trigger {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: var(--touch-min);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.trigger:hover {
+  background: var(--surface-sunken);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Wraps the glyph so the active-count badge (Increment 4) anchors to the glyph's top-right. */
+.iconWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.label {
+  font-size: 0.6875rem; /* 11px — a tiny caption under the glyph; matches the bottom bar's label size */
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Active-count badge — the SAME accent count-pill as HubTabs / MobileControlSheet, anchored to the
+ * glyph's top-right corner. */
+.badge {
+  position: absolute;
+  top: -6px;
+  left: 100%;
+  transform: translateX(-40%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The sheet body stacks its grouped controls vertically with comfortable spacing (mirrors
+ * MobileControlSheet's .body). */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
