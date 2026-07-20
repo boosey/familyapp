@@ -60,15 +60,14 @@ export const hub = {
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
   },
-  // ADR-0024 mobile pass — the "Filters & view" bottom sheet that hides secondary hub-toolbar controls
-  // (search, family chips, view/layout toggles, album date/facet filters + size slider) behind one
-  // button on a phone (< 40rem). Desktop is unchanged (the inline HubToolbar renders as today).
+  // ADR-0025 Phase B mobile control sheets — the per-concern IconSheet triggers (View/Family/Filter)
+  // that open a shared BottomSheet on a phone (< 40rem). Desktop is unchanged (the inline HubToolbar
+  // renders as today). (The former single "⚙ Filters & view" gear + MobileControlSheet were removed in
+  // Increment 3 once every tab moved to the per-concern icon strip.)
   mobileControls: {
-    // The trigger button (a ⚙ gear glyph precedes this in JSX) + its sheet's title.
-    label: "Filters & view",
-    // Accessible name for the count badge on the trigger (n = number of active secondary filters).
+    // Accessible name for an IconSheet's active-filter count badge (n = active filters for that icon).
     activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
-    // The bottom sheet's ✕ close control.
+    // The bottom sheet's ✕ close control (BottomSheet.tsx).
     close: "Close",
     // ADR-0025 Phase B Increment 3 — the single "⚙ Filters & view" gear splits into per-concern labeled
     // icon-sheets on a phone: View (layout options), Family (the family selector), Filter (search +
@@ -579,6 +578,8 @@ export const hub = {
     googlePhotosDisconnect: "Disconnect Google Photos",
     // Trigger for the right-justified "Add Photos ▾" dropdown that consolidates every album entry
     // point (#93): the device picker, Google connect/import, and — below a divider — Manage connections.
+    // On the compact strip the trigger is iconified (ImagePlus); `addPhotosMenu` still supplies its
+    // aria-label (accessible name unchanged across the icon/label swap), so no separate key is needed.
     addPhotosMenu: "Add Photos",
     // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
     // is available (#93 — replaced the old standalone "Add to album" button).

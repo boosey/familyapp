@@ -2,12 +2,12 @@
 
 /**
  * IconSheet (ADR-0025 Phase B, Increment 3) — a labeled lucide-icon trigger that opens the shared
- * {@link BottomSheet} holding its controls. It generalizes the {@link MobileControlSheet} pattern (the
- * single "⚙ Filters & view" gear) into a per-concern icon: the Stories strip renders up to three of
- * these — View / Family / Filter — each opening its own sheet, instead of one gear for everything.
+ * {@link BottomSheet} holding its controls. It replaced the former single "⚙ Filters & view" gear with
+ * a per-concern icon: a tab's strip renders up to three of these — View / Family / Filter — each opening
+ * its own sheet, instead of one gear for everything.
  *
- * Presentational + self-contained open/close (like MobileControlSheet): tap the trigger → the sheet
- * opens with `children`. The icon strokes `currentColor` so it themes with the trigger ink. A small
+ * Presentational + self-contained open/close: tap the trigger → the sheet opens with `children`. The
+ * icon strokes `currentColor` so it themes with the trigger ink. A small
  * accent badge renders when `badgeCount > 0` (the active-filter count) — Step A never passes one; the
  * slot exists for Increment 4's per-icon active badges.
  *

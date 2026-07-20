@@ -19,9 +19,11 @@
  * `aria-pressed` toggle button (keyboard-operable, elder-friendly). The period is a native <select>; the
  * text is a search input. A single "Clear filters" button resets everything.
  */
+import { LayoutGrid, UsersRound, ListFilter } from "lucide-react";
 import { hub } from "@/app/_copy";
 import { HubToolbar } from "../HubToolbar";
-import { MobileControlSheet } from "../MobileControlSheet";
+import { IconSheet } from "../IconSheet";
+import strip from "../HubControlStrip.module.css";
 import { SearchField } from "@/app/_kindred/SearchField";
 
 /** Coarse capture-time buckets over each photo's `capturedAt` ISO string. */
@@ -67,7 +69,6 @@ export function AlbumFilterBar({
   addSlot,
   familyChips,
   compact = false,
-  activeCount = 0,
 }: {
   /** Union of subject+appears-in people across the current photos (deduped by id). */
   people: { id: string; name: string }[];
@@ -87,7 +88,8 @@ export function AlbumFilterBar({
    *  bottom sheet; only "Add Photos" stays on the primary row. Desktop (false) renders the inline
    *  two-row HubToolbar unchanged. AlbumControls decides this via useIsCompact. */
   compact?: boolean;
-  /** Number of non-default filters/view options — drives the mobile trigger's count badge (compact only). */
+  /** Number of non-default filters/view options. Plumbed from AlbumControls for Increment 4's per-icon
+   *  active badges; NOT consumed yet in Step B (the single-gear badge was dropped). */
   activeCount?: number;
 }) {
   const control: React.CSSProperties = {
@@ -180,27 +182,45 @@ export function AlbumFilterBar({
     </div>
   );
 
-  // ADR-0024 mobile branch: keep only "Add Photos" on the primary row and tuck the filter cluster +
-  // family chips + view controls into the "⚙ Filters & view" sheet. The primary row right-justifies the
-  // Add Photos affordance beside the Filters trigger.
+  // ADR-0025 Increment 3 Step B — the compact control strip (shared HubControlStrip layout). The single
+  // "⚙ Filters & view" gear splits into per-concern labeled icon-sheets: View ← the view/layout controls
+  // (rightSlot); Family ← the family chips (≥2 families); Filter ← the When/facets/Search cluster. Album
+  // has NO sub-tab pills, so the strip's left side is empty and the icon cluster + iconified Add-Photos
+  // action right-align. Each icon renders ONLY when its content exists. NON-STICKY. Per-icon active
+  // badges are Increment 4 — `activeCount` is no longer consumed here (kept in the prop for that step).
   if (compact) {
     return (
       <div role="group" aria-label={hub.album.filterBarAria}>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "var(--space-2)",
-          }}
-        >
-          {addSlot ?? null}
-          <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <MobileControlSheet activeCount={activeCount}>
+        <div className={strip.strip}>
+          {/* No pills group on Album — the icon cluster + action right-align via margin-left:auto. */}
+          <div className={strip.right}>
+            {rightSlot ? (
+              <IconSheet
+                icon={LayoutGrid}
+                label={hub.mobileControls.viewLabel}
+                sheetTitle={hub.mobileControls.viewLabel}
+              >
+                {rightSlot}
+              </IconSheet>
+            ) : null}
+            {familyChips ? (
+              <IconSheet
+                icon={UsersRound}
+                label={hub.mobileControls.familyLabel}
+                sheetTitle={hub.mobileControls.familyLabel}
+              >
+                {familyChips}
+              </IconSheet>
+            ) : null}
+            <IconSheet
+              icon={ListFilter}
+              label={hub.mobileControls.filterLabel}
+              sheetTitle={hub.mobileControls.filterLabel}
+            >
               {filterCluster}
-              {familyChips ?? null}
-              {rightSlot ?? null}
-            </MobileControlSheet>
+            </IconSheet>
+            {/* Add-Photos — iconified by AlbumUploader on the compact branch (menu behavior unchanged). */}
+            {addSlot ?? null}
           </div>
         </div>
       </div>

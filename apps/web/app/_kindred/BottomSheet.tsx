@@ -4,8 +4,8 @@
  * BottomSheet (ADR-0024 "approach B" seam) — a reusable, presentational bottom-anchored sheet. It is the
  * mobile counterpart to {@link ModalShell}: same scrim (`--overlay-scrim`), same cap + internal-scroll +
  * safe-area contract, but anchored to the bottom edge with top-only rounding, a visual drag handle, and
- * a header row (title + ✕ close). The hub tabs open it via {@link MobileControlSheet} to group their
- * secondary controls on a phone.
+ * a header row (title + ✕ close). The hub tabs open it via {@link IconSheet} (the per-concern
+ * View/Family/Filter triggers) to group their secondary controls on a phone.
  *
  * Behaviour it owns (unlike the presentational ModalShell): open/close is a prop; it renders NOTHING
  * when closed; it closes on scrim click AND Escape; and it focuses the panel on open (a light-touch

@@ -45,7 +45,7 @@
   white-space: nowrap;
 }
 
-/* Active-count badge — the SAME accent count-pill as HubTabs / MobileControlSheet, anchored to the
+/* Active-count badge — the SAME accent count-pill as HubTabs / BottomTabBar, anchored to the
  * glyph's top-right corner. */
 .badge {
   position: absolute;
@@ -66,8 +66,7 @@
   line-height: 1;
 }
 
-/* The sheet body stacks its grouped controls vertically with comfortable spacing (mirrors
- * MobileControlSheet's .body). */
+/* The sheet body stacks its grouped controls vertically with comfortable spacing. */
 .body {
   display: flex;
   flex-direction: column;

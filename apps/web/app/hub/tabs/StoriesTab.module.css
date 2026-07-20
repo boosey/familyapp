@@ -11,52 +11,10 @@
   gap: 28px;
 }
 
-/* ADR-0025 Increment 3 Step A — the compact control STRIP shown only on a phone (< 40rem, gated by
-   useIsCompact in StoriesSurface). Sub-tab pills LEFT (visible); the [View][Family][Filter] labeled
-   icon-sheets + the iconified Tell action pushed RIGHT. NON-STICKY (2026-07-20 amendment) — normal
-   top-matter. The desktop branch renders the unchanged inline HubToolbar instead.
-
-   360px fit is EXPLICIT, not incidental: the strip is `nowrap`, but the horizontal deficit is steered
-   onto the pills wrapper (`.mobileStripPills` = the ONLY flexible child: `flex: 1 1 auto; min-width: 0`)
-   while the icon cluster (`.mobileStripRight` = `flex: 0 0 auto`, never shrinks/wraps) stays intact. So
-   when space is tight the pills group absorbs the squeeze (SegmentedControl already shrinks its equal
-   segments), never the icons+action — no reliance on which child happens to give first. */
-.mobileStrip {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-/* The pills wrapper — the sole shrink valve. Takes all the horizontal deficit so the icon cluster never
-   has to. `min-width: 0` lets it shrink below the pills' intrinsic width (SegmentedControl's equal
-   segments compress); the pills stay a single readable row. */
-.mobileStripPills {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* The icon-sheet cluster + iconified action, pushed hard-right. `flex: 0 0 auto` + `nowrap` = it never
-   shrinks or wraps; the compact icon-over-label controls fit three-plus-action at 360px unchanged. */
-.mobileStripRight {
-  display: inline-flex;
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: var(--space-1);
-  margin-left: auto;
-}
-
-/* Reminders (draft + intake) as a full-width row BELOW the strip on a phone — they don't fit inline
-   beside the pills + icons + action at 360px, so they drop here but stay reachable. */
-.mobileReminders {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: var(--space-2);
-}
+/* ADR-0025 Increment 3 — the compact control STRIP layout (Stories' pills + [View][Family][Filter]
+   icon-sheets + iconified Tell, reminders below) now lives in the SHARED ../HubControlStrip.module.css
+   (imported as `strip` in StoriesSurface), so Stories/Album/Family can't diverge. The classes formerly
+   here (.mobileStrip/.mobileStripPills/.mobileStripRight/.mobileReminders) moved there verbatim. */
 
 /* R1-left group (#190): the Feed/Timeline/Search pill nav (shared HubSubNav) with the Search field
    beside it (Search mode only). A quiet inline row that wraps on narrow viewports; the toolbar's `.left`

@@ -3,7 +3,7 @@
  * IconSheet (ADR-0025 Phase B, Increment 3) — a labeled lucide-icon trigger that opens the shared
  * BottomSheet holding its controls. Guards: the trigger shows its label + glyph, tapping it opens the
  * sheet (revealing the children under the given title), and the active-count badge shows ONLY when
- * badgeCount > 0 (Increment 4 wiring; Step A passes none). Mirrors MobileControlSheet.test.tsx.
+ * badgeCount > 0 (Increment 4 wiring; Step A passes none).
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

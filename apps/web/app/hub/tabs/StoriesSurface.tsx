@@ -34,6 +34,7 @@ import { LayoutGrid, UsersRound, ListFilter, SquarePen } from "lucide-react";
 import { HubToolbar } from "../HubToolbar";
 import { IconSheet } from "../IconSheet";
 import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
+import strip from "../HubControlStrip.module.css";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
@@ -254,12 +255,12 @@ export function StoriesSurface({
     <div className={styles.wrap}>
       {compact ? (
         <>
-          <div className={styles.mobileStrip}>
+          <div className={strip.strip}>
             {/* Sub-tab pills stay VISIBLE inline (primary wayfinding, never behind an icon). The wrapper
                 is the strip's explicit shrink valve (flex:1 1 auto; min-width:0) so the pills absorb any
                 horizontal deficit and the icon cluster never has to shrink/wrap at 360px. */}
-            <div className={styles.mobileStripPills}>{modeNav}</div>
-            <div className={styles.mobileStripRight}>
+            <div className={strip.pills}>{modeNav}</div>
+            <div className={strip.right}>
               {viewSelector ? (
                 <IconSheet
                   icon={LayoutGrid}
@@ -292,7 +293,7 @@ export function StoriesSurface({
           </div>
           {/* Reminders don't fit inline at 360px beside pills + 3 icons + action — full-width row below,
               still reachable. Absent when there are no drafts and intake is complete. */}
-          {reminders ? <div className={styles.mobileReminders}>{reminders}</div> : null}
+          {reminders ? <div className={strip.belowRow}>{reminders}</div> : null}
         </>
       ) : (
         <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />

@@ -308,11 +308,12 @@ describe("AlbumControls HubToolbar layout (controls hoist — strictly two rows)
   });
 });
 
-// ADR-0024 mobile pass: on a phone (< 40rem) the album's filters/chips/view move into the closed
-// "⚙ Filters & view" sheet. A narrowed family-chip filter is then invisible, so it MUST feed the
-// trigger's active-count badge — the exact undercount the cold review caught. These tests force the
-// compact branch by mocking matchMedia (jsdom leaves it undefined → desktop otherwise).
-describe("AlbumControls mobile 'Filters & view' badge counts the family filter (blocker regression)", () => {
+// ADR-0025 Increment 3 Step B: on a phone (< 40rem) the album's single "⚙ Filters & view" gear splits
+// into the shared IconSheet strip — [View][Family][Filter] labeled icon-sheets + the iconified
+// Add-Photos action. Each icon renders only when it has content; the Family chips are reached by tapping
+// the Family icon. These tests force the compact branch by mocking matchMedia (jsdom leaves it undefined
+// → desktop otherwise).
+describe("AlbumControls mobile IconSheet strip (Increment 3 Step B)", () => {
   const realMatchMedia = window.matchMedia;
   beforeEach(() => {
     // A compact viewport: the query matches, so useIsCompact() → true.
@@ -331,32 +332,46 @@ describe("AlbumControls mobile 'Filters & view' badge counts the family filter (
     window.matchMedia = realMatchMedia;
   });
 
-  it("badges the trigger when the family filter is narrowed to a subset", () => {
+  it("renders the three per-concern View + Family + Filter icon-sheet triggers", () => {
     render(
       <AlbumControls
         photos={ENRICHED}
         familyChips={<div data-testid="fam-chips">chips</div>}
-        familyFilterActive
         emptyNote="(empty)"
       />,
     );
-    // The mobile layout collapses to the single "Filters & view" trigger…
-    const trigger = screen.getByRole("button", { name: new RegExp(hub.mobileControls.label) });
-    // …carrying an active-count badge of 1 (the narrowed family filter, no other filters, default view).
-    expect(trigger.textContent).toContain("1");
+    // The compact strip is the three per-concern icon-sheets (the old single ⚙ gear is gone).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.familyLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
   });
 
-  it("shows NO badge when nothing (incl. the family filter) is narrowed", () => {
+  it("hides the Family icon for a single-family viewer (no familyChips)", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    expect(screen.queryByRole("button", { name: hub.mobileControls.familyLabel })).toBeNull();
+    // View + Filter remain (always have content when there's a grid).
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
+  });
+
+  it("tapping the Family icon opens a sheet holding the family chips", () => {
     render(
       <AlbumControls
         photos={ENRICHED}
         familyChips={<div data-testid="fam-chips">chips</div>}
-        familyFilterActive={false}
         emptyNote="(empty)"
       />,
     );
-    const trigger = screen.getByRole("button", { name: new RegExp(hub.mobileControls.label) });
-    expect(trigger.textContent).not.toMatch(/\d/);
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.familyLabel }));
+    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.familyLabel });
+    expect(within(dialog).getByTestId("fam-chips")).toBeTruthy();
+  });
+
+  it("tapping the Filter icon opens a sheet holding the album's search field", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
+    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.filterLabel });
+    expect(within(dialog).getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
   });
 });
 
