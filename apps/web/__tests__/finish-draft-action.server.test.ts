@@ -39,12 +39,13 @@ import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/in
 import {
   ScriptedLanguageModel,
   ScriptedTranscriber,
+  BACKSTOP_PROVENANCE_SUFFIX,
   type LanguageModel,
   type LanguageModelRequest,
   type Transcriber,
 } from "@chronicle/pipeline";
 import { InMemoryMediaStorage } from "@chronicle/storage";
-import { getStoryForViewer, type AuthContext } from "@chronicle/core";
+import { applyResolvedStoryDate, getStoryForViewer, type AuthContext } from "@chronicle/core";
 import { sql } from "drizzle-orm";
 import { hub } from "@/app/_copy";
 import { composeStoryAction, finishDraftAction } from "@/app/hub/answer/[askId]/actions";
@@ -331,5 +332,109 @@ describe("finishDraftAction — Finish + Finish-check (ADR-0014 Inc 3 slice 8)",
     expect(await finishDraftAction(form({ intent: "accept", storyId, prose: "x" }))).toEqual({
       error: hub.actions.invalidInput,
     });
+  });
+});
+
+describe("finishDraftAction — Story date backstop (ADR-0026 #246)", () => {
+  beforeEach(async () => {
+    runtimeDb = await createTestDatabase();
+    runtimeStorage = new InMemoryMediaStorage();
+    runtimeLlm = scriptedLlm();
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: "unused" });
+    authCtx = { kind: "none" };
+  });
+
+  it("decline: a finished-as-is story the prose supports a date for is dated by the backstop", async () => {
+    const personId = await makePerson(runtimeDb);
+    const storyId = await seedDraftWithProse(personId, "seed text");
+    authCtx = { kind: "account", personId };
+
+    const result = await finishDraftAction(
+      form({ intent: "decline", storyId, prose: "We drove to the coast in 1962 and it broke down." }),
+    );
+
+    expect(result).toEqual({ kind: "finished", storyId });
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
+    expect(story!.state).toBe("pending_approval");
+    expect(story!.occurredKind).toBe("period");
+    expect(story!.occurredDate).toBe("1962-01-01");
+    expect(story!.occurredEndDate).toBe("1962-12-31");
+    expect(story!.occurredProvenance).toBe(`stated year "1962" ${BACKSTOP_PROVENANCE_SUFFIX}`);
+  });
+
+  it("accept: the backstop runs over the sealed POLISHED text", async () => {
+    const personId = await makePerson(runtimeDb);
+    const storyId = await seedDraftWithProse(personId, "the summer we drove to the coast");
+    authCtx = { kind: "account", personId };
+    const llm = scriptedLlm();
+    runtimeLlm = llm;
+
+    const offer = await finishDraftAction(
+      form({ intent: "probe", storyId, prose: "the summer we drove to the coast, um, and it broke down" }),
+    );
+    if (!("kind" in offer) || offer.kind !== "finish_offer") {
+      throw new Error(`expected a finish_offer, got ${JSON.stringify(offer)}`);
+    }
+    // Probe persists NOTHING — still Undated.
+    let story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
+    expect(story!.occurredKind).toBeNull();
+
+    const accepted = await finishDraftAction(
+      form({
+        intent: "accept",
+        storyId,
+        prose: "the summer we drove to the coast, um, and it broke down",
+        polished: "A tidier account of the drive to the coast in 1962.",
+        polishModelId: offer.polishModelId,
+        polishPromptText: offer.polishPromptText,
+      }),
+    );
+    expect(accepted).toEqual({ kind: "finished", storyId });
+    story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
+    expect(story!.occurredKind).toBe("period");
+    expect(story!.occurredDate).toBe("1962-01-01");
+    expect(story!.occurredProvenance).toBe(`stated year "1962" ${BACKSTOP_PROVENANCE_SUFFIX}`);
+  });
+
+  it("leaves the story Undated when the final text supports no date", async () => {
+    const personId = await makePerson(runtimeDb);
+    const storyId = await seedDraftWithProse(personId, "seed text");
+    authCtx = { kind: "account", personId };
+
+    const result = await finishDraftAction(
+      form({ intent: "decline", storyId, prose: "We had a dog named Biscuit who slept on the porch." }),
+    );
+
+    expect(result).toEqual({ kind: "finished", storyId });
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
+    expect(story!.state).toBe("pending_approval");
+    expect(story!.occurredKind).toBeNull();
+    expect(story!.occurredDate).toBeNull();
+    expect(story!.occurredProvenance).toBeNull();
+  });
+
+  it("NEVER overwrites a story date persisted during the interview", async () => {
+    const personId = await makePerson(runtimeDb);
+    const storyId = await seedDraftWithProse(personId, "seed text");
+    authCtx = { kind: "account", personId };
+    // Simulate the live path (#243): a date derived mid-interview, persisted before Finish.
+    await applyResolvedStoryDate(runtimeDb, storyId, {
+      kind: "date",
+      date: "1943-12-25",
+      endDate: null,
+      provenance: "age 8 at Christmas, from birthdate",
+    });
+
+    // The posted prose WOULD resolve differently ("in 1962") — the backstop must not touch it.
+    const result = await finishDraftAction(
+      form({ intent: "decline", storyId, prose: "We drove to the coast in 1962 and it broke down." }),
+    );
+
+    expect(result).toEqual({ kind: "finished", storyId });
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
+    expect(story!.occurredKind).toBe("date");
+    expect(story!.occurredDate).toBe("1943-12-25");
+    expect(story!.occurredProvenance).toBe("age 8 at Christmas, from birthdate");
   });
 });

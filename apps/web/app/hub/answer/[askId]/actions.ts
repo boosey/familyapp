@@ -15,6 +15,9 @@ import {
   logPolish,
   finishDraft,
   updateDerivedFields,
+  applyResolvedStoryDate,
+  getNarratorBiographicalContext,
+  listLifeEventsForPerson,
   listStoryRecordings,
   appendVoiceTakeContribution,
   appendTypedTakeContribution,
@@ -36,6 +39,7 @@ import {
   cleanupTake,
   polishProse,
   deriveMetadata,
+  deriveStoryDate,
 } from "@chronicle/pipeline";
 import {
   createCoreAnchorSource,
@@ -50,6 +54,7 @@ import { assertAnswerableAsk } from "@/lib/answerable-ask";
 import { resolveSubjectPhotos, attachCarryForwardPhotos } from "@/lib/subject-photo";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
+import type { Database, Story } from "@chronicle/db";
 
 /** Map the shared ask-guard failure reasons onto hub copy for the signed-in answer surface. */
 function answerableAskError(reason: "not_for_you" | "already_answered"): { error: string } {
@@ -1003,6 +1008,45 @@ function normalizeWhitespace(s: string): string {
 }
 
 /**
+ * Finish-time Story date backstop (ADR-0026, issue #246). A story that reaches Finish still
+ * Undated (the temporal follow-up was skipped or answered "I don't know") gets ONE silent
+ * second chance: the #242 resolver over the final sealed text against the narrator's
+ * birthDate + known life events. It never asks the narrator anything, and it NEVER overwrites
+ * a date the interview's live pass already persisted (the `occurredKind !== null` gate).
+ * Persistence goes through the same `applyResolvedStoryDate` seam the live path uses; the
+ * provenance note carries the finish-time-backstop marker. Best-effort: a backstop failure
+ * must never fail the Finish — the story simply stays Undated.
+ */
+async function backstopStoryDate(
+  db: Database,
+  story: Story,
+  finalText: string,
+): Promise<void> {
+  if (story.occurredKind !== null) return;
+  try {
+    const bio = await getNarratorBiographicalContext(db, story.ownerPersonId);
+    const lifeEvents = await listLifeEventsForPerson(db, story.ownerPersonId);
+    const resolution = deriveStoryDate({
+      fullText: finalText,
+      birthDate: bio?.birthDate ?? null,
+      lifeEvents,
+    });
+    if (resolution.status !== "resolved") return;
+    await applyResolvedStoryDate(db, story.id, resolution.occurrence);
+    plog("answer", "finishDraft: backstop dated story", {
+      story: story.id,
+      kind: resolution.occurrence.kind,
+      date: resolution.occurrence.date,
+    });
+  } catch (err) {
+    plogError("answer", "finishDraft: backstop failed (story left Undated)", {
+      story: story.id,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+  }
+}
+
+/**
  * Finish + Finish-check (ADR-0014 Inc 3 slice 8). Seals a `draft` to `pending_approval`, optionally
  * offering a speculative polish first. `intent`:
  *   - `probe`: run `polishProse` on the CLIENT'S current editor `prose`. If a REAL polish
@@ -1075,6 +1119,7 @@ export async function finishDraftAction(formData: FormData): Promise<ThreadStep>
         finalText: polishedField,
         metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
       });
+      await backstopStoryDate(db, story, polishedField);
       plog("answer", "finishDraft: accepted polish → finished (pending_approval)", {
         story: storyId,
       });
@@ -1110,6 +1155,7 @@ export async function finishDraftAction(formData: FormData): Promise<ThreadStep>
       finalText: proseField,
       metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
     });
+    await backstopStoryDate(db, story, proseField);
     plog("answer", "finishDraft: finished as-is (pending_approval)", { story: storyId });
     return { kind: "finished", storyId };
   } catch (err) {

@@ -132,6 +132,13 @@ export {
 } from "./derive-metadata";
 
 export {
+  deriveStoryDate,
+  BACKSTOP_PROVENANCE_SUFFIX,
+  type DeriveStoryDateInput,
+  type DeriveStoryDateOutput,
+} from "./derive-story-date";
+
+export {
   parseSpokenDate,
   parseSpokenDateResponse,
   type SpokenDate,

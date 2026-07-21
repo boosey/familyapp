@@ -429,6 +429,9 @@ export interface PipelineStoryView {
   promptQuestion: string | null;
   transcript: string | null;
   prose: string | null;
+  /** The Story date's form (ADR-0026); NULL = Undated. The render stage's finish-time backstop
+   *  (issue #246) gates on this: it only ever dates a story that is still Undated. */
+  occurredKind: OccurredKind | null;
   /** The canonical recording. NULL for a text story (no audio) — the media join is a LEFT join
    * so a text draft still returns a view row. Always populated for a voice story. */
   recording: {
@@ -1677,6 +1680,7 @@ export async function getStoryAndRecordingForPipeline(
       promptQuestion: stories.promptQuestion,
       transcript: stories.transcript,
       prose: stories.prose,
+      occurredKind: stories.occurredKind,
       mediaId: media.id,
       storageKey: media.storageKey,
       contentType: media.contentType,
@@ -1705,6 +1709,7 @@ export async function getStoryAndRecordingForPipeline(
     promptQuestion: row.promptQuestion,
     transcript: row.transcript,
     prose: row.prose,
+    occurredKind: row.occurredKind,
     // NULL for a text story (no media row from the LEFT join). `media.id` is NOT NULL in the
     // schema, so a null `mediaId` here can only mean "no joined recording".
     recording:
