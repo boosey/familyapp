@@ -249,8 +249,6 @@ export interface DerivedFields {
   title?: string;
   summary?: string;
   tags?: string[];
-  /** The representative year the story is ABOUT (historical era), not when it was recorded. */
-  eraYear?: number | null;
   /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
   eraLabel?: string | null;
   // --- Story date (ADR-0026): when the story's events took place, in one of three forms ---
@@ -278,7 +276,6 @@ export async function updateDerivedFields(
   if (fields.title !== undefined) patch.title = fields.title;
   if (fields.summary !== undefined) patch.summary = fields.summary;
   if (fields.tags !== undefined) patch.tags = fields.tags;
-  if (fields.eraYear !== undefined) patch.eraYear = fields.eraYear;
   if (fields.eraLabel !== undefined) patch.eraLabel = fields.eraLabel;
   if (fields.occurredKind !== undefined) patch.occurredKind = fields.occurredKind;
   if (fields.occurredDate !== undefined) patch.occurredDate = fields.occurredDate;

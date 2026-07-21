@@ -465,10 +465,10 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
 - **Story feed** — the reverse-chronological (by recording time) stream of stories an explorer may
   see. A view over the visible-story projection; not a new artifact. The per-viewer "New" badge rides
   the existing `story_views` read-state.
-- **Timeline** — the same visible stories arranged by the era they are *about* (`eraYear`), not when
-  recorded. Stories with no era gather in an explicit **Undated** section (never silently dropped).
-  Default scope is one narrator's life; a whole-family toggle is the same projection widened.
-  Inferring `eraYear` from prose is a deferred extraction step; v1 uses the era already supplied.
+- **Timeline** — the same visible stories arranged by when they are *about* (their **Story date**,
+  ADR-0026), not when recorded. Stories with no date gather in an explicit **Undated** section
+  (never silently dropped). Default scope is one narrator's life; a whole-family toggle is the same
+  projection widened.
 - **Chronicle search** — keyword/full-text search *within* the stories an explorer may see (title,
   summary, transcript, prose, tags, place label). DISTINCT from **Family search**, which finds a
   *discoverable family to join*: chronicle search reads inside families you are already in; family

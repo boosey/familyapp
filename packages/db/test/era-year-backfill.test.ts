@@ -8,6 +8,10 @@
  *   - a story with no era year stays Undated (a first-class state — never a fabricated date);
  *   - a story that already carries a Story date is NEVER clobbered (the guard is
  *     `occurred_kind IS NULL`), which also makes the migration idempotent.
+ *
+ * #248 retired the era_year column itself, so the live schema no longer carries it. Each test
+ * re-creates the pre-0029 world by re-adding the column with raw SQL before seeding; the
+ * migration file stays in the chain as replayed history.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -24,6 +28,8 @@ const BACKFILL_SQL = readFileSync(
 let db: Database;
 beforeEach(async () => {
   db = await createTestDatabase();
+  // The retired legacy column, back for one test so the backfill has something to read.
+  await db.$pglite!.exec(`ALTER TABLE "stories" ADD COLUMN "era_year" integer;`);
 });
 
 async function makePerson(displayName: string) {
@@ -49,13 +55,12 @@ async function makeStory(
       checksum: "abc123",
     })
     .returning();
-  return db.transaction(async (tx) => {
+  const story = await db.transaction(async (tx) => {
     const [s] = await tx
       .insert(stories)
       .values({
         ownerPersonId,
         recordingMediaId: rec!.id,
-        eraYear: legacy.eraYear,
         occurredKind: legacy.occurred ? legacy.occurred.kind : null,
         occurredDate: legacy.occurred?.date ?? null,
       })
@@ -66,12 +71,18 @@ async function makeStory(
       .values({ storyId: s!.id, position: 0, mediaId: rec!.id });
     return s!;
   });
+  if (legacy.eraYear !== null) {
+    await db.$pglite!.query(`UPDATE "stories" SET "era_year" = $1 WHERE "id" = $2`, [
+      legacy.eraYear,
+      story.id,
+    ]);
+  }
+  return story;
 }
 
 async function occurredOf(storyId: string) {
   const [row] = await db
     .select({
-      eraYear: stories.eraYear,
       occurredKind: stories.occurredKind,
       occurredDate: stories.occurredDate,
       occurredEndDate: stories.occurredEndDate,
@@ -92,7 +103,6 @@ describe("0029 era_year backfill (ADR-0026)", () => {
     await db.$pglite!.exec(BACKFILL_SQL);
 
     expect(await occurredOf(s1943.id)).toEqual({
-      eraYear: 1943, // the column itself is NOT dropped here (that's the contract ticket)
       occurredKind: "period",
       occurredDate: "1943-01-01",
       occurredEndDate: "1943-12-31",

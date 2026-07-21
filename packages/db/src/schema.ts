@@ -625,8 +625,6 @@ export const stories = pgTable(
     title: text("title"),
     summary: text("summary"),
     tags: jsonb("tags").$type<string[]>().default(sql`'[]'::jsonb`),
-    /** The representative year the story is ABOUT (historical era), not when it was recorded. */
-    eraYear: integer("era_year"),
     /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
     eraLabel: text("era_label"),
     // --- Story date (ADR-0026): when the story's events took place, in one of three forms ---

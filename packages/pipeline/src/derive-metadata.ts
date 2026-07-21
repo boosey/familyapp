@@ -1,8 +1,8 @@
 /**
  * FINISH-TIME METADATA derivation (ADR-0014 §5). One short LM call over the WHOLE final composed text
  * that returns title/summary/tags only — NO prose (the prose is authored, never regenerated, §7) and
- * NO eraYear (deferred inference; v1 uses a supplied era). Runs synchronously in the Finish action;
- * the durable queue is reserved for background work.
+ * NO story date (ADR-0026 dates resolve from the telling via the resolver/backstop, not this call).
+ * Runs synchronously in the Finish action; the durable queue is reserved for background work.
  *
  * The JSON parse + fallbacks + length/count caps are shared with the legacy render path via
  * `parseRenderResponse` (we ask for {title, summary, tags}; its `prose` is ignored). This keeps one

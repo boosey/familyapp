@@ -179,7 +179,6 @@ describe("dev seed — Story date spread (ADR-0026, #247)", () => {
         date: stories.occurredDate,
         endDate: stories.occurredEndDate,
         provenance: stories.occurredProvenance,
-        eraYear: stories.eraYear,
       })
       .from(stories);
 
@@ -195,9 +194,6 @@ describe("dev seed — Story date spread (ADR-0026, #247)", () => {
     expect(rows.some((r) => r.kind === null)).toBe(true);
     // Every derived seed date records its provenance (user-visible, ADR-0026).
     expect(dated.every((r) => typeof r.provenance === "string" && r.provenance.length > 0)).toBe(true);
-    // The legacy era_year column is no longer populated by the seed (reads switched over; the
-    // column itself retires in the contract ticket).
-    expect(rows.every((r) => r.eraYear === null)).toBe(true);
   });
 
   it("seeded dates smart-display as their forms (year period → the bare year)", async () => {

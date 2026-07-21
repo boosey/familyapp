@@ -397,7 +397,6 @@ CREATE TABLE "stories" (
 	"title" text,
 	"summary" text,
 	"tags" jsonb DEFAULT '[]'::jsonb,
-	"era_year" integer,
 	"era_label" text,
 	"occurred_kind" "occurred_kind",
 	"occurred_date" date,

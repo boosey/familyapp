@@ -22,12 +22,12 @@ describe("deriveMetadata", () => {
     expect(out.systemPrompt).toBe(METADATA_SYSTEM_PROMPT);
   });
 
-  it("does not derive prose or era (title/summary/tags only)", async () => {
+  it("does not derive prose (title/summary/tags only)", async () => {
     const llm = new ScriptedLanguageModel({
-      respond: JSON.stringify({ title: "T", summary: "S", tags: [], prose: "SHOULD BE IGNORED", eraYear: 1950 }),
+      respond: JSON.stringify({ title: "T", summary: "S", tags: [], prose: "SHOULD BE IGNORED" }),
     });
     const out = await deriveMetadata(llm, { fullText: "text" });
-    // The output type has no prose/eraYear fields; assert we only surfaced metadata.
+    // The output type has no prose field; assert we only surfaced metadata.
     expect(Object.keys(out).sort()).toEqual(["modelId", "summary", "systemPrompt", "tags", "title"]);
   });
 

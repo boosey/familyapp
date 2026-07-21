@@ -74,8 +74,8 @@ describe("persistRecordingAndCreateDraft (capture write path)", () => {
   });
 });
 
-describe("updateDerivedFields — historical era (eraYear / eraLabel)", () => {
-  it("persists eraYear/eraLabel and a subsequent read returns them", async () => {
+describe("updateDerivedFields — era label (eraLabel)", () => {
+  it("persists eraLabel and a subsequent read returns it", async () => {
     const narrator = await makePerson(db, "Eleanor");
     const { story } = await persistRecordingAndCreateDraft(db, {
       ownerPersonId: narrator.id,
@@ -83,15 +83,12 @@ describe("updateDerivedFields — historical era (eraYear / eraLabel)", () => {
       contentType: "audio/webm",
       checksum: "sha256:era",
     });
-    // Born without an era.
-    expect(story.eraYear).toBeNull();
+    // Born without an era label.
     expect(story.eraLabel).toBeNull();
 
     const updated = await updateDerivedFields(db, story.id, {
-      eraYear: 1958,
       eraLabel: "Cherry Street",
     });
-    expect(updated.eraYear).toBe(1958);
     expect(updated.eraLabel).toBe("Cherry Street");
 
     // Read back through the authorized front door as the owner.
@@ -100,11 +97,10 @@ describe("updateDerivedFields — historical era (eraYear / eraLabel)", () => {
       { kind: "link_session", personId: narrator.id },
       story.id,
     );
-    expect(readBack?.eraYear).toBe(1958);
     expect(readBack?.eraLabel).toBe("Cherry Street");
   });
 
-  it("leaves era fields untouched when omitted, and allows clearing eraLabel via null", async () => {
+  it("leaves eraLabel untouched when omitted, and allows clearing it via null", async () => {
     const narrator = await makePerson(db, "Eleanor");
     const { story } = await persistRecordingAndCreateDraft(db, {
       ownerPersonId: narrator.id,
@@ -112,16 +108,14 @@ describe("updateDerivedFields — historical era (eraYear / eraLabel)", () => {
       contentType: "audio/webm",
       checksum: "sha256:era2",
     });
-    await updateDerivedFields(db, story.id, { eraYear: 1961, eraLabel: "the Blue Room" });
+    await updateDerivedFields(db, story.id, { eraLabel: "the Blue Room" });
 
-    // A later derived-field write that omits era fields must not wipe them (undefined = skip).
+    // A later derived-field write that omits the era label must not wipe it (undefined = skip).
     const afterTitle = await updateDerivedFields(db, story.id, { title: "The dance" });
-    expect(afterTitle.eraYear).toBe(1961);
     expect(afterTitle.eraLabel).toBe("the Blue Room");
 
     // Explicit null clears the label (distinct from undefined).
     const cleared = await updateDerivedFields(db, story.id, { eraLabel: null });
-    expect(cleared.eraYear).toBe(1961);
     expect(cleared.eraLabel).toBeNull();
   });
 });
@@ -221,7 +215,7 @@ describe("updateDerivedFields — Story date (occurred_*, ADR-0026)", () => {
     expect(cleared.occurredProvenance).toBeNull();
   });
 
-  it("does not disturb eraYear/eraLabel (legacy era behavior fully intact)", async () => {
+  it("does not disturb eraLabel (legacy era behavior fully intact)", async () => {
     const narrator = await makePerson(db, "Eleanor");
     const { story } = await persistRecordingAndCreateDraft(db, {
       ownerPersonId: narrator.id,
@@ -229,14 +223,13 @@ describe("updateDerivedFields — Story date (occurred_*, ADR-0026)", () => {
       contentType: "audio/webm",
       checksum: "sha256:occ-era",
     });
-    await updateDerivedFields(db, story.id, { eraYear: 1958, eraLabel: "Cherry Street" });
+    await updateDerivedFields(db, story.id, { eraLabel: "Cherry Street" });
 
     const after = await updateDerivedFields(db, story.id, {
       occurredKind: "period",
       occurredDate: "1958-01-01",
       occurredEndDate: "1958-12-31",
     });
-    expect(after.eraYear).toBe(1958);
     expect(after.eraLabel).toBe("Cherry Street");
     expect(after.occurredKind).toBe("period");
   });

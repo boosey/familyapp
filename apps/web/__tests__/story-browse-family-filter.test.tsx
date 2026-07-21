@@ -238,7 +238,6 @@ function slot(familyId: string, familyName: string, storyId: string, title: stri
         summary: null,
         prose: null,
         tags: [],
-        eraYear: null,
         eraLabel: null,
         approvedAt: now,
         createdAt: now,
