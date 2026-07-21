@@ -5,6 +5,10 @@
  * so it can be unit-tested in isolation and imported from routes/actions. Unconfigured → Google
  * chrome stays hidden (file upload only).
  *
+ * Product rollout is gated by `GOOGLE_PHOTOS_ENABLED` (off by default) so Connect / Import stay
+ * hidden while Google OAuth verification is pending — same idiom as `FOLLOW_UPS_ENABLED` and
+ * `ALBUM_IMPORT_PROGRESS_ENABLED`. Credentials alone are not enough.
+ *
  * `getGooglePhotosDeps()` is the test seam: production returns the real `@chronicle/photos-google`
  * functions; tests override via `vi.mock("@/lib/google-photos-config", …)` or by replacing the
  * module-level `_depsOverride`.
@@ -27,10 +31,24 @@ import { resolvePublicOrigin } from "@/lib/public-origin";
 const CLIENT_ID = "GOOGLE_PHOTOS_CLIENT_ID";
 const CLIENT_SECRET = "GOOGLE_PHOTOS_CLIENT_SECRET";
 const ENCRYPTION_KEY = "GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY";
+const ENABLED = "GOOGLE_PHOTOS_ENABLED";
 
-/** True when all three required env vars are non-empty. */
+/**
+ * Rollout flag. Off by default so Connect / Import stay hidden until Google verification
+ * completes — set `GOOGLE_PHOTOS_ENABLED=1` (or `true`) to turn the product surface on.
+ */
+export function isGooglePhotosEnabled(): boolean {
+  const raw = process.env[ENABLED];
+  return raw === "1" || raw === "true";
+}
+
+/**
+ * Product gate used by UI, routes, and actions: rollout flag on AND all three credential
+ * env vars non-empty. False → Google chrome stays hidden (file upload only).
+ */
 export function isGooglePhotosConfigured(): boolean {
   return (
+    isGooglePhotosEnabled() &&
     (process.env[CLIENT_ID] ?? "").length > 0 &&
     (process.env[CLIENT_SECRET] ?? "").length > 0 &&
     (process.env[ENCRYPTION_KEY] ?? "").length > 0
@@ -70,8 +88,9 @@ export function getGooglePhotosOAuthConfig(opts?: {
 }): GooglePhotosOAuthConfig {
   if (!isGooglePhotosConfigured()) {
     throw new Error(
-      "Google Photos is not configured (need GOOGLE_PHOTOS_CLIENT_ID, " +
-        "GOOGLE_PHOTOS_CLIENT_SECRET, GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY).",
+      "Google Photos is not configured (need GOOGLE_PHOTOS_ENABLED=1 plus " +
+        "GOOGLE_PHOTOS_CLIENT_ID, GOOGLE_PHOTOS_CLIENT_SECRET, " +
+        "GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY).",
     );
   }
   const configuredBase =

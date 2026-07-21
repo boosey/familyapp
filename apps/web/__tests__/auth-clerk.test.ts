@@ -73,7 +73,11 @@ describe("createClerkAuthProvider", () => {
     });
   });
 
-  it("retries a transient DB failure during the account lookup and stays signed in", async () => {
+  // PGlite boot under a loaded CI shard routinely eats most of the default 5s; give the
+  // createTestDatabase + retry path room so this does not flake as a false timeout.
+  it(
+    "retries a transient DB failure during the account lookup and stays signed in",
+    async () => {
     // Regression: Neon (prod Postgres) scales to zero; the first query after idle can drop the
     // connection while the compute wakes. That transient throw used to hit the catch and degrade a
     // SIGNED-IN user to anonymous — the spurious "Not signed in" observed in production. The lookup
@@ -108,7 +112,9 @@ describe("createClerkAuthProvider", () => {
     // Proves it actually retried past the transient failure rather than degrading.
     expect(selectCalls).toBeGreaterThanOrEqual(2);
     warnSpy.mockRestore();
-  });
+  },
+    15_000,
+  );
 
   it("resolves a session for an identity attached AFTER account creation (healed account)", async () => {
     // Model B heal: the account was created under a dead dev-instance clerk id (`dev_old`) and a
