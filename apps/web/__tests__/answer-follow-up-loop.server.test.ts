@@ -18,6 +18,8 @@ let runtimeDb: Database;
 let runtimeStorage: InMemoryMediaStorage;
 let runtimeLlm: LanguageModel;
 let runtimeEvaluator: FollowUpEvaluator;
+/** Gap stage (production always wires this); undefined → deepen-only cascade for older tests. */
+let runtimeGapEvaluator: FollowUpEvaluator | undefined;
 let runtimeTranscriber: Transcriber;
 let authCtx: { kind: string; personId?: string };
 
@@ -28,6 +30,7 @@ vi.mock("@/lib/runtime", () => ({
     auth: { getCurrentAuthContext: async () => authCtx },
     languageModel: runtimeLlm,
     followUpEvaluator: runtimeEvaluator,
+    gapFollowUpEvaluator: runtimeGapEvaluator,
     transcriber: runtimeTranscriber,
     dispatchPipeline: async () => {},
   }),
@@ -65,6 +68,7 @@ import {
   appendTypedTakeAction,
   dropTakeAction,
 } from "@/app/hub/answer/[askId]/actions";
+import { FOLLOW_UP_BUDGET_MS } from "@/lib/follow-up-config";
 
 /** Seed a queued ask targeted at `targetPersonId` and return its id (for the flag-ON voice path). */
 async function seedAnswerableAsk(
@@ -192,6 +196,142 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
     expect(story!.state).toBe("draft");
   });
+
+  it("dating context → temporal system probe wins; ledger modelId is system:story-date", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    const rt = {
+      db,
+      languageModel: scriptedLlm("Do you remember about when that was? A year is fine."),
+      followUpEvaluator: deepen,
+      gapFollowUpEvaluator: new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]),
+    };
+
+    const step = await runFollowUpStep(rt, {
+      storyId,
+      ownerPersonId,
+      promptText: "What was your childhood home like?",
+      answerTranscript: ANSWER,
+      dating: { dateUnresolved: true, alreadyAsked: false },
+    });
+
+    expect(step?.kind).toBe("follow_up");
+    expect(deepen.calls).toHaveLength(0);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.evaluatorModelId).toBe("system:story-date");
+    expect(rows[0]!.selectedSeed).toBe("about when this happened");
+  });
+
+  it("gap wins → deepen not called; ledger modelId is from the gap evaluator", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "gap-model");
+    const rt = {
+      db,
+      languageModel: scriptedLlm("What else do you remember about that stained glass?"),
+      followUpEvaluator: deepen,
+      gapFollowUpEvaluator: gap,
+    };
+
+    const step = await runFollowUpStep(rt, {
+      storyId,
+      ownerPersonId,
+      promptText: "What was your childhood home like?",
+      answerTranscript: ANSWER,
+    });
+
+    expect(step?.kind).toBe("follow_up");
+    expect(gap.calls).toHaveLength(1);
+    expect(deepen.calls).toHaveLength(0);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.evaluatorModelId).toBe("gap-model");
+    expect(rows[0]!.selectedSeed).toBe("the stained glass window");
+  });
+
+  it("gap empty → deepen wins; ledger modelId is from the deepen evaluator", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator([[]], "gap-model");
+    const rt = {
+      db,
+      languageModel: scriptedLlm("Tell me more about that stained glass window."),
+      followUpEvaluator: deepen,
+      gapFollowUpEvaluator: gap,
+    };
+
+    const step = await runFollowUpStep(rt, {
+      storyId,
+      ownerPersonId,
+      promptText: "What was your childhood home like?",
+      answerTranscript: ANSWER,
+    });
+
+    expect(step).toEqual({
+      kind: "follow_up",
+      storyId,
+      prompt: "Tell me more about that stained glass window.",
+    });
+    expect(gap.calls).toHaveLength(1);
+    expect(deepen.calls).toHaveLength(1);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.evaluatorModelId).toBe("deepen-model");
+    expect(rows[0]!.selectedSeed).toBe("the stained glass window");
+  });
+
+  it("gap-empty → deepen still completes under budget with slow cascade stages", async () => {
+    // Regression: budget must cover gap + deepen + phrase (not deepen-only). Each stage sleeps
+    // long enough that the sum exceeds the old 8s deepen-only budget but fits under FOLLOW_UP_BUDGET_MS.
+    expect(FOLLOW_UP_BUDGET_MS).toBeGreaterThanOrEqual(12_000);
+    const perStageMs = 4_500;
+    expect(perStageMs * 2).toBeGreaterThan(8_000);
+    expect(perStageMs * 2).toBeLessThan(FOLLOW_UP_BUDGET_MS);
+
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const gap: FollowUpEvaluator = {
+      async evaluate() {
+        await delay(perStageMs);
+        return { candidates: [], modelId: "slow-gap" };
+      },
+    };
+    const deepen: FollowUpEvaluator = {
+      async evaluate() {
+        await delay(perStageMs);
+        return { candidates: [STRONG_CANDIDATE], modelId: "slow-deepen" };
+      },
+    };
+
+    const step = await runFollowUpStep(
+      {
+        db,
+        languageModel: scriptedLlm("Tell me more about that stained glass window."),
+        followUpEvaluator: deepen,
+        gapFollowUpEvaluator: gap,
+      },
+      {
+        storyId,
+        ownerPersonId,
+        promptText: "What was your childhood home like?",
+        answerTranscript: ANSWER,
+      },
+    );
+
+    expect(step?.kind).toBe("follow_up");
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.evaluatorModelId).toBe("slow-deepen");
+  }, 25_000);
 
   it("stops proposing when nothing is selected: records a null-seed decision, returns null, draft stays open (no stitch)", async () => {
     const db = await createTestDatabase();
@@ -418,7 +558,7 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(step).toBeNull();
     const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
     expect(story!.state).toBe("draft");
-  }, 15000);
+  }, FOLLOW_UP_BUDGET_MS + 10_000);
 });
 
 /**
@@ -432,6 +572,7 @@ describe("follow-up actions (getRuntime-driven)", () => {
     runtimeStorage = new InMemoryMediaStorage();
     runtimeLlm = scriptedLlm("Tell me more.");
     runtimeEvaluator = new ScriptedFollowUpEvaluator([[]]);
+    runtimeGapEvaluator = undefined;
     runtimeTranscriber = new ScriptedTranscriber({ text: "follow-up take words" });
     authCtx = { kind: "none" };
     process.env.FOLLOW_UPS_ENABLED = "1";
@@ -906,5 +1047,37 @@ describe("follow-up actions (getRuntime-driven)", () => {
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
     expect(story!.state).toBe("draft");
     expect(story!.prose).toBeTruthy();
+  });
+
+  it("recordAnswerAction (FOLLOW_UPS_ENABLED=false + askId) stays dark: appended, evaluators never called", async () => {
+    process.env.FOLLOW_UPS_ENABLED = "false";
+    const ownerPersonId = (
+      await runtimeDb
+        .insert(persons)
+        .values({ displayName: "Nora", spokenName: "Nora", birthYear: 1950 })
+        .returning()
+    )[0]!.id;
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const askId = await seedAnswerableAsk(runtimeDb, ownerPersonId, "What was your childhood home like?");
+    runtimeLlm = scriptedLlm("Cleaned take zero prose.");
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "gap-model");
+    runtimeEvaluator = deepen;
+    runtimeGapEvaluator = gap;
+    runtimeTranscriber = new ScriptedTranscriber({ text: ANSWER });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
+    );
+
+    if (!("kind" in result) || result.kind !== "appended") {
+      throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+    }
+    expect(deepen.calls).toHaveLength(0);
+    expect(gap.calls).toHaveLength(0);
+    const rows = await listFollowUpDecisionsForStory(runtimeDb, result.storyId);
+    expect(rows).toHaveLength(0);
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
+    expect(story!.state).toBe("draft");
   });
 });

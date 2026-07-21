@@ -124,12 +124,11 @@ Ask this in your warm voice (re-render naturally — do NOT read verbatim, keep 
 """${intent.questionText}"""
 Curious and warm, never clinical or form-like. Never yes/no.`;
     case "follow_up":
-      if (intent.origin === "gap") {
-        // Gap-driven follow-up (issue #80): the seed names a SPECIFIC missing fact the narrator
-        // did not supply. Still ONE warm question, still non-leading — we ask about the gap, we do
-        // NOT assert the missing fact exists. The gapKind hints the angle (when/who/where/why/what).
-        // Temporal gaps (issue #244, ADR-0026) carry extra wording discipline: the question must
-        // explicitly welcome a fuzzy answer and never pressure for an exact date.
+      if (intent.origin === "gap" || intent.origin === "system") {
+        // Gap / system-probe follow-up: the seed names a SPECIFIC missing fact. Still ONE warm
+        // question, still non-leading — we ask about the gap, we do NOT assert it exists.
+        // Temporal (system dating probe or gap kind) carries extra wording discipline: welcome a
+        // fuzzy answer and never pressure for an exact date (issue #244 / story-dates).
         const temporalGuidance =
           intent.gapKind === "temporal"
             ? `\nThis is a WHEN question. Phrase it so an approximate answer is explicitly welcome — a

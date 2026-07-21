@@ -625,6 +625,24 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   is PHRASED by the existing (already-versioned) `phraser.ts`, so it introduces no second new
   prompt. When the next prompt or a real vendor variant lands, this module is the seam to grow.
 
+## Follow-up cascade (ADR-0013 amendment, 2026-07-20)
+
+- **One propose → dispose → phrase pipeline for both surfaces.** Answer mini-loop and interview
+  session share `proposeAndDisposeFollowUp` with a fixed cascade: **system probes → gap → deepen**.
+  Surfaces differ only in when they run it and whether they persist the ledger / queue for next turn.
+- **System probes** (`SystemFollowUpProbe`) are deterministic (no LLM). Temporal dating
+  (`createTemporalFollowUpProbe`, seed `"about when this happened"`, modelId `system:story-date`)
+  is the first probe — lifted from feat/story-dates so PR #249 only wires dating context
+  (`runFollowUpStep({ dating })` / `InterviewSessionOptions.getProbeContext`). Do **not**
+  reintroduce inline `proposeTemporalFollowUp` in `turn-loop.ts` when landing #249.
+- **`origin` taxonomy** on `PromptIntent.follow_up`: `system` | `gap` | `reflection`. Phraser uses
+  gentle dating guidance for `gapKind: "temporal"`. FollowUpType ↔ GapKind maps live in
+  `follow-up-mapping.ts` (single source).
+- **`FOLLOW_UPS_ENABLED`** remains the master enable for the answer surface; cascade stages are not
+  separately flagged in v1. Temporal stays dark without dating context.
+- ADR-0012 multi-take UX unchanged. Out of scope: `/s` multi-turn, notifications, family ask
+  `sourceStoryId` framing.
+
 ## Workflow
 
 - **Subagent-driven build + fresh adversarial review.** Coding sub-agents write the code; the
