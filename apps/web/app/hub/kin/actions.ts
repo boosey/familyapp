@@ -268,7 +268,7 @@ export async function affirmEdgeAction(formData: FormData): Promise<ActionResult
   return runEdgeAction(formData, "affirmEdge", (db, ctx, ref) => affirmEdge(db, ctx, ref));
 }
 
-/** Steward removes an edge (#33). Optional `note` reason. */
+/** Steward or original asserter removes an edge (#33/#256). Optional `note` reason. */
 export async function denyEdgeAction(formData: FormData): Promise<ActionResult> {
   const rawNote = formData.get("note");
   const note = typeof rawNote === "string" && rawNote.trim() ? rawNote.trim() : null;
