@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
 import {
   createInterviewSession,
+  createTemporalFollowUpProbe,
   InMemoryAnchorSource,
   InMemoryAskSource,
   InMemoryMemorySource,
@@ -19,6 +20,7 @@ import {
   ScriptedVoice,
   RAPPORT_THRESHOLD_TURNS,
   GAP_DETECTION_MIN_ANSWER_WORDS,
+  STORY_DATE_FOLLOW_UP_SEED,
   type BiographicalAnchors,
   type InterviewerDeps,
   type PromptIntent,
@@ -271,5 +273,32 @@ describe("gap-driven follow-up in the controlled loop", () => {
     await session.recordResponse(LONG_ANSWER);
     // No gap machinery ran; nothing queued.
     expect(session.getState().pendingGapFollowUp).toBeNull();
+  });
+
+  it("queues a system temporal probe ahead of gap when dating context says unresolved", async () => {
+    const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
+    const deps = makeDeps(evaluator);
+    deps.systemFollowUpProbes = [createTemporalFollowUpProbe()];
+    const session = await createInterviewSession(deps, {
+      narratorPersonId: NARRATOR,
+      getProbeContext: ({ answerTranscript, temporalFollowUpAsked }) => ({
+        answerTranscript,
+        dating: { alreadyAsked: temporalFollowUpAsked, dateUnresolved: true },
+      }),
+    });
+
+    await session.nextTurn();
+    await session.recordResponse(LONG_ANSWER);
+    expect(evaluator.calls).toHaveLength(0); // probe won — gap never called
+    expect(session.getState().pendingGapFollowUp?.origin).toBe("system");
+    expect(session.getState().pendingGapFollowUp?.gapKind).toBe("temporal");
+    expect(session.getState().pendingGapFollowUp?.candidate.threadSeed).toBe(
+      STORY_DATE_FOLLOW_UP_SEED,
+    );
+
+    const turn = await session.nextTurn();
+    const fu = turn.intent as Extract<PromptIntent, { kind: "follow_up" }>;
+    expect(fu.origin).toBe("system");
+    expect(fu.gapKind).toBe("temporal");
   });
 });

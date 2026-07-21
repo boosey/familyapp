@@ -17,6 +17,12 @@ Tracks which build-sequence increment is active and the eval status of each comp
 
 ## Log
 
+- **2026-07-20** — **P0 MOBILE-WEB RESPONSIVE LAYOUTS COMPLETE** per
+  `docs/01 Strategy/Family-Chronicle-Prioritized-Backlog.md`. Phone-first
+  `@media` layouts for `/s` capture, `/hub` tabs, and onboarding/Ask. With
+  Clerk go-live already shipped, the prioritized backlog's next build item is
+  **#2 Follow-up questions on published stories**.
+
 - **2026-07-17** — **CLERK GO-LIVE (#9) + PROVIDER-AGNOSTIC IDENTITY (PR #99) COMPLETE.**
   (a) **Clerk go-live** — production instance on `tellmeagain.app` (Clerk Frontend API
   `clerk.tellmeagain.app`), `pk_live_`/`sk_live_` set on Vercel Production, live sign-up /

@@ -39,12 +39,16 @@ import {
 } from "@chronicle/pipeline";
 import {
   createCoreAnchorSource,
-  decideFollowUp,
+  createTemporalFollowUpProbe,
   phraseIntent,
   detectDistress,
   detectOffRamp,
+  proposeAndDisposeFollowUp,
+  STORY_DATE_FOLLOW_UP_SEED,
+  type FollowUpEvaluator,
+  type SystemFollowUpProbe,
 } from "@chronicle/interviewer";
-import { resolveFollowUpPolicyForRequest } from "@/lib/follow-up-config";
+import { FOLLOW_UP_BUDGET_MS, resolveFollowUpPolicyForRequest } from "@/lib/follow-up-config";
 import { resolveComposeFamilies } from "@/lib/compose-scope";
 import { assertAnswerableAsk } from "@/lib/answerable-ask";
 import { resolveSubjectPhotos, attachCarryForwardPhotos } from "@/lib/subject-photo";
@@ -109,27 +113,36 @@ export type ThreadStep =
   | { error: string };
 
 /**
- * Latency budget for the follow-up tax (evaluate + phrase). Exceed → degrade to one-shot: the
- * narrator's take is already transcribed regardless, so this bounds only the EXTRA follow-up work.
- * A broken/slow evaluator can never block sharing (handoff watch #2).
- */
-const FOLLOW_UP_BUDGET_MS = 8000;
-/**
  * The Ask-answer surface has no live turn history → no rapport signal yet; stay conservative so
  * high-sensitivity threads never fire on this surface in v1 (the emotional-door veto is separate).
  */
 const RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE = false;
 
 /**
- * runFollowUpStep needs only these from the runtime: `db`, and the two AI seams (`languageModel`
- * for phrasing / stitch-render, `followUpEvaluator` for the propose side). Typing it this narrowly
- * (rather than the full `getRuntime()` object) lets the server test drive it with a hand-built
+ * runFollowUpStep needs these from the runtime: `db`, `languageModel` for phrasing, and the
+ * cascade evaluators. `followUpEvaluator` is the deepen (stage 3) proposer; `gapFollowUpEvaluator`
+ * is optional stage 2. Typing it this narrowly lets the server test drive it with a hand-built
  * object instead of the getRuntime singleton. The real callers pass the full runtime (a superset).
  */
 type FollowUpStepRuntime = Pick<
   Awaited<ReturnType<typeof getRuntime>>,
   "db" | "languageModel" | "followUpEvaluator"
->;
+> & {
+  /** Optional gap stage; when omitted, cascade goes probe → deepen (deepen-only tests). */
+  gapFollowUpEvaluator?: FollowUpEvaluator;
+  /** Optional system probes; production may pass temporal when dating context exists. */
+  systemFollowUpProbes?: ReadonlyArray<SystemFollowUpProbe>;
+};
+
+/**
+ * Optional dating context for the temporal system probe (story-dates PR #249 hook).
+ * When absent, the temporal probe is N/A and the cascade skips to gap/deepen.
+ */
+export type FollowUpDatingContext = {
+  dateUnresolved: boolean;
+  /** True once a temporal follow-up was already asked on this thread. */
+  alreadyAsked: boolean;
+};
 
 /** Read an optional non-empty string field from FormData; returns `null` when absent/blank/non-string. */
 function formField(formData: FormData, key: string): string | null {
@@ -435,18 +448,25 @@ export async function appendTypedTakeAction(formData: FormData): Promise<ThreadS
 }
 
 /**
- * PROPOSE-ONLY (ADR-0014 Inc 3 slice 6): the core evaluate → decide → (phrase + persist follow-up |
- * persist "none") helper. The ONLY place the ledger's `decision` rows are written; callers write the
- * `outcome` rows. Selected → phrase + append the decision row → return the `follow_up` step. Nothing
- * selected → append the null-seed decision row → return `null`. On timeout (FOLLOW_UP_BUDGET_MS) or
- * ANY evaluator/phraser/ledger failure → log + return `null`. There is NO stitch-to-finish: `null`
- * means "stop proposing; the draft stays open" (the narrator's take was already appended by the
- * caller). Never throws — a broken/slow evaluator can never block the draft (handoff watch #2).
- * Exported so the server test can drive it directly against a hand-built runtime.
+ * PROPOSE-ONLY cascade (ADR-0013 amendment / ADR-0014 Inc 3 slice 6): system probes → gap → deepen,
+ * then dispose → phrase + persist. The ONLY place the ledger's `decision` rows are written; callers
+ * write the `outcome` rows. Selected → phrase with origin/gapKind + append → return `follow_up`.
+ * Nothing selected → append null-seed decision → return `null`. On timeout or ANY failure → log +
+ * `null`. Never throws — a broken/slow evaluator can never block the draft.
+ *
+ * `dating` is the story-dates hook: pass it only when an active story still needs a date. Do NOT
+ * reintroduce inline `proposeTemporalFollowUp` — use `createTemporalFollowUpProbe` via probes.
  */
 export async function runFollowUpStep(
   rt: FollowUpStepRuntime,
-  args: { storyId: string; ownerPersonId: string; promptText: string; answerTranscript: string },
+  args: {
+    storyId: string;
+    ownerPersonId: string;
+    promptText: string;
+    answerTranscript: string;
+    /** Story-dates hook — enables temporal system probe when present. */
+    dating?: FollowUpDatingContext;
+  },
 ): Promise<{ kind: "follow_up"; storyId: string; prompt: string } | null> {
   const { db, languageModel, followUpEvaluator } = rt;
   const policy = resolveFollowUpPolicyForRequest();
@@ -463,31 +483,63 @@ export async function runFollowUpStep(
   const distressed = detectDistress(args.answerTranscript);
   const offRampRequested = detectOffRamp(args.answerTranscript);
 
+  // Temporal latch from ledger: any prior ask of the dating seed counts.
+  const temporalAlreadyAsked =
+    args.dating?.alreadyAsked === true || askedSeeds.includes(STORY_DATE_FOLLOW_UP_SEED);
+
+  const probes: SystemFollowUpProbe[] = [
+    ...(rt.systemFollowUpProbes ?? []),
+    // Auto-include temporal probe only when dating context is supplied (dark without story-dates).
+    ...(args.dating ? [createTemporalFollowUpProbe()] : []),
+  ];
+
+  // Tests that omit gapFollowUpEvaluator get deepen-only (regression parity). Production runtime
+  // supplies gapFollowUpEvaluator so the full cascade runs.
+  const gapEvaluator = rt.gapFollowUpEvaluator;
+  const deepenEvaluator = followUpEvaluator;
+
   try {
     const step = await withTimeout<{ kind: "follow_up"; storyId: string; prompt: string } | null>(
       FOLLOW_UP_BUDGET_MS,
       async () => {
-      const evaluation = await followUpEvaluator.evaluate({
-        answerTranscript: args.answerTranscript,
-        promptText: args.promptText,
-        alreadyAskedSeeds: askedSeeds,
-        coveredCategories: [],
-        followUpsAskedInThread,
-        rapportEstablished: RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE,
+      const result = await proposeAndDisposeFollowUp({
+        probes,
+        probeContext: {
+          answerTranscript: args.answerTranscript,
+          ...(args.dating
+            ? {
+                dating: {
+                  dateUnresolved: args.dating.dateUnresolved,
+                  alreadyAsked: temporalAlreadyAsked,
+                },
+              }
+            : {}),
+        },
+        gapEvaluator,
+        deepenEvaluator,
+        evaluationInput: {
+          answerTranscript: args.answerTranscript,
+          promptText: args.promptText,
+          alreadyAskedSeeds: askedSeeds,
+          coveredCategories: [],
+          followUpsAskedInThread,
+          rapportEstablished: RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE,
+        },
+        decide: {
+          policy,
+          answerWordCount,
+          followUpsAskedInThread,
+          // Session cap is inert in v1 (one Ask = one thread); passing the thread count means the
+          // per-thread cap is the binding one — honest, not theater (handoff watch #1).
+          followUpsAskedInSession: followUpsAskedInThread,
+          distressed,
+          offRampRequested,
+          rapportEstablished: RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE,
+          alreadyAskedSeeds: askedSeeds,
+        },
       });
-      const decision = decideFollowUp({
-        evaluation,
-        policy,
-        answerWordCount,
-        followUpsAskedInThread,
-        // Session cap is inert in v1 (one Ask = one thread); passing the thread count means the
-        // per-thread cap is the binding one — honest, not theater (handoff watch #1).
-        followUpsAskedInSession: followUpsAskedInThread,
-        distressed,
-        offRampRequested,
-        rapportEstablished: RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE,
-        alreadyAskedSeeds: askedSeeds,
-      });
+
+      const { decision, evaluation, origin, gapKind } = result;
 
       if (decision.selected) {
         // phraseIntent runs BEFORE appendFollowUpDecision so the phrased line lands in the SAME
@@ -496,7 +548,12 @@ export async function runFollowUpStep(
         // write no row than a decision row with a null phrasedLine that implies "nothing selected".
         const anchors = await createCoreAnchorSource(db).loadForNarrator(args.ownerPersonId);
         const phrased = await phraseIntent(languageModel, {
-          intent: { kind: "follow_up", threadSeed: decision.selected.threadSeed },
+          intent: {
+            kind: "follow_up",
+            threadSeed: decision.selected.threadSeed,
+            ...(origin ? { origin } : {}),
+            ...(gapKind ? { gapKind } : {}),
+          },
           anchors,
           priorStories: [],
           isFirstSession: false,

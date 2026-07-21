@@ -34,11 +34,13 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 
 ## The sequenced backlog (build in this order)
 
+**Front of queue:** **#2 Follow-up questions on published stories.** P0 (mobile-web responsive) and #1 (Clerk go-live) are shipped — see *Already shipped* below.
+
 | Seq | Epic | /100 | What it is |
 |:-:|---|:-:|---|
-| **P0** | **Mobile-web responsive layouts** | 74 | *Preempting-defect override* (2026-07-19). The `/s` narrator capture surface and every `/hub` tab ship with **zero `@media` breakpoints** — desktop-first fixed widths that overflow/wrap on a phone. This is a regression against the wedge's founding premise (zero-app, elder taps a link on their phone), so it preempts #1: every downstream loop bet (ask-back, receipt, onboarding, interviewer) would otherwise be validated on an unusable surface. Build order within it: `/s` capture → `/hub` tabs → onboarding/Ask. |
-| **1** | **Clerk go-live** | 77 | Live auth (acceptance + live keys). *Prerequisite override* — without it no real family exists to validate with. |
-| **2** | **Follow-up questions on published stories** | 89 | The "asks-back" arm of the core loop; the Roadmap's highest-leverage trigger. |
+| ~~P0~~ | ~~Mobile-web responsive layouts~~ | 74 | ✅ **Shipped** (2026-07-20). Was a *preempting-defect override* (2026-07-19): phone-first surfaces usable before validating loop bets. |
+| ~~1~~ | ~~Clerk go-live~~ | 77 | ✅ **Shipped** (2026-07-17). Was a *prerequisite override* — live auth so real families can exist. |
+| **2** | **Follow-up questions on published stories** | 89 | **← next.** The "asks-back" arm of the core loop; the Roadmap's highest-leverage trigger. |
 | **3** | **Basic story receipt / payoff** | 83 | The family receives and *feels* the story — the "family is moved" hypothesis. |
 | **4** | **Narrator onboarding / setup-by-a-relative** | 80 | Getting the elder set up — the first adoption barrier. |
 | **5** | **Richer AI interviewer + gap-detection** | 80 | Deeper sessions so stories are "good enough that family cares." |
@@ -47,9 +49,9 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 | **8** | **Loop-event pings** | 74 | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
 | **9** | **Album & upload hardening** | 60 | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
 
-**Three sequencing overrides** the raw score doesn't capture: **mobile-web responsive layouts** preempts everything (P0) — it scores only 74 but is a hard precondition for validating *any* loop bet on the phone-first surface families actually use, the same logic that lifts Clerk go-live above its score; **Clerk go-live** jumps to #1 as a hard prerequisite (nothing downstream is learnable without live families, despite its low *learning* score); **notification-delivery** precedes its higher-scoring **loop-event pings** on the capability edge.
+**Sequencing overrides** the raw score captured (now resolved except the last): **mobile-web responsive layouts** was P0 (shipped) — hard precondition for validating loop bets on the phone-first surface; **Clerk go-live** was #1 (shipped) — hard prerequisite for live families; **notification-delivery** still precedes its higher-scoring **loop-event pings** on the capability edge.
 
-**The story the sequence tells:** turn auth on → close the ask-back loop → make receipt land → onboard narrators → deepen the interviewer → harden capture → wire the notification heartbeat that brings families back.
+**The story the sequence tells from here:** close the ask-back loop → make receipt land → onboard narrators → deepen the interviewer → harden capture → wire the notification heartbeat that brings families back.
 
 ---
 
@@ -72,11 +74,11 @@ Native mobile app · alternative entry channels (phone/SMS) · video capture & d
 - **Multi-family identity/data model** — the Roadmap's foundational open question (`Family-Chronicle-Identity-Data-Model.md`); its own effort. (Membership *plumbing* — ADR-0019 soft-link, ADR-0021 filter/designator — is already shipped.)
 
 ### Already shipped (not candidates)
-Family filter + short_name (#45/#46) · kinship provenance/edges/governance/subjects (#30–35) · album-in-hub (#19) · kinship membership plumbing.
+**Clerk go-live** (#1) · **Mobile-web responsive layouts** (P0) · Family filter + short_name (#45/#46) · kinship provenance/edges/governance/subjects (#30–35) · album-in-hub (#19) · kinship membership plumbing.
 
 ---
 
 ## What this unblocked next
 
-- **Slice & file the top eligible epics as issues** — the frontmost coarse epics (Clerk go-live, follow-up-on-published, basic receipt, narrator onboarding, richer interviewer, capture reliability) graduate into buildable `ready-for-agent` issues ([#76](https://github.com/boosey/familyapp/issues/76)).
+- **Slice & file the top eligible epics as issues** — the frontmost remaining coarse epics (follow-up-on-published, basic receipt, narrator onboarding, richer interviewer, capture reliability) graduate into buildable `ready-for-agent` issues ([#76](https://github.com/boosey/familyapp/issues/76)).
 - **Feasibility spikes stay fog** — every feasibility-uncertain candidate (native app, video infra, face-tagging vendor, external-data access) is currently *parked*, so no research spike fires until a re-run promotes one to a contender.

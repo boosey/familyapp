@@ -35,6 +35,7 @@ import {
 } from "@chronicle/pipeline";
 import {
   createLlmFollowUpEvaluator,
+  createGapFollowUpEvaluator,
   type FollowUpEvaluator,
 } from "@chronicle/interviewer";
 import {
@@ -214,12 +215,16 @@ type Runtime = {
    */
   languageModel: LanguageModel;
   /**
-   * The narrator follow-up evaluator (ADR-0013 propose side), built on the SAME `languageModel` —
-   * so it automatically follows whichever LLM is live (scripted mock in dev/CI, real Anthropic/Groq
-   * when keyed). Gated behind the (off-by-default) follow-up policy flag, so it is inert until
-   * enabled. The evaluator only PROPOSES; `decideFollowUp` in @chronicle/interviewer disposes.
+   * Deepen-stage follow-up evaluator (ADR-0013 cascade stage 3), built on the SAME `languageModel`.
+   * Gated behind the (off-by-default) follow-up policy flag. Only PROPOSES; dispose is
+   * `decideFollowUp` via `proposeAndDisposeFollowUp`.
    */
   followUpEvaluator: FollowUpEvaluator;
+  /**
+   * Gap-detection follow-up evaluator (cascade stage 2). Same languageModel. Wired so production
+   * runs probe → gap → deepen; tests that omit this get deepen-only.
+   */
+  gapFollowUpEvaluator: FollowUpEvaluator;
   /**
    * The bare transcriber (real Groq Whisper adapter when GROQ_API_KEY is set, else the
    * deterministic mock). Exposed for the non-pipeline transcription call site — intake audio
@@ -378,9 +383,10 @@ async function build(): Promise<Runtime> {
         : new ScriptedLanguageModel(),
     llmName,
   );
-  // The follow-up evaluator rides the same languageModel — mock LLM → mock behavior, real key →
-  // real model, no separate wiring. Inert until the follow-up policy flag is enabled.
+  // Follow-up cascade: gap (stage 2) + deepen (stage 3) ride the same languageModel.
+  // Temporal system probe stays dark until dating context is passed into runFollowUpStep.
   const followUpEvaluator = createLlmFollowUpEvaluator(languageModel);
+  const gapFollowUpEvaluator = createGapFollowUpEvaluator(languageModel);
   // Make the silent mock-fallback visible: a misplaced key (e.g. left in the monorepo-root .env,
   // which `next dev` does not load) means the pipeline quietly runs on scripted stubs. Log which
   // adapters are actually live so "am I on real AI?" is answerable from the dev console.
@@ -528,6 +534,7 @@ async function build(): Promise<Runtime> {
     auth,
     languageModel,
     followUpEvaluator,
+    gapFollowUpEvaluator,
     transcriber,
     newPipeline,
     dispatchPipeline,

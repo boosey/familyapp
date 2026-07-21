@@ -1,6 +1,6 @@
 # ADR-0013 — The interviewer consults an auditable LLM evaluation for follow-ups
 
-Status: Proposed (2026-07-02)
+Status: Accepted (amended 2026-07-20)
 
 ## Context
 
@@ -23,31 +23,41 @@ model is then driving, and it cannot emit a trustworthy record of what it *consi
 
 Follow-ups use a **propose-then-dispose** split, and every disposition is recorded.
 
-- A dedicated **evaluator seam** (prompts-as-data, per the prompts-are-data principle) reads the
-  take's transcript + light context (the prompt it answered, covered material, turn count, remaining
-  sensitivity budget) and returns a **ranked list of candidate threads**, each tagged
-  `{ type, sensitivity, confidence, narratorOpened }`. The model does the semantic work: assessing
-  interestingness, sensitivity, and novelty (it is *given* what is already covered and told to
-  propose only novel threads).
+- **Proposers are pluggable.** More than one propose path may feed the same dispose function. The
+  product policy is a fixed **cascade** (not a free blend):
+  1. **System probes** — deterministic, no LLM (e.g. temporal dating when story-date context says
+     the telling has no resolvable date). A probe that does not apply is a no-op; it must not block
+     later stages. At most one probe kind per thread/session via explicit latches.
+  2. **Gap detection** — thin LLM extraction of missing facts (`createGapFollowUpEvaluator`).
+  3. **Deepen** — free-form interestingness (`createLlmFollowUpEvaluator`).
+  Later stages run only when earlier stages produced no *selected* candidate after dispose.
+- Each propose path returns a **ranked list of candidate threads**, each tagged
+  `{ type, sensitivity, confidence, narratorOpened }` (system probes synthesize a single tagged
+  candidate with a fixed `modelId` such as `system:story-date`).
 - **Code enforces hard rules** over those tags plus state it fully owns — the rapport/sensitivity
-  gate, the caps, the distress/off-ramp short-circuit, and a cheap lexical anti-repeat backstop. Code
-  does not *compute* semantics; it applies arithmetic to the model's tags and hard counters. Ranking
-  is confidence-order, with an **emotional-door veto** (an `emotional` candidate is eligible only
-  when the narrator opened that door) and a deterministic tie-break.
-- Every follow-up turn writes an append-only **follow-up decision record**: all candidates and their
-  tags, each candidate's disposition with a coded reason (`below_rapport | duplicate | over_cap |
-  distress_shortcircuit | thin_answer | not_selected`), the selected candidate (or "none → thread
-  ends"), the phrased line, and the narrator's outcome. Nothing is discarded without a recorded
-  reason — the same discipline as the consent ledger and the L1→L2→L3 prose revisions.
+  gate, the caps, the distress/off-ramp short-circuit, and a cheap lexical anti-repeat backstop —
+  via pure `decideFollowUp`. Ranking is confidence-order, with an **emotional-door veto** and a
+  deterministic tie-break.
+- Shared orchestration lives in `proposeAndDisposeFollowUp`; surfaces differ only in *when* they
+  run it and *whether* they persist the ledger / queue for the next turn.
+- `PromptIntent.follow_up.origin` records the winning stage for phrasing:
+  `system` | `gap` | `reflection` (deepen), plus optional `gapKind`.
+- Every follow-up turn on the answer surface writes an append-only **follow-up decision record**:
+  candidates and tags, each disposition with a coded reason, the selected candidate (or "none"),
+  the phrased line, and the narrator's outcome. Ledger `evaluatorModelId` reflects the winning stage.
 
-The invariant is therefore *amended, not abandoned*: the LLM proposes options; the deterministic
-picker chooses and gates; the loop never hands conversational control to the model. Auditability is
-preserved by the decision record, not by keeping the LLM out of the decision.
+The invariant is therefore *amended, not abandoned*: proposers (LLM or system) propose options; the
+deterministic picker chooses and gates; the loop never hands conversational control to the model.
+Auditability is preserved by the decision record.
 
 ## Consequences
 
 - A new evaluator seam with a mock (vendor SDKs never leak past adapters, per the architecture test).
-  The `phraser` is unchanged — it phrases the chosen `follow_up` intent as its template already does.
+  The `phraser` phrases the chosen `follow_up` intent, shading by `origin` / `gapKind` (including
+  gentle temporal dating guidance).
+- A `SystemFollowUpProbe` seam for deterministic proposers; story-dates temporal is the first probe
+  (`createTemporalFollowUpProbe`). Landing PR #249 wires dating context into the probe only — it
+  must not reintroduce an inline `proposeTemporalFollowUp` in the turn loop.
 - A new append-only table for the decision record; it stores short `threadSeed` paraphrases
   (title/summary-tier, derived), kept in the interviewer-operational tier, not behind the story
   front door.
@@ -55,3 +65,5 @@ preserved by the decision record, not by keeping the LLM out of the decision.
   evaluator prompt against recorded proposals — the eval loop the prompts-are-data principle wants.
 - The same propose-then-audited-dispose shape governs the asker-side **Ask suggestion** (separately
   flagged), whose disposition is simply "surfaced / stayed silent."
+- ADR-0012 multi-take Story UX on `/hub/answer` is unchanged; this ADR is the proposer/orchestration
+  layer only.

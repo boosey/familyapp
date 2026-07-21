@@ -77,13 +77,16 @@ export interface SessionState {
   offRampRequested: boolean;
   // --- Gap-driven follow-up (issue #80) ---
   /**
-   * A gap follow-up that has ALREADY passed `decideFollowUp`'s gates and is queued to be surfaced
-   * at the next `follow_up` slot. Set by the turn loop's `recordResponse` (after gap detection),
-   * consumed + cleared when the picker emits it. `null` = no gap follow-up pending. The `gapKind`
-   * is carried alongside (losslessly — the FollowUpType mapping is many-to-one) so the phraser can
-   * target the specific missing fact.
+   * A follow-up that has ALREADY passed `decideFollowUp`'s gates and is queued to be surfaced
+   * at the next `follow_up` slot. Set by the turn loop's `recordResponse` (after the propose
+   * cascade), consumed + cleared when the picker emits it. `null` = nothing pending.
+   * `origin` + `gapKind` shade phrasing (`system` = deterministic probe, `gap` = gap detection).
    */
-  pendingGapFollowUp: { candidate: FollowUpCandidate; gapKind: GapKind } | null;
+  pendingGapFollowUp: {
+    candidate: FollowUpCandidate;
+    gapKind: GapKind;
+    origin: "system" | "gap";
+  } | null;
   /** Gap seeds already asked this session — the anti-repeat backstop fed to `decideFollowUp`. */
   askedGapSeeds: string[];
   /** How many gap follow-ups have been asked this session — feeds the per-session cap. */
@@ -138,14 +141,16 @@ export type PromptIntent =
       /** A short paraphrase / topic seed of the thread to dig into. */
       threadSeed: string;
       /**
-       * What produced this follow-up (issue #80). `reflection` = the original behavior: the last
-       * answer was substantial, reflect on it whole. `gap` = a gap-detection pass named a specific
-       * missing fact (whose category is `gapKind`) and that candidate cleared `decideFollowUp`. Both
-       * ride the SAME priority slot and the SAME one-question phrasing — the origin only shades how
-       * the phraser frames the ask. Defaults to `reflection` when omitted.
+       * What produced this follow-up (issue #80 / ADR-0013 cascade). `reflection` = deepen /
+       * whole-answer reflect. `gap` = gap-detection named a missing fact. `system` = deterministic
+       * probe (e.g. temporal dating). All ride the SAME priority slot and one-question phrasing —
+       * the origin only shades how the phraser frames the ask. Defaults to `reflection` when omitted.
        */
-      origin?: "reflection" | "gap";
-      /** The category of the gap, present only for `origin: "gap"` — lets the phraser target it. */
+      origin?: "reflection" | "gap" | "system";
+      /**
+       * Category / probe angle for `origin: "gap" | "system"` — lets the phraser target it
+       * (e.g. temporal dating guidance).
+       */
       gapKind?: GapKind;
     }
   | {
@@ -302,16 +307,15 @@ export function pickNextIntent(input: PickInput): PromptIntent {
     };
   }
 
-  // 5. Follow_up. Two sub-sources, SAME priority slot + SAME one-question phrasing (issue #80):
-  //   5a. A GAP follow-up that the turn loop already ran through `decideFollowUp` (thin-answer,
-  //       distress/off-ramp, rapport, anti-repeat, confidence, caps ALL applied there) and queued.
-  //       Preferred over the whole-answer reflection because it targets a specific missing fact.
+  // 5. Follow_up. Queued cascade winner OR reflection — SAME priority slot + one-question phrasing:
+  //   5a. A system/gap follow-up the turn loop already ran through `decideFollowUp` and queued.
+  //       Preferred over whole-answer reflection because it targets a specific missing fact.
   //       Safety note: slots 0 above already returned wind_down on distress/off-ramp, so a queued
-  //       gap can never surface once the narrator has pulled back — a gap NEVER pushes into pain.
+  //       follow-up can never surface once the narrator has pulled back.
   //   5b. Otherwise the original reflection: if the last utterance was substantial, reflect on it.
   if (state.pendingGapFollowUp) {
-    const { candidate, gapKind } = state.pendingGapFollowUp;
-    return { kind: "follow_up", threadSeed: candidate.threadSeed, origin: "gap", gapKind };
+    const { candidate, gapKind, origin } = state.pendingGapFollowUp;
+    return { kind: "follow_up", threadSeed: candidate.threadSeed, origin, gapKind };
   }
   const last = state.lastNarratorUtterance;
   if (last && last.trim().split(/\s+/).length >= 12) {
@@ -367,13 +371,13 @@ export function recordTurnCompleted(state: SessionState, intent: PromptIntent): 
       // on the same utterance every subsequent turn until the narrator speaks again — without
       // this, one substantial answer would steer the loop indefinitely.
       state.lastNarratorUtterance = null;
-      if (intent.origin === "gap") {
-        // Gap follow-up asked: record its seed (anti-repeat backstop), count it against the
+      if (intent.origin === "gap" || intent.origin === "system") {
+        // Cascade follow-up asked: record its seed (anti-repeat backstop), count it against the
         // session cap, and clear the queue so the picker doesn't re-emit it next turn.
         state.askedGapSeeds.push(intent.threadSeed);
         state.gapFollowUpsAskedInSession += 1;
       }
-      // A queued gap is consumed whether we asked it (gap origin) or a reflection preempted the
+      // A queued follow-up is consumed whether we asked it or a reflection preempted the
       // slot — either way it must not linger into the next turn on a stale utterance.
       state.pendingGapFollowUp = null;
       break;
