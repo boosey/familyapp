@@ -33,7 +33,8 @@ export function applyPreference(
   const app = computeApplication(def, value);
   if (app.target === "root-font-size") target.style.fontSize = app.value;
   else if (app.target === "data-attr") target.setAttribute(app.attr, app.value);
-  else target.style.setProperty(app.name, app.value);
+  else if (app.target === "css-var") target.style.setProperty(app.name, app.value);
+  // js-read: no DOM mutation — consumers read via readPreference.
 }
 
 /** Persist a preference and apply it — the write path a control calls when the user chooses. */

@@ -33,6 +33,7 @@ import { useRouter } from "next/navigation";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
 import { useAudioLevel } from "@/app/_kindred/use-audio-level";
+import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { PREFERENCES } from "@/app/_kindred/preferences/registry";
 import { readPreference } from "@/app/_kindred/preferences/client";
 import { hub, common } from "@/app/_copy";
@@ -566,6 +567,7 @@ export function ComposingEditor({
     (typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
   const level = useAudioLevel(stream, !reduceMotion);
+  const { holdToRecord } = useRecordingGesture();
   const heldRef = useRef(false);
   const onHoldStart = useCallback(async () => {
     if (recordPhase !== "idle" || otherMutationInFlight) return;
@@ -579,6 +581,12 @@ export function ComposingEditor({
     heldRef.current = false;
     if (recordPhase === "listening") stopRecording();
   }, [recordPhase, stopRecording]);
+  // Tap-to-toggle: start when idle, stop when listening (gated the same as hold-start).
+  const onTapToggle = useCallback(() => {
+    if (otherMutationInFlight) return;
+    if (recordPhase === "listening") stopRecording();
+    else if (recordPhase === "idle") void startRecording();
+  }, [recordPhase, otherMutationInFlight, startRecording, stopRecording]);
 
   // Submit typed text. Take 0 (no draft yet) → composeStoryAction (creates the story, full-screen
   // pending). Take ≥ 1 (composing) → appendTypedTakeAction onto the existing draft (inline).
@@ -1085,16 +1093,10 @@ export function ComposingEditor({
               saving={savingTake}
               disabled={otherMutationInFlight}
               size={160}
-              label={
-                recordPhase === "listening"
-                  ? common.voiceButton.releaseToFinish
-                  : savingTake
-                    ? common.voiceButton.oneMoment
-                    : common.voiceButton.holdToSpeak
-              }
-              holdToRecord
-              onHoldStart={onHoldStart}
-              onHoldEnd={onHoldEnd}
+              holdToRecord={holdToRecord}
+              onHoldStart={holdToRecord ? onHoldStart : undefined}
+              onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+              onClick={holdToRecord ? undefined : onTapToggle}
               waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
             />
           ) : (
@@ -1271,16 +1273,10 @@ export function ComposingEditor({
             listening={recordPhase === "listening"}
             saving={recordPhase === "saving"}
             size={220}
-            label={
-              recordPhase === "listening"
-                ? common.voiceButton.releaseToFinish
-                : recordPhase === "saving"
-                  ? common.voiceButton.oneMoment
-                  : common.voiceButton.holdToSpeak
-            }
-            holdToRecord
-            onHoldStart={onHoldStart}
-            onHoldEnd={onHoldEnd}
+            holdToRecord={holdToRecord}
+            onHoldStart={holdToRecord ? onHoldStart : undefined}
+            onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+            onClick={holdToRecord ? undefined : onTapToggle}
             waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
           />
           {recordPhase === "idle" && (

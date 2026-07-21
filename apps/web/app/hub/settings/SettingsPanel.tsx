@@ -4,6 +4,7 @@ import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
 import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
 import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
 import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
+import { KindredRecordingGesturePicker } from "@/app/_kindred/KindredRecordingGesturePicker";
 import { hub } from "@/app/_copy";
 import type { CSSProperties } from "react";
 
@@ -24,6 +25,14 @@ export function SettingsPanel() {
         </h2>
         <p style={sectionIntro}>{hub.settings.motionIntro}</p>
         <KindredMotionToggle />
+      </section>
+
+      <section aria-labelledby="settings-recording-gesture">
+        <h2 id="settings-recording-gesture" style={sectionTitle}>
+          {hub.settings.recordingGestureHeading}
+        </h2>
+        <p style={sectionIntro}>{hub.settings.recordingGestureIntro}</p>
+        <KindredRecordingGesturePicker />
       </section>
 
       <section aria-labelledby="settings-text-size">

@@ -1,12 +1,13 @@
 /**
  * App-preference registry (ADR-0020). The single source of truth for the small, opt-in set of
- * device-local preferences a Person can set (today: reading size and color palette). Each preference
- * is PURE SERIALIZABLE DATA — no functions — so one definition drives the pre-paint inline script (which
- * cannot import TS), the React control, and validation, without any of them re-implementing the others.
+ * device-local preferences a Person can set (reading size, theme, skin, reduce-motion, recording
+ * gesture). Each preference is PURE SERIALIZABLE DATA — no functions — so one definition drives the
+ * pre-paint inline script (which cannot import TS), the React control, and validation, without any of
+ * them re-implementing the others.
  *
  * A UI value becomes a preference only by being registered here (opt-in); everything else stays a
- * compile-time constant changed by redeploy. JS-math values (e.g. tree geometry) are NOT preferences —
- * see ADR-0020 for the boundary and the additive `js-read` escape hatch.
+ * compile-time constant changed by redeploy. JS-math / imperative values use the additive `js-read`
+ * strategy (no DOM apply) — see ADR-0020.
  */
 import {
   FONT_SIZE_STEPS_PT,
@@ -16,6 +17,12 @@ import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
 import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
 import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
 import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
+import {
+  RECORDING_GESTURE_VALUES,
+  DEFAULT_RECORDING_GESTURE,
+  RECORDING_GESTURE_PHONE_STORAGE_KEY,
+  RECORDING_GESTURE_DESKTOP_STORAGE_KEY,
+} from "@/app/_kindred/recording-gesture-constants";
 
 export type PreferenceValidator =
   | { kind: "int-index"; length: number }
@@ -24,7 +31,9 @@ export type PreferenceValidator =
 export type PreferenceApply =
   | { strategy: "root-font-size"; steps: readonly number[]; unit: string }
   | { strategy: "data-attr"; attr: string }
-  | { strategy: "css-var"; cssVar: string; unit?: string };
+  | { strategy: "css-var"; cssVar: string; unit?: string }
+  /** JS-math / imperative consumers read the stored value; no DOM apply (ADR-0020). */
+  | { strategy: "js-read" };
 
 export interface PreferenceDef {
   /** Stable identifier for the preference. */
@@ -68,7 +77,8 @@ export function coerce(def: PreferenceDef, raw: string | null): string | number 
 export type PreferenceApplication =
   | { target: "root-font-size"; value: string }
   | { target: "data-attr"; attr: string; value: string }
-  | { target: "css-var"; name: string; value: string };
+  | { target: "css-var"; name: string; value: string }
+  | { target: "js-read" };
 
 export function computeApplication(def: PreferenceDef, value: string | number): PreferenceApplication {
   const a = def.apply;
@@ -79,6 +89,9 @@ export function computeApplication(def: PreferenceDef, value: string | number): 
   }
   if (a.strategy === "data-attr") {
     return { target: "data-attr", attr: a.attr, value: String(value) };
+  }
+  if (a.strategy === "js-read") {
+    return { target: "js-read" };
   }
   return { target: "css-var", name: a.cssVar, value: `${value}${a.unit ?? ""}` };
 }
@@ -116,6 +129,20 @@ export const PREFERENCES = {
     validate: { kind: "enum", values: REDUCE_MOTION_VALUES },
     apply: { strategy: "data-attr", attr: "data-reduce-motion" },
   },
+  recordingGesturePhone: {
+    key: "recording-gesture-phone",
+    storageKey: RECORDING_GESTURE_PHONE_STORAGE_KEY,
+    default: DEFAULT_RECORDING_GESTURE,
+    validate: { kind: "enum", values: RECORDING_GESTURE_VALUES },
+    apply: { strategy: "js-read" },
+  },
+  recordingGestureDesktop: {
+    key: "recording-gesture-desktop",
+    storageKey: RECORDING_GESTURE_DESKTOP_STORAGE_KEY,
+    default: DEFAULT_RECORDING_GESTURE,
+    validate: { kind: "enum", values: RECORDING_GESTURE_VALUES },
+    apply: { strategy: "js-read" },
+  },
 } as const satisfies Record<string, PreferenceDef>;
 
 /** All registered preferences as a list (for the pre-paint script and any registry-driven UI). */
@@ -130,5 +157,5 @@ export const ALL_PREFERENCES: readonly PreferenceDef[] = Object.values(PREFERENC
  */
 export function buildPrePaintScript(defs: readonly PreferenceDef[]): string {
   const data = JSON.stringify(defs);
-  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);if(raw!==null)raw=raw.trim();var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else{val=v.values.indexOf(raw)>=0?raw:d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
+  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);if(raw!==null)raw=raw.trim();var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else{val=v.values.indexOf(raw)>=0?raw:d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="js-read"){continue;}if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
 }

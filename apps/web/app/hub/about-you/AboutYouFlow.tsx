@@ -18,11 +18,11 @@
  * client bundle. The next question is always computed server-side by `saveIntakeAnswer`, which
  * makes the turn loop's in-session `askedIntakeKeys` stateless across HTTP.
  */
-import { useState, type CSSProperties } from "react";
+import { useState, useRef, useCallback, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
-import { hub } from "@/app/_copy";
+import { hub, common } from "@/app/_copy";
 import {
   submitIntakeRecording,
   saveIntakeAnswer,
@@ -30,6 +30,7 @@ import {
   type NextQuestion,
 } from "./actions";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
+import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { useProseHistory } from "@/lib/use-prose-history";
 import { ProseBlock } from "@/app/hub/_composing/ProseBlock";
 import styles from "@/app/_onboarding/onboarding-card.module.css";
@@ -74,6 +75,30 @@ export function AboutYouFlow({
     },
     onError: () => setError(hub.aboutYou.micError),
   });
+
+  const { holdToRecord } = useRecordingGesture();
+  const heldRef = useRef(false);
+  const onHoldStart = useCallback(async () => {
+    if (micPhase !== "idle" || transcribing) return;
+    heldRef.current = true;
+    await start();
+    if (!heldRef.current) finish();
+  }, [micPhase, transcribing, start, finish]);
+  const onHoldEnd = useCallback(() => {
+    heldRef.current = false;
+    if (micPhase === "listening") finish();
+  }, [micPhase, finish]);
+  const onVoiceClick =
+    micPhase === "listening" ? finish : micPhase === "idle" ? start : undefined;
+  const voiceLabel = transcribing
+    ? hub.aboutYou.transcribing
+    : holdToRecord
+      ? micPhase === "listening"
+        ? common.voiceButton.releaseToFinish
+        : common.voiceButton.holdToSpeak
+      : micPhase === "listening"
+        ? hub.aboutYou.voiceStop
+        : hub.aboutYou.voiceLabel;
 
   // Opt-in ✨Polish for the intake editor: text→text via the server action, returning the tidied prose.
   // Throw on `{error}` so KindredProseEditor surfaces its inline, non-destructive polish error (mirrors
@@ -209,14 +234,11 @@ export function AboutYouFlow({
           <KindredVoiceButton
             listening={micPhase === "listening"}
             saving={micPhase === "saving" || transcribing}
-            label={
-              transcribing
-                ? hub.aboutYou.transcribing
-                : micPhase === "listening"
-                  ? hub.aboutYou.voiceStop
-                  : hub.aboutYou.voiceLabel
-            }
-            onClick={micPhase === "listening" ? finish : micPhase === "idle" ? start : undefined}
+            label={voiceLabel}
+            holdToRecord={holdToRecord}
+            onHoldStart={holdToRecord ? onHoldStart : undefined}
+            onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+            onClick={holdToRecord ? undefined : onVoiceClick}
           />
         </div>
 
