@@ -935,13 +935,19 @@ export const hub = {
     existingMatchConnecting: "Connecting…",
     existingMatchCreateNew: "Add as someone new",
     existingMatchFailed: "Couldn't connect them. Please try again.",
-    // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
+    // Issues #33/#34/#256 — the governance list (steward affirm/deny/correct + subject hide/unhide +
+    // asserter retract).
     govHeading: "Relationships in this family",
     govIntro:
-      "Every relationship anyone records shows up here as soon as it's added. As steward you can endorse, remove, or correct one; if a relationship is about you, you can hide it.",
+      "Every relationship anyone records shows up here as soon as it's added. If you added one by mistake, you can remove it yourself; as steward you can endorse, remove, or correct any of them; if a relationship is about you, you can hide it.",
     govEmpty: "No relationships recorded in this family yet.",
     // The two ungendered primitives, rendered for a row.
     edgeParentOf: (parent: string, child: string) => `${parent} is a parent of ${child}`,
+    // #255 — parent_of with a known nature (skip for unknown so the base sentence stays clean).
+    edgeParentOfNature: (parent: string, nature: string, child: string) => {
+      const article = /^[aeiou]/i.test(nature) ? "an" : "a";
+      return `${parent} is ${article} ${nature} parent of ${child}`;
+    },
     edgePartneredWith: (a: string, b: string) => `${a} and ${b} are partners`,
     edgeUnknownPerson: "someone unnamed",
     natureLabel: {
@@ -950,13 +956,25 @@ export const hub = {
       step: "step",
       foster: "foster",
       unknown: "",
-    } as Record<string, string>,
+    },
+    // #255 — steward nature picker on parent_of edges (partnered_with has no nature).
+    natureFieldLabel: "Nature",
+    natureOptions: {
+      biological: "Biological",
+      adoptive: "Adoptive",
+      step: "Step",
+      foster: "Foster",
+      unknown: "Unknown",
+    },
     stateAffirmed: "Endorsed by steward",
     // Steward controls.
     affirm: "Endorse",
     affirming: "Endorsing…",
     deny: "Remove",
     denying: "Removing…",
+    // #255 — correct parent_of nature (append-only supersede; does not remove the edge).
+    correct: "Update nature",
+    correcting: "Updating…",
     // Subject controls.
     hide: "Hide this from the tree",
     hiding: "Hiding…",

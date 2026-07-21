@@ -724,7 +724,8 @@ export async function linkExistingMember(
 }
 
 // ===========================================================================
-// Steward governance (issue #33) + subject-hide veto (issue #34).
+// Steward governance (issue #33) + subject-hide veto (issue #34) + asserter
+// retract (issue #256).
 //
 // LOAD-BEARING invariant (ADR-0016, user clarification): the Steward is NOT a
 // visibility gate. An asserted edge is fact IMMEDIATELY (first-asserter-wins,
@@ -733,6 +734,12 @@ export async function linkExistingMember(
 // subject `hide` (#34) overrides even a steward affirm. None of the functions
 // below add an approval prerequisite to the read side — they only append new
 // superseding ledger rows, which the projection already resolves latest-wins.
+//
+// #256 widens ONLY `denyEdge`: the Person who originally asserted an edge may
+// also retract it themselves (append-only deny, same as the steward's). This
+// is deliberately narrow — `affirmEdge`/`correctEdge` stay Steward-only; a
+// non-steward asserter may undo their own mistake but not endorse or re-type
+// it, and can never deny someone ELSE's edge.
 // ===========================================================================
 
 /**
@@ -849,6 +856,78 @@ async function requireStewardOverExistingEdge(
   };
 }
 
+/**
+ * The ORIGINAL asserter of a logical edge: the `actorPersonId` of its EARLIEST row (min `seq`), or
+ * null if the edge was never asserted in this family. Mirrors `latestEdgeRow`'s row-scan but picks
+ * the FIRST row instead of the latest — the original assertion is never mutated (append-only), so its
+ * actor is a stable, audit-grade fact for the lifetime of the edge (#256).
+ */
+async function originalAsserterPersonId(db: DbOrTx, ref: EdgeRef): Promise<string | null> {
+  const { personAId, personBId } = normalizeEdgeEndpoints(ref.edgeType, ref.personAId, ref.personBId);
+  const rows = await db
+    .select({ seq: kinshipAssertions.seq, actorPersonId: kinshipAssertions.actorPersonId })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, ref.familyId),
+        eq(kinshipAssertions.edgeType, ref.edgeType),
+        eq(kinshipAssertions.personAId, personAId),
+        eq(kinshipAssertions.personBId, personBId),
+      ),
+    );
+  if (rows.length === 0) return null;
+  let earliest = rows[0]!;
+  for (const r of rows) if (r.seq < earliest.seq) earliest = r;
+  return earliest.actorPersonId;
+}
+
+/**
+ * Shared server-side gate for `denyEdge` ONLY (#256): mistakes may be fixed by the family's Steward
+ * OR the Person who originally asserted the currently-visible edge — deny is the one governance
+ * action a non-steward may exercise, and only over their OWN assertion. `affirmEdge`/`correctEdge`
+ * remain Steward-only (`requireStewardOverExistingEdge`); widening THOSE to the asserter is out of
+ * scope for #256 (endorsing or re-typing your own claim is a different trust question than retracting
+ * it). Returns the normalized endpoints on success, or a `{allowed:false, reason}` failure.
+ */
+async function requireDenyAuthorityOverExistingEdge(
+  db: DbOrTx,
+  ctx: AuthContext,
+  ref: EdgeRef,
+): Promise<
+  | { ok: true; personAId: string; personBId: string; nature: KinshipNature | null }
+  | { ok: false; result: KinshipEdgeActionResult }
+> {
+  if (ctx.kind !== "account") {
+    return { ok: false, result: { allowed: false, reason: "not signed in" } };
+  }
+  const steward = await stewardPersonIdOf(db, ref.familyId);
+  if (steward === null) {
+    return { ok: false, result: { allowed: false, reason: "family not found" } };
+  }
+  const existing = await latestEdgeRow(db, ref);
+  if (existing === null) {
+    return { ok: false, result: { allowed: false, reason: "edge does not exist in this family" } };
+  }
+  if (steward !== ctx.personId) {
+    const asserter = await originalAsserterPersonId(db, ref);
+    if (asserter !== ctx.personId) {
+      return {
+        ok: false,
+        result: {
+          allowed: false,
+          reason: "only the steward or the person who added this relationship may remove it",
+        },
+      };
+    }
+  }
+  return {
+    ok: true,
+    personAId: existing.personAId,
+    personBId: existing.personBId,
+    nature: existing.nature,
+  };
+}
+
 /** Append one governance transition row (affirmed / denied / corrected) on an existing edge, actor =
  *  the steward. Carries `nature` for parent_of, null for partnered_with, and an optional `note`. */
 async function appendGovernanceRow(
@@ -904,9 +983,10 @@ export async function affirmEdge(
 }
 
 /**
- * Steward DENIES an existing edge (#33): after-the-fact moderation. Appends one superseding `denied`
- * row; the read projection then omits the edge (VISIBLE_STATES excludes `denied`) while every
- * historical row survives (append-only). An optional `note` records the reason.
+ * The Steward, OR the ORIGINAL ASSERTER, DENIES an existing edge (#33, widened by #256): after-the-
+ * fact moderation, or the asserter retracting their own mistake. Appends one superseding `denied` row;
+ * the read projection then omits the edge (VISIBLE_STATES excludes `denied`) while every historical
+ * row survives (append-only). An optional `note` records the reason.
  */
 export async function denyEdge(
   db: Database,
@@ -914,7 +994,7 @@ export async function denyEdge(
   ref: EdgeRef,
   note?: string | null,
 ): Promise<KinshipEdgeActionResult> {
-  const gate = await requireStewardOverExistingEdge(db, ctx, ref);
+  const gate = await requireDenyAuthorityOverExistingEdge(db, ctx, ref);
   if (!gate.ok) return gate.result;
   const edgeId = await appendGovernanceRow(
     db,

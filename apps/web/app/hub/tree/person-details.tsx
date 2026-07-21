@@ -19,8 +19,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
-import type { KinRelation, PersonSex, TreeNode } from "@chronicle/core";
+import type { GovernableKinEdge, KinRelation, PersonSex, TreeNode } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
+import { KinEdgeControls } from "../kin/kin-edge-controls";
+import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "../kin/edge-sentence";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
 import {
   personEditabilityAction,
@@ -63,6 +65,17 @@ export interface PersonDetailsProps {
    * Invite… item (canvas passes it to both). Absent ⇒ no invite affordance (e.g. a bare test mount).
    */
   onInvite?: (node: TreeNode) => void;
+  /**
+   * #254 — family's governable edges (capability flags included). The sheet filters to edges that
+   * touch this person AND that the viewer can act on (steward Remove / subject Hide).
+   */
+  governableEdges?: readonly GovernableKinEdge[];
+  /**
+   * #254/#255 — after a successful deny/hide/affirm/correct. Canvas must prune client edges only for
+   * deny/hide (affirm/correct keep the edge; same-family merge won't restore a wrongly dropped edge
+   * when only state/nature changed).
+   */
+  onEdgeGoverned?: (edge: GovernableKinEdge, kind: "affirm" | "deny" | "hide" | "correct") => void;
   /** Overridable for tests; default to the real server actions. */
   checkEditable?: CheckEditableFn;
   saveEdit?: SaveEditFn;
@@ -76,6 +89,8 @@ export function PersonDetails({
   onClose,
   onSaved,
   onInvite,
+  governableEdges = [],
+  onEdgeGoverned,
   checkEditable = personEditabilityAction,
   saveEdit = savePersonEditAction,
 }: PersonDetailsProps) {
@@ -86,6 +101,7 @@ export function PersonDetails({
   const anon = isAnonymousBridge(node);
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
   const rootRef = useRef<HTMLElement | null>(null);
+  const actableEdges = actableEdgesForPerson(governableEdges, node.personId);
 
   // Slice B: the three contribution links now point at the unified per-person page's sections.
   const storiesHref = `/hub/person/${node.personId}?section=stories`;
@@ -273,6 +289,49 @@ export function PersonDetails({
             >
               {hub.tree.invitePendingNote}
             </p>
+          )}
+
+          {/* #254 — steward Remove / subject Hide for edges touching this person. */}
+          {actableEdges.length > 0 && (
+            <section
+              data-testid="tree-details-gov-edges"
+              aria-labelledby="tree-details-gov-heading"
+              style={{ marginTop: 16 }}
+            >
+              <h3
+                id="tree-details-gov-heading"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--text-ui-sm)",
+                  fontWeight: 600,
+                  color: "var(--text-meta)",
+                  margin: "0 0 10px",
+                }}
+              >
+                {hub.kin.govHeading}
+              </h3>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
+                {actableEdges.map((edge) => (
+                  <li key={governableEdgeKey(edge)} data-testid="tree-details-gov-edge">
+                    <p
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: "var(--text-ui-sm)",
+                        color: "var(--text-body)",
+                        margin: 0,
+                      }}
+                    >
+                      {edgeSentence(edge)}
+                    </p>
+                    <KinEdgeControls
+                      familyId={familyId}
+                      edge={edge}
+                      onSuccess={(kind) => onEdgeGoverned?.(edge, kind)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           <nav style={{ display: "grid", gap: 8, marginTop: 14 }}>
