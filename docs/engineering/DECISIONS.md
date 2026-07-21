@@ -469,7 +469,7 @@ recap of every fix.
 
 ## Migrations: forward migration chain for durable DBs, snapshot kept for dev/tests (2026-07-04)
 
-Full design: `docs/superpowers/specs/2026-07-04-db-migrations-design.md`. This supersedes the
+Full design: `docs/99-pruned/superpowers/specs/2026-07-04-db-migrations-design.md`. This supersedes the
 "single-schema, no incremental migrations while the schema is molten (2026-06-28)" decision above
 for **durable** environments, and retires the parity-gate-only / boot-bootstrap model from the
 schema-parity section — dev and tests are unchanged.
@@ -520,8 +520,8 @@ schema-parity section — dev and tests are unchanged.
 
 ## Family scope selector: create/join any time, multi-family hub (2026-07-05)
 
-Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`; plan:
-`docs/superpowers/plans/2026-07-05-family-scope-selector.md`.
+Full design: `docs/99-pruned/superpowers/specs/2026-07-05-family-scope-selector-design.md`; plan:
+`docs/99-pruned/superpowers/plans/2026-07-05-family-scope-selector.md`.
 
 - **Create-a-family and request-to-join are always-available in-app actions, not one-time
   onboarding stops.** The router's "park a pending-only user on `/families/find`" fork is gone
@@ -682,7 +682,7 @@ Rules:
 
 ## Invite delivery (email/SMS) — vendor choice + a deliberate invariant weakening
 
-Decided 2026-07-17. Spec: `docs/superpowers/specs/2026-07-17-invite-delivery-email-sms-design.md`.
+Decided 2026-07-17. Spec: `docs/99-pruned/superpowers/specs/2026-07-17-invite-delivery-email-sms-design.md`.
 
 - **Resend (email) and Twilio (SMS) are the default adapters behind a new `Notifier` seam**
   (`@chronicle/notifications`). Both vendor SDKs are confined to `resend.ts`/`twilio.ts`

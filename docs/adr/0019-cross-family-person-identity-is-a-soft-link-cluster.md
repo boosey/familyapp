@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-14)
 
 Builds on **ADR-0016** (kinship is a steward-governed per-family tree) and the family scope selector.
-Full design + build plan: `docs/superpowers/specs/2026-07-14-multi-family-reconciliation-design.md`.
+Full design + build plan: `docs/99-pruned/superpowers/specs/2026-07-14-multi-family-reconciliation-design.md`.
 
 ## Context
 

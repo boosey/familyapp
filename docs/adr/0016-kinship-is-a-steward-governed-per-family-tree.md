@@ -9,7 +9,7 @@ Status: Accepted (2026-07-11)
 > are implemented and unit-tested, and create-time death fields landed (migration 0011). The rendered
 > `/hub/tree` route (a `TreeCanvas` consuming the layout engine) is **not yet wired** as of this
 > branch. GEDCOM/API import and reconciliation remain deferred seams. See
-> `docs/superpowers/plans/2026-07-12-kinship-release-runbook.md`.
+> `docs/99-pruned/superpowers/plans/2026-07-12-kinship-release-runbook.md`.
 
 ## Context
 

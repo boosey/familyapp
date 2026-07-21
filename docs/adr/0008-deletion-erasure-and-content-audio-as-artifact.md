@@ -1,6 +1,6 @@
 # ADR-0008 — Deletion, erasure, and content-audio as a permanent artifact (amends ADR-0002)
 
-Status: Accepted (2026-07-01) — amends ADR-0002. Implemented 2026-07-04 (see docs/superpowers/specs/2026-07-04-adr0008-deletion-design.md).
+Status: Accepted (2026-07-01) — amends ADR-0002. Implemented 2026-07-04 (see docs/99-pruned/superpowers/specs/2026-07-04-adr0008-deletion-design.md).
 
 ## Context
 

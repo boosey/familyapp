@@ -57,5 +57,5 @@ is the kind of structural decision that is expensive to walk back once data and 
 Creating a family and requesting to join a family are no longer one-time onboarding stops — they are
 always-available actions pinned at the bottom of the hub scope selector
 (`apps/web/app/hub/HubScopeSelector.tsx`), reachable by any authenticated user regardless of how many
-families they already belong to. See `docs/DECISIONS.md` § "Family scope selector" and
-`docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`.
+families they already belong to. See `docs/engineering/DECISIONS.md` § "Family scope selector" and
+`docs/99-pruned/superpowers/specs/2026-07-05-family-scope-selector-design.md`.

@@ -1,6 +1,6 @@
 # North Star Vision — A Perpetual Family Chronicle
 
-> ⚠️ **Superseded for product framing.** This doc over-emphasizes elders and phone calls as primary interaction. For current product truth, read **`docs/current/`** (especially `02-vision-and-mission.md` and `01-product-overview.md`). Shipped brand: **Tell Me Again** (`tellmeagain.app`). Retained for historical context.
+> ⚠️ **Superseded for product framing.** For current product truth, read **`docs/strategy/`** (especially `02-vision-and-mission.md` and `01-product-overview.md`). Shipped brand: **Tell Me Again** (`tellmeagain.app`). Retained for historical context.
 
 *An AI-first platform for collecting, synthesizing, and sharing a family's story across generations. Working name in flux (see separate naming doc).*
 

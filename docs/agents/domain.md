@@ -4,9 +4,10 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root — the domain glossary and language for Family Chronicle.
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in (0001–0021 today).
-- **`docs/DECISIONS.md`** — narrative rationale for non-obvious stack/architecture choices; complements the ADRs.
+- **`CONTEXT.md`** at the repo root — the domain glossary and language for Tell Me Again / Family Chronicle.
+- **`docs/strategy/`** — primary product docs (overview, what's built, domain, journeys).
+- **`docs/adr/`** — read ADRs that touch the area you're about to work in.
+- **`docs/engineering/DECISIONS.md`** — narrative rationale for non-obvious stack/architecture choices; complements the ADRs.
 
 This is a **single-context** repo: one root `CONTEXT.md`, no `CONTEXT-MAP.md`. If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates and extends them lazily when terms or decisions actually get resolved.
 
@@ -16,12 +17,18 @@ This is a **single-context** repo: one root `CONTEXT.md`, no `CONTEXT-MAP.md`. I
 /
 ├── CONTEXT.md                         ← domain glossary (single context)
 ├── docs/
-│   ├── adr/
-│   │   ├── 0001-family-discovery-and-join-requests.md
-│   │   └── ... (numbered ADRs)
-│   └── DECISIONS.md                   ← stack/architecture rationale
+│   ├── README.md                      ← docs index
+│   ├── strategy/                      ← primary product docs
+│   ├── adr/                           ← numbered ADRs
+│   ├── engineering/
+│   │   ├── DECISIONS.md               ← stack/architecture rationale
+│   │   └── Recording-To-Story-Pipeline.md
+│   ├── brand/                         ← marketing brief
+│   ├── agents/                        ← agent how-tos
+│   ├── runbooks/
+│   └── 99-pruned/                     ← historical / superseded (not product truth)
 ├── packages/*                         ← source-only libraries (@chronicle/*)
-└── apps/web                           ← Next.js link-session capture surface
+└── apps/web                           ← Next.js app (hub + capture)
 ```
 
 ## Use the glossary's vocabulary

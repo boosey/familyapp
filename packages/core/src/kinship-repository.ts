@@ -534,7 +534,7 @@ export async function listGovernableKinEdges(
 // ---------------------------------------------------------------------------
 // resolveKinshipTree — the read behind the visual tree renderer (ADR-0016 seam).
 // SHARED CONTRACT (Stage-0 stub). Implemented by Track-B "B-core".
-// See docs/superpowers/specs/2026-07-12-kinship-tree-viz-design.md §5.
+// See docs/99-pruned/superpowers/specs/2026-07-12-kinship-tree-viz-design.md §5.
 // ---------------------------------------------------------------------------
 
 /**

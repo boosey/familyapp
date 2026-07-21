@@ -18,8 +18,9 @@ This is a **launcher**, not the method. The method lives in **`docs/adr/0022-gat
 ## Orient first (read these, in order)
 
 1. **`docs/adr/0022-gated-two-layer-feature-prioritization-method.md`** — the machinery: Layer-1 eligibility router (3 gates) + Layer-2 weighted-additive value score. The **weight vector is the knob** that encodes the objective.
-2. **`docs/01 Strategy/Family-Chronicle-Prioritized-Backlog.md`** — the last pass + its **"How to re-run this"** section (triggers, and the two levels of re-run). Start there.
-3. **`docs/wayfinder/2026-07-15-*.md`** — the detailed working artifacts (eligibility layer, value rubric, candidate corpus, sequenced backlog) if you need the fine grain.
+2. **`docs/strategy/prioritized-backlog.md`** — the last pass + its **"How to re-run this"** section (triggers, and the two levels of re-run). Start there.
+3. **`docs/strategy/09-roadmap-and-deferred.md`** — shipped inventory + parked product ideas (Ask the archive, etc.) for corpus refresh.
+4. **`docs/99-pruned/wayfinder/2026-07-15-*.md`** — optional fine grain from the first pass (eligibility layer, value rubric, candidate corpus). Historical; do not treat as product truth.
 
 ## Which re-run is this?
 
@@ -31,10 +32,10 @@ This is a **launcher**, not the method. The method lives in **`docs/adr/0022-gat
 Follow ADR-0022, but the shape is:
 
 1. **Set the objective → the weight vector.** Confirm the stage with the human (adoption/validation? retention? differentiation/moat?). The objective *is* the weight vector; the current adoption pass = `2/2/1/1/1`. A differentiation pass restores strategic-moat-fit + reach and raises effort. **This is the human's decision — grill, don't assume.**
-2. **Refresh the corpus.** Add any new candidate ideas + open GitHub issues; re-check each item's dependency capabilities against **`origin/master`** ("shipped" = merged). Carry forward the parking lot and check which revisit triggers have fired.
+2. **Refresh the corpus.** Add any new candidate ideas + open GitHub issues; re-check each item's dependency capabilities against **`origin/master`** ("shipped" = merged). Carry forward the parking lot and check which revisit triggers have fired. Pull parked ideas from `docs/strategy/09-roadmap-and-deferred.md`.
 3. **Run the eligibility router** (mechanical): route every candidate to `eligible` / `ethics-parked` / `premature-parked` / `blocked-dependency` / `decompose`, precedence most-binding-first. Present the pass for the human to confirm/override.
 4. **Score the survivors** on the rubric (1–5 anchored, weighted per the objective's vector) → normalized /100. **Grill the human on the scores** — recommend, don't dictate. Apply tie-breaks and the sequencing overrides (hard prerequisites, capability edges).
-5. **Emit the outputs:** update `Family-Chronicle-Prioritized-Backlog.md` (new sequence + refreshed parking lot with triggers) and file the top eligible slices as `ready-for-agent` GitHub issues (don't duplicate existing ones — thread them in).
+5. **Emit the outputs:** update `docs/strategy/prioritized-backlog.md` (new sequence + refreshed parking lot with triggers) and file the top eligible slices as `ready-for-agent` GitHub issues (don't duplicate existing ones — thread them in).
 
 ## Guardrails
 

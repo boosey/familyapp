@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Standard commands, architecture, and conventions live in `CLAUDE.md` and `docs/`. Read those first.
+Standard commands, architecture, and conventions live in `CLAUDE.md` and `docs/` (start at `docs/README.md`). Read those first.
 
 ## Cursor Cloud specific instructions
 

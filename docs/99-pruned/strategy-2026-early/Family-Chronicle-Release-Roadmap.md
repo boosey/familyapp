@@ -1,6 +1,6 @@
 # Release Roadmap — Phased Sequencing
 
-> ⚠️ **Superseded for build status.** Phase 0–1 core is largely shipped. Current inventory and deferred work: **`docs/current/04-what-is-built.md`** and **`docs/current/09-roadmap-and-deferred.md`**. Live issue queue: `Family-Chronicle-Prioritized-Backlog.md`.
+> ⚠️ **Superseded for build status.** Phase 0–1 core is largely shipped. Current inventory and deferred work: **`docs/strategy/04-what-is-built.md`** and **`docs/strategy/09-roadmap-and-deferred.md`**. Live issue queue: **`docs/strategy/prioritized-backlog.md`**.
 
 *Companion to the North Star Vision, Personas, Journey Map, Engagement Engine, and Consent & Estate Framework. This turns the north star into buildable releases. It is the one piece the vision explicitly deferred ("release sequencing — collaborative phased roadmap work to be done in a future session"). Strategy: **wedge-first, risk-retiring** — ship the sharpest wedge fastest to validate the core loop, then layer enrichment, engagement, and ethics-gated features in dependency order.*
 

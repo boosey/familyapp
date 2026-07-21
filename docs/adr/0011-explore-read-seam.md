@@ -48,6 +48,6 @@ Rejected alternatives:
   CI fails.
 - **Every explorer is an authenticated member** — v1 ships no anonymous/`public` read surface and no
   external sharing, so the predicate's `public` arm is latent (kept faithful, unused by a surface).
-- **Deferred out of v1** (see `docs/OPEN-QUESTIONS.md`): map, family tree, the "Ask the archive" Q&A
+- **Deferred out of v1** (see `docs/strategy/09-roadmap-and-deferred.md`): map, the "Ask the archive" Q&A engine (chronicle search ships; RAG waits for corpus depth + grounding = visible projection). Family tree shipped separately (ADR-0016).
   synthesis engine, clip trimming/editor, external sharing. v1 = feed + timeline + Chronicle search,
   all pure projections over this predicate.

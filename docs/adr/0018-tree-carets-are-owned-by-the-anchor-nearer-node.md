@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-07-13)
 
-Refines the caret model of `docs/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md` (ego-centric
+Refines the caret model of `docs/99-pruned/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md` (ego-centric
 `/hub/tree`). Builds on **ADR-0016** (derived kinship) and **ADR-0017** (placeholder parent-couple).
 
 ## Context

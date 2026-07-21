@@ -3,7 +3,7 @@
 The canonical vocabulary of Family Chronicle / Tell Me Again. Terms only; no implementation. When code or
 conversation uses a word that conflicts with a definition here, the conflict is a bug in one of them.
 
-**Product overview and shipped features:** see `docs/current/`.
+**Product overview and shipped features:** see `docs/strategy/`.
 
 ## Identity & membership
 - **Person** — the permanent, singular human; owner of everything expressive. There is one kind of

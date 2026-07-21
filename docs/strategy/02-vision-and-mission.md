@@ -10,7 +10,7 @@ Build a **perpetual family chronicle**: a living, private institution that holds
 
 ### What changed from early strategy docs
 
-Early documents (`docs/01 Strategy/Family-Chronicle-Vision.md`) over-rotated on:
+Early documents (`docs/99-pruned/strategy-2026-early/Family-Chronicle-Vision.md`) over-rotated on:
 
 1. **Elders as the product** — narrators are important, but the hub serves the whole family
 2. **Phone calls as primary entry** — the product is a **web app**; link sessions are the account-free exception
@@ -71,7 +71,7 @@ Modes are **lenses on one chronicle**, not separate products.
 
 ## Success looks like
 
-A real family uses Tell Me Again for months:
+A real family uses Tell Me Again for years or decades:
 
 - Grandmother answers questions from her phone browser without creating a password
 - Adult children ask specific questions and hear answers in her voice

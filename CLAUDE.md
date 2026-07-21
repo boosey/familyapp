@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Family Chronicle — Phase 0 (the spine) + Phase 1 (the voice-capture wedge). TypeScript end-to-end, pnpm workspaces monorepo, Node >=20.
+Tell Me Again (repo/internal: Family Chronicle) — private family storykeeping app. TypeScript end-to-end, pnpm workspaces monorepo, Node >=20.
 
 Authoritative docs (read these before non-trivial work):
-- `docs/Phase-0-1-Engineering-Spec.md` — the spec the code implements.
-- `docs/PLAN.md` — increment-by-increment build sequence + status.
-- `docs/DECISIONS.md` — why each non-obvious choice was made (stack, architecture, review responses).
-- `docs/PROGRESS.md`, `docs/OPEN-QUESTIONS.md`.
+- `docs/strategy/` — primary product docs (what we are, what's built, domain, roadmap).
+- `CONTEXT.md` — domain glossary (terms only).
+- `docs/adr/` — accepted architectural decisions.
+- `docs/engineering/DECISIONS.md` — stack, vendors, workflow choices.
+- `docs/strategy/prioritized-backlog.md` — what to build next (ADR-0022).
+- `docs/README.md` — docs index.
 
 ## Commands
 
@@ -28,7 +30,7 @@ Tests use Vitest. The DB layer uses **PGlite** (real Postgres in-process) — th
 ## Architecture
 
 ### Packages (`packages/*`, `apps/*`)
-- `@chronicle/db` — Drizzle schema (the spec made executable), client, PGlite test helper, and the DB evolution path. `schema.ts` is the single source of truth deriving TWO artifacts: the **snapshot** (`drizzle/schema.sql` + `drizzle/invariants.sql`, applied wholesale by `applySchema`/`resetSchema` — the fast path for PGlite tests and the dev seed) and the **migration chain** (`drizzle/migrations/NNNN_*.sql`, applied incrementally to durable environments like Neon by `runMigrations`/`db:migrate` in the Vercel build, tracked in `__drizzle_migrations`). A drift-guard test (`test/migration-drift.test.ts`) bonds the two so they can never silently diverge. See `docs/DECISIONS.md` § Migrations.
+- `@chronicle/db` — Drizzle schema (the spec made executable), client, PGlite test helper, and the DB evolution path. `schema.ts` is the single source of truth deriving TWO artifacts: the **snapshot** (`drizzle/schema.sql` + `drizzle/invariants.sql`, applied wholesale by `applySchema`/`resetSchema` — the fast path for PGlite tests and the dev seed) and the **migration chain** (`drizzle/migrations/NNNN_*.sql`, applied incrementally to durable environments like Neon by `runMigrations`/`db:migrate` in the Vercel build, tracked in `__drizzle_migrations`). A drift-guard test (`test/migration-drift.test.ts`) bonds the two so they can never silently diverge. See `docs/engineering/DECISIONS.md` § Migrations.
 - `@chronicle/core` — the IP: single authorization function, append-only consent ledger, story state machine, story write repository.
 - `@chronicle/storage` — `MediaStorage` interface + in-memory/filesystem/R2 adapters. Media bytes only; no DB.
 - `@chronicle/capture` — session tokens (token IS identity for the link-session capture surface), `ingestRecording` orchestrator (storage upload → core write path).
@@ -57,16 +59,16 @@ Authorization tiers: `private` (owner only), `branch` (treated as `family` in Ph
 Enforced at **two layers**: (1) a Postgres trigger raising on UPDATE/DELETE of `consent_records`, and (2) a repository that exposes only append + read. Both are tested via PGlite. Revocation is always a new superseding row — never an edit.
 
 ### Vendor seams
-Every external vendor sits behind an interface in our code with a mock for tests. Vendor SDKs may only appear in adapter files, never in `core`, `pipeline`, `interviewer`, `storage`, `capture`, or `db`. The architecture test in `packages/pipeline/test/pipeline.test.ts` scans all those src trees and fails CI on any SDK import. Defaults named in `docs/DECISIONS.md`: Groq Whisper Turbo (`Transcriber`), Anthropic Claude (`LanguageModel`), ElevenLabs (`Voice`), Cloudflare R2 (`MediaStorage`), Inngest (`JobQueue`), Clerk (`AuthProvider`), Supabase Postgres in prod.
+Every external vendor sits behind an interface in our code with a mock for tests. Vendor SDKs may only appear in adapter files, never in `core`, `pipeline`, `interviewer`, `storage`, `capture`, or `db`. The architecture test in `packages/pipeline/test/pipeline.test.ts` scans all those src trees and fails CI on any SDK import. Defaults named in `docs/engineering/DECISIONS.md`: Groq Whisper Turbo (`Transcriber`), Anthropic Claude (`LanguageModel`), ElevenLabs (`Voice`), Cloudflare R2 (`MediaStorage`), Inngest (`JobQueue`), Clerk (`AuthProvider`), Supabase Postgres in prod.
 
 ## Conventions
 
 - TS strict + `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, ESM-only (`"type": "module"`).
 - Domain enums/types and the Drizzle schema are the shared contract — defined in `@chronicle/db` and re-exported. Add new domain types there first.
-- **User-facing text and tweakable constants are externalized (i18n on-ramp + one-place tuning).** Copy → `apps/web/app/_copy/{namespace}.ts` (`as const`; dynamic strings as arrow fns). Numbers: a **pure design value** (color/spacing/radius/border/font-size, no JS math) → a CSS custom property in `_kindred/tokens.css`, never a hardcoded hex/px in a component; a value **used in JS math** (geometry, zoom bounds, thresholds, limits) → a TS constant (`hub/tree/tree-constants.ts`, a package `constants.ts`, or `apps/web/lib/constants.ts`); a **computed-then-rendered** value → JS sets a CSS var, CSS consumes it. The same number must never live in two files. Guard tests: `app/hub/tree/tree-constants.test.ts` (geometry single-source) and `app/hub/album/photo-batch-cap.test.ts` (batch cap). See `docs/superpowers/audits/2026-07-14-centralization-audit.md`.
+- **User-facing text and tweakable constants are externalized (i18n on-ramp + one-place tuning).** Copy → `apps/web/app/_copy/{namespace}.ts` (`as const`; dynamic strings as arrow fns). Numbers: a **pure design value** (color/spacing/radius/border/font-size, no JS math) → a CSS custom property in `_kindred/tokens.css`, never a hardcoded hex/px in a component; a value **used in JS math** (geometry, zoom bounds, thresholds, limits) → a TS constant (`hub/tree/tree-constants.ts`, a package `constants.ts`, or `apps/web/lib/constants.ts`); a **computed-then-rendered** value → JS sets a CSS var, CSS consumes it. The same number must never live in two files. Guard tests: `app/hub/tree/tree-constants.test.ts` (geometry single-source) and `app/hub/album/photo-batch-cap.test.ts` (batch cap). See `docs/99-pruned/superpowers/audits/2026-07-14-centralization-audit.md`.
 - Story state machine: changes to `Story.state` must go through `assertStoryTransition` (in `@chronicle/core`). It is not yet wired into a write path — wire it in at the capture/approval increments when those write paths land.
-- The build/review workflow for this repo is **subagent-driven**. A coding sub-agent writes the code for a task. When it finishes, it (or the main agent) spawns a *separate, fresh adversarial code-reviewer* sub-agent; the coding sub-agent then consumes that review output and iterates until clean. Spin up a *new* cold reviewer each round so each review is fresh-eyes. The main agent orchestrates; coding sub-agents do the writing and the fixing. (See `docs/DECISIONS.md` § Workflow.)
-- **Test execution is not free — don't run the suite three times.** The builder runs tests for its red-green loop. The **reviewer does NOT re-run the full suite** — it reviews the diff (correctness/spec/security/convention/test-adequacy) against the builder's reported output, and may run only a *targeted* test on a specific hypothesis. Pass/fail is settled by CI on a PR, or by the main agent's full local preflight on a direct push. **Before any direct push to master** (which skips GitHub CI by design — Vercel does NOT run the suite), the main agent runs the full CI-equivalent preflight, not just `test`: `pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @chronicle/web build && pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle`. If you find yourself running that routinely, just open a PR. (See `docs/DECISIONS.md` § Test execution & merge gates.)
+- The build/review workflow for this repo is **subagent-driven**. A coding sub-agent writes the code for a task. When it finishes, it (or the main agent) spawns a *separate, fresh adversarial code-reviewer* sub-agent; the coding sub-agent then consumes that review output and iterates until clean. Spin up a *new* cold reviewer each round so each review is fresh-eyes. The main agent orchestrates; coding sub-agents do the writing and the fixing. (See `docs/engineering/DECISIONS.md` § Workflow.)
+- **Test execution is not free — don't run the suite three times.** The builder runs tests for its red-green loop. The **reviewer does NOT re-run the full suite** — it reviews the diff (correctness/spec/security/convention/test-adequacy) against the builder's reported output, and may run only a *targeted* test on a specific hypothesis. Pass/fail is settled by CI on a PR, or by the main agent's full local preflight on a direct push. **Before any direct push to master** (which skips GitHub CI by design — Vercel does NOT run the suite), the main agent runs the full CI-equivalent preflight, not just `test`: `pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @chronicle/web build && pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle`. If you find yourself running that routinely, just open a PR. (See `docs/engineering/DECISIONS.md` § Test execution & merge gates.)
 
 ## Agent skills
 
@@ -80,4 +82,4 @@ The five canonical triage roles map 1:1 to their default label strings (`needs-t
 
 ### Domain docs
 
-Single-context: one root `CONTEXT.md` + `docs/adr/` (plus `docs/DECISIONS.md`). See `docs/agents/domain.md`.
+Single-context: one root `CONTEXT.md` + `docs/adr/` (plus `docs/engineering/DECISIONS.md`). See `docs/agents/domain.md`.

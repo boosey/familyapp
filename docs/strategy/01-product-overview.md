@@ -60,7 +60,7 @@ Elders are a **critical launch audience**, not the product definition. Roles (na
 | Refrain | "Tell me again." |
 | Tagline | Family voices, kept for the people who come next. |
 
-Marketing copy: `docs/02 Naming/Tell-Me-Again-Canva-Brief.md`
+Marketing copy: `docs/brand/Tell-Me-Again-Canva-Brief.md`
 
 ## Technical snapshot
 
