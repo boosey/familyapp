@@ -5,6 +5,7 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BrandMark } from "@/app/_brand/BrandMark";
 import { common } from "@/app/_copy";
 
 export function AuthScreen({
@@ -45,6 +46,9 @@ export function AuthScreen({
         <Link
           href="/"
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
             fontFamily: "var(--font-mono)",
             fontSize: "var(--text-label)",
             letterSpacing: "var(--tracking-mono)",
@@ -52,6 +56,7 @@ export function AuthScreen({
             textDecoration: "none",
           }}
         >
+          <BrandMark size={28} />
           {common.authScreenBrand}
         </Link>
         <h1

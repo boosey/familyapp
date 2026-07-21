@@ -16,6 +16,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
+import { BrandMark } from "@/app/_brand/BrandMark";
 import { auth, legal } from "@/app/_copy";
 import styles from "./landing.module.css";
 import {
@@ -139,9 +140,12 @@ export function LandingExperience() {
       <main>
         {/* ---- hero ---- */}
         <section className={styles.hero}>
-          {/* Brand wordmark — the exact app name, shown prominently so the homepage name
+          {/* Brand lockup — mark + exact app name, shown prominently so the homepage name
               matches the OAuth consent-screen app name Google verifies against (#154). */}
-          <p className={styles.wordmark}>{landing.brand}</p>
+          <p className={styles.brandLockup}>
+            <BrandMark size={48} className={styles.brandMark} />
+            <span className={styles.wordmark}>{landing.brand}</span>
+          </p>
           <p className={styles.eyebrow}>{landing.eyebrow}</p>
           <h1 className={styles.refrain}>
             <span className={styles.mark}>{landing.refrain}</span>
@@ -223,6 +227,7 @@ export function LandingExperience() {
 
       <footer className={styles.footer}>
         <span className={styles.footerBrand}>
+          <BrandMark size={20} className={styles.footerMark} />
           © {landing.brand}
         </span>
         <span>{landing.footer.tagline}</span>
