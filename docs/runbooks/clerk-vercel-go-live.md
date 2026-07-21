@@ -55,7 +55,8 @@ only warns). All set in **Vercel → Project → Settings → Environment Variab
 ### FEATURE-GATED — not in check-env; only if you enable the feature
 | Var | Feature |
 |---|---|
-| `GOOGLE_PHOTOS_CLIENT_ID` / `_CLIENT_SECRET` / `_TOKEN_ENCRYPTION_KEY` | Google Photos import (§D) |
+| `GOOGLE_PHOTOS_CLIENT_ID` / `_CLIENT_SECRET` / `_TOKEN_ENCRYPTION_KEY` | Google Photos import credentials (§D) |
+| `GOOGLE_PHOTOS_ENABLED` | Google Photos Connect / Import UI — set `true` (or `1`) to enable; **off by default** while Google OAuth verification is pending |
 | `FOLLOW_UPS_ENABLED` | follow-up questions (#77) — set `true` to enable |
 | `ALBUM_IMPORT_PROGRESS_ENABLED` | album import progress UI |
 
@@ -141,8 +142,10 @@ For **each** provider you want live, e.g. Google:
 ## §D. Google Photos import OAuth (OPTIONAL, separate from sign-in)
 
 This powers the album's **"import from Google Photos"** feature — a distinct Google Cloud
-OAuth client, unrelated to §C sign-in. `isGooglePhotosConfigured()` gates it: **unset → the
-Google chrome stays hidden and the album is file-upload-only.** Safe to defer past launch.
+OAuth client, unrelated to §C sign-in. `isGooglePhotosConfigured()` gates it: it requires
+both credentials **and** `GOOGLE_PHOTOS_ENABLED=true`. **Unset / off → the Google chrome
+stays hidden and the album is file-upload-only.** Safe to defer past launch (and past
+Google OAuth verification).
 
 If you want it live:
 
@@ -160,6 +163,9 @@ If you want it live:
      `openssl rand -base64 32` (must decode to exactly 32 bytes or the app throws).
 5. Also set `GOOGLE_PHOTOS_OAUTH_STATE_SECRET` (any strong random string; `openssl rand -hex 32`)
    — signs the OAuth state cookie.
+6. When Google OAuth verification is approved and you want Connect / Import live, set
+   `GOOGLE_PHOTOS_ENABLED=true`. Until then, leave it unset — credentials alone keep the
+   chrome hidden.
 
 ---
 

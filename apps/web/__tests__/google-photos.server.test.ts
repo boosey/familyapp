@@ -50,6 +50,7 @@ import {
   getGooglePhotosEncryptionKey,
   getGooglePhotosOAuthConfig,
   isGooglePhotosConfigured,
+  isGooglePhotosEnabled,
   setGooglePhotosDepsForTests,
   type GooglePhotosDeps,
 } from "@/lib/google-photos-config";
@@ -79,6 +80,7 @@ import { hub } from "@/app/_copy";
 const account = (personId: string): AuthContext => ({ kind: "account", personId });
 
 const ENV_KEYS = [
+  "GOOGLE_PHOTOS_ENABLED",
   "GOOGLE_PHOTOS_CLIENT_ID",
   "GOOGLE_PHOTOS_CLIENT_SECRET",
   "GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY",
@@ -87,6 +89,7 @@ const ENV_KEYS = [
 ] as const;
 
 function stubConfiguredEnv() {
+  vi.stubEnv("GOOGLE_PHOTOS_ENABLED", "1");
   vi.stubEnv("GOOGLE_PHOTOS_CLIENT_ID", "client-id");
   vi.stubEnv("GOOGLE_PHOTOS_CLIENT_SECRET", "client-secret");
   vi.stubEnv("GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY", TEST_KEY_B64);
@@ -143,7 +146,20 @@ afterEach(() => {
 });
 
 describe("isGooglePhotosConfigured / getGooglePhotosOAuthConfig", () => {
-  it("is false when any required env is missing", () => {
+  it("is false when the rollout flag is off, even with credentials", () => {
+    expect(isGooglePhotosEnabled()).toBe(false);
+    expect(isGooglePhotosConfigured()).toBe(false);
+    vi.stubEnv("GOOGLE_PHOTOS_CLIENT_ID", "x");
+    vi.stubEnv("GOOGLE_PHOTOS_CLIENT_SECRET", "y");
+    vi.stubEnv("GOOGLE_PHOTOS_TOKEN_ENCRYPTION_KEY", TEST_KEY_B64);
+    expect(isGooglePhotosConfigured()).toBe(false);
+    vi.stubEnv("GOOGLE_PHOTOS_ENABLED", "1");
+    expect(isGooglePhotosEnabled()).toBe(true);
+    expect(isGooglePhotosConfigured()).toBe(true);
+  });
+
+  it("is false when any required credential is missing", () => {
+    vi.stubEnv("GOOGLE_PHOTOS_ENABLED", "true");
     expect(isGooglePhotosConfigured()).toBe(false);
     vi.stubEnv("GOOGLE_PHOTOS_CLIENT_ID", "x");
     expect(isGooglePhotosConfigured()).toBe(false);
