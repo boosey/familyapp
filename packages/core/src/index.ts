@@ -142,6 +142,12 @@ export {
 export { eraseStory, eraseAsk, eraseVoiceCaption, eraseAccount } from "./erasure-repository";
 export type { EraseResult, EraseAccountResult } from "./erasure-repository";
 export {
+  listStorySharedPingRecipients,
+  type StorySharedPingContext,
+  type StorySharedPingKind,
+  type StorySharedPingRecipient,
+} from "./story-shared-pings";
+export {
   AlreadyFamilyMemberError,
   AuthorizationError,
   InvariantViolation,

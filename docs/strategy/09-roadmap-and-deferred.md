@@ -28,9 +28,10 @@
 | Mobile-responsive hub (ADR-0024/0025) | ✅ |
 | App branding (Tell Me Again, logo) | ✅ |
 | Chronicle search (keyword / full-text) | ✅ |
-| Notification delivery (invites) | ✅ capability; loop-event pings not yet wired |
+| Notification delivery (invites) | ✅ capability |
+| Loop-event pings (email) | ✅ shipped (#270); SMS/prefs deferred (#271/#272) |
 
-**Front of the build queue (2026-07-20):** loop-event pings — see Prioritized Backlog #8.
+**Front of the build queue (2026-07-21):** album & upload hardening — see Prioritized Backlog #9.
 
 ---
 
@@ -38,7 +39,7 @@
 
 | Gap | Notes |
 |-----|-------|
-| **Loop-event pings** | "A story landed" / "your question was answered" — next prioritized epic |
+| **Album & upload hardening** | Residual perf (#218/#219); front of prioritized backlog #9 |
 | **Engagement digests** | Weekly "this week in family history" — needs delivery + content assembly |
 | **Face tagging** | UI stub; no ML backend |
 | **Public tier read surface** | Tier stored; no external sharing URL |

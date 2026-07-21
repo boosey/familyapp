@@ -32,6 +32,7 @@ const ALLOWLIST = new Set<string>([
   "packages/core/src/album-repository.ts", // audited album (family_photos) read + write (ADR-0009)
   "packages/core/src/story-image-repository.ts", // audited story_images attach/read (ADR-0009 Ph2)
   "packages/core/src/erasure-repository.ts", // audited hard-delete/erasure path (ADR-0008)
+  "packages/core/src/story-shared-pings.ts", // loop-event ping recipient metadata (#270 / C13b)
 ]);
 
 /**
@@ -200,6 +201,7 @@ describe("single front door (architecture guard)", () => {
         "packages/core/src/album-repository.ts",
         "packages/core/src/story-image-repository.ts",
         "packages/core/src/erasure-repository.ts",
+        "packages/core/src/story-shared-pings.ts",
       ].sort(),
     );
   });

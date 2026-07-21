@@ -65,7 +65,12 @@ import {
   makeDispatchInviteDelivery,
   type DispatchInviteDelivery,
 } from "./dispatch-invite-delivery";
+import {
+  makeDispatchStorySharedNotify,
+  type DispatchStorySharedNotify,
+} from "./dispatch-story-shared-notify";
 import { deliverInvite } from "./deliver-invite";
+import { deliverStorySharedPings } from "./deliver-story-shared-pings";
 import { resolvePublicOrigin } from "./public-origin";
 
 export { isClerkConfigured, isInngestConfigured };
@@ -260,6 +265,12 @@ type Runtime = {
    * See `lib/dispatch-invite-delivery.ts`.
    */
   dispatchInviteDelivery: DispatchInviteDelivery;
+  /**
+   * Dispatch loop-event pings after a story is approved/shared (#270 / C13b). Same durable-vs-
+   * synchronous split as invite delivery: Inngest → enqueue `story.shared.notify`; else email
+   * synchronously via the composite notifier. Best-effort — callers catch errors.
+   */
+  dispatchStorySharedNotify: DispatchStorySharedNotify;
   /**
    * True when `INNGEST_EVENT_KEY` is set, i.e. `dispatchPipeline` takes the durable enqueue path.
    * (In prod the serve route ALSO needs `INNGEST_SIGNING_KEY`; see `lib/inngest-config.ts`.)
@@ -479,6 +490,21 @@ async function build(): Promise<Runtime> {
         link: `${origin}/join/${token}`,
       });
     });
+    // Loop-event pings (#270): email authorized co-members after a story is shared.
+    jobQueue.register("story.shared.notify", async (p) => {
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: true,
+      });
+      await deliverStorySharedPings({
+        db,
+        notifier,
+        storyId: p.storyId,
+        origin,
+      });
+    });
     // Orphaned album-object reaper (issue #90) — the app's ONLY scheduled job. The upload path is
     // put-then-record, so abandoned direct uploads leave write-once `family-photos/` objects with
     // no DB row; this hourly sweep hard-deletes any that are older than the safety window. Cron is
@@ -528,6 +554,25 @@ async function build(): Promise<Runtime> {
     },
   });
 
+  const dispatchStorySharedNotify = makeDispatchStorySharedNotify({
+    inngestConfigured,
+    ...(inngestJobQueue ? { inngestJobQueue } : {}),
+    deliver: async ({ storyId }) => {
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: process.env.NODE_ENV === "production",
+      });
+      await deliverStorySharedPings({
+        db,
+        notifier,
+        storyId,
+        origin,
+      });
+    },
+  });
+
   return {
     db,
     storage,
@@ -539,6 +584,7 @@ async function build(): Promise<Runtime> {
     newPipeline,
     dispatchPipeline,
     dispatchInviteDelivery,
+    dispatchStorySharedNotify,
     inngestConfigured,
     ...(inngest ? { inngest } : {}),
     narratorMemory: noopNarratorMemorySink,

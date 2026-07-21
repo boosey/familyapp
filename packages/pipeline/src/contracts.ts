@@ -150,11 +150,17 @@ export interface InviteJobPayload {
   channels: DeliveryChannel[];
 }
 
+/** Payload for post-share family email pings (#270 / C13b). Worker re-resolves recipients from DB. */
+export interface StorySharedNotifyJobPayload {
+  storyId: string;
+}
+
 /** Maps each job name to its payload type. Adding a job = a deliberate, named entry here. */
 export interface JobPayloadMap {
   transcribe: StoryJobPayload;
   render_story: StoryJobPayload;
   "invite.send": InviteJobPayload;
+  "story.shared.notify": StorySharedNotifyJobPayload;
 }
 
 /** The pipeline stages Phase 1 ships (plus invite delivery). Adding a stage is a deliberate, named change. */
@@ -194,11 +200,14 @@ export type JobFailureHandler<N extends JobName = JobName> = (
 /**
  * Per-name dedupe/attempt key: story jobs key on storyId(+attempt) (preserving the existing
  * retry-generation dedupe-bust behavior — see `StoryJobPayload.attempt`), invite jobs key on
- * invitationId. Adding a job name means adding a deliberate branch here.
+ * invitationId, loop-ping jobs key on storyId. Adding a job name means adding a deliberate branch here.
  */
 export function jobDedupeKey<N extends JobName>(name: N, payload: JobPayloadMap[N]): string {
   if (name === "invite.send") {
     return `invite.send|${(payload as InviteJobPayload).invitationId}`;
+  }
+  if (name === "story.shared.notify") {
+    return `story.shared.notify|${(payload as StorySharedNotifyJobPayload).storyId}`;
   }
   const p = payload as StoryJobPayload;
   return `${name}|${p.storyId}${p.attempt !== undefined ? `|${p.attempt}` : ""}`;
