@@ -1,0 +1,131 @@
+/*
+ * KinList — Family → List relatives. Base chrome is token-driven & skin-neutral (reproduces the
+ * former inline values 1:1). Playful Phase-2 is deliberately restrained for a dense searchable list:
+ * soft hover-lift + stickerized relation chip only — no tape, tilt, or highlighter (those fight
+ * scanability; StoryCard / QuestionsTab keep the full scrapbook kit). Signatures are skin-scoped via
+ * :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+.root {
+  max-width: 720px;
+}
+
+.search {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  outline: none;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.search:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+}
+
+.name {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-body);
+}
+
+.nameUnknown {
+  color: var(--text-muted);
+}
+
+.deceased {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-meta);
+  margin-left: 10px;
+}
+
+.relation {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.empty {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  text-align: center;
+}
+
+.emptyText {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ---- Playful structural signatures (restrained) ---------------------------------------------
+   Dense-list kit: hover-lift on rows + sticker chip on the relation label. No tape / tilt /
+   highlighter — those belong on scrapbook cards, not a searchable kin roster. */
+
+:global(:root[data-skin="playful"]) .row {
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .row:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+:global(:root[data-skin="playful"]) .relation {
+  background: var(--sticker-sky-bg);
+  color: var(--sticker-sky-ink);
+  border-radius: var(--radius-pill);
+  padding: 3px 11px;
+  display: inline-block;
+}
+
+/* Suppress structural signatures under reduce-motion OR solemn.
+   Solemn uses the stronger `:root[data-skin="playful"] [data-tone="solemn"]` form so it out-specifies
+   the playful rules when tone is on a container (see StoryDetailClient.module.css / #227). */
+:global(:root[data-reduce-motion="on"]) .row,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .row {
+  transition: none;
+}
+:global(:root[data-reduce-motion="on"]) .row:hover,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .row:hover {
+  transform: none;
+  box-shadow: none;
+}
+:global(:root[data-reduce-motion="on"]) .relation,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .relation {
+  background: none;
+  color: var(--text-muted);
+  padding: 0;
+  border-radius: 0;
+}
