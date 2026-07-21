@@ -28,6 +28,9 @@
  */
 import {
   appendProseRevision,
+  applyResolvedStoryDate,
+  getNarratorBiographicalContext,
+  listLifeEventsForPerson,
   markStoryProcessingFailed,
   transitionStoryState,
   updateDerivedFields,
@@ -51,6 +54,7 @@ import {
   createDefaultWorkingCopyTransformer,
 } from "./working-copy";
 import { renderStoryFromTranscript } from "./render-story";
+import { deriveStoryDate } from "./derive-story-date";
 import { AUDIO_SPEED_FACTOR_MAX, AUDIO_SPEED_FACTOR_MIN } from "./constants";
 import { plog, startTimer } from "./logger";
 
@@ -336,6 +340,46 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       model: render.modelId,
       ms: done(),
     });
+
+    // Finish-time Story date backstop (ADR-0026, issue #246). The stage IS the finish line for a
+    // pipeline-driven story, so anything still Undated here (a skipped temporal follow-up, an
+    // import) gets its one silent second chance: the #242 resolver over the assembled transcript
+    // against the narrator's birthDate + life events. The gate is `occurredKind === null` — a
+    // story dated live during the interview is NEVER overwritten. Persistence goes through the
+    // same `applyResolvedStoryDate` seam the live path uses; the provenance note carries the
+    // backstop marker. Best-effort LAST: a backstop failure must never fail the render stage or
+    // roll back the finished render — the story simply stays Undated.
+    if (view.occurredKind === null) {
+      try {
+        const bio = await getNarratorBiographicalContext(deps.db, view.ownerPersonId);
+        const lifeEvents = await listLifeEventsForPerson(deps.db, view.ownerPersonId);
+        const backstop = await deriveStoryDate({
+          fullText: view.transcript,
+          birthDate: bio?.birthDate ?? null,
+          lifeEvents,
+          languageModel: deps.languageModel,
+        });
+        if (backstop.status === "resolved") {
+          await applyResolvedStoryDate(deps.db, view.storyId, backstop.occurrence);
+          plog("pipeline", "render: backstop dated story", {
+            story: view.storyId,
+            kind: backstop.occurrence.kind,
+            date: backstop.occurrence.date,
+            provenance: backstop.occurrence.provenance,
+          });
+        } else {
+          plog("pipeline", "render: backstop found no date (story stays Undated)", {
+            story: view.storyId,
+          });
+        }
+      } catch (backstopErr) {
+        plog("pipeline", "render: backstop FAILED (story left Undated)", {
+          story: view.storyId,
+          error:
+            backstopErr instanceof Error ? backstopErr.message : String(backstopErr),
+        });
+      }
+    }
   };
 
   queue.register("transcribe", runTranscribeStage, onStageFailure("transcribe"));

@@ -67,7 +67,7 @@ would require real-world action (paid accounts, vendor signup, real personal dat
   and **suggests which families it belongs to** — e.g. recognizing a wedding story spans both Boudreaux
   and Carney, or that a childhood story is Boudreaux-only. A suggestion, never an auto-apply: the
   narrator confirms, preserving the "never over-share by default" rule. Same weight class as the other
-  content→metadata engines (imagery suggestion, `eraYear` inference) and shares their deferral. Its
+  content→metadata engines (imagery suggestion) and shares their deferral. Its
   grounding must respect that targeting can only offer families the owner actually belongs to.
 
 - **Mode 4 "Ask the archive" Q&A engine (2026-07-01).** Deferred out of Explore v1. Keyword/

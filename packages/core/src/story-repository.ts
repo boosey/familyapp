@@ -45,6 +45,7 @@ import type {
   ConsentRecord,
   Database,
   Media,
+  OccurredKind,
   ProseRevision,
   ProseRevisionLevel,
   Story,
@@ -55,6 +56,8 @@ import type {
 import { assertStoryTransition } from "./story-state";
 import { InvariantViolation } from "./errors";
 import { PROCESSING_ERROR_MAX_CHARS } from "./constants";
+import { isRealCalendarDate } from "./person-dob";
+import type { StoryDateOccurrence } from "./resolve-story-date";
 import {
   type AuthContext,
   getStoryForViewer,
@@ -246,10 +249,17 @@ export interface DerivedFields {
   title?: string;
   summary?: string;
   tags?: string[];
-  /** The representative year the story is ABOUT (historical era), not when it was recorded. */
-  eraYear?: number | null;
   /** Optional human display note for the era/place, e.g. "Naples" or "Cherry Street". */
   eraLabel?: string | null;
+  // --- Story date (ADR-0026): when the story's events took place, in one of three forms ---
+  /** The form of the Story date (`date` | `circa` | `period`); null marks the story Undated. */
+  occurredKind?: OccurredKind | null;
+  /** ISO calendar date (YYYY-MM-DD): the point for `date`/`circa`, the span start for `period`. */
+  occurredDate?: string | null;
+  /** ISO calendar date — the span end. Set only for `period`. */
+  occurredEndDate?: string | null;
+  /** Human-readable note recording HOW the date was derived (user-visible, ADR-0026). */
+  occurredProvenance?: string | null;
 }
 
 /** Update derived fields on a Story. Only the audited write surface touches the table. */
@@ -266,8 +276,12 @@ export async function updateDerivedFields(
   if (fields.title !== undefined) patch.title = fields.title;
   if (fields.summary !== undefined) patch.summary = fields.summary;
   if (fields.tags !== undefined) patch.tags = fields.tags;
-  if (fields.eraYear !== undefined) patch.eraYear = fields.eraYear;
   if (fields.eraLabel !== undefined) patch.eraLabel = fields.eraLabel;
+  if (fields.occurredKind !== undefined) patch.occurredKind = fields.occurredKind;
+  if (fields.occurredDate !== undefined) patch.occurredDate = fields.occurredDate;
+  if (fields.occurredEndDate !== undefined) patch.occurredEndDate = fields.occurredEndDate;
+  if (fields.occurredProvenance !== undefined)
+    patch.occurredProvenance = fields.occurredProvenance;
 
   const [row] = await db
     .update(stories)
@@ -276,6 +290,27 @@ export async function updateDerivedFields(
     .returning();
   if (!row) throw new Error(`story not found: ${storyId}`);
   return row;
+}
+
+/**
+ * Persist a resolver-derived Story date (ADR-0026) through the `updateDerivedFields` write
+ * seam. This is the derivation path's one write shape — the interviewer's live pass and the
+ * pipeline backstop both call it, so a derived value always lands with its user-visible
+ * provenance note. Unlike `editStoryDate` (a human correction), derivation carries no actor and
+ * appends no revision row: the value is derived/regenerable metadata, and the provenance note
+ * IS the audit trail ("age 8 at Christmas, from birthdate").
+ */
+export async function applyResolvedStoryDate(
+  db: Database,
+  storyId: string,
+  occurrence: StoryDateOccurrence,
+): Promise<Story> {
+  return updateDerivedFields(db, storyId, {
+    occurredKind: occurrence.kind,
+    occurredDate: occurrence.date,
+    occurredEndDate: occurrence.endDate,
+    occurredProvenance: occurrence.provenance,
+  });
 }
 
 /**
@@ -391,6 +426,9 @@ export interface PipelineStoryView {
   promptQuestion: string | null;
   transcript: string | null;
   prose: string | null;
+  /** The Story date's form (ADR-0026); NULL = Undated. The render stage's finish-time backstop
+   *  (issue #246) gates on this: it only ever dates a story that is still Undated. */
+  occurredKind: OccurredKind | null;
   /** The canonical recording. NULL for a text story (no audio) — the media join is a LEFT join
    * so a text draft still returns a view row. Always populated for a voice story. */
   recording: {
@@ -1639,6 +1677,7 @@ export async function getStoryAndRecordingForPipeline(
       promptQuestion: stories.promptQuestion,
       transcript: stories.transcript,
       prose: stories.prose,
+      occurredKind: stories.occurredKind,
       mediaId: media.id,
       storageKey: media.storageKey,
       contentType: media.contentType,
@@ -1667,6 +1706,7 @@ export async function getStoryAndRecordingForPipeline(
     promptQuestion: row.promptQuestion,
     transcript: row.transcript,
     prose: row.prose,
+    occurredKind: row.occurredKind,
     // NULL for a text story (no media row from the LEFT join). `media.id` is NOT NULL in the
     // schema, so a null `mediaId` here can only mean "no joined recording".
     recording:
@@ -1952,6 +1992,121 @@ export async function editStoryDetails(
     });
 
     return updatedStory!;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Story date edit (ADR-0026 #241): set / change / clear the Story date.
+// Owner-only, state-agnostic, auditable — the same authorization and audit
+// discipline as editStoryDetails. Persists through the updateDerivedFields
+// write seam; no new write path.
+// ---------------------------------------------------------------------------
+
+export interface EditStoryDateInput {
+  storyId: string;
+  actorPersonId: string;
+  /**
+   * The Story date to set, in storage shape (ISO calendar dates, YYYY-MM-DD). `null` marks the
+   * story Undated — a first-class state — clearing all occurred_* fields. For `date`/`circa` only
+   * `date` is kept (any `endDate` is discarded); for `period` both ends are required.
+   */
+  occurred: {
+    kind: OccurredKind;
+    /** The point for `date`/`circa`; the span start for `period`. */
+    date: string;
+    /** The span end — required for `period`, must not precede `date`. */
+    endDate?: string | null;
+  } | null;
+}
+
+/**
+ * Validate + normalize an ISO calendar date (YYYY-MM-DD) from user input. Hand-parsed so no
+ * Date/timezone conversion can shift a day; rejects impossible dates (e.g. Feb 30).
+ */
+function assertIsoCalendarDate(value: string | null | undefined, label: string): string {
+  const trimmed = (value ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match || !isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))) {
+    throw new InvariantViolation(`editStoryDate: ${label} must be a real calendar date (YYYY-MM-DD)`);
+  }
+  return trimmed;
+}
+
+export async function editStoryDate(
+  db: Database,
+  input: EditStoryDateInput,
+): Promise<Story> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        ownerPersonId: stories.ownerPersonId,
+        prose: stories.prose,
+        occurredKind: stories.occurredKind,
+        occurredDate: stories.occurredDate,
+        occurredEndDate: stories.occurredEndDate,
+      })
+      .from(stories)
+      .where(eq(stories.id, input.storyId))
+      .limit(1);
+
+    if (!current) {
+      throw new InvariantViolation(`story not found: ${input.storyId}`);
+    }
+    if (current.ownerPersonId !== input.actorPersonId) {
+      throw new InvariantViolation(
+        `editStoryDate: actor ${input.actorPersonId} is not the owner of story ${input.storyId}`,
+      );
+    }
+
+    // Normalize + validate the requested value into the storage columns.
+    let next: { kind: OccurredKind | null; date: string | null; endDate: string | null };
+    if (input.occurred === null) {
+      next = { kind: null, date: null, endDate: null };
+    } else {
+      const date = assertIsoCalendarDate(input.occurred.date, "the story date");
+      if (input.occurred.kind === "period") {
+        const endDate = assertIsoCalendarDate(input.occurred.endDate, "the period end");
+        // ISO YYYY-MM-DD compares lexicographically.
+        if (endDate < date) {
+          throw new InvariantViolation("editStoryDate: the period end must not precede its start");
+        }
+        next = { kind: "period", date, endDate };
+      } else {
+        next = { kind: input.occurred.kind, date, endDate: null };
+      }
+    }
+
+    // A no-op save (the stored value already matches) writes nothing: updatedAt stays put, no
+    // audit row is appended, and the existing provenance note is kept.
+    if (
+      current.occurredKind === next.kind &&
+      current.occurredDate === next.date &&
+      current.occurredEndDate === next.endDate
+    ) {
+      const [row] = await tx.select().from(stories).where(eq(stories.id, input.storyId)).limit(1);
+      return row!;
+    }
+
+    // Persist through the ADR-0026 write seam. A CHANGED value clears the provenance note: the
+    // note records how the PREVIOUS value was derived, so keeping it would attribute that
+    // derivation to a value it did not produce. A hand-set date has no derivation.
+    const updatedStory = await updateDerivedFields(tx, input.storyId, {
+      occurredKind: next.kind,
+      occurredDate: next.date,
+      occurredEndDate: next.endDate,
+      occurredProvenance: null,
+    });
+
+    // Append the same metadata-edit audit row editStoryDetails does (carrying the unchanged prose
+    // snapshot in text) — a date edit is a displayed, correctable fact, not a hidden one.
+    await tx.insert(proseRevisions).values({
+      storyId: input.storyId,
+      level: "human_metadata_edit",
+      text: current.prose ?? "",
+      actorPersonId: input.actorPersonId,
+    });
+
+    return updatedStory;
   });
 }
 

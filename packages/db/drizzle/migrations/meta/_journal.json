@@ -197,6 +197,27 @@
       "when": 1784406881748,
       "tag": "0027_lowly_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1784575561691,
+      "tag": "0028_past_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784586000000,
+      "tag": "0029_era_year_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1784604191033,
+      "tag": "0030_deep_raza",
+      "breakpoints": true
     }
   ]
 }

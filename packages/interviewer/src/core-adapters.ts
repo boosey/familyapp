@@ -12,19 +12,26 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  applyResolvedStoryDate,
   getNarratorBiographicalContext,
+  listLifeEventsForPerson,
   listNarratorMemoryForInterviewer,
   listPendingAsksForNarrator,
   markAskRouted,
+  recordStatedLifeEvent,
 } from "@chronicle/core";
 import type { BiographicalProfile, Database } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
   BiographicalAnchors,
+  LifeEventSink,
   MemorySource,
   PendingAsk,
+  PersistResolvedStoryDateInput,
   PriorStoryMemory,
+  RecordStatedLifeEventInput,
+  StoryDateSink,
 } from "./contracts";
 
 /**
@@ -85,10 +92,15 @@ export function createCoreAnchorSource(db: Database): AnchorSource {
       const ctx = await getNarratorBiographicalContext(db, personId);
       if (!ctx) return null;
       const stored = (ctx.anchors ?? {}) as Partial<BiographicalProfile>;
+      // The date-derivation anchors (ADR-0026) load with the rest of the inflow, once per
+      // session: the full birth date (primary anchor) plus the narrator's known life events.
+      const lifeEvents = await listLifeEventsForPerson(db, personId);
       return {
         personId: ctx.personId,
         spokenName: ctx.spokenName,
         birthYear: ctx.birthYear,
+        birthDate: ctx.birthDate,
+        lifeEvents,
         profile: {
           hometown: stored.hometown ?? null,
           siblingContext: stored.siblingContext ?? null,
@@ -112,6 +124,36 @@ export function createCoreAnchorSource(db: Database): AnchorSource {
         SET biographical_anchors = COALESCE(biographical_anchors, '{}'::jsonb) || ${JSON.stringify({ [key]: value })}::jsonb,
             updated_at = now()
         WHERE id = ${personId}`);
+    },
+  };
+}
+
+/**
+ * Build a `StoryDateSink` over the audited story repository. Live derivation writes through the
+ * SAME `updateDerivedFields` seam every other derivation path uses (backstop, migration) — the
+ * interviewer never touches the `stories` table directly. `applyResolvedStoryDate` carries the
+ * mapping (occurrence → the four `occurred_*` columns, provenance included) at the core
+ * boundary, so this adapter is a pass-through like the memory/ask sources above.
+ */
+export function createCoreStoryDateSink(db: Database): StoryDateSink {
+  return {
+    async persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void> {
+      await applyResolvedStoryDate(db, input.storyId, input.occurrence);
+    },
+  };
+}
+
+/**
+ * Build a `LifeEventSink` over the core life-events write side (issue #245). The idempotency
+ * (person + kind + date) and the narrator-only attachment live in `recordStatedLifeEvent` at
+ * the core boundary, so this adapter is a pass-through like the story-date sink above. The
+ * `life_events` table is on the OPEN schema (person-adjacent biographical data, not expressive
+ * content), so this is a non-content write — no architecture-allowlist entry is needed.
+ */
+export function createCoreLifeEventSink(db: Database): LifeEventSink {
+  return {
+    async recordStatedLifeEvent(input: RecordStatedLifeEventInput): Promise<void> {
+      await recordStatedLifeEvent(db, input.personId, input.event);
     },
   };
 }

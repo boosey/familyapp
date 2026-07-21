@@ -9,6 +9,10 @@ export type {
   AnchorSource,
   BiographicalAnchors,
   BiographicalProfile,
+  StoryDateSink,
+  PersistResolvedStoryDateInput,
+  LifeEventSink,
+  RecordStatedLifeEventInput,
 } from "./contracts";
 
 export {
@@ -16,6 +20,8 @@ export {
   InMemoryAskSource,
   InMemoryMemorySource,
   InMemoryAnchorSource,
+  InMemoryStoryDateSink,
+  InMemoryLifeEventSink,
   ScriptedFollowUpEvaluator,
 } from "./mocks";
 
@@ -69,6 +75,8 @@ export {
   createCoreMemorySource,
   createCoreAnchorSource,
   createCoreAskSource,
+  createCoreStoryDateSink,
+  createCoreLifeEventSink,
 } from "./core-adapters";
 
 export {
@@ -113,4 +121,28 @@ export {
   GAP_DETECTION_MAX_GAPS,
   GAP_DETECTION_MIN_ANSWER_WORDS,
   GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE,
+  STORY_DATE_FOLLOW_UP_SEED,
+  SYSTEM_STORY_DATE_MODEL_ID,
 } from "./constants";
+
+// Follow-up cascade (ADR-0013 amendment): system probes → gap → deepen.
+export {
+  GAP_KIND_TO_FOLLOW_UP_TYPE,
+  FOLLOW_UP_TYPE_TO_GAP_KIND,
+} from "./follow-up-mapping";
+export {
+  proposeAndDisposeFollowUp,
+  type ProposeAndDisposeFollowUpInput,
+  type ProposeAndDisposeFollowUpResult,
+  type FollowUpOrigin,
+  type FollowUpCascadeStage,
+} from "./follow-up-cascade";
+export type {
+  SystemFollowUpProbe,
+  SystemFollowUpProbeContext,
+  SystemFollowUpProposal,
+} from "./system-follow-up-probe";
+export {
+  createTemporalFollowUpProbe,
+  TEMPORAL_PROBE_ID,
+} from "./temporal-follow-up-probe";

@@ -145,7 +145,7 @@ describe("loadStoryPhotoEditorAction — Phase 4 suggestion (Slice B §5)", () =
     expect(res.nudge).toBeNull();
   });
 
-  it("silently reorders by eraYear ∪ EXIF without nudging (year arm only)", async () => {
+  it("silently reorders by story-date ∪ EXIF without nudging (year arm only)", async () => {
     const owner = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", owner);
     await addMember(owner, familyId);
@@ -166,7 +166,11 @@ describe("loadStoryPhotoEditorAction — Phase 4 suggestion (Slice B §5)", () =
     );
 
     const storyId = await makeDraftWithProse(owner, "A memory with no caption overlap words.");
-    await updateDerivedFields(runtimeDb, storyId, { eraYear: 1980 });
+    await updateDerivedFields(runtimeDb, storyId, {
+      occurredKind: "period",
+      occurredDate: "1980-01-01",
+      occurredEndDate: "1980-12-31",
+    });
     authCtx = account(owner);
 
     const res = await loadStoryPhotoEditorAction(storyId);

@@ -11,7 +11,9 @@ import {
 } from "@chronicle/db/content";
 import {
   persistRecordingAndCreateDraft,
+  updateDerivedFields,
   editStoryDetails,
+  editStoryDate,
   retargetStoryFamilies,
   editStoryProse,
   setStoryFavorite,
@@ -125,6 +127,189 @@ describe("Story Management Core", () => {
           tags: ["trip"],
         }),
       ).rejects.toThrow(InvariantViolation);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story date edit (ADR-0026 #241)
+  // ---------------------------------------------------------------------------
+  describe("editStoryDate", () => {
+    it("lets the owner set, change, and clear the Story date in all three forms on a shared story", async () => {
+      const ownerId = await createPerson("Alice");
+      const familyId = await createActiveFamily(ownerId, "Smiths");
+
+      const { story } = await persistRecordingAndCreateDraft(db, {
+        ownerPersonId: ownerId,
+        storageKey: "take0.webm",
+        contentType: "audio/webm",
+        checksum: "fake-checksum",
+      });
+      await finishDraft(db, {
+        storyId: story.id,
+        ownerPersonId: ownerId,
+        finalText: "Alice's story prose text.",
+        metadata: { title: "Alice's Story", summary: "", tags: [] },
+      });
+      await approveAndShareStory(db, {
+        storyId: story.id,
+        narratorPersonId: ownerId,
+        audienceTier: "family",
+        familyIds: [familyId],
+        approvalAudio: {
+          storageKey: "approval.webm",
+          contentType: "audio/webm",
+          checksum: "fake-checksum",
+        },
+      });
+
+      // Born Undated.
+      expect(story.occurredKind).toBeNull();
+
+      // date — an exact point.
+      const asDate = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: { kind: "date", date: "1943-12-25" },
+      });
+      expect(asDate.occurredKind).toBe("date");
+      expect(asDate.occurredDate).toBe("1943-12-25");
+      expect(asDate.occurredEndDate).toBeNull();
+      expect(asDate.occurredProvenance).toBeNull();
+
+      // period — a true span with start and end.
+      const asPeriod = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: { kind: "period", date: "1951-09-01", endDate: "1955-06-30" },
+      });
+      expect(asPeriod.occurredKind).toBe("period");
+      expect(asPeriod.occurredDate).toBe("1951-09-01");
+      expect(asPeriod.occurredEndDate).toBe("1955-06-30");
+
+      // circa — an approximate point; a stray endDate is discarded (point forms have no end).
+      const asCirca = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: { kind: "circa", date: "1965-01-01", endDate: "1965-12-31" },
+      });
+      expect(asCirca.occurredKind).toBe("circa");
+      expect(asCirca.occurredDate).toBe("1965-01-01");
+      expect(asCirca.occurredEndDate).toBeNull();
+
+      // clear — mark the story Undated again (all four fields cleared).
+      const cleared = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: null,
+      });
+      expect(cleared.occurredKind).toBeNull();
+      expect(cleared.occurredDate).toBeNull();
+      expect(cleared.occurredEndDate).toBeNull();
+      expect(cleared.occurredProvenance).toBeNull();
+
+      // Each real change appended the same metadata-edit audit row editStoryDetails writes.
+      const revisions = await listProseRevisions(db, story.id);
+      const auditRows = revisions.filter((r) => r.level === "human_metadata_edit");
+      expect(auditRows).toHaveLength(4);
+      expect(auditRows.every((r) => r.actorPersonId === ownerId)).toBe(true);
+    });
+
+    it("clears the provenance note when the value changes; a no-op save keeps it and writes nothing", async () => {
+      const ownerId = await createPerson("Alice");
+      const { story } = await persistRecordingAndCreateDraft(db, {
+        ownerPersonId: ownerId,
+        storageKey: "take0.webm",
+        contentType: "audio/webm",
+        checksum: "fake-checksum",
+      });
+      await updateDerivedFields(db, story.id, {
+        occurredKind: "date",
+        occurredDate: "1943-12-25",
+        occurredProvenance: "age 8 at Christmas, from birthdate",
+      });
+
+      // No-op save (same value): the derivation note is kept and NO audit row is appended.
+      const untouched = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: { kind: "date", date: "1943-12-25" },
+      });
+      expect(untouched.occurredProvenance).toBe("age 8 at Christmas, from birthdate");
+      let revisions = await listProseRevisions(db, story.id);
+      expect(revisions.filter((r) => r.level === "human_metadata_edit")).toHaveLength(0);
+
+      // A CHANGED value: the note records how the PREVIOUS value was derived, so it is cleared —
+      // keeping it would attribute that derivation to a value it did not produce.
+      const changed = await editStoryDate(db, {
+        storyId: story.id,
+        actorPersonId: ownerId,
+        occurred: { kind: "date", date: "1944-12-25" },
+      });
+      expect(changed.occurredDate).toBe("1944-12-25");
+      expect(changed.occurredProvenance).toBeNull();
+      revisions = await listProseRevisions(db, story.id);
+      expect(revisions.filter((r) => r.level === "human_metadata_edit")).toHaveLength(1);
+    });
+
+    it("rejects edits from a non-owner and for a missing story", async () => {
+      const ownerId = await createPerson("Alice");
+      const otherId = await createPerson("Bob");
+      const { story } = await persistRecordingAndCreateDraft(db, {
+        ownerPersonId: ownerId,
+        storageKey: "take0.webm",
+        contentType: "audio/webm",
+        checksum: "fake-checksum",
+      });
+
+      await expect(
+        editStoryDate(db, {
+          storyId: story.id,
+          actorPersonId: otherId,
+          occurred: { kind: "date", date: "1943-12-25" },
+        }),
+      ).rejects.toThrow(InvariantViolation);
+
+      await expect(
+        editStoryDate(db, {
+          storyId: "00000000-0000-0000-0000-000000000000",
+          actorPersonId: ownerId,
+          occurred: { kind: "date", date: "1943-12-25" },
+        }),
+      ).rejects.toThrow(InvariantViolation);
+    });
+
+    it("rejects malformed dates, missing period ends, and inverted periods", async () => {
+      const ownerId = await createPerson("Alice");
+      const { story } = await persistRecordingAndCreateDraft(db, {
+        ownerPersonId: ownerId,
+        storageKey: "take0.webm",
+        contentType: "audio/webm",
+        checksum: "fake-checksum",
+      });
+      const attempt = (occurred: Parameters<typeof editStoryDate>[1]["occurred"]) =>
+        editStoryDate(db, { storyId: story.id, actorPersonId: ownerId, occurred });
+
+      // Not ISO shape, impossible month, impossible day-of-month.
+      await expect(attempt({ kind: "date", date: "25 December 1943" })).rejects.toThrow(
+        InvariantViolation,
+      );
+      await expect(attempt({ kind: "date", date: "1943-13-01" })).rejects.toThrow(
+        InvariantViolation,
+      );
+      await expect(attempt({ kind: "date", date: "1943-02-30" })).rejects.toThrow(
+        InvariantViolation,
+      );
+      // A period requires its end, and the end must not precede the start.
+      await expect(attempt({ kind: "period", date: "1951-09-01" })).rejects.toThrow(
+        InvariantViolation,
+      );
+      await expect(
+        attempt({ kind: "period", date: "1955-06-30", endDate: "1951-09-01" }),
+      ).rejects.toThrow(InvariantViolation);
+
+      // None of the rejected attempts wrote anything.
+      const revisions = await listProseRevisions(db, story.id);
+      expect(revisions.filter((r) => r.level === "human_metadata_edit")).toHaveLength(0);
     });
   });
 

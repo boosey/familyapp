@@ -10,6 +10,7 @@ import { FavoriteButton } from "./FavoriteButton";
 import { FollowUpButton } from "./FollowUpButton";
 import { LikeButton } from "./LikeButton";
 import { OwnerActionMenu } from "./OwnerActionMenu";
+import { StoryDateEditor, type StoryDateValue } from "./StoryDateEditor";
 import { StoryReadBody } from "./StoryReadBody";
 import { StoryEditor } from "./StoryEditor";
 import { FamilyChoiceChips } from "../../FamilyChoiceChips";
@@ -35,6 +36,11 @@ export interface StoryDetailClientProps {
   updatedAt: string;
   narratorName: string;
   eraLabelStr: string;
+  /** The raw Story date (ADR-0026) for the edit control; null = Undated. `eraLabelStr` stays the
+   *  display label (it already carries the smart-display formatting). */
+  storyDate: StoryDateValue | null;
+  /** The provenance note recording HOW the date was derived, shown beside it when present. */
+  storyDateProvenance: string | null;
   recordingMediaId: string | null;
   // Sharing targets
   viewerFamilies: Array<{ id: string; name: string; shortName?: string | null }>;
@@ -67,6 +73,8 @@ export function StoryDetailClient({
   initialSummary,
   narratorName,
   eraLabelStr,
+  storyDate,
+  storyDateProvenance,
   recordingMediaId,
   viewerFamilies,
   initialTargetFamilies,
@@ -200,6 +208,12 @@ export function StoryDetailClient({
         <span className={styles.eraLabel}>
           {eraLabelStr}
         </span>
+        {storyDateProvenance && (
+          <span className={styles.dateNote} data-testid="story-date-provenance">
+            ({storyDateProvenance})
+          </span>
+        )}
+        {isOwner && <StoryDateEditor storyId={storyId} current={storyDate} />}
         {authorTreeHref && (
           <Link href={authorTreeHref} data-testid="story-tree-link" className={styles.treeLink}>
             {hub.tree.openInTree}

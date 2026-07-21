@@ -54,6 +54,21 @@ export const GAP_DETECTION_MIN_ANSWER_WORDS = 12;
  * The confidence a gap-derived follow-up candidate is assigned when it feeds `decideFollowUp`.
  * The gap detector reports no numeric confidence (a gap is present or it isn't), so we assign a
  * single value at/above the default `confidenceThreshold` (0.6) — high enough to clear the gate,
- * without claiming false precision. Tune here, one place.
+ * without claiming false precision. Tune here, one place. Shared with system probes (e.g. temporal)
+ * that likewise carry no numeric self-assessment.
  */
 export const GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE = 0.7;
+
+// ---------------------------------------------------------------------------
+// System follow-up probes (deterministic, no LLM). First stage of the propose cascade
+// (ADR-0013 amendment): probes → gap detection → deepen.
+// ---------------------------------------------------------------------------
+
+/**
+ * Thread seed of the ONE temporal dating follow-up (issue #244 / story-dates). Constant on
+ * purpose: once asked, the seed lands in already-asked seeds so anti-repeat vetoes re-proposal.
+ */
+export const STORY_DATE_FOLLOW_UP_SEED = "about when this happened";
+
+/** Fixed modelId for system-probe proposals on the follow-up decision ledger. */
+export const SYSTEM_STORY_DATE_MODEL_ID = "system:story-date";

@@ -3,18 +3,20 @@
  * any DOM/query dependency so they can be unit-tested in isolation (see
  * apps/web/__tests__/story-browse-helpers.test.ts).
  */
+import type { OccurredKind } from "@chronicle/db";
+import { hub } from "@/app/_copy";
 import type { StoryItem } from "./story-browse-types";
 
 /** A decade bucket for the Timeline, e.g. label "1950s" holding the stories about that decade. */
 export interface DecadeGroup {
   /** Mono uppercase decade label, e.g. "1950s". */
   label: string;
-  /** Stories about that decade, ascending by era year (chronological within the decade). */
+  /** Stories about that decade, ascending by Story date (chronological within the decade). */
   items: StoryItem[];
 }
 
 /** The Timeline split: dated stories grouped by decade (ascending, empty decades dropped) and the
- *  always-shown Undated bucket (stories with `eraYear === null`). */
+ *  always-shown Undated bucket (stories with `occurredDate === null`). */
 export interface TimelineGroups {
   groups: DecadeGroup[];
   undated: StoryItem[];
@@ -25,6 +27,80 @@ export interface Highlight {
   before: string;
   match: string;
   after: string;
+}
+
+// ---------------------------------------------------------------------------
+// Story date display (ADR-0026)
+// ---------------------------------------------------------------------------
+
+/** A Story date as the read path carries it: the form plus ISO calendar dates (YYYY-MM-DD). */
+export interface StoryDate {
+  kind: OccurredKind;
+  /** The point for `date`/`circa`; the span start for `period`. */
+  date: string;
+  /** The span end — set only for `period`. */
+  endDate?: string | null;
+}
+
+const MONTH_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+const MONTH_SHORT = MONTH_LONG.map((m) => m.slice(0, 3));
+
+/** Parse an ISO calendar date (YYYY-MM-DD) into parts, or null when malformed. Parsed by hand so
+ *  no Date/timezone conversion can shift the day. */
+function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const parts = { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
+  if (parts.m < 1 || parts.m > 12 || parts.d < 1 || parts.d > 31) return null;
+  return parts;
+}
+
+function lastDayOfMonth(y: number, m: number): number {
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/** "December 25, 1943" — the full point form. */
+function formatPoint(p: { y: number; m: number; d: number }): string {
+  return `${MONTH_LONG[p.m - 1]} ${p.d}, ${p.y}`;
+}
+
+/**
+ * The smart-display label for a Story date (ADR-0026): never claims more precision than the form
+ * carries. Exact date → "December 25, 1943"; period aligned to a year → "1943", to a month →
+ * "December 1943", to a decade → "the 1940s", any other span → "Sep 1951 – Jun 1955"; circa →
+ * "c. 1949"; null (or an unparseable value) → Undated.
+ */
+export function formatStoryDate(occurred: StoryDate | null): string {
+  if (!occurred) return hub.browse.undated;
+  const start = parseIsoDate(occurred.date);
+  if (!start) return hub.browse.undated;
+
+  if (occurred.kind === "date") return formatPoint(start);
+  if (occurred.kind === "circa") return `c. ${start.y}`;
+
+  // period
+  const end = occurred.endDate ? parseIsoDate(occurred.endDate) : null;
+  if (!end || end.y < start.y || (end.y === start.y && (end.m < start.m || (end.m === start.m && end.d < start.d)))) {
+    // Defensive: a period without a usable end renders as its start point.
+    return formatPoint(start);
+  }
+  if (start.y === end.y && start.m === end.m && start.d === end.d) return formatPoint(start);
+  if (start.m === 1 && start.d === 1 && end.m === 12 && end.d === 31) {
+    if (start.y === end.y) return `${start.y}`;
+    if (start.y % 10 === 0 && end.y === start.y + 9) return `the ${start.y}s`;
+  }
+  if (
+    start.y === end.y &&
+    start.m === end.m &&
+    start.d === 1 &&
+    end.d === lastDayOfMonth(end.y, end.m)
+  ) {
+    return `${MONTH_LONG[start.m - 1]} ${start.y}`;
+  }
+  return `${MONTH_SHORT[start.m - 1]} ${start.y} – ${MONTH_SHORT[end.m - 1]} ${end.y}`;
 }
 
 /** Up to two leading initials, uppercased, e.g. "Eleanor Boudreaux" → "EB". Falls back to "?". */
@@ -66,27 +142,29 @@ export function resolveGalleryPhotoIds(
   return storyPhotos.get(storyId) ?? [];
 }
 
-/** The decade label a story's era falls in, e.g. 1958 → "1950s". */
-function decadeLabelOf(eraYear: number): string {
-  return `${Math.floor(eraYear / 10) * 10}s`;
+/** The decade label a Story date falls in, e.g. 1958 → "1950s". */
+function decadeLabelOf(year: number): string {
+  return `${Math.floor(year / 10) * 10}s`;
 }
 
 /**
  * Split `items` into decade groups (dated) and the Undated bucket. Dated stories are grouped by the
- * decade of `eraYear`, groups are ordered ascending, empty decades are dropped, and stories within a
- * decade are ordered ascending by era year. Undated stories (`eraYear === null`) keep their incoming
- * order (the feed's reverse-chronological order).
+ * decade of their Story date (`occurredDate` — ADR-0026: always the sort key), groups are ordered
+ * ascending, empty decades are dropped, and stories within a decade are ordered ascending by the
+ * ISO date (lexicographic = chronological). Undated stories (`occurredDate === null`, or an
+ * unparseable value) keep their incoming order (the feed's reverse-chronological order).
  */
 export function groupByDecade(items: StoryItem[]): TimelineGroups {
   const undated: StoryItem[] = [];
   const byDecade = new Map<string, StoryItem[]>();
 
   for (const item of items) {
-    if (item.eraYear === null) {
+    const year = item.occurredDate ? parseIsoDate(item.occurredDate)?.y : undefined;
+    if (year === undefined) {
       undated.push(item);
       continue;
     }
-    const label = decadeLabelOf(item.eraYear);
+    const label = decadeLabelOf(year);
     const bucket = byDecade.get(label);
     if (bucket) bucket.push(item);
     else byDecade.set(label, [item]);
@@ -97,8 +175,8 @@ export function groupByDecade(items: StoryItem[]): TimelineGroups {
     .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10))
     .map(([label, bucket]) => ({
       label,
-      // Non-null era years within a dated bucket; ascending, stable for equal years.
-      items: [...bucket].sort((a, b) => (a.eraYear ?? 0) - (b.eraYear ?? 0)),
+      // Non-null ISO dates within a dated bucket; ascending, stable for equal dates.
+      items: [...bucket].sort((a, b) => (a.occurredDate ?? "").localeCompare(b.occurredDate ?? "")),
     }));
 
   return { groups, undated };

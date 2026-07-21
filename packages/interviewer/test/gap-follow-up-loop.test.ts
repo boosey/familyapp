@@ -15,10 +15,12 @@ import {
   InMemoryAnchorSource,
   InMemoryAskSource,
   InMemoryMemorySource,
+  InMemoryStoryDateSink,
   ScriptedFollowUpEvaluator,
   ScriptedVoice,
   RAPPORT_THRESHOLD_TURNS,
   GAP_DETECTION_MIN_ANSWER_WORDS,
+  STORY_DATE_FOLLOW_UP_SEED,
   type BiographicalAnchors,
   type InterviewerDeps,
   type PromptIntent,
@@ -39,7 +41,14 @@ const COMPLETE_PROFILE: BiographicalProfile = {
 // Anchors with a fully-populated profile so the picker has NO intake field to collect and — with no
 // pending Asks / prior stories — falls through to the follow_up slot, where a queued gap surfaces.
 function completeAnchors(): BiographicalAnchors {
-  return { personId: NARRATOR, spokenName: "Eleanor", birthYear: 1942, profile: { ...COMPLETE_PROFILE } };
+  return {
+    personId: NARRATOR,
+    spokenName: "Eleanor",
+    birthYear: 1942,
+    birthDate: null,
+    lifeEvents: [],
+    profile: { ...COMPLETE_PROFILE },
+  };
 }
 
 const cand = (over: Partial<FollowUpCandidate> = {}): FollowUpCandidate => ({
@@ -245,6 +254,8 @@ describe("gap-driven follow-up in the controlled loop", () => {
       personId: NARRATOR,
       spokenName: "Eleanor",
       birthYear: 1942,
+      birthDate: null,
+      lifeEvents: [],
       profile: {
         hometown: null,
         siblingContext: null,
@@ -271,5 +282,31 @@ describe("gap-driven follow-up in the controlled loop", () => {
     await session.recordResponse(LONG_ANSWER);
     // No gap machinery ran; nothing queued.
     expect(session.getState().pendingGapFollowUp).toBeNull();
+  });
+
+  it("queues a system temporal probe ahead of gap when the story is still undated", async () => {
+    const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
+    const deps = makeDeps(evaluator);
+    // Dating is active (sink + activeStoryId); the undatable LONG_ANSWER leaves the date
+    // unresolved, so the deterministic temporal probe (cascade stage 1) fires ahead of gap.
+    deps.storyDateSink = new InMemoryStoryDateSink();
+    const session = await createInterviewSession(deps, {
+      narratorPersonId: NARRATOR,
+      activeStoryId: "story-1",
+    });
+
+    await session.nextTurn();
+    await session.recordResponse(LONG_ANSWER);
+    expect(evaluator.calls).toHaveLength(0); // probe won — gap never called
+    expect(session.getState().pendingGapFollowUp?.origin).toBe("system");
+    expect(session.getState().pendingGapFollowUp?.gapKind).toBe("temporal");
+    expect(session.getState().pendingGapFollowUp?.candidate.threadSeed).toBe(
+      STORY_DATE_FOLLOW_UP_SEED,
+    );
+
+    const turn = await session.nextTurn();
+    const fu = turn.intent as Extract<PromptIntent, { kind: "follow_up" }>;
+    expect(fu.origin).toBe("system");
+    expect(fu.gapKind).toBe("temporal");
   });
 });

@@ -17,6 +17,7 @@ import styles from "./StoryDetailClient.module.css";
 
 vi.mock("./actions", () => ({
   editStoryDetailsAction: vi.fn(),
+  editStoryDateAction: vi.fn(),
   retargetStoryFamiliesAction: vi.fn(),
   editStoryProseAction: vi.fn(),
   tagStorySubjectAction: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("./LikeButton", () => ({ LikeButton: () => null }));
 vi.mock("./FollowUpButton", () => ({ FollowUpButton: () => null }));
 vi.mock("./OwnerActionMenu", () => ({ OwnerActionMenu: () => null }));
 vi.mock("./StoryEditor", () => ({ StoryEditor: () => null }));
+vi.mock("./StoryDateEditor", () => ({ StoryDateEditor: () => null }));
 
 afterEach(cleanup);
 
@@ -46,6 +48,8 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
     updatedAt: "2026-01-01T00:00:00.000Z",
     narratorName: "Eleanor",
     eraLabelStr: "1962 · NAPLES",
+    storyDate: null,
+    storyDateProvenance: null,
     recordingMediaId: null,
     viewerFamilies: [],
     initialTargetFamilies: [{ id: "f1", name: "Boudreaux", shortName: "B" }],

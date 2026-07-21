@@ -242,7 +242,12 @@ function Timeline({
             </div>
             <div className={styles.timelineRowList}>
               {group.items.map((item) => (
-                <TimelineRow key={item.id} item={item} href={href(item)} year={String(item.eraYear)} />
+                <TimelineRow
+                  key={item.id}
+                  item={item}
+                  href={href(item)}
+                  year={item.occurredLabel ?? hub.browse.undated}
+                />
               ))}
             </div>
           </section>
@@ -256,7 +261,13 @@ function Timeline({
           </div>
           <div className={styles.timelineRowList}>
             {undated.map((item) => (
-              <TimelineRow key={item.id} item={item} href={href(item)} year="· · ·" undated />
+              <TimelineRow
+                key={item.id}
+                item={item}
+                href={href(item)}
+                year={item.occurredLabel ?? "· · ·"}
+                undated
+              />
             ))}
           </div>
         </section>
@@ -336,7 +347,9 @@ function SearchResult({ item, href, query }: { item: StoryItem; href: string; qu
     <Link href={href} className={styles.searchResultCard}>
       <div className={styles.searchResultHead}>
         <span className={styles.searchResultTitle}>{item.title}</span>
-        <span className={styles.searchResultEra}>{item.eventLabel ?? hub.browse.undated}</span>
+        <span className={styles.searchResultEra}>
+          {item.eventLabel ?? hub.browse.undated}
+        </span>
       </div>
       {item.summary ? (
         <p className={styles.searchResultSummary}>

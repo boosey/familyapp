@@ -10,9 +10,13 @@ import type {
   FollowUpEvaluation,
   FollowUpEvaluationInput,
   FollowUpEvaluator,
+  LifeEventSink,
   MemorySource,
   PendingAsk,
+  PersistResolvedStoryDateInput,
   PriorStoryMemory,
+  RecordStatedLifeEventInput,
+  StoryDateSink,
   Voice,
   VoiceSpeakInput,
   VoiceSpeakResult,
@@ -114,5 +118,33 @@ export class ScriptedFollowUpEvaluator implements FollowUpEvaluator {
     const idx = this.calls.length;
     this.calls.push(input);
     return { candidates: this.script[idx] ?? [], modelId: this.modelId };
+  }
+}
+
+/**
+ * Records every resolved Story date the loop persists, in order — the assertion point for live
+ * date derivation (issue #243): a self-dating telling lands here with its occurrence and
+ * provenance note; an unresolvable telling never produces a call.
+ */
+export class InMemoryStoryDateSink implements StoryDateSink {
+  readonly persisted: PersistResolvedStoryDateInput[] = [];
+
+  async persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void> {
+    this.persisted.push(input);
+  }
+}
+
+/**
+ * Records every stated life-event fact the loop captures, in order — the assertion point for
+ * life-event capture (issue #245): "we married in '58" lands here as a wedding event on the
+ * narrator; an anchor-relative reference ("ten years after we married") never produces a call.
+ * Idempotency (person + kind + date) is a property of the prod write side, so this mock stores
+ * every call raw — a test asserting dedupe belongs over the real DB (packages/core).
+ */
+export class InMemoryLifeEventSink implements LifeEventSink {
+  readonly recorded: RecordStatedLifeEventInput[] = [];
+
+  async recordStatedLifeEvent(input: RecordStatedLifeEventInput): Promise<void> {
+    this.recorded.push(input);
   }
 }

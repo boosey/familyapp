@@ -16,13 +16,14 @@
  * versioned `prompts/gap-prompts.ts` data module and is resolved by purpose × vendor × version.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
-import type { FollowUpCandidate, FollowUpSensitivity, FollowUpType } from "@chronicle/db";
+import type { FollowUpCandidate, FollowUpSensitivity } from "@chronicle/db";
 import {
   GAP_DETECTION_MAX_GAPS,
   GAP_DETECTION_MAX_OUTPUT_TOKENS,
   GAP_DETECTION_TEMPERATURE,
   GAP_FOLLOW_UP_CANDIDATE_CONFIDENCE,
 } from "./constants";
+import { GAP_KIND_TO_FOLLOW_UP_TYPE } from "./follow-up-mapping";
 import { resolveGapPrompt, type PromptVendor } from "./prompts/gap-prompts";
 
 /** The kind of missing/ambiguous fact a gap names. Maps onto the persisted `FollowUpType`. */
@@ -129,20 +130,8 @@ export function parseGaps(text: string): Gap[] {
 }
 
 /**
- * Gap → FollowUpType. Gap follow-ups are FACTUAL by construction (they fill in missing facts), so
- * none map to `emotional` — that keeps the emotional-door veto irrelevant to this path while the
- * sensitivity gate still applies. temporal/relational have exact type peers; the rest are `factual`.
- */
-const GAP_KIND_TO_FOLLOW_UP_TYPE: Record<GapKind, FollowUpType> = {
-  temporal: "temporal",
-  relational: "relational",
-  spatial: "factual",
-  causal: "factual",
-  identity: "factual",
-};
-
-/**
  * Bridge detected gaps into the EXISTING `FollowUpCandidate` shape so `decideFollowUp` gates them.
+ * Type mapping lives in `follow-up-mapping.ts` (single source for both directions).
  * This is the "compose, don't duplicate" seam: every gate the answer-surface follow-up already
  * enforces applies to gap follow-ups verbatim. Confidence is a single tuned constant (a gap has no
  * numeric self-assessment); sensitivity + narratorOpened pass through so the gates see real inputs.

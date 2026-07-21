@@ -61,7 +61,6 @@ function slot(
         summary,
         prose: null,
         tags: [],
-        eraYear: 1962,
         eraLabel: null,
         approvedAt: now,
         createdAt: now,

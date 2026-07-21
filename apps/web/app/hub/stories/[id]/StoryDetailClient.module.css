@@ -86,6 +86,13 @@
   color: var(--support);
 }
 
+/* The Story date provenance note (ADR-0026) — a quiet parenthetical beside the date. */
+.dateNote {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+}
+
 .treeLink {
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);

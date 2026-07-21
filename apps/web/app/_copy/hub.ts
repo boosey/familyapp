@@ -727,6 +727,25 @@ export const hub = {
     // Fallback error for the title/tags editor save path.
     genericError: "Something went wrong. Please try again.",
   },
+  // ADR-0026 Story date edit control (#241) — the modal next to the date on the opened story.
+  // Save/saving/cancel and the generic error reuse `storyDetail`'s copy.
+  storyDate: {
+    edit: "Edit date",
+    heading: "When did this happen?",
+    kindDate: "On a date",
+    kindPeriod: "Over a period",
+    kindCirca: "Around a year",
+    kindUndated: "No date — undated",
+    dateLabel: "Date",
+    startLabel: "Start",
+    endLabel: "End",
+    yearLabel: "Year",
+    yearPlaceholder: "e.g. 1949",
+    preview: (label: string) => `Will show as “${label}”.`,
+    invalidDate: "Choose a date.",
+    invalidPeriod: "A period needs a start and an end, with the end after the start.",
+    invalidYear: "Enter a year, e.g. 1949.",
+  },
 
   // ADR-0009 Phase 2 — story accompaniment photos: the read-only gallery on the opened story and the
   // draft-editor attach/cover/remove/reorder controls in the composer's review phase.

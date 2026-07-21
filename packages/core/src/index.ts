@@ -37,6 +37,7 @@ export {
   persistRecordingAndCreateDraft,
   createTextDraft,
   updateDerivedFields,
+  applyResolvedStoryDate,
   transitionStoryState,
   markStoryProcessingFailed,
   beginStoryRetry,
@@ -61,6 +62,7 @@ export {
   updateStoryRecordingTranscript,
   dropStoryRecording,
   editStoryDetails,
+  editStoryDate,
   editStoryProse,
   retargetStoryFamilies,
   setStoryFavorite,
@@ -74,6 +76,7 @@ export {
   listStoriesAboutPerson,
   listStoriesNarratedByPerson,
   type EditStoryDetailsInput,
+  type EditStoryDateInput,
   type EditStoryProseInput,
   type FavoriteState,
   type LikeState,
@@ -81,6 +84,41 @@ export {
   type TagStorySubjectInput,
   type TagStorySubjectResult,
 } from "./story-repository";
+// ADR-0026 (tiered hybrid): Tier A stated-calendar parse (deterministic, no LLM), the Tier B pure
+// calculator over a validated structured ref, and the defensive parser. The live path uses Tier A;
+// the finish-time backstop recognizes soft language via an LLM ref → the same calculator.
+export {
+  resolveStatedStoryDate,
+  resolveTemporalRef,
+  parseTemporalProposal,
+  type ResolveStoryDateInput,
+  type ResolveTemporalRefInput,
+  type StoryDateOccurrence,
+  type StoryDateResolution,
+  type LifeEventAnchor,
+  type TemporalRef,
+  type TemporalRefType,
+  type TemporalProposal,
+  type HolidayId,
+  type LifeStageId,
+  type EraId,
+  type SeasonId,
+  type AnchorKind,
+} from "./resolve-story-date";
+// ADR-0026 (#245): the pure stated-life-event extractor — spots an anchor FACT in a telling
+// ("we married in '58") so it can be stored on the narrator as a reusable life event.
+export {
+  extractStatedLifeEvents,
+  type ExtractStatedLifeEventsInput,
+  type StatedLifeEvent,
+} from "./resolve-story-date";
+// ADR-0026: the Life event read side (the reusable anchors derivation resolves against) and the
+// write side (#245) — capture from tellings, idempotent per person + kind + date.
+export {
+  listLifeEventsForPerson,
+  recordStatedLifeEvent,
+  type RecordStatedLifeEventResult,
+} from "./life-events";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";
 // ADR-0016 (tree renderer): card color only, mirrors `TreeNode.sex`.

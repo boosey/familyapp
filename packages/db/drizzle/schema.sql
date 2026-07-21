@@ -15,10 +15,12 @@ CREATE TYPE "public"."join_request_status" AS ENUM('pending', 'approved', 'decli
 CREATE TYPE "public"."kinship_edge_type" AS ENUM('parent_of', 'partnered_with');
 CREATE TYPE "public"."kinship_nature" AS ENUM('biological', 'adoptive', 'step', 'foster', 'unknown');
 CREATE TYPE "public"."kinship_state" AS ENUM('asserted', 'affirmed', 'denied', 'corrected');
+CREATE TYPE "public"."life_event_kind" AS ENUM('wedding', 'graduation', 'military_service', 'move', 'other');
 CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."occurred_kind" AS ENUM('date', 'circa', 'period');
 CREATE TYPE "public"."person_origin" AS ENUM('self', 'invitee', 'mention');
 CREATE TYPE "public"."person_sex" AS ENUM('male', 'female', 'unknown');
 CREATE TYPE "public"."photo_source" AS ENUM('upload', 'google_picker');
@@ -260,6 +262,18 @@ CREATE TABLE "kinship_subject_hides" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "life_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"person_id" uuid NOT NULL,
+	"kind" "life_event_kind" NOT NULL,
+	"occurred_kind" "occurred_kind" NOT NULL,
+	"occurred_date" date NOT NULL,
+	"occurred_end_date" date,
+	"occurred_provenance" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "link_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"token_hash" text NOT NULL,
@@ -383,8 +397,11 @@ CREATE TABLE "stories" (
 	"title" text,
 	"summary" text,
 	"tags" jsonb DEFAULT '[]'::jsonb,
-	"era_year" integer,
 	"era_label" text,
+	"occurred_kind" "occurred_kind",
+	"occurred_date" date,
+	"occurred_end_date" date,
+	"occurred_provenance" text,
 	"prompt_question" text,
 	"ask_id" uuid,
 	"originating_family_id" uuid,
@@ -515,6 +532,7 @@ ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_person
 ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_person_b_id_persons_id_fk" FOREIGN KEY ("person_b_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_subject_person_id_persons_id_fk" FOREIGN KEY ("subject_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "kinship_subject_hides" ADD CONSTRAINT "kinship_subject_hides_actor_person_id_persons_id_fk" FOREIGN KEY ("actor_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "life_events" ADD CONSTRAINT "life_events_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_invited_by_person_id_persons_id_fk" FOREIGN KEY ("invited_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -591,6 +609,7 @@ CREATE INDEX "kinship_assertions_edge_idx" ON "kinship_assertions" USING btree (
 CREATE INDEX "kinship_assertions_person_a_idx" ON "kinship_assertions" USING btree ("person_a_id");
 CREATE INDEX "kinship_assertions_person_b_idx" ON "kinship_assertions" USING btree ("person_b_id");
 CREATE INDEX "kinship_subject_hides_edge_subject_idx" ON "kinship_subject_hides" USING btree ("family_id","edge_type","person_a_id","person_b_id","subject_person_id");
+CREATE INDEX "life_events_person_idx" ON "life_events" USING btree ("person_id");
 CREATE UNIQUE INDEX "link_sessions_token_hash_uq" ON "link_sessions" USING btree ("token_hash");
 CREATE INDEX "link_sessions_person_idx" ON "link_sessions" USING btree ("person_id");
 CREATE INDEX "media_owner_idx" ON "media" USING btree ("owner_person_id");

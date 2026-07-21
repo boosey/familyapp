@@ -52,7 +52,7 @@ import {
   transitionStoryState,
   updateDerivedFields,
 } from "@chronicle/core";
-import type { KinshipEdgeType, KinshipNature } from "@chronicle/db";
+import type { KinshipEdgeType, KinshipNature, OccurredKind } from "@chronicle/db";
 import { createLinkSession } from "@chronicle/capture";
 import { getRuntime } from "./runtime";
 import { tinyWav } from "./wav-util";
@@ -116,10 +116,22 @@ interface ExtraStorySpec {
   title: string;
   summary: string;
   tags: string[];
-  /** Back-dates createdAt/approvedAt so the Era (decade) facet has real spread. */
+  /** Back-dates createdAt/approvedAt so the reverse-chronological feed has real spread. */
   occurredAt: Date;
-  /** The historical year the story is ABOUT — drives the Era facet/label. */
-  eraYear: number;
+  /**
+   * The Story date (ADR-0026) the story carries — when the events took place, in one of the three
+   * forms. Omitted/null leaves the story Undated (a first-class state). The seeded spread
+   * (date / year-period / true period / circa / undated) makes the Timeline demonstrable.
+   */
+  occurred?: {
+    kind: OccurredKind;
+    /** ISO calendar date (YYYY-MM-DD): the point for `date`/`circa`; the span start for `period`. */
+    date: string;
+    /** The span end — `period` only. */
+    endDate?: string;
+    /** How the date was derived (user-visible provenance note). */
+    provenance?: string;
+  } | null;
   /** Optional human display note for the era/place. */
   eraLabel?: string;
 }
@@ -155,7 +167,10 @@ async function seedApprovedStory(
     title: spec.title,
     summary: spec.summary,
     tags: spec.tags,
-    eraYear: spec.eraYear,
+    occurredKind: spec.occurred?.kind ?? null,
+    occurredDate: spec.occurred?.date ?? null,
+    occurredEndDate: spec.occurred?.endDate ?? null,
+    occurredProvenance: spec.occurred?.provenance ?? null,
     eraLabel: spec.eraLabel ?? null,
   });
   await transitionStoryState(db, story.id, "pending_approval");
@@ -481,7 +496,10 @@ export async function seedInto(
     title: "My grandmother Odette",
     summary: "Eleanor's earliest memory of her grandmother shelling butter beans on a Zachary porch.",
     tags: ["grandparents", "childhood", "louisiana"],
-    eraYear: 1961,
+    // Circa — "I must have been four or five" (born 1956): an approximate point, rendered "c. 1961".
+    occurredKind: "circa",
+    occurredDate: "1961-01-01",
+    occurredProvenance: "from 'four or five' in the telling + birthdate",
     eraLabel: "Zachary",
   });
   await transitionStoryState(db, draftStory.id, "pending_approval");
@@ -614,7 +632,7 @@ export async function seedInto(
     title: "The porch on Plank Road",
     summary: "Eleanor, the youngest of five, remembers her mother's ferns and the cicadas at dusk in Zachary.",
     tags: ["childhood", "house", "louisiana"],
-    eraYear: 1964,
+    // Undated — the telling pins no when (a first-class state; the Timeline's Undated section).
     eraLabel: "Zachary",
   });
   await transitionStoryState(db, story.id, "pending_approval");
@@ -636,7 +654,7 @@ export async function seedInto(
       durationSeconds: 1,
     },
   });
-  // Back-date Story 1 into the 1950s so the Era facet spans real decades (dev-only).
+  // Back-date Story 1's feed position so the reverse-chronological feed has real spread (dev-only).
   {
     const iso = new Date("1964-06-15T00:00:00Z").toISOString();
     await db.execute(sql`
@@ -646,8 +664,9 @@ export async function seedInto(
     `);
   }
 
-  // Extra approved stories — give the hub finder real facet spread (Person/Era/Topic) and
-  // enough cards to fill the "Earlier memories" grid.
+  // Extra approved stories — give the hub finder real facet spread (Person/Era/Topic), a
+  // date/period/circa spread for the Timeline (Story 1 stays Undated), and enough cards to fill
+  // the "Earlier memories" grid.
   const extras: ExtraStorySpec[] = [
     {
       promptQuestion: "How did you and Grandpa meet?",
@@ -658,7 +677,13 @@ export async function seedInto(
       summary: "Eleanor remembers the 1977 dance where she met Grandpa — and how badly he danced.",
       tags: ["marriage", "family", "louisiana"],
       occurredAt: new Date("1977-10-12T00:00:00Z"),
-      eraYear: 1977,
+      // Year-aligned period ("the autumn of 1977") — renders "1977".
+      occurred: {
+        kind: "period",
+        date: "1977-01-01",
+        endDate: "1977-12-31",
+        provenance: "from 'the autumn of 1977' in the telling",
+      },
       eraLabel: "the dance hall",
     },
     {
@@ -670,7 +695,12 @@ export async function seedInto(
       summary: "A rainy 1979 wedding that the whole family swore was good luck.",
       tags: ["marriage", "family"],
       occurredAt: new Date("1979-04-06T00:00:00Z"),
-      eraYear: 1979,
+      // An exact date — a wedding day is recalled to the day. Renders "April 6, 1979".
+      occurred: {
+        kind: "date",
+        date: "1979-04-06",
+        provenance: "her wedding date, stated in the telling",
+      },
     },
     {
       promptQuestion: "Tell me about the year the children were born.",
@@ -681,7 +711,13 @@ export async function seedInto(
       summary: "Eleanor on the year her first child was born.",
       tags: ["birth", "family", "house"],
       occurredAt: new Date("1981-07-22T00:00:00Z"),
-      eraYear: 1981,
+      // Year-aligned period — renders "1981".
+      occurred: {
+        kind: "period",
+        date: "1981-01-01",
+        endDate: "1981-12-31",
+        provenance: "from 'born in 1981' in the telling",
+      },
     },
     {
       promptQuestion: "What work did you do?",
@@ -692,7 +728,13 @@ export async function seedInto(
       summary: "Eleanor's career at IBM — from development to sales, including the Raleigh years at Research Triangle Park.",
       tags: ["work", "ibm", "career"],
       occurredAt: new Date("1989-09-03T00:00:00Z"),
-      eraYear: 1989,
+      // A true span ("from '87 to '91") — renders "Jan 1987 – Dec 1991".
+      occurred: {
+        kind: "period",
+        date: "1987-01-01",
+        endDate: "1991-12-31",
+        provenance: "from 'from '87 to '91' in the telling",
+      },
       eraLabel: "Research Triangle Park",
     },
   ];

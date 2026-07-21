@@ -33,6 +33,27 @@ describe("phraser — gap-origin follow-up", () => {
     expect(res.spokenText).not.toContain("The narrator's last words");
   });
 
+  it("system-origin temporal follow-up includes gentle dating guidance", async () => {
+    const llm = new ScriptedLanguageModel({
+      respond: (req) => req.messages.find((m) => m.role === "user")!.content,
+    });
+    const res = await phraseIntent(llm, {
+      intent: {
+        kind: "follow_up",
+        threadSeed: "about when this happened",
+        origin: "system",
+        gapKind: "temporal",
+      },
+      anchors: null,
+      priorStories: [],
+      isFirstSession: false,
+    });
+    expect(res.spokenText).toContain("about when this happened");
+    expect(res.spokenText).toContain("WHEN question");
+    expect(res.spokenText).toContain("NEVER ask for, or imply you need, an exact date");
+    expect(res.spokenText).not.toContain("The narrator's last words");
+  });
+
   it("a reflection-origin follow-up still renders the original block", async () => {
     const llm = new ScriptedLanguageModel({ respond: (req) => req.messages.find((m) => m.role === "user")!.content });
     const res = await phraseIntent(llm, {

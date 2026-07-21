@@ -11,9 +11,11 @@ import {
   getFavoriteState,
   getLikeState,
 } from "@chronicle/core";
+import type { Story } from "@chronicle/db";
 import { getRuntime } from "@/lib/runtime";
 import { markStorySeen, loadStoryFamilyTargets, loadViewerFamilies } from "@/lib/hub-data";
 import { hub } from "@/app/_copy";
+import { formatStoryDate } from "@/app/hub/tabs/story-browse-helpers";
 import { StoryDetailClient } from "./StoryDetailClient";
 import { loadTagSuggestionsAction } from "@/app/hub/tag-suggestions-actions";
 
@@ -24,9 +26,23 @@ function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function eraLabel(eraYear: number | null, eraPlace: string | null): string {
-  if (eraYear != null && eraPlace) return `${eraYear} · ${eraPlace}`;
-  if (eraYear != null) return String(eraYear);
+/**
+ * The header date line: the ADR-0026 Story date (smart-display via `formatStoryDate`), with the
+ * narrator's place note (`era_label`, untouched by the migration) appended when one was given —
+ * "1962 · Naples". A story with no Story date is Undated (a first-class state).
+ */
+function storyDateLabel(
+  story: Pick<Story, "occurredKind" | "occurredDate" | "occurredEndDate" | "eraLabel">,
+): string {
+  const place = story.eraLabel ?? null;
+  if (story.occurredKind) {
+    const date = formatStoryDate({
+      kind: story.occurredKind,
+      date: story.occurredDate ?? "",
+      endDate: story.occurredEndDate,
+    });
+    return place ? `${date} · ${place}` : date;
+  }
   return hub.browse.undated;
 }
 
@@ -117,7 +133,17 @@ export default async function StoryDetailPage({
         audienceTier={story.audienceTier}
         updatedAt={story.updatedAt ? story.updatedAt.toISOString() : ""}
         narratorName={narratorName}
-        eraLabelStr={eraLabel(story.eraYear ?? null, story.eraLabel ?? null)}
+        eraLabelStr={storyDateLabel(story)}
+        storyDate={
+          story.occurredKind
+            ? {
+                kind: story.occurredKind,
+                date: story.occurredDate ?? "",
+                endDate: story.occurredEndDate ?? null,
+              }
+            : null
+        }
+        storyDateProvenance={story.occurredProvenance ?? null}
         recordingMediaId={story.recordingMediaId}
         viewerFamilies={viewerFamilies}
         initialTargetFamilies={targets}

@@ -14,6 +14,7 @@
  */
 
 import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
+import type { LifeEventAnchor, StatedLifeEvent, StoryDateOccurrence } from "@chronicle/core";
 
 export type { BiographicalProfile };
 
@@ -128,6 +129,18 @@ export interface BiographicalAnchors {
   spokenName: string;
   birthYear: number | null;
   /**
+   * Full birth date (ISO YYYY-MM-DD) when known — the primary anchor the Story date resolver
+   * derives age/grade references against (ADR-0026). Null = unknown (derivation degrades to
+   * stated dates only).
+   */
+  birthDate: string | null;
+  /**
+   * The narrator's known Life events (wedding, graduation, …), pared to kind + ISO date — the
+   * reusable anchors for relative references ("about ten years after we married"). Loaded once
+   * per session with the rest of the anchors inflow.
+   */
+  lifeEvents: LifeEventAnchor[];
+  /**
    * Named biographical facts from `persons.biographical_anchors` jsonb — collected by the
    * ephemeral intake pass and inferred from approved stories (e.g. hometown, sibling context).
    * Each field is nullable (null = "not yet known"). Treated as hints, never as ground truth —
@@ -148,6 +161,49 @@ export interface AnchorSource {
     key: K,
     value: NonNullable<BiographicalProfile[K]>,
   ): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// StoryDateSink — the persistence side of live date derivation (ADR-0026). As each take arrives,
+// the turn loop runs the pure Tier A `resolveStatedStoryDate` over the story text so far; a resolved
+// occurrence is handed to this seam, which persists it (with its user-visible provenance note)
+// through the story repository's `updateDerivedFields` write seam. The loop stays DB-free: prod
+// plugs `createCoreStoryDateSink(db)`; tests use the in-memory mock. An UNRESOLVABLE telling
+// produces no call — instead the loop proposes its ONE temporal follow-up (issue #244), which is
+// always skippable and never re-asked.
+// ---------------------------------------------------------------------------
+
+export interface PersistResolvedStoryDateInput {
+  /** The draft Story this session's tellings are contributing to. */
+  storyId: string;
+  /** The resolver's output — form, point/span, and the plain-language provenance note. */
+  occurrence: StoryDateOccurrence;
+}
+
+export interface StoryDateSink {
+  persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// LifeEventSink — the persistence side of life-event capture (issue #245, ADR-0026). When a
+// telling states an anchor FACT ("we married in '58", "after I graduated in '61"), the turn
+// loop's pure `extractStatedLifeEvents` spots it and hands it here to be stored on the
+// NARRATOR (idempotent per person + kind + date) — in addition to resolving the current
+// story's date. Later stories then resolve anchor-relative references against the stored
+// events without the narrator repeating themselves. This is the ONLY life-event write path —
+// no profile UI, no onboarding questions. Prod plugs `createCoreLifeEventSink(db)`; tests use
+// the in-memory mock.
+// ---------------------------------------------------------------------------
+
+export interface RecordStatedLifeEventInput {
+  /** The narrator who stated the fact — events attach to the teller only (never mirrored). */
+  personId: string;
+  /** The extractor's output — kind plus the occurrence (form, point/span, provenance note). */
+  event: StatedLifeEvent;
+}
+
+export interface LifeEventSink {
+  recordStatedLifeEvent(input: RecordStatedLifeEventInput): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

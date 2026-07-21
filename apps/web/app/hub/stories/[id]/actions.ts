@@ -7,6 +7,7 @@ import {
   createAsk,
   eraseStory,
   editStoryDetails,
+  editStoryDate,
   retargetStoryFamilies,
   editStoryProse,
   setStoryFavorite,
@@ -14,6 +15,7 @@ import {
   tagStorySubject,
   untagStorySubject,
   viewerPersonId,
+  type EditStoryDateInput,
   type FavoriteState,
   type LikeState,
 } from "@chronicle/core";
@@ -97,6 +99,58 @@ export async function editStoryDetailsAction(formData: FormData): Promise<Action
     plog("story", "editStoryDetails: success", { story: storyId });
   } catch (err) {
     plogError("story", "editStoryDetails: error", {
+      story: storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { error: err instanceof Error ? err.message : hub.actions.saveFailed };
+  }
+
+  revalidatePath(`/hub/stories/${storyId}`);
+}
+
+export async function editStoryDateAction(formData: FormData): Promise<ActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+
+  if (ctx.kind !== "account") {
+    return { error: hub.actions.notSignedIn };
+  }
+
+  const storyId = formData.get("storyId");
+  const kind = formData.get("occurredKind");
+  if (typeof storyId !== "string" || !storyId || typeof kind !== "string") {
+    return { error: hub.actions.invalidInput };
+  }
+
+  // Map the control's three forms (+ "undated") onto the storage shape. The client already sends
+  // ISO calendar dates (a circa year arrives padded to YYYY-01-01); core re-validates everything.
+  let occurred: EditStoryDateInput["occurred"];
+  if (kind === "undated") {
+    occurred = null;
+  } else if (kind === "date" || kind === "circa" || kind === "period") {
+    const dateRaw = formData.get("occurredDate");
+    const endRaw = formData.get("occurredEndDate");
+    occurred = {
+      kind,
+      date: typeof dateRaw === "string" ? dateRaw : "",
+      endDate: typeof endRaw === "string" && endRaw ? endRaw : null,
+    };
+  } else {
+    return { error: hub.actions.invalidInput };
+  }
+
+  plog("story", "editStoryDate: received", { person: ctx.personId, story: storyId, kind });
+
+  try {
+    await editStoryDate(db, {
+      storyId,
+      actorPersonId: ctx.personId,
+      occurred,
+    });
+    plog("story", "editStoryDate: success", { story: storyId });
+  } catch (err) {
+    plogError("story", "editStoryDate: error", {
       story: storyId,
       error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
