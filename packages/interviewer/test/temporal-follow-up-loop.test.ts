@@ -192,6 +192,32 @@ describe("the temporal follow-up in the interview loop (issue #244)", () => {
     expect(temporalFollowUps).toBe(1);
   });
 
+  it("after the temporal latch, a gap with a DIFFERENT temporal seed is still dropped", async () => {
+    // Spec §4.5 / ADR-0026: skip / don't-know is terminal — anti-repeat is not enough when the
+    // gap LLM invents a new WHEN seed. The type-level latch must drop gap temporal too.
+    const otherWhen: FollowUpCandidate = {
+      threadSeed: "the year of the move",
+      type: "temporal",
+      sensitivity: "low",
+      confidence: 0.9,
+      narratorOpened: false,
+    };
+    const { deps } = makeDeps();
+    const session = await tellSession(deps, STORY);
+
+    await session.nextTurn();
+    await session.recordResponse(UNDATABLE_TELLING);
+    const followUp = await session.nextTurn();
+    expect(isTemporalGapFollowUp(followUp.intent)).toBe(true);
+    await session.recordResponse("I don't know, I really couldn't tell you.");
+
+    // Now wire a gap evaluator that would re-ask WHEN under a different seed.
+    deps.followUpEvaluator = new ScriptedFollowUpEvaluator([[otherWhen]]);
+    await session.nextTurn(); // continue the session with a normal bank question
+    await session.recordResponse(ANOTHER_UNDATABLE_TELLING);
+    expect(session.getState().pendingGapFollowUp).toBeNull();
+  });
+
   it("a skip off-ramp winds the session down with the story still undated", async () => {
     const { deps, storyDateSink } = makeDeps();
     const session = await tellSession(deps, STORY);

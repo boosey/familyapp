@@ -62,6 +62,7 @@ import { InMemoryMediaStorage } from "@chronicle/storage";
 import { hub } from "@/app/_copy";
 import {
   runFollowUpStep,
+  prepareAnswerDatingContext,
   recordAnswerAction,
   recordFollowUpTakeAction,
   declineFollowUpAction,
@@ -223,6 +224,119 @@ describe("follow-up mini-loop — runFollowUpStep (Task 6b)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.evaluatorModelId).toBe("system:story-date");
     expect(rows[0]!.selectedSeed).toBe("about when this happened");
+  });
+
+  it("prepareAnswerDatingContext + stated year → Tier A persists; temporal probe stays dark", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+    const dated =
+      "It had a beautiful stained glass window in the front hall that my grandmother loved in 1958.";
+
+    const dating = await prepareAnswerDatingContext(db, {
+      storyId,
+      ownerPersonId,
+      text: dated,
+      viewer: { kind: "account", personId: ownerPersonId },
+    });
+    expect(dating.dateUnresolved).toBe(false);
+    const story = await getStoryForViewer(db, ownerCtx(ownerPersonId), storyId);
+    expect(story!.occurredKind).toBe("period");
+    expect(story!.occurredDate).toBe("1958-01-01");
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator([[]], "gap-model");
+    const step = await runFollowUpStep(
+      {
+        db,
+        languageModel: scriptedLlm("Tell me more about that stained glass window."),
+        followUpEvaluator: deepen,
+        gapFollowUpEvaluator: gap,
+      },
+      {
+        storyId,
+        ownerPersonId,
+        promptText: "What was your childhood home like?",
+        answerTranscript: dated,
+        dating,
+      },
+    );
+
+    // Temporal system probe N/A (dated); gap empty → deepen wins.
+    expect(step?.kind).toBe("follow_up");
+    expect(step?.prompt).toBe("Tell me more about that stained glass window.");
+    expect(gap.calls).toHaveLength(1);
+    expect(deepen.calls).toHaveLength(1);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows[0]!.evaluatorModelId).toBe("deepen-model");
+  });
+
+  it("dating just resolved → gap temporal candidate is dropped (race fix)", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator(
+      [[{ ...STRONG_CANDIDATE, type: "temporal", threadSeed: "about when this happened" }]],
+      "gap-model",
+    );
+    const step = await runFollowUpStep(
+      {
+        db,
+        languageModel: scriptedLlm("should not phrase"),
+        followUpEvaluator: deepen,
+        gapFollowUpEvaluator: gap,
+      },
+      {
+        storyId,
+        ownerPersonId,
+        promptText: "What was your childhood home like?",
+        answerTranscript: ANSWER,
+        dating: { dateUnresolved: false, alreadyAsked: false },
+      },
+    );
+
+    // Cascade short-circuits at gap (temporal selected); post-dispose race fix drops it —
+    // deepen was never called (same as interview turn-loop). No follow-up that turn.
+    expect(step).toBeNull();
+    expect(gap.calls).toHaveLength(1);
+    expect(deepen.calls).toHaveLength(0);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.selectedSeed).toBeNull();
+  });
+
+  it("temporal already asked → gap with a DIFFERENT temporal seed is still dropped (latch)", async () => {
+    const db = await createTestDatabase();
+    const { ownerPersonId, storyId } = await seedDraft(db);
+
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    const gap = new ScriptedFollowUpEvaluator(
+      [[{ ...STRONG_CANDIDATE, type: "temporal", threadSeed: "the year of the move" }]],
+      "gap-model",
+    );
+    const step = await runFollowUpStep(
+      {
+        db,
+        languageModel: scriptedLlm("should not phrase"),
+        followUpEvaluator: deepen,
+        gapFollowUpEvaluator: gap,
+      },
+      {
+        storyId,
+        ownerPersonId,
+        promptText: "What was your childhood home like?",
+        answerTranscript: ANSWER,
+        // Still Undated (skip / don't-know), but the one dating ask already fired.
+        dating: { dateUnresolved: true, alreadyAsked: true },
+      },
+    );
+
+    expect(step).toBeNull();
+    expect(gap.calls).toHaveLength(1);
+    expect(deepen.calls).toHaveLength(0);
+    const rows = await listFollowUpDecisionsForStory(db, storyId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.selectedSeed).toBeNull();
   });
 
   it("gap wins → deepen not called; ledger modelId is from the gap evaluator", async () => {
@@ -1022,7 +1136,7 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(story!.prose).toBe("Cleaned take zero prose.");
   });
 
-  it("recordAnswerAction (flag ON + askId, evaluator proposes) APPENDS take 0 first, then returns follow_up", async () => {
+  it("recordAnswerAction (flag ON + askId, undated take) → temporal follow-up wins over deepen", async () => {
     const ownerPersonId = (
       await runtimeDb
         .insert(persons)
@@ -1031,7 +1145,7 @@ describe("follow-up actions (getRuntime-driven)", () => {
     )[0]!.id;
     authCtx = { kind: "account", personId: ownerPersonId };
     const askId = await seedAnswerableAsk(runtimeDb, ownerPersonId, "What was your childhood home like?");
-    runtimeLlm = scriptedLlm("Tell me more about that window.");
+    runtimeLlm = scriptedLlm("Do you remember about when that was? A year is fine.");
     runtimeEvaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
     runtimeTranscriber = new ScriptedTranscriber({ text: ANSWER });
 
@@ -1042,11 +1156,43 @@ describe("follow-up actions (getRuntime-driven)", () => {
     if (!("kind" in result) || result.kind !== "follow_up") {
       throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
     }
-    expect(result.prompt).toBe("Tell me more about that window.");
-    // Take 0's prose was ALREADY appended before the follow-up was proposed.
+    expect(result.prompt).toBe("Do you remember about when that was? A year is fine.");
+    const rows = await listFollowUpDecisionsForStory(runtimeDb, result.storyId);
+    expect(rows[0]!.evaluatorModelId).toBe("system:story-date");
     const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
     expect(story!.state).toBe("draft");
-    expect(story!.prose).toBeTruthy();
+    expect(story!.occurredKind).toBeNull();
+  });
+
+  it("recordAnswerAction (flag ON + askId, stated year) → Tier A dates; deepen follow-up (not temporal)", async () => {
+    const ownerPersonId = (
+      await runtimeDb
+        .insert(persons)
+        .values({ displayName: "Nora", spokenName: "Nora", birthYear: 1950 })
+        .returning()
+    )[0]!.id;
+    authCtx = { kind: "account", personId: ownerPersonId };
+    const askId = await seedAnswerableAsk(runtimeDb, ownerPersonId, "What was your childhood home like?");
+    runtimeLlm = scriptedLlm("Tell me more about that window.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    runtimeTranscriber = new ScriptedTranscriber({
+      text: "It had a beautiful stained glass window in the front hall that my grandmother loved in 1958.",
+    });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
+    );
+
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that window.");
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.occurredKind).toBe("period");
+    expect(story!.occurredDate).toBe("1958-01-01");
+    const rows = await listFollowUpDecisionsForStory(runtimeDb, result.storyId);
+    expect(rows[0]!.evaluatorModelId).not.toBe("system:story-date");
   });
 
   it("recordAnswerAction (FOLLOW_UPS_ENABLED=false + askId) stays dark: appended, evaluators never called", async () => {

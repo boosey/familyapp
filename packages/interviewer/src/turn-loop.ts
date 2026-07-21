@@ -329,9 +329,10 @@ export async function createInterviewSession(
       });
       if (!result.decision.selected) return;
       if (result.origin !== "system" && result.origin !== "gap") return;
-      // Race fix (spec §4.5): if we already have a date, never ask "when" — drop a gap-proposed
-      // temporal candidate for this turn (the system probe is already N/A via dateUnresolved).
-      if (result.gapKind === "temporal" && !dateUnresolved) return;
+      // Race fix (spec §4.5 / ADR-0026): if we already have a date OR already asked the one
+      // temporal dating follow-up, never ask "when" again — drop a gap-proposed temporal
+      // candidate (the system probe is already N/A via dateUnresolved / alreadyAsked).
+      if (result.gapKind === "temporal" && (!dateUnresolved || temporalFollowUpAsked)) return;
       state.pendingGapFollowUp = {
         candidate: result.decision.selected,
         gapKind: result.gapKind ?? "identity",

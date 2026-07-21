@@ -18,6 +18,9 @@ import {
   applyResolvedStoryDate,
   getNarratorBiographicalContext,
   listLifeEventsForPerson,
+  recordStatedLifeEvent,
+  extractStatedLifeEvents,
+  resolveStatedStoryDate,
   listStoryRecordings,
   appendVoiceTakeContribution,
   appendTypedTakeContribution,
@@ -28,6 +31,7 @@ import {
   listFollowUpDecisionsForStory,
   listActiveFamiliesForPerson,
 } from "@chronicle/core";
+import type { OccurredKind } from "@chronicle/db";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
   augmentProfileFromStory,
@@ -143,12 +147,85 @@ type FollowUpStepRuntime = Pick<
 /**
  * Optional dating context for the temporal system probe (story-dates PR #249 hook).
  * When absent, the temporal probe is N/A and the cascade skips to gap/deepen.
+ * Production answer callers always prepare this via `prepareAnswerDatingContext` before
+ * `runFollowUpStep` so the probe can light when the story is still Undated.
  */
 export type FollowUpDatingContext = {
   dateUnresolved: boolean;
   /** True once a temporal follow-up was already asked on this thread. */
   alreadyAsked: boolean;
 };
+
+/** Precision rank — never downgrade a more precise occurrence already on the story. */
+const OCCURRENCE_PRECISION_RANK: Record<OccurredKind, number> = { circa: 1, period: 2, date: 3 };
+
+/**
+ * Live answer-surface dating (ADR-0026): Tier A stated-calendar parse + life-event capture,
+ * then a dating context for the temporal system probe. Best-effort — failures leave the story
+ * Undated and still return a usable context so the cascade can ask once.
+ */
+export async function prepareAnswerDatingContext(
+  db: Database,
+  args: {
+    storyId: string;
+    ownerPersonId: string;
+    /** Assembled telling so far (working prose and/or current take transcript). */
+    text: string;
+    viewer: { kind: "account"; personId: string };
+  },
+): Promise<FollowUpDatingContext> {
+  try {
+    const story = await getStoryForViewer(db, args.viewer, args.storyId);
+    if (!story || story.ownerPersonId !== args.ownerPersonId) {
+      return { dateUnresolved: true, alreadyAsked: false };
+    }
+
+    const bio = await getNarratorBiographicalContext(db, args.ownerPersonId);
+    const birthDate = bio?.birthDate ?? null;
+    const lifeEvents = await listLifeEventsForPerson(db, args.ownerPersonId);
+
+    // Life-event capture is a by-product of dating — stated anchor facts only (ADR-0026 §4.6).
+    try {
+      const events = extractStatedLifeEvents({ text: args.text, birthDate });
+      for (const event of events) {
+        await recordStatedLifeEvent(db, args.ownerPersonId, event);
+      }
+    } catch (err) {
+      plogError("answer", "life-event capture failed (continuing dating)", {
+        story: args.storyId,
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+    }
+
+    let dateUnresolved = story.occurredKind === null;
+    const resolution = resolveStatedStoryDate({ text: args.text, birthDate, lifeEvents });
+    if (resolution.status === "resolved") {
+      const existingRank = story.occurredKind
+        ? OCCURRENCE_PRECISION_RANK[story.occurredKind]
+        : 0;
+      const nextRank = OCCURRENCE_PRECISION_RANK[resolution.occurrence.kind];
+      if (nextRank > existingRank) {
+        await applyResolvedStoryDate(db, args.storyId, resolution.occurrence);
+        plog("answer", "live Tier A dated story", {
+          story: args.storyId,
+          kind: resolution.occurrence.kind,
+          date: resolution.occurrence.date,
+        });
+      }
+      dateUnresolved = false;
+    } else if (story.occurredKind !== null) {
+      dateUnresolved = false;
+    }
+
+    return { dateUnresolved, alreadyAsked: false };
+  } catch (err) {
+    plogError("answer", "prepareAnswerDatingContext failed (leaving Undated)", {
+      story: args.storyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { dateUnresolved: true, alreadyAsked: false };
+  }
+}
 
 /** Read an optional non-empty string field from FormData; returns `null` when absent/blank/non-string. */
 function formField(formData: FormData, key: string): string | null {
@@ -288,11 +365,21 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
   // follow-up proposed". There is no stitch-to-finish here anymore.
   const policy = resolveFollowUpPolicyForRequest();
   if (policy.enabled && askId) {
+    // Tier A + dating context BEFORE cascade (spec §4.5): persist stated calendar first so the
+    // temporal probe / gap-temporal cannot race a date we just wrote. Use the RAW transcript
+    // (narrator words) — cleaned prose can drop calendar cues during cleanup.
+    const dating = await prepareAnswerDatingContext(rt.db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      text: transcript,
+      viewer: { kind: "account", personId: ctx.personId },
+    });
     const step = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId: ctx.personId,
       promptText: askQuestionText,
       answerTranscript: transcript,
+      dating,
     });
     // Carry the just-appended working prose onto the follow_up step so the client seeds the composing
     // editor optimistically (ADR-0014 Inc 3 slice 10 — take-0 follow_up arrives before any refresh).
@@ -545,7 +632,30 @@ export async function runFollowUpStep(
         },
       });
 
-      const { decision, evaluation, origin, gapKind } = result;
+      let { decision, evaluation, origin, gapKind } = result;
+
+      // Race fix (spec §4.5 / ADR-0026): never ask "when" when the story is already dated OR
+      // the at-most-once temporal latch has fired (system probe asked; skip / don't-know is
+      // terminal). Drop a gap-proposed temporal winner; deepen is not re-run that turn.
+      if (
+        decision.selected &&
+        gapKind === "temporal" &&
+        args.dating &&
+        (!args.dating.dateUnresolved || temporalAlreadyAsked)
+      ) {
+        const droppedSeed = decision.selected.threadSeed;
+        decision = {
+          selected: null,
+          shortCircuit: null,
+          dispositions: decision.dispositions.map((d) =>
+            d.candidate.threadSeed === droppedSeed
+              ? { ...d, selected: false, reason: "not_selected" as const }
+              : d,
+          ),
+        };
+        origin = null;
+        gapKind = undefined;
+      }
 
       if (decision.selected) {
         // phraseIntent runs BEFORE appendFollowUpDecision so the phrased line lands in the SAME
@@ -969,11 +1079,19 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
       priorProse: proseField,
     });
 
+    const dating = await prepareAnswerDatingContext(rt.db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      // Raw transcript — cleaned prose can drop calendar cues.
+      text: transcript,
+      viewer: { kind: "account", personId: ctx.personId },
+    });
     const step = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId: ctx.personId,
       promptText: unresolved?.phrasedLine ?? "",
       answerTranscript: transcript,
+      dating,
     });
     plog("answer", "recordFollowUpTake: appended", {
       story: storyId,
@@ -1068,9 +1186,9 @@ function normalizeWhitespace(s: string): string {
 /**
  * Finish-time Story date backstop (ADR-0026, issue #246). A story that reaches Finish still
  * Undated (the temporal follow-up was skipped or answered "I don't know") gets ONE silent
- * second chance: the #242 resolver over the final sealed text against the narrator's
- * birthDate + known life events. It never asks the narrator anything, and it NEVER overwrites
- * a date the interview's live pass already persisted (the `occurredKind !== null` gate).
+ * second chance: Tier A stated-calendar parse, then (if still Undated) Tier B LLM ref →
+ * `resolveTemporalRef` calculator. It never asks the narrator anything, and it NEVER overwrites
+ * a date the live pass already persisted (the `occurredKind !== null` gate).
  * Persistence goes through the same `applyResolvedStoryDate` seam the live path uses; the
  * provenance note carries the finish-time-backstop marker. Best-effort: a backstop failure
  * must never fail the Finish — the story simply stays Undated.
