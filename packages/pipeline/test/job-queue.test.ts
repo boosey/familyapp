@@ -40,6 +40,19 @@ describe("jobDedupeKey — per-name namespace + discrimination contract", () => 
       jobDedupeKey("transcribe", { storyId: "a", attempt: 2 }),
     );
   });
+
+  it("story.shared.notify jobs key on storyId", () => {
+    expect(jobDedupeKey("story.shared.notify", { storyId: "s1" })).toBe(
+      "story.shared.notify|s1",
+    );
+    expect(jobDedupeKey("story.shared.notify", { storyId: "s1" })).not.toBe(
+      jobDedupeKey("story.shared.notify", { storyId: "s2" }),
+    );
+    // Distinct namespace from pipeline stages even when storyId matches.
+    expect(jobDedupeKey("story.shared.notify", { storyId: "x" })).not.toBe(
+      jobDedupeKey("transcribe", { storyId: "x" }),
+    );
+  });
 });
 
 describe("InProcessJobQueue invite jobs", () => {
@@ -62,6 +75,13 @@ describe("InProcessJobQueue invite jobs", () => {
     const q = new InProcessJobQueue();
     await q.enqueue("transcribe", { storyId: "a" });
     await q.enqueue("render_story", { storyId: "a" });
+    expect(q.pending()).toHaveLength(2);
+  });
+
+  it("keeps story.shared.notify in its own dedupe namespace from pipeline stages", async () => {
+    const q = new InProcessJobQueue();
+    await q.enqueue("transcribe", { storyId: "a" });
+    await q.enqueue("story.shared.notify", { storyId: "a" });
     expect(q.pending()).toHaveLength(2);
   });
 });

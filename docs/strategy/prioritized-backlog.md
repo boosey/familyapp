@@ -34,7 +34,7 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 
 ## The sequenced backlog (build in this order)
 
-*Status refresh 2026-07-20: P0 (mobile-web v1) declared complete by the owner — ADR-0025 Phases A+B merged (PRs #226/#231/#232), issue #230 closed. Items 1–7 had already shipped; **the front of the queue is now #8, loop-event pings.***
+*Status refresh 2026-07-21: **#8 loop-event pings** shipped (email v1, issue #270). Items 1–8 shipped; **the front of the queue is now #9, album & upload hardening.***
 
 | Seq | Epic | /100 | Status (2026-07-20) | What it is |
 |:-:|---|:-:|---|---|
@@ -46,8 +46,8 @@ The objective was **adoption/validation**: *impact* = "removes a real barrier to
 | **5** | **Richer AI interviewer + gap-detection** | 80 | ✅ Shipped (#80) | Deeper sessions so stories are "good enough that family cares." |
 | **6** | **Capture reliability & job-failure recovery** | 66 | ✅ Shipped (#11) | A failed recording kills trust in the wedge. |
 | **7** | **Notification-delivery capability** | 60 | ✅ Shipped for invites (`@chronicle/notifications`, PR #102); loop events not yet wired | The enabler for loop-event pings (→ 8). |
-| **8** | **Loop-event pings** | 74 | ⬅ **NEXT** | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
-| **9** | **Album & upload hardening** | 60 | Mostly shipped (EXIF #17/#21, thumbnails #139); residual perf items #218/#219 open | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
+| **8** | **Loop-event pings** | 74 | ✅ Shipped (#270) — email on every share to authorized co-members; SMS/prefs deferred (#271/#272) | "A story landed for you" / "your question was answered" — tells the family to return. Gated behind (7). |
+| **9** | **Album & upload hardening** | 60 | ⬅ **NEXT** — Mostly shipped (EXIF #17/#21, thumbnails #139); residual perf items #218/#219 open | Fix direct-to-storage uploads (currently broken for real files) + EXIF coverage. |
 
 **Sequencing overrides** the raw score captured (now resolved except the last): **mobile-web responsive layouts** was P0 (shipped) — hard precondition for validating loop bets on the phone-first surface; **Clerk go-live** was #1 (shipped) — hard prerequisite for live families; **notification-delivery** still precedes its higher-scoring **loop-event pings** on the capability edge.
 

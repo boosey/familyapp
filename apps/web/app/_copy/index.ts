@@ -9,4 +9,5 @@ export { capture } from "./capture";
 export { join } from "./join";
 export { hub } from "./hub";
 export { invitations } from "./invitations";
+export { loopPings } from "./loop-pings";
 export { legal } from "./legal";

@@ -19,12 +19,13 @@ import {
   StoryNotApprovableError,
 } from "@chronicle/capture";
 import type { AudienceTier } from "@chronicle/db";
+import { plogError } from "@chronicle/pipeline";
 import { getRuntime } from "@/lib/runtime";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const { db, storage } = await getRuntime();
+  const { db, storage, dispatchStorySharedNotify } = await getRuntime();
 
   let form: FormData;
   try {
@@ -66,6 +67,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         ? { correctedProse }
         : {}),
     });
+    // Best-effort loop-event pings (#270) — never fail the approve response on ping/queue errors.
+    try {
+      await dispatchStorySharedNotify({ storyId: result.story.id });
+    } catch (e) {
+      plogError("capture", "approve: loop-event ping dispatch failed (non-fatal)", {
+        story: result.story.id,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
+    }
     return NextResponse.json({ ok: true, storyId: result.story.id });
   } catch (err) {
     if (err instanceof InvalidAudienceTierError) {

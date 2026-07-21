@@ -744,7 +744,8 @@ function withTimeout<T>(ms: number, fn: () => Promise<T>): Promise<T> {
 export async function shareAnswerAction(formData: FormData): Promise<ActionResult> {
   // Correlate every log line for this share run (approve/share → augmentation AI call).
   beginLogContext();
-  const { db, auth, languageModel, narratorMemory } = await getRuntime();
+  const { db, auth, languageModel, narratorMemory, dispatchStorySharedNotify } =
+    await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -824,6 +825,16 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       story: storyId,
       tier: audienceTier,
     });
+
+    // Best-effort loop-event pings (#270) — never fail the share on ping/queue errors.
+    try {
+      await dispatchStorySharedNotify({ storyId });
+    } catch (e) {
+      plogError("answer", "shareAnswer: loop-event ping dispatch failed (non-fatal)", {
+        story: storyId,
+        error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      });
+    }
 
     // Best-effort post-approval biographical augmentation: re-read the story after approval —
     // the pre-approval getStoryForViewer above was used only for the ownership check; a fresh

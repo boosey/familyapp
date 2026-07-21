@@ -16,6 +16,7 @@ export type {
   JobPayloadMap,
   StoryJobPayload,
   InviteJobPayload,
+  StorySharedNotifyJobPayload,
   DeliveryChannel,
   EnqueuedJob,
   JobHandler,
