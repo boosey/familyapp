@@ -75,6 +75,13 @@ function scriptedLlm(phrasedLine = "unused"): ScriptedLanguageModel {
 const NEUTRAL_ANSWER =
   "It had a beautiful stained glass window in the front hall that my grandmother truly loved.";
 
+/**
+ * Same shape as NEUTRAL_ANSWER but with a Tier A stated year so live dating persists and the
+ * temporal system probe stays N/A — the deepen evaluator (stage 3) is what this suite asserts.
+ */
+const DATED_ANSWER =
+  "It had a beautiful stained glass window in the front hall that my grandmother loved in 1958.";
+
 const STRONG_CANDIDATE: FollowUpCandidate = {
   threadSeed: "the stained glass window",
   type: "sensory",
@@ -276,9 +283,16 @@ describe("recordAnswerAction — flag-off one-shot voice → per-take append (In
  * `{ askId }` spread reaches ingest, binding the draft to the ask.
  */
 describe("recordAnswerAction — real ask, flag ON (follow-up prompt-seed regression)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Match how answer-follow-up-loop.server.test.ts enables the follow-up policy.
     process.env.FOLLOW_UPS_ENABLED = "1";
+    runtimeDb = await createTestDatabase();
+    runtimeStorage = new InMemoryMediaStorage();
+    runtimeLlm = scriptedLlm("Tell me more about that stained glass window.");
+    runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
+    runtimeTranscriber = new ScriptedTranscriber({ text: DATED_ANSWER });
+    runtimeDispatch = async () => {};
+    authCtx = { kind: "none" };
   });
   afterAll(() => {
     delete process.env.FOLLOW_UPS_ENABLED;
@@ -293,7 +307,8 @@ describe("recordAnswerAction — real ask, flag ON (follow-up prompt-seed regres
     const evaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
     runtimeEvaluator = evaluator;
     runtimeLlm = scriptedLlm("Tell me more about that stained glass window.");
-    runtimeTranscriber = new ScriptedTranscriber({ text: NEUTRAL_ANSWER });
+    // Stated year → Tier A dates the draft; temporal probe is N/A so deepen (this evaluator) runs.
+    runtimeTranscriber = new ScriptedTranscriber({ text: DATED_ANSWER });
 
     const result = await recordAnswerAction(
       form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), askId }),
@@ -306,7 +321,7 @@ describe("recordAnswerAction — real ask, flag ON (follow-up prompt-seed regres
     expect(result.prompt).toBe("Tell me more about that stained glass window.");
 
     // CRUX: the ask questionText (returned by the extracted assertAnswerableAsk) reached the
-    // evaluator's promptText seed — the whole point of this task's refactor.
+    // deepen evaluator's promptText seed — the whole point of this task's refactor.
     expect(evaluator.calls).toHaveLength(1);
     expect(evaluator.calls[0]!.promptText).toBe(QUESTION);
 
