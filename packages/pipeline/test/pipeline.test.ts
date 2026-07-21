@@ -277,7 +277,10 @@ describe("pipeline — idempotency (durable retry safety)", () => {
   it("re-running the pipeline does not re-call vendors and does not re-transition state", async () => {
     const narratorId = await makeNarrator();
     const { storyId } = await seedDraftStory(narratorId, new Uint8Array([1, 2, 3]));
-    const transcriber = new ScriptedTranscriber({ text: "the transcript" });
+    // The transcript states a calendar year, so the finish-time backstop resolves via Tier A
+    // (deterministic, no model call) — keeping this test's assertion about the ONE render LLM call
+    // clean and about idempotency rather than the Tier B recognizer's cost.
+    const transcriber = new ScriptedTranscriber({ text: "the transcript from 1962" });
     const languageModel = new ScriptedLanguageModel();
     const pipeline = createPipeline({ db, storage, transcriber, languageModel });
 

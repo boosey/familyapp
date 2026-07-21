@@ -86,7 +86,11 @@ async function tellSession(deps: InterviewerDeps, activeStoryId?: string) {
 }
 
 function isTemporalGapFollowUp(intent: PromptIntent): boolean {
-  return intent.kind === "follow_up" && intent.origin === "gap" && intent.gapKind === "temporal";
+  return (
+    intent.kind === "follow_up" &&
+    (intent.origin === "system" || intent.origin === "gap") &&
+    intent.gapKind === "temporal"
+  );
 }
 
 describe("the temporal follow-up in the interview loop (issue #244)", () => {
@@ -213,7 +217,10 @@ describe("the temporal follow-up in the interview loop (issue #244)", () => {
     expect(session.getState().pendingGapFollowUp).toBeNull();
   });
 
-  it("does not override a gap follow-up the LLM evaluator already queued this response", async () => {
+  it("takes precedence over a gap candidate: the system dating probe is cascade stage 1", async () => {
+    // ADR-0013 amendment: system probes run BEFORE gap detection. When the story is still undated,
+    // the deterministic temporal probe wins the slot for this turn ahead of any LLM gap candidate —
+    // the at-most-once latch means it preempts only once, then gap/deepen resume on later turns.
     const relational: FollowUpCandidate = {
       threadSeed: "who else rode in the truck",
       type: "relational",
@@ -222,14 +229,18 @@ describe("the temporal follow-up in the interview loop (issue #244)", () => {
       narratorOpened: false,
     };
     const { deps } = makeDeps();
-    deps.followUpEvaluator = new ScriptedFollowUpEvaluator([[relational]]);
+    const evaluator = new ScriptedFollowUpEvaluator([[relational]]);
+    deps.followUpEvaluator = evaluator;
     const session = await tellSession(deps, STORY);
 
     await session.nextTurn();
     await session.recordResponse(UNDATABLE_TELLING);
 
-    // The evaluator's candidate keeps the slot; the temporal proposal yields this response.
-    expect(session.getState().pendingGapFollowUp?.candidate.type).toBe("relational");
+    // The temporal probe (stage 1) won; the gap evaluator was never consulted this turn.
+    expect(evaluator.calls).toHaveLength(0);
+    const queued = session.getState().pendingGapFollowUp;
+    expect(queued?.candidate.type).toBe("temporal");
+    expect(queued?.origin).toBe("system");
   });
 
   it("a self-dating telling never provokes the follow-up", async () => {

@@ -165,7 +165,7 @@ export interface AnchorSource {
 
 // ---------------------------------------------------------------------------
 // StoryDateSink — the persistence side of live date derivation (ADR-0026). As each take arrives,
-// the turn loop runs the pure `resolveStoryDate` over the story text so far; a resolved
+// the turn loop runs the pure Tier A `resolveStatedStoryDate` over the story text so far; a resolved
 // occurrence is handed to this seam, which persists it (with its user-visible provenance note)
 // through the story repository's `updateDerivedFields` write seam. The loop stays DB-free: prod
 // plugs `createCoreStoryDateSink(db)`; tests use the in-memory mock. An UNRESOLVABLE telling

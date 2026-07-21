@@ -40,6 +40,7 @@ import {
   polishProse,
   deriveMetadata,
   deriveStoryDate,
+  type LanguageModel,
 } from "@chronicle/pipeline";
 import {
   createCoreAnchorSource,
@@ -1076,6 +1077,7 @@ function normalizeWhitespace(s: string): string {
  */
 async function backstopStoryDate(
   db: Database,
+  languageModel: LanguageModel,
   story: Story,
   finalText: string,
 ): Promise<void> {
@@ -1083,10 +1085,11 @@ async function backstopStoryDate(
   try {
     const bio = await getNarratorBiographicalContext(db, story.ownerPersonId);
     const lifeEvents = await listLifeEventsForPerson(db, story.ownerPersonId);
-    const resolution = deriveStoryDate({
+    const resolution = await deriveStoryDate({
       fullText: finalText,
       birthDate: bio?.birthDate ?? null,
       lifeEvents,
+      languageModel,
     });
     if (resolution.status !== "resolved") return;
     await applyResolvedStoryDate(db, story.id, resolution.occurrence);
@@ -1176,7 +1179,7 @@ export async function finishDraftAction(formData: FormData): Promise<ThreadStep>
         finalText: polishedField,
         metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
       });
-      await backstopStoryDate(db, story, polishedField);
+      await backstopStoryDate(db, languageModel, story, polishedField);
       plog("answer", "finishDraft: accepted polish → finished (pending_approval)", {
         story: storyId,
       });
@@ -1212,7 +1215,7 @@ export async function finishDraftAction(formData: FormData): Promise<ThreadStep>
       finalText: proseField,
       metadata: { title: meta.title, summary: meta.summary, tags: meta.tags },
     });
-    await backstopStoryDate(db, story, proseField);
+    await backstopStoryDate(db, languageModel, story, proseField);
     plog("answer", "finishDraft: finished as-is (pending_approval)", { story: storyId });
     return { kind: "finished", storyId };
   } catch (err) {

@@ -17,7 +17,7 @@
  */
 import type { LanguageModel } from "@chronicle/pipeline";
 import type { BiographicalProfile, FollowUpPolicy, OccurredKind } from "@chronicle/db";
-import { extractStatedLifeEvents, resolveStoryDate } from "@chronicle/core";
+import { extractStatedLifeEvents, resolveStatedStoryDate } from "@chronicle/core";
 import type {
   AnchorSource,
   AskSource,
@@ -85,7 +85,7 @@ export interface InterviewerDeps {
   /**
    * Optional persistence seam for live Story date derivation (issue #243). When present AND the
    * session was opened with `activeStoryId`, every non-intake response is run through the pure
-   * `resolveStoryDate` (over the story text so far, against the anchors' birthDate + lifeEvents)
+   * Tier A `resolveStatedStoryDate` (over the story text so far, against the anchors' birthDate + lifeEvents)
    * and a resolved occurrence is persisted with its provenance note. Omit either to keep the
    * session derivation-free (the feature lands dark by default, like the gap evaluator).
    */
@@ -361,7 +361,10 @@ export async function createInterviewSession(
     tellingParts.push(utterance);
     await captureStatedLifeEvents(utterance);
     try {
-      const resolution = resolveStoryDate({
+      // Tier A only on the live path: the narrator's STATED calendar auto-dates immediately.
+      // Relative/age/era language stays Undated here and flows to the one temporal ask (and the
+      // finish-time LLM-ref backstop) — never a silent heuristic guess (ADR-0026 §4.4/§4.7).
+      const resolution = resolveStatedStoryDate({
         text: tellingParts.join("\n"),
         birthDate: anchors?.birthDate ?? null,
         lifeEvents: anchors?.lifeEvents ?? [],

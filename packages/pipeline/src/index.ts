@@ -133,7 +133,9 @@ export {
 
 export {
   deriveStoryDate,
+  proposeTemporalRef,
   BACKSTOP_PROVENANCE_SUFFIX,
+  TEMPORAL_REF_SYSTEM_PROMPT,
   type DeriveStoryDateInput,
   type DeriveStoryDateOutput,
 } from "./derive-story-date";

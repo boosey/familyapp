@@ -157,6 +157,12 @@ const cases: Case[] = [
       event("wedding", "period", "1958-01-01", "1958-12-31", 'stated "married in \'58" in a telling'),
     ],
   },
+  {
+    name: "a 2-digit year that would predate the narrator's birth is dropped (born 1955, \"'50\")",
+    text: "We married in '50, the happiest day of my life.",
+    birthDate: "1955-06-15",
+    expected: [],
+  },
 ];
 
 describe("extractStatedLifeEvents", () => {

@@ -1,10 +1,14 @@
 /**
- * Live Story date derivation in the CONTROLLED LOOP (issue #243, ADR-0026). These tests prove:
+ * Live Story date derivation in the CONTROLLED LOOP (issue #243, ADR-0026, tiered-hybrid). These
+ * tests prove:
  *   - the session context carries the narrator's birthdate + life events via the anchors inflow;
- *   - a telling that self-dates (stated / age+holiday / anchor-relative) is PERSISTED as dated,
- *     with its provenance note, through the storyDateSink seam — no question is asked;
- *   - an unresolvable telling persists nothing and provokes nothing (the temporal follow-up is a
- *     later ticket);
+ *   - a telling that states the CALENDAR (full date / month+year / year / explicit decade) is
+ *     PERSISTED live via Tier A, with its provenance note, through the storyDateSink seam — no
+ *     question is asked;
+ *   - SOFT temporal language (bare age, age+holiday, anchor-relative, life-stage) is deliberately
+ *     NOT auto-persisted on the live path — it stays Undated here and flows to the single temporal
+ *     ask / the finish-time backstop (which owns the LLM recognizer). This is the ADR-0026 fix:
+ *     no confidently-wrong guess lands silently on the Timeline;
  *   - persistence is monotonic in precision (date > period > circa): later takes may refine,
  *     never downgrade.
  *
@@ -97,7 +101,25 @@ describe("live Story date derivation in the interview loop", () => {
     expect(languageModel.calls).toHaveLength(1);
   });
 
-  it("resolves an age+holiday reference against the anchors' birthDate", async () => {
+  it("persists a stated month+year as a month-long period", async () => {
+    const { deps, storyDateSink } = makeDeps();
+    const session = await tellSession(deps, STORY);
+
+    await session.nextTurn();
+    await session.recordResponse(
+      "That was December 1943, right before the cold snap, and the whole house smelled of woodsmoke.",
+    );
+
+    expect(storyDateSink.persisted).toHaveLength(1);
+    expect(storyDateSink.persisted[0]!.occurrence).toEqual({
+      kind: "period",
+      date: "1943-12-01",
+      endDate: "1943-12-31",
+      provenance: 'stated "December 1943"',
+    });
+  });
+
+  it("does NOT auto-persist a soft age+holiday reference on the live path (Tier A only)", async () => {
     const { deps, storyDateSink } = makeDeps();
     const session = await tellSession(deps, STORY);
 
@@ -106,16 +128,12 @@ describe("live Story date derivation in the interview loop", () => {
       "When I was 8, for Christmas, I got a red bicycle and rode it around the block all afternoon.",
     );
 
-    expect(storyDateSink.persisted).toHaveLength(1);
-    expect(storyDateSink.persisted[0]!.occurrence).toEqual({
-      kind: "date",
-      date: "1943-12-25",
-      endDate: null,
-      provenance: "age 8 at Christmas, from birthdate",
-    });
+    // Soft language stays Undated live — the guessy age+holiday math is gone from Tier A. It is the
+    // temporal ask / finish-time backstop that gets to interpret this, not a silent regex.
+    expect(storyDateSink.persisted).toHaveLength(0);
   });
 
-  it("resolves an anchor-relative reference against the anchors' life events", async () => {
+  it("does NOT auto-persist a soft anchor-relative reference on the live path (Tier A only)", async () => {
     const { deps, storyDateSink } = makeDeps();
     const session = await tellSession(deps, STORY);
 
@@ -124,13 +142,7 @@ describe("live Story date derivation in the interview loop", () => {
       "We bought the farm about ten years after we married, and that first spring we planted the whole north field.",
     );
 
-    expect(storyDateSink.persisted).toHaveLength(1);
-    expect(storyDateSink.persisted[0]!.occurrence).toEqual({
-      kind: "circa",
-      date: "1965-04-02",
-      endDate: null,
-      provenance: '"about ten years after we married", from the wedding life event',
-    });
+    expect(storyDateSink.persisted).toHaveLength(0);
   });
 
   it("an unresolvable telling persists nothing and provokes no question", async () => {
@@ -179,12 +191,12 @@ describe("live Story date derivation in the interview loop", () => {
 
     await session.nextTurn();
     await session.recordResponse(
-      "When I was in high school I worked at the five and dime after classes every day.",
+      "We opened the shop in 1951 and I worked at the counter after classes every day.",
     );
     expect(storyDateSink.persisted).toHaveLength(1);
     expect(storyDateSink.persisted[0]!.occurrence.kind).toBe("period");
-    expect(storyDateSink.persisted[0]!.occurrence.date).toBe("1949-09-01");
-    expect(storyDateSink.persisted[0]!.occurrence.endDate).toBe("1953-06-30");
+    expect(storyDateSink.persisted[0]!.occurrence.date).toBe("1951-01-01");
+    expect(storyDateSink.persisted[0]!.occurrence.endDate).toBe("1951-12-31");
 
     await session.nextTurn();
     await session.recordResponse(
@@ -206,13 +218,14 @@ describe("live Story date derivation in the interview loop", () => {
     expect(storyDateSink.persisted).toHaveLength(1);
 
     await session.nextTurn();
-    // Period language joins the text-so-far, but the stated date already in it still wins — the
-    // re-resolution is the same rank, so nothing is persisted again.
+    // A vaguer STATED year joins the text-so-far, but the stated full date already in it still wins
+    // — the re-resolution is the same (date) rank, so nothing is persisted again.
     await session.recordResponse(
-      "When I was in high school, that was the winter the pipe burst in the kitchen.",
+      "The next year, 1944, was the winter the pipe burst in the kitchen.",
     );
     expect(storyDateSink.persisted).toHaveLength(1);
     expect(storyDateSink.persisted[0]!.occurrence.kind).toBe("date");
+    expect(storyDateSink.persisted[0]!.occurrence.date).toBe("1943-12-25");
   });
 
   it("skips derivation on a structured intake answer (not free narrative)", async () => {

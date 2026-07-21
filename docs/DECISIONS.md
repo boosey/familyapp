@@ -632,9 +632,11 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   Surfaces differ only in when they run it and whether they persist the ledger / queue for next turn.
 - **System probes** (`SystemFollowUpProbe`) are deterministic (no LLM). Temporal dating
   (`createTemporalFollowUpProbe`, seed `"about when this happened"`, modelId `system:story-date`)
-  is the first probe — lifted from feat/story-dates so PR #249 only wires dating context
-  (`runFollowUpStep({ dating })` / `InterviewSessionOptions.getProbeContext`). Do **not**
-  reintroduce inline `proposeTemporalFollowUp` in `turn-loop.ts` when landing #249.
+  is the first probe. The answer surface passes dating context explicitly (`runFollowUpStep({ dating })`);
+  the interview session derives it internally from its live dating state (a session opened with
+  `activeStoryId` + a `storyDateSink` tracks `persistedDateRank` / the temporal-ask latch and builds
+  the probe's `SystemFollowUpProbeContext.dating` itself — no `getProbeContext` seam). Do **not**
+  reintroduce inline `proposeTemporalFollowUp` in `turn-loop.ts`.
 - **`origin` taxonomy** on `PromptIntent.follow_up`: `system` | `gap` | `reflection`. Phraser uses
   gentle dating guidance for `gapKind: "temporal"`. FollowUpType ↔ GapKind maps live in
   `follow-up-mapping.ts` (single source).
@@ -642,6 +644,29 @@ Full design: `docs/superpowers/specs/2026-07-05-family-scope-selector-design.md`
   separately flagged in v1. Temporal stays dark without dating context.
 - ADR-0012 multi-take UX unchanged. Out of scope: `/s` multi-turn, notifications, family ask
   `sourceStoryId` framing.
+
+## Story dates: tiered-hybrid resolver (ADR-0026, 2026-07-21)
+
+- **A confidently-wrong date is worse than no date.** The original omnibus `resolveStoryDate` (#242)
+  wrote *guesses* silently — bare "the war" → WWII, "the 50s" → the 1950s, bare age/grade/holiday-at-age
+  math, anchor-relative math. Those heuristics are **deleted from write-authority**, not softened.
+- **Tier A — `resolveStatedStoryDate`** (deterministic, no LLM): the STATED calendar only — full date,
+  month+year, bare year, explicit four-digit decade. This is the ONLY resolver on the live interview
+  path (#243). Nothing else auto-dates live.
+- **Tier B — `TemporalRef` → `resolveTemporalRef`**: an LLM *recognizes* soft language into a
+  closed-catalog structured ref; our pure calculator does ALL the date math against real anchors
+  (birthDate, life events) and closed allowlists. The model's ISO guess (`hintedOccurrence`) is
+  **ignored**; a defensive `parseTemporalProposal` validates the JSON. Persist only when the
+  recognition is `resolved`, confidence ≠ `low`, AND the calculator resolves.
+- **Tier B runs at finish only** (#246): the pipeline render stage and web `finishDraft` run Tier A
+  first, then consult the recognizer only for still-Undated stories; the value is written through the
+  same `applyResolvedStoryDate` seam with a `(finish-time backstop)` provenance marker, and never
+  overwrites a live-set date (`occurredKind === null` gate). Tier B is **not** on the live turn loop —
+  the live path is Tier A + the single temporal ask (which invents nothing).
+- **Cost note:** the finish backstop now spends one short LLM recognizer call per still-Undated story
+  (next to the metadata call already there); stated-calendar stories short-circuit before the model.
+- **Life-event capture (#245)** keeps the same bar: a stated calendar form tied to an anchor word in
+  the same clause, stating a NEW fact — a reference records nothing.
 
 ## Workflow
 

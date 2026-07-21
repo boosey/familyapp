@@ -12,10 +12,10 @@ import { describe, expect, it } from "vitest";
 import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
 import {
   createInterviewSession,
-  createTemporalFollowUpProbe,
   InMemoryAnchorSource,
   InMemoryAskSource,
   InMemoryMemorySource,
+  InMemoryStoryDateSink,
   ScriptedFollowUpEvaluator,
   ScriptedVoice,
   RAPPORT_THRESHOLD_TURNS,
@@ -284,16 +284,15 @@ describe("gap-driven follow-up in the controlled loop", () => {
     expect(session.getState().pendingGapFollowUp).toBeNull();
   });
 
-  it("queues a system temporal probe ahead of gap when dating context says unresolved", async () => {
+  it("queues a system temporal probe ahead of gap when the story is still undated", async () => {
     const evaluator = new ScriptedFollowUpEvaluator([[cand()]]);
     const deps = makeDeps(evaluator);
-    deps.systemFollowUpProbes = [createTemporalFollowUpProbe()];
+    // Dating is active (sink + activeStoryId); the undatable LONG_ANSWER leaves the date
+    // unresolved, so the deterministic temporal probe (cascade stage 1) fires ahead of gap.
+    deps.storyDateSink = new InMemoryStoryDateSink();
     const session = await createInterviewSession(deps, {
       narratorPersonId: NARRATOR,
-      getProbeContext: ({ answerTranscript, temporalFollowUpAsked }) => ({
-        answerTranscript,
-        dating: { alreadyAsked: temporalFollowUpAsked, dateUnresolved: true },
-      }),
+      activeStoryId: "story-1",
     });
 
     await session.nextTurn();

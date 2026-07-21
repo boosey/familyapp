@@ -84,14 +84,26 @@ export {
   type TagStorySubjectInput,
   type TagStorySubjectResult,
 } from "./story-repository";
-// ADR-0026: the pure Story date resolver — (story text, narrator birthdate, known life events)
-// → resolved occurrence | unresolvable. Shared by the interviewer and the pipeline backstop.
+// ADR-0026 (tiered hybrid): Tier A stated-calendar parse (deterministic, no LLM), the Tier B pure
+// calculator over a validated structured ref, and the defensive parser. The live path uses Tier A;
+// the finish-time backstop recognizes soft language via an LLM ref → the same calculator.
 export {
-  resolveStoryDate,
+  resolveStatedStoryDate,
+  resolveTemporalRef,
+  parseTemporalProposal,
   type ResolveStoryDateInput,
+  type ResolveTemporalRefInput,
   type StoryDateOccurrence,
   type StoryDateResolution,
   type LifeEventAnchor,
+  type TemporalRef,
+  type TemporalRefType,
+  type TemporalProposal,
+  type HolidayId,
+  type LifeStageId,
+  type EraId,
+  type SeasonId,
+  type AnchorKind,
 } from "./resolve-story-date";
 // ADR-0026 (#245): the pure stated-life-event extractor — spots an anchor FACT in a telling
 // ("we married in '58") so it can be stored on the narrator as a reusable life event.

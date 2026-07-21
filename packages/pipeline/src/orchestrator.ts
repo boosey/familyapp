@@ -353,10 +353,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       try {
         const bio = await getNarratorBiographicalContext(deps.db, view.ownerPersonId);
         const lifeEvents = await listLifeEventsForPerson(deps.db, view.ownerPersonId);
-        const backstop = deriveStoryDate({
+        const backstop = await deriveStoryDate({
           fullText: view.transcript,
           birthDate: bio?.birthDate ?? null,
           lifeEvents,
+          languageModel: deps.languageModel,
         });
         if (backstop.status === "resolved") {
           await applyResolvedStoryDate(deps.db, view.storyId, backstop.occurrence);

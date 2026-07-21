@@ -147,7 +147,7 @@ describe("life-event capture in the interview loop", () => {
     expect(storyDateSink.persisted).toHaveLength(0);
   });
 
-  it("an anchor used as a REFERENCE records nothing — the stored event is what resolves", async () => {
+  it("an anchor used as a REFERENCE records no life event (and doesn't auto-date live)", async () => {
     const { deps, storyDateSink, lifeEventSink } = makeDeps();
     const session = await tellSession(deps, STORY);
 
@@ -156,14 +156,15 @@ describe("life-event capture in the interview loop", () => {
       "We bought the farm about ten years after we married, and that first spring we planted the whole north field.",
     );
 
+    // A reference states no NEW anchor fact, so nothing is captured. And under the tiered-hybrid
+    // resolver, the anchor-relative MATH is Tier B — it does not auto-persist on the live path
+    // (it flows to the temporal ask / finish backstop). The Tier B calculation itself is proven in
+    // @chronicle/core's resolveTemporalRef tests.
     expect(lifeEventSink.recorded).toHaveLength(0);
-    // The story date resolves circa against the session's KNOWN wedding anchor (1955-04-02).
-    expect(storyDateSink.persisted).toHaveLength(1);
-    expect(storyDateSink.persisted[0]!.occurrence.kind).toBe("circa");
-    expect(storyDateSink.persisted[0]!.occurrence.date).toBe("1965-04-02");
+    expect(storyDateSink.persisted).toHaveLength(0);
   });
 
-  it("the reuse loop closes: an event captured in one session anchors a LATER story's relative reference", async () => {
+  it("the reuse loop: an event captured in one session is available to a LATER session's anchors", async () => {
     // Session A states the anchor fact → captured.
     const first = makeDeps();
     const sessionA = await tellSession(first.deps, STORY);
@@ -174,7 +175,8 @@ describe("life-event capture in the interview loop", () => {
     expect(first.lifeEventSink.recorded).toHaveLength(1);
 
     // Session B opens LATER: the anchors inflow now carries the stored event (mapped exactly as
-    // listLifeEventsForPerson maps the row — kind + occurred date).
+    // listLifeEventsForPerson maps the row — kind + occurred date), ready for Tier B to resolve
+    // an anchor-relative reference at the ask/backstop stage.
     const stored = first.lifeEventSink.recorded[0]!.event;
     const anchors = datedAnchors();
     anchors.lifeEvents = [{ kind: stored.kind, date: stored.occurrence.date }];
@@ -186,20 +188,10 @@ describe("life-event capture in the interview loop", () => {
       "About ten years after we married, we bought the farm, and that first spring we planted the whole north field.",
     );
 
-    // The relative reference resolves against the captured event — the narrator never repeated
-    // the year — and NOTHING new is recorded (the reference states no new fact).
+    // The reference states no new fact, so nothing new is captured; and the anchor-relative MATH is
+    // Tier B, so nothing auto-persists live (the resolver test proves the anchor resolves to 1968).
     expect(second.lifeEventSink.recorded).toHaveLength(0);
-    expect(second.storyDateSink.persisted).toEqual([
-      {
-        storyId: LATER_STORY,
-        occurrence: {
-          kind: "circa",
-          date: "1968-01-01",
-          endDate: null,
-          provenance: '"About ten years after we married", from the wedding life event',
-        },
-      },
-    ]);
+    expect(second.storyDateSink.persisted).toHaveLength(0);
   });
 
   it("lands dark without a lifeEventSink: the story date still derives, nothing else happens", async () => {

@@ -1,28 +1,32 @@
 /**
- * Story date resolver (ADR-0026) — the shared brain that turns a telling's own words into one of
- * the three Story date forms. Takes (story text, narrator birthdate, known life events) and
- * returns either a resolved occurrence — kind, date, end date, and a plain-language provenance
- * note — or "unresolvable". It handles stated dates ("December 25, 1943", "1958",
- * "December 1943", "the 50s"), age references ("when I was 8"), grade references ("in 8th
- * grade" → circa, birth+13/14), holiday references ("for Christmas" → Dec 25 of the resolved
- * year), anchor-relative references ("about ten years after we married" → circa against the
- * wedding life event), and period language ("when I was in high school", "during the war").
+ * Story date resolver (ADR-0026, tiered hybrid) — turns a telling's temporal language into one of
+ * the three Story date forms (`date | period | circa`), with a plain-language provenance note.
  *
- * The discipline is the parse-spoken-date tradition: tolerant and NEVER throws — anything it
- * cannot derive comes back as `unresolvable`, never an exception and never an invented date.
- * When several forms are derivable it captures the most precise the storyteller's own words
- * support: date > period > circa. It never invents precision the telling doesn't contain — a
- * bare year is a year-long period, not a point; "about" language is circa, not a date.
+ * The split of labor is BINDING (see docs/superpowers/specs/2026-07-21-dates-gaps-richness-
+ * reconciliation.md and ADR-0026):
  *
- * Pure: no DB, no LLM, no clock. Every resolved value carries a provenance note naming the
- * derivation (e.g. "age 8 at Christmas, from birthdate") because the note is user-visible — a
- * wrong inference is a displayed, correctable fact, not a hidden one.
+ *   - **Tier A — `resolveStatedStoryDate`**: a NARROW deterministic parse of the *stated calendar*
+ *     only — full dates ("December 25, 1943"), month+year ("December 1943"), bare year ("1958"),
+ *     and explicit four-digit decades ("the 1950s"). It NEVER guesses: no relative ages, no
+ *     grade/holiday/anchor math, no bare place-names, no bare "the war", no ambiguous "the 50s"
+ *     century guess. Those were silent regex write-authority in the earlier resolver and are the
+ *     source of confidently-wrong Timeline placement; they are DELETED here.
+ *
+ *   - **Tier B — `resolveTemporalRef`**: a PURE calculator that turns a *validated* structured
+ *     `TemporalRef` (which an LLM recognizes from soft language) plus `(birthDate, lifeEvents)`
+ *     into an occurrence — age/holiday/anchor/grade/life-stage/named-era/season math. The LLM only
+ *     RECOGNIZES and emits the ref; this code does the arithmetic and alone decides the form. An
+ *     LLM-emitted ISO occurrence is NEVER trusted (the `hintedOccurrence` field is ignored here).
+ *
+ * Both are pure: no DB, no LLM, no clock, and they NEVER throw — anything underivable comes back
+ * `{ status: "unresolvable" }`, never an exception and never an invented date. Precision is never
+ * invented: a bare year is a year-long period, "about"/hedged language is `circa`, and an age or
+ * grade alone is a period/circa, never a fake day.
  *
  * This module also holds `extractStatedLifeEvents` (issue #245) — the capture half of the
- * life-events loop. Where the resolver derives the STORY's date, the extractor spots a stated
- * anchor FACT ("we married in '58", "after I graduated in '61") so it can be stored on the
- * narrator as a reusable life event. Same discipline: tolerant, never throws, never invents
- * precision — and conservative, because a wrong anchor silently corrupts later derivations.
+ * life-events loop, which spots a STATED anchor fact ("we married in '58") to store as a reusable
+ * event. Same discipline: tolerant, never throws, never invents; conservative because a wrong
+ * anchor silently corrupts later derivations.
  */
 import type { LifeEventKind, OccurredKind } from "@chronicle/db";
 import { isRealCalendarDate, toIsoDate } from "./person-dob";
@@ -59,6 +63,92 @@ export type StoryDateResolution =
   | { status: "unresolvable" };
 
 const UNRESOLVABLE: StoryDateResolution = { status: "unresolvable" };
+
+// ===========================================================================
+// Tier B contract — structured temporal references (ADR-0026 §4.3).
+// An LLM recognizes soft temporal language and emits ONE of these; the calculator below does the
+// math. Allowlists are CLOSED and owned by the calculator — an unknown value is treated as
+// unresolvable, never invented at runtime.
+// ===========================================================================
+
+export type HolidayId =
+  | "christmas_eve"
+  | "christmas"
+  | "new_years_eve"
+  | "new_years_day"
+  | "halloween"
+  | "valentines_day"
+  | "fourth_of_july"
+  | "thanksgiving";
+
+export type LifeStageId =
+  | "elementary_school" // ~age 5–11
+  | "middle_school" // ~age 11–14
+  | "high_school" // ~age 14–18 (Sep 14 → Jun 18)
+  | "college"; // ~age 18–22
+
+/** Named eras with FIXED calculator spans only — never a bare place-name. */
+export type EraId = "wwi" | "wwii" | "korea" | "vietnam";
+
+export type SeasonId = "spring" | "summer" | "fall" | "winter";
+
+export type AnchorKind = LifeEventKind;
+
+export type TemporalRefType =
+  | "stated_full_date"
+  | "stated_month_year"
+  | "stated_year"
+  | "stated_decade"
+  | "holiday_in_year"
+  | "holiday_at_age"
+  | "month_at_age"
+  | "age"
+  | "grade"
+  | "life_stage"
+  | "years_from_anchor"
+  | "named_era"
+  | "season_in_year"
+  | "season_at_age";
+
+export interface TemporalRef {
+  type: TemporalRefType;
+  // calendar slots
+  year?: number;
+  month?: number; // 1–12
+  day?: number; // 1–31
+  decadeStartYear?: number; // 1950 for "the 1950s"
+  // relative slots
+  age?: number; // 0–110
+  grade?: number; // 1–12
+  holiday?: HolidayId;
+  lifeStage?: LifeStageId;
+  era?: EraId;
+  season?: SeasonId;
+  anchorKind?: AnchorKind;
+  offsetYears?: number; // +10 / -3 for years_from_anchor
+  hedge?: boolean; // about / around / I think → never an exact date
+  /**
+   * Optional debug hint ONLY — the model's own guess at the occurrence. IGNORED for persistence:
+   * the calculator is the source of truth. Kept in the type so a parser may carry it for logging.
+   */
+  hintedOccurrence?: {
+    kind: OccurredKind;
+    date: string;
+    endDate?: string | null;
+  };
+}
+
+export interface TemporalProposal {
+  dateStatus: "resolved" | "unresolvable" | "ambiguous";
+  confidence: "high" | "medium" | "low";
+  ref?: TemporalRef;
+}
+
+export interface ResolveTemporalRefInput {
+  ref: TemporalRef;
+  birthDate?: string | null;
+  lifeEvents?: LifeEventAnchor[];
+}
 
 // ---------------------------------------------------------------------------
 // Small date math (hand-rolled; no Date/timezone conversion may shift a day)
@@ -106,57 +196,7 @@ function thanksgivingDay(y: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Word numbers ("eight", "twenty-one") and ordinals ("eighth")
-// ---------------------------------------------------------------------------
-
-const UNITS: Record<string, number> = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
-};
-const TEENS: Record<string, number> = {
-  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
-  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
-};
-const TENS: Record<string, number> = {
-  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
-};
-const ORDINALS: Record<string, number> = {
-  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7,
-  eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12,
-};
-
-function wordNumber(token: string): number | null {
-  const w = token.toLowerCase().replace(/-/g, " ").trim();
-  if (UNITS[w] !== undefined) return UNITS[w]!;
-  if (TEENS[w] !== undefined) return TEENS[w]!;
-  if (TENS[w] !== undefined) return TENS[w]!;
-  const parts = w.split(/\s+/);
-  if (parts.length === 2 && TENS[parts[0]!] !== undefined && UNITS[parts[1]!] !== undefined) {
-    return TENS[parts[0]!]! + UNITS[parts[1]!]!;
-  }
-  return null;
-}
-
-/** A number token: digits, a unit/teen word, or a tens word with an optional unit ("twenty one"). */
-const NUM = String.raw`(?:\d{1,3}|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s](?:one|two|three|four|five|six|seven|eight|nine))?|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|one|two|three|four|five|six|seven|eight|nine)`;
-
-function toNumber(token: string): number | null {
-  const t = token.trim();
-  if (/^\d+$/.test(t)) return Number(t);
-  return wordNumber(t);
-}
-
-function ordinalSuffix(n: number): string {
-  if (n >= 11 && n <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Vocabulary
+// Vocabulary shared by Tier A parse and life-event capture
 // ---------------------------------------------------------------------------
 
 const MONTH_LONG = [
@@ -171,37 +211,46 @@ function monthIndex(token: string): number | null {
   return idx === -1 ? null : idx + 1;
 }
 
-/** Fixed-date holidays plus Thanksgiving (computed). `name` slots into provenance phrasing. */
-const HOLIDAYS: Array<{ key: RegExp; name: string; md: [number, number] | "thanksgiving" }> = [
-  { key: /\bchristmas\s+eve\b/i, name: "Christmas Eve", md: [12, 24] },
-  { key: /\bchristmas\b/i, name: "Christmas", md: [12, 25] },
-  { key: /\bhalloween\b/i, name: "Halloween", md: [10, 31] },
-  { key: /\bvalentine'?s\s+day\b/i, name: "Valentine's Day", md: [2, 14] },
-  { key: /\b(?:fourth\s+of\s+july|4th\s+of\s+july|july\s+(?:4|4th|fourth)|independence\s+day)\b/i, name: "the Fourth of July", md: [7, 4] },
-  { key: /\bnew\s+year'?s\s+day\b/i, name: "New Year's Day", md: [1, 1] },
-  { key: /\bnew\s+year'?s\s+eve\b/i, name: "New Year's Eve", md: [12, 31] },
-  { key: /\bthanksgiving\b/i, name: "Thanksgiving", md: "thanksgiving" },
-];
+// ---------------------------------------------------------------------------
+// Allowlist tables for the Tier B calculator
+// ---------------------------------------------------------------------------
 
-/** Named wars as period spans. Bare "the war" resolves to WWII when the narrator was alive for it. */
-const WARS = {
+/** Fixed-date holidays plus Thanksgiving (computed). `name` slots into provenance phrasing. */
+const HOLIDAY_TABLE: Record<HolidayId, { name: string; md: [number, number] | "thanksgiving" }> = {
+  christmas_eve: { name: "Christmas Eve", md: [12, 24] },
+  christmas: { name: "Christmas", md: [12, 25] },
+  new_years_eve: { name: "New Year's Eve", md: [12, 31] },
+  new_years_day: { name: "New Year's Day", md: [1, 1] },
+  halloween: { name: "Halloween", md: [10, 31] },
+  valentines_day: { name: "Valentine's Day", md: [2, 14] },
+  fourth_of_july: { name: "the Fourth of July", md: [7, 4] },
+  thanksgiving: { name: "Thanksgiving", md: "thanksgiving" },
+};
+
+/** Named eras as period spans (fixed; calculator-owned). */
+const ERA_TABLE: Record<EraId, { name: string; start: Ymd; end: Ymd; label: string }> = {
   wwi: { name: "World War I", start: { y: 1914, m: 7, d: 28 }, end: { y: 1918, m: 11, d: 11 }, label: "1914–1918" },
   wwii: { name: "World War II", start: { y: 1939, m: 9, d: 1 }, end: { y: 1945, m: 9, d: 2 }, label: "1939–1945" },
   korea: { name: "the Korean War", start: { y: 1950, m: 6, d: 25 }, end: { y: 1953, m: 7, d: 27 }, label: "1950–1953" },
   vietnam: { name: "the Vietnam War", start: { y: 1955, m: 11, d: 1 }, end: { y: 1975, m: 4, d: 30 }, label: "1955–1975" },
-} as const;
-
-const DECADE_WORDS: Record<string, number> = {
-  twenties: 20, thirties: 30, forties: 40, fifties: 50, sixties: 60,
-  seventies: 70, eighties: 80, nineties: 90,
 };
 
-const ANCHOR_WORDS: Record<string, LifeEventKind> = {
-  married: "wedding", wed: "wedding", wedding: "wedding",
-  graduated: "graduation", graduation: "graduation",
-  moved: "move", move: "move",
-  enlisted: "military_service", army: "military_service", navy: "military_service",
-  marines: "military_service", military: "military_service", service: "military_service",
+/** Life-stage spans as age offsets from birthdate (calculator policy). */
+const LIFE_STAGE_TABLE: Record<LifeStageId, { startAge: [number, number]; endAge: [number, number]; name: string }> = {
+  // [ageOffset, monthOfYear] — start on the birthday-year Sep, end on the exit Jun, per school calendar.
+  elementary_school: { startAge: [5, 9], endAge: [11, 6], name: "elementary school" },
+  middle_school: { startAge: [11, 9], endAge: [14, 6], name: "middle school" },
+  high_school: { startAge: [14, 9], endAge: [18, 6], name: "high school" },
+  college: { startAge: [18, 9], endAge: [22, 6], name: "college" },
+};
+
+/** Meteorological season bounds (calculator policy): spring Mar–May, summer Jun–Aug, etc. */
+const SEASON_TABLE: Record<SeasonId, { startMonth: number; endMonth: number; name: string; crossesYear?: boolean }> = {
+  spring: { startMonth: 3, endMonth: 5, name: "spring" },
+  summer: { startMonth: 6, endMonth: 8, name: "summer" },
+  fall: { startMonth: 9, endMonth: 11, name: "fall" },
+  // Winter (Dec–Feb) crosses the year boundary; the calculator anchors it to Dec of the stated year.
+  winter: { startMonth: 12, endMonth: 2, name: "winter", crossesYear: true },
 };
 
 const ANCHOR_LABEL: Record<LifeEventKind, string> = {
@@ -212,16 +261,23 @@ const ANCHOR_LABEL: Record<LifeEventKind, string> = {
   other: "other",
 };
 
-// ---------------------------------------------------------------------------
-// Candidates
-// ---------------------------------------------------------------------------
+function ordinalSuffix(n: number): string {
+  if (n >= 11 && n <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
+// ===========================================================================
+// Tier A — stated calendar only (deterministic, no LLM, no guessing)
+// ===========================================================================
 
 interface Candidate {
   /** 3 = date, 2 = period, 1 = circa — the ADR-0026 precedence date > period > circa. */
   rank: 1 | 2 | 3;
-  /** True when the teller's words state the form directly (tie-breaks above derived forms). */
-  stated: boolean;
-  /** Match position in the text (final tie-break: earliest mention wins). */
   pos: number;
   occurrence: StoryDateOccurrence;
 }
@@ -229,33 +285,26 @@ interface Candidate {
 interface Mention {
   pos: number;
   end: number;
-  text: string;
 }
 
 function overlaps(m: Mention, spans: Mention[]): boolean {
   return spans.some((s) => m.pos < s.end && s.pos < m.end);
 }
 
-// ---------------------------------------------------------------------------
-// The resolver
-// ---------------------------------------------------------------------------
-
 /**
- * Resolve the Story date from a telling. Never throws; anything underivable returns
- * `{ status: "unresolvable" }`. Precedence when several forms are derivable:
- * date > period > circa (ADR-0026).
+ * Tier A: resolve ONLY the stated calendar the narrator's words assert directly. Full dates,
+ * month+year, bare year, and explicit four-digit decades. NO relative/age/holiday/anchor/era math,
+ * NO place-names, NO century guessing. Anything else → unresolvable (Tier B / the temporal ask).
  */
-export function resolveStoryDate(input: ResolveStoryDateInput): StoryDateResolution {
+export function resolveStatedStoryDate(input: ResolveStoryDateInput): StoryDateResolution {
   try {
     const text = typeof input?.text === "string" ? input.text : "";
     if (text.trim().length === 0) return UNRESOLVABLE;
-    const birth = parseIso(input.birthDate);
-    const lifeEvents = Array.isArray(input.lifeEvents) ? input.lifeEvents : [];
 
     const candidates: Candidate[] = [];
-
-    // --- Stated full dates: "December 25, 1943", "December 25th 1943", "25 December 1943" ---
     const fullDateSpans: Mention[] = [];
+
+    // --- Stated full dates: "December 25, 1943", "25 December 1943" → date ---
     const usDate = new RegExp(String.raw`\b${MONTH_RE}\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+((?:1[89]|20)\d{2})\b`, "gi");
     const dayFirst = new RegExp(String.raw`\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?${MONTH_RE},?\s+((?:1[89]|20)\d{2})\b`, "gi");
     for (const m of text.matchAll(usDate)) {
@@ -265,72 +314,18 @@ export function resolveStoryDate(input: ResolveStoryDateInput): StoryDateResolut
       pushFullDate(candidates, fullDateSpans, m.index, m[1]!, m[2]!, m[3]!, m[0]);
     }
 
-    // --- Mentions used by the combination rules below ---
-    const holidayMentions: Array<Mention & { name: string; md: [number, number] | "thanksgiving" }> = [];
-    for (const h of HOLIDAYS) {
-      const re = new RegExp(h.key.source, "gi");
-      for (const m of text.matchAll(re)) {
-        holidayMentions.push({ pos: m.index, end: m.index + m[0].length, text: m[0], name: h.name, md: h.md });
-      }
-    }
-    const ageRe = new RegExp(String.raw`\b(?:when\s+i\s+was|at\s+age|aged?)\s*(?:about\s+|around\s+)?(${NUM})\b`, "gi");
-    const ageMentions: Array<Mention & { age: number }> = [];
-    for (const m of text.matchAll(ageRe)) {
-      const age = toNumber(m[1]!);
-      if (age !== null && age >= 0 && age <= 110) {
-        ageMentions.push({ pos: m.index, end: m.index + m[0].length, text: m[0], age });
-      }
-    }
-    const yearRe = /\b((?:1[89]|20)\d{2})\b/g;
-    const yearMentions: Array<Mention & { year: number }> = [];
-    for (const m of text.matchAll(yearRe)) {
-      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0], year: Number(m[1]) };
-      if (!overlaps(mention, fullDateSpans)) yearMentions.push(mention);
-    }
-
-    // --- Holiday combinations → date. "Christmas when I was 8" (age anchor) or "Christmas of
-    //     1958" (stated year). A holiday alone names a month/day; the year must be derivable. ---
-    for (const h of holidayMentions) {
-      const nearestAge = nearest(h, ageMentions);
-      const nearestYear = nearest(h, yearMentions);
-      const useAge =
-        nearestAge !== null &&
-        (nearestYear === null || dist(h, nearestAge) <= dist(h, nearestYear));
-      if (useAge && nearestAge && birth) {
-        const point = holidayInAgeYear(birth, nearestAge.age, h.md);
-        if (point) {
-          candidates.push({
-            rank: 3, stated: false, pos: h.pos,
-            occurrence: {
-              kind: "date", date: iso(point), endDate: null,
-              provenance: `age ${nearestAge.age} at ${h.name}, from birthdate`,
-            },
-          });
-          continue;
-        }
-      }
-      if (nearestYear) {
-        const md = h.md === "thanksgiving" ? [11, thanksgivingDay(nearestYear.year)] as [number, number] : h.md;
-        candidates.push({
-          rank: 3, stated: true, pos: h.pos,
-          occurrence: {
-            kind: "date", date: toIsoDate(nearestYear.year, md[0], md[1]), endDate: null,
-            provenance: `stated "${h.name} ${nearestYear.year}"`,
-          },
-        });
-      }
-    }
-
     // --- Stated month + year: "December 1943" → period aligned to the month ---
+    const monthYearSpans: Mention[] = [];
     const monthYearRe = new RegExp(String.raw`\b${MONTH_RE}\s+((?:1[89]|20)\d{2})\b`, "gi");
     for (const m of text.matchAll(monthYearRe)) {
-      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      const mention = { pos: m.index, end: m.index + m[0].length };
       if (overlaps(mention, fullDateSpans)) continue;
       const month = monthIndex(m[1]!);
       const year = Number(m[2]);
       if (month === null) continue;
+      monthYearSpans.push(mention);
       candidates.push({
-        rank: 2, stated: true, pos: m.index,
+        rank: 2, pos: m.index,
         occurrence: {
           kind: "period",
           date: toIsoDate(year, month, 1),
@@ -340,172 +335,53 @@ export function resolveStoryDate(input: ResolveStoryDateInput): StoryDateResolut
       });
     }
 
-    // --- Stated bare year: "in 1958" → period aligned to the year ---
-    for (const y of yearMentions) {
+    // --- Explicit four-digit decade: "the 1950s" / "1950s" → period decade ---
+    // ONLY a full four-digit decade is a stated calendar form. A bare "the 50s" is a century guess
+    // and is DELETED (Tier B / unresolved) — its ambiguity is a known Timeline-poisoning bug.
+    const decadeSpans: Mention[] = [];
+    for (const m of text.matchAll(/\b(?:the\s+)?'?((?:1[89]|20)\d)0s\b/gi)) {
+      const mention = { pos: m.index, end: m.index + m[0].length };
+      if (overlaps(mention, fullDateSpans) || overlaps(mention, monthYearSpans)) continue;
+      const start = Number(m[1]) * 10;
+      decadeSpans.push(mention);
       candidates.push({
-        rank: 2, stated: true, pos: y.pos,
-        occurrence: {
-          kind: "period",
-          date: toIsoDate(y.year, 1, 1),
-          endDate: toIsoDate(y.year, 12, 31),
-          provenance: `stated year "${y.year}"`,
-        },
-      });
-    }
-
-    // --- Decades: "the 50s", "the '50s", "the 1950s", "the fifties" → period decade ---
-    const pushDecade = (pos: number, text0: string, short: number | null, explicitStart: number | null) => {
-      let start: number;
-      if (explicitStart !== null) {
-        start = explicitStart;
-      } else if (short !== null) {
-        // A bare "50s" assumes the 1900s unless the narrator wasn't alive for it.
-        start = birth !== null && birth.y > 1959 ? 2000 + short : 1900 + short;
-      } else {
-        return;
-      }
-      candidates.push({
-        rank: 2, stated: true, pos,
+        rank: 2, pos: m.index,
         occurrence: {
           kind: "period",
           date: toIsoDate(start, 1, 1),
           endDate: toIsoDate(start + 9, 12, 31),
-          provenance: `stated "${text0}", taken as the ${start}s`,
+          provenance: `stated "the ${start}s"`,
         },
       });
-    };
-    for (const m of text.matchAll(/\bthe\s+'?((?:1[89]|20)\d)0s\b/gi)) {
-      pushDecade(m.index, m[0], null, Number(m[1]) * 10);
-    }
-    for (const m of text.matchAll(/\bthe\s+'?(\d{1,2})0s\b/gi)) {
-      const n = Number(m[1]);
-      pushDecade(m.index, m[0], String(n).endsWith("0") ? n : n * 10, null);
-    }
-    const decadeWordRe = new RegExp(String.raw`\bthe\s+(twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b`, "gi");
-    for (const m of text.matchAll(decadeWordRe)) {
-      pushDecade(m.index, m[0], DECADE_WORDS[m[1]!.toLowerCase()] ?? null, null);
     }
 
-    // --- Age alone: "when I was 8" → period spanning that year of life (birthday to birthday) ---
-    if (birth) {
-      for (const a of ageMentions) {
-        const start = addYears(birth, a.age);
-        const end = dayBefore(addYears(birth, a.age + 1));
-        candidates.push({
-          rank: 2, stated: false, pos: a.pos,
-          occurrence: {
-            kind: "period", date: iso(start), endDate: iso(end),
-            provenance: `age ${a.age}, from birthdate`,
-          },
-        });
+    // --- Stated bare year: "in 1958" → period aligned to the year ---
+    for (const m of text.matchAll(/\b((?:1[89]|20)\d{2})\b/g)) {
+      const mention = { pos: m.index, end: m.index + m[0].length };
+      if (
+        overlaps(mention, fullDateSpans) ||
+        overlaps(mention, monthYearSpans) ||
+        overlaps(mention, decadeSpans)
+      ) {
+        continue;
       }
-    }
-
-    // --- "when I was in high school" → period Sep(14) – Jun(18), from birthdate ---
-    if (birth && /\bin\s+high\s+school\b|\bhigh\s+school\s+(?:years|days)\b/i.test(text)) {
+      const year = Number(m[1]);
       candidates.push({
-        rank: 2, stated: false, pos: text.search(/high\s+school/i),
+        rank: 2, pos: mention.pos,
         occurrence: {
           kind: "period",
-          date: toIsoDate(birth.y + 14, 9, 1),
-          endDate: toIsoDate(birth.y + 18, 6, 30),
-          provenance: "high school years, from birthdate",
-        },
-      });
-    }
-
-    // --- Wars: named wars are stated periods; bare "the war" is taken as WWII when the narrator
-    //     was alive for it (the family-history default), otherwise left unresolvable. ---
-    const pushWar = (pos: number, text0: string, war: (typeof WARS)[keyof typeof WARS], stated: boolean, provenance: string) => {
-      candidates.push({
-        rank: 2, stated, pos,
-        occurrence: {
-          kind: "period", date: iso(war.start), endDate: iso(war.end), provenance,
-        },
-      });
-    };
-    let warMatched = false;
-    for (const m of text.matchAll(/\bworld\s+war\s+(?:ii|two|2)\b|\bwwii\b|\bww2\b/gi)) {
-      warMatched = true;
-      pushWar(m.index, m[0], WARS.wwii, true, `"${m[0]}", taken as ${WARS.wwii.label}`);
-    }
-    for (const m of text.matchAll(/\bworld\s+war\s+(?:i|one|1)\b|\bwwi\b|\bww1\b/gi)) {
-      warMatched = true;
-      pushWar(m.index, m[0], WARS.wwi, true, `"${m[0]}", taken as ${WARS.wwi.label}`);
-    }
-    for (const m of text.matchAll(/\bkorean\s+war\b/gi)) {
-      warMatched = true;
-      pushWar(m.index, m[0], WARS.korea, true, `"${m[0]}", taken as ${WARS.korea.label}`);
-    }
-    for (const m of text.matchAll(/\bvietnam\b/gi)) {
-      warMatched = true;
-      pushWar(m.index, m[0], WARS.vietnam, true, `"${m[0]}", taken as ${WARS.vietnam.label}`);
-    }
-    if (!warMatched && birth) {
-      for (const m of text.matchAll(/\b(?:during|in|through)\s+the\s+war\b/gi)) {
-        if (birth.y <= WARS.wwii.end.y) {
-          pushWar(m.index, m[0], WARS.wwii, false, `"${m[0]}", taken as World War II from birthdate`);
-        }
-      }
-    }
-
-    // --- Grade references: "in 8th grade" → circa birth+13/14 (point at the 14th birthday) ---
-    if (birth) {
-      const pushGrade = (pos: number, grade: number) => {
-        if (grade < 1 || grade > 12) return;
-        candidates.push({
-          rank: 1, stated: false, pos,
-          occurrence: {
-            kind: "circa", date: iso(addYears(birth, grade + 6)), endDate: null,
-            provenance: `${ordinalSuffix(grade)} grade (age ${grade + 5}–${grade + 6}), from birthdate`,
-          },
-        });
-      };
-      for (const m of text.matchAll(/\b(\d{1,2})(?:st|nd|rd|th)\s+grade\b/gi)) {
-        pushGrade(m.index, Number(m[1]));
-      }
-      const gradeWordRe = new RegExp(String.raw`\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)\s+grade\b`, "gi");
-      for (const m of text.matchAll(gradeWordRe)) {
-        pushGrade(m.index, ORDINALS[m[1]!.toLowerCase()] ?? 0);
-      }
-      for (const m of text.matchAll(/\bgrade\s+(\d{1,2})\b/gi)) {
-        pushGrade(m.index, Number(m[1]));
-      }
-    }
-
-    // --- Anchor-relative: "about ten years after we married" → circa against the life event ---
-    const anchorRe = new RegExp(
-      String.raw`\b(?:about\s+|around\s+|roughly\s+)?(${NUM})\s+years?\s+(after|before)\s+(?:(?:we|i|the|our|my)\s+)*(married|wed|wedding|graduated|graduation|moved|move|enlisted|army|navy|marines|military|service)\b`,
-      "gi",
-    );
-    for (const m of text.matchAll(anchorRe)) {
-      const n = toNumber(m[1]!);
-      const kind = ANCHOR_WORDS[m[3]!.toLowerCase()];
-      if (n === null || n < 0 || n > 100 || !kind) continue;
-      const anchor = lifeEvents.find((e) => e && e.kind === kind);
-      const anchorDate = anchor ? parseIso(anchor.date) : null;
-      if (!anchorDate) continue; // no such anchor → the reference can't resolve
-      const point = addYears(anchorDate, m[2]!.toLowerCase() === "after" ? n : -n);
-      candidates.push({
-        rank: 1, stated: false, pos: m.index,
-        occurrence: {
-          kind: "circa", date: iso(point), endDate: null,
-          provenance: `"${m[0]}", from the ${ANCHOR_LABEL[kind]} life event`,
+          date: toIsoDate(year, 1, 1),
+          endDate: toIsoDate(year, 12, 31),
+          provenance: `stated year "${year}"`,
         },
       });
     }
 
     if (candidates.length === 0) return UNRESOLVABLE;
-
-    // Precedence: date > period > circa; stated beats derived; earliest mention wins ties.
-    candidates.sort((a, b) =>
-      b.rank - a.rank ||
-      Number(b.stated) - Number(a.stated) ||
-      a.pos - b.pos,
-    );
+    // Precedence: date > period > circa; earliest mention wins ties.
+    candidates.sort((a, b) => b.rank - a.rank || a.pos - b.pos);
     return { status: "resolved", occurrence: candidates[0]!.occurrence };
   } catch {
-    // Tolerant by contract: a resolver that throws would take down the interview turn.
     return UNRESOLVABLE;
   }
 }
@@ -523,9 +399,9 @@ function pushFullDate(
   const day = Number(dayToken);
   const year = Number(yearToken);
   if (month === null || !isRealCalendarDate(year, month, day)) return;
-  spans.push({ pos, end: pos + matched.length, text: matched });
+  spans.push({ pos, end: pos + matched.length });
   candidates.push({
-    rank: 3, stated: true, pos,
+    rank: 3, pos,
     occurrence: {
       kind: "date", date: toIsoDate(year, month, day), endDate: null,
       provenance: `stated date "${MONTH_LONG[month - 1]} ${day}, ${year}"`,
@@ -533,33 +409,251 @@ function pushFullDate(
   });
 }
 
-function nearest<T extends Mention>(h: Mention, ms: T[]): T | null {
-  let best: T | null = null;
-  for (const m of ms) {
-    if (best === null || dist(h, m) < dist(h, best)) best = m;
+// ===========================================================================
+// Tier B — pure calculator over a validated structured ref (ADR-0026 §4.3)
+// ===========================================================================
+
+/**
+ * Resolve a validated `TemporalRef` into an occurrence. Pure; never throws; returns unresolvable
+ * on a missing/invalid anchor or an invalid calendar rather than inventing a date. The calculator
+ * — not the model — owns every calendar computation and the resulting form:
+ *   - `kind: "date"` only for day-level refs (stated_full_date, holiday_in_year, holiday_at_age);
+ *   - `age` / `grade` / `life_stage` / `season` / `named_era` → period/circa, never a fake day;
+ *   - `ref.hedge` downgrades an otherwise-exact form away from `date`.
+ * A model-emitted `hintedOccurrence` is IGNORED — this function is the source of truth.
+ */
+export function resolveTemporalRef(input: ResolveTemporalRefInput): StoryDateResolution {
+  try {
+    const ref = input?.ref;
+    if (!ref || typeof ref !== "object" || typeof ref.type !== "string") return UNRESOLVABLE;
+    const birth = parseIso(input.birthDate);
+    const lifeEvents = Array.isArray(input.lifeEvents) ? input.lifeEvents : [];
+
+    switch (ref.type) {
+      case "stated_full_date": {
+        if (!isYear(ref.year) || !isMonth(ref.month) || !isDay(ref.day)) return UNRESOLVABLE;
+        if (!isRealCalendarDate(ref.year!, ref.month!, ref.day!)) return UNRESOLVABLE;
+        return ok("date", toIsoDate(ref.year!, ref.month!, ref.day!), null,
+          `stated date "${MONTH_LONG[ref.month! - 1]} ${ref.day}, ${ref.year}"`);
+      }
+      case "stated_month_year": {
+        if (!isYear(ref.year) || !isMonth(ref.month)) return UNRESOLVABLE;
+        return ok("period", toIsoDate(ref.year!, ref.month!, 1),
+          toIsoDate(ref.year!, ref.month!, lastDayOfMonth(ref.year!, ref.month!)),
+          `stated "${MONTH_LONG[ref.month! - 1]} ${ref.year}"`);
+      }
+      case "stated_year": {
+        if (!isYear(ref.year)) return UNRESOLVABLE;
+        return ok("period", toIsoDate(ref.year!, 1, 1), toIsoDate(ref.year!, 12, 31),
+          `stated year "${ref.year}"`);
+      }
+      case "stated_decade": {
+        const start = ref.decadeStartYear;
+        if (typeof start !== "number" || start % 10 !== 0 || start < 1800 || start > 2100) return UNRESOLVABLE;
+        return ok("period", toIsoDate(start, 1, 1), toIsoDate(start + 9, 12, 31), `stated "the ${start}s"`);
+      }
+      case "holiday_in_year": {
+        if (!isYear(ref.year) || !ref.holiday || !(ref.holiday in HOLIDAY_TABLE)) return UNRESOLVABLE;
+        const h = HOLIDAY_TABLE[ref.holiday];
+        const md = h.md === "thanksgiving" ? [11, thanksgivingDay(ref.year!)] as [number, number] : h.md;
+        if (!isRealCalendarDate(ref.year!, md[0], md[1])) return UNRESOLVABLE;
+        const kind = ref.hedge ? "circa" : "date";
+        return ok(kind, toIsoDate(ref.year!, md[0], md[1]), null, `stated "${h.name} ${ref.year}"`);
+      }
+      case "holiday_at_age": {
+        if (!birth || !isAge(ref.age) || !ref.holiday || !(ref.holiday in HOLIDAY_TABLE)) return UNRESOLVABLE;
+        const h = HOLIDAY_TABLE[ref.holiday];
+        const point = holidayInAgeYear(birth, ref.age!, h.md);
+        if (!point) return UNRESOLVABLE;
+        const kind = ref.hedge ? "circa" : "date";
+        return ok(kind, iso(point), null, `age ${ref.age} at ${h.name}, from birthdate`);
+      }
+      case "month_at_age": {
+        if (!birth || !isAge(ref.age) || !isMonth(ref.month)) return UNRESOLVABLE;
+        // The calendar year in which the narrator is `age` during that month.
+        const beforeBirthday = ref.month! < birth.m || (ref.month! === birth.m && 1 < birth.d);
+        const y = birth.y + ref.age! + (beforeBirthday ? 1 : 0);
+        return ok("period", toIsoDate(y, ref.month!, 1), toIsoDate(y, ref.month!, lastDayOfMonth(y, ref.month!)),
+          `${MONTH_LONG[ref.month! - 1]} at age ${ref.age}, from birthdate`);
+      }
+      case "age": {
+        if (!birth || !isAge(ref.age)) return UNRESOLVABLE;
+        const start = addYears(birth, ref.age!);
+        if (ref.hedge) {
+          return ok("circa", iso(start), null, `around age ${ref.age}, from birthdate`);
+        }
+        const end = dayBefore(addYears(birth, ref.age! + 1));
+        return ok("period", iso(start), iso(end), `age ${ref.age}, from birthdate`);
+      }
+      case "grade": {
+        if (!birth || typeof ref.grade !== "number" || ref.grade < 1 || ref.grade > 12) return UNRESOLVABLE;
+        return ok("circa", iso(addYears(birth, ref.grade + 6)), null,
+          `${ordinalSuffix(ref.grade)} grade (age ${ref.grade + 5}–${ref.grade + 6}), from birthdate`);
+      }
+      case "life_stage": {
+        if (!birth || !ref.lifeStage || !(ref.lifeStage in LIFE_STAGE_TABLE)) return UNRESOLVABLE;
+        const s = LIFE_STAGE_TABLE[ref.lifeStage];
+        return ok("period",
+          toIsoDate(birth.y + s.startAge[0], s.startAge[1], 1),
+          toIsoDate(birth.y + s.endAge[0], s.endAge[1], lastDayOfMonth(birth.y + s.endAge[0], s.endAge[1])),
+          `${s.name} years, from birthdate`);
+      }
+      case "years_from_anchor": {
+        if (!ref.anchorKind || typeof ref.offsetYears !== "number") return UNRESOLVABLE;
+        if (ref.offsetYears < -100 || ref.offsetYears > 100) return UNRESOLVABLE;
+        // First matching anchor of the kind. Disambiguating multiple same-kind anchors (e.g. two
+        // weddings) is deferred past v1 by the spec; a single anchor is the common case.
+        const anchor = lifeEvents.find((e) => e && e.kind === ref.anchorKind);
+        const anchorDate = anchor ? parseIso(anchor.date) : null;
+        if (!anchorDate) return UNRESOLVABLE;
+        const point = addYears(anchorDate, ref.offsetYears);
+        const dir = ref.offsetYears >= 0 ? "after" : "before";
+        return ok("circa", iso(point), null,
+          `${Math.abs(ref.offsetYears)} years ${dir} the ${ANCHOR_LABEL[ref.anchorKind]}, from that life event`);
+      }
+      case "named_era": {
+        if (!ref.era || !(ref.era in ERA_TABLE)) return UNRESOLVABLE;
+        const e = ERA_TABLE[ref.era];
+        return ok("period", iso(e.start), iso(e.end), `${e.name}, taken as ${e.label}`);
+      }
+      case "season_in_year": {
+        if (!isYear(ref.year) || !ref.season || !(ref.season in SEASON_TABLE)) return UNRESOLVABLE;
+        return seasonPeriod(ref.season, ref.year!, `stated "${SEASON_TABLE[ref.season].name} ${ref.year}"`);
+      }
+      case "season_at_age": {
+        if (!birth || !isAge(ref.age) || !ref.season || !(ref.season in SEASON_TABLE)) return UNRESOLVABLE;
+        const s = SEASON_TABLE[ref.season];
+        // The calendar year in which the narrator is `age` during that season's start month.
+        const beforeBirthday = s.startMonth < birth.m;
+        const y = birth.y + ref.age! + (beforeBirthday ? 1 : 0);
+        return seasonPeriod(ref.season, y, `${s.name} at age ${ref.age}, from birthdate`);
+      }
+      default:
+        return UNRESOLVABLE;
+    }
+  } catch {
+    return UNRESOLVABLE;
   }
-  return best;
 }
 
-function dist(a: Mention, b: Mention): number {
-  return Math.abs(a.pos - b.pos);
+function ok(kind: OccurredKind, date: string, endDate: string | null, provenance: string): StoryDateResolution {
+  return { status: "resolved", occurrence: { kind, date, endDate, provenance } };
+}
+
+function isYear(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 1800 && n <= 2200;
+}
+function isMonth(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 12;
+}
+function isDay(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 31;
+}
+function isAge(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 110;
+}
+
+function seasonPeriod(season: SeasonId, year: number, provenance: string): StoryDateResolution {
+  const s = SEASON_TABLE[season];
+  if (s.crossesYear) {
+    // Winter: Dec of `year` → end of Feb of `year + 1`.
+    return ok("period", toIsoDate(year, 12, 1), toIsoDate(year + 1, 2, lastDayOfMonth(year + 1, 2)), provenance);
+  }
+  return ok("period", toIsoDate(year, s.startMonth, 1),
+    toIsoDate(year, s.endMonth, lastDayOfMonth(year, s.endMonth)), provenance);
 }
 
 /** The holiday date on which the narrator (born `birth`) was exactly `age` years old. */
 function holidayInAgeYear(birth: Ymd, age: number, md: [number, number] | "thanksgiving"): Ymd | null {
-  const [hm, hd] = md === "thanksgiving" ? [11, 22] as const : md;
-  // If the holiday falls before the birthday in the calendar year, the narrator turns `age`
-  // AFTER it — the age-year's holiday is in the following calendar year.
+  if (md === "thanksgiving") {
+    // Thanksgiving moves (Nov 22–28), so its day depends on the very year we are choosing. Compute
+    // the day for the provisional age-year FIRST, then decide whether the narrator's birthday has
+    // already passed by then — a hard-coded Nov 22 probe mis-picks the year for a late-November
+    // birthday (born Nov 23–28).
+    let y = birth.y + age;
+    let day = thanksgivingDay(y);
+    const thanksgivingBeforeBirthday = 11 < birth.m || (11 === birth.m && day < birth.d);
+    if (thanksgivingBeforeBirthday) {
+      y = birth.y + age + 1;
+      day = thanksgivingDay(y);
+    }
+    return isRealCalendarDate(y, 11, day) ? { y, m: 11, d: day } : null;
+  }
+  const [hm, hd] = md;
   const beforeBirthday = hm < birth.m || (hm === birth.m && hd < birth.d);
   const y = birth.y + age + (beforeBirthday ? 1 : 0);
-  const day = md === "thanksgiving" ? thanksgivingDay(y) : hd;
-  if (!isRealCalendarDate(y, hm, day)) return null;
-  return { y, m: hm, d: day };
+  return isRealCalendarDate(y, hm, hd) ? { y, m: hm, d: hd } : null;
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Defensive parser — LLM JSON → validated TemporalProposal (ADR-0026 §4.3)
+// ===========================================================================
+
+const REF_TYPES: ReadonlySet<string> = new Set<TemporalRefType>([
+  "stated_full_date", "stated_month_year", "stated_year", "stated_decade",
+  "holiday_in_year", "holiday_at_age", "month_at_age", "age", "grade",
+  "life_stage", "years_from_anchor", "named_era", "season_in_year", "season_at_age",
+]);
+const HOLIDAY_IDS: ReadonlySet<string> = new Set(Object.keys(HOLIDAY_TABLE));
+const LIFE_STAGE_IDS: ReadonlySet<string> = new Set(Object.keys(LIFE_STAGE_TABLE));
+const ERA_IDS: ReadonlySet<string> = new Set(Object.keys(ERA_TABLE));
+const SEASON_IDS: ReadonlySet<string> = new Set(Object.keys(SEASON_TABLE));
+const ANCHOR_KINDS: ReadonlySet<string> = new Set<AnchorKind>([
+  "wedding", "graduation", "military_service", "move", "other",
+]);
+
+/**
+ * Parse a model reply into a `TemporalProposal`. Tolerant of fenced/raw JSON. Unknown `type`,
+ * unknown allowlist value, or malformed shape → `{ dateStatus: "unresolvable" }` (never invent a
+ * type at runtime). Numeric slots are coerced only from real numbers, never from arbitrary strings.
+ */
+export function parseTemporalProposal(text: string): TemporalProposal {
+  const unresolved: TemporalProposal = { dateStatus: "unresolvable", confidence: "low" };
+  const jsonStr = String(text ?? "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    return unresolved;
+  }
+  if (typeof parsed !== "object" || parsed === null) return unresolved;
+  const o = parsed as Record<string, unknown>;
+
+  const dateStatus =
+    o.dateStatus === "resolved" || o.dateStatus === "ambiguous" ? o.dateStatus : "unresolvable";
+  const confidence =
+    o.confidence === "high" || o.confidence === "medium" ? o.confidence : "low";
+
+  const rawRef = o.ref;
+  if (dateStatus !== "resolved" || typeof rawRef !== "object" || rawRef === null) {
+    return { dateStatus: dateStatus === "ambiguous" ? "ambiguous" : "unresolvable", confidence };
+  }
+  const r = rawRef as Record<string, unknown>;
+  if (typeof r.type !== "string" || !REF_TYPES.has(r.type)) return { dateStatus: "unresolvable", confidence };
+
+  const ref: TemporalRef = { type: r.type as TemporalRefType };
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  if (num(r.year) !== undefined) ref.year = num(r.year);
+  if (num(r.month) !== undefined) ref.month = num(r.month);
+  if (num(r.day) !== undefined) ref.day = num(r.day);
+  if (num(r.decadeStartYear) !== undefined) ref.decadeStartYear = num(r.decadeStartYear);
+  if (num(r.age) !== undefined) ref.age = num(r.age);
+  if (num(r.grade) !== undefined) ref.grade = num(r.grade);
+  if (num(r.offsetYears) !== undefined) ref.offsetYears = num(r.offsetYears);
+  if (typeof r.holiday === "string" && HOLIDAY_IDS.has(r.holiday)) ref.holiday = r.holiday as HolidayId;
+  if (typeof r.lifeStage === "string" && LIFE_STAGE_IDS.has(r.lifeStage)) ref.lifeStage = r.lifeStage as LifeStageId;
+  if (typeof r.era === "string" && ERA_IDS.has(r.era)) ref.era = r.era as EraId;
+  if (typeof r.season === "string" && SEASON_IDS.has(r.season)) ref.season = r.season as SeasonId;
+  if (typeof r.anchorKind === "string" && ANCHOR_KINDS.has(r.anchorKind)) ref.anchorKind = r.anchorKind as AnchorKind;
+  if (r.hedge === true) ref.hedge = true;
+
+  return { dateStatus: "resolved", confidence, ref };
+}
+
+// ===========================================================================
 // Stated life-event capture (issue #245, ADR-0026)
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 /**
  * A life-event fact stated in a telling ("we married in '58", "after I graduated in '61") — the
@@ -578,10 +672,9 @@ export interface ExtractStatedLifeEventsInput {
 }
 
 /**
- * Anchor words strong enough to carry a silent write. Deliberately narrower than the resolver's
- * anchor-relative vocabulary: bare "military"/"service" are dropped (a church service is not
- * military service) — an anchor-relative REFERENCE has the "ten years after" scaffolding to
- * disambiguate it, a stated fact does not.
+ * Anchor words strong enough to carry a silent write. Deliberately narrow: bare "military" /
+ * "service" are dropped (a church service is not military service). A wrong life event silently
+ * corrupts later derivations, so this errs toward UNDER-capture (ADR-0026 §4.6).
  */
 const STATED_EVENT_WORDS: Record<string, LifeEventKind> = {
   married: "wedding", wed: "wedding", wedding: "wedding",
@@ -594,13 +687,14 @@ const STATED_EVENT_WORDS: Record<string, LifeEventKind> = {
 /** How far from the anchor word (chars, either side) a date expression may sit and still belong to it. */
 const EVENT_WINDOW = 48;
 
+const NUM_RELATIVE = String.raw`(?:\d{1,3}|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s](?:one|two|three|four|five|six|seven|eight|nine))?|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|one|two|three|four|five|six|seven|eight|nine)`;
+
 /**
  * The anchor-relative guard: "ten years after we married" USES the event as a reference — it
- * states nothing about when the wedding was, so it must not record one. Matches the resolver's
- * anchor-relative prefix shape ending right at the anchor word.
+ * states nothing about when the wedding was, so it must not record one.
  */
 const RELATIVE_REFERENCE_GUARD = new RegExp(
-  String.raw`(?:about\s+|around\s+|roughly\s+)?${NUM}\s+years?\s+(?:after|before)\s+(?:(?:we|i|the|our|my)\s+)*$`,
+  String.raw`(?:about\s+|around\s+|roughly\s+)?${NUM_RELATIVE}\s+years?\s+(?:after|before)\s+(?:(?:we|i|the|our|my)\s+)*$`,
   "i",
 );
 
@@ -609,17 +703,9 @@ const CLAUSE_BOUNDARY = /[.!?\n]/;
 
 /**
  * Extract the life-event facts STATED in a telling. Never throws; anything unclear yields no
- * event. Pairing rules:
- *   - an anchor word pairs with the most precise date expression within `EVENT_WINDOW` chars
- *     (full date > month+year > bare year; ties break to the nearest), in either direction
- *     ("in 1958 we married" pairs as well as "we married in 1958");
- *   - a sentence boundary between anchor and date blocks the pairing;
- *   - an anchor used as a RELATIVE reference ("ten years after we married") records nothing,
- *     even when a date sits nearby — the date belongs to the story, not the event;
- *   - a 2-digit year ("'58") takes the resolver's decade convention: the 1900s unless the
- *     narrator wasn't alive for it (birth year > 1959), then the 2000s.
- * Only stated forms come out — a full date is a `date`, a month or year a `period` aligned to
- * that calendar boundary; the extractor never invents a circa the words don't support.
+ * event. Only STATED calendar forms pair with an anchor (full date > month+year > bare year), and
+ * only within the same clause; relative references record nothing. A 2-digit year ("'58") takes
+ * the 1900s unless the narrator wasn't alive for it (birth year > 1959).
  */
 export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): StatedLifeEvent[] {
   try {
@@ -632,12 +718,10 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
       end: number;
       /** 3 = full date, 2 = month+year, 1 = bare year — most precise wins an anchor. */
       rank: 1 | 2 | 3;
-      /** ISO span: the point for rank 3, the span start for ranks 1–2. */
       date: string;
       endDate: string | null;
     }
 
-    // --- Collect every date expression in the text, once ---
     const dates: DateExpr[] = [];
     const fullSpans: Mention[] = [];
     const collectFull = (re: RegExp, dayGroup: number, monthGroup: number, yearGroup: number) => {
@@ -646,7 +730,7 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
         const day = Number(m[dayGroup]!);
         const year = Number(m[yearGroup]!);
         if (month === null || !isRealCalendarDate(year, month, day)) continue;
-        fullSpans.push({ pos: m.index, end: m.index + m[0].length, text: m[0] });
+        fullSpans.push({ pos: m.index, end: m.index + m[0].length });
         dates.push({ pos: m.index, end: m.index + m[0].length, rank: 3, date: toIsoDate(year, month, day), endDate: null });
       }
     };
@@ -655,7 +739,7 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
 
     const monthYearSpans: Mention[] = [];
     for (const m of text.matchAll(new RegExp(String.raw`\b${MONTH_RE}\s+((?:1[89]|20)\d{2})\b`, "gi"))) {
-      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      const mention = { pos: m.index, end: m.index + m[0].length };
       if (overlaps(mention, fullSpans)) continue;
       const month = monthIndex(m[1]!);
       if (month === null) continue;
@@ -669,37 +753,29 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
     }
 
     for (const m of text.matchAll(/\b((?:1[89]|20)\d{2})\b/g)) {
-      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      const mention = { pos: m.index, end: m.index + m[0].length };
       if (overlaps(mention, fullSpans) || overlaps(mention, monthYearSpans)) continue;
       const year = Number(m[1]);
-      dates.push({
-        pos: mention.pos, end: mention.end, rank: 1,
-        date: toIsoDate(year, 1, 1),
-        endDate: toIsoDate(year, 12, 31),
-      });
+      dates.push({ pos: mention.pos, end: mention.end, rank: 1, date: toIsoDate(year, 1, 1), endDate: toIsoDate(year, 12, 31) });
     }
-    // Two-digit years ("'58"): the resolver's decade convention — the 1900s unless the narrator
-    // wasn't alive for it (birth year > 1959), then the 2000s.
     for (const m of text.matchAll(/'(\d{2})\b/g)) {
-      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      const mention = { pos: m.index, end: m.index + m[0].length };
       if (overlaps(mention, fullSpans) || overlaps(mention, monthYearSpans)) continue;
       const short = Number(m[1]);
       const year = birth !== null && birth.y > 1959 ? 2000 + short : 1900 + short;
-      dates.push({
-        pos: mention.pos, end: mention.end, rank: 1,
-        date: toIsoDate(year, 1, 1),
-        endDate: toIsoDate(year, 12, 31),
-      });
+      // A life event cannot predate the narrator's birth. This clockless guard drops the
+      // impossible century read of an ambiguous 2-digit year ("'85" for someone born 1990) rather
+      // than capturing a wrong anchor — under-capture over a silent corruption (ADR-0026 §4.6).
+      if (birth !== null && year < birth.y) continue;
+      dates.push({ pos: mention.pos, end: mention.end, rank: 1, date: toIsoDate(year, 1, 1), endDate: toIsoDate(year, 12, 31) });
     }
 
-    // --- Pair anchor words with their nearest most-precise date expression ---
     const events: StatedLifeEvent[] = [];
     const seen = new Set<string>();
     const anchorRe = /\b(married|wed|wedding|graduated|graduation|moved|move|enlisted|army|navy|marines)\b/gi;
     for (const m of text.matchAll(anchorRe)) {
       const kind = STATED_EVENT_WORDS[m[1]!.toLowerCase()]!;
       const anchorEnd = m.index + m[0].length;
-      // "ten years after we married" references the event; it does not state it.
       if (RELATIVE_REFERENCE_GUARD.test(text.slice(Math.max(0, m.index - EVENT_WINDOW), m.index))) continue;
 
       let best: (DateExpr & { gap: number }) | null = null;
@@ -707,7 +783,7 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
         if (d.pos < m.index - EVENT_WINDOW || d.pos > anchorEnd + EVENT_WINDOW) continue;
         const before = d.end <= m.index;
         const gap = before ? m.index - d.end : d.pos - anchorEnd;
-        if (gap < 0) continue; // the date expression swallows the anchor word itself — not a pairing
+        if (gap < 0) continue;
         if (CLAUSE_BOUNDARY.test(before ? text.slice(d.end, m.index) : text.slice(anchorEnd, d.pos))) continue;
         if (best === null || d.rank > best.rank || (d.rank === best.rank && gap < best.gap)) {
           best = { ...d, gap };
@@ -728,7 +804,6 @@ export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): St
     }
     return events;
   } catch {
-    // Tolerant by contract, same as the resolver: capture must never take down the interview turn.
     return [];
   }
 }

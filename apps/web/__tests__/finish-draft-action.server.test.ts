@@ -222,13 +222,15 @@ describe("finishDraftAction — Finish + Finish-check (ADR-0014 Inc 3 slice 8)",
     );
     expect(accepted).toEqual({ kind: "finished", storyId });
 
-    // Exactly ONE ai_polished row (the polished text). deriveMetadata ran once (json); the polish LLM
-    // ran exactly once total across the whole round-trip → 0 extra calls on accept.
+    // Exactly ONE ai_polished row (the polished text). The polish LLM (text) ran exactly once total
+    // across the whole round-trip → 0 extra polish calls on accept. Two json calls now: deriveMetadata
+    // plus the ADR-0026 finish-time Tier B backstop recognizer (the polished text states no calendar
+    // date, so Tier A misses and the recognizer is consulted — it returns nothing usable here).
     const rows = await aiPolishedRows(runtimeDb, storyId);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.text).toBe(POLISHED);
     expect(countCalls(llm, "text")).toBe(1);
-    expect(countCalls(llm, "json")).toBe(1);
+    expect(countCalls(llm, "json")).toBe(2);
 
     const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
     expect(story!.state).toBe("pending_approval");
@@ -249,9 +251,11 @@ describe("finishDraftAction — Finish + Finish-check (ADR-0014 Inc 3 slice 8)",
 
     expect(result).toEqual({ kind: "finished", storyId });
     expect(await aiPolishedRows(runtimeDb, storyId)).toHaveLength(0);
-    // No polish call; deriveMetadata ran exactly once.
+    // No polish (text) call. Two json calls: deriveMetadata plus the ADR-0026 finish-time Tier B
+    // backstop recognizer (the final text states no calendar date, so Tier A misses and the
+    // recognizer is consulted — returning nothing usable here, so the story stays Undated).
     expect(countCalls(llm, "text")).toBe(0);
-    expect(countCalls(llm, "json")).toBe(1);
+    expect(countCalls(llm, "json")).toBe(2);
 
     const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), storyId);
     expect(story!.state).toBe("pending_approval");
