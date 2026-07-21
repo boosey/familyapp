@@ -70,14 +70,9 @@ function scriptedLlm(phrasedLine = "unused"): ScriptedLanguageModel {
   });
 }
 
-// A neutral, above-word-floor answer (16 words) — not thin, not distressed, no off-ramp — so the
-// strong candidate is selected (mirrors answer-follow-up-loop.server.test.ts's ANSWER).
-const NEUTRAL_ANSWER =
-  "It had a beautiful stained glass window in the front hall that my grandmother truly loved.";
-
 /**
- * Same shape as NEUTRAL_ANSWER but with a Tier A stated year so live dating persists and the
- * temporal system probe stays N/A — the deepen evaluator (stage 3) is what this suite asserts.
+ * Above-word-floor answer with a Tier A stated year so live dating persists and the temporal
+ * system probe stays N/A — the deepen evaluator (stage 3) is what the prompt-seed suite asserts.
  */
 const DATED_ANSWER =
   "It had a beautiful stained glass window in the front hall that my grandmother loved in 1958.";
