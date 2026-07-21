@@ -11,6 +11,8 @@ export type {
   BiographicalProfile,
   StoryDateSink,
   PersistResolvedStoryDateInput,
+  LifeEventSink,
+  RecordStatedLifeEventInput,
 } from "./contracts";
 
 export {
@@ -19,6 +21,7 @@ export {
   InMemoryMemorySource,
   InMemoryAnchorSource,
   InMemoryStoryDateSink,
+  InMemoryLifeEventSink,
   ScriptedFollowUpEvaluator,
 } from "./mocks";
 
@@ -73,6 +76,7 @@ export {
   createCoreAnchorSource,
   createCoreAskSource,
   createCoreStoryDateSink,
+  createCoreLifeEventSink,
 } from "./core-adapters";
 
 export {

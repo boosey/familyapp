@@ -17,12 +17,13 @@ import type {
   FollowUpType,
   OccurredKind,
 } from "@chronicle/db";
-import { resolveStoryDate } from "@chronicle/core";
+import { extractStatedLifeEvents, resolveStoryDate } from "@chronicle/core";
 import type {
   AnchorSource,
   AskSource,
   BiographicalAnchors,
   FollowUpEvaluator,
+  LifeEventSink,
   MemorySource,
   PriorStoryMemory,
   StoryDateSink,
@@ -75,6 +76,17 @@ export interface InterviewerDeps {
    * session derivation-free (the feature lands dark by default, like the gap evaluator).
    */
   storyDateSink?: StoryDateSink;
+  /**
+   * Optional persistence seam for life-event capture (issue #245). When present AND live Story
+   * date derivation is active (storyDateSink + activeStoryId — capture is a by-product of
+   * story-date capture and rides the same gate), every non-intake response is run through the
+   * pure `extractStatedLifeEvents`; a stated anchor fact ("we married in '58") is recorded on
+   * the narrator, idempotently (person + kind + date) at the core write side. Later sessions
+   * load the stored events with the anchors inflow, so anchor-relative references ("ten years
+   * after we married") resolve without the narrator repeating themselves. Omit to keep the
+   * session capture-free (the feature lands dark by default).
+   */
+  lifeEventSink?: LifeEventSink;
   /** Optional fixed voice id, so the persona is the same every session (a dignity requirement). */
   voiceId?: string;
 }
@@ -329,6 +341,7 @@ export async function createInterviewSession(
     const storyId = opts.activeStoryId;
     if (!sink || !storyId) return;
     tellingParts.push(utterance);
+    await captureStatedLifeEvents(utterance);
     try {
       const resolution = resolveStoryDate({
         text: tellingParts.join("\n"),
@@ -346,6 +359,33 @@ export async function createInterviewSession(
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("story-date derivation failed (narrator=%s):", state.narratorPersonId, e);
+    }
+  }
+
+  /**
+   * Life-event capture (issue #245, ADR-0026): a telling that STATES an anchor fact ("we married
+   * in '58") stores the reusable event on the narrator in addition to resolving the story's own
+   * date. Runs per utterance, BEFORE the story-date resolution, on the same gate (capture is a
+   * by-product of story-date capture) — but independently best-effort: a capture failure must
+   * not cost the story's date. The extractor is pure; the events it returns are recorded
+   * through the sink, which dedupes per person + kind + date at the core write side. The stored
+   * event does NOT join THIS session's anchors (they are the stable snapshot loaded at start);
+   * it anchors later stories' derivations from the next session on.
+   */
+  async function captureStatedLifeEvents(utterance: string): Promise<void> {
+    const sink = deps.lifeEventSink;
+    if (!sink) return;
+    try {
+      const events = extractStatedLifeEvents({
+        text: utterance,
+        birthDate: anchors?.birthDate ?? null,
+      });
+      for (const event of events) {
+        await sink.recordStatedLifeEvent({ personId: state.narratorPersonId, event });
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("life-event capture failed (narrator=%s):", state.narratorPersonId, e);
     }
   }
 

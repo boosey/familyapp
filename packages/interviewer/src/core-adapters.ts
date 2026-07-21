@@ -18,16 +18,19 @@ import {
   listNarratorMemoryForInterviewer,
   listPendingAsksForNarrator,
   markAskRouted,
+  recordStatedLifeEvent,
 } from "@chronicle/core";
 import type { BiographicalProfile, Database } from "@chronicle/db";
 import type {
   AnchorSource,
   AskSource,
   BiographicalAnchors,
+  LifeEventSink,
   MemorySource,
   PendingAsk,
   PersistResolvedStoryDateInput,
   PriorStoryMemory,
+  RecordStatedLifeEventInput,
   StoryDateSink,
 } from "./contracts";
 
@@ -136,6 +139,21 @@ export function createCoreStoryDateSink(db: Database): StoryDateSink {
   return {
     async persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void> {
       await applyResolvedStoryDate(db, input.storyId, input.occurrence);
+    },
+  };
+}
+
+/**
+ * Build a `LifeEventSink` over the core life-events write side (issue #245). The idempotency
+ * (person + kind + date) and the narrator-only attachment live in `recordStatedLifeEvent` at
+ * the core boundary, so this adapter is a pass-through like the story-date sink above. The
+ * `life_events` table is on the OPEN schema (person-adjacent biographical data, not expressive
+ * content), so this is a non-content write — no architecture-allowlist entry is needed.
+ */
+export function createCoreLifeEventSink(db: Database): LifeEventSink {
+  return {
+    async recordStatedLifeEvent(input: RecordStatedLifeEventInput): Promise<void> {
+      await recordStatedLifeEvent(db, input.personId, input.event);
     },
   };
 }

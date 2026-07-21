@@ -17,6 +17,12 @@
  * Pure: no DB, no LLM, no clock. Every resolved value carries a provenance note naming the
  * derivation (e.g. "age 8 at Christmas, from birthdate") because the note is user-visible — a
  * wrong inference is a displayed, correctable fact, not a hidden one.
+ *
+ * This module also holds `extractStatedLifeEvents` (issue #245) — the capture half of the
+ * life-events loop. Where the resolver derives the STORY's date, the extractor spots a stated
+ * anchor FACT ("we married in '58", "after I graduated in '61") so it can be stored on the
+ * narrator as a reusable life event. Same discipline: tolerant, never throws, never invents
+ * precision — and conservative, because a wrong anchor silently corrupts later derivations.
  */
 import type { LifeEventKind, OccurredKind } from "@chronicle/db";
 import { isRealCalendarDate, toIsoDate } from "./person-dob";
@@ -549,4 +555,180 @@ function holidayInAgeYear(birth: Ymd, age: number, md: [number, number] | "thank
   const day = md === "thanksgiving" ? thanksgivingDay(y) : hd;
   if (!isRealCalendarDate(y, hm, day)) return null;
   return { y, m: hm, d: day };
+}
+
+// ---------------------------------------------------------------------------
+// Stated life-event capture (issue #245, ADR-0026)
+// ---------------------------------------------------------------------------
+
+/**
+ * A life-event fact stated in a telling ("we married in '58", "after I graduated in '61") — the
+ * reusable anchor, pared to kind + occurrence, ready to persist on the narrator.
+ */
+export interface StatedLifeEvent {
+  kind: LifeEventKind;
+  occurrence: StoryDateOccurrence;
+}
+
+export interface ExtractStatedLifeEventsInput {
+  /** The telling (one utterance) — transcript or prose. */
+  text: string;
+  /** The narrator's birth date (ISO YYYY-MM-DD) — settles the century of a 2-digit "'58". */
+  birthDate?: string | null;
+}
+
+/**
+ * Anchor words strong enough to carry a silent write. Deliberately narrower than the resolver's
+ * anchor-relative vocabulary: bare "military"/"service" are dropped (a church service is not
+ * military service) — an anchor-relative REFERENCE has the "ten years after" scaffolding to
+ * disambiguate it, a stated fact does not.
+ */
+const STATED_EVENT_WORDS: Record<string, LifeEventKind> = {
+  married: "wedding", wed: "wedding", wedding: "wedding",
+  graduated: "graduation", graduation: "graduation",
+  moved: "move", move: "move",
+  enlisted: "military_service", army: "military_service",
+  navy: "military_service", marines: "military_service",
+};
+
+/** How far from the anchor word (chars, either side) a date expression may sit and still belong to it. */
+const EVENT_WINDOW = 48;
+
+/**
+ * The anchor-relative guard: "ten years after we married" USES the event as a reference — it
+ * states nothing about when the wedding was, so it must not record one. Matches the resolver's
+ * anchor-relative prefix shape ending right at the anchor word.
+ */
+const RELATIVE_REFERENCE_GUARD = new RegExp(
+  String.raw`(?:about\s+|around\s+|roughly\s+)?${NUM}\s+years?\s+(?:after|before)\s+(?:(?:we|i|the|our|my)\s+)*$`,
+  "i",
+);
+
+/** Sentence boundaries sever the anchor↔date pairing ("We married young. In 1968…" pairs nothing). */
+const CLAUSE_BOUNDARY = /[.!?\n]/;
+
+/**
+ * Extract the life-event facts STATED in a telling. Never throws; anything unclear yields no
+ * event. Pairing rules:
+ *   - an anchor word pairs with the most precise date expression within `EVENT_WINDOW` chars
+ *     (full date > month+year > bare year; ties break to the nearest), in either direction
+ *     ("in 1958 we married" pairs as well as "we married in 1958");
+ *   - a sentence boundary between anchor and date blocks the pairing;
+ *   - an anchor used as a RELATIVE reference ("ten years after we married") records nothing,
+ *     even when a date sits nearby — the date belongs to the story, not the event;
+ *   - a 2-digit year ("'58") takes the resolver's decade convention: the 1900s unless the
+ *     narrator wasn't alive for it (birth year > 1959), then the 2000s.
+ * Only stated forms come out — a full date is a `date`, a month or year a `period` aligned to
+ * that calendar boundary; the extractor never invents a circa the words don't support.
+ */
+export function extractStatedLifeEvents(input: ExtractStatedLifeEventsInput): StatedLifeEvent[] {
+  try {
+    const text = typeof input?.text === "string" ? input.text : "";
+    if (text.trim().length === 0) return [];
+    const birth = parseIso(input?.birthDate);
+
+    interface DateExpr {
+      pos: number;
+      end: number;
+      /** 3 = full date, 2 = month+year, 1 = bare year — most precise wins an anchor. */
+      rank: 1 | 2 | 3;
+      /** ISO span: the point for rank 3, the span start for ranks 1–2. */
+      date: string;
+      endDate: string | null;
+    }
+
+    // --- Collect every date expression in the text, once ---
+    const dates: DateExpr[] = [];
+    const fullSpans: Mention[] = [];
+    const collectFull = (re: RegExp, dayGroup: number, monthGroup: number, yearGroup: number) => {
+      for (const m of text.matchAll(re)) {
+        const month = monthIndex(m[monthGroup]!);
+        const day = Number(m[dayGroup]!);
+        const year = Number(m[yearGroup]!);
+        if (month === null || !isRealCalendarDate(year, month, day)) continue;
+        fullSpans.push({ pos: m.index, end: m.index + m[0].length, text: m[0] });
+        dates.push({ pos: m.index, end: m.index + m[0].length, rank: 3, date: toIsoDate(year, month, day), endDate: null });
+      }
+    };
+    collectFull(new RegExp(String.raw`\b${MONTH_RE}\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+((?:1[89]|20)\d{2})\b`, "gi"), 2, 1, 3);
+    collectFull(new RegExp(String.raw`\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?${MONTH_RE},?\s+((?:1[89]|20)\d{2})\b`, "gi"), 1, 2, 3);
+
+    const monthYearSpans: Mention[] = [];
+    for (const m of text.matchAll(new RegExp(String.raw`\b${MONTH_RE}\s+((?:1[89]|20)\d{2})\b`, "gi"))) {
+      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      if (overlaps(mention, fullSpans)) continue;
+      const month = monthIndex(m[1]!);
+      if (month === null) continue;
+      const year = Number(m[2]);
+      monthYearSpans.push(mention);
+      dates.push({
+        pos: mention.pos, end: mention.end, rank: 2,
+        date: toIsoDate(year, month, 1),
+        endDate: toIsoDate(year, month, lastDayOfMonth(year, month)),
+      });
+    }
+
+    for (const m of text.matchAll(/\b((?:1[89]|20)\d{2})\b/g)) {
+      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      if (overlaps(mention, fullSpans) || overlaps(mention, monthYearSpans)) continue;
+      const year = Number(m[1]);
+      dates.push({
+        pos: mention.pos, end: mention.end, rank: 1,
+        date: toIsoDate(year, 1, 1),
+        endDate: toIsoDate(year, 12, 31),
+      });
+    }
+    // Two-digit years ("'58"): the resolver's decade convention — the 1900s unless the narrator
+    // wasn't alive for it (birth year > 1959), then the 2000s.
+    for (const m of text.matchAll(/'(\d{2})\b/g)) {
+      const mention = { pos: m.index, end: m.index + m[0].length, text: m[0] };
+      if (overlaps(mention, fullSpans) || overlaps(mention, monthYearSpans)) continue;
+      const short = Number(m[1]);
+      const year = birth !== null && birth.y > 1959 ? 2000 + short : 1900 + short;
+      dates.push({
+        pos: mention.pos, end: mention.end, rank: 1,
+        date: toIsoDate(year, 1, 1),
+        endDate: toIsoDate(year, 12, 31),
+      });
+    }
+
+    // --- Pair anchor words with their nearest most-precise date expression ---
+    const events: StatedLifeEvent[] = [];
+    const seen = new Set<string>();
+    const anchorRe = /\b(married|wed|wedding|graduated|graduation|moved|move|enlisted|army|navy|marines)\b/gi;
+    for (const m of text.matchAll(anchorRe)) {
+      const kind = STATED_EVENT_WORDS[m[1]!.toLowerCase()]!;
+      const anchorEnd = m.index + m[0].length;
+      // "ten years after we married" references the event; it does not state it.
+      if (RELATIVE_REFERENCE_GUARD.test(text.slice(Math.max(0, m.index - EVENT_WINDOW), m.index))) continue;
+
+      let best: (DateExpr & { gap: number }) | null = null;
+      for (const d of dates) {
+        if (d.pos < m.index - EVENT_WINDOW || d.pos > anchorEnd + EVENT_WINDOW) continue;
+        const before = d.end <= m.index;
+        const gap = before ? m.index - d.end : d.pos - anchorEnd;
+        if (gap < 0) continue; // the date expression swallows the anchor word itself — not a pairing
+        if (CLAUSE_BOUNDARY.test(before ? text.slice(d.end, m.index) : text.slice(anchorEnd, d.pos))) continue;
+        if (best === null || d.rank > best.rank || (d.rank === best.rank && gap < best.gap)) {
+          best = { ...d, gap };
+        }
+      }
+      if (best === null) continue;
+
+      const occurrence: StoryDateOccurrence = {
+        kind: best.rank === 3 ? "date" : "period",
+        date: best.date,
+        endDate: best.rank === 3 ? null : best.endDate,
+        provenance: `stated "${text.slice(Math.min(m.index, best.pos), Math.max(anchorEnd, best.end))}" in a telling`,
+      };
+      const key = `${kind}:${occurrence.date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      events.push({ kind, occurrence });
+    }
+    return events;
+  } catch {
+    // Tolerant by contract, same as the resolver: capture must never take down the interview turn.
+    return [];
+  }
 }

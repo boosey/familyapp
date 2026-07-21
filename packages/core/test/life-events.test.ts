@@ -3,6 +3,8 @@
  * PGlite (zero mocking) like the rest of the story-repository suite:
  *   - `listLifeEventsForPerson` — the read side of the life-events anchor table that feeds the
  *     interviewer's session context;
+ *   - `recordStatedLifeEvent` — the write side (issue #245): a stated anchor fact lands as a
+ *     row, idempotent per person + kind + date, on the narrator only;
  *   - `applyResolvedStoryDate` — the derivation path's write shape, persisting a resolved
  *     occurrence (with its provenance note) through the `updateDerivedFields` seam;
  *   - `getNarratorBiographicalContext` — now carries the full birth date (the primary anchor).
@@ -15,6 +17,8 @@ import {
   getNarratorBiographicalContext,
   listLifeEventsForPerson,
   persistRecordingAndCreateDraft,
+  recordStatedLifeEvent,
+  type StatedLifeEvent,
 } from "../src/index";
 
 let db: Database;
@@ -83,6 +87,81 @@ describe("listLifeEventsForPerson", () => {
     });
 
     expect(await listLifeEventsForPerson(db, personId)).toEqual([]);
+  });
+});
+
+describe("recordStatedLifeEvent", () => {
+  const WEDDING_1958: StatedLifeEvent = {
+    kind: "wedding",
+    occurrence: {
+      kind: "period",
+      date: "1958-01-01",
+      endDate: "1958-12-31",
+      provenance: 'stated "married in \'58" in a telling',
+    },
+  };
+
+  it("writes the stated fact as a life_events row, with its provenance", async () => {
+    const personId = await createPerson("Eleanor");
+
+    const result = await recordStatedLifeEvent(db, personId, WEDDING_1958);
+
+    expect(result.created).toBe(true);
+    expect(result.event.personId).toBe(personId);
+    expect(result.event.kind).toBe("wedding");
+    expect(result.event.occurredKind).toBe("period");
+    expect(result.event.occurredDate).toBe("1958-01-01");
+    expect(result.event.occurredEndDate).toBe("1958-12-31");
+    expect(result.event.occurredProvenance).toBe('stated "married in \'58" in a telling');
+    // …and the read side hands it back as a derivation anchor (the reuse loop closes).
+    expect(await listLifeEventsForPerson(db, personId)).toEqual([
+      { kind: "wedding", date: "1958-01-01" },
+    ]);
+  });
+
+  it("is idempotent per person + kind + date: a re-stated fact writes nothing", async () => {
+    const personId = await createPerson("Eleanor");
+
+    const first = await recordStatedLifeEvent(db, personId, WEDDING_1958);
+    const second = await recordStatedLifeEvent(db, personId, WEDDING_1958);
+
+    expect(second.created).toBe(false);
+    expect(second.event.id).toBe(first.event.id);
+    const rows = await db.select().from(lifeEvents);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("same kind at a different date is a NEW row (not a dupe, not an overwrite)", async () => {
+    const personId = await createPerson("Eleanor");
+
+    await recordStatedLifeEvent(db, personId, WEDDING_1958);
+    const secondMarriage = await recordStatedLifeEvent(db, personId, {
+      kind: "wedding",
+      occurrence: {
+        kind: "period",
+        date: "1963-01-01",
+        endDate: "1963-12-31",
+        provenance: 'stated "married again in \'63" in a telling',
+      },
+    });
+
+    expect(secondMarriage.created).toBe(true);
+    expect(await listLifeEventsForPerson(db, personId)).toEqual([
+      { kind: "wedding", date: "1958-01-01" },
+      { kind: "wedding", date: "1963-01-01" },
+    ]);
+  });
+
+  it("attaches to the narrator who stated it ONLY — no mirroring onto spouse or kin", async () => {
+    const narratorId = await createPerson("Eleanor");
+    const spouseId = await createPerson("Henry");
+
+    await recordStatedLifeEvent(db, narratorId, WEDDING_1958);
+
+    expect(await listLifeEventsForPerson(db, narratorId)).toEqual([
+      { kind: "wedding", date: "1958-01-01" },
+    ]);
+    expect(await listLifeEventsForPerson(db, spouseId)).toEqual([]);
   });
 });
 

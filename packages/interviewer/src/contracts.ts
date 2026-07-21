@@ -14,7 +14,7 @@
  */
 
 import type { BiographicalProfile, FollowUpCandidate } from "@chronicle/db";
-import type { LifeEventAnchor, StoryDateOccurrence } from "@chronicle/core";
+import type { LifeEventAnchor, StatedLifeEvent, StoryDateOccurrence } from "@chronicle/core";
 
 export type { BiographicalProfile };
 
@@ -182,6 +182,28 @@ export interface PersistResolvedStoryDateInput {
 
 export interface StoryDateSink {
   persistResolvedStoryDate(input: PersistResolvedStoryDateInput): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// LifeEventSink — the persistence side of life-event capture (issue #245, ADR-0026). When a
+// telling states an anchor FACT ("we married in '58", "after I graduated in '61"), the turn
+// loop's pure `extractStatedLifeEvents` spots it and hands it here to be stored on the
+// NARRATOR (idempotent per person + kind + date) — in addition to resolving the current
+// story's date. Later stories then resolve anchor-relative references against the stored
+// events without the narrator repeating themselves. This is the ONLY life-event write path —
+// no profile UI, no onboarding questions. Prod plugs `createCoreLifeEventSink(db)`; tests use
+// the in-memory mock.
+// ---------------------------------------------------------------------------
+
+export interface RecordStatedLifeEventInput {
+  /** The narrator who stated the fact — events attach to the teller only (never mirrored). */
+  personId: string;
+  /** The extractor's output — kind plus the occurrence (form, point/span, provenance note). */
+  event: StatedLifeEvent;
+}
+
+export interface LifeEventSink {
+  recordStatedLifeEvent(input: RecordStatedLifeEventInput): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

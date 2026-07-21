@@ -93,9 +93,20 @@ export {
   type StoryDateResolution,
   type LifeEventAnchor,
 } from "./resolve-story-date";
-// ADR-0026: the Life event read side — the reusable anchors derivation resolves against. The
-// write side lands with life-event capture from tellings (#245).
-export { listLifeEventsForPerson } from "./life-events";
+// ADR-0026 (#245): the pure stated-life-event extractor — spots an anchor FACT in a telling
+// ("we married in '58") so it can be stored on the narrator as a reusable life event.
+export {
+  extractStatedLifeEvents,
+  type ExtractStatedLifeEventsInput,
+  type StatedLifeEvent,
+} from "./resolve-story-date";
+// ADR-0026: the Life event read side (the reusable anchors derivation resolves against) and the
+// write side (#245) — capture from tellings, idempotent per person + kind + date.
+export {
+  listLifeEventsForPerson,
+  recordStatedLifeEvent,
+  type RecordStatedLifeEventResult,
+} from "./life-events";
 // The multi-take set (ADR-0012) surfaced for callers of the take repo above.
 export type { StoryRecording } from "@chronicle/db";
 // ADR-0016 (tree renderer): card color only, mirrors `TreeNode.sex`.
