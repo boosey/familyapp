@@ -916,10 +916,11 @@ export const hub = {
     existingMatchConnecting: "Connecting…",
     existingMatchCreateNew: "Add as someone new",
     existingMatchFailed: "Couldn't connect them. Please try again.",
-    // Issues #33/#34 — the governance list (steward affirm/deny/correct + subject hide/unhide).
+    // Issues #33/#34/#256 — the governance list (steward affirm/deny/correct + subject hide/unhide +
+    // asserter retract).
     govHeading: "Relationships in this family",
     govIntro:
-      "Every relationship anyone records shows up here as soon as it's added. As steward you can endorse, remove, or correct one; if a relationship is about you, you can hide it.",
+      "Every relationship anyone records shows up here as soon as it's added. If you added one by mistake, you can remove it yourself; as steward you can endorse, remove, or correct any of them; if a relationship is about you, you can hide it.",
     govEmpty: "No relationships recorded in this family yet.",
     // The two ungendered primitives, rendered for a row.
     edgeParentOf: (parent: string, child: string) => `${parent} is a parent of ${child}`,

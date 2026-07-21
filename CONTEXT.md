@@ -96,7 +96,10 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   up-front consent: the **Steward** may **affirm, deny, or correct** any edge; later, any member may
   **challenge** an edge and the **Steward decides**. All of it is **append-only** — a deny/correct/
   challenge/decision **supersedes** with a new row (same discipline as the **Consent ledger** and the
-  **Follow-up decision record**), never an edit; history is never lost.
+  **Follow-up decision record**), never an edit; history is never lost. **Issue #256:** the edge's
+  **original asserter** may also **deny (retract) that same edge** themselves, even when not the
+  Steward — the one governance action a non-steward may exercise, and only over their own assertion;
+  `affirm`/`correct` remain Steward-only.
 - **Subject hide** — a **personal veto** available to the Person an edge is *about*, when they are a
   real account (`self`). Hiding suppresses the edge family-wide (it stops being shown as fact) and
   **overrides even a Steward affirmation** — being *depicted at all* is the subject's own consent, not

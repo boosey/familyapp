@@ -57,6 +57,15 @@ truth, no endpoint confirmation required. Governance is by **exception** — the
 deny, or correct**; any member may later **challenge** and the Steward **decides**. Every transition
 is **append-only** (supersede, never edit), matching the Consent ledger and Follow-up decision record.
 
+> **Amendment (2026-07-20, issue #256):** mistakes happen — the Steward should not be the only person
+> who can undo one. The **original asserter of an edge may also `deny` (retract) that SAME edge
+> themselves**, an append-only supersede identical in shape to the Steward's deny. This widens ONLY
+> `deny`: `affirm`/`correct` remain **Steward-only** — endorsing or re-typing someone else's claim is a
+> different trust question than undoing your own. A non-steward, non-asserter member still has no
+> governance authority over an edge. The Family tree's Remove affordance is shown to a viewer who is
+> the Steward **or** the edge's original asserter (`viewerCanRemove`); Endorse/Correct stay
+> Steward-gated (`viewerIsSteward`).
+
 **The subject keeps a veto.** The Person an edge is *about*, if a real account (`self`), has a
 **hide** button that suppresses the edge family-wide and **overrides even a Steward affirmation** —
 being depicted at all is the subject's own consent, not a dispute the Steward adjudicates. A `mention`

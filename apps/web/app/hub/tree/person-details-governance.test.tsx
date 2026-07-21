@@ -50,8 +50,10 @@ function edge(over: Partial<GovernableKinEdge> & Pick<GovernableKinEdge, "person
     personBIdentified: over.personBIdentified ?? true,
     nature: over.nature ?? "unknown",
     state: over.state ?? "asserted",
+    assertedBy: over.assertedBy ?? over.personAId,
     viewerIsSteward: over.viewerIsSteward ?? false,
     viewerCanHide: over.viewerCanHide ?? false,
+    viewerCanRemove: over.viewerCanRemove ?? over.viewerIsSteward ?? false,
   };
 }
 
@@ -105,6 +107,22 @@ it("shows both Remove and Hide when the steward is also an endpoint", async () =
   ]);
   expect(await screen.findByRole("button", { name: hub.kin.deny })).toBeTruthy();
   expect(screen.getByRole("button", { name: hub.kin.hide })).toBeTruthy();
+});
+
+it("#256: shows Remove for the original asserter even when not steward", async () => {
+  renderDetails([
+    edge({ personAId: "alice", personBId: "bob", viewerIsSteward: false, viewerCanRemove: true }),
+  ]);
+  expect(await screen.findByTestId("tree-details-gov-edges")).toBeTruthy();
+  expect(screen.getByRole("button", { name: hub.kin.deny })).toBeTruthy();
+});
+
+it("#256: hides Remove for a viewer who is neither steward nor asserter (Charlie)", async () => {
+  renderDetails([
+    edge({ personAId: "alice", personBId: "bob", viewerIsSteward: false, viewerCanRemove: false }),
+  ]);
+  await waitFor(() => expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull());
+  expect(screen.queryByRole("button", { name: hub.kin.deny })).toBeNull();
 });
 
 it("hides the governance section when the viewer can neither Remove nor Hide", async () => {

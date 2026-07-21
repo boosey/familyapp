@@ -467,10 +467,16 @@ export interface GovernableKinEdge {
   personBIdentified: boolean;
   nature: KinshipNature | null;
   state: KinshipState;
-  /** True iff the viewer is THIS family's steward — may affirm/deny/correct. */
+  /** The Person who ORIGINALLY asserted this edge (the earliest ledger row's actor) — audit + #256's
+   *  asserter-retract gate (`viewerCanRemove`). */
+  assertedBy: string;
+  /** True iff the viewer is THIS family's steward — may affirm/deny/correct any edge. */
   viewerIsSteward: boolean;
   /** True iff the viewer is a self-account endpoint of THIS edge — may hide/unhide it. */
   viewerCanHide: boolean;
+  /** True iff the viewer may DENY (remove) this specific edge (#256): the steward, OR the Person who
+   *  originally asserted it. Narrower than `viewerIsSteward` — affirm/correct stay steward-only. */
+  viewerCanRemove: boolean;
 }
 
 /**
@@ -478,8 +484,9 @@ export interface GovernableKinEdge {
  * per-edge capabilities. Auth flows through `resolveKinshipProjection` (active-membership required,
  * anonymous rejected). Then it hydrates endpoint names from `persons` and computes, for the viewer:
  * steward-of-this-family (a single `families` lookup) and, per edge, whether the viewer is a
- * self-account endpoint of it (so the hide control appears only where it applies). The flags are
- * advisory; the write path re-verifies them.
+ * self-account endpoint of it (so the hide control appears only where it applies) and whether the
+ * viewer is the steward or the edge's original asserter (`viewerCanRemove`, #256 — drives the Family
+ * tree's Remove affordance). The flags are advisory; the write path re-verifies them.
  */
 export async function listGovernableKinEdges(
   db: Database,
@@ -525,8 +532,10 @@ export async function listGovernableKinEdges(
       personBIdentified: b?.identified ?? false,
       nature: e.nature,
       state: e.state,
+      assertedBy: e.assertedBy,
       viewerIsSteward,
       viewerCanHide: viewerIsEndpoint && viewerHasAccount,
+      viewerCanRemove: viewerIsSteward || e.assertedBy === viewer,
     };
   });
 }

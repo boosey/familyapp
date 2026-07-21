@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * Governance + hide controls for one kinship edge (issues #33/#34) — client component wrapping the
- * edge server actions. Renders ONLY the controls the viewer is entitled to (per the capability flags
- * the audited read composition computed): steward → Endorse / Remove / Update nature (parent_of);
- * a self-endpoint subject → Hide. The server actions re-check every gate, so these flags are
+ * Governance + hide controls for one kinship edge (issues #33/#34, widened by #256) - client
+ * component wrapping the edge server actions. Renders ONLY the controls the viewer is entitled to (per
+ * the capability flags the audited read composition computed): steward -> Endorse / Remove / Update nature (parent_of);
+ * the ORIGINAL ASSERTER of the edge (steward or not) -> Remove, retracting their own mistake (#256); a
+ * self-endpoint subject -> Hide. The server actions re-check every gate, so these flags are
  * affordances, not the authorization.
  *
  * Re-homed onto the Family tree (#254): PersonDetails + the List-view relationships section. Nature
- * correction (#255) uses the existing append-only `correctEdge` path — partner edges have no nature
+ * correction (#255) uses the existing append-only `correctEdge` path - partner edges have no nature
  * control. On success, `onSuccess` reports which action ran so the mount can prune client tree
- * state only for deny/hide (affirm/correct must keep the edge visible — TreeCanvas merge won't
+ * state only for deny/hide (affirm/correct must keep the edge visible - TreeCanvas merge won't
  * restore a wrongly pruned edge when only `state`/`nature` changed).
  */
 import { useState, useTransition } from "react";
@@ -171,7 +172,7 @@ export function KinEdgeControls({
 }) {
   const [error, setError] = useState<string | null>(null);
 
-  if (!edge.viewerIsSteward && !edge.viewerCanHide) return null;
+  if (!edge.viewerCanRemove && !edge.viewerCanHide) return null;
 
   return (
     <div
@@ -190,7 +191,9 @@ export function KinEdgeControls({
           onSuccess={onSuccess}
         />
       ) : null}
-      {edge.viewerIsSteward ? (
+      {/* #256: Remove is available to the steward (any edge) OR the edge's original asserter
+          (their own edge only) — `viewerCanRemove` already encodes that gate. */}
+      {edge.viewerCanRemove ? (
         <ActionButton
           familyId={familyId}
           edge={edge}
