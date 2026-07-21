@@ -10,9 +10,10 @@ import { useRouter } from "next/navigation";
 import { KindredVoiceButton } from "@/app/_kindred";
 import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
 import { useAudioLevel } from "@/app/_kindred/use-audio-level";
+import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { PREFERENCES } from "@/app/_kindred/preferences/registry";
 import { readPreference } from "@/app/_kindred/preferences/client";
-import { capture, common } from "@/app/_copy";
+import { capture } from "@/app/_copy";
 import { pollUntilReady } from "@/lib/poll-status";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
 
@@ -112,14 +113,16 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true);
   const level = useAudioLevel(stream, !reduceMotion);
 
-  // Hold-to-record: press-down starts, release finishes. `start()` only reaches "listening" after
-  // an async getUserMedia, so a quick tap (down+up before the mic is ready) would otherwise release
-  // while phase is still "idle" and the stop would be dropped — leaving a recording that never ends.
+  // Recording gesture follows the device-local phone/desktop preference (#263/#264). Hold mode:
+  // press-down starts, release finishes. `start()` only reaches "listening" after an async
+  // getUserMedia, so a quick tap (down+up before the mic is ready) would otherwise release while
+  // phase is still "idle" and the stop would be dropped — leaving a recording that never ends.
   // `heldRef` tracks whether the pointer is still down; when start resolves we honour a release that
   // already happened. This keeps tap-to-toggle working (motor accessibility) alongside press-hold.
   // These hooks MUST sit above the phase early-returns below (rules of hooks): once a capture flips
   // phase to "processing"/"slow"/"done"/"softfail" the component returns early, and declaring them
   // after those returns would skip them on that render → "rendered fewer hooks than expected".
+  const { holdToRecord } = useRecordingGesture();
   const heldRef = useRef(false);
   const onHoldStart = useCallback(async () => {
     if (micPhase !== "idle") return;
@@ -134,6 +137,11 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     heldRef.current = false;
     if (micPhase === "listening") finish();
   }, [micPhase, finish]);
+  // Tap-to-toggle: start when idle, stop when listening.
+  const onTapToggle = useCallback(() => {
+    if (micPhase === "listening") finish();
+    else if (micPhase === "idle") void start();
+  }, [micPhase, start, finish]);
 
   if (phase === "processing") {
     return (
@@ -215,16 +223,11 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
       listening={micPhase === "listening"}
       saving={micPhase === "saving"}
       size={220}
-      label={
-        micPhase === "saving"
-          ? common.voiceButton.oneMoment
-          : micPhase === "listening"
-            ? common.voiceButton.releaseToFinish
-            : common.voiceButton.holdToSpeak
-      }
-      holdToRecord
-      onHoldStart={onHoldStart}
-      onHoldEnd={onHoldEnd}
+      // Omit `label` so KindredVoiceButton's hold/tap defaults match hub compose + onboarding.
+      holdToRecord={holdToRecord}
+      onHoldStart={holdToRecord ? onHoldStart : undefined}
+      onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+      onClick={holdToRecord ? undefined : onTapToggle}
       waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
     />
   );

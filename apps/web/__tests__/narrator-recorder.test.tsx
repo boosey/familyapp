@@ -5,10 +5,14 @@
  * /api/capture/status until `ready`, then routes to the approval surface. Covers the instant-ready
  * case (dev/CI synchronous dispatch) and the processing→ready case (prod durable queue, simulated
  * via the mocked status poll). Mocks the browser media stack, fetch, and the router.
+ *
+ * Recording gesture defaults to tap (#263/#264); hold is covered when the preference is set.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NarratorRecorder } from "@/app/s/[token]/NarratorRecorder";
+import { PREFERENCES } from "@/app/_kindred/preferences/registry";
+import { common } from "@/app/_copy";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -82,8 +86,19 @@ class FakeAudioContext {
   }
 }
 
+function stubDesktopMatchMedia() {
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    media: "",
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }) as unknown as typeof window.matchMedia;
+}
+
 beforeEach(() => {
   statusQueue = ["ready"];
+  localStorage.clear();
+  stubDesktopMatchMedia();
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
     value: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => {} }] }) },
@@ -97,17 +112,17 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
+/** Default gesture is tap (#263/#264): click starts, click again stops. */
 async function recordAndStop() {
-  // Hold-to-record mode: pointerDown starts, pointerUp stops. The button's accessible name flips
-  // "Hold to speak" → "Release to finish", so grab the element up front and release that same node.
   const mic = screen.getByRole("button");
-  fireEvent.pointerDown(mic);
-  await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
-  fireEvent.pointerUp(mic);
+  fireEvent.click(mic);
+  await waitFor(() => expect(screen.getByText(common.voiceButton.listening)).toBeTruthy());
+  fireEvent.click(mic);
 }
 
 describe("NarratorRecorder async-aware capture", () => {
@@ -212,5 +227,20 @@ describe("NarratorRecorder async-aware capture", () => {
     await recordAndStop();
     await waitFor(() => expect(screen.getByText(/pick this up another time/)).toBeTruthy());
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("honors hold recording-gesture preference (pointer down/up)", async () => {
+    localStorage.setItem(PREFERENCES.recordingGestureDesktop.storageKey, "hold");
+    render(<NarratorRecorder token={TOKEN} />);
+    await waitFor(() => expect(screen.getByText(common.voiceButton.holdToSpeak)).toBeTruthy());
+
+    const mic = screen.getByRole("button");
+    fireEvent.pointerDown(mic);
+    await waitFor(() => expect(screen.getByText(common.voiceButton.releaseToFinish)).toBeTruthy());
+    fireEvent.pointerUp(mic);
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(`/s/${TOKEN}/approve/${STORY_ID}`),
+    );
   });
 });
