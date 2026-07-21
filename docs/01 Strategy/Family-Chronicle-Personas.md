@@ -1,5 +1,7 @@
 # User Personas — Guided Narration Use Case (Mode One)
 
+> ⚠️ **Superseded for product framing.** Personas here are elder-centric snapshots of Mode 1. Current roles and personas: **`docs/current/03-users-roles-and-personas.md`**.
+
 *Companion to the North Star Vision. Covers the first use case: capturing one person's life history in collaboration with the rest of their family. Four personas map to the four human roles in this flow — the narrator (Mode 1), the initiator/organizer (Mode 3), the curious audience-member (Mode 4), and the family steward (Mode 5). These personas happen to be an elder and her younger relatives — a common starting constellation — but the roles are age-neutral: a narrator can be any age, and asking, organizing, and stewarding are not the province of the young. Roles rotate over a lifetime; these are snapshots of who each person is at the moment they meet the product.*
 
 ---
