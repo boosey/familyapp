@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     url: "https://tellmeagain.app",
     siteName: landing.brand,
     type: "website",
+    images: [{ url: "/logo.png", width: 528, height: 528, alt: landing.brand }],
   },
   robots: { index: true, follow: true },
 };

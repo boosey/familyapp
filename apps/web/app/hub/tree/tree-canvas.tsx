@@ -46,6 +46,7 @@ import type {
   KinshipTreeData,
   ResolvedKinshipEdge,
   TreeNode,
+  UnplacedMember,
 } from "@chronicle/core";
 // Client-safe kinship derivation (type-only server barrel avoided — no node:crypto in the bundle).
 import { deriveKin, type KinRelation } from "@chronicle/core/kinship-derive";
@@ -109,6 +110,16 @@ export interface TreeCanvasProps {
    * pre-targeted invite URL without a real navigation.
    */
   navigate?: (url: string) => void;
+  /**
+   * #251 — active members not yet on a kinship edge. Passed into AddRelativeModal so typing a
+   * colliding name can offer connect-existing instead of minting a duplicate.
+   */
+  unplacedMembers?: readonly UnplacedMember[];
+  /**
+   * After a successful add/link, refresh server-rendered Family tab data (unplaced list, etc.).
+   * FamilyTab passes `router.refresh()`. Optional so bare test mounts stay router-free.
+   */
+  onFamilyMutation?: () => void;
 }
 
 
@@ -199,6 +210,8 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     pan: panProp,
     onPanChange,
     navigate = defaultNavigate,
+    unplacedMembers = [],
+    onFamilyMutation,
   }: TreeCanvasProps,
   ref,
 ) {
@@ -786,11 +799,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           initialRelation={addTarget.relation}
           coParentOptions={partnersOf(addTarget.anchorPersonId)}
           preselectedCoParentId={addTarget.coParentPersonId}
+          unplacedMembers={unplacedMembers}
           onClose={() => setAddTarget(null)}
           onSuccess={() => {
             const anchor = addTarget.anchorPersonId;
             setAddTarget(null);
             void refetchAnchor(anchor);
+            onFamilyMutation?.();
           }}
         />
       )}

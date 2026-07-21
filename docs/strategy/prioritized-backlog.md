@@ -2,7 +2,7 @@
 
 *Companion to the Release Roadmap. Where the Roadmap sequences the whole north star by **dependency and risk across phases**, this doc answers the narrower, live question: **at the adoption/validation stage, with no real families yet, what do we build first?** It is the output of running the gated two-layer method (ADR-0022) over the reconciled 26-epic candidate corpus. It refines the Roadmap's early-phase sequencing; it does not replace the phase logic. Where a phase-reading and this backlog conflict on "what's next," this backlog wins for the current stage — because it is the phase logic passed through the eligibility gates and scored for adoption.*
 
-*Charted and applied via Wayfinder map [#69](https://github.com/boosey/familyapp/issues/69). Method: **ADR-0022**. Working artifacts: `docs/wayfinder/2026-07-15-*.md`.*
+*Charted and applied via Wayfinder map [#69](https://github.com/boosey/familyapp/issues/69). Method: **ADR-0022**. First-pass working artifacts (historical): `docs/99-pruned/wayfinder/2026-07-15-*.md`. Parked product ideas: [`09-roadmap-and-deferred.md`](./09-roadmap-and-deferred.md).*
 
 ---
 

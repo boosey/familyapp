@@ -12,6 +12,7 @@ import { getRuntime } from "@/lib/runtime";
 import { ApprovalRecorder } from "./ApprovalRecorder";
 import { ApprovePending } from "./ApprovePending";
 import { KindredListenBar } from "@/app/_kindred";
+import { BrandMark } from "@/app/_brand/BrandMark";
 import { capture } from "@/app/_copy";
 
 export const runtime = "nodejs";
@@ -129,11 +130,15 @@ export default async function ApprovePage({
         >
           <span
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
               fontFamily: "var(--font-story)",
               fontSize: "var(--text-ui-lg)",
               color: "var(--text-meta)",
             }}
           >
+            <BrandMark size={24} />
             {capture.approve.brand}
           </span>
           <span

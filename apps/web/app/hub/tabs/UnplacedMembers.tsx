@@ -336,10 +336,13 @@ function PlaceMemberModal({
       const res = await onFetchAnchors(familyId);
       if (cancelled) return;
       if (res.ok) {
-        const opts = res.persons.map((p) => ({
-          id: p.personId,
-          name: p.displayName?.trim() || hub.kin.edgeUnknownPerson,
-        }));
+        // #250: seed fallback may include the member being placed; never offer a self-link.
+        const opts = res.persons
+          .filter((p) => p.personId !== member.personId)
+          .map((p) => ({
+            id: p.personId,
+            name: p.displayName?.trim() || hub.kin.edgeUnknownPerson,
+          }));
         setAnchors(opts);
         const first = opts[0];
         if (first) {
@@ -352,7 +355,7 @@ function PlaceMemberModal({
     }
     load();
     return () => { cancelled = true; };
-  }, [familyId, onFetchAnchors]);
+  }, [familyId, member.personId, onFetchAnchors]);
 
   // Escape closes (mirrors AddRelativeModal — a window listener, not a div handler, so it fires
   // regardless of focus).

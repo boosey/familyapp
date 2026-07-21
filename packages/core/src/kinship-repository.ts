@@ -365,11 +365,11 @@ export async function listUnplacedMembers(
 }
 
 // ---------------------------------------------------------------------------
-// listPlacedPersons (#169) — every person who is an endpoint of at least one
-// visible kinship edge in the family, i.e. "already placed in the tree".
-// Used by the unplaced-member placement UX so the anchor picker offers the
-// FULL set of placed relatives, not just the ones inside the current bounded
-// tree window. Returns displayName for rendering a searchable list.
+// listPlacedPersons (#169, #250) — people the place-in-tree UX may offer as
+// anchors. Prefer endpoints of visible kinship edges ("already placed"). When
+// the family has no visible edges yet, fall back to active members: a brand-new
+// single-person tree still materializes that person as a lone root
+// (`resolveKinshipTree`), so they must be a valid anchor even with zero edges.
 // ---------------------------------------------------------------------------
 
 export interface PlacedPersonView {
@@ -377,11 +377,27 @@ export interface PlacedPersonView {
   displayName: string | null;
 }
 
+function sortPlacedPersonViews(
+  rows: { id: string; displayName: string | null }[],
+): PlacedPersonView[] {
+  rows.sort(
+    (a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "") ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return rows.map((r) => ({ personId: r.id, displayName: r.displayName }));
+}
+
 /**
- * List every person who is an endpoint of at least one VISIBLE kinship edge in `familyId` (#169).
- * "Placed" means touched by a visible edge (same definition as `listUnplacedMembers` uses for the
- * complement set). Auth flows through `resolveKinshipProjection` (active-membership required,
- * anonymous rejected). Sorted by displayName then id for a deterministic, searchable list.
+ * List people who may anchor an unplaced-member placement in `familyId` (#169, #250).
+ *
+ * Primary set: endpoints of at least one VISIBLE kinship edge (same "placed" definition
+ * `listUnplacedMembers` complements). Seed fallback (#250): when that set is empty, return
+ * active non-`non_family` members — matching the tree's lone-root materialization so a
+ * brand-new single-person tree still offers someone to connect to. Auth flows through
+ * `resolveKinshipProjection` (active-membership required, anonymous rejected). Sorted by
+ * displayName then id. Callers placing a specific member should exclude that member from
+ * the picker (a self-link is rejected on the write path).
  */
 export async function listPlacedPersons(
   db: Database,
@@ -394,7 +410,27 @@ export async function listPlacedPersons(
     placed.add(e.personAId);
     placed.add(e.personBId);
   }
-  if (placed.size === 0) return [];
+
+  if (placed.size === 0) {
+    // #250: no visible edges yet — seed anchors from active members (the people who can still
+    // appear as a self-rooted lone node on the tree). Exclude curated non-family; they are not
+    // meant to be tree nodes.
+    const seedRows = await db
+      .select({
+        id: persons.id,
+        displayName: persons.displayName,
+      })
+      .from(memberships)
+      .innerJoin(persons, eq(persons.id, memberships.personId))
+      .where(
+        and(
+          eq(memberships.familyId, familyId),
+          eq(memberships.status, "active"),
+          eq(memberships.nonFamily, false),
+        ),
+      );
+    return sortPlacedPersonViews(seedRows);
+  }
 
   const rows = await db
     .select({
@@ -404,12 +440,7 @@ export async function listPlacedPersons(
     .from(persons)
     .where(inArray(persons.id, Array.from(placed)));
 
-  rows.sort(
-    (a, b) =>
-      (a.displayName ?? "").localeCompare(b.displayName ?? "") ||
-      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  );
-  return rows.map((r) => ({ personId: r.id, displayName: r.displayName }));
+  return sortPlacedPersonViews(rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -503,7 +534,7 @@ export async function listGovernableKinEdges(
 // ---------------------------------------------------------------------------
 // resolveKinshipTree — the read behind the visual tree renderer (ADR-0016 seam).
 // SHARED CONTRACT (Stage-0 stub). Implemented by Track-B "B-core".
-// See docs/superpowers/specs/2026-07-12-kinship-tree-viz-design.md §5.
+// See docs/99-pruned/superpowers/specs/2026-07-12-kinship-tree-viz-design.md §5.
 // ---------------------------------------------------------------------------
 
 /**

@@ -105,7 +105,7 @@ follows the normal approval/consent path; the *link* and the *caption* do not.)
   links are visible only when their parent item is (a `private` story must not leak its imagery or
   subject). Not a free-for-all — routed through the single front door.
 - **Google Picker** is a vendor seam (adapter-isolated, per the SDK-only-in-adapters rule).
-- **Build sequence:** `docs/PLAN.md` "STORY IMAGERY (photos)", a 5-phase plan.
-- **Deferred to their own design passes** (see `docs/OPEN-QUESTIONS.md`): vision photo-understanding
+- **Build sequence:** historically tracked in pruned Phase 0/1 PLAN; see `docs/strategy/04-what-is-built.md` for shipped imagery.
+- **Deferred to their own design passes** (see `docs/strategy/09-roadmap-and-deferred.md`): vision photo-understanding
   (premium tier), external open-license illustrations, a photos-only / combined photo+story feed, and
   depicted-third-party consent.

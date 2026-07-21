@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-15)
 
 Builds on **ADR-0016** (kinship is a steward-governed per-family tree) and the existing self-edit
-surface (`/hub/profile` → `updatePersonIdentity`). Full design: `docs/superpowers/specs/2026-07-14-tree-slice-c-person-editing-design.md`.
+surface (`/hub/profile` → `updatePersonIdentity`). Full design: `docs/99-pruned/superpowers/specs/2026-07-14-tree-slice-c-person-editing-design.md`.
 
 ## Context
 

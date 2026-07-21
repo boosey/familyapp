@@ -210,9 +210,9 @@ export type PlacedPersonsResult =
   | { ok: false; error: "unauthorized" | "invalid" | "failed" };
 
 /**
- * List every person already placed in the family's kinship tree (#169). Used by the unplaced-member
- * placement UX so the anchor picker offers the FULL family-wide set, not just the ones inside the
- * current bounded tree window. Re-validates the family against the viewer's active families.
+ * List people who may anchor an unplaced-member placement (#169, #250). Prefer endpoints of visible
+ * kinship edges; when the family has no edges yet, core falls back to active members so a lone
+ * tree person is still offered. Re-validates the family against the viewer's active families.
  */
 export async function listPlacedPersonsAction(
   familyId: string,
@@ -248,6 +248,8 @@ export async function linkExistingMemberAction(
   existingPersonId: string,
   relation: AddRelativeRelation,
   anchorPersonId?: string,
+  /** Optional second parent when relation=child (same semantics as addRelative). */
+  coParentPersonId?: string,
 ): Promise<LinkExistingMemberActionResult> {
   beginLogContext();
   const scoped = await resolveFamilyScopedActor(familyId);
@@ -260,12 +262,17 @@ export async function linkExistingMemberAction(
   }
   const anchor =
     typeof anchorPersonId === "string" && anchorPersonId.trim() ? anchorPersonId.trim() : undefined;
+  const coParent =
+    relation === "child" && typeof coParentPersonId === "string" && coParentPersonId.trim()
+      ? coParentPersonId.trim()
+      : undefined;
   try {
     const result = await linkExistingMember(scoped.db, scoped.ctx, {
       familyId,
       relation,
       existingPersonId,
       ...(anchor ? { anchorPersonId: anchor } : {}),
+      ...(coParent ? { coParentPersonId: coParent } : {}),
     });
     if (!result.allowed) {
       plogError("tree", "linkExistingMember: not allowed", { family: familyId, reason: result.reason });

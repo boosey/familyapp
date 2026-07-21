@@ -54,7 +54,7 @@ sub-group *within* a targeted family (enforced as family in Phase 0).
   multi-family member multi-selects to *widen* (the wedding → both). Only when there is no originating
   context *and* the owner is in several families is an explicit pick forced. The default is
   deliberately **never "all"** — that would reintroduce the over-share this ADR exists to prevent.
-  (Future: an LLM suggests the target families from the item's content — see `docs/OPEN-QUESTIONS.md`.)
+  (Future: an LLM suggests the target families from the item's content — see `docs/strategy/09-roadmap-and-deferred.md`.)
 - **Explore is family-scoped** on top of this (ADR-0011): a family's chronicle = visible stories
   targeted to that family.
 - **Asymmetry with Ask, on purpose:** an `Ask` carries a single `familyId` (one raised question in one

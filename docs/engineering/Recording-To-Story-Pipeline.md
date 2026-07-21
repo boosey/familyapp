@@ -22,7 +22,7 @@ Two coupled flows:
 > `logPolish` / `finishDraft` / `approveAndShareStory`), `pipeline/render-story.ts`
 > (`transcribeTakeToRecording` / `cleanupTake` / `polishProse` / `deriveMetadata`),
 > `core/authorization.ts`. See also `docs/adr/0014-*`, `docs/adr/0007-*`, `docs/adr/0004-*`,
-> `docs/Phase-0-1-Engineering-Spec.md`, and `docs/DECISIONS.md`.
+> `docs/99-pruned/phase-0-1-build/`, and `docs/engineering/DECISIONS.md`.
 
 ---
 

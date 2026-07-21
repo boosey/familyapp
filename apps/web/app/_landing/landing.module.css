@@ -130,15 +130,24 @@
   opacity: calc(1 - var(--hero, 0) * 0.85);
   transform: translate3d(0, calc(var(--hero, 0) * -28px), 0);
 }
-/* Brand wordmark — the exact app name ("Tell Me Again") as a clear lockup at the top of the
-   hero, so the homepage prominently displays the same name as the OAuth consent screen (#154). */
+/* Brand lockup — mark + exact app name ("Tell Me Again") at the top of the hero, so the
+   homepage prominently displays the same name as the OAuth consent screen (#154). */
+.brandLockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+.brandMark {
+  flex-shrink: 0;
+  display: block;
+}
 .wordmark {
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
   font-size: clamp(1.25rem, 3vw, 1.75rem);
   letter-spacing: var(--tracking-tight);
   color: var(--text-body);
-  margin: 0;
 }
 .eyebrow {
   font-family: var(--font-mono);
@@ -329,7 +338,17 @@
   color: var(--text-muted);
   font-size: var(--text-label);
 }
-.footerBrand { font-weight: var(--weight-semibold); color: var(--text-meta); }
+.footerBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+  color: var(--text-meta);
+}
+.footerMark {
+  flex-shrink: 0;
+  display: block;
+}
 .footerLinks { display: flex; flex-wrap: wrap; gap: var(--space-5); }
 .footerLink { color: var(--text-muted); text-decoration: none; }
 .footerLink:hover { color: var(--accent-strong); text-decoration: underline; }

@@ -10,7 +10,7 @@ ADR-0016 stores only two generative primitives — **`parent-of`** and **`partne
 **derives** sibling/grandparent/cousin/in-law by walking the graph. "Sibling = shares a parent" is a
 derived fact, never stored, so it can never contradict a stored one.
 
-The tree renderer (`docs/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md`) lets a user **add a
+The tree renderer (`docs/99-pruned/superpowers/specs/2026-07-13-tree-ego-nav-redesign.md`) lets a user **add a
 sibling** to a person directly from that person's card. But if the person has **no parents in the
 data**, there is no shared parent to derive siblinghood from — and the model has no way to persist
 "these two are siblings" as a standalone fact. Something has to give: either we forbid adding a sibling

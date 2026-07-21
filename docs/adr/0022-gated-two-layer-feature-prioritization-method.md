@@ -4,7 +4,7 @@ Status: Accepted (2026-07-15)
 
 A reusable method for prioritizing a large candidate backlog: **Layer 1 eligibility gates** (pass/fail, run first) then **Layer 2 value scoring** (over survivors only). Gated, *not* blended — a single blended score would sequence powerful features ahead of the guardrails they depend on, the exact failure the Release Roadmap already guards against. The method is objective-parameterized and re-runnable; this ADR fixes the machinery and records the **adoption/validation** objective as its first application.
 
-*Charted and applied via the Wayfinder map [#69](https://github.com/boosey/familyapp/issues/69). The detailed working artifacts live in `docs/wayfinder/2026-07-15-{eligibility-layer,value-score-rubric,candidate-corpus,sequenced-backlog}.md`; the first application's narrative is `docs/01 Strategy/Family-Chronicle-Prioritized-Backlog.md`. This ADR is the durable, canonical statement of the method.*
+*Charted and applied via the Wayfinder map [#69](https://github.com/boosey/familyapp/issues/69). First-pass working artifacts (historical): `docs/99-pruned/wayfinder/2026-07-15-{eligibility-layer,value-score-rubric,candidate-corpus,sequenced-backlog}.md`; the live sequenced backlog is `docs/strategy/prioritized-backlog.md`. This ADR is the durable, canonical statement of the method.*
 
 ## Context
 
