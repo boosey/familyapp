@@ -17,7 +17,8 @@ Authoritative docs (read these before non-trivial work):
 ## Commands
 
 Run from repo root:
-- `pnpm -r build` / `pnpm -r typecheck` / `pnpm -r test` / `pnpm -r lint`
+- `pnpm -r build` / `pnpm -r typecheck` / `pnpm test:all` (or `pnpm -r test`) / `pnpm -r lint`
+  - Root `pnpm test` is intentionally a no-op (root has no vitest suite). Full monorepo = `pnpm test:all`.
 - Single package: `pnpm --filter @chronicle/core test` (or `typecheck`, etc.)
 - Single test file: `pnpm --filter @chronicle/core exec vitest run path/to/file.test.ts`
 - Single test name: `pnpm --filter @chronicle/core exec vitest run -t "name pattern"`
@@ -25,7 +26,7 @@ Run from repo root:
 - DB schema codegen: `pnpm --filter @chronicle/db db:generate` (drizzle-kit) — emits BOTH the snapshot (`drizzle/schema.sql` + `drizzle/invariants.sql`) and a new incremental migration (`drizzle/migrations/NNNN_*.sql`) for any modeled diff. Invariant changes must be hand-carried into the emitted migration.
 - Apply pending migrations to a durable Postgres (Neon): `pnpm --filter @chronicle/db db:migrate` (runs in the Vercel build against `DATABASE_URL`; never on the request path).
 
-Tests use Vitest. The DB layer uses **PGlite** (real Postgres in-process) — there is no external Postgres to provision for `pnpm test`.
+Tests use Vitest. The DB layer uses **PGlite** (real Postgres in-process) — there is no external Postgres to provision for `pnpm test:all`.
 
 ## Architecture
 

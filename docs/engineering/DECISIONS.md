@@ -511,7 +511,7 @@ schema-parity section — dev and tests are unchanged.
   the suite has no external Postgres and PGlite can't back the postgres-js migrator. The drift guard
   exercises a parallel hand-rolled replay (`replayMigrationsFromEmpty`), not `migrate()` itself, so a
   defect in `runMigrations` / its migrations-folder resolution / the `as never` cast would first
-  surface in a Vercel build rather than in `pnpm test`.
+  surface in a Vercel build rather than in `pnpm test:all`.
 - **Deferred (recorded so they're choices):** per-PR isolated Neon branches (previews share the dev
   branch); a separate release-step GitHub Action (migrate stays in `buildCommand`); Atlas / any
   non-drizzle engine; down/rollback migrations (forward-only — roll back by writing a new forward
@@ -714,7 +714,7 @@ Rules:
   matrix, not just `test` (gating only `test` leaves lint/typecheck/`next build`/drift holes on the
   one path with no CI — the exact failure modes ci.yml's comments were written over):
   ```
-  pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @chronicle/web build \
+  pnpm -r lint && pnpm -r typecheck && pnpm test:all && pnpm --filter @chronicle/web build \
     && pnpm --filter @chronicle/db db:generate && git diff --exit-code -- packages/db/drizzle
   ```
 - **Why direct-push exists:** free-plan GitHub CI is ~12 min (dominated by 5× cold

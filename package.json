@@ -11,7 +11,8 @@
     "dev": "pnpm --filter @chronicle/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r --workspace-concurrency=2 test",
+    "test": "node -e \"process.stdout.write('family-chronicle: no root-level tests (use pnpm test:all)\\n')\"",
+    "test:all": "pnpm -r --workspace-concurrency=2 test",
     "lint": "oxlint"
   },
   "devDependencies": {

@@ -48,6 +48,11 @@ jobs:
       #   1. Root-level shared files (lockfile, base tsconfig, shared vitest config) belong to
       #      no package, so the filter can't see them — any change to one runs the FULL suite.
       #   2. A PR that touches no package sources at all (docs/meta-only) runs nothing.
+      #
+      # Root package (`family-chronicle`) is excluded from the affected filter: docs/CONTEXT.md
+      # and other non-package files are attributed to root by pnpm, and root has no vitest suite
+      # of its own — selecting it used to re-launch `pnpm -r test` and double the wall time.
+      # Full-suite runs call `pnpm test:all` directly (never via a recursive root `test` script).
       - name: Run affected tests (+ dependents)
         if: matrix.task == 'test'
         shell: bash
@@ -58,10 +63,10 @@ jobs:
           echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.base\.json|vitest\.shared\.ts|package\.json)$'; then
             echo "::notice::Shared root config changed — running the FULL suite."
-            pnpm test
+            pnpm test:all
           elif echo "$CHANGED" | grep -qE '^(apps|packages)/'; then
             echo "::notice::Running tests for affected packages (+ dependents) only."
-            pnpm --filter "...[$BASE]" --workspace-concurrency=2 test
+            pnpm --filter "...[$BASE]" --filter "!family-chronicle" --workspace-concurrency=2 test
           else
             echo "::notice::No package sources changed (docs/meta-only PR) — nothing to run."
           fi
