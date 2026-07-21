@@ -28,6 +28,15 @@ it("formats parent_of and partnered_with sentences", () => {
   ).toBe(hub.kin.edgePartneredWith("Alice", "Bob"));
 });
 
+it("includes known nature in parent_of sentences (#255)", () => {
+  expect(edgeSentence(edge({ personAId: "a", personBId: "b", nature: "adoptive" }))).toBe(
+    hub.kin.edgeParentOfNature("Alice", hub.kin.natureLabel.adoptive, "Bob"),
+  );
+  expect(edgeSentence(edge({ personAId: "a", personBId: "b", nature: "unknown" }))).toBe(
+    hub.kin.edgeParentOf("Alice", "Bob"),
+  );
+});
+
 it("uses the unnamed fallback for unidentified endpoints", () => {
   expect(
     edgeSentence(

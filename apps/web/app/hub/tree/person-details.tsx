@@ -71,10 +71,11 @@ export interface PersonDetailsProps {
    */
   governableEdges?: readonly GovernableKinEdge[];
   /**
-   * #254 — after a successful deny/hide/affirm. Canvas must prune client edges only for deny/hide
-   * (affirm keeps the edge; same-family merge won't restore a wrongly dropped edge when only state changed).
+   * #254/#255 — after a successful deny/hide/affirm/correct. Canvas must prune client edges only for
+   * deny/hide (affirm/correct keep the edge; same-family merge won't restore a wrongly dropped edge
+   * when only state/nature changed).
    */
-  onEdgeGoverned?: (edge: GovernableKinEdge, kind: "affirm" | "deny" | "hide") => void;
+  onEdgeGoverned?: (edge: GovernableKinEdge, kind: "affirm" | "deny" | "hide" | "correct") => void;
   /** Overridable for tests; default to the real server actions. */
   checkEditable?: CheckEditableFn;
   saveEdit?: SaveEditFn;

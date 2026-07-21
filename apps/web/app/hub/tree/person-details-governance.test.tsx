@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * #254 — PersonDetails re-homes steward Remove / subject Hide from the dead kin page onto the tree
- * details sheet. Capability flags come from `listGovernableKinEdges` (threaded as `governableEdges`);
- * the sheet only lists edges that touch the opened person AND that the viewer can act on.
+ * #254/#255 — PersonDetails re-homes steward Remove / subject Hide / nature correct from the dead
+ * kin page onto the tree details sheet. Capability flags come from `listGovernableKinEdges`
+ * (threaded as `governableEdges`); the sheet only lists edges that touch the opened person AND that
+ * the viewer can act on.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -17,9 +18,10 @@ vi.mock("../kin/actions", () => ({
   affirmEdgeAction: vi.fn(async () => undefined),
   denyEdgeAction: vi.fn(async () => undefined),
   hideEdgeAction: vi.fn(async () => undefined),
+  correctEdgeAction: vi.fn(async () => undefined),
 }));
 
-import { affirmEdgeAction, denyEdgeAction, hideEdgeAction } from "../kin/actions";
+import { affirmEdgeAction, correctEdgeAction, denyEdgeAction, hideEdgeAction } from "../kin/actions";
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -152,4 +154,45 @@ it("calls onEdgeGoverned with affirm after Endorse (must not be treated as a pru
   fireEvent.click(await screen.findByRole("button", { name: hub.kin.affirm }));
   await waitFor(() => expect(affirmEdgeAction).toHaveBeenCalled());
   await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "affirm"));
+});
+
+it("shows nature picker for steward on parent_of and submits correctEdgeAction (#255)", async () => {
+  const e = edge({
+    personAId: "alice",
+    personBId: "bob",
+    viewerIsSteward: true,
+    nature: "biological",
+  });
+  const { onEdgeGoverned } = renderDetails([e]);
+  expect(await screen.findByTestId("kin-edge-correct-nature")).toBeTruthy();
+  const select = screen.getByLabelText(hub.kin.natureFieldLabel) as HTMLSelectElement;
+  expect(select.value).toBe("biological");
+  fireEvent.change(select, { target: { value: "adoptive" } });
+  fireEvent.click(screen.getByRole("button", { name: hub.kin.correct }));
+  await waitFor(() => expect(correctEdgeAction).toHaveBeenCalled());
+  const formData = (correctEdgeAction as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as FormData;
+  expect(formData.get("nature")).toBe("adoptive");
+  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "correct"));
+});
+
+it("does not show nature picker on partner edges or for non-stewards (#255)", async () => {
+  renderDetails([
+    edge({
+      personAId: "alice",
+      personBId: "bob",
+      edgeType: "partnered_with",
+      nature: null,
+      viewerIsSteward: true,
+    }),
+  ]);
+  expect(await screen.findByRole("button", { name: hub.kin.deny })).toBeTruthy();
+  expect(screen.queryByTestId("kin-edge-correct-nature")).toBeNull();
+
+  cleanup();
+  renderDetails([
+    edge({ personAId: "alice", personBId: "bob", viewerCanHide: true, nature: "biological" }),
+  ]);
+  expect(await screen.findByRole("button", { name: hub.kin.hide })).toBeTruthy();
+  expect(screen.queryByTestId("kin-edge-correct-nature")).toBeNull();
+  expect(screen.queryByRole("button", { name: hub.kin.correct })).toBeNull();
 });

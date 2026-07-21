@@ -15,7 +15,13 @@ function endpointName(displayName: string | null, identified: boolean): string {
 export function edgeSentence(edge: GovernableKinEdge): string {
   const a = endpointName(edge.personADisplayName, edge.personAIdentified);
   const b = endpointName(edge.personBDisplayName, edge.personBIdentified);
-  if (edge.edgeType === "parent_of") return hub.kin.edgeParentOf(a, b);
+  if (edge.edgeType === "parent_of") {
+    // #255 — surface corrected nature in the projection sentence (unknown stays unadorned).
+    const nature =
+      edge.nature && edge.nature !== "unknown" ? hub.kin.natureLabel[edge.nature] : "";
+    if (nature) return hub.kin.edgeParentOfNature(a, nature, b);
+    return hub.kin.edgeParentOf(a, b);
+  }
   return hub.kin.edgePartneredWith(a, b);
 }
 

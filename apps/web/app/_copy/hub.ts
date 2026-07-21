@@ -923,6 +923,11 @@ export const hub = {
     govEmpty: "No relationships recorded in this family yet.",
     // The two ungendered primitives, rendered for a row.
     edgeParentOf: (parent: string, child: string) => `${parent} is a parent of ${child}`,
+    // #255 — parent_of with a known nature (skip for unknown so the base sentence stays clean).
+    edgeParentOfNature: (parent: string, nature: string, child: string) => {
+      const article = /^[aeiou]/i.test(nature) ? "an" : "a";
+      return `${parent} is ${article} ${nature} parent of ${child}`;
+    },
     edgePartneredWith: (a: string, b: string) => `${a} and ${b} are partners`,
     edgeUnknownPerson: "someone unnamed",
     natureLabel: {
@@ -931,13 +936,25 @@ export const hub = {
       step: "step",
       foster: "foster",
       unknown: "",
-    } as Record<string, string>,
+    },
+    // #255 — steward nature picker on parent_of edges (partnered_with has no nature).
+    natureFieldLabel: "Nature",
+    natureOptions: {
+      biological: "Biological",
+      adoptive: "Adoptive",
+      step: "Step",
+      foster: "Foster",
+      unknown: "Unknown",
+    },
     stateAffirmed: "Endorsed by steward",
     // Steward controls.
     affirm: "Endorse",
     affirming: "Endorsing…",
     deny: "Remove",
     denying: "Removing…",
+    // #255 — correct parent_of nature (append-only supersede; does not remove the edge).
+    correct: "Update nature",
+    correcting: "Updating…",
     // Subject controls.
     hide: "Hide this from the tree",
     hiding: "Hiding…",
