@@ -9,6 +9,7 @@ import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
 import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
 import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
 import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
+import { KindredRecordingGesturePicker } from "@/app/_kindred/KindredRecordingGesturePicker";
 import { PREFERENCES } from "@/app/_kindred/preferences/registry";
 import { common } from "@/app/_copy";
 import { hub } from "@/app/_copy";
@@ -79,5 +80,38 @@ describe("KindredMotionToggle", () => {
     localStorage.setItem(PREFERENCES.reduceMotion.storageKey, "on");
     render(<KindredMotionToggle />);
     expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("on");
+  });
+});
+
+describe("KindredRecordingGesturePicker", () => {
+  it("choosing phone hold writes the phone storage key (not desktop)", () => {
+    render(<KindredRecordingGesturePicker />);
+    const phoneHold = screen.getByLabelText(
+      `${hub.settings.recordingGestureHoldLabel} — ${hub.settings.recordingGesturePhoneAria}`,
+    );
+    fireEvent.click(phoneHold);
+    expect(localStorage.getItem(PREFERENCES.recordingGesturePhone.storageKey)).toBe("hold");
+    expect(localStorage.getItem(PREFERENCES.recordingGestureDesktop.storageKey)).toBeNull();
+  });
+
+  it("choosing desktop tap writes the desktop storage key (not phone)", () => {
+    localStorage.setItem(PREFERENCES.recordingGestureDesktop.storageKey, "hold");
+    render(<KindredRecordingGesturePicker />);
+    const desktopTap = screen.getByLabelText(
+      `${hub.settings.recordingGestureTapLabel} — ${hub.settings.recordingGestureDesktopAria}`,
+    );
+    fireEvent.click(desktopTap);
+    expect(localStorage.getItem(PREFERENCES.recordingGestureDesktop.storageKey)).toBe("tap");
+    expect(localStorage.getItem(PREFERENCES.recordingGesturePhone.storageKey)).toBeNull();
+  });
+
+  it("js-read apply does not mutate the document when choosing", () => {
+    render(<KindredRecordingGesturePicker />);
+    fireEvent.click(
+      screen.getByLabelText(
+        `${hub.settings.recordingGestureHoldLabel} — ${hub.settings.recordingGesturePhoneAria}`,
+      ),
+    );
+    expect(document.documentElement.getAttribute("data-recording-gesture")).toBeNull();
   });
 });

@@ -114,25 +114,25 @@ afterEach(() => {
 });
 
 // The capture screen now has a voice⇄text toggle, so several buttons coexist — target the voice
-// control by its aria-label rather than the (now-ambiguous) bare button role. The mic runs in
-// hold-to-record mode: pointerDown starts, pointerUp stops. The button's accessible name flips from
-// "Hold to speak" → "Release to finish", so callers grab the element on start and stop that same node.
+// control by its aria-label rather than the (now-ambiguous) bare button role. Default recording
+// gesture is tap-to-toggle (#263): click starts, click again stops. Accessible name flips
+// "Tap to speak" → "Listening…"; grab the element on start and click that same node to stop.
 const startVoice = () => {
-  const btn = screen.getByRole("button", { name: /Hold to speak/ });
-  fireEvent.pointerDown(btn);
+  const btn = screen.getByRole("button", { name: /Tap to speak/ });
+  fireEvent.click(btn);
   return btn;
 };
-const stopVoice = (btn: HTMLElement) => fireEvent.pointerUp(btn);
+const stopVoice = (btn: HTMLElement) => fireEvent.click(btn);
 
 describe("StoryComposer optimistic transition", () => {
   it("shows the review-pending screen the moment recording stops", async () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
-    // Start: hold the voice button (idle → listening, async getUserMedia).
+    // Start: tap the voice button (idle → listening, async getUserMedia).
     const mic = startVoice();
-    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
 
-    // Stop: release → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
+    // Stop: tap again → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
     stopVoice(mic);
 
     // Review-pending appears while composeStoryAction is still pending.
@@ -161,7 +161,7 @@ describe("StoryComposer optimistic transition", () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={null} />);
 
     const mic = startVoice();
-    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
     stopVoice(mic);
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
@@ -183,7 +183,7 @@ describe("StoryComposer optimistic transition", () => {
 
     // Record then stop → review-pending while the action is in flight.
     const mic = startVoice();
-    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
     stopVoice(mic);
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
 
@@ -198,7 +198,7 @@ describe("StoryComposer optimistic transition", () => {
 
     // "Record again" clears the take (revoking its URL) and returns to the record screen.
     fireEvent.click(screen.getByRole("button", { name: /Record again/ }));
-    expect(screen.getByRole("button", { name: /Hold to speak/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Tap to speak/ })).toBeTruthy();
     expect(screen.queryByText(/Could not save your recording/)).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:local-take");
   });

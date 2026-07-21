@@ -57,11 +57,28 @@ describe("pre-paint script", () => {
     expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("off");
   });
 
+  it("ignores js-read preferences (no crash, no spurious DOM attrs)", () => {
+    localStorage.setItem(PREFERENCES.recordingGesturePhone.storageKey, "hold");
+    localStorage.setItem(PREFERENCES.recordingGestureDesktop.storageKey, "hold");
+    runPrePaint();
+    // Skin/reduce-motion defaults still apply; js-read must not invent attrs or CSS vars.
+    expect(document.documentElement.getAttribute("data-skin")).toBe("playful");
+    expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("off");
+    expect(document.documentElement.getAttribute("data-recording-gesture")).toBeNull();
+    expect(document.documentElement.style.getPropertyValue("--recording-gesture")).toBe("");
+    const dataAttrs = [...document.documentElement.attributes]
+      .map((a) => a.name)
+      .filter((n) => n.startsWith("data-"));
+    expect(dataAttrs).toEqual(expect.arrayContaining(["data-skin", "data-reduce-motion", "data-theme"]));
+    expect(dataAttrs).not.toContain("data-recording-gesture");
+  });
+
   it("does not drift from the TS applier (computeApplication)", () => {
     localStorage.setItem(PREFERENCES.readingSize.storageKey, "4");
     runPrePaint();
     const ts = computeApplication(PREFERENCES.readingSize, 4);
     expect(ts.target).toBe("root-font-size");
+    if (ts.target !== "root-font-size") throw new Error("expected root-font-size");
     expect(document.documentElement.style.fontSize).toBe(ts.value);
   });
 });
@@ -94,7 +111,10 @@ describe("pre-paint script — css-var strategy & degenerate steps (drift guard 
     localStorage.setItem(empty.storageKey, "0");
     // eslint-disable-next-line no-eval
     eval(buildPrePaintScript([empty]));
-    expect(document.documentElement.style.fontSize).toBe(computeApplication(empty, 0).value);
+    const ts = computeApplication(empty, 0);
+    expect(ts.target).toBe("root-font-size");
+    if (ts.target !== "root-font-size") throw new Error("expected root-font-size");
+    expect(document.documentElement.style.fontSize).toBe(ts.value);
     expect(document.documentElement.style.fontSize).toBe("0pt");
   });
 });

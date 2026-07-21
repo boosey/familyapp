@@ -861,6 +861,15 @@ export const hub = {
     motionAria: "Reduce motion",
     motionOnLabel: "On",
     motionOffLabel: "Off",
+    recordingGestureHeading: "Recording gesture",
+    recordingGestureIntro:
+      "Choose how the microphone button starts and stops recording — separately for phone and desktop on this device.",
+    recordingGesturePhoneHeading: "Phone",
+    recordingGestureDesktopHeading: "Desktop",
+    recordingGesturePhoneAria: "Phone recording gesture",
+    recordingGestureDesktopAria: "Desktop recording gesture",
+    recordingGestureTapLabel: "Tap",
+    recordingGestureHoldLabel: "Hold",
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.
   kin: {

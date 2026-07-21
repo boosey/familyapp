@@ -5,6 +5,12 @@ import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
 import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
 import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
 import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
+import {
+  RECORDING_GESTURE_VALUES,
+  DEFAULT_RECORDING_GESTURE,
+  RECORDING_GESTURE_PHONE_STORAGE_KEY,
+  RECORDING_GESTURE_DESKTOP_STORAGE_KEY,
+} from "@/app/_kindred/recording-gesture-constants";
 
 const fontDef: PreferenceDef = {
   key: "reading-size",
@@ -127,5 +133,38 @@ describe("PREFERENCES registry — skin + reduce-motion", () => {
     expect(PREFERENCES.reduceMotion.storageKey).toBe(MOTION_STORAGE_KEY);
     expect(PREFERENCES.reduceMotion.validate).toMatchObject({ kind: "enum", values: REDUCE_MOTION_VALUES });
     expect(PREFERENCES.reduceMotion.apply).toEqual({ strategy: "data-attr", attr: "data-reduce-motion" });
+  });
+});
+
+describe("PREFERENCES registry — recording gesture (js-read)", () => {
+  it("phone + desktop prefs default to tap, use js-read, and share tap|hold values", () => {
+    expect(PREFERENCES.recordingGesturePhone.default).toBe(DEFAULT_RECORDING_GESTURE);
+    expect(PREFERENCES.recordingGestureDesktop.default).toBe(DEFAULT_RECORDING_GESTURE);
+    expect(DEFAULT_RECORDING_GESTURE).toBe("tap");
+    expect(PREFERENCES.recordingGesturePhone.storageKey).toBe(RECORDING_GESTURE_PHONE_STORAGE_KEY);
+    expect(PREFERENCES.recordingGestureDesktop.storageKey).toBe(RECORDING_GESTURE_DESKTOP_STORAGE_KEY);
+    expect(PREFERENCES.recordingGesturePhone.validate).toMatchObject({
+      kind: "enum",
+      values: RECORDING_GESTURE_VALUES,
+    });
+    expect(PREFERENCES.recordingGestureDesktop.validate).toMatchObject({
+      kind: "enum",
+      values: RECORDING_GESTURE_VALUES,
+    });
+    expect(PREFERENCES.recordingGesturePhone.apply).toEqual({ strategy: "js-read" });
+    expect(PREFERENCES.recordingGestureDesktop.apply).toEqual({ strategy: "js-read" });
+  });
+
+  it("computeApplication returns js-read (no DOM shape) for recording gesture", () => {
+    expect(computeApplication(PREFERENCES.recordingGesturePhone, "hold")).toEqual({ target: "js-read" });
+    expect(computeApplication(PREFERENCES.recordingGestureDesktop, "tap")).toEqual({ target: "js-read" });
+  });
+
+  it("coerce accepts tap/hold and falls back to tap for garbage/absent", () => {
+    expect(coerce(PREFERENCES.recordingGesturePhone, "hold")).toBe("hold");
+    expect(coerce(PREFERENCES.recordingGesturePhone, "tap")).toBe("tap");
+    expect(coerce(PREFERENCES.recordingGesturePhone, null)).toBe("tap");
+    expect(coerce(PREFERENCES.recordingGesturePhone, "swipe")).toBe("tap");
+    expect(coerce(PREFERENCES.recordingGestureDesktop, "  hold  ")).toBe("hold");
   });
 });

@@ -15,7 +15,7 @@
  *    the single intake surface at /hub/about-you. The old "doors" fork (which let a user skip family
  *    creation) is gone; family creation now happens earlier via the /families/start path.
  */
-import { useState, type CSSProperties } from "react";
+import { useState, useRef, useCallback, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
 import {
@@ -24,6 +24,7 @@ import {
   transcribeOnboardingDob,
 } from "./actions";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
+import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { common, welcome } from "@/app/_copy";
 import styles from "@/app/_onboarding/onboarding-card.module.css";
 
@@ -128,6 +129,21 @@ export function WelcomeFlow({
     void start();
   }
 
+  const { holdToRecord } = useRecordingGesture();
+  const heldRef = useRef(false);
+  const onHoldStart = useCallback(async () => {
+    if (micPhase !== "idle" || transcribing) return;
+    heldRef.current = true;
+    setMicError(false);
+    await start();
+    // Released before the mic was ready → stop immediately (finish is idempotent if start failed).
+    if (!heldRef.current) finish();
+  }, [micPhase, transcribing, start, finish]);
+  const onHoldEnd = useCallback(() => {
+    heldRef.current = false;
+    if (micPhase === "listening") finish();
+  }, [micPhase, finish]);
+
   const voiceBusy = micPhase === "saving" || transcribing;
   // A recording/transcription in flight must block forward navigation: leaving the step mid-capture
   // orphans the MediaRecorder (its onstop would route through the NEXT step's action) — mirrors
@@ -135,9 +151,13 @@ export function WelcomeFlow({
   const voiceActive = micPhase !== "idle" || transcribing;
   const voiceLabel = transcribing
     ? welcome.voiceOneMoment
-    : micPhase === "listening"
-      ? welcome.voiceStop
-      : welcome.sayItOutLoud;
+    : holdToRecord
+      ? micPhase === "listening"
+        ? common.voiceButton.releaseToFinish
+        : common.voiceButton.holdToSpeak
+      : micPhase === "listening"
+        ? welcome.voiceStop
+        : welcome.sayItOutLoud;
   const onVoiceClick =
     micPhase === "listening" ? finish : micPhase === "idle" && !transcribing ? startVoice : undefined;
 
@@ -209,7 +229,10 @@ export function WelcomeFlow({
               listening={micPhase === "listening"}
               saving={voiceBusy}
               label={voiceLabel}
-              onClick={onVoiceClick}
+              holdToRecord={holdToRecord}
+              onHoldStart={holdToRecord ? onHoldStart : undefined}
+              onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+              onClick={holdToRecord ? undefined : onVoiceClick}
             />
             {micError ? (
               <p style={voiceHint}>{welcome.voiceError}</p>
@@ -260,7 +283,10 @@ export function WelcomeFlow({
               listening={micPhase === "listening"}
               saving={voiceBusy}
               label={voiceLabel}
-              onClick={onVoiceClick}
+              holdToRecord={holdToRecord}
+              onHoldStart={holdToRecord ? onHoldStart : undefined}
+              onHoldEnd={holdToRecord ? onHoldEnd : undefined}
+              onClick={holdToRecord ? undefined : onVoiceClick}
             />
             {micError ? (
               <p style={voiceHint}>{welcome.voiceError}</p>

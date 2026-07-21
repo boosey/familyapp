@@ -155,15 +155,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** Drive the voice button through idle → listening → stop (fires onstop → uploadRecording). The mic
- * runs in hold-to-record mode (pointerDown starts, pointerUp stops) and its accessible name flips
- * "Hold to speak" → "Release to finish", so grab the element up front and release that same node.
+/** Drive the voice button through idle → listening → stop (fires onstop → uploadRecording).
+ * Default recording gesture is tap-to-toggle (#263): click starts, click again stops. Accessible
+ * name flips "Tap to speak" → "Listening…"; grab the element up front and click that same node.
  * Targets the voice button by its aria-label so it works on the composing footer too. */
 async function recordOnce() {
-  const mic = screen.getByRole("button", { name: /Hold to speak/ });
-  fireEvent.pointerDown(mic); // idle → listening
-  await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
-  fireEvent.pointerUp(mic); // listening → stop
+  const mic = screen.getByRole("button", { name: /Tap to speak/ });
+  fireEvent.click(mic); // idle → listening
+  await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
+  fireEvent.click(mic); // listening → stop
 }
 
 describe("StoryComposer follow-up loop (inline banner)", () => {
@@ -247,7 +247,7 @@ describe("StoryComposer follow-up loop (inline banner)", () => {
     await waitFor(() => expect(declineFollowUpAction).toHaveBeenCalledOnce());
 
     // Decline in flight → the mic cannot start a new recording.
-    expect((screen.getByRole("button", { name: /Hold to speak/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Tap to speak/ }) as HTMLButtonElement).disabled).toBe(true);
 
     resolveDecline({ kind: "appended", storyId: STORY_ID, prose: "My grandmother's house.", appendedSegment: "" });
     await waitFor(() =>
@@ -322,8 +322,8 @@ describe("StoryComposer per-take relisten (draft composing)", () => {
     expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(false);
 
     // Start listening (mic open).
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Hold to speak/ }));
-    await waitFor(() => expect(screen.getByText(/Release to finish/)).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Tap to speak/ }));
+    await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
 
     // Now everything except the mic is locked.
     expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(true);
