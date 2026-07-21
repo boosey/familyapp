@@ -24,7 +24,8 @@ export function governableEdgeKey(edge: GovernableKinEdge): string {
   return `${edge.edgeType}:${edge.personAId}:${edge.personBId}`;
 }
 
-/** Edges the viewer can act on (steward and/or subject-hide) that touch `personId`. */
+/** Edges the viewer can act on (steward/asserter remove and/or subject-hide, #256) that touch
+ *  `personId`. */
 export function actableEdgesForPerson(
   edges: readonly GovernableKinEdge[],
   personId: string,
@@ -32,11 +33,11 @@ export function actableEdgesForPerson(
   return edges.filter(
     (e) =>
       (e.personAId === personId || e.personBId === personId) &&
-      (e.viewerIsSteward || e.viewerCanHide),
+      (e.viewerCanRemove || e.viewerCanHide),
   );
 }
 
 /** Edges the viewer can act on anywhere in the family (List-view governance section). */
 export function actableEdges(edges: readonly GovernableKinEdge[]): GovernableKinEdge[] {
-  return edges.filter((e) => e.viewerIsSteward || e.viewerCanHide);
+  return edges.filter((e) => e.viewerCanRemove || e.viewerCanHide);
 }

@@ -38,8 +38,10 @@ function edge(over: Partial<GovernableKinEdge> & Pick<GovernableKinEdge, "person
     personBIdentified: over.personBIdentified ?? true,
     nature: over.nature ?? null,
     state: over.state ?? "asserted",
+    assertedBy: over.assertedBy ?? over.personAId,
     viewerIsSteward: over.viewerIsSteward ?? false,
     viewerCanHide: over.viewerCanHide ?? false,
+    viewerCanRemove: over.viewerCanRemove ?? over.viewerIsSteward ?? false,
   };
 }
 
@@ -64,6 +66,21 @@ it("renders Remove for steward edges and Hide for endpoint edges", () => {
   expect(screen.getAllByTestId("family-gov-edge")).toHaveLength(2);
   expect(screen.getByRole("button", { name: hub.kin.deny })).toBeTruthy();
   expect(screen.getByRole("button", { name: hub.kin.hide })).toBeTruthy();
+});
+
+it("#256: renders Remove for the original asserter (non-steward) and excludes a non-actable edge", () => {
+  render(
+    <GovernableEdgesSection
+      familyId="F"
+      edges={[
+        edge({ personAId: "a", personBId: "b", viewerIsSteward: false, viewerCanRemove: true }),
+        edge({ personAId: "c", personBId: "d", viewerIsSteward: false, viewerCanRemove: false }),
+      ]}
+    />,
+  );
+  expect(screen.getByTestId("family-gov-edges")).toBeTruthy();
+  expect(screen.getAllByTestId("family-gov-edge")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: hub.kin.deny })).toBeTruthy();
 });
 
 it("renders nothing when no edges are actable", () => {

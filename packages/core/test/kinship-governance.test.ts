@@ -176,15 +176,152 @@ describe("denyEdge (#33)", () => {
     expect(rows[0]?.note).toBe("not the biological parent");
   });
 
-  it("rejects a non-steward", async () => {
+  it("allows the original asserter (a non-steward) to deny/retract their own edge (#256)", async () => {
     const { member, fam } = await familyWithStewardAndMember();
     const parent = await makePerson(db, "P");
     const child = await makePerson(db, "C");
     await assertParentOf(db, { familyId: fam.id, parent: parent.id, child: child.id, actor: member.id });
     const ref: EdgeRef = { familyId: fam.id, edgeType: "parent_of", personAId: parent.id, personBId: child.id };
     const res = await denyEdge(db, account(member.id), ref);
+    expect(res.allowed).toBe(true);
+
+    const { edges } = await resolveKinshipProjection(db, account(member.id), fam.id);
+    expect(edges).toHaveLength(0); // denied → not shown
+    expect(await edgeRowCount(db, ref)).toBe(2); // history intact
+  });
+
+  it("rejects a non-steward, non-asserter member", async () => {
+    const { steward, member, fam } = await familyWithStewardAndMember();
+    const parent = await makePerson(db, "P");
+    const child = await makePerson(db, "C");
+    await assertParentOf(db, { familyId: fam.id, parent: parent.id, child: child.id, actor: steward.id });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "parent_of", personAId: parent.id, personBId: child.id };
+    const res = await denyEdge(db, account(member.id), ref);
     expect(res.allowed).toBe(false);
     expect(await edgeRowCount(db, ref)).toBe(1);
+  });
+});
+
+describe("denyEdge — asserter retract (#256)", () => {
+  it("Alice (non-steward) asserts partnered_with Bob by mistake, then denies it herself → allowed, projection empty, history intact", async () => {
+    const { steward, fam } = await familyWithStewardAndMember();
+    const alice = await makeSelfPerson(db, "Alice");
+    await addMembership(db, { personId: alice.id, familyId: fam.id, role: "member" });
+    const bob = await makePerson(db, "Bob");
+
+    const { personAId, personBId } = normalizeEdgeEndpoints("partnered_with", alice.id, bob.id);
+    await db.insert(kinshipAssertions).values({
+      familyId: fam.id,
+      edgeType: "partnered_with",
+      personAId,
+      personBId,
+      nature: null,
+      state: "asserted",
+      actorPersonId: alice.id,
+    });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "partnered_with", personAId: alice.id, personBId: bob.id };
+
+    const res = await denyEdge(db, account(alice.id), ref);
+    expect(res.allowed).toBe(true);
+
+    const { edges } = await resolveKinshipProjection(db, account(steward.id), fam.id);
+    expect(edges).toHaveLength(0);
+    expect(await edgeRowCount(db, ref)).toBe(2);
+  });
+
+  it("Charlie — neither steward nor asserter — cannot deny Alice's edge", async () => {
+    const { fam } = await familyWithStewardAndMember();
+    const alice = await makeSelfPerson(db, "Alice");
+    await addMembership(db, { personId: alice.id, familyId: fam.id, role: "member" });
+    const bob = await makePerson(db, "Bob");
+    const charlie = await makeSelfPerson(db, "Charlie");
+    await addMembership(db, { personId: charlie.id, familyId: fam.id, role: "member" });
+
+    const { personAId, personBId } = normalizeEdgeEndpoints("partnered_with", alice.id, bob.id);
+    await db.insert(kinshipAssertions).values({
+      familyId: fam.id,
+      edgeType: "partnered_with",
+      personAId,
+      personBId,
+      nature: null,
+      state: "asserted",
+      actorPersonId: alice.id,
+    });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "partnered_with", personAId: alice.id, personBId: bob.id };
+
+    const res = await denyEdge(db, account(charlie.id), ref);
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toBeDefined();
+    expect(await edgeRowCount(db, ref)).toBe(1);
+  });
+
+  it("the steward can still deny an edge they did not assert (regression)", async () => {
+    const { steward, member, fam } = await familyWithStewardAndMember();
+    const parent = await makePerson(db, "P");
+    const child = await makePerson(db, "C");
+    await assertParentOf(db, { familyId: fam.id, parent: parent.id, child: child.id, actor: member.id });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "parent_of", personAId: parent.id, personBId: child.id };
+
+    const res = await denyEdge(db, account(steward.id), ref);
+    expect(res.allowed).toBe(true);
+    const { edges } = await resolveKinshipProjection(db, account(member.id), fam.id);
+    expect(edges).toHaveLength(0);
+  });
+
+  it("the asserter cannot affirmEdge (still steward-only)", async () => {
+    const { fam } = await familyWithStewardAndMember();
+    const alice = await makeSelfPerson(db, "Alice");
+    await addMembership(db, { personId: alice.id, familyId: fam.id, role: "member" });
+    const bob = await makePerson(db, "Bob");
+    await assertParentOf(db, { familyId: fam.id, parent: alice.id, child: bob.id, actor: alice.id });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "parent_of", personAId: alice.id, personBId: bob.id };
+
+    const res = await affirmEdge(db, account(alice.id), ref);
+    expect(res.allowed).toBe(false);
+  });
+
+  it("the asserter cannot correctEdge (still steward-only)", async () => {
+    const { fam } = await familyWithStewardAndMember();
+    const alice = await makeSelfPerson(db, "Alice");
+    await addMembership(db, { personId: alice.id, familyId: fam.id, role: "member" });
+    const bob = await makePerson(db, "Bob");
+    await assertParentOf(db, { familyId: fam.id, parent: alice.id, child: bob.id, actor: alice.id });
+    const ref: EdgeRef = { familyId: fam.id, edgeType: "parent_of", personAId: alice.id, personBId: bob.id };
+
+    const res = await correctEdge(db, account(alice.id), { ref, nature: "adoptive" });
+    expect(res.allowed).toBe(false);
+  });
+
+  it("listGovernableKinEdges: viewerCanRemove is true for the asserter (non-steward), false for a stranger, true for the steward", async () => {
+    const { steward, fam } = await familyWithStewardAndMember();
+    const alice = await makeSelfPerson(db, "Alice");
+    await addMembership(db, { personId: alice.id, familyId: fam.id, role: "member" });
+    const bob = await makePerson(db, "Bob");
+    const charlie = await makeSelfPerson(db, "Charlie");
+    await addMembership(db, { personId: charlie.id, familyId: fam.id, role: "member" });
+
+    const { personAId, personBId } = normalizeEdgeEndpoints("partnered_with", alice.id, bob.id);
+    await db.insert(kinshipAssertions).values({
+      familyId: fam.id,
+      edgeType: "partnered_with",
+      personAId,
+      personBId,
+      nature: null,
+      state: "asserted",
+      actorPersonId: alice.id,
+    });
+
+    const asAlice = await listGovernableKinEdges(db, account(alice.id), fam.id);
+    expect(asAlice[0]!.viewerCanRemove).toBe(true);
+    expect(asAlice[0]!.viewerIsSteward).toBe(false);
+    expect(asAlice[0]!.assertedBy).toBe(alice.id);
+
+    const asCharlie = await listGovernableKinEdges(db, account(charlie.id), fam.id);
+    expect(asCharlie[0]!.viewerCanRemove).toBe(false);
+
+    const asSteward = await listGovernableKinEdges(db, account(steward.id), fam.id);
+    expect(asSteward[0]!.viewerCanRemove).toBe(true);
+    expect(asSteward[0]!.viewerIsSteward).toBe(true);
   });
 });
 
