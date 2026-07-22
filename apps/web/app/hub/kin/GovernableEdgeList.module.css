@@ -1,0 +1,90 @@
+/*
+ * Governable edge lists — Family → List "Relationships in this family" and the tree person-details
+ * sheet. Base chrome is token-driven & skin-neutral (reproduces the former List inline card values
+ * 1:1). Playful Phase-2 is deliberately restrained for dense stewardship: soft hover-lift on edge
+ * cards only — no tape, tilt, highlighter, or scrapbook kit (those fight scanability; StoryCard /
+ * QuestionsTab keep the full kit). Signatures are skin-scoped via :global(:root[data-skin="playful"])
+ * and suppressed under reduce-motion / solemn. See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+/* List-page section chrome only — not for the 280px tree person-details sheet. */
+.section {
+  max-width: 720px;
+  margin-top: 28px;
+}
+
+.heading {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 0 0 6px;
+}
+
+.intro {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+
+/* Tree sheet: compact section/heading so the gov h3 does not compete with the person title. */
+.sectionDense {
+  margin-top: 16px;
+}
+
+.headingDense {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--text-meta);
+  margin: 0 0 10px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.edge {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+}
+
+.sentence {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+  margin: 0;
+}
+
+/* ---- Playful structural signatures (restrained) ---------------------------------------------
+   Dense stewardship kit: hover-lift on edge cards only. No tape / tilt / highlighter — those
+   belong on scrapbook cards, not a governable relationship roster. */
+
+:global(:root[data-skin="playful"]) .edge {
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+:global(:root[data-skin="playful"]) .edge:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Suppress structural signatures under reduce-motion OR solemn.
+   Solemn uses the stronger `:root[data-skin="playful"] [data-tone="solemn"]` form so it out-specifies
+   the playful rules when tone is on a container (see StoryDetailClient.module.css / #227). */
+:global(:root[data-reduce-motion="on"]) .edge,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .edge {
+  transition: none;
+}
+:global(:root[data-reduce-motion="on"]) .edge:hover,
+:global(:root[data-skin="playful"] [data-tone="solemn"]) .edge:hover {
+  transform: none;
+  box-shadow: none;
+}
