@@ -218,3 +218,91 @@ it("kin-options reject keeps submit disabled (#285/#286)", async () => {
   expect(screen.getByTestId("place-confirm-error").textContent).toMatch(/Couldn't do that/i);
   expect(onLink).not.toHaveBeenCalled();
 });
+
+it("re-render with new subject object identity does not refetch or reset receiver (#286)", async () => {
+  const onFetchAnchors = vi.fn(async () => ({
+    ok: true as const,
+    persons: [
+      { personId: "self", displayName: "You" },
+      { personId: "elena", displayName: "Elena" },
+    ],
+  }));
+
+  const { rerender } = render(
+    <PlaceConfirmModal
+      familyId="F"
+      subject={{ kind: "link", personId: "u1", displayName: "Rosa" }}
+      onFetchAnchors={onFetchAnchors}
+      onClose={() => {}}
+      onSuccess={() => {}}
+    />,
+  );
+  await flush();
+  await flush();
+
+  expect(onFetchAnchors).toHaveBeenCalledTimes(1);
+  const receiver = screen.getByTestId("place-confirm-receiver") as HTMLSelectElement;
+  fireEvent.change(receiver, { target: { value: "elena" } });
+  expect(receiver.value).toBe("elena");
+
+  rerender(
+    <PlaceConfirmModal
+      familyId="F"
+      subject={{ kind: "link", personId: "u1", displayName: "Rosa" }}
+      onFetchAnchors={onFetchAnchors}
+      onClose={() => {}}
+      onSuccess={() => {}}
+    />,
+  );
+  await flush();
+
+  expect(onFetchAnchors).toHaveBeenCalledTimes(1);
+  expect(screen.queryByTestId("place-confirm-loading-anchors")).toBeNull();
+  expect((screen.getByTestId("place-confirm-receiver") as HTMLSelectElement).value).toBe("elena");
+});
+
+it("partners-only seed keeps submit disabled until kin fetch completes (#286)", async () => {
+  let resolveKin!: (value: {
+    ok: true;
+    partners: { id: string; name: string }[];
+    children: { id: string; name: string }[];
+  }) => void;
+  const kinPromise = new Promise<{
+    ok: true;
+    partners: { id: string; name: string }[];
+    children: { id: string; name: string }[];
+  }>((resolve) => {
+    resolveKin = resolve;
+  });
+  const onFetchKin = vi.fn(() => kinPromise);
+
+  render(
+    <PlaceConfirmModal
+      familyId="F"
+      subject={{ kind: "mint" }}
+      receiver={{ personId: "elena", displayName: "Elena" }}
+      receiverLocked
+      partners={[{ id: "p2", name: "Partner Two" }]}
+      onFetchKinOptions={onFetchKin}
+      onClose={() => {}}
+      onSuccess={() => {}}
+    />,
+  );
+
+  // Partial seed (partners only) must NOT mark kin ready — submit stays gated.
+  const submit = screen.getByTestId("place-confirm-submit") as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  expect(onFetchKin).toHaveBeenCalledWith("F", "elena");
+
+  await act(async () => {
+    resolveKin({
+      ok: true,
+      partners: [{ id: "p2", name: "Partner Two" }],
+      children: [{ id: "kid-1", name: "Kid One" }],
+    });
+    await kinPromise;
+  });
+  await flush();
+
+  expect((screen.getByTestId("place-confirm-submit") as HTMLButtonElement).disabled).toBe(false);
+});
