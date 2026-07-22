@@ -67,18 +67,45 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 - **Parent-of / Partnered-with** — the **two generative primitives** of the tree. `parent-of` is a
   directed Person→Person edge carrying a **`nature`** (`biological | adoptive | step | foster |
   unknown`); `partnered-with` is an undirected union edge. These two are the *only* stored kinship
-  facts. **Sibling, half-sibling, grandparent, aunt/uncle, cousin, in-law** are **derived** by
-  walking parent/partner edges (sibling = shares a parent; half = shares exactly one; cousin =
-  parents are siblings), never stored — so a derived fact can never contradict a stored one.
+  facts — **no new edge types** for half/step or multi-partner cases; the existing `nature` enum and
+  the two primitives already cover them. **Sibling, half-sibling, step-sibling, grandparent,
+  aunt/uncle, cousin, in-law** are **derived labels** by walking parent/partner edges (full sibling =
+  shares two parents; half-sibling = shares exactly one; step-sibling = a parent of A is
+  partnered-with a parent of B and they do **not** share a `parent-of` edge — shared `parent-of`,
+  even `nature=step`, is half/full by parent count, never step-sibling), never stored — so a derived
+  fact can never contradict
+  a stored one.
 - **Union-node ban** — a genealogy file (GEDCOM) groups a marriage-plus-children into a unit it calls
   a **`FAM`**/"family". That is **not** our **Family (Chronicle)**. We never store a union node and
   never call it "family": on import a `FAM` is **shredded** into `parent-of` + `partnered-with`
   edges. "Family" always means the chronicle container.
 - **Sibling container** — because "sibling" is derived (shares a parent) and never stored, two people
-  can only be *made* siblings by giving them a **shared parent**. Adding a sibling to a person with no
-  parents therefore auto-creates a **placeholder parent-couple** — two unidentified bridge persons,
-  partnered, each a `parent-of` both siblings (ADR-0017). The couple is the storable home of the
-  siblinghood; there is no stored sibling fact.
+  can only be *made* siblings by giving them a **shared parent**. **Add sibling** to a person with no
+  full parent-couple therefore auto-creates a **placeholder parent-couple** — two unidentified bridge
+  persons, partnered, each a `parent-of` both siblings (ADR-0017). That path still produces *full*
+  siblings. Half-siblings are unlocked separately by an explicit **this parent only** choice when
+  placing a child (one shared parent; ADR-0017 amendment) — never by inventing a stored sibling edge.
+- **Multi-partner** — a Person may have more than one `partnered-with` edge. Allowed in the model and
+  in placement UI; each partnership is its own undirected edge, and children attach via ordinary
+  `parent-of` (with `nature` as needed). Not a new primitive.
+- **Partner→children offer** — when a new partner is added to someone who already has children, the
+  system **offers** (never silently writes) a step `parent-of` from the new partner to each existing
+  child. Accepting writes `nature = step`; declining leaves the children attached only to the original
+  parent. Same **offer-never-silent** discipline as Dedup-on-invite and Finish check (ADR-0027).
+- **Family tab List** — the Family tab's **browse-only people index**: the full family projection
+  (members and tree-placed kin), with a **Member** vs **tree-only** badge so membership and kinship
+  stay visually distinct. No placement, no relationship governance, no unplaced queue — those live on
+  the Tree (ADR-0023 amendment).
+- **Family tab Tree** — the Family tab's surface for **place, relate, and govern**. Holds the kinship
+  canvas, the **tree tray** (unplaced members + New person), zone-based placement with confirm, and
+  edge governance. Distinct from List (ADR-0023 amendment, ADR-0027).
+- **Tree tray** — the Tree's home for people not yet on the canvas: **unplaced members** (active
+  membership, no kinship edge in this family) plus **New person**. Placement starts from the tray;
+  governance of existing edges is on the canvas, not in the List (ADR-0023 amendment).
+- **Member vs tree-only** — badge language on List (and anywhere the full family projection is shown):
+  **Member** = has an active Membership in this Family; **tree-only** = appears via kinship / tree
+  placement without (or no longer with) an active membership. Orthogonality of membership and kinship
+  made visible — neither badge grants content access by itself.
 - **Focus person** — the single person a **tree view** is centered on: the initial framing and initial
   expansion origin. Seeded by the entry point (the person whose menu opened the tree, or the logged-in
   user for a direct visit) and thereafter fixed — not selectable, not re-rootable, not visually
