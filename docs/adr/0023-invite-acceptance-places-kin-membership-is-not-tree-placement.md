@@ -1,10 +1,11 @@
 # ADR-0023 — Invite acceptance places kin; membership is surfaced independently of the tree
 
-Status: Accepted (2026-07-18)
+Status: Accepted (2026-07-18) · **Amended (2026-07-21, issue #282 / #281)**
 
 Extends ADR-0016 (kinship is a steward-governed per-family tree), ADR-0017 (siblinghood via a
-shared placeholder couple), ADR-0001 (family discovery & join requests). Full rationale, schema
-deltas, and build sequence: `docs/design/2026-07-18-membership-vs-kinship-and-invite-placement.md`.
+shared placeholder couple), ADR-0001 (family discovery & join requests). Related: ADR-0027
+(Tree placement IA). Full rationale, schema deltas, and build sequence:
+`docs/design/2026-07-18-membership-vs-kinship-and-invite-placement.md`.
 
 ## Context
 
@@ -42,12 +43,20 @@ members become **unplaced**, resolved later by a human in the placement UX — n
 classified at invite time.
 
 **Membership is surfaced independently of tree placement.** Unplaced members (those with a
-membership but no kinship edge) are shown in **both** the Tree and List views — the tree canvas
-gains a home for edge-less nodes. A **"link existing member"** capability is added to the
+membership but no kinship edge) must still be visible and placeable — but **where** they live in the
+Family tab IA is amended below. A **"link existing member"** capability is added to the
 add-relative flow (the missing inverse of "mint a new Person"). Any active member may place
 (first-asserter-wins); the steward may override at any time. A **"leave as non-family member"**
 action persists a **per-family** flag on the membership to remove a member from the unplaced surface
 permanently.
+
+> **Amendment (2026-07-21, issue #282 / grilled #281):** **List** and **Tree** split roles. **List** is
+> a **browse-only people index** of the full family projection (Member vs tree-only badge) — it does
+> **not** host the unplaced queue, placement actions, or relationship governance. **Tree** owns place /
+> relate / govern. The Tree gains a **tray** whose contents are **unplaced members + New person** (the
+> home for edge-less members and minting someone new onto the canvas). Link-existing-member and
+> leave-as-non-family-member remain Tree/placement concerns, not List. Membership is still surfaced
+> independently of kinship; only the IA split changes.
 
 **A member is removable.** A steward-only `endMembership` sets `status='ended'` + `ended_at`.
 `memberships` is the revocable link (mutable status, unlike the append-only consent ledger).
@@ -78,9 +87,11 @@ reconciliation dedups the person).
 
 ## Consequences
 
-- **The Family tab stops being a pure kinship projection.** It must render membership-only nodes
-  (unplaced tray) in both views — a renderer change, and a subtle re-widening of what "the tree"
-  shows (structure only; kinship still never grants content access — ADR-0016 holds).
+- **The Family tab is no longer a pure kinship projection.** List shows the full people projection
+  (membership + tree-only); Tree shows structure plus the unplaced tray. Kinship still never grants
+  content access — ADR-0016 holds.
+- **List stays browse-only** after the #281 IA split — placement and edge governance do not leak back
+  into the people index (ADR-0027).
 - **Acceptance now writes to the kinship ledger.** A new audited write path (invite-accept →
   `parent_of`/`partnered_with`) subject to the same governance overlay; a mis-picked relationship is
   corrected by subject-hide or steward deny/correct, not by editing (append-only).
@@ -88,5 +99,5 @@ reconciliation dedups the person).
   otherwise needing no schema — the price of an un-nagging placement queue.
 - **`remove-member` closes a real governance hole** but introduces the first membership-ending write;
   ending a membership must leave authored content and tree placement intact.
-- **Steward workload grows again** (curating unplaced members) — same authority, extended, as with
-  every ADR-0016 governance addition.
+- **Steward workload grows again** (curating unplaced members on the Tree tray) — same authority,
+  extended, as with every ADR-0016 governance addition.
