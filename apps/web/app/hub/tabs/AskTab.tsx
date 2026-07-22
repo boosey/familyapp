@@ -11,6 +11,7 @@
 import { redirect } from "next/navigation";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createAsk } from "@chronicle/core";
+import { plogError } from "@chronicle/pipeline";
 import { invitations, memberships, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { ActionButton } from "@/app/_kindred/ActionButton";
@@ -21,7 +22,7 @@ import s from "./AskTab.module.css";
 
 async function submitAsk(formData: FormData): Promise<void> {
   "use server";
-  const { db, auth } = await getRuntime();
+  const { db, auth, dispatchAskActionableNotify } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
   const targetPersonId = String(formData.get("targetPersonId") ?? "");
@@ -37,11 +38,20 @@ async function submitAsk(formData: FormData): Promise<void> {
   const subjectPhotoIds = formData
     .getAll("subjectPhotoIds")
     .filter((v): v is string => typeof v === "string" && v.length > 0);
-  await createAsk(db, ctx, {
+  const ask = await createAsk(db, ctx, {
     targetPersonId,
     questionText,
     ...(subjectPhotoIds.length > 0 ? { subjectPhotoIds } : {}),
   });
+  // #276: best-effort email the askee that a question is waiting. Never fails Ask creation.
+  try {
+    await dispatchAskActionableNotify({ askId: ask.id });
+  } catch (err) {
+    plogError("ask", "submitAsk: ask.actionable.notify dispatch failed", {
+      ask: ask.id,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+  }
   redirect("/hub?tab=asks");
 }
 

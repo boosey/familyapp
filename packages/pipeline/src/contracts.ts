@@ -155,12 +155,19 @@ export interface StorySharedNotifyJobPayload {
   storyId: string;
 }
 
+/** Payload for the "Ask became actionable" askee email ping (#276). Worker re-resolves the
+ *  recipient (prefs + email) from DB via `resolveQuestionsForMePing`. */
+export interface AskActionableNotifyJobPayload {
+  askId: string;
+}
+
 /** Maps each job name to its payload type. Adding a job = a deliberate, named entry here. */
 export interface JobPayloadMap {
   transcribe: StoryJobPayload;
   render_story: StoryJobPayload;
   "invite.send": InviteJobPayload;
   "story.shared.notify": StorySharedNotifyJobPayload;
+  "ask.actionable.notify": AskActionableNotifyJobPayload;
 }
 
 /** The pipeline stages Phase 1 ships (plus invite delivery). Adding a stage is a deliberate, named change. */
@@ -200,7 +207,8 @@ export type JobFailureHandler<N extends JobName = JobName> = (
 /**
  * Per-name dedupe/attempt key: story jobs key on storyId(+attempt) (preserving the existing
  * retry-generation dedupe-bust behavior — see `StoryJobPayload.attempt`), invite jobs key on
- * invitationId, loop-ping jobs key on storyId. Adding a job name means adding a deliberate branch here.
+ * invitationId, loop-ping jobs key on storyId, ask-actionable jobs key on askId. Adding a job name
+ * means adding a deliberate branch here.
  */
 export function jobDedupeKey<N extends JobName>(name: N, payload: JobPayloadMap[N]): string {
   if (name === "invite.send") {
@@ -208,6 +216,9 @@ export function jobDedupeKey<N extends JobName>(name: N, payload: JobPayloadMap[
   }
   if (name === "story.shared.notify") {
     return `story.shared.notify|${(payload as StorySharedNotifyJobPayload).storyId}`;
+  }
+  if (name === "ask.actionable.notify") {
+    return `ask.actionable.notify|${(payload as AskActionableNotifyJobPayload).askId}`;
   }
   const p = payload as StoryJobPayload;
   return `${name}|${p.storyId}${p.attempt !== undefined ? `|${p.attempt}` : ""}`;

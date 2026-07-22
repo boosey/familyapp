@@ -53,6 +53,22 @@ describe("jobDedupeKey — per-name namespace + discrimination contract", () => 
       jobDedupeKey("transcribe", { storyId: "x" }),
     );
   });
+
+  it("ask.actionable.notify jobs key on askId", () => {
+    expect(jobDedupeKey("ask.actionable.notify", { askId: "a1" })).toBe(
+      "ask.actionable.notify|a1",
+    );
+    expect(jobDedupeKey("ask.actionable.notify", { askId: "a1" })).not.toBe(
+      jobDedupeKey("ask.actionable.notify", { askId: "a2" }),
+    );
+    // Distinct namespace from other job names even when the id string matches.
+    expect(jobDedupeKey("ask.actionable.notify", { askId: "x" })).not.toBe(
+      jobDedupeKey("story.shared.notify", { storyId: "x" }),
+    );
+    expect(jobDedupeKey("ask.actionable.notify", { askId: "x" })).not.toBe(
+      jobDedupeKey("transcribe", { storyId: "x" }),
+    );
+  });
 });
 
 describe("InProcessJobQueue invite jobs", () => {
@@ -82,6 +98,21 @@ describe("InProcessJobQueue invite jobs", () => {
     const q = new InProcessJobQueue();
     await q.enqueue("transcribe", { storyId: "a" });
     await q.enqueue("story.shared.notify", { storyId: "a" });
+    expect(q.pending()).toHaveLength(2);
+  });
+
+  it("dedupes ask.actionable.notify by askId while pending", async () => {
+    const q = new InProcessJobQueue();
+    const id1 = await q.enqueue("ask.actionable.notify", { askId: "ask-1" });
+    const id2 = await q.enqueue("ask.actionable.notify", { askId: "ask-1" });
+    expect(id1).toBe(id2);
+    expect(q.pending()).toHaveLength(1);
+  });
+
+  it("keeps ask.actionable.notify in its own dedupe namespace from pipeline stages", async () => {
+    const q = new InProcessJobQueue();
+    await q.enqueue("transcribe", { storyId: "a" });
+    await q.enqueue("ask.actionable.notify", { askId: "a" });
     expect(q.pending()).toHaveLength(2);
   });
 });

@@ -148,6 +148,10 @@ export {
   type StorySharedPingRecipient,
 } from "./story-shared-pings";
 export {
+  resolveQuestionsForMePing,
+  type QuestionsForMePingContext,
+} from "./questions-for-me-pings";
+export {
   DEFAULT_NOTIFICATION_FREQUENCY,
   NOTIFICATION_STREAMS,
   getNotificationStreamFrequency,

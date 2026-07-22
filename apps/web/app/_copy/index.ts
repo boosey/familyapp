@@ -10,4 +10,5 @@ export { join } from "./join";
 export { hub } from "./hub";
 export { invitations } from "./invitations";
 export { loopPings } from "./loop-pings";
+export { questionsForMePings } from "./questions-for-me-pings";
 export { legal } from "./legal";
