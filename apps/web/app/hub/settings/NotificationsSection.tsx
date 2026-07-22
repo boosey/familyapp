@@ -8,7 +8,7 @@
  * The UI only ever offers every_item|off — digest cadences aren't built yet (see actions.ts), so
  * this control never renders daily_digest/weekly_digest even though the DB type allows them.
  */
-import { useState, type CSSProperties } from "react";
+import { useCallback, useRef, useState, type CSSProperties } from "react";
 import { NOTIFICATION_STREAMS } from "@chronicle/core";
 import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
 import { hub } from "@/app/_copy";
@@ -40,20 +40,36 @@ export function NotificationsSection({ initialFrequencies }: NotificationsSectio
     return initial;
   });
   const [saveState, setSaveState] = useState<Partial<Record<NotificationStream, SaveState>>>({});
+  const savingRef = useRef<Set<NotificationStream>>(new Set());
 
-  async function handleSelect(stream: NotificationStream, next: UiFrequency) {
-    const previous = frequencies[stream];
-    if (previous === next) return;
-    setFrequencies((f) => ({ ...f, [stream]: next }));
-    setSaveState((s) => ({ ...s, [stream]: "saving" }));
-    const result = await saveNotificationStreamFrequencyAction(stream, next);
-    if ("ok" in result) {
-      setSaveState((s) => ({ ...s, [stream]: "saved" }));
-    } else {
-      setFrequencies((f) => ({ ...f, [stream]: previous }));
-      setSaveState((s) => ({ ...s, [stream]: "error" }));
+  const mark = useCallback((stream: NotificationStream, state: SaveState) => {
+    setSaveState((s) => ({ ...s, [stream]: state }));
+    if (state === "saved") {
+      window.setTimeout(() => {
+        setSaveState((s) => (s[stream] === "saved" ? { ...s, [stream]: "idle" } : s));
+      }, 2000);
     }
-  }
+  }, []);
+
+  const handleSelect = useCallback(
+    async (stream: NotificationStream, next: UiFrequency) => {
+      if (savingRef.current.has(stream)) return;
+      const previous = frequencies[stream];
+      if (previous === next) return;
+      savingRef.current.add(stream);
+      setFrequencies((f) => ({ ...f, [stream]: next }));
+      mark(stream, "saving");
+      const result = await saveNotificationStreamFrequencyAction(stream, next);
+      if ("ok" in result) {
+        mark(stream, "saved");
+      } else {
+        setFrequencies((f) => ({ ...f, [stream]: previous }));
+        mark(stream, "error");
+      }
+      savingRef.current.delete(stream);
+    },
+    [frequencies, mark],
+  );
 
   function hint(stream: NotificationStream) {
     const state = saveState[stream];
