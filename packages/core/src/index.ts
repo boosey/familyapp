@@ -112,6 +112,15 @@ export {
   type ExtractStatedLifeEventsInput,
   type StatedLifeEvent,
 } from "./resolve-story-date";
+// ADR-0026 / #321: shared live Story date update policy (Tier A + rank + life-event extract).
+// Turn-loop and answer surface both call this; finish-time backstop stays in pipeline.
+export {
+  OCCURRENCE_PRECISION_RANK,
+  occurrencePrecisionRank,
+  deriveLiveStoryDateUpdate,
+  type DeriveLiveStoryDateUpdateInput,
+  type DeriveLiveStoryDateUpdateResult,
+} from "./live-story-date";
 // ADR-0026: the Life event read side (the reusable anchors derivation resolves against) and the
 // write side (#245) — capture from tellings, idempotent per person + kind + date.
 export {
