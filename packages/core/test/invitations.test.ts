@@ -5,6 +5,7 @@
  * accept (membership + status flip; reject double-accept and expired).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
+import { kinshipAssertions } from "@chronicle/db/kinship";
 import {
   accountContacts,
   accounts,
@@ -54,6 +55,19 @@ async function familyWithSteward(name = "Esposito") {
     role: "steward",
   });
   return { steward, fam };
+}
+
+/**
+ * Grant the invite STANDING check (#333) between `viewerId` and `personId`: create a family where
+ * both hold ACTIVE membership, so `personId` is visible to `viewerId` (`resolveKinshipProjection`'s
+ * co-membership clause). The simplest, most common way a List/Tree invite anchor is "known" to an
+ * inviter — mirrors the canonical Zach-is-a-member-of-Boudreaux case.
+ */
+async function grantStanding(personId: string, viewerId: string) {
+  const shared = await makeFamily(db, "Shared", viewerId);
+  await addMembership(db, { personId: viewerId, familyId: shared.id, role: "member" });
+  await addMembership(db, { personId, familyId: shared.id, role: "member" });
+  return shared;
 }
 
 describe("createInvitation", () => {
@@ -1154,6 +1168,7 @@ describe("createInvitation person-bound (#333, ADR-0028)", () => {
   it("binds to the existing Person on create — no second Person minted", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makePerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const before = await personCount();
 
     const { invitationId, inviteePersonId } = await createInvitation(db, {
@@ -1176,6 +1191,7 @@ describe("createInvitation person-bound (#333, ADR-0028)", () => {
   it("prefills inviteeName from the Person's displayName when the caller supplies none", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makePerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const { invitationId } = await createInvitation(db, {
       familyId: fam.id,
       inviterPersonId: steward.id,
@@ -1192,6 +1208,7 @@ describe("createInvitation person-bound (#333, ADR-0028)", () => {
   it("still honors a caller-supplied inviteeName over the Person's displayName", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makePerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const { invitationId } = await createInvitation(db, {
       familyId: fam.id,
       inviterPersonId: steward.id,
@@ -1220,23 +1237,47 @@ describe("createInvitation person-bound (#333, ADR-0028)", () => {
     ).rejects.toBeInstanceOf(AlreadyFamilyMemberError);
   });
 
-  it("allows a person-bound invite into a DIFFERENT family the invitee is not a member of", async () => {
-    const { fam: boudreaux } = await familyWithSteward("Boudreaux");
+  it("allows a person-bound invite into a DIFFERENT family when the inviter has standing (shares a family with the invitee)", async () => {
+    // Canonical Zach → Carney scenario: Zach is a member of Boudreaux; the INVITER is ALSO an active
+    // member of Boudreaux (where Zach is visible to them), which is what gives them standing to name
+    // Zach as an invite anchor into Carney — being a Carney steward alone would not be enough (#333).
+    const { steward, fam: boudreaux } = await familyWithSteward("Boudreaux");
     const zach = await makePerson(db, "Zach Boudreaux");
     await addMembership(db, { personId: zach.id, familyId: boudreaux.id, role: "member" });
 
-    const { steward: carneySteward, fam: carney } = await familyWithSteward("Carney");
+    const carney = await makeFamily(db, "Carney", steward.id);
+    await addMembership(db, { personId: steward.id, familyId: carney.id, role: "steward" });
+
     const { inviteePersonId } = await createInvitation(db, {
       familyId: carney.id,
-      inviterPersonId: carneySteward.id,
+      inviterPersonId: steward.id,
       existingInviteePersonId: zach.id,
     });
     expect(inviteePersonId).toBe(zach.id);
   });
 
+  it("refuses a person-bound invite when the inviter has NO shared family with the invitee (standing, #333)", async () => {
+    // Zach is only ever a member of Boudreaux. The Carney steward has never shared a family with him
+    // — no membership overlap, no visible kinship edge — so they have no standing to name him as an
+    // invite anchor, even though they ARE an active member of the target family (Carney).
+    const { fam: boudreaux } = await familyWithSteward("Boudreaux");
+    const zach = await makePerson(db, "Zach Boudreaux");
+    await addMembership(db, { personId: zach.id, familyId: boudreaux.id, role: "member" });
+
+    const { steward: carneySteward, fam: carney } = await familyWithSteward("Carney");
+    await expect(
+      createInvitation(db, {
+        familyId: carney.id,
+        inviterPersonId: carneySteward.id,
+        existingInviteePersonId: zach.id,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
   it("refreshes an existing pending person-bound invite in place instead of duplicating", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makePerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const first = await createInvitation(db, {
       familyId: fam.id,
       inviterPersonId: steward.id,
@@ -1262,6 +1303,7 @@ describe("createInvitation person-bound (#333, ADR-0028)", () => {
   it("rotates the token when refreshing a DEAD person-bound invite", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makePerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const first = await createInvitation(db, {
       familyId: fam.id,
       inviterPersonId: steward.id,
@@ -1351,6 +1393,7 @@ describe("acceptInvitation of a person-bound invite (#333, ADR-0028)", () => {
   it("Account-holder accept adds Membership on the SAME Person id — no second Person minted", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makeAccountPerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const before = await personCount();
 
     const { token } = await createInvitation(db, {
@@ -1383,6 +1426,7 @@ describe("acceptInvitation of a person-bound invite (#333, ADR-0028)", () => {
   it("places the Account-holder on the tree per the invite's structured relationship (ADR-0023)", async () => {
     const { steward, fam } = await familyWithSteward("Carney");
     const zach = await makeAccountPerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id); // #333 standing: shared family with the inviter
     const { token } = await createInvitation(db, {
       familyId: fam.id,
       inviterPersonId: steward.id,
@@ -1404,6 +1448,10 @@ describe("acceptInvitation of a person-bound invite (#333, ADR-0028)", () => {
     await addMembership(db, { personId: zach.id, familyId: boudreaux.id, role: "member" });
 
     const { steward: carneySteward, fam: carney } = await familyWithSteward("Carney");
+    // Standing (#333): the Carney steward must ALSO be able to see Zach — active in Boudreaux too
+    // (mirrors the fix to the "DIFFERENT family" create test above; being a Carney steward alone is
+    // not standing to name Zach as an invite anchor).
+    await addMembership(db, { personId: carneySteward.id, familyId: boudreaux.id, role: "member" });
     const before = await personCount();
     const { token } = await createInvitation(db, {
       familyId: carney.id,
@@ -1415,5 +1463,85 @@ describe("acceptInvitation of a person-bound invite (#333, ADR-0028)", () => {
     expect(await isActiveMember(db, zach.id, boudreaux.id)).toBe(true); // untouched
     expect(await isActiveMember(db, zach.id, carney.id)).toBe(true); // new membership, same Person
     expect(await personCount()).toBe(before); // no second Person minted
+  });
+});
+
+// acceptInvitation must protect NON-provisional anchors from the ADR-0006 merge/delete (#333
+// hardening). A person-bound Invitation may anchor to a real tree Person (a `mention` placeholder, or
+// another `self` Person) rather than a disposable ADR-0006 provisional — that Person must never be
+// silently deleted just because the accepter differs from the anchor.
+describe("acceptInvitation protects non-provisional anchors from deletion (#333 hardening)", () => {
+  it("refuses (and does NOT delete) when a DIFFERENT Person accepts a person-bound invite anchored to a mention Person", async () => {
+    const { steward, fam } = await familyWithSteward("Carney");
+
+    // A real tree Person: a `mention` (e.g. a deceased relative, or a placeholder a family member
+    // entered) — Account-less, but NOT a disposable ADR-0006 provisional (`origin` is "mention", not
+    // "invitee"). Give it standing via a visible kinship edge in `fam`, the realistic way a mention
+    // Person is "known" to an inviter (mentions hold no memberships).
+    const [auntRosa] = await db
+      .insert(persons)
+      .values({ displayName: "Aunt Rosa", spokenName: "Rosa", origin: "mention" })
+      .returning({ id: persons.id });
+    await db.insert(kinshipAssertions).values({
+      familyId: fam.id,
+      edgeType: "parent_of",
+      personAId: steward.id,
+      personBId: auntRosa!.id,
+      nature: "biological",
+      state: "asserted",
+      actorPersonId: steward.id,
+    });
+
+    const { token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      existingInviteePersonId: auntRosa!.id,
+    });
+
+    // A DIFFERENT Person accepts (a mismatched accept) — must be refused, never merged/deleted. The
+    // write path cannot trust that only the intended person could ever redeem this token.
+    const someoneElse = await makeAccountPerson(db, "Someone Else");
+    await expect(
+      acceptInvitation(db, { token, acceptedPersonId: someoneElse.id }),
+    ).rejects.toBeInstanceOf(InvariantViolation);
+
+    // Aunt Rosa's Person row is untouched — NOT deleted.
+    const stillThere = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.id, auntRosa!.id));
+    expect(stillThere).toHaveLength(1);
+
+    // The invitation is unchanged too — still pending, still anchored to Aunt Rosa.
+    const view = await getInvitationByToken(db, token);
+    expect(view?.status).toBe("pending");
+    const [invite] = await db
+      .select({ inviteePersonId: invitations.inviteePersonId })
+      .from(invitations)
+      .where(eq(invitations.id, view!.invitationId));
+    expect(invite?.inviteePersonId).toBe(auntRosa!.id);
+  });
+
+  it("still succeeds when the SAME Account-holder Person accepts their own person-bound invite", async () => {
+    // Regression guard alongside the refusal above: the anchor-equals-accepter path (Zach accepting
+    // his own Carney invite) must keep working — the merge/delete branch is skipped entirely then.
+    const { steward, fam } = await familyWithSteward("Carney");
+    const zach = await makeAccountPerson(db, "Zach Boudreaux");
+    await grantStanding(zach.id, steward.id);
+
+    const { token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      existingInviteePersonId: zach.id,
+    });
+    const { membershipId } = await acceptInvitation(db, { token, acceptedPersonId: zach.id });
+    expect(membershipId).toBeTruthy();
+    expect(await isActiveMember(db, zach.id, fam.id)).toBe(true);
+
+    const stillThere = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.id, zach.id));
+    expect(stillThere).toHaveLength(1);
   });
 });

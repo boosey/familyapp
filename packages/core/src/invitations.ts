@@ -24,6 +24,7 @@ import {
   ThrottleError,
 } from "./errors";
 import { findActiveFamilyMemberByContact } from "./invite-member-guard";
+import { personVisibleToViewerAcrossFamilies } from "./kinship-repository";
 import { placeInvitedMemberOnAccept } from "./kinship-write";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
@@ -74,7 +75,11 @@ export interface CreateInvitationInput {
    * beyond cold contact matching to an invite started from an existing List/Tree Person. The Person
    * must be identified and living; create refuses (`InvariantViolation`) otherwise, or if it does
    * not exist. Create also refuses (`AlreadyFamilyMemberError`) when this Person already holds an
-   * ACTIVE membership in `familyId`. Omitted => the ADR-0006 cold path (mints a provisional Person)
+   * ACTIVE membership in `familyId`. STANDING CHECK (hardening): the inviter must also have
+   * independent visibility into this Person — active co-membership in some shared family, or being
+   * able to see them on that family's tree (`personVisibleToViewerAcrossFamilies`) — else
+   * `AuthorizationError`. Being an active member of `familyId` alone is NOT sufficient standing to
+   * name an arbitrary Person UUID. Omitted => the ADR-0006 cold path (mints a provisional Person)
    * runs unchanged.
    */
   existingInviteePersonId?: string;
@@ -156,6 +161,21 @@ export async function createInvitation(
       if (await isActiveMember(tx, person.id, input.familyId)) {
         throw new AlreadyFamilyMemberError(
           `${person.displayName ?? "this person"} is already an active member of this family`,
+        );
+      }
+      // STANDING CHECK (#333 hardening — load-bearing, do not remove): being an active member of the
+      // TARGET family is enough to CREATE an invitation, but not enough to name ANY Person UUID in the
+      // app as its anchor. The inviter must have independent standing to see this specific Person —
+      // active co-membership with them in some family, or being able to see them on that family's
+      // tree — mirroring the exact reachability the List/Tree surfaces already enforce. Without this,
+      // any member of the target family could probe arbitrary personIds and leak a stranger's name via
+      // the invite flow. Canonical case this still allows: Zach (active in Boudreaux) is visible to a
+      // Carney steward who is ALSO an active member of Boudreaux — shared family gives standing.
+      if (
+        !(await personVisibleToViewerAcrossFamilies(tx, input.inviterPersonId, person.id))
+      ) {
+        throw new AuthorizationError(
+          "inviter has no standing to invite this person — not visible in any family they share",
         );
       }
       boundPerson = { id: person.id, displayName: person.displayName };
@@ -714,12 +734,19 @@ export async function getInvitationByToken(
  * rejected with `InvariantViolation`. An edited `relationshipLabel` overrides the stored one (the
  * welcome screen lets the user correct it) before the row is persisted.
  *
- * ADR-0006 merge: the invitation anchored a provisional Account-less Person. Acceptance folds that
- * provisional Person into `acceptedPersonId` — queued Asks that targeted the provisional Person are
- * re-pointed to the accepting Person (so questions raised before the invitee joined actually reach
- * them), the invitation's anchor is re-pointed, and the now-empty provisional row is deleted. This
- * is the "acceptance is a link, not a create" outcome (ADR-0006) achieved by merge rather than an
- * in-place account link, so the ADR-0005 JIT provisioning path is left untouched.
+ * ADR-0006 merge: when the invitation anchored a genuine ADR-0006 provisional (`origin === "invitee"`,
+ * Account-less) and a DIFFERENT Person is accepting, acceptance folds that provisional Person into
+ * `acceptedPersonId` — queued Asks that targeted the provisional Person are re-pointed to the
+ * accepting Person (so questions raised before the invitee joined actually reach them), the
+ * invitation's anchor is re-pointed, and the now-empty provisional row is deleted. This is the
+ * "acceptance is a link, not a create" outcome (ADR-0006) achieved by merge rather than an in-place
+ * account link, so the ADR-0005 JIT provisioning path is left untouched.
+ *
+ * Person-bound invites (#333, ADR-0028) may instead anchor to a real, non-provisional Person (e.g. a
+ * `mention` placeholder or another `self` Person entered by a relative). That anchor must NEVER be
+ * silently deleted: a mismatched accept (accepting Person != anchor) against a non-provisional anchor
+ * is refused with `InvariantViolation` rather than merged/deleted. The Account-holder-accepts-their-
+ * own-invite case (accepting Person === anchor) always succeeds — no merge is attempted.
  */
 export async function acceptInvitation(
   db: Database,
@@ -766,24 +793,35 @@ export async function acceptInvitation(
     });
 
     // Merge the provisional invitee Person into the accepting Person, unless the invite already
-    // anchors to them (a no-op re-point). Guard: never destroy a Person that carries an Account —
-    // the provisional row is Account-less by construction, and anything else signals a corrupted
-    // anchor we must not silently delete.
+    // anchors to them (a no-op re-point, the person-bound Account-holder-accepts-their-own-invite
+    // case, #333). Guard: ONLY ever delete a Person that is a genuine ADR-0006 provisional —
+    // `origin === "invitee"` AND Account-less. A person-bound invite (#333, ADR-0028) may anchor to a
+    // real `mention`/`self` Person who happens to have no Account yet (e.g. a deceased-relative
+    // placeholder or a tree Person entered by a relative) — deleting THAT Person on a mismatched
+    // accept would destroy a real tree node the family already built, not clean up a throwaway
+    // placeholder. So a mismatched accept (accepter differs from the anchor) is refused unless the
+    // anchor is unambiguously a disposable provisional.
     const provisionalId = invite.inviteePersonId;
     if (provisionalId !== input.acceptedPersonId) {
-      const [provisional] = await tx
-        .select({ accountId: persons.accountId })
+      const [anchor] = await tx
+        .select({ accountId: persons.accountId, origin: persons.origin })
         .from(persons)
         .where(eq(persons.id, provisionalId))
         .limit(1);
-      if (!provisional) {
+      if (!anchor) {
         throw new InvariantViolation(
           "invitation's provisional invitee Person is missing — cannot merge",
         );
       }
-      if (provisional.accountId !== null) {
+      if (anchor.accountId !== null) {
         throw new InvariantViolation(
           "invitation's invitee anchor is an Account-bearing Person — refusing to merge/delete",
+        );
+      }
+      if (anchor.origin !== "invitee") {
+        throw new InvariantViolation(
+          "invitation's invitee anchor is not a disposable provisional (origin != 'invitee') — " +
+            "refusing to merge/delete a real tree Person; the accepting Person must match the anchor",
         );
       }
       // Move any Asks queued against the provisional invitee onto the real Person.

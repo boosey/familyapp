@@ -135,6 +135,98 @@ export async function canViewerSeePerson(
 }
 
 /**
+ * Invite-standing check (#333, ADR-0028 hardening): is `personId` visible to `viewerPersonId`
+ * through some family they BOTH have a connection to? This is the gate a person-bound Invitation
+ * create must pass — without it, any active member of the TARGET family could hand
+ * `existingInviteePersonId` an arbitrary Person UUID from anywhere in the app, a cross-family PII
+ * leak (a stranger's name/relationship surfaced via the invite flow).
+ *
+ * "Visible" mirrors the same reachability `canViewerSeePerson` and the List/Tree projections use,
+ * generalized to a many-family standing check instead of a single boolean:
+ *   - `personId` is an ACTIVE Member of some family where the viewer also holds active membership, OR
+ *   - `personId` is an endpoint of a currently-VISIBLE kinship edge (latest-supersede + subject-hide
+ *     applied, same as {@link resolveKinshipProjection}) in some family where the viewer holds active
+ *     membership.
+ * Self is always standing (a person always has standing on themselves).
+ *
+ * Batched across the viewer's WHOLE family set in a small, fixed number of queries (membership
+ * lookup, co-membership check, one kinship-assertions scan, one hide-overlay scan) — never a query
+ * per candidate family, so an inviter who belongs to many families does not create an N+1.
+ */
+export async function personVisibleToViewerAcrossFamilies(
+  db: Pick<Database, "select">,
+  viewerPersonId: string,
+  personId: string,
+): Promise<boolean> {
+  if (viewerPersonId === personId) return true;
+
+  const viewerFamilyRows = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(
+      and(eq(memberships.personId, viewerPersonId), eq(memberships.status, "active")),
+    );
+  const familyIds = viewerFamilyRows.map((r) => r.familyId);
+  if (familyIds.length === 0) return false;
+
+  // Direct co-membership: `personId` is an active member of some family the viewer is also active in.
+  const [coMember] = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.status, "active"),
+        inArray(memberships.familyId, familyIds),
+      ),
+    )
+    .limit(1);
+  if (coMember) return true;
+
+  // Otherwise: is `personId` an endpoint of a VISIBLE kinship edge in ANY of those families? One
+  // query across every candidate family for the assertions, one for the hide overlay — mirrors
+  // resolveKinshipProjection's latest-supersede + subject-hide logic, generalized over families.
+  const rows = await db
+    .select()
+    .from(kinshipAssertions)
+    .where(inArray(kinshipAssertions.familyId, familyIds))
+    .orderBy(asc(kinshipAssertions.seq));
+  if (rows.length === 0) return false;
+
+  // Latest row per (family, edge) — rows arrive oldest→newest by seq, so the last write per key wins.
+  const latestByFamilyEdge = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    latestByFamilyEdge.set(`${r.familyId}${SEP}${edgeKey(r)}`, r);
+  }
+
+  const hideRows = await db
+    .select()
+    .from(kinshipSubjectHides)
+    .where(inArray(kinshipSubjectHides.familyId, familyIds))
+    .orderBy(asc(kinshipSubjectHides.seq));
+  const latestHideByFamilyEdgeSubject = new Map<string, boolean>();
+  for (const h of hideRows) {
+    // A hide is the subject's veto — ignore a malformed row whose subject is neither endpoint.
+    if (h.subjectPersonId !== h.personAId && h.subjectPersonId !== h.personBId) continue;
+    latestHideByFamilyEdgeSubject.set(
+      `${h.familyId}${SEP}${edgeKey(h)}${SEP}${h.subjectPersonId}`,
+      h.hidden,
+    );
+  }
+  const hiddenFamilyEdgeKeys = new Set<string>();
+  for (const [key, hidden] of latestHideByFamilyEdgeSubject) {
+    if (hidden) hiddenFamilyEdgeKeys.add(key.slice(0, key.lastIndexOf(SEP)));
+  }
+
+  for (const [familyEdgeKey, edge] of latestByFamilyEdge) {
+    if (!VISIBLE_STATES.has(edge.state)) continue; // denied → not shown
+    if (hiddenFamilyEdgeKeys.has(familyEdgeKey)) continue; // subject veto
+    if (edge.personAId === personId || edge.personBId === personId) return true;
+  }
+  return false;
+}
+
+/**
  * Resolve a family's current kinship projection for a viewer. The viewer MUST hold an active
  * membership in the family (kinship visibility is family-membership-scoped, ADR-0010) — otherwise
  * `AuthorizationError`. Returns only edges whose latest state is visible and which no subject has
