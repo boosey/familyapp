@@ -930,9 +930,20 @@ export const hub = {
     sexMale: "Male",
     sexFemale: "Female",
     sexUnknown: "Prefer not to say",
-    // Add-child co-parent picker: attach the child to a second parent (the anchor's partner).
-    otherParentLabel: "Other parent (optional)",
-    otherParentNone: "No other parent",
+    // Add-child co-parent checkboxes (#285 / ADR-0027): attach the child to zero or more additional
+    // parents (the anchor's partners). Unchecked = this-parent-only (half-sibling by derivation).
+    otherParentLabel: "Also a child of (optional)",
+    otherParentNone: "This parent only",
+    otherParentHint: "Leave unchecked to place with this parent only (half-siblings).",
+    // Ordinary parent/child nature (#285); default biological.
+    natureFieldLabelAdd: "Relationship nature",
+    natureHintBiological: "Usually biological; change for adoptive, step, or foster.",
+    // Partner→kids offer (#285 / ADR-0027): never silent.
+    stepParentOfferHeading: "Also a step parent of?",
+    stepParentOfferIntro:
+      "This person already has children. Add the new partner as a step parent of the ones you check, or skip to add the partnership only.",
+    stepParentOfferSkip: "Partner only — skip step parenting",
+    stepParentOfferConfirm: "Continue",
     submit: "Add relative",
     submitting: "Adding…",
     // #251 — typed name matches an unplaced member; offer connect-existing before minting a duplicate.

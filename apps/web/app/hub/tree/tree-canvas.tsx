@@ -530,7 +530,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     [familyId, fetchSubtree],
   );
 
-  // The anchor's partners (for the modal's "Other parent" picker) — the OTHER endpoint of every
+  // The anchor's partners (for the modal's co-parent checkboxes) — the OTHER endpoint of every
   // partnered_with edge touching the anchor, named from the loaded nodes.
   const partnersOf = useCallback(
     (anchorId: string): { id: string; name: string }[] => {
@@ -543,6 +543,23 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
         const n = nodeById.get(otherId);
         out.push({
           id: otherId,
+          name: n?.identified && n.displayName ? n.displayName : hub.kin.edgeUnknownPerson,
+        });
+      }
+      return out;
+    },
+    [edges, nodeById],
+  );
+
+  // The anchor's children (for the partner→kids step offer) — personB of every parent_of from anchor.
+  const childrenOf = useCallback(
+    (anchorId: string): { id: string; name: string }[] => {
+      const out: { id: string; name: string }[] = [];
+      for (const e of edges) {
+        if (e.edgeType !== "parent_of" || e.personAId !== anchorId) continue;
+        const n = nodeById.get(e.personBId);
+        out.push({
+          id: e.personBId,
           name: n?.identified && n.displayName ? n.displayName : hub.kin.edgeUnknownPerson,
         });
       }
@@ -818,6 +835,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           initialRelation={addTarget.relation}
           coParentOptions={partnersOf(addTarget.anchorPersonId)}
           preselectedCoParentId={addTarget.coParentPersonId}
+          childOptions={childrenOf(addTarget.anchorPersonId)}
           unplacedMembers={unplacedMembers}
           onClose={() => setAddTarget(null)}
           onSuccess={() => {

@@ -24,6 +24,7 @@ import { hub } from "@/app/_copy";
 import {
   endMembershipAction,
   linkExistingMemberAction,
+  listPersonKinOptionsAction,
   listPlacedPersonsAction,
   setMemberNonFamilyAction,
 } from "../tree/actions";
@@ -307,10 +308,10 @@ interface PlaceMemberModalProps {
 }
 
 /**
- * Link an EXISTING member (`member`) to an `anchor` with a chosen relation (#161). Reuses the shared
- * relation vocabulary; the anchor is a person already in the tree (never a fresh person — this connects
- * a member you already have, so no duplicate is minted). Escape/overlay-click dismiss; a two-field form
- * calls `linkExistingMemberAction`.
+ * Link an EXISTING member (`member`) to an `anchor` with a chosen relation (#161, blended #285).
+ * Reuses the shared relation vocabulary; the anchor is a person already in the tree. Escape/overlay-
+ * click dismiss. Child place shows co-parent checkboxes; partner place confirms step parent-of to
+ * existing kids before write (ADR-0027 — never silent).
  */
 function PlaceMemberModal({
   familyId,
@@ -327,6 +328,10 @@ function PlaceMemberModal({
   const [pending, startTransition] = useTransition();
   const [anchors, setAnchors] = useState<AnchorOption[]>([]);
   const [loadingAnchors, setLoadingAnchors] = useState(true);
+  const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
+  const [children, setChildren] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCoParents, setSelectedCoParents] = useState<Set<string>>(new Set());
+  const [pendingStepOffer, setPendingStepOffer] = useState<Set<string> | null>(null);
 
   // Fetch the full family-wide placed-person list on mount (#169).
   useEffect(() => {
@@ -354,8 +359,34 @@ function PlaceMemberModal({
       setLoadingAnchors(false);
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [familyId, member.personId, onFetchAnchors]);
+
+  // When the chosen anchor changes, load their partners + children for confirm UI (#285).
+  useEffect(() => {
+    let cancelled = false;
+    async function loadKin() {
+      if (!anchorId) {
+        setPartners([]);
+        setChildren([]);
+        return;
+      }
+      const res = await listPersonKinOptionsAction(familyId, anchorId);
+      if (cancelled) return;
+      if (res.ok) {
+        setPartners(res.partners);
+        setChildren(res.children);
+        setSelectedCoParents(new Set());
+        setPendingStepOffer(null);
+      }
+    }
+    void loadKin();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, anchorId]);
 
   // Escape closes (mirrors AddRelativeModal — a window listener, not a div handler, so it fires
   // regardless of focus).
@@ -369,17 +400,37 @@ function PlaceMemberModal({
 
   const hasAnchors = anchors.length > 0;
 
-  function onSubmit() {
-    if (!hasAnchors || !anchorId) return;
+  function doLink(stepKids: string[]) {
     setError(null);
     startTransition(async () => {
-      const res = await onLink(familyId, member.personId, relation, anchorId);
+      const coParents = relation === "child" ? [...selectedCoParents] : [];
+      const res = await onLink(
+        familyId,
+        member.personId,
+        relation,
+        anchorId,
+        coParents.length === 1 ? coParents[0] : undefined,
+        {
+          coParentPersonIds: coParents.length > 0 ? coParents : undefined,
+          stepParentOfChildIds: relation === "partner" && stepKids.length > 0 ? stepKids : undefined,
+          nature: relation === "parent" || relation === "child" ? "biological" : undefined,
+        },
+      );
       if (!res.ok) {
         setError(hub.unplaced.actionFailed);
         return;
       }
       onSuccess();
     });
+  }
+
+  function onSubmit() {
+    if (!hasAnchors || !anchorId) return;
+    if (relation === "partner" && children.length > 0 && pendingStepOffer === null) {
+      setPendingStepOffer(new Set(children.map((c) => c.id)));
+      return;
+    }
+    doLink(pendingStepOffer ? [...pendingStepOffer] : []);
   }
 
   return (
@@ -407,7 +458,9 @@ function PlaceMemberModal({
         <p className={styles.intro}>{hub.unplaced.placeIntro}</p>
 
         {loadingAnchors ? (
-          <p className={styles.intro} data-testid="place-member-loading-anchors">{hub.unplaced.loadingAnchors}</p>
+          <p className={styles.intro} data-testid="place-member-loading-anchors">
+            {hub.unplaced.loadingAnchors}
+          </p>
         ) : hasAnchors ? (
           <form
             className={styles.form}
@@ -424,6 +477,7 @@ function PlaceMemberModal({
                 onChange={(e) => setAnchorId(e.target.value)}
                 data-testid="place-member-anchor"
                 required
+                disabled={pendingStepOffer !== null}
               >
                 {anchors.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -438,9 +492,13 @@ function PlaceMemberModal({
               <select
                 className="kin-field"
                 value={relation}
-                onChange={(e) => setRelation(e.target.value as AddRelativeRelation)}
+                onChange={(e) => {
+                  setRelation(e.target.value as AddRelativeRelation);
+                  setPendingStepOffer(null);
+                }}
                 data-testid="place-member-relation"
                 required
+                disabled={pendingStepOffer !== null}
               >
                 {RELATIONS.map((r) => (
                   <option key={r} value={r}>
@@ -450,20 +508,117 @@ function PlaceMemberModal({
               </select>
             </label>
 
+            {relation === "child" && partners.length > 0 ? (
+              <fieldset
+                style={{ border: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}
+                data-testid="place-member-coparents"
+              >
+                <legend className="kin-form-label" style={{ padding: 0 }}>
+                  {hub.kin.otherParentLabel}
+                </legend>
+                {partners.map((p) => (
+                  <label
+                    key={p.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontFamily: "var(--font-ui)",
+                      fontSize: "var(--text-ui)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCoParents.has(p.id)}
+                      onChange={(e) => {
+                        setSelectedCoParents((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(p.id);
+                          else next.delete(p.id);
+                          return next;
+                        });
+                      }}
+                      data-testid={`place-member-coparent-${p.id}`}
+                    />
+                    {p.name}
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
+
+            {pendingStepOffer ? (
+              <div
+                role="group"
+                aria-label={hub.kin.stepParentOfferHeading}
+                data-testid="place-member-step-offer"
+                style={{ display: "grid", gap: 12 }}
+              >
+                <p className={styles.intro} style={{ margin: 0 }}>
+                  {hub.kin.stepParentOfferIntro}
+                </p>
+                {children.map((c) => (
+                  <label
+                    key={c.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontFamily: "var(--font-ui)",
+                      fontSize: "var(--text-ui)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={pendingStepOffer.has(c.id)}
+                      onChange={(e) => {
+                        setPendingStepOffer((prev) => {
+                          if (!prev) return prev;
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(c.id);
+                          else next.delete(c.id);
+                          return next;
+                        });
+                      }}
+                      data-testid={`place-member-step-child-${c.id}`}
+                    />
+                    {c.name}
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  className={styles.action}
+                  data-testid="place-member-step-confirm"
+                  disabled={pending}
+                  onClick={() => doLink([...pendingStepOffer])}
+                >
+                  {pending ? hub.unplaced.placing : hub.kin.stepParentOfferConfirm}
+                </button>
+                <button
+                  type="button"
+                  className={styles.action}
+                  data-testid="place-member-step-skip"
+                  disabled={pending}
+                  onClick={() => doLink([])}
+                >
+                  {hub.kin.stepParentOfferSkip}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                className={styles.action}
+                data-testid="place-member-submit"
+                disabled={pending}
+              >
+                {pending ? hub.unplaced.placing : hub.unplaced.placeSubmit}
+              </button>
+            )}
+
             {error ? (
               <p role="alert" className={styles.error} data-testid="place-member-error">
                 {error}
               </p>
             ) : null}
-
-            <button
-              type="submit"
-              className={styles.action}
-              data-testid="place-member-submit"
-              disabled={pending}
-            >
-              {pending ? hub.unplaced.placing : hub.unplaced.placeSubmit}
-            </button>
           </form>
         ) : (
           <p className={styles.intro} data-testid="place-member-no-anchors">

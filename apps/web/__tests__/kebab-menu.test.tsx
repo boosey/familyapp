@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * KebabMenu — the shared ⋮ add-relative menu (pedigree-nav redesign, spec §Testing). Verifies the
- * adjacency gating (parent hidden at ≥2, partner hidden at ≥1; child/sibling always) and that each
+ * adjacency gating (parent hidden at ≥2; partner always shown — multi-partner allowed; child/sibling
+ * always) and that each
  * visible item opens the tree's Add modal (via TreeAddProvider) anchored on the node with the right
  * relation — /hub/kin navigation is gone (2026-07-14).
  */
@@ -60,12 +61,15 @@ it("shows Add parent only when parentCount < 2", () => {
   expect(screen.queryByTestId("tree-kebab-addparent")).toBeNull();
 });
 
-it("shows Add partner only when partnerCount === 0", () => {
+it("always shows Add partner (multi-partner allowed), even when partnerCount ≥ 1", () => {
   open({ parentCount: 0, partnerCount: 0 });
   expect(screen.getByTestId("tree-kebab-addpartner")).toBeTruthy();
   cleanup();
   open({ parentCount: 0, partnerCount: 1 });
-  expect(screen.queryByTestId("tree-kebab-addpartner")).toBeNull();
+  expect(screen.getByTestId("tree-kebab-addpartner")).toBeTruthy();
+  cleanup();
+  open({ parentCount: 0, partnerCount: 2 });
+  expect(screen.getByTestId("tree-kebab-addpartner")).toBeTruthy();
 });
 
 it("opens the Add modal anchored on the node with the right relation per item", () => {

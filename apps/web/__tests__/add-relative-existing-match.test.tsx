@@ -61,6 +61,11 @@ it("offers connect-existing when the typed name matches an unplaced member (#251
     "partner",
     "john",
     undefined,
+    {
+      coParentPersonIds: undefined,
+      stepParentOfChildIds: undefined,
+      nature: undefined,
+    },
   );
   expect(onSuccess).toHaveBeenCalled();
   expect(addRelativeAction).not.toHaveBeenCalled();

@@ -14,10 +14,9 @@
  * The remaining items open the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
  * `node.personId` with the chosen relation. They write nothing themselves — the modal's form does.
  * Items are GATED by the loaded adjacency counts so we never offer an impossible add (a person already
- * has ≤2 parents; at most one partner in v1):
- *   - Add child / Add sibling — always
+ * has ≤2 parents). Multi-partner is allowed (ADR-0027 / #285) — "Add partner" is always offered:
+ *   - Add child / Add sibling / Add partner — always
  *   - Add parent — only when `parentCount < 2`
- *   - Add partner — only when `partnerCount === 0`
  */
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
@@ -38,7 +37,7 @@ export interface KebabMenuProps {
   node: TreeNode;
   /** Loaded `parent_of` edges where this node is the CHILD. Gates "Add parent" (< 2). */
   parentCount: number;
-  /** Loaded `partnered_with` edges touching this node. Gates "Add partner" (=== 0). */
+  /** Loaded `partnered_with` edges touching this node (informational; multi-partner allowed). */
   partnerCount: number;
   /** True when this card is already the focus person — the Focus item is then omitted. */
   isFocus?: boolean;
@@ -50,7 +49,7 @@ interface Item {
   testId: string;
 }
 
-export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMenuProps) {
+export function KebabMenu({ node, parentCount, partnerCount: _partnerCount, isFocus }: KebabMenuProps) {
   const openAdd = useTreeAdd();
   const focusPerson = useTreeFocus();
   const invitePerson = useTreeInvite();
@@ -82,9 +81,8 @@ export function KebabMenu({ node, parentCount, partnerCount, isFocus }: KebabMen
   if (parentCount < 2) {
     items.push({ relation: "parent", label: hub.tree.kebabAddParent, testId: "tree-kebab-addparent" });
   }
-  if (partnerCount === 0) {
-    items.push({ relation: "partner", label: hub.tree.kebabAddPartner, testId: "tree-kebab-addpartner" });
-  }
+  // Multi-partner allowed (ADR-0027) — always offer Add partner, even when partnerCount > 0.
+  items.push({ relation: "partner", label: hub.tree.kebabAddPartner, testId: "tree-kebab-addpartner" });
 
   return (
     <div ref={rootRef} style={{ position: "relative", display: "inline-block" }}>

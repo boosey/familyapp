@@ -160,7 +160,7 @@ describe("addRelative — direct relations", () => {
     expect(edge!.nature).toBeNull();
   });
 
-  it("stores parent_of nature from input.nature, defaulting to `unknown`", async () => {
+  it("stores parent_of nature from input.nature, defaulting to `biological` for ordinary parent/child", async () => {
     const { me, fam } = await familyWithMe();
     await addRelative(db, account(me.id), {
       familyId: fam.id,
@@ -178,7 +178,7 @@ describe("addRelative — direct relations", () => {
       .from(kinshipAssertions)
       .where(eq(kinshipAssertions.edgeType, "parent_of"));
     const natures = rows.map((r) => r.nature).sort();
-    expect(natures).toEqual(["adoptive", "unknown"]);
+    expect(natures).toEqual(["adoptive", "biological"]);
   });
 
   it("creates an anonymous bridge relative when displayName is empty/whitespace", async () => {
@@ -561,7 +561,7 @@ describe("addRelative — visibility & audit", () => {
   });
 });
 
-describe("addRelative — optional coParentPersonId (relation=child only)", () => {
+describe("addRelative — optional coParentPersonId / coParentPersonIds (relation=child only)", () => {
   it("relation=child with a valid coParentPersonId creates BOTH parent_of edges", async () => {
     const { db, ctx, familyId, mePersonId, otherPersonId } = await seedTwoMemberFamily();
     const res = await addRelative(db, ctx, {
@@ -581,7 +581,35 @@ describe("addRelative — optional coParentPersonId (relation=child only)", () =
     expect(parentsOfChild).toEqual([mePersonId, otherPersonId].sort());
   });
 
-  it("relation=child WITHOUT coParentPersonId creates only the single parent edge (unchanged)", async () => {
+  it("relation=child with coParentPersonIds[] asserts parent_of for the anchor and every co-parent", async () => {
+    // Multi-partner: two co-parents beyond the anchor (ADR-0027).
+    const me = await makePerson(db, "Me");
+    const p1 = await makePerson(db, "Partner1");
+    const p2 = await makePerson(db, "Partner2");
+    const fam = await makeFamily(db, "Esposito", me.id);
+    await addMembership(db, { personId: me.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: p1.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: p2.id, familyId: fam.id, role: "member" });
+    const ctx = account(me.id);
+
+    const res = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "child",
+      displayName: "Kid",
+      coParentPersonIds: [p1.id, p2.id],
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(3);
+
+    const proj = await resolveKinshipProjection(db, ctx, fam.id);
+    const parentsOfChild = proj.edges
+      .filter((e) => e.edgeType === "parent_of" && e.personBId === res.createdPersonId)
+      .map((e) => e.personAId)
+      .sort();
+    expect(parentsOfChild).toEqual([me.id, p1.id, p2.id].sort());
+  });
+
+  it("relation=child WITHOUT co-parents creates only the single parent edge (this-parent-only / half path)", async () => {
     const { db, ctx, familyId, mePersonId } = await seedTwoMemberFamily();
     const res = await addRelative(db, ctx, {
       familyId,
@@ -625,6 +653,117 @@ describe("addRelative — optional coParentPersonId (relation=child only)", () =
     });
     expect(res.allowed).toBe(true);
     expect(res.edgeIds).toHaveLength(1);
+  });
+});
+
+describe("addRelative — partner → existing kids offer (ADR-0027, never silent)", () => {
+  it("with stepParentOfChildIds writes partnered_with plus step parent_of to each named child", async () => {
+    const { me, fam } = await familyWithMe();
+    const ctx = account(me.id);
+    const kid = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "child",
+      displayName: "Kid",
+    });
+    expect(kid.allowed).toBe(true);
+
+    const res = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "StepParent",
+      stepParentOfChildIds: [kid.createdPersonId!],
+    });
+    expect(res.allowed).toBe(true);
+    // partnered_with + one step parent_of
+    expect(res.edgeIds).toHaveLength(2);
+
+    const proj = await resolveKinshipProjection(db, ctx, fam.id);
+    const partnerEdge = proj.edges.find(
+      (e) =>
+        e.edgeType === "partnered_with" &&
+        (e.personAId === res.createdPersonId || e.personBId === res.createdPersonId),
+    );
+    expect(partnerEdge).toBeDefined();
+
+    const stepEdges = proj.edges.filter(
+      (e) =>
+        e.edgeType === "parent_of" &&
+        e.personAId === res.createdPersonId &&
+        e.personBId === kid.createdPersonId,
+    );
+    expect(stepEdges).toHaveLength(1);
+    expect(stepEdges[0]!.nature).toBe("step");
+  });
+
+  it("without stepParentOfChildIds writes partner only — never silently attaches to kids", async () => {
+    const { me, fam } = await familyWithMe();
+    const ctx = account(me.id);
+    const kid = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "child",
+      displayName: "Kid",
+    });
+    expect(kid.allowed).toBe(true);
+
+    const res = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "PartnerOnly",
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.edgeIds).toHaveLength(1);
+
+    const proj = await resolveKinshipProjection(db, ctx, fam.id);
+    const stepFromPartner = proj.edges.filter(
+      (e) => e.edgeType === "parent_of" && e.personAId === res.createdPersonId,
+    );
+    expect(stepFromPartner).toHaveLength(0);
+  });
+
+  it("rejects stepParentOfChildIds that are not children of the anchor", async () => {
+    const { me, fam } = await familyWithMe();
+    const ctx = account(me.id);
+    // A person in the family who is NOT me's child.
+    const stranger = await makePerson(db, "NotMyKid");
+    await addMembership(db, { personId: stranger.id, familyId: fam.id, role: "member" });
+
+    const res = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "Partner",
+      stepParentOfChildIds: [stranger.id],
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/child|step/i);
+
+    const rows = await db.select().from(kinshipAssertions);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("allows a second partner on the same anchor (multi-partner)", async () => {
+    const { me, fam } = await familyWithMe();
+    const ctx = account(me.id);
+    const first = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "First",
+    });
+    expect(first.allowed).toBe(true);
+
+    const second = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "Second",
+    });
+    expect(second.allowed).toBe(true);
+
+    const proj = await resolveKinshipProjection(db, ctx, fam.id);
+    const partnerEdges = proj.edges.filter(
+      (e) =>
+        e.edgeType === "partnered_with" &&
+        (e.personAId === me.id || e.personBId === me.id),
+    );
+    expect(partnerEdges).toHaveLength(2);
   });
 });
 
@@ -947,5 +1086,51 @@ describe("linkExistingMember (#161)", () => {
     });
     expect(res.allowed).toBe(false);
     expect(res.reason).toMatch(/anchor/i);
+  });
+
+  it("relation=partner with stepParentOfChildIds attaches step parent_of; omitting leaves partner-only", async () => {
+    const me = await makePerson(db, "Me");
+    const partner = await makePerson(db, "Partner");
+    const fam = await makeFamily(db, "Esposito", me.id);
+    await addMembership(db, { personId: me.id, familyId: fam.id, role: "member" });
+    await addMembership(db, { personId: partner.id, familyId: fam.id, role: "member" });
+    const ctx = account(me.id);
+
+    const kid = await addRelative(db, ctx, {
+      familyId: fam.id,
+      relation: "child",
+      displayName: "Kid",
+    });
+    expect(kid.allowed).toBe(true);
+
+    // Decline path: partner only.
+    const partnerOnly = await linkExistingMember(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      existingPersonId: partner.id,
+    });
+    expect(partnerOnly.allowed).toBe(true);
+    expect(partnerOnly.edgeIds).toHaveLength(1);
+
+    // Retract and re-link with the offer accepted (deny+re-assert would be heavy; use a second partner).
+    const partner2 = await makePerson(db, "Partner2");
+    await addMembership(db, { personId: partner2.id, familyId: fam.id, role: "member" });
+    const withKids = await linkExistingMember(db, ctx, {
+      familyId: fam.id,
+      relation: "partner",
+      existingPersonId: partner2.id,
+      stepParentOfChildIds: [kid.createdPersonId!],
+    });
+    expect(withKids.allowed).toBe(true);
+    expect(withKids.edgeIds).toHaveLength(2);
+
+    const proj = await resolveKinshipProjection(db, ctx, fam.id);
+    const step = proj.edges.find(
+      (e) =>
+        e.edgeType === "parent_of" &&
+        e.personAId === partner2.id &&
+        e.personBId === kid.createdPersonId,
+    );
+    expect(step?.nature).toBe("step");
   });
 });

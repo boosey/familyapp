@@ -53,15 +53,32 @@ export interface AddRelativeInput {
    */
   deathDate?: string | null;
   deathYear?: number | null;
-  /** For parent_of edges; default "unknown". */
+  /**
+   * For ordinary parent/child `parent_of` edges; default `"biological"` (ADR-0027 / #285).
+   * Partner→kids attachments via `stepParentOfChildIds` always use `"step"` and ignore this field.
+   * Sibling-scaffold / grandparent-bridge edges still write `"unknown"` internally.
+   */
   nature?: KinshipNature;
   /** ADR-0016 tree renderer — the relative's sex. Omitted => `"unknown"` (never inferred). */
   sex?: PersonSex;
   /**
    * ONLY for relation="child": also record this person as a second parent of the child; must be
    * attachable in the family — typically the anchor's partner. Ignored for every other relation.
+   * Prefer `coParentPersonIds` when selecting more than one (multi-partner).
    */
   coParentPersonId?: string;
+  /**
+   * ONLY for relation="child": additional co-parents (multi-partner allowed, ADR-0027). Merged with
+   * `coParentPersonId` when both are supplied. Empty / omitted = this-parent-only (half-sibling by
+   * derivation when the anchor already has other kids who share only this parent).
+   */
+  coParentPersonIds?: string[];
+  /**
+   * ONLY for relation="partner": explicit offer to also assert `parent_of` (nature=`step`) from the
+   * NEW partner to each listed child of the anchor (ADR-0027). Omitted/empty = partner-only — never
+   * silently inferred. Each id must currently be a child of the anchor in this family.
+   */
+  stepParentOfChildIds?: string[];
 }
 
 export interface AddRelativeResult {
@@ -289,6 +306,109 @@ async function currentPartnerIdsOf(
 }
 
 /**
+ * The CURRENT recorded children of `parentId` in this family: distinct `personBId` of every visible
+ * `parent_of` edge whose parent is `parentId`. Same latest-state / deny-exclusion discipline as
+ * `currentParentIdsOf`. Used to validate `stepParentOfChildIds` on partner add (ADR-0027).
+ */
+async function currentChildIdsOf(
+  db: DbOrTx,
+  familyId: string,
+  parentId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({
+      seq: kinshipAssertions.seq,
+      childId: kinshipAssertions.personBId,
+      state: kinshipAssertions.state,
+    })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, familyId),
+        eq(kinshipAssertions.edgeType, "parent_of"),
+        eq(kinshipAssertions.personAId, parentId),
+      ),
+    );
+  const latest = new Map<string, { seq: number; state: string }>();
+  for (const r of rows) {
+    const cur = latest.get(r.childId);
+    if (cur === undefined || r.seq > cur.seq) latest.set(r.childId, { seq: r.seq, state: r.state });
+  }
+  const out: string[] = [];
+  for (const [childId, v] of latest) {
+    if (v.state !== "denied") out.push(childId);
+  }
+  return out;
+}
+
+/**
+ * Merge singular + plural co-parent inputs, drop the anchor / duplicates, and validate each id is
+ * attachable. Returns the cleaned list or a denial reason.
+ */
+async function resolveCoParentPersonIds(
+  db: Database,
+  ctx: AuthContext,
+  familyId: string,
+  anchor: string,
+  input: { coParentPersonId?: string; coParentPersonIds?: string[] },
+): Promise<{ ok: true; ids: string[] } | { ok: false; reason: string }> {
+  const raw = [
+    ...(input.coParentPersonIds ?? []),
+    ...(input.coParentPersonId !== undefined ? [input.coParentPersonId] : []),
+  ];
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const candidate of raw) {
+    if (candidate === anchor) continue; // same as primary parent — no second edge
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (!(await isAttachableInFamily(db, ctx, familyId, candidate))) {
+      return { ok: false, reason: "co-parent person is not in this family" };
+    }
+    ids.push(candidate);
+  }
+  return { ok: true, ids };
+}
+
+/**
+ * Validate `stepParentOfChildIds` for a partner add: each id must be a current child of the anchor.
+ * Empty/undefined is fine (partner-only). Returns cleaned ids or a denial reason.
+ */
+async function resolveStepParentOfChildIds(
+  db: DbOrTx,
+  familyId: string,
+  anchor: string,
+  stepParentOfChildIds: string[] | undefined,
+): Promise<{ ok: true; ids: string[] } | { ok: false; reason: string }> {
+  if (stepParentOfChildIds === undefined || stepParentOfChildIds.length === 0) {
+    return { ok: true, ids: [] };
+  }
+  const children = new Set(await currentChildIdsOf(db, familyId, anchor));
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const childId of stepParentOfChildIds) {
+    if (seen.has(childId)) continue;
+    seen.add(childId);
+    if (!children.has(childId)) {
+      return {
+        ok: false,
+        reason: "step parent-of target must be a current child of the anchor",
+      };
+    }
+    ids.push(childId);
+  }
+  return { ok: true, ids };
+}
+
+/**
+ * Default nature for ordinary parent/child generative edges (ADR-0027 / #285). Sibling scaffolds and
+ * invite auto-placement keep their own `"unknown"` defaults elsewhere.
+ */
+function defaultParentChildNature(nature: KinshipNature | undefined): KinshipNature {
+  return nature ?? "biological";
+}
+
+/**
  * Write the primitive edge(s) that express `relation` between `anchor` and `targetPersonId`, inside
  * an open transaction, first-asserter-wins. This is the SHARED edge-writing core of both
  * `addRelative` (where `targetPersonId` is a freshly-minted mention) and `linkExistingMember` (where
@@ -305,10 +425,13 @@ async function writeRelationEdges(
     targetPersonId: string;
     relation: AddRelativeRelation;
     nature: KinshipNature;
-    coParentPersonId?: string;
+    coParentPersonIds?: string[];
+    /** Partner→kids: step parent_of from target (new partner) to each id. Never inferred. */
+    stepParentOfChildIds?: string[];
   },
 ): Promise<{ edgeIds: string[]; bridgePersonIds: string[] }> {
-  const { familyId, me, anchor, targetPersonId, relation, nature, coParentPersonId } = opts;
+  const { familyId, me, anchor, targetPersonId, relation, nature, coParentPersonIds, stepParentOfChildIds } =
+    opts;
   const edgeIds: string[] = [];
   const bridgePersonIds: string[] = [];
 
@@ -320,13 +443,17 @@ async function writeRelationEdges(
     }
     case "child": {
       edgeIds.push(await insertParentOf(tx, familyId, me, anchor, targetPersonId, nature));
-      if (coParentPersonId !== undefined) {
-        edgeIds.push(await insertParentOf(tx, familyId, me, coParentPersonId, targetPersonId, nature));
+      for (const co of coParentPersonIds ?? []) {
+        edgeIds.push(await insertParentOf(tx, familyId, me, co, targetPersonId, nature));
       }
       break;
     }
     case "partner": {
       edgeIds.push(await insertPartneredWith(tx, familyId, me, anchor, targetPersonId));
+      // Explicit offer only (ADR-0027): never silently attach the new partner to the anchor's kids.
+      for (const childId of stepParentOfChildIds ?? []) {
+        edgeIds.push(await insertParentOf(tx, familyId, me, targetPersonId, childId, "step"));
+      }
       break;
     }
     case "grandparent": {
@@ -408,8 +535,10 @@ async function writeRelationEdges(
  * chosen relation. Grandparent mints ONE anonymous bridge parent when the anchor has none. Sibling
  * (ADR-0017) tops the anchor's parents up to a COUPLE and shares BOTH with the new sibling — minting
  * two placeholders for a parentless anchor, one for a single-parent anchor, none when a full couple
- * already exists — so a v1 sibling is always a FULL sibling, never a half. Returns the created ids
- * (`bridgePersonIds` lists every placeholder minted). See ADR-0016, ADR-0017 and the plan's section A.
+ * already exists — so a v1 sibling is always a FULL sibling, never a half. Ordinary parent/child
+ * `parent_of` defaults to `nature = biological`; partner adds may optionally attach step `parent_of`
+ * to named kids via `stepParentOfChildIds` (never silent). Returns the created ids
+ * (`bridgePersonIds` lists every placeholder minted). See ADR-0016, ADR-0017, ADR-0027 and #285.
  */
 export async function addRelative(
   db: Database,
@@ -439,21 +568,34 @@ export async function addRelative(
 
   // Co-parent (relation=child only): validate up-front like the anchor, so a supplied-but-invalid
   // co-parent is rejected with a clear reason rather than silently dropped (which would misleadingly
-  // create a single-parent child when the user asked for two parents).
-  let coParentPersonId: string | undefined;
-  if (input.relation === "child" && input.coParentPersonId !== undefined) {
-    const candidate = input.coParentPersonId;
-    if (candidate !== anchor) {
-      if (!(await isAttachableInFamily(db, ctx, input.familyId, candidate))) {
-        return { allowed: false, reason: "co-parent person is not in this family" };
-      }
-      coParentPersonId = candidate;
-    }
-    // candidate === anchor: same person as the primary parent, so no second edge is added.
+  // create a single-parent child when the user asked for two parents). Multi-partner: accept many.
+  let coParentPersonIds: string[] | undefined;
+  if (input.relation === "child") {
+    const resolved = await resolveCoParentPersonIds(db, ctx, input.familyId, anchor, input);
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    if (resolved.ids.length > 0) coParentPersonIds = resolved.ids;
+  }
+
+  // Partner→kids offer (relation=partner only): explicit ids only — never silent (ADR-0027).
+  let stepParentOfChildIds: string[] | undefined;
+  if (input.relation === "partner") {
+    const resolved = await resolveStepParentOfChildIds(
+      db,
+      input.familyId,
+      anchor,
+      input.stepParentOfChildIds,
+    );
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    if (resolved.ids.length > 0) stepParentOfChildIds = resolved.ids;
   }
 
   const familyId = input.familyId;
-  const nature: KinshipNature = input.nature ?? "unknown";
+  // Ordinary parent/child default biological (ADR-0027). Other relations keep unknown unless set
+  // (sibling scaffolds force unknown inside writeRelationEdges; partner has no nature).
+  const nature: KinshipNature =
+    input.relation === "parent" || input.relation === "child"
+      ? defaultParentChildNature(input.nature)
+      : (input.nature ?? "unknown");
   const lifeStatus = input.lifeStatus ?? "living";
   const trimmed = input.displayName?.trim();
   const relativeDisplayName = trimmed ? trimmed : null;
@@ -480,7 +622,8 @@ export async function addRelative(
       targetPersonId: createdPersonId,
       relation: input.relation,
       nature,
-      coParentPersonId,
+      coParentPersonIds,
+      stepParentOfChildIds,
     });
 
     const result: AddRelativeResult = { allowed: true, createdPersonId, edgeIds };
@@ -624,11 +767,21 @@ export interface LinkExistingMemberInput {
   anchorPersonId?: string;
   /** The EXISTING active member to place — attached, never minted. */
   existingPersonId: string;
-  /** For parent_of edges; default "unknown". */
+  /**
+   * For ordinary parent/child `parent_of` edges; default `"biological"` (ADR-0027 / #285).
+   * Partner→kids via `stepParentOfChildIds` always use `"step"`.
+   */
   nature?: KinshipNature;
   /** ONLY for relation="child": also record this person as a second parent of the child. Must be
-   *  attachable in the family. Ignored for every other relation. */
+   *  attachable in the family. Ignored for every other relation. Prefer `coParentPersonIds` for many. */
   coParentPersonId?: string;
+  /** ONLY for relation="child": additional co-parents (multi-partner). Merged with `coParentPersonId`. */
+  coParentPersonIds?: string[];
+  /**
+   * ONLY for relation="partner": explicit step `parent_of` to each listed child of the anchor
+   * (ADR-0027). Omitted/empty = partner-only — never silently inferred.
+   */
+  stepParentOfChildIds?: string[];
 }
 
 export interface LinkExistingMemberResult {
@@ -682,29 +835,44 @@ export async function linkExistingMember(
   }
 
   // Co-parent (relation=child only): validate up-front like `addRelative`.
-  let coParentPersonId: string | undefined;
-  if (input.relation === "child" && input.coParentPersonId !== undefined) {
-    const candidate = input.coParentPersonId;
+  let coParentPersonIds: string[] | undefined;
+  if (input.relation === "child") {
     // A co-parent that IS the linked child would write parent_of(child, child) — a self-loop the DB
     // CHECK `kinship_assertions_no_self_ck` rejects as a raw exception. Reject cleanly here instead.
     // (`addRelative` cannot hit this: its child is a freshly-minted person, never a caller id.)
-    if (candidate === input.existingPersonId) {
+    const raw = [
+      ...(input.coParentPersonIds ?? []),
+      ...(input.coParentPersonId !== undefined ? [input.coParentPersonId] : []),
+    ];
+    if (raw.some((id) => id === input.existingPersonId)) {
       return {
         allowed: false,
         reason: "co-parent cannot be the linked child (a person cannot be their own parent)",
       };
     }
-    if (candidate !== anchor) {
-      if (!(await isAttachableInFamily(db, ctx, input.familyId, candidate))) {
-        return { allowed: false, reason: "co-parent person is not in this family" };
-      }
-      coParentPersonId = candidate;
-    }
-    // candidate === anchor: same person as the primary parent, so no second edge is added.
+    const resolved = await resolveCoParentPersonIds(db, ctx, input.familyId, anchor, input);
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    if (resolved.ids.length > 0) coParentPersonIds = resolved.ids;
+  }
+
+  // Partner→kids offer (relation=partner only): explicit ids only — never silent (ADR-0027).
+  let stepParentOfChildIds: string[] | undefined;
+  if (input.relation === "partner") {
+    const resolved = await resolveStepParentOfChildIds(
+      db,
+      input.familyId,
+      anchor,
+      input.stepParentOfChildIds,
+    );
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    if (resolved.ids.length > 0) stepParentOfChildIds = resolved.ids;
   }
 
   const familyId = input.familyId;
-  const nature: KinshipNature = input.nature ?? "unknown";
+  const nature: KinshipNature =
+    input.relation === "parent" || input.relation === "child"
+      ? defaultParentChildNature(input.nature)
+      : (input.nature ?? "unknown");
 
   return db.transaction(async (tx) => {
     const { edgeIds, bridgePersonIds } = await writeRelationEdges(tx, {
@@ -714,7 +882,8 @@ export async function linkExistingMember(
       targetPersonId: input.existingPersonId,
       relation: input.relation,
       nature,
-      coParentPersonId,
+      coParentPersonIds,
+      stepParentOfChildIds,
     });
 
     const result: LinkExistingMemberResult = { allowed: true, edgeIds };
