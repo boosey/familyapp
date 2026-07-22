@@ -597,13 +597,24 @@ export interface TreeNode {
   hasHiddenParents: boolean;
   hasHiddenChildren: boolean;
   /**
-   * Slice D (#6): whether this person can be invited to create their own Account. Kinship/person
-   * metadata (derived from `persons.accountId`/`identified`/`lifeStatus` + the `invitations` ledger) —
-   * NOT content, so it never widens the Story/Media front door.
-   *   - `accepted`       — already a real user (`accountId != null`).
-   *   - `pending`        — has a LIVE (`pending`, unexpired) invitation.
-   *   - `invitable`      — identified, living, no account, no live invitation.
-   *   - `not-applicable` — bridge/unidentified, deceased, or otherwise not invitable.
+   * Slice D (#6) / #332 (ADR-0028): whether this person can be invited into one of the viewer's
+   * Families. Kinship/person metadata (derived from `persons.accountId`/`identified`/`lifeStatus`,
+   * the `invitations` ledger, and `memberships`) — NOT content, so it never widens the Story/Media
+   * front door.
+   *
+   * ADR-0028 supersedes Slice D's Account-hides-Invite rule with **membership-gap eligibility**: an
+   * Account no longer auto-hides Invite. Order matters:
+   *   - `not-applicable` — bridge/unidentified, or deceased.
+   *   - `pending`        — has a LIVE (`pending`, unexpired) invitation INTO THE BROWSED family
+   *                        (family-scoped — a live invite into a different family does not count).
+   *   - `invitable`      — the viewer has a MEMBERSHIP GAP for this person: at least one of the
+   *                        viewer's own active Families where this person is NOT an active member.
+   *                        Applies whether or not the person has an Account (the canonical case: an
+   *                        Account-holder Member of Family A is still invitable into Family B).
+   *   - `accepted`       — has an Account and NO membership gap (already an active member of every
+   *                        Family the viewer belongs to). Retained for backward compatibility with
+   *                        existing consumers; #335 retires this union member once they're migrated.
+   *   - `not-applicable` — otherwise (no account, no gap — nothing left to invite into).
    */
   inviteStatus: "invitable" | "pending" | "accepted" | "not-applicable";
 }
@@ -618,19 +629,28 @@ export interface KinshipTreeData {
 }
 
 /**
- * Slice D (#6): the pure invite-status rule, factored out so the projection and the tests share ONE
- * source of truth. Order matters — an account-holder is `accepted` even if a stale pending row lingers;
- * a live invite is `pending`; only then does the identified-living-no-account case become `invitable`.
+ * #332 (ADR-0028): the pure invite-status rule, factored out so the projection and the tests share
+ * ONE source of truth. Membership-gap eligibility supersedes Slice D's Account-hides-Invite rule —
+ * order matters:
+ *   1. Not identified or deceased → `not-applicable` (never invitable regardless of gap/account).
+ *   2. A LIVE pending invitation into the browsed family → `pending` (wins over a gap or an account —
+ *      already-in-flight).
+ *   3. A membership gap (the viewer has ≥1 active Family where this person is not an active member) →
+ *      `invitable`, Account or not — this is the canonical Zach-on-Boudreaux → Carney case.
+ *   4. An Account and no gap → `accepted` (compat path: already a member everywhere the viewer is).
+ *   5. Otherwise → `not-applicable` (no account, no gap — nothing left to invite into).
  */
 export function inviteStatusFor(p: {
-  accountId: string | null;
+  hasAccount: boolean;
   identified: boolean;
   lifeStatus: "living" | "deceased";
   hasLivePendingInvite: boolean;
+  hasMembershipGap: boolean;
 }): TreeNode["inviteStatus"] {
-  if (p.accountId !== null) return "accepted";
+  if (!p.identified || p.lifeStatus === "deceased") return "not-applicable";
   if (p.hasLivePendingInvite) return "pending";
-  if (p.identified && p.lifeStatus === "living") return "invitable";
+  if (p.hasMembershipGap) return "invitable";
+  if (p.hasAccount) return "accepted";
   return "not-applicable";
 }
 
@@ -849,6 +869,38 @@ export async function resolveKinshipTree(
     }
   }
 
+  // #332 (ADR-0028): membership-gap eligibility. For each in-window person, does the VIEWER hold
+  // active membership in some Family where this person does NOT? Computed across ALL of the viewer's
+  // active families (not just `familyId`, the browsed one) — the canonical case is a person the viewer
+  // sees on Family A's tree who is invitable into Family B because the viewer belongs to B and this
+  // person doesn't. Batched: one query for the viewer's own active families, one for every in-window
+  // person's active families, never N+1.
+  const viewerFamilyRows = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(and(eq(memberships.personId, viewer!), eq(memberships.status, "active")));
+  const viewerFamilyIds = viewerFamilyRows.map((r) => r.familyId);
+
+  const activeFamiliesByPerson = new Map<string, Set<string>>();
+  if (ids.length > 0 && viewerFamilyIds.length > 0) {
+    const memberRows = await db
+      .select({ personId: memberships.personId, familyId: memberships.familyId })
+      .from(memberships)
+      .where(and(inArray(memberships.personId, ids), eq(memberships.status, "active")));
+    for (const row of memberRows) {
+      let s = activeFamiliesByPerson.get(row.personId);
+      if (s === undefined) {
+        s = new Set<string>();
+        activeFamiliesByPerson.set(row.personId, s);
+      }
+      s.add(row.familyId);
+    }
+  }
+  const hasMembershipGap = (personId: string): boolean => {
+    const theirFamilies = activeFamiliesByPerson.get(personId);
+    return viewerFamilyIds.some((fid) => !theirFamilies?.has(fid));
+  };
+
   const nodes: TreeNode[] = rows.map((r) => ({
     personId: r.id,
     displayName: r.displayName,
@@ -861,10 +913,11 @@ export async function resolveKinshipTree(
     hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
     hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,
     inviteStatus: inviteStatusFor({
-      accountId: r.accountId,
+      hasAccount: r.accountId !== null,
       identified: r.identified,
       lifeStatus: r.lifeStatus,
       hasLivePendingInvite: pendingInvitedIds.has(r.id),
+      hasMembershipGap: hasMembershipGap(r.id),
     }),
   }));
 
