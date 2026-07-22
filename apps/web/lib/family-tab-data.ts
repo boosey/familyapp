@@ -44,6 +44,7 @@ export interface FamilyTabData {
   /**
    * #283 — browse-only people index for List: members ∪ edged tree-only kin ∪ unplaced members,
    * with Member vs tree-only badges. Projection lives in `family-list-people.ts`.
+   * #337 — rows also carry `reconcileSide` when person origin/account were hydrated.
    */
   listPeople: FamilyListPerson[];
   /**
@@ -53,7 +54,8 @@ export interface FamilyTabData {
   unplaced: UnplacedMember[];
   /**
    * Whether the viewer is this family's STEWARD — gates the destructive "remove member" affordance in
-   * the Tree unplaced surface (computed server-side so the button never flashes). The write path re-checks.
+   * the Tree unplaced surface and #337 Reconciliation (computed server-side so the button never flashes).
+   * The write path re-checks.
    */
   viewerIsSteward: boolean;
   /**
@@ -115,11 +117,10 @@ export async function loadFamilyTabData(
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
   const projected = projectFamilyListPeople({ kin, unplaced, members, placed });
 
-  // #330/#334 fix — hydrate REAL lifeStatus/birthYear/deathYear/sex/inviteStatus from `persons` (+ the
-  // shared `resolveInviteStatuses` batch, ADR-0028/#332) for every projected id, so
-  // `resolveListPersonNode` never has to synthesize a null/"unknown"/"living"/"not-applicable"
-  // placeholder for a person outside the current tree window (List's projector itself has no identity
-  // or invite-status source).
+  // #330/#334/#337 fix — hydrate REAL lifeStatus/birthYear/deathYear/sex/inviteStatus/origin/accountId
+  // from `persons` (+ the shared `resolveInviteStatuses` batch, ADR-0028/#332) for every projected id,
+  // so `resolveListPersonNode` never has to synthesize placeholders (#330/#334) and steward reconcile
+  // eligibility (#337) has mention vs member-with-account without a client round-trip.
   const identityRows =
     projected.length > 0
       ? await db
@@ -130,6 +131,8 @@ export async function loadFamilyTabData(
             deathYear: persons.deathYear,
             sex: persons.sex,
             identified: persons.identified,
+            origin: persons.origin,
+            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, projected.map((p) => p.personId)))
@@ -159,6 +162,8 @@ export async function loadFamilyTabData(
         deathYear: r.deathYear,
         sex: r.sex ?? "unknown",
         inviteStatus: inviteStatusById.get(r.id) ?? "not-applicable",
+        origin: r.origin,
+        accountId: r.accountId,
       },
     ]),
   );

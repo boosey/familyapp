@@ -49,21 +49,87 @@
   padding: 16px 20px;
 }
 
-/* #330 — a row rendered as a <button> (List → PersonDetails) needs its browser-default button chrome
-   reset so it reads identically to the plain <li> row above; `.row`'s own background/border/padding
-   already apply since both elements share that class. */
-.rowButton {
-  width: 100%;
+.row[data-highlighted="true"] {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* #330/#337 — name/badge select control beside an optional steward ⋮ (never nested buttons). */
+.rowSelect {
+  flex: 1;
+  min-width: 0;
+  display: block;
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   font: inherit;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.rowButton:focus-visible {
+.rowSelect:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+.rowEnd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rowMenu {
+  position: relative;
+  display: inline-block;
+}
+
+.kebabTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.kebabMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lift, 0 8px 28px rgba(0, 0, 0, 0.16));
+  padding: 6px;
+  z-index: 3;
+  display: grid;
+  gap: 2px;
+}
+
+.kebabItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
 }
 
 .primary {

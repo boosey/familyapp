@@ -39,6 +39,7 @@ function open(props: { parentCount: number; partnerCount: number; personId?: str
         openAdd: props.onAdd ?? (() => {}),
         focusPerson: () => {},
         invitePerson: () => {},
+        reconcilePerson: () => {},
       }}
     >
       <KebabMenu

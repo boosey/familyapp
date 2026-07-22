@@ -3,7 +3,8 @@
  * TreeCallbacksContext — single callbacks provider for TreeCanvas child affordances (#319).
  *
  * Collapses the former TreeAdd / TreeFocus / TreeInvite contexts into one value so kebab / "+" /
- * invite entry points stay ignorant of canvas internals without nesting three thin providers.
+ * invite entry points stay ignorant of canvas internals without nesting thin providers.
+ * #337 adds reconcilePerson the same way.
  *
  * Hooks return no-ops outside a provider so KebabMenu still mounts standalone in unit tests.
  */
@@ -22,20 +23,26 @@ export type FocusPerson = (personId: string) => void;
 
 export type InvitePerson = (node: TreeNode) => void;
 
+/** #337 — open steward Reconciliation for a tree card's person id. */
+export type ReconcilePerson = (personId: string) => void;
+
 export type TreeCallbacks = {
   openAdd: OpenAddRelative;
   focusPerson: FocusPerson;
   invitePerson: InvitePerson;
+  reconcilePerson: ReconcilePerson;
 };
 
 const noopAdd: OpenAddRelative = () => {};
 const noopFocus: FocusPerson = () => {};
 const noopInvite: InvitePerson = () => {};
+const noopReconcile: ReconcilePerson = () => {};
 
 const NOOP_CALLBACKS: TreeCallbacks = {
   openAdd: noopAdd,
   focusPerson: noopFocus,
   invitePerson: noopInvite,
+  reconcilePerson: noopReconcile,
 };
 
 const TreeCallbacksContext = createContext<TreeCallbacks>(NOOP_CALLBACKS);
@@ -64,4 +71,8 @@ export function useTreeFocus(): FocusPerson {
 
 export function useTreeInvite(): InvitePerson {
   return useTreeCallbacks().invitePerson;
+}
+
+export function useTreeReconcile(): ReconcilePerson {
+  return useTreeCallbacks().reconcilePerson;
 }

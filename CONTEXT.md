@@ -64,7 +64,8 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   filling the fields in flips `identified` true without changing `origin`). The UI may create the
   bridge **implicitly** (one-tap "add grandmother") even though the data always holds the explicit
   node. Two relatives independently adding "unknown father" create two placeholders for the same man —
-  tolerated (first-asserter-wins), and the prime **reconciliation** merge candidates.
+  tolerated (first-asserter-wins); they are future **Reconciliation** candidates (placeholder↔placeholder
+  or after identification), not part of steward mention→member reconcile until identified.
 - **Parent-of / Partnered-with** — the **two generative primitives** of the tree. `parent-of` is a
   directed Person→Person edge carrying a **`nature`** (`biological | adoptive | step | foster |
   unknown`); `partnered-with` is an undirected union edge. These two are the *only* stored kinship
@@ -149,10 +150,12 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   (`gedcom | familysearch | ancestry`), `sourceId` (the source's own person id, e.g. GEDCOM `@I42@`
   or a FamilySearch PID), and `importBatchId`. Re-import / API **sync matches on `(source,
   sourceId)`** to update-in-place — foreign ids, never names, drive **idempotency**.
-- **Reconciliation** — the **separate, explicit, human-confirmed** step of merging an imported
-  `mention` onto a Person already known to the chronicle. **Never part of import.** The importer is
-  *offered* likely matches ("these look like people you already know — merge?") and confirms each —
-  the same **offer-never-silent** discipline as **Dedup-on-invite**, at bulk.
+- **Reconciliation** — the **separate, explicit, human-confirmed** step of merging a `mention`
+  Person (a tree depiction with no Account) onto a **known Person** who already participates as a
+  member with an Account in that Family. Always mention → member; never silent; Steward-gated.
+  Product language: **This is the same person as…** (not “merge”). **Import reconciliation**
+  (GEDCOM/API) is the same operation offered in bulk after additive import — never part of import
+  itself, same **offer-never-silent** discipline as **Dedup-on-invite**.
 
 ## Joining a family (the new flows)
 - **Invitation** — a system-delivered link a member sends to someone (possibly unknown to the

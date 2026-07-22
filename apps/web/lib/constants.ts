@@ -38,6 +38,9 @@ export const PHOTO_PICKER_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 /** Google Photos picker polling: delay between poll attempts (ms). */
 export const PHOTO_PICKER_POLL_INTERVAL_MS = 2000;
 
+/** How long the #337 reconcile success toast stays visible before auto-dismiss (ms). */
+export const RECONCILE_TOAST_DISMISS_MS = 5000;
+
 /**
  * Canonical responsive breakpoints (min-width, in rem) for the web app's mobile-first @media layers.
  * SINGLE SOURCE OF TRUTH: every `@media (min-width: …)` under apps/web/app must use exactly one of

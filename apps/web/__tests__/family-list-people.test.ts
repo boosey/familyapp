@@ -108,10 +108,12 @@ describe("projectFamilyListPeople (#283)", () => {
     });
     for (const row of rows) {
       expect(row.membership === "member" || row.membership === "tree-only").toBe(true);
+      // Without identity hydration, reconcile eligibility stays unset (callers that don't need #337).
+      expect(row.reconcileSide).toBeNull();
     }
   });
 
-  it("#330/#334 fix — never invents identity or invite status: birthYear/deathYear/sex/inviteStatus default null/null/unknown/not-applicable (loader hydrates them)", () => {
+  it("#330/#334/#337 fix — never invents identity, invite status, or reconcile side: defaults null/null/unknown/not-applicable/null (loader hydrates them)", () => {
     const rows = projectFamilyListPeople({
       members: [member({ personId: "m" })],
       unplaced: [],
@@ -125,12 +127,13 @@ describe("projectFamilyListPeople (#283)", () => {
         deathYear: null,
         sex: "unknown",
         inviteStatus: "not-applicable",
+        reconcileSide: null,
       }),
     ]);
   });
 });
 
-describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
+describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
   it("merges real lifeStatus/birthYear/deathYear/sex onto matching rows", () => {
     const rows = [
       person({ personId: "eleanor" }),
@@ -147,6 +150,8 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
             deathYear: 2010,
             sex: "female" as const,
             inviteStatus: "not-applicable" as const,
+            origin: "self" as const,
+            accountId: "acct-e",
           },
         ],
         [
@@ -157,6 +162,8 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
             deathYear: null,
             sex: "male" as const,
             inviteStatus: "invitable" as const,
+            origin: "self" as const,
+            accountId: "acct-m",
           },
         ],
       ]),
@@ -167,6 +174,7 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
       deathYear: 2010,
       sex: "female",
       inviteStatus: "not-applicable",
+      reconcileSide: "member",
     });
     expect(hydrated.find((r) => r.personId === "marco")).toMatchObject({
       lifeStatus: "living",
@@ -174,7 +182,69 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
       deathYear: null,
       sex: "male",
       inviteStatus: "invitable",
+      reconcileSide: "member",
     });
+  });
+
+  it("#337: marks identified mentions and members-with-accounts", () => {
+    const projected = projectFamilyListPeople({
+      members: [member({ personId: "real", displayName: "Mia Real" })],
+      unplaced: [],
+      kin: [
+        kin({ personId: "mia", displayName: "Mia", relation: "child", identified: true }),
+        kin({ personId: "bridge", displayName: null, relation: "parent", identified: false }),
+      ],
+      placed: [
+        placed({ personId: "mia", displayName: "Mia" }),
+        placed({ personId: "bridge", displayName: null }),
+        placed({ personId: "real", displayName: "Mia Real" }),
+      ],
+    });
+    const hydrated = hydrateFamilyListPeopleIdentity(
+      projected,
+      new Map([
+        [
+          "mia",
+          {
+            lifeStatus: "living" as const,
+            birthYear: null,
+            deathYear: null,
+            sex: "unknown" as const,
+            inviteStatus: "not-applicable" as const,
+            origin: "mention" as const,
+            accountId: null,
+          },
+        ],
+        [
+          "real",
+          {
+            lifeStatus: "living" as const,
+            birthYear: null,
+            deathYear: null,
+            sex: "unknown" as const,
+            inviteStatus: "not-applicable" as const,
+            origin: "self" as const,
+            accountId: "acct-1",
+          },
+        ],
+        [
+          "bridge",
+          {
+            lifeStatus: "living" as const,
+            birthYear: null,
+            deathYear: null,
+            sex: "unknown" as const,
+            inviteStatus: "not-applicable" as const,
+            origin: "mention" as const,
+            accountId: null,
+          },
+        ],
+      ]),
+    );
+    const byId = Object.fromEntries(hydrated.map((r) => [r.personId, r]));
+    expect(byId.mia!.reconcileSide).toBe("mention");
+    expect(byId.real!.reconcileSide).toBe("member");
+    expect(byId.bridge!.reconcileSide).toBeNull();
   });
 
   it("overwrites projector's default lifeStatus: living for unplaced members without kin", () => {
@@ -197,6 +267,8 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
             deathYear: 1995,
             sex: "female",
             inviteStatus: "not-applicable",
+            origin: "self",
+            accountId: "acct-r",
           },
         ],
       ]),
@@ -207,6 +279,7 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
       birthYear: 1920,
       deathYear: 1995,
       sex: "female",
+      reconcileSide: "member",
     });
   });
 
@@ -229,6 +302,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     deathYear: over.deathYear ?? null,
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
+    reconcileSide: "reconcileSide" in over ? (over.reconcileSide ?? null) : null,
   };
 }
 

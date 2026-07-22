@@ -11,6 +11,10 @@
  *     omitted (no `governableEdges` — Tree-only, #283) and Invite (#334) wired to the SAME in-place
  *     <PersonInviteModal> Tree uses.
  *
+ * #337 — owns Steward Reconciliation ("This is the same person as…") for both List and Tree: opens
+ * the shared picker/confirm flow, toasts on success, and focuses the winner (List highlight / Tree
+ * `?anchor=` re-root).
+ *
  * The Tree/List selection is URL-driven now (#158): the `Family tree · List · Requests` selector lives
  * in <FamilySurfaceNav> (rendered by the page shell) and this component simply renders whichever `view`
  * the page resolved from `?view=`. There is no localStorage toggle and no in-tab pill anymore.
@@ -22,8 +26,8 @@
  * #288 — on compact viewports, Place / New person run Place→tap person→tap zone into the shared
  * PlaceConfirmModal (desktop keeps the unlocked-receiver modal; #287 owns tray DnD).
  */
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type {
   AddRelativeRelation,
   GovernableKinEdge,
@@ -32,8 +36,10 @@ import type {
   UnplacedMember,
 } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import type { FamilyListPerson } from "@/lib/family-list-people";
+import { asReconcilePerson, type FamilyListPerson } from "@/lib/family-list-people";
 import { resolveListPersonNode } from "@/lib/family-list-people";
+import { shouldPushReconcileTreeAnchor } from "@/lib/reconcile-eligibility";
+import { RECONCILE_TOAST_DISMISS_MS } from "@/lib/constants";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import {
@@ -42,6 +48,7 @@ import {
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
 import { PersonDetails } from "../tree/person-details";
 import { PersonInviteModal, type PersonInviteModalProps } from "../tree/PersonInviteModal";
+import { ReconcileFlow } from "../kin/reconcile-flow";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "../tree/UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
@@ -74,7 +81,7 @@ export interface FamilyTabProps {
    * (#283: List is browse-only — no Place / Not-family / Remove on List).
    */
   unplaced?: UnplacedMember[];
-  /** Steward-only: gates the destructive "remove member" action in the Tree unplaced surface. */
+  /** Steward-only: gates unplaced Remove and #337 Reconciliation (write paths re-check). */
   viewerIsSteward?: boolean;
   /**
    * #254 — visible edges with Remove/Hide capability flags (from `listGovernableKinEdges`). Threaded
@@ -133,6 +140,8 @@ export function FamilyTab({
   submitInvite,
 }: FamilyTabProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   // Compact still gates Place→tap→zone (#288); zoom/fit are the progressive Views unit (#297), not a
   // floating canvas overlay.
   const compact = useIsCompact();
@@ -146,6 +155,46 @@ export function FamilyTab({
   // #334 — List's Invite modal target, a SIBLING overlay of `selectedListPerson`'s details sheet (not
   // a replacement): closing the modal never closes the details sheet underneath it (AC 4).
   const [listInviteNode, setListInviteNode] = useState<TreeNode | null>(null);
+
+  // #337 — steward reconcile flow (shared by List row ⋮ and Tree kebab).
+  const [reconcileStartId, setReconcileStartId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [highlightedPersonId, setHighlightedPersonId] = useState<string | null>(null);
+
+  const reconcilePool = useMemo(() => listPeople.map(asReconcilePerson), [listPeople]);
+  const reconcileById = useMemo(() => {
+    const m = new Map(reconcilePool.map((p) => [p.personId, p]));
+    return m;
+  }, [reconcilePool]);
+  const reconcileStart = reconcileStartId ? (reconcileById.get(reconcileStartId) ?? null) : null;
+
+  const openReconcile = (personId: string) => setReconcileStartId(personId);
+
+  const onReconcileSuccess = (accountPersonId: string) => {
+    setReconcileStartId(null);
+    const winner = reconcileById.get(accountPersonId);
+    const winnerName = winner?.displayName?.trim() || hub.reconcile.unnamed;
+    setToast(hub.reconcile.successToast(winnerName));
+    setHighlightedPersonId(accountPersonId);
+
+    // Always refresh so the mention leaves the projection even when the winner is already focused
+    // (`?anchor=` unchanged → push would no-op). Push only when the tree must re-root.
+    if (shouldPushReconcileTreeAnchor(view, searchParams.get("anchor"), accountPersonId)) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("tab", "family");
+      next.set("view", "tree");
+      next.set("anchor", accountPersonId);
+      router.push(`${pathname}?${next.toString()}`);
+    }
+    router.refresh();
+  };
+
+  // #337 — auto-dismiss the success toast so it doesn't stick forever.
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), RECONCILE_TOAST_DISMISS_MS);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   // #169 / #286: Tree tray always mounts (unplaced members + New person). List never hosts it (#283).
   // On compact, Place/New start a canvas session instead of the unlocked-receiver modal.
@@ -252,6 +301,12 @@ export function FamilyTab({
         row2Right={zoomControls}
       />
 
+      {toast ? (
+        <p role="status" aria-live="polite" data-testid="reconcile-toast" className={styles.reconcileToast}>
+          {toast}
+        </p>
+      ) : null}
+
       {view === "tree" ? (
         <>
           <div className={styles.treeFrame}>
@@ -285,6 +340,12 @@ export function FamilyTab({
               }
               fetchInviteTargets={fetchInviteTargets}
               submitInvite={submitInvite}
+              reconcile={{
+                viewerIsSteward,
+                byPersonId: reconcileById,
+                pool: reconcilePool,
+                onReconcile: openReconcile,
+              }}
             />
           </div>
           {/* #161/#286: Tree tray (unplaced + New person) BELOW the canvas — outside computeTreeLayout /
@@ -317,7 +378,13 @@ export function FamilyTab({
         // uses `placement="viewport"` (`position: fixed`, same 12px inset) instead of Tree's
         // `position: absolute` default — a lower row's sheet would otherwise park itself off-screen (#330).
         <div style={{ position: "relative" }}>
-          <KinList people={listPeople} onSelectPerson={setSelectedListPerson} />
+          <KinList
+            people={listPeople}
+            onSelectPerson={setSelectedListPerson}
+            viewerIsSteward={viewerIsSteward}
+            onReconcile={openReconcile}
+            highlightedPersonId={highlightedPersonId}
+          />
           {selectedListPerson && (
             <PersonDetails
               key={selectedListPerson.personId}
@@ -343,6 +410,16 @@ export function FamilyTab({
           )}
         </div>
       )}
+
+      {reconcileStart ? (
+        <ReconcileFlow
+          familyId={familyId}
+          start={reconcileStart}
+          pool={reconcilePool}
+          onClose={() => setReconcileStartId(null)}
+          onSuccess={onReconcileSuccess}
+        />
+      ) : null}
     </div>
   );
 }
