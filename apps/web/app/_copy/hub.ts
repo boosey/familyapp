@@ -872,17 +872,23 @@ export const hub = {
     recordingGestureHoldLabel: "Hold",
   },
   // Issue #32 — the kin surface (/hub/kin): view your relatives + add one.
+  // #283 — Family → List is a browse-only people index (Member vs tree-only), not a kin-only roster.
   kin: {
     signedOut: "Sign in to see your family tree.",
     heading: "Your relatives",
     intro:
       "The people you record as kin in this family. Adding a relative is enough — no one has to confirm it.",
-    // Empty state when the viewer has recorded no kin yet. Adding now happens in the Tree view.
-    empty: "You haven't added any relatives yet. Switch to Tree to add your first one.",
-    // List-view search (Family tab → List). Filters the relatives list by name or relation.
-    searchPlaceholder: "Search relatives…",
-    searchAria: "Search relatives by name or relation",
-    searchNoResults: (q: string) => `No relatives match “${q}”.`,
+    // Empty state when the family people index has no one yet. Placement / add lives on Tree.
+    empty: "No one is in this family's people list yet. Switch to Tree to place or add someone.",
+    // List-view search (Family tab → List). Filters by name, relation, or membership badge.
+    searchPlaceholder: "Search people…",
+    searchAria: "Search people by name, relation, or membership",
+    searchNoResults: (q: string) => `No people match “${q}”.`,
+    // #283 — membership-first badge (not Origin / Account / mention jargon).
+    membershipBadge: {
+      member: "Member",
+      treeOnly: "Tree-only",
+    },
     // Shown when the viewer belongs to no family at all.
     noFamily: "Join or start a family before adding relatives.",
     deceased: "In memory",

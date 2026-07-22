@@ -49,10 +49,26 @@
   padding: 16px 20px;
 }
 
+.primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
 .name {
   font-family: var(--font-story);
   font-size: var(--text-story);
   color: var(--text-body);
+}
+
+.badge {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  color: var(--text-meta);
+  white-space: nowrap;
 }
 
 .nameUnknown {
