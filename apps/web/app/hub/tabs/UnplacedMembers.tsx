@@ -26,6 +26,7 @@ import {
 } from "../tree/actions";
 import { addRelativeAction } from "../kin/actions";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
+import type { PlaceConfirmSubject } from "../tree/place-confirm";
 import {
   setActivePlaceDrag,
   writePlaceDrag,
@@ -51,6 +52,15 @@ export interface UnplacedMembersProps {
    * zero unplaced members so mint+place is always reachable.
    */
   showNewPerson?: boolean;
+  /**
+   * #288 — when set (mobile compact), Place / New person start a canvas Place→tap→zone session
+   * instead of opening the unlocked-receiver modal. Desktop omits this so the picker modal and
+   * tray→zone DnD (#287) stay available on wide viewports.
+   */
+  onStartCanvasPlace?: (subject: PlaceConfirmSubject) => void;
+  /** Active canvas place session subject — drives the cancel hint copy. */
+  canvasPlaceSubject?: PlaceConfirmSubject | null;
+  onCancelCanvasPlace?: () => void;
   /** Overridable in tests so the actions can be stubbed without a server round-trip. */
   onLink?: typeof linkExistingMemberAction;
   onMint?: typeof addRelativeAction;
@@ -75,6 +85,9 @@ export function UnplacedMembers({
   viewerIsSteward,
   variant = "section",
   showNewPerson = false,
+  onStartCanvasPlace,
+  canvasPlaceSubject = null,
+  onCancelCanvasPlace,
   onLink = linkExistingMemberAction,
   onMint = addRelativeAction,
   onSetNonFamily = setMemberNonFamilyAction,
@@ -119,6 +132,15 @@ export function UnplacedMembers({
 
   function endPlaceDrag() {
     setActivePlaceDrag(null);
+  }
+
+  function startPlace(subject: PlaceConfirmSubject, fallback: PlacingState) {
+    setError(null);
+    if (onStartCanvasPlace) {
+      onStartCanvasPlace(subject);
+      return;
+    }
+    setPlacing(fallback);
   }
 
   function runAction(
@@ -182,6 +204,30 @@ export function UnplacedMembers({
       <h3 className={styles.heading}>{heading}</h3>
       <p className={styles.intro}>{intro}</p>
 
+      {canvasPlaceSubject ? (
+        <div className={styles.placeHint} data-testid="mobile-place-hint" role="status">
+          <p className={styles.placeHintText}>
+            {canvasPlaceSubject.kind === "link"
+              ? hub.tree.placeTapHintLink(
+                  canvasPlaceSubject.displayName?.trim()
+                    ? canvasPlaceSubject.displayName.trim()
+                    : hub.unplaced.unnamedMember,
+                )
+              : hub.tree.placeTapHintMint}
+          </p>
+          {onCancelCanvasPlace ? (
+            <button
+              type="button"
+              className={styles.action}
+              data-testid="mobile-place-cancel"
+              onClick={onCancelCanvasPlace}
+            >
+              {hub.tree.placeTapCancel}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {showNewPerson ? (
         <div className={styles.newPersonRow}>
           <button
@@ -200,10 +246,7 @@ export function UnplacedMembers({
                 : undefined
             }
             onDragEnd={desktopDrag ? endPlaceDrag : undefined}
-            onClick={() => {
-              setError(null);
-              setPlacing({ kind: "mint" });
-            }}
+            onClick={() => startPlace({ kind: "mint" }, { kind: "mint" })}
           >
             {hub.unplaced.newPerson}
           </button>
@@ -278,10 +321,16 @@ export function UnplacedMembers({
                         className={styles.action}
                         data-testid={`unplaced-place-${m.personId}`}
                         disabled={busy(m.personId)}
-                        onClick={() => {
-                          setError(null);
-                          setPlacing({ kind: "link", member: m });
-                        }}
+                        onClick={() =>
+                          startPlace(
+                            {
+                              kind: "link",
+                              personId: m.personId,
+                              displayName: m.displayName,
+                            },
+                            { kind: "link", member: m },
+                          )
+                        }
                       >
                         {hub.unplaced.place}
                       </button>
