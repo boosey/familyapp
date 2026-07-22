@@ -74,18 +74,18 @@ export const hub = {
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
   },
-  // ADR-0025 Phase B mobile control sheets — the per-concern IconSheet triggers (View/Family/Filter)
-  // that open a shared BottomSheet on a phone (< 40rem). Desktop is unchanged (the inline HubToolbar
-  // renders as today). (The former single "⚙ Filters & view" gear + MobileControlSheet were removed in
-  // Increment 3 once every tab moved to the per-concern icon strip.)
+  // ADR-0025 collapsed browse panels — per-concern IconSheet triggers (View/Family/Filter/Search).
+  // Compact (< 40rem) opens a BottomSheet; wide opens an AnchoredPopover (#300). Panel body is shared.
+  // Family/Questions still mount IconSheet only on the compact strip until #297. (The former single
+  // "⚙ Filters & view" gear + MobileControlSheet were removed in Increment 3.)
   mobileControls: {
     // Accessible name for an IconSheet's active-filter count badge (n = active filters for that icon).
     activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
-    // The bottom sheet's ✕ close control (BottomSheet.tsx).
+    // Shared ✕ close control for BottomSheet and AnchoredPopover.
     close: "Close",
     // ADR-0025 Phase B Increment 3 — the single "⚙ Filters & view" gear splits into per-concern labeled
-    // icon-sheets on a phone: View (layout options), Family (the family selector), Filter (search +
-    // facets). Each string is BOTH the tiny icon label and its bottom-sheet title.
+    // icon-sheets: View (layout options), Family (the family selector), Filter (search + facets).
+    // Each string is BOTH the tiny icon label and its panel title (sheet or popover).
     viewLabel: "View",
     familyLabel: "Family",
     filterLabel: "Filter",

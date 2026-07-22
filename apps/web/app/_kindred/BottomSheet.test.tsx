@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { BottomSheet } from "./BottomSheet";
 
 afterEach(() => cleanup());
@@ -37,6 +38,7 @@ describe("BottomSheet — behaviour", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Filters & view" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("data-shell")).toBe("sheet");
     expect(dialog.textContent).toContain("sheet body");
   });
 
@@ -97,6 +99,30 @@ describe("BottomSheet — behaviour", () => {
     );
     expect(document.activeElement).toBe(opener);
     opener.remove();
+  });
+
+  it("keeps focus on an input inside the sheet across parent re-renders (typing)", () => {
+    function SheetWithInput({ closeStub }: { closeStub: () => void }) {
+      const [value, setValue] = useState("");
+      return (
+        <BottomSheet open onClose={closeStub} title="Search">
+          <input
+            aria-label="Search stories"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </BottomSheet>
+      );
+    }
+    const { rerender } = render(<SheetWithInput closeStub={vi.fn()} />);
+    const input = screen.getByRole("textbox", { name: "Search stories" });
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    // New onClose identity (parent re-render) must not steal focus back to the dialog.
+    rerender(<SheetWithInput closeStub={vi.fn()} />);
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "hi" } });
+    expect(document.activeElement).toBe(input);
   });
 
   it("has a close (✕) button labelled from copy", () => {

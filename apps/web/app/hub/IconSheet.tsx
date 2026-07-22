@@ -1,22 +1,22 @@
 "use client";
 
 /**
- * IconSheet (ADR-0025 Phase B, Increment 3) — a labeled lucide-icon trigger that opens the shared
- * {@link BottomSheet} holding its controls. It replaced the former single "⚙ Filters & view" gear with
- * a per-concern icon: a tab's strip renders up to three of these — View / Family / Filter — each opening
- * its own sheet, instead of one gear for everything.
+ * IconSheet — labeled lucide-icon trigger for collapsed hub browse panels (Family / Search / Filters /
+ * Views). ADR-0025 Phase B Increment 3 introduced the compact strip; Amendment 2026-07-21 / #300
+ * migrates the open shell: bottom {@link BottomSheet} on compact viewports, anchored
+ * {@link AnchoredPopover} on wide. Panel body (`children`) is shared — one composition, two chrome
+ * shells. Shell selection goes through {@link resolveCollapsedBrowseShell} (not CSS).
  *
- * Presentational + self-contained open/close: tap the trigger → the sheet opens with `children`. The
- * icon strokes `currentColor` so it themes with the trigger ink. A small
- * accent badge renders when `badgeCount > 0` (the active-filter count) — Step A never passes one; the
- * slot exists for Increment 4's per-icon active badges.
- *
- * Mobile-only: mounted solely on a tab's compact branch (the tab gates on `useIsCompact`), so it carries
- * no viewport logic and no desktop media layer.
+ * Presentational + self-contained open/close: tap the trigger → the panel opens with `children`.
+ * Icon strokes `currentColor`. A small accent badge renders when `badgeCount > 0`. Sub tabs menus
+ * are out of scope (they open a menu, not this panel).
  */
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useRef, useState, type ComponentType, type ReactNode } from "react";
 import { hub } from "@/app/_copy";
+import { AnchoredPopover } from "@/app/_kindred/AnchoredPopover";
 import { BottomSheet } from "@/app/_kindred/BottomSheet";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
+import { resolveCollapsedBrowseShell } from "./collapsed-browse-shell";
 import s from "./IconSheet.module.css";
 import { ICON_SHEET_GLYPH_SIZE } from "./icon-sheet-constants";
 
@@ -25,16 +25,18 @@ export interface IconSheetProps {
   icon: ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>;
   /** The tiny text label beside/under the glyph (icons are labeled per ADR-0025). */
   label: string;
-  /** The bottom sheet's title. */
+  /** Panel title (sheet header or popover header). */
   sheetTitle: string;
-  /** Active-filter count — renders a small accent badge when > 0. Unused in Step A (Increment 4 wires it). */
+  /** Active-filter / refinement count — renders a small accent badge when > 0. */
   badgeCount?: number;
-  /** The controls to group inside the sheet. */
+  /** The controls to group inside the panel body (shared across sheet and popover). */
   children: ReactNode;
 }
 
 export function IconSheet({ icon: Icon, label, sheetTitle, badgeCount = 0, children }: IconSheetProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const shell = resolveCollapsedBrowseShell(useIsCompact());
   const showBadge = badgeCount > 0;
   // The button's accessible name is ALWAYS label-first, with the active-count appended when badged
   // ("Filter" → "Filter, 1 filter active"). Set explicitly so the visible badge (aria-hidden below)
@@ -44,9 +46,19 @@ export function IconSheet({ icon: Icon, label, sheetTitle, badgeCount = 0, child
     ? `${label}, ${hub.mobileControls.activeCountAria(badgeCount)}`
     : label;
 
+  const body = <div className={s.body}>{children}</div>;
+
   return (
     <>
-      <button type="button" className={s.trigger} onClick={() => setOpen(true)} aria-label={triggerLabel}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={s.trigger}
+        onClick={() => setOpen((was) => !was)}
+        aria-label={triggerLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
         <span className={s.iconWrap}>
           <Icon size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
           {showBadge ? (
@@ -60,9 +72,20 @@ export function IconSheet({ icon: Icon, label, sheetTitle, badgeCount = 0, child
         </span>
       </button>
 
-      <BottomSheet open={open} onClose={() => setOpen(false)} title={sheetTitle}>
-        <div className={s.body}>{children}</div>
-      </BottomSheet>
+      {shell === "sheet" ? (
+        <BottomSheet open={open} onClose={() => setOpen(false)} title={sheetTitle}>
+          {body}
+        </BottomSheet>
+      ) : (
+        <AnchoredPopover
+          open={open}
+          onClose={() => setOpen(false)}
+          title={sheetTitle}
+          anchorRef={triggerRef}
+        >
+          {body}
+        </AnchoredPopover>
+      )}
     </>
   );
 }
