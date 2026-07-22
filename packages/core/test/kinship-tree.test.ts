@@ -242,10 +242,10 @@ describe("resolveKinshipTree — hydration + relationToRoot", () => {
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: pa.id, b: member.id, actor: member.id });
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: pa.id, b: sib.id, actor: member.id });
 
-    // Root on the sibling: member is a sibling, pa is a parent, gp is a grandparent.
+    // Root on the sibling: fixture shares one parent only → half_sibling (not full sibling).
     const tree = await resolveKinshipTree(db, account(member.id), fam.id, sib.id);
     expect(node(tree, sib.id)!.relationToRoot).toBe("self");
-    expect(node(tree, member.id)!.relationToRoot).toBe("sibling");
+    expect(node(tree, member.id)!.relationToRoot).toBe("half_sibling");
     expect(node(tree, pa.id)!.relationToRoot).toBe("parent");
     expect(node(tree, gp.id)!.relationToRoot).toBe("grandparent");
   });
