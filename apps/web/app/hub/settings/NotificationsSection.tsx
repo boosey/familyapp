@@ -2,18 +2,26 @@
 
 /**
  * Notifications section (#280) — the settings surface for the three Person-global notification
- * streams (@chronicle/core's NOTIFICATION_STREAMS). Unlike every other section on this page these
- * choices SYNC to the account (persisted via notificationStreamPrefs), not device-local.
+ * streams. Unlike every other section on this page these choices SYNC to the account (persisted
+ * via notificationStreamPrefs), not device-local.
+ *
+ * Prefs get/set live in `@/lib/notification-prefs` (`server-only`); this client module must not
+ * import `@chronicle/core`.
  *
  * The UI only ever offers every_item|off — digest cadences aren't built yet (see actions.ts), so
  * this control never renders daily_digest/weekly_digest even though the DB type allows them.
  */
 import { useCallback, useRef, useState, type CSSProperties } from "react";
-import { NOTIFICATION_STREAMS } from "@chronicle/core";
 import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
 import { hub } from "@/app/_copy";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { saveNotificationStreamFrequencyAction } from "./actions";
+
+const NOTIFICATION_STREAMS = [
+  "questions_for_me",
+  "answers_to_my_asks",
+  "family_activity",
+] as const satisfies readonly NotificationStream[];
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 

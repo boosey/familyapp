@@ -1,8 +1,8 @@
 "use server";
 
-import { NOTIFICATION_STREAMS, setNotificationStreamFrequency } from "@chronicle/core";
 import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
 import { getRuntime } from "@/lib/runtime";
+import { NOTIFICATION_STREAMS, setNotificationStreamFrequency } from "@/lib/notification-prefs";
 
 type SaveResult =
   | { ok: true }

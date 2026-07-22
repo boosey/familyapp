@@ -4,8 +4,8 @@
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { listNotificationStreamFrequencies } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
+import { listNotificationStreamFrequencies } from "@/lib/notification-prefs";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { hub } from "@/app/_copy";
 import { SettingsPanel } from "./SettingsPanel";
