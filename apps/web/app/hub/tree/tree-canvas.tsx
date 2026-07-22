@@ -755,8 +755,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
 
   const detailsNode = details ? (nodeById.get(details.id) ?? null) : null;
 
+  const treeCallbacks = useMemo(
+    () => ({ openAdd, focusPerson: onFocus, invitePerson: onInvite }),
+    [openAdd, onFocus, onInvite],
+  );
+
   return (
-    <TreeCallbacksProvider value={{ openAdd, focusPerson: onFocus, invitePerson: onInvite }}>
+    <TreeCallbacksProvider value={treeCallbacks}>
     <div style={{ position: "relative" }}>
       {/* The Fit/−/+ controls moved OUT of the canvas into FamilyTab's view-selector row (§5). */}
 
