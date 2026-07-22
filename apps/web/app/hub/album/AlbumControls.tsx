@@ -1,36 +1,40 @@
 "use client";
 
 /**
- * AlbumControls (album controls hoist) — the album's StoriesSurface equivalent: the ONE client owner
- * of the album's shared two-row {@link HubToolbar}, so the album's control area can't drift from the
- * other hub sub-tabs and — crucially — so BOTH album mount paths (the flag-off `AlbumSurface` pair and
- * the flag-on `AlbumBoard`) render the SAME toolbar with the "Add Photos" affordance on the SAME row as
- * the When/Search filters.
+ * AlbumControls (#302) — the album's StoriesSurface equivalent: ONE client owner of the progressive
+ * hub control row. Occupancy: Family → Search → Filters → Views (no Sub tabs). Add Photos stays on
+ * the trailing edge outside collapse. Search and Filters are separate units (Filters collapses first).
  *
- *   R1:  [When ▾ · Search · Clear]                 ·······  [Add Photos ▾ (addSlot)]
- *   R2:  [Family selector chips (familyChips)]     ·······  [size slider + Masonry/Grid/List]
+ * Both album mount paths (flag-off AlbumSurface and flag-on AlbumBoard) render through this so the
+ * control chrome cannot drift. State owned here:
+ *  - `filter` (When/Search/facets) — threaded to AlbumGrid
+ *  - `view` + `thumbPx` — Views unit, localStorage-persisted
  *
- * State owned here (was hoisted OUT of AlbumGrid so the toolbar composes in ONE place, above a
- * body-only grid — mirroring StoriesSurface owning the toolbar over a controlled StoryBrowse body):
- *  - `filter` (When/Search/facets) — the AlbumFilterValue, threaded down to AlbumGrid which does the
- *    actual filtering; the People/Places facet options are derived HERE from the current photos.
- *  - `view` (Masonry/Grid/List) + `thumbPx` (size slider) — the R2-right selector, persisted to
- *    localStorage with an SSR-safe default + a client-only hydrate effect (no hydration mismatch).
- * Selection / bulk / delete / photo-viewer state stays IN AlbumGrid (body concerns).
- *
- * Empty album (no photos AND no in-flight tiles): there is no grid body to host the toolbar, so this
- * renders a MINIMAL toolbar carrying just the Add Photos affordance (R1-right) + the family chips
- * (R2-left) above the welcoming empty note — the add/import flow is never hidden by an empty album.
- *
- * All authorization already happened upstream; this only renders + narrows what the surface handed it.
+ * Empty album: progressive row with Family + Add Photos only (no Search/Filters/Views — they steer
+ * nothing). Legacy HubToolbar remains for Family/Questions until #297.
  */
-import { useEffect, useMemo, useState } from "react";
-import { HubToolbar } from "../HubToolbar";
-import { useIsCompact } from "@/app/_kindred/useIsCompact";
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import { ImagePlus, LayoutGrid, ListFilter, Search, UsersRound } from "lucide-react";
+import { hub } from "@/app/_copy";
+import actionButtonStyles from "@/app/_kindred/ActionButton.module.css";
+import { HubProgressiveControlRow } from "../HubProgressiveControlRow";
+import { IconSheet } from "../IconSheet";
+import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
 import { AlbumGrid, type AlbumGridPhoto } from "./AlbumGrid";
 import {
-  AlbumFilterBar,
+  AlbumFacetFilters,
+  AlbumSearchFilter,
   EMPTY_FILTER,
+  isFacetFilterActive,
+  isSearchActive,
   type AlbumFilterValue,
 } from "./AlbumFilterBar";
 import {
@@ -54,6 +58,24 @@ function isView(v: string | null): v is AlbumView {
   return v === "grid" || v === "masonry" || v === "list";
 }
 
+/** Lightweight width probes for Add Photos — avoid dual-mounting AlbumUploader in the measure strip. */
+function addPhotosMeasureLabeled(): ReactNode {
+  return (
+    <button type="button" className={actionButtonStyles.button} tabIndex={-1}>
+      {hub.album.addPhotosMenu}{" "}
+      <span aria-hidden="true">▾</span>
+    </button>
+  );
+}
+
+function addPhotosMeasureIconified(): ReactNode {
+  return (
+    <button type="button" className={actionButtonStyles.button} tabIndex={-1} aria-label={hub.album.addPhotosMenu}>
+      <ImagePlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+    </button>
+  );
+}
+
 export function AlbumControls({
   photos,
   pendingTiles = [],
@@ -63,33 +85,31 @@ export function AlbumControls({
   familyFilterActive = false,
   notices,
   emptyNote,
+  /** Test seam: force progressive-row width (skips ResizeObserver). */
+  forceAvailableWidth,
+  forceWidths,
 }: {
   photos: AlbumGridPhoto[];
   /** ADR-0015 · F2 in-flight/failed placeholder tiles (board path only). */
   pendingTiles?: PendingTile[];
   /** Called with a failed tile's `tempId` when its retry affordance is tapped (board path only). */
   onRetryTile?: (tempId: string) => void;
-  /** The "Add Photos" uploader element — rendered right-justified in the toolbar's R1-right on BOTH
-   *  the populated and empty paths, so the add/import flow always shares the When/Search row. */
-  addSlot?: React.ReactNode;
-  /** The shared browse Family filter chips (ADR-0021) — HubToolbar's R2-left. Omit (<2 families) and
-   *  the slot collapses (HubToolbar's empty-row rule). */
-  familyChips?: React.ReactNode;
-  /** Whether the `?families=` chip filter is narrowed to a subset (computed upstream in AlbumSurface,
-   *  which owns the selection). On mobile the chips move INSIDE the closed "Filters & view" sheet, so
-   *  this must feed the trigger badge — otherwise a family-narrowed grid shows with no indication. */
+  /** The "Add Photos" uploader — trailing progressive-row action (may iconify by width). */
+  addSlot?: ReactNode;
+  /** Shared browse Family filter chips (ADR-0021). Omit when <2 families. */
+  familyChips?: ReactNode;
+  /** Whether `?families=` is narrowed to a subset — badges the collapsed Family icon. */
   familyFilterActive?: boolean;
-  /** Board-only status lines (import "X of N", a list-step error, a "nothing imported" note),
-   *  rendered BELOW the toolbar and above the grid body. */
-  notices?: React.ReactNode;
-  /** The welcoming empty-album note shown when there are no photos and no in-flight tiles. */
+  /** Board-only status lines below the control row. */
+  notices?: ReactNode;
+  /** Welcoming empty-album note when there are no photos and no in-flight tiles. */
   emptyNote: string;
+  forceAvailableWidth?: number;
+  forceWidths?: React.ComponentProps<typeof HubProgressiveControlRow>["forceWidths"];
 }) {
-  // ---- Filter state (client-side; AlbumGrid does the actual filtering over these values) --------
   const [filter, setFilter] = useState<AlbumFilterValue>(EMPTY_FILTER);
+  const [actionForm, setActionForm] = useState<"labeled" | "iconified">("labeled");
 
-  // Filter-menu options: the UNION of people (subjects ∪ appears-in) and of places across the CURRENT
-  // photos, deduped by id, sorted by name for a stable menu.
   const peopleOptions = useMemo(() => {
     const by = new Map<string, string>();
     for (const p of photos) {
@@ -104,9 +124,6 @@ export function AlbumControls({
     return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [photos]);
 
-  // ---- Layout + thumbnail-size state -------------------------------------------------------------
-  // Start at the SSR-safe defaults (Masonry / DEFAULT_THUMB) — never touch localStorage during render —
-  // then hydrate the stored choice in a client-only effect (mirrors StoriesSurface's feedView effect).
   const [view, setView] = useState<AlbumView>("masonry");
   const [thumbPx, setThumbPx] = useState<number>(DEFAULT_THUMB);
   useEffect(() => {
@@ -137,28 +154,51 @@ export function AlbumControls({
     }
   }
 
-  // ADR-0024: on a phone (< 40rem) the album's filter cluster + family chips + view controls move into a
-  // "⚙ Filters & view" bottom sheet, leaving only "Add Photos" on the primary row. Desktop is unchanged.
-  const compact = useIsCompact();
-
-  // ADR-0025 Increment 4 — per-icon active badges. The Filter icon badges an engaged When/facets/search
-  // filter (AlbumFilterBar computes that itself via isFilterActive over the filter VALUE); the Family
-  // icon badges a narrowed family-chip subset — `familyFilterActive` (computed upstream in AlbumSurface,
-  // which owns the selection) is threaded through since the chips are opaque inside the sheet. The View
-  // icon is never badged (a layout choice hides no content), so `view` no longer feeds any badge.
   const hasBody = photos.length > 0 || pendingTiles.length > 0;
 
-  // Empty album: no grid to host the full filter toolbar, so render a MINIMAL toolbar carrying only the
-  // Add Photos affordance (R1-right) + the family chips (R2-left) above the empty note. The filters and
-  // view controls would steer nothing here, so they are omitted (their slots collapse).
-  // DELIBERATELY EXEMPT from the mobile "Filters & view" sheet (`compact` is unused on this path): there
-  // is no photo grid below to protect from vertical bloat, and the chips are the one useful control here
-  // (switch which family's empty album you're looking at) — hiding them behind a gear on an empty screen
-  // is worse UX than leaving them inline. So no sheet, no badge, chips stay visible.
+  const visibleAction =
+    addSlot && isValidElement(addSlot) && typeof addSlot.type !== "string"
+      ? cloneElement(addSlot as ReactElement<{ iconified?: boolean }>, {
+          iconified: actionForm === "iconified",
+        })
+      : addSlot;
+
+  const action = addSlot
+    ? {
+        labeled: addPhotosMeasureLabeled(),
+        iconified: addPhotosMeasureIconified(),
+        visible: visibleAction,
+      }
+    : undefined;
+
+  const family =
+    familyChips != null
+      ? {
+          expanded: familyChips,
+          collapsed: (
+            <IconSheet
+              icon={UsersRound}
+              label={hub.mobileControls.familyLabel}
+              sheetTitle={hub.mobileControls.familyLabel}
+              badgeCount={familyFilterActive ? 1 : 0}
+            >
+              {familyChips}
+            </IconSheet>
+          ),
+        }
+      : undefined;
+
+  // Empty album: Family + Add Photos only — filters/views steer nothing.
   if (!hasBody) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <HubToolbar row1Right={addSlot ?? null} row2Left={familyChips ?? null} />
+        <HubProgressiveControlRow
+          family={family}
+          action={action}
+          onActionFormChange={setActionForm}
+          forceAvailableWidth={forceAvailableWidth}
+          forceWidths={forceWidths}
+        />
         {notices}
         <p
           style={{
@@ -174,34 +214,80 @@ export function AlbumControls({
     );
   }
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* The shared control block: the facet-chips row (People/Places, when the photos carry them) plus
-          the two-row HubToolbar — R1 [When·Search·Clear … Add Photos], R2 [Family selector … size +
-          view layout]. AlbumFilterBar composes it; each slot gates its own presence. */}
-      <AlbumFilterBar
+  const searchExpanded = <AlbumSearchFilter value={filter} onChange={setFilter} />;
+  const searchCollapsed = (
+    <IconSheet
+      icon={Search}
+      label={hub.mobileControls.searchLabel}
+      sheetTitle={hub.mobileControls.searchLabel}
+      badgeCount={isSearchActive(filter) ? 1 : 0}
+    >
+      <AlbumSearchFilter value={filter} onChange={setFilter} />
+    </IconSheet>
+  );
+
+  const filtersExpanded = (
+    <AlbumFacetFilters
+      people={peopleOptions}
+      places={placeOptions}
+      value={filter}
+      onChange={setFilter}
+    />
+  );
+  const filtersCollapsed = (
+    <IconSheet
+      icon={ListFilter}
+      label={hub.mobileControls.filterLabel}
+      sheetTitle={hub.mobileControls.filterLabel}
+      badgeCount={isFacetFilterActive(filter) ? 1 : 0}
+    >
+      <AlbumFacetFilters
         people={peopleOptions}
         places={placeOptions}
         value={filter}
         onChange={setFilter}
-        familyChips={familyChips}
-        addSlot={addSlot}
-        compact={compact}
-        familyFilterActive={familyFilterActive}
-        rightSlot={
-          <AlbumViewControls
-            view={view}
-            onView={changeView}
-            thumbPx={thumbPx}
-            onThumbPx={changeThumb}
-          />
-        }
+      />
+    </IconSheet>
+  );
+
+  const viewsExpanded = (
+    <AlbumViewControls
+      view={view}
+      onView={changeView}
+      thumbPx={thumbPx}
+      onThumbPx={changeThumb}
+    />
+  );
+  const viewsCollapsed = (
+    <IconSheet
+      icon={LayoutGrid}
+      label={hub.mobileControls.viewLabel}
+      sheetTitle={hub.mobileControls.viewLabel}
+    >
+      <AlbumViewControls
+        view={view}
+        onView={changeView}
+        thumbPx={thumbPx}
+        onThumbPx={changeThumb}
+      />
+    </IconSheet>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <HubProgressiveControlRow
+        family={family}
+        search={{ expanded: searchExpanded, collapsed: searchCollapsed }}
+        filters={{ expanded: filtersExpanded, collapsed: filtersCollapsed }}
+        views={{ expanded: viewsExpanded, collapsed: viewsCollapsed }}
+        action={action}
+        onActionFormChange={setActionForm}
+        forceAvailableWidth={forceAvailableWidth}
+        forceWidths={forceWidths}
       />
 
       {notices}
 
-      {/* Body only — the grid receives the controlled filter/view/thumbPx and renders tiles (+ its own
-          selection/bulk/delete/viewer affordances and pending-import placeholders). */}
       <AlbumGrid
         photos={photos}
         filter={filter}
