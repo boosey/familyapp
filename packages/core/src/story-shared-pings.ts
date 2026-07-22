@@ -10,7 +10,7 @@ import { asks, memberships, persons, storyFamilies } from "@chronicle/db/schema"
 import type { Database } from "@chronicle/db";
 import { decideStoryRead, type AuthContext } from "./authorization";
 import { isCurrentlyShared } from "./consent";
-import { getNotificationStreamFrequency } from "./notification-prefs";
+import { shouldDeliverImmediately } from "./notification-immediate";
 import { resolvePersonEmails } from "./person-emails";
 
 export type StorySharedPingKind = "asker" | "family";
@@ -40,8 +40,8 @@ const EMPTY: StorySharedPingContext = {
 /**
  * Recipients for a post-share email ping. Empty when the story is missing, not currently
  * shared, private, or has no emailable authorized co-members. Owner is never included.
- * Stream prefs are honored: `off` omits the recipient; absent prefs default to `every_item`
- * via the prefs API. Asker → `answers_to_my_asks`; family → `family_activity`.
+ * Stream prefs are honored via `shouldDeliverImmediately` (`off` omits; absent prefs
+ * default to every_item). Asker → `answers_to_my_asks`; family → `family_activity`.
  */
 export async function listStorySharedPingRecipients(
   db: Database,
@@ -116,8 +116,7 @@ export async function listStorySharedPingRecipients(
       askerPersonId !== null && personId === askerPersonId ? "asker" : "family";
     const stream =
       kind === "asker" ? "answers_to_my_asks" : "family_activity";
-    const frequency = await getNotificationStreamFrequency(db, personId, stream);
-    if (frequency === "off") continue;
+    if (!(await shouldDeliverImmediately(db, personId, stream))) continue;
     recipients.push({ personId, email, kind });
   }
 
