@@ -70,8 +70,10 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   facts — **no new edge types** for half/step or multi-partner cases; the existing `nature` enum and
   the two primitives already cover them. **Sibling, half-sibling, step-sibling, grandparent,
   aunt/uncle, cousin, in-law** are **derived labels** by walking parent/partner edges (full sibling =
-  shares both parents; half-sibling = shares exactly one; step-sibling = linked through a partner /
-  step `parent-of` path, not a shared parent), never stored — so a derived fact can never contradict
+  shares two parents; half-sibling = shares exactly one; step-sibling = a parent of A is
+  partnered-with a parent of B and they do **not** share a `parent-of` edge — shared `parent-of`,
+  even `nature=step`, is half/full by parent count, never step-sibling), never stored — so a derived
+  fact can never contradict
   a stored one.
 - **Union-node ban** — a genealogy file (GEDCOM) groups a marriage-plus-children into a unit it calls
   a **`FAM`**/"family". That is **not** our **Family (Chronicle)**. We never store a union node and
