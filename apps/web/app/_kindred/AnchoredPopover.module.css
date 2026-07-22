@@ -1,0 +1,78 @@
+/* AnchoredPopover — wide shell for collapsed hub browse panels (#300). Tokens only. No max-width
+ * media query (viewport → shell is decided in JS via useIsCompact + resolveCollapsedBrowseShell). */
+
+.panel {
+  z-index: 1000;
+  min-width: var(--anchored-popover-min-width, 12rem);
+  max-width: min(var(--anchored-popover-max-width, 22rem), calc(100vw - 1rem));
+  max-height: min(85dvh, 90dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  animation: kindred-popover-in var(--dur-settle) var(--ease-quiet);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-meta);
+  font-size: var(--text-ui-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-sunken);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes kindred-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+:global(:root[data-reduce-motion="on"]) .panel {
+  animation: none;
+}

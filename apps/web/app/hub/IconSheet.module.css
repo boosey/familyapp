@@ -1,7 +1,7 @@
-/* IconSheet (ADR-0025 Phase B, Increment 3) — a labeled lucide-icon trigger opening the shared
- * BottomSheet. Tokens only (per _skins/CSS-MODULES.md). Only ever mounted on a tab's compact branch, so
- * no desktop media layer and no max-width query. The trigger is a compact icon-over-label control sized
- * to fit three-across-plus-action at the 360px floor. */
+/* IconSheet — labeled lucide-icon trigger for collapsed browse panels (#300). Tokens only
+ * (per _skins/CSS-MODULES.md). Shell (sheet vs popover) is chosen in JS; this file has no viewport
+ * media layer and no max-width query. The trigger is a compact icon-over-label control sized to fit
+ * three-across-plus-action at the 360px floor. */
 
 .trigger {
   display: inline-flex;
