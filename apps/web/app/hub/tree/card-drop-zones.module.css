@@ -1,0 +1,74 @@
+/* Card drop zones (#287) — overlays on a person card while tray place-drag is active. */
+
+.root {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.rootActive {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+
+.zone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--surface-card) 55%, var(--focus-ring));
+  border: var(--border-width) dashed var(--border-strong);
+  color: var(--text-body);
+  cursor: copy;
+}
+
+.zone:hover,
+.zone:focus-visible {
+  background: color-mix(in srgb, var(--focus-ring) 35%, var(--surface-card));
+}
+
+.top {
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 28%;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.bottom {
+  bottom: 0;
+  left: 18%;
+  right: 18%;
+  height: 28%;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.left {
+  top: 28%;
+  bottom: 28%;
+  left: 0;
+  width: 28%;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.right {
+  top: 28%;
+  bottom: 28%;
+  right: 0;
+  width: 28%;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
+  padding: 2px 4px;
+}

@@ -1139,6 +1139,10 @@ export const hub = {
     lineGovernMenu: "Relationship actions",
     lineGovernHeading: "This relationship",
     lineGovernHit: "Open relationship actions",
+    // Card drop zones for desktop tray → tree DnD (#287 / ADR-0027). Side = partner only.
+    zoneParent: "Parent",
+    zoneChild: "Child",
+    zonePartner: "Partner",
   },
   // Tree place-confirm modal (#286 / ADR-0027) — shared by tray New person + unplaced Place.
   // Desktop DnD (#287) and mobile Place→tap (#288) reopen this same surface.
@@ -1163,6 +1167,9 @@ export const hub = {
     trayIntro: "Place someone who isn't on the tree yet, or add a new person.",
     newPerson: "New person",
     newPersonAria: "Add a new person to the tree",
+    // Desktop tray drag handles (#287) — Place/New still work via click; drag is the zone shortcut.
+    dragMemberAria: (name: string) => `Drag ${name} onto a person on the tree`,
+    dragNewPersonAria: "Drag a new person onto a person on the tree",
     // Accessible group name wrapping the per-member action buttons.
     memberActionsAria: (name: string) => `Actions for ${name}`,
     // Fallback name for a member with no display name recorded.

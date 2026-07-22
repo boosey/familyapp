@@ -5,16 +5,19 @@
  *
  *   - Place in tree  → opens shared <PlaceConfirmModal> (link mode)
  *   - New person     → opens the same modal (mint mode) (#286)
+ *   - Desktop drag   → tray handle / New person → card zones (#287); drop opens the same modal
+ *     with receiverLocked + relationFromZone (mobile Place→tap is #288)
  *   - Not family     → `setMemberNonFamilyAction(nonFamily:true)`; quiet set-aside + Move back
  *   - Remove         → STEWARD-ONLY; in-page confirm then `endMembershipAction`
  *
  * List does NOT mount this surface (#283). Variant `tray` is the Tree chrome; `showNewPerson`
  * keeps the tray visible even when there are no unplaced rows.
  */
-import { useState, useTransition } from "react";
+import { useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
+import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import {
   endMembershipAction,
   linkExistingMemberAction,
@@ -23,6 +26,11 @@ import {
 } from "../tree/actions";
 import { addRelativeAction } from "../kin/actions";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
+import {
+  setActivePlaceDrag,
+  writePlaceDrag,
+  type PlaceDragPayload,
+} from "../tree/place-drag";
 import styles from "./UnplacedMembers.module.css";
 
 /** A person already placed in the tree, offered as an anchor to link an unplaced member to. */
@@ -74,6 +82,7 @@ export function UnplacedMembers({
   onFetchAnchors = listPlacedPersonsAction,
 }: UnplacedMembersProps) {
   const router = useRouter();
+  const compact = useIsCompact();
   const [placing, setPlacing] = useState<PlacingState>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +101,8 @@ export function UnplacedMembers({
 
   const busy = (id: string) => isPending && pendingId === id;
   const isTray = variant === "tray";
+  // #287: desktop tray → zone DnD only (mobile Place→tap is #288). SSR/first paint = desktop.
+  const desktopDrag = isTray && !compact;
   const heading =
     isTray && activeMembers.length === 0 && setAsideMembers.length === 0
       ? hub.unplaced.trayHeading
@@ -100,6 +111,15 @@ export function UnplacedMembers({
     isTray && activeMembers.length === 0 && setAsideMembers.length === 0
       ? hub.unplaced.trayIntro
       : hub.unplaced.intro;
+
+  function beginPlaceDrag(e: DragEvent, payload: PlaceDragPayload) {
+    writePlaceDrag(e.dataTransfer, payload);
+    setActivePlaceDrag(payload);
+  }
+
+  function endPlaceDrag() {
+    setActivePlaceDrag(null);
+  }
 
   function runAction(
     personId: string,
@@ -166,9 +186,20 @@ export function UnplacedMembers({
         <div className={styles.newPersonRow}>
           <button
             type="button"
-            className={styles.newPerson}
+            className={`${styles.newPerson}${desktopDrag ? ` ${styles.newPersonDraggable}` : ""}`}
             data-testid="tree-tray-new-person"
-            aria-label={hub.unplaced.newPersonAria}
+            aria-label={
+              desktopDrag ? hub.unplaced.dragNewPersonAria : hub.unplaced.newPersonAria
+            }
+            draggable={desktopDrag}
+            onDragStart={
+              desktopDrag
+                ? (e) => {
+                    beginPlaceDrag(e, { kind: "mint" });
+                  }
+                : undefined
+            }
+            onDragEnd={desktopDrag ? endPlaceDrag : undefined}
             onClick={() => {
               setError(null);
               setPlacing({ kind: "mint" });
@@ -187,7 +218,30 @@ export function UnplacedMembers({
             const confirming = confirmRemoveId === m.personId;
             return (
               <li key={m.personId} className={styles.row} data-testid={`unplaced-row-${m.personId}`}>
-                <span className={`${styles.name} ${named ? "" : styles.nameUnknown}`}>{name}</span>
+                {desktopDrag ? (
+                  <button
+                    type="button"
+                    className={styles.dragHandle}
+                    draggable
+                    data-testid={`unplaced-drag-${m.personId}`}
+                    aria-label={hub.unplaced.dragMemberAria(name)}
+                    onDragStart={(e) => {
+                      beginPlaceDrag(e, {
+                        kind: "link",
+                        personId: m.personId,
+                        displayName: m.displayName,
+                      });
+                    }}
+                    onDragEnd={endPlaceDrag}
+                  >
+                    <span aria-hidden="true" className={styles.dragHint}>
+                      ::
+                    </span>
+                    <span className={`${styles.name} ${named ? "" : styles.nameUnknown}`}>{name}</span>
+                  </button>
+                ) : (
+                  <span className={`${styles.name} ${named ? "" : styles.nameUnknown}`}>{name}</span>
+                )}
                 <span
                   className={styles.actions}
                   role="group"
