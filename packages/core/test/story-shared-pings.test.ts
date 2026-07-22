@@ -11,6 +11,7 @@ import {
   createAsk,
   listStorySharedPingRecipients,
   persistRecordingAndCreateDraft,
+  setNotificationStreamFrequency,
   transitionStoryState,
   updateDerivedFields,
 } from "../src/index";
@@ -276,5 +277,130 @@ describe("listStorySharedPingRecipients", () => {
 
     const result = await listStorySharedPingRecipients(db, story.id);
     expect(result.recipients).toEqual([]);
+  });
+
+  it("omits asker when answers_to_my_asks is off (no fall-through to family_activity)", async () => {
+    const owner = await makePerson(db, "Eleanor");
+    const asker = await makePerson(db, "Sofia");
+    const other = await makePerson(db, "Marcus");
+    const fam = await makeFamily(db, "B", owner.id);
+    await addMembership(db, owner.id, fam.id);
+    await addMembership(db, asker.id, fam.id);
+    await addMembership(db, other.id, fam.id);
+    await attachVerifiedEmail(asker.id, "sofia@example.com");
+    await attachVerifiedEmail(other.id, "marcus@example.com");
+
+    const ask = await createAsk(
+      db,
+      { kind: "account", personId: asker.id },
+      { targetPersonId: owner.id, questionText: "Tell me about Sunday dinner." },
+    );
+    const { story } = await persistRecordingAndCreateDraft(
+      db,
+      {
+        ownerPersonId: owner.id,
+        storageKey: "r2://r.webm",
+        contentType: "audio/webm",
+        checksum: "sha256:r",
+      },
+      { askId: ask.id },
+    );
+    await updateDerivedFields(db, story.id, {
+      transcript: "t",
+      prose: "p",
+      title: "Sunday",
+      summary: "s",
+      tags: [],
+    });
+    await transitionStoryState(db, story.id, "pending_approval");
+    await approveAndShareStory(db, {
+      storyId: story.id,
+      narratorPersonId: owner.id,
+      audienceTier: "family",
+      approvalAudio: {
+        storageKey: "k",
+        contentType: "audio/webm",
+        checksum: "sha256:x",
+      },
+    });
+
+    await setNotificationStreamFrequency(
+      db,
+      asker.id,
+      "answers_to_my_asks",
+      "off",
+    );
+    // Family activity stays every_item (default) — asker must still be omitted.
+    await setNotificationStreamFrequency(
+      db,
+      other.id,
+      "family_activity",
+      "every_item",
+    );
+
+    const result = await listStorySharedPingRecipients(db, story.id);
+    expect(result.recipients.map((r) => r.personId)).toEqual([other.id]);
+    expect(result.recipients.find((r) => r.personId === asker.id)).toBeUndefined();
+  });
+
+  it("omits non-asker when family_activity is off; keeps every_item co-members", async () => {
+    const owner = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const marcus = await makePerson(db, "Marcus");
+    const fam = await makeFamily(db, "Boudreaux", owner.id);
+    await addMembership(db, owner.id, fam.id);
+    await addMembership(db, sofia.id, fam.id);
+    await addMembership(db, marcus.id, fam.id);
+    await attachVerifiedEmail(sofia.id, "sofia@example.com");
+    await attachVerifiedEmail(marcus.id, "marcus@example.com");
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
+      title: "Sunday dinner",
+    });
+
+    await setNotificationStreamFrequency(db, sofia.id, "family_activity", "off");
+    // marcus: no prefs row → every_item
+
+    const result = await listStorySharedPingRecipients(db, story.id);
+    expect(result.recipients).toEqual([
+      {
+        personId: marcus.id,
+        email: "marcus@example.com",
+        kind: "family",
+      },
+    ]);
+  });
+
+  it("preserves pre-prefs audience when no prefs rows exist", async () => {
+    const owner = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const fam = await makeFamily(db, "B", owner.id);
+    await addMembership(db, owner.id, fam.id);
+    await addMembership(db, sofia.id, fam.id);
+    await attachVerifiedEmail(sofia.id, "sofia@example.com");
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
+      title: "Sunday dinner",
+    });
+
+    const result = await listStorySharedPingRecipients(db, story.id);
+    expect(result.recipients).toEqual([
+      {
+        personId: sofia.id,
+        email: "sofia@example.com",
+        kind: "family",
+      },
+    ]);
+    expect(result.recipients.every((r) => r.personId !== owner.id)).toBe(true);
   });
 });

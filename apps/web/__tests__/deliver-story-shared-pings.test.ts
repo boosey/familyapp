@@ -9,6 +9,7 @@ import {
   approveAndShareStory,
   createAsk,
   persistRecordingAndCreateDraft,
+  setNotificationStreamFrequency,
   transitionStoryState,
   updateDerivedFields,
 } from "@chronicle/core";
@@ -156,5 +157,39 @@ describe("deliverStorySharedPings", () => {
       origin: "https://app.test",
     });
     expect(notifier.sent).toHaveLength(0);
+  });
+
+  it("does not send to recipients whose owning stream is off", async () => {
+    const owner = await makePerson(db, "Eleanor");
+    const sofia = await makePerson(db, "Sofia");
+    const marcus = await makePerson(db, "Marcus");
+    const fam = await makeFamily(db, "B", owner.id);
+    await addMembership(db, owner.id, fam.id);
+    await addMembership(db, sofia.id, fam.id);
+    await addMembership(db, marcus.id, fam.id);
+    await attachVerifiedEmail(sofia.id, "sofia@example.com");
+    await attachVerifiedEmail(marcus.id, "marcus@example.com");
+
+    const { story } = await makeStory(db, {
+      ownerPersonId: owner.id,
+      state: "shared",
+      audienceTier: "family",
+      withApprovalConsent: true,
+      targetFamilyIds: [fam.id],
+      title: "Sunday dinner",
+    });
+
+    await setNotificationStreamFrequency(db, sofia.id, "family_activity", "off");
+
+    const notifier = new MockNotifier();
+    await deliverStorySharedPings({
+      db,
+      notifier,
+      storyId: story.id,
+      origin: "https://app.test",
+    });
+
+    expect(notifier.sent).toHaveLength(1);
+    expect(notifier.sent[0]!.to).toBe("marcus@example.com");
   });
 });
