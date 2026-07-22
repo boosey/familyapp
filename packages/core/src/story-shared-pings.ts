@@ -17,6 +17,7 @@ import {
 import type { Database } from "@chronicle/db";
 import { decideStoryRead, type AuthContext } from "./authorization";
 import { isCurrentlyShared } from "./consent";
+import { getNotificationStreamFrequency } from "./notification-prefs";
 
 export type StorySharedPingKind = "asker" | "family";
 
@@ -45,6 +46,8 @@ const EMPTY: StorySharedPingContext = {
 /**
  * Recipients for a post-share email ping. Empty when the story is missing, not currently
  * shared, private, or has no emailable authorized co-members. Owner is never included.
+ * Stream prefs are honored: `off` omits the recipient; absent prefs default to `every_item`
+ * via the prefs API. Asker → `answers_to_my_asks`; family → `family_activity`.
  */
 export async function listStorySharedPingRecipients(
   db: Database,
@@ -115,11 +118,13 @@ export async function listStorySharedPingRecipients(
   for (const personId of authorized) {
     const email = emailsByPerson.get(personId);
     if (!email) continue;
-    recipients.push({
-      personId,
-      email,
-      kind: askerPersonId !== null && personId === askerPersonId ? "asker" : "family",
-    });
+    const kind: StorySharedPingKind =
+      askerPersonId !== null && personId === askerPersonId ? "asker" : "family";
+    const stream =
+      kind === "asker" ? "answers_to_my_asks" : "family_activity";
+    const frequency = await getNotificationStreamFrequency(db, personId, stream);
+    if (frequency === "off") continue;
+    recipients.push({ personId, email, kind });
   }
 
   return { ...base, recipients };
