@@ -38,6 +38,8 @@ export type KinRelation =
   | "child"
   | "partner"
   | "sibling"
+  | "half_sibling"
+  | "step_sibling"
   | "grandparent"
   | "grandchild"
   | "aunt_uncle"
@@ -56,6 +58,8 @@ export const RELATION_PRECEDENCE: readonly KinRelation[] = [
   "child",
   "partner",
   "sibling",
+  "half_sibling",
+  "step_sibling",
   "grandparent",
   "grandchild",
   "aunt_uncle",
@@ -66,8 +70,11 @@ export const RELATION_PRECEDENCE: readonly KinRelation[] = [
 /**
  * Derive every labeled relative of `rootPersonId` from a resolved edge set (the output of
  * `resolveKinshipProjection`, so already visibility- and hide-filtered). Pure — no DB, no auth.
- * Covers the first- and second-degree relations; `sibling` = shares ≥1 parent, `cousin` = parents
- * are siblings. When a person qualifies for several relations the most specific (by precedence) wins.
+ * Covers the first- and second-degree relations. Sibling labels by shared `parent_of` count:
+ * `sibling` = two shared parents, `half_sibling` = exactly one; `step_sibling` = a parent of root
+ * is partnered-with a parent of the other with **no** shared `parent_of` (shared parent_of even
+ * `nature=step` is half/full by count, never step). `cousin` = parents are siblings (share ≥1
+ * parent). When a person qualifies for several relations the most specific (by precedence) wins.
  */
 export function deriveKin(
   edges: ResolvedKinshipEdge[],
@@ -100,8 +107,8 @@ export function deriveKin(
   const get = (m: Map<string, Set<string>>, k: string): Set<string> =>
     m.get(k) ?? new Set<string>();
 
-  /** Siblings of x = others sharing ≥1 parent with x. */
-  const siblingsOf = (x: string): Set<string> => {
+  /** Blood/adoptive co-children of x = others sharing ≥1 parent with x (used for aunt/niece walks). */
+  const coChildrenOf = (x: string): Set<string> => {
     const out = new Set<string>();
     for (const p of get(parentsOf, x)) {
       for (const c of get(childrenOf, p)) {
@@ -109,6 +116,15 @@ export function deriveKin(
       }
     }
     return out;
+  };
+
+  const sharedParentCount = (a: string, b: string): number => {
+    const bParents = get(parentsOf, b);
+    let n = 0;
+    for (const p of get(parentsOf, a)) {
+      if (bParents.has(p)) n += 1;
+    }
+    return n;
   };
 
   // Collect candidates per relation, then pick the most specific per person.
@@ -124,21 +140,38 @@ export function deriveKin(
   for (const p of parents) mark(p, "parent");
   for (const c of children) mark(c, "child");
   for (const pt of get(partnersOf, rootPersonId)) mark(pt, "partner");
-  for (const s of siblingsOf(rootPersonId)) mark(s, "sibling");
+
+  // Full / half siblings by shared parent_of count (nature ignored — step parent_of still counts).
+  for (const s of coChildrenOf(rootPersonId)) {
+    const n = sharedParentCount(rootPersonId, s);
+    if (n >= 2) mark(s, "sibling");
+    else if (n === 1) mark(s, "half_sibling");
+  }
+
+  // Step-siblings: a parent of root is partnered-with a parent of other, and they share no parent_of.
+  for (const p of parents) {
+    for (const partner of get(partnersOf, p)) {
+      for (const other of get(childrenOf, partner)) {
+        if (other === rootPersonId) continue;
+        if (sharedParentCount(rootPersonId, other) > 0) continue;
+        mark(other, "step_sibling");
+      }
+    }
+  }
 
   // grandparents = parents of parents; grandchildren = children of children.
   for (const p of parents) for (const gp of get(parentsOf, p)) mark(gp, "grandparent");
   for (const c of children) for (const gc of get(childrenOf, c)) mark(gc, "grandchild");
 
-  // aunts/uncles = siblings of parents; cousins = their children.
+  // aunts/uncles = co-children of parents (share ≥1 parent); cousins = their children.
   for (const p of parents) {
-    for (const au of siblingsOf(p)) {
+    for (const au of coChildrenOf(p)) {
       mark(au, "aunt_uncle");
       for (const cousin of get(childrenOf, au)) mark(cousin, "cousin");
     }
   }
-  // nieces/nephews = children of siblings.
-  for (const s of siblingsOf(rootPersonId)) {
+  // nieces/nephews = children of co-children (half and full).
+  for (const s of coChildrenOf(rootPersonId)) {
     for (const nn of get(childrenOf, s)) mark(nn, "niece_nephew");
   }
 

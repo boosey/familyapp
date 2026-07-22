@@ -423,7 +423,8 @@ describe("addRelative — sibling (ADR-0017: shares a full parent-couple)", () =
   });
 
   // Regression (repo policy): the shipped single-bridge shortcut yielded a HALF-sibling (one shared
-  // parent). ADR-0017 forbids that in v1 — every "add sibling" must yield a FULL sibling.
+  // parent). ADR-0017 forbids that for Add sibling — every "add sibling" must yield a FULL sibling
+  // (two shared parents → deriveKin labels `sibling`, not `half_sibling`).
   it("regression: sibling add never yields a half-sibling in v1 (always two shared parents)", async () => {
     // Parentless anchor is the case that used to produce a half-sibling (single shared bridge).
     const { me, fam } = await familyWithMe();
@@ -437,6 +438,7 @@ describe("addRelative — sibling (ADR-0017: shares a full parent-couple)", () =
     expect((await parentIdsOf(fam.id, me.id, me.id))).toHaveLength(2);
     expect((await parentIdsOf(fam.id, me.id, res.createdPersonId!))).toHaveLength(2);
     expect(await shareBothParents(fam.id, me.id, me.id, res.createdPersonId!)).toBe(true);
+    expect(await relationOf(fam.id, me.id, res.createdPersonId!)).toBe("sibling");
   });
 
   // Case 2b (single-partner rule): when the anchor's one recorded parent ALREADY has a partner,
