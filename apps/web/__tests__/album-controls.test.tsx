@@ -1,20 +1,16 @@
 // @vitest-environment jsdom
 /**
- * AlbumControls (album controls hoist) — the album's toolbar owner. State that used to live in AlbumGrid
- * (the When/Search/facet FILTER, the Masonry/Grid/List VIEW, and the thumbnail-size SLIDER) was hoisted
- * here so BOTH album paths compose the SAME two-row HubToolbar above a body-only grid. These tests drive
- * those controls THROUGH AlbumControls (the assertions moved wholesale from album-grid.test.tsx) and pin
- * the load-bearing layout invariants:
- *   - the control area is STRICTLY two toolbar rows (People/Places facets ride INLINE in R1, never a 3rd row);
- *   - "Add Photos" (addSlot) sits on the SAME row as the When/Search filters (R1);
- *   - the family chips + size slider + view selector are R2.
- * Mocks next/navigation and the server-action module; the real AlbumFilterBar / AlbumViewControls /
- * HubToolbar / AlbumGrid mount, so this exercises the whole composed toolbar + body.
+ * AlbumControls (#302) — progressive hub control row wiring + filter/view behavior.
+ * Precedence lives in resolveHubControlExpansion; these assert Album occupancy (Search + Filters
+ * separate, no Sub tabs), single-row chrome, badges, and that filter/view state still drives the grid.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AlbumControls } from "@/app/hub/album/AlbumControls";
+import { HubProgressiveControlRow } from "@/app/hub/HubProgressiveControlRow";
+import { IconSheet } from "@/app/hub/IconSheet";
 import { hub } from "@/app/_copy";
+import { ListFilter, Search } from "lucide-react";
 import toolbarStyles from "@/app/hub/HubToolbar.module.css";
 
 const refresh = vi.fn();
@@ -23,8 +19,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, push }),
 }));
 
-// AlbumGrid (mounted below the toolbar) opens a viewer that loads its detail via the "use server"
-// actions module — stub it exactly as album-grid.test.tsx does so the body renders without a round-trip.
 const PANEL_DATA = {
   detail: {
     id: "photo-1",
@@ -64,7 +58,6 @@ afterEach(() => {
 
 const MANAGEABLE = { id: "photo-1", caption: null, canManage: true };
 
-// Enriched fixtures (distinct people, places, capture years, captions) for the filter tests.
 const THIS_YEAR = new Date().getFullYear();
 const ADA = {
   id: "ada",
@@ -101,7 +94,16 @@ const OLD = {
 };
 const ENRICHED = [ADA, BABBAGE, OLD];
 
-/** Count the rendered photo tiles by their <img> src (strip the ?variant=thumb query to the bare id). */
+/** Widths that collapse Views then Filters while Search stays expanded (Album precedence). */
+const COLLAPSE_FILTERS_BEFORE_SEARCH = {
+  family: { expanded: 200, collapsedIcon: 48 },
+  search: { expanded: 200, collapsedIcon: 48 },
+  filters: { expanded: 280, collapsedIcon: 48 },
+  views: { expanded: 220, collapsedIcon: 48 },
+  actionLabeled: 120,
+  actionIconified: 48,
+};
+
 function renderedPhotoIds(): string[] {
   return screen
     .queryAllByRole("img")
@@ -110,14 +112,7 @@ function renderedPhotoIds(): string[] {
     .map((src) => src.replace("/api/album-photo/", "").replace(/\?.*$/, ""));
 }
 
-/** The rendered HubToolbar rows (in order) — the shared toolbarRows(container) pattern (#190). */
-function toolbarRows(container: HTMLElement): HTMLElement[] {
-  const toolbar = container.querySelector(`.${toolbarStyles.toolbar}`) as HTMLElement | null;
-  if (!toolbar) return [];
-  return Array.from(toolbar.querySelectorAll(`.${toolbarStyles.row}`)) as HTMLElement[];
-}
-
-describe("AlbumControls view selector + size slider (items 7 + 8)", () => {
+describe("AlbumControls view selector + size slider", () => {
   it("renders the view selector radiogroup with Grid / Masonry / List", () => {
     render(<AlbumControls photos={[MANAGEABLE]} emptyNote="(empty)" />);
     const group = screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria });
@@ -134,7 +129,12 @@ describe("AlbumControls view selector + size slider (items 7 + 8)", () => {
   });
 
   it("switching to List renders a table with the five column headers", () => {
-    render(<AlbumControls photos={[MANAGEABLE, { id: "photo-2", caption: "Grandpa at the shore", canManage: false }]} emptyNote="(empty)" />);
+    render(
+      <AlbumControls
+        photos={[MANAGEABLE, { id: "photo-2", caption: "Grandpa at the shore", canManage: false }]}
+        emptyNote="(empty)"
+      />,
+    );
     fireEvent.click(screen.getByRole("radio", { name: hub.album.viewList }));
     const table = screen.getByRole("table");
     for (const col of [
@@ -150,7 +150,6 @@ describe("AlbumControls view selector + size slider (items 7 + 8)", () => {
 
   it("switching to Grid changes the layout container (data-view=grid, no masonry)", () => {
     const { container } = render(<AlbumControls photos={[MANAGEABLE]} emptyNote="(empty)" />);
-    // Default is Masonry.
     expect(container.querySelector('ul[data-view="masonry"]')).toBeTruthy();
     expect(container.querySelector('ul[data-view="grid"]')).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: hub.album.viewGrid }));
@@ -189,7 +188,7 @@ describe("AlbumControls view selector + size slider (items 7 + 8)", () => {
   });
 });
 
-describe("AlbumControls filtering (item 9)", () => {
+describe("AlbumControls filtering", () => {
   it("filtering by a person narrows the rendered set; clearing restores", () => {
     render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
     expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
@@ -200,6 +199,23 @@ describe("AlbumControls filtering (item 9)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: hub.album.filterClear }));
     expect(renderedPhotoIds().sort()).toEqual(["ada", "babbage", "old"]);
+  });
+
+  it("Filters Clear leaves Search text intact (separate units)", () => {
+    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    fireEvent.change(screen.getByRole("searchbox", { name: hub.album.filterTextLabel }), {
+      target: { value: "engine" },
+    });
+    const people = screen.getByRole("group", { name: hub.album.filterPeopleLabel });
+    fireEvent.click(within(people).getByRole("button", { name: "Ada", pressed: false }));
+    // Facets Clear must not wipe caption search — Search and Filters are separate units (#302).
+    const clearButtons = screen.getAllByRole("button", { name: hub.album.filterClear });
+    // Prefer the Filters Clear (facets active); clicking either Search Clear would only clear text.
+    fireEvent.click(clearButtons[clearButtons.length - 1]!);
+    expect(
+      (screen.getByRole("searchbox", { name: hub.album.filterTextLabel }) as HTMLInputElement).value,
+    ).toBe("engine");
+    expect(renderedPhotoIds().sort()).toEqual(["babbage"]);
   });
 
   it("filtering by a place narrows to photos in that place", () => {
@@ -242,46 +258,9 @@ describe("AlbumControls filtering (item 9)", () => {
   });
 });
 
-describe("AlbumControls HubToolbar layout (controls hoist — strictly two rows)", () => {
-  it("renders the When/Search filters, the view controls, and (when passed) Add + family chips", () => {
+describe("AlbumControls progressive control row (#302)", () => {
+  it("renders a single progressive control row (not HubToolbar two-row chrome)", () => {
     render(
-      <AlbumControls
-        photos={ENRICHED}
-        familyChips={<div data-testid="fam-chips">chips</div>}
-        addSlot={<button type="button">Add Photos</button>}
-        emptyNote="(empty)"
-      />,
-    );
-    expect(screen.getByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeTruthy();
-    expect(screen.getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add Photos" })).toBeTruthy();
-    expect(screen.getByTestId("fam-chips")).toBeTruthy();
-    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
-    expect(screen.getByRole("slider", { name: hub.album.thumbnailSizeLabel })).toBeTruthy();
-  });
-
-  it("renders the passed familyChips inside the consolidated filter/control row", () => {
-    render(
-      <AlbumControls
-        photos={[MANAGEABLE]}
-        familyChips={<div data-testid="fam-chips">chips</div>}
-        emptyNote="(empty)"
-      />,
-    );
-    const group = screen.getByRole("group", { name: hub.album.filterBarAria });
-    expect(within(group).getByTestId("fam-chips")).toBeTruthy();
-  });
-
-  it("omits the family chips entirely when none are passed (no reserved R2-left slot)", () => {
-    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
-    expect(screen.queryByTestId("fam-chips")).toBeNull();
-    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
-  });
-
-  // The load-bearing invariant: the control area is STRICTLY two rows, and "Add Photos" shares R1 with
-  // the When/Search filters (never a third row for the facets).
-  it("keeps the control area to two rows with Add Photos on the same row as When/Search", () => {
-    const { container } = render(
       <AlbumControls
         photos={ENRICHED}
         familyChips={<div data-testid="fam-chips">chips</div>}
@@ -289,148 +268,218 @@ describe("AlbumControls HubToolbar layout (controls hoist — strictly two rows)
         emptyNote="(empty)"
       />,
     );
-    const rows = toolbarRows(container);
-    expect(rows.length).toBe(2);
-    const r1 = rows[0]!;
-    // R1 hosts BOTH the When filter and the Add Photos affordance.
-    expect(within(r1).getByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeTruthy();
-    expect(within(r1).getByRole("button", { name: hub.album.addPhotosMenu })).toBeTruthy();
+    expect(document.querySelectorAll("[data-hub-progressive-control-row]")).toHaveLength(1);
+    expect(document.querySelector(`.${toolbarStyles.toolbar}`)).toBeNull();
+    expect(screen.getByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
+    expect(screen.getByRole("button", { name: hub.album.addPhotosMenu })).toBeTruthy();
+    // Family chips also mount in the aria-hidden measure strip — assert at least the visible copy.
+    expect(screen.getAllByTestId("fam-chips").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeTruthy();
   });
 
-  // The People/Places facets ride INLINE in R1 (between When and Search), never a separate third row.
-  it("renders the People/Places facet chips inline in R1, keeping the control area at two rows", () => {
-    const { container } = render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
-    const rows = toolbarRows(container);
-    expect(rows.length).toBe(2);
-    const r1 = rows[0]!;
-    expect(within(r1).getByRole("group", { name: hub.album.filterPeopleLabel })).toBeTruthy();
-    expect(within(r1).getByRole("group", { name: hub.album.filterPlacesLabel })).toBeTruthy();
-  });
-});
-
-// ADR-0025 Increment 3 Step B: on a phone (< 40rem) the album's single "⚙ Filters & view" gear splits
-// into the shared IconSheet strip — [View][Family][Filter] labeled icon-sheets + the iconified
-// Add-Photos action. Each icon renders only when it has content; the Family chips are reached by tapping
-// the Family icon. These tests force the compact branch by mocking matchMedia (jsdom leaves it undefined
-// → desktop otherwise).
-describe("AlbumControls mobile IconSheet strip (Increment 3 Step B)", () => {
-  const realMatchMedia = window.matchMedia;
-  beforeEach(() => {
-    // A compact viewport: the query matches, so useIsCompact() → true.
-    window.matchMedia = ((query: string) => ({
-      matches: true,
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia;
-  });
-  afterEach(() => {
-    window.matchMedia = realMatchMedia;
-  });
-
-  it("renders the three per-concern View + Family + Filter icon-sheet triggers", () => {
+  it("has no Sub tabs unit; Search and Filters are separate collapse units", () => {
     render(
       <AlbumControls
         photos={ENRICHED}
-        familyChips={<div data-testid="fam-chips">chips</div>}
+        forceAvailableWidth={320}
+        forceWidths={COLLAPSE_FILTERS_BEFORE_SEARCH}
         emptyNote="(empty)"
       />,
     );
-    // The compact strip is the three per-concern icon-sheets (the old single ⚙ gear is gone).
-    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
-    expect(screen.getByRole("button", { name: hub.mobileControls.familyLabel })).toBeTruthy();
+    const row = document.querySelector("[data-hub-progressive-control-row]");
+    expect(row?.getAttribute("data-sub-tabs")).toBe("none");
+    expect(row?.getAttribute("data-search")).toBe("expanded");
+    expect(row?.getAttribute("data-filters")).toBe("collapsed-icon");
+    expect(row?.getAttribute("data-views")).toBe("collapsed-icon");
+    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: hub.mobileControls.subTabsLabel })).toBeNull();
+  });
+
+  it("exposes separate collapsed Search and Filters icons when both must collapse", () => {
+    render(
+      <HubProgressiveControlRow
+        forceAvailableWidth={100}
+        forceWidths={{
+          search: { expanded: 200, collapsedIcon: 48 },
+          filters: { expanded: 280, collapsedIcon: 48 },
+        }}
+        search={{
+          expanded: <input type="search" aria-label={hub.album.filterTextLabel} />,
+          collapsed: (
+            <IconSheet
+              icon={Search}
+              label={hub.mobileControls.searchLabel}
+              sheetTitle={hub.mobileControls.searchLabel}
+            >
+              <input type="search" aria-label={hub.album.filterTextLabel} />
+            </IconSheet>
+          ),
+        }}
+        filters={{
+          expanded: <span>facets</span>,
+          collapsed: (
+            <IconSheet
+              icon={ListFilter}
+              label={hub.mobileControls.filterLabel}
+              sheetTitle={hub.mobileControls.filterLabel}
+            >
+              <span>facets</span>
+            </IconSheet>
+          ),
+        }}
+      />,
+    );
+    const row = document.querySelector("[data-hub-progressive-control-row]");
+    expect(row?.getAttribute("data-search")).toBe("collapsed-icon");
+    expect(row?.getAttribute("data-filters")).toBe("collapsed-icon");
+    expect(screen.getByRole("button", { name: hub.mobileControls.searchLabel })).toBeTruthy();
     expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
   });
 
-  it("hides the Family icon for a single-family viewer (no familyChips)", () => {
+  it("keeps Add Photos outside collapse as the trailing action", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        addSlot={<button type="button">{hub.album.addPhotosMenu}</button>}
+        emptyNote="(empty)"
+      />,
+    );
+    expect(screen.getByRole("button", { name: hub.album.addPhotosMenu })).toBeTruthy();
+    expect(
+      document.querySelector("[data-hub-progressive-control-row]")?.getAttribute("data-action"),
+    ).toBe("labeled");
+  });
+
+  it("omits Family when no chips are passed", () => {
     render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
+    const row = document.querySelector("[data-hub-progressive-control-row]");
+    expect(row?.getAttribute("data-family")).toBe("none");
     expect(screen.queryByRole("button", { name: hub.mobileControls.familyLabel })).toBeNull();
-    // View + Filter remain (always have content when there's a grid).
-    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
-    expect(screen.getByRole("button", { name: hub.mobileControls.filterLabel })).toBeTruthy();
   });
 
-  it("tapping the Family icon opens a sheet holding the family chips", () => {
+  it("badges collapsed Search for text and Filters for facets separately; never badges Views", () => {
     render(
       <AlbumControls
         photos={ENRICHED}
-        familyChips={<div data-testid="fam-chips">chips</div>}
+        forceAvailableWidth={100}
+        forceWidths={{
+          search: { expanded: 200, collapsedIcon: 48 },
+          filters: { expanded: 280, collapsedIcon: 48 },
+          views: { expanded: 220, collapsedIcon: 48 },
+        }}
         emptyNote="(empty)"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.familyLabel }));
-    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.familyLabel });
-    expect(within(dialog).getByTestId("fam-chips")).toBeTruthy();
-  });
+    const badgePhrase = hub.mobileControls.activeCountAria(1);
 
-  it("tapping the Filter icon opens a sheet holding the album's search field", () => {
-    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
-    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
-    const dialog = screen.getByRole("dialog", { name: hub.mobileControls.filterLabel });
-    expect(within(dialog).getByRole("searchbox", { name: hub.album.filterTextLabel })).toBeTruthy();
-  });
-
-  // ── ADR-0025 Increment 4 — per-icon active badges ──────────────────────────────────────────────
-  // A badged IconSheet trigger's accessible NAME gains the active-count phrase (e.g. "Filter, 1 filter
-  // active"); unbadged it is just the label. So "is it badged?" = its aria-label contains the phrase.
-  const badgePhrase = hub.mobileControls.activeCountAria(1);
-  const iconByLabel = (label: string) => screen.getByRole("button", { name: new RegExp(label) });
-
-  it("badges the Filter icon when a When/facets/search filter is active, and not otherwise", () => {
-    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
-    // Idle: no filter badge.
-    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).not.toContain(
-      badgePhrase,
+    // Idle: neither Search nor Filters badged; Views present but unbadged.
+    expect(
+      screen.getByRole("button", { name: hub.mobileControls.searchLabel }).getAttribute("aria-label"),
+    ).toBe(hub.mobileControls.searchLabel);
+    expect(
+      screen.getByRole("button", { name: hub.mobileControls.filterLabel }).getAttribute("aria-label"),
+    ).toBe(hub.mobileControls.filterLabel);
+    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel }).getAttribute("aria-label")).toBe(
+      hub.mobileControls.viewLabel,
     );
-    // Type a caption/tag search inside the Filter sheet → the Filter icon badges.
-    fireEvent.click(iconByLabel(hub.mobileControls.filterLabel));
+
+    // Text search → Search badge only.
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.searchLabel }));
     fireEvent.change(screen.getByRole("searchbox", { name: hub.album.filterTextLabel }), {
       target: { value: "wedding" },
     });
-    expect(iconByLabel(hub.mobileControls.filterLabel).getAttribute("aria-label")).toContain(
-      badgePhrase,
-    );
+    expect(
+      screen.getByRole("button", { name: new RegExp(hub.mobileControls.searchLabel) }).getAttribute(
+        "aria-label",
+      ),
+    ).toContain(badgePhrase);
+    expect(
+      screen.getByRole("button", { name: hub.mobileControls.filterLabel }).getAttribute("aria-label"),
+    ).toBe(hub.mobileControls.filterLabel);
+
+    // Clear text, engage a facet → Filters badge only.
+    fireEvent.change(screen.getByRole("searchbox", { name: hub.album.filterTextLabel }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
+    const period = screen.getByRole("combobox", { name: hub.album.filterPeriodLabel });
+    fireEvent.change(period, { target: { value: "thisYear" } });
+    expect(
+      screen.getByRole("button", { name: hub.mobileControls.searchLabel }).getAttribute("aria-label"),
+    ).toBe(hub.mobileControls.searchLabel);
+    expect(
+      screen.getByRole("button", { name: new RegExp(hub.mobileControls.filterLabel) }).getAttribute(
+        "aria-label",
+      ),
+    ).toContain(badgePhrase);
   });
 
-  it("badges the Family icon when the family filter is a subset (familyFilterActive), not otherwise", () => {
+  it("badges collapsed Family when familyFilterActive", () => {
+    const badgePhrase = hub.mobileControls.activeCountAria(1);
     const { rerender } = render(
       <AlbumControls
         photos={ENRICHED}
         familyChips={<div data-testid="fam-chips">chips</div>}
         familyFilterActive
+        forceAvailableWidth={100}
+        forceWidths={{ family: { expanded: 200, collapsedIcon: 48 } }}
         emptyNote="(empty)"
       />,
     );
-    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).toContain(
-      badgePhrase,
-    );
+    expect(
+      screen.getByRole("button", { name: new RegExp(hub.mobileControls.familyLabel) }).getAttribute(
+        "aria-label",
+      ),
+    ).toContain(badgePhrase);
     rerender(
       <AlbumControls
         photos={ENRICHED}
         familyChips={<div data-testid="fam-chips">chips</div>}
         familyFilterActive={false}
+        forceAvailableWidth={100}
+        forceWidths={{ family: { expanded: 200, collapsedIcon: 48 } }}
         emptyNote="(empty)"
       />,
     );
-    expect(iconByLabel(hub.mobileControls.familyLabel).getAttribute("aria-label")).not.toContain(
-      badgePhrase,
-    );
+    expect(
+      screen.getByRole("button", { name: hub.mobileControls.familyLabel }).getAttribute("aria-label"),
+    ).toBe(hub.mobileControls.familyLabel);
   });
 
-  it("never badges the View icon", () => {
-    render(<AlbumControls photos={ENRICHED} emptyNote="(empty)" />);
-    // View is never badged, so its trigger's accessible name is EXACTLY "View" (exact match — a loose
-    // /View/ regex would also hit the Grid/Masonry/List controls inside the sheet).
-    expect(screen.getByRole("button", { name: hub.mobileControls.viewLabel })).toBeTruthy();
+  it("opens collapsed Family / Filters panels via IconSheet (sheet/popover shells)", () => {
+    render(
+      <AlbumControls
+        photos={ENRICHED}
+        familyChips={<div data-testid="fam-chips">chips</div>}
+        forceAvailableWidth={100}
+        forceWidths={{
+          family: { expanded: 200, collapsedIcon: 48 },
+          filters: { expanded: 280, collapsedIcon: 48 },
+        }}
+        emptyNote="(empty)"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.familyLabel }));
+    expect(
+      within(screen.getByRole("dialog", { name: hub.mobileControls.familyLabel })).getByTestId(
+        "fam-chips",
+      ),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: hub.mobileControls.filterLabel }));
+    expect(
+      within(screen.getByRole("dialog", { name: hub.mobileControls.filterLabel })).getByRole(
+        "combobox",
+        { name: hub.album.filterPeriodLabel },
+      ),
+    ).toBeTruthy();
   });
 });
 
 describe("AlbumControls empty album", () => {
-  it("shows a minimal toolbar (Add Photos + family chips) above the empty note — no grid, no filters", () => {
+  it("shows Family + Add Photos above the empty note — no Search/Filters/Views, no grid", () => {
     render(
       <AlbumControls
         photos={[]}
@@ -439,12 +488,12 @@ describe("AlbumControls empty album", () => {
         emptyNote="Nothing here yet"
       />,
     );
-    // Add Photos + chips still render (the add flow is never hidden by an empty album)…
+    expect(document.querySelectorAll("[data-hub-progressive-control-row]")).toHaveLength(1);
     expect(screen.getByRole("button", { name: hub.album.addPhotosMenu })).toBeTruthy();
-    expect(screen.getByTestId("fam-chips")).toBeTruthy();
+    expect(screen.getAllByTestId("fam-chips").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Nothing here yet")).toBeTruthy();
-    // …but the filter/view controls (which would steer nothing) and the grid do not.
     expect(screen.queryByRole("radiogroup", { name: hub.album.viewSelectorAria })).toBeNull();
     expect(screen.queryByRole("combobox", { name: hub.album.filterPeriodLabel })).toBeNull();
+    expect(screen.queryByRole("searchbox", { name: hub.album.filterTextLabel })).toBeNull();
   });
 });

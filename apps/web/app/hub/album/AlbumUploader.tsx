@@ -96,6 +96,7 @@ export function AlbumUploader({
   googlePhotosOauthError = null,
   onImportFiles,
   onImportGoogle,
+  iconified,
 }: {
   families: AlbumFamilyOption[];
   currentFamilyId: string;
@@ -131,10 +132,15 @@ export function AlbumUploader({
    *  pending tiles) instead of running the batched actions. Absent → today's self-driving behavior. */
   onImportFiles?: (files: File[], familyIds: string[]) => void;
   onImportGoogle?: (sessionId: string, familyIds: string[]) => void;
+  /**
+   * Progressive control row (#302): when set, overrides compact-breakpoint iconification so Add Photos
+   * iconifies by measured row width. Omit to keep the legacy useIsCompact path.
+   */
+  iconified?: boolean;
 }) {
   const router = useRouter();
-  // ADR-0025 Increment 3 Step B: iconify the Add-Photos trigger on the compact strip (labeled on
-  // desktop). SSR/first-paint = desktop (labeled), so no hydration mismatch; behavior/menu unchanged.
+  // ADR-0025 Increment 3 Step B / #302: iconify the Add-Photos trigger under width pressure (or on the
+  // legacy compact strip when `iconified` is omitted). SSR/first-paint = labeled.
   const compact = useIsCompact();
   const fileInputRef = useRef<HTMLInputElement>(null);
   // The Add Photos trigger — the destination modal restores focus here when it closes (#94), since the
@@ -656,7 +662,7 @@ export function AlbumUploader({
           <AddPhotosMenu
             label={hub.album.addPhotosMenu}
             icon={
-              compact ? (
+              (iconified ?? compact) ? (
                 <ImagePlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
               ) : undefined
             }

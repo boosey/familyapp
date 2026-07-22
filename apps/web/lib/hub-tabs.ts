@@ -38,3 +38,22 @@ export function familyTabBadge(pendingCount: number): number | undefined {
 export function requestsInScope<T extends { familyId: string }>(rows: T[], scope: string): T[] {
   return scope === "all" ? rows : rows.filter((r) => r.familyId === scope);
 }
+
+/**
+ * Per-family pending-request chip badges for the Requests progressive Family unit (#140 / #297).
+ * Returns serializable maps only — never a formatter fn — so Server Components can pass them across
+ * the RSC boundary into client `<FamilyChips>` without Flight 500s.
+ */
+export function pendingRequestChipBadges(
+  pending: ReadonlyArray<{ familyId: string }>,
+  labelFor: (count: number) => string,
+): { badges: Record<string, number>; badgeLabels: Record<string, string> } {
+  const badges = pending.reduce<Record<string, number>>((acc, r) => {
+    acc[r.familyId] = (acc[r.familyId] ?? 0) + 1;
+    return acc;
+  }, {});
+  const badgeLabels = Object.fromEntries(
+    Object.entries(badges).map(([familyId, count]) => [familyId, labelFor(count)]),
+  );
+  return { badges, badgeLabels };
+}

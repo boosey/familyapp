@@ -8,7 +8,8 @@
  * Server component. It fetches ALL of the viewer's steward requests (each already authorized), scopes
  * them to the single family selected via the shared `?families=` filter (#159 — the Requests surface
  * now shares the URL-driven family selector instead of a bespoke client "designator"), and renders:
- *   1. the shared single-select <FamilyChips> (`?families=`) — badged per-family with pending counts;
+ *   1. the progressive FamilySurfaceNav row (#297) with Tree/List/Requests + Family chips (badged
+ *      per-family with pending counts) + Invite — chips live IN the control row, not a second toolbar;
  *   2. the "Requests to join" heading + an <InfoTooltip> (#160 — the steward instruction moved off an
  *      always-on paragraph into an on-demand tooltip);
  *   3. the presentational <RequestsList> of the scoped rows.
@@ -22,9 +23,11 @@ import {
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
-import { requestsInScope } from "@/lib/hub-tabs";
+import { pendingRequestChipBadges, requestsInScope } from "@/lib/hub-tabs";
 import { FamilyChips } from "@/app/hub/FamilyChips";
+import { FamilySurfaceNav } from "@/app/hub/FamilySurfaceNav";
 import { InfoTooltip } from "@/app/hub/InfoTooltip";
+import familyStyles from "./FamilyTab.module.css";
 import { RequestsList, type RequestRow } from "./RequestsList";
 
 async function approve(formData: FormData): Promise<void> {
@@ -54,12 +57,23 @@ async function decline(formData: FormData): Promise<void> {
 export async function RequestsTab({
   families = [],
   scopeFamilyId = "all",
+  surface,
 }: {
   families?: { id: string; name: string; shortName?: string | null }[];
   /** The single resolved scope family id from the shared `?families=` filter, or "all" (show every
    *  stewarded family's requests — the fallback for a scopeless / non-member deep-link). */
   scopeFamilyId?: string;
-} = {}) {
+  /**
+   * Progressive control-row data for {@link FamilySurfaceNav} (#297). Requests owns the row (like
+   * FamilyTab on tree/list) so Family chips fold into the same chrome instead of a second toolbar.
+   */
+  surface: {
+    familiesParam: string | null;
+    showRequests: boolean;
+    requestsBadge?: number;
+    inviteHref?: string;
+  };
+}) {
   const { db, auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") {
@@ -102,19 +116,10 @@ export async function RequestsTab({
 
   // #140 per-family pending-request counts from the FULL pending set (independent of the selected
   // family), so every chip carries its own count; they sum to the aggregate Requests badge upstream.
-  const pendingCountByFamily = pending.reduce<Record<string, number>>((acc, r) => {
-    acc[r.familyId] = (acc[r.familyId] ?? 0) + 1;
-    return acc;
-  }, {});
-  // Precompute the badge accessible-name STRINGS here (in the server component) rather than passing the
-  // `pendingCountAria` copy fn down: <FamilyChips> is a client component, and a plain function can't
-  // cross the RSC boundary ("Functions cannot be passed directly to Client Components…") — doing so
-  // 500'd this tab. Strings serialize; the fn does not.
-  const pendingCountLabels = Object.fromEntries(
-    Object.entries(pendingCountByFamily).map(([familyId, count]) => [
-      familyId,
-      hub.requests.pendingCountAria(count),
-    ]),
+  // Precompute serializable badge label STRINGS — a formatter fn can't cross the RSC boundary.
+  const { badges: pendingCountByFamily, badgeLabels: pendingCountLabels } = pendingRequestChipBadges(
+    pending,
+    hub.requests.pendingCountAria,
   );
 
   // Scope the already-authorized rows to the selected family via the shared pure helper (the SAME the
@@ -122,16 +127,31 @@ export async function RequestsTab({
   const visiblePending = requestsInScope(pending, scopeFamilyId);
   const visibleDecided = requestsInScope(decided, scopeFamilyId);
 
-  return (
-    <div>
-      {/* Family-selector row (#159): the shared single-select FamilyChips, writing `?families=`. It
-          self-hides for a <2-family viewer. Badged per-family with pending counts (#140). */}
+  // Progressive Family unit: gate on ≥2 families so a truthy empty chip element never mounts a Family
+  // icon. Badged per-family with pending counts (#140).
+  const familyChips =
+    families.length >= 2 ? (
       <FamilyChips
         singleSelect
+        inline
         families={families}
         selected={[scopeFamilyId]}
         badges={pendingCountByFamily}
         badgeLabels={pendingCountLabels}
+        rowClassName={familyStyles.familyChipsScroll}
+      />
+    ) : null;
+
+  return (
+    <div>
+      {/* Progressive control row (#297): Sub tabs + Family chips + Invite — one row, not a second toolbar. */}
+      <FamilySurfaceNav
+        active="requests"
+        familiesParam={surface.familiesParam}
+        showRequests={surface.showRequests}
+        requestsBadge={surface.requestsBadge}
+        inviteHref={surface.inviteHref}
+        row2Left={familyChips}
       />
 
       <h2

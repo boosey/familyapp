@@ -19,6 +19,7 @@ import {
   denyEdge,
   endMembership,
   hideEdge,
+  planInviteAcceptPlacement,
   resolveKinshipProjection,
   type AuthContext,
   type ResolvedKinshipEdge,
@@ -288,6 +289,54 @@ describe("regression: an invite that said 'son' places the member on the tree at
       (e) => e.edgeType === "parent_of" && e.personAId === steward.id && e.personBId === alex.id,
     );
     expect(placed).toBe(true);
+  });
+});
+
+// #320 — invite-accept uses the shared generative write path (writeRelationEdges), not a parallel
+// insert dialect. ADR-0023 exclusions stay as adapter policy: only direct parent/child/partner.
+describe("invite-accept shared generative path (#320)", () => {
+  it("ADR-0023 adapter maps only direct primitives — never sibling/grandparent", () => {
+    const relations = (
+      ["wife", "husband", "mother", "father", "son", "daughter"] as const
+    ).map((r) => planInviteAcceptPlacement(r).relation);
+    expect(new Set(relations)).toEqual(new Set(["partner", "parent", "child"]));
+    expect(relations).not.toContain("sibling");
+    expect(relations).not.toContain("grandparent");
+  });
+
+  it("accept-as-mother yields one parent_of edge via shared nature default; no second Person minted", async () => {
+    const { steward, fam } = await familyWithSteward();
+    const invitee = await makePerson(db, "Maria Mother");
+    const personsBefore = (await db.select({ id: persons.id }).from(persons)).length;
+
+    const { token } = await createInvitation(db, {
+      familyId: fam.id,
+      inviterPersonId: steward.id,
+      inviteeName: "Maria Mother",
+      relationship: "mother",
+    });
+    await acceptInvitation(db, { token, acceptedPersonId: invitee.id });
+
+    const edges = await edgesOf(fam.id, steward.id);
+    const parentEdges = edges.filter((e) => e.edgeType === "parent_of");
+    expect(parentEdges).toHaveLength(1);
+    expect(parentEdges[0]).toMatchObject({
+      personAId: invitee.id,
+      personBId: steward.id,
+      // Shared generative default (defaultParentChildNature) — not an invite-forked "unknown".
+      nature: "biological",
+    });
+    // No ADR-0017 bridge/placeholder minted on accept (direct parent only).
+    expect((await db.select({ id: persons.id }).from(persons)).length).toBe(personsBefore);
+  });
+
+  it("accept-as-son uses the same shared parent/child nature default as manual place", async () => {
+    const { steward, inviteeId, fam } = await inviteAndAccept("son");
+    const edges = await edgesOf(fam.id, steward.id);
+    const edge = edges.find(
+      (e) => e.edgeType === "parent_of" && e.personAId === steward.id && e.personBId === inviteeId,
+    );
+    expect(edge?.nature).toBe("biological");
   });
 });
 
