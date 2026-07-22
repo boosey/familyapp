@@ -16,8 +16,8 @@
  * separate fact channel (`deriveAndPersistStoryDate`); it feeds the probe, it does not ask.
  */
 import type { LanguageModel } from "@chronicle/pipeline";
-import type { BiographicalProfile, FollowUpPolicy, OccurredKind } from "@chronicle/db";
-import { extractStatedLifeEvents, resolveStatedStoryDate } from "@chronicle/core";
+import type { BiographicalProfile, FollowUpPolicy } from "@chronicle/db";
+import { deriveLiveStoryDateUpdate } from "@chronicle/core";
 import type {
   AnchorSource,
   AskSource,
@@ -83,35 +83,25 @@ export interface InterviewerDeps {
   /** Optional policy override for gap follow-ups; defaults to `resolveFollowUpPolicy({enabled:true})`. */
   followUpPolicy?: Partial<FollowUpPolicy>;
   /**
-   * Optional persistence seam for live Story date derivation (issue #243). When present AND the
-   * session was opened with `activeStoryId`, every non-intake response is run through the pure
-   * Tier A `resolveStatedStoryDate` (over the story text so far, against the anchors' birthDate + lifeEvents)
-   * and a resolved occurrence is persisted with its provenance note. Omit either to keep the
-   * session derivation-free (the feature lands dark by default, like the gap evaluator).
+   * Optional persistence seam for live Story date derivation (issue #243 / #321). When present AND the
+   * session was opened with `activeStoryId`, every non-intake response is run through the shared
+   * `deriveLiveStoryDateUpdate` (Tier A + rank policy over the story text so far) and upgrades are
+   * persisted with their provenance note. Omit either to keep the session derivation-free (the
+   * feature lands dark by default, like the gap evaluator).
    */
   storyDateSink?: StoryDateSink;
   /**
-   * Optional persistence seam for life-event capture (issue #245). When present AND live Story
+   * Optional persistence seam for life-event capture (issue #245 / #321). When present AND live Story
    * date derivation is active (storyDateSink + activeStoryId — capture is a by-product of
-   * story-date capture and rides the same gate), every non-intake response is run through the
-   * pure `extractStatedLifeEvents`; a stated anchor fact ("we married in '58") is recorded on
-   * the narrator, idempotently (person + kind + date) at the core write side. Later sessions
-   * load the stored events with the anchors inflow, so anchor-relative references ("ten years
-   * after we married") resolve without the narrator repeating themselves. Omit to keep the
-   * session capture-free (the feature lands dark by default).
+   * story-date capture and rides the same gate), stated life events from the shared live update
+   * are recorded on the narrator, idempotently (person + kind + date) at the core write side.
+   * Later sessions load the stored events with the anchors inflow. Omit to keep the session
+   * capture-free (the feature lands dark by default).
    */
   lifeEventSink?: LifeEventSink;
   /** Optional fixed voice id, so the persona is the same every session (a dignity requirement). */
   voiceId?: string;
 }
-
-/**
- * Precision rank of a Story date form (ADR-0026 precedence: date > period > circa). Live
- * derivation persists monotonically: a later take may REFINE the date (period → date) but never
- * downgrade it — the resolver never invents precision, so a less precise later resolution adds
- * nothing and is not persisted.
- */
-const OCCURRENCE_PRECISION_RANK: Record<OccurredKind, number> = { circa: 1, period: 2, date: 3 };
 
 export interface InterviewSessionOptions {
   narratorPersonId: string;
@@ -346,65 +336,47 @@ export async function createInterviewSession(
   }
 
   /**
-   * Live Story date derivation (issue #243, ADR-0026). Thin:
-   *   - no sink configured, or no activeStoryId bound   → skip (derivation lands dark).
-   *   - resolver returns unresolvable                    → persist nothing (the temporal probe in
-   *                                                        the cascade will ask, at most once).
-   *   - resolution no more precise than what's persisted → skip (never downgrade).
-   * Otherwise the resolved occurrence is persisted with its provenance note through the sink.
-   * The resolver is pure (no LLM, no clock, never throws), but the sink is I/O — so the whole
-   * step is best-effort: a failure must never break the session.
+   * Live Story date derivation (issue #243 / #321, ADR-0026). Thin I/O over the shared
+   * `deriveLiveStoryDateUpdate` seam:
+   *   - no sink configured, or no activeStoryId bound → skip (derivation lands dark).
+   *   - shared policy returns nothing to persist       → leave Undated / keep existing rank.
+   * Otherwise the occurrence is persisted through the sink. Best-effort: sink failures must
+   * never break the session. Life-event capture runs via the same shared extract, recorded
+   * through LifeEventSink independently (a capture failure must not cost the story's date).
    */
   async function deriveAndPersistStoryDate(utterance: string): Promise<void> {
     const sink = deps.storyDateSink;
     const storyId = opts.activeStoryId;
     if (!sink || !storyId) return;
     tellingParts.push(utterance);
-    await captureStatedLifeEvents(utterance);
+
+    const update = deriveLiveStoryDateUpdate({
+      storyText: tellingParts.join("\n"),
+      lifeEventText: utterance,
+      birthDate: anchors?.birthDate ?? null,
+      lifeEvents: anchors?.lifeEvents ?? [],
+      existingRank: persistedDateRank,
+    });
+
+    const lifeSink = deps.lifeEventSink;
+    if (lifeSink && update.statedLifeEvents.length > 0) {
+      try {
+        for (const event of update.statedLifeEvents) {
+          await lifeSink.recordStatedLifeEvent({ personId: state.narratorPersonId, event });
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("life-event capture failed (narrator=%s):", state.narratorPersonId, e);
+      }
+    }
+
+    if (!update.toPersist) return;
     try {
-      // Tier A only on the live path: the narrator's STATED calendar auto-dates immediately.
-      // Relative/age/era language stays Undated here and flows to the one temporal ask (and the
-      // finish-time LLM-ref backstop) — never a silent heuristic guess (ADR-0026 §4.4/§4.7).
-      const resolution = resolveStatedStoryDate({
-        text: tellingParts.join("\n"),
-        birthDate: anchors?.birthDate ?? null,
-        lifeEvents: anchors?.lifeEvents ?? [],
-      });
-      if (resolution.status !== "resolved") return;
-      const rank = OCCURRENCE_PRECISION_RANK[resolution.occurrence.kind];
-      if (rank <= persistedDateRank) return;
-      await sink.persistResolvedStoryDate({ storyId, occurrence: resolution.occurrence });
-      persistedDateRank = rank;
+      await sink.persistResolvedStoryDate({ storyId, occurrence: update.toPersist });
+      persistedDateRank = update.resultingRank;
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("story-date derivation failed (narrator=%s):", state.narratorPersonId, e);
-    }
-  }
-
-  /**
-   * Life-event capture (issue #245, ADR-0026): a telling that STATES an anchor fact ("we married
-   * in '58") stores the reusable event on the narrator in addition to resolving the story's own
-   * date. Runs per utterance, BEFORE the story-date resolution, on the same gate (capture is a
-   * by-product of story-date capture) — but independently best-effort: a capture failure must
-   * not cost the story's date. The extractor is pure; the events it returns are recorded
-   * through the sink, which dedupes per person + kind + date at the core write side. The stored
-   * event does NOT join THIS session's anchors (they are the stable snapshot loaded at start);
-   * it anchors later stories' derivations from the next session on.
-   */
-  async function captureStatedLifeEvents(utterance: string): Promise<void> {
-    const sink = deps.lifeEventSink;
-    if (!sink) return;
-    try {
-      const events = extractStatedLifeEvents({
-        text: utterance,
-        birthDate: anchors?.birthDate ?? null,
-      });
-      for (const event of events) {
-        await sink.recordStatedLifeEvent({ personId: state.narratorPersonId, event });
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn("life-event capture failed (narrator=%s):", state.narratorPersonId, e);
     }
   }
 

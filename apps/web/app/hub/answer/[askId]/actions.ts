@@ -19,8 +19,8 @@ import {
   getNarratorBiographicalContext,
   listLifeEventsForPerson,
   recordStatedLifeEvent,
-  extractStatedLifeEvents,
-  resolveStatedStoryDate,
+  deriveLiveStoryDateUpdate,
+  occurrencePrecisionRank,
   listStoryRecordings,
   appendVoiceTakeContribution,
   appendTypedTakeContribution,
@@ -31,7 +31,6 @@ import {
   listFollowUpDecisionsForStory,
   listActiveFamiliesForPerson,
 } from "@chronicle/core";
-import type { OccurredKind } from "@chronicle/db";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
   augmentProfileFromStory,
@@ -156,13 +155,11 @@ export type FollowUpDatingContext = {
   alreadyAsked: boolean;
 };
 
-/** Precision rank — never downgrade a more precise occurrence already on the story. */
-const OCCURRENCE_PRECISION_RANK: Record<OccurredKind, number> = { circa: 1, period: 2, date: 3 };
-
 /**
- * Live answer-surface dating (ADR-0026): Tier A stated-calendar parse + life-event capture,
- * then a dating context for the temporal system probe. Best-effort — failures leave the story
- * Undated and still return a usable context so the cascade can ask once.
+ * Live answer-surface dating (ADR-0026 / #321): thin I/O over the shared
+ * `deriveLiveStoryDateUpdate` seam (Tier A + rank + life-event extract), then a dating
+ * context for the temporal system probe. Best-effort — failures leave the story Undated
+ * and still return a usable context so the cascade can ask once.
  */
 export async function prepareAnswerDatingContext(
   db: Database,
@@ -184,10 +181,16 @@ export async function prepareAnswerDatingContext(
     const birthDate = bio?.birthDate ?? null;
     const lifeEvents = await listLifeEventsForPerson(db, args.ownerPersonId);
 
+    const update = deriveLiveStoryDateUpdate({
+      storyText: args.text,
+      birthDate,
+      lifeEvents,
+      existingRank: occurrencePrecisionRank(story.occurredKind),
+    });
+
     // Life-event capture is a by-product of dating — stated anchor facts only (ADR-0026 §4.6).
     try {
-      const events = extractStatedLifeEvents({ text: args.text, birthDate });
-      for (const event of events) {
+      for (const event of update.statedLifeEvents) {
         await recordStatedLifeEvent(db, args.ownerPersonId, event);
       }
     } catch (err) {
@@ -197,27 +200,16 @@ export async function prepareAnswerDatingContext(
       });
     }
 
-    let dateUnresolved = story.occurredKind === null;
-    const resolution = resolveStatedStoryDate({ text: args.text, birthDate, lifeEvents });
-    if (resolution.status === "resolved") {
-      const existingRank = story.occurredKind
-        ? OCCURRENCE_PRECISION_RANK[story.occurredKind]
-        : 0;
-      const nextRank = OCCURRENCE_PRECISION_RANK[resolution.occurrence.kind];
-      if (nextRank > existingRank) {
-        await applyResolvedStoryDate(db, args.storyId, resolution.occurrence);
-        plog("answer", "live Tier A dated story", {
-          story: args.storyId,
-          kind: resolution.occurrence.kind,
-          date: resolution.occurrence.date,
-        });
-      }
-      dateUnresolved = false;
-    } else if (story.occurredKind !== null) {
-      dateUnresolved = false;
+    if (update.toPersist) {
+      await applyResolvedStoryDate(db, args.storyId, update.toPersist);
+      plog("answer", "live Tier A dated story", {
+        story: args.storyId,
+        kind: update.toPersist.kind,
+        date: update.toPersist.date,
+      });
     }
 
-    return { dateUnresolved, alreadyAsked: false };
+    return { dateUnresolved: update.dateUnresolved, alreadyAsked: false };
   } catch (err) {
     plogError("answer", "prepareAnswerDatingContext failed (leaving Undated)", {
       story: args.storyId,
