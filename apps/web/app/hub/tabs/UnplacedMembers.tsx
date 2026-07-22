@@ -24,9 +24,8 @@ import {
   listPlacedPersonsAction,
   setMemberNonFamilyAction,
 } from "../tree/actions";
-import { addRelativeAction } from "../kin/actions";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
-import type { PlaceConfirmSubject } from "../tree/place-confirm";
+import type { MintPlacement, PlaceConfirmSubject, PlacementResult } from "../tree/place-confirm";
 import {
   setActivePlaceDrag,
   writePlaceDrag,
@@ -63,7 +62,8 @@ export interface UnplacedMembersProps {
   onCancelCanvasPlace?: () => void;
   /** Overridable in tests so the actions can be stubbed without a server round-trip. */
   onLink?: typeof linkExistingMemberAction;
-  onMint?: typeof addRelativeAction;
+  /** Typed mint (#318) — FormData is not the seam; omit to use commitPlaceMint default. */
+  onMint?: (placement: MintPlacement) => Promise<PlacementResult>;
   onSetNonFamily?: typeof setMemberNonFamilyAction;
   onEndMembership?: typeof endMembershipAction;
   onFetchAnchors?: typeof listPlacedPersonsAction;
@@ -89,7 +89,7 @@ export function UnplacedMembers({
   canvasPlaceSubject = null,
   onCancelCanvasPlace,
   onLink = linkExistingMemberAction,
-  onMint = addRelativeAction,
+  onMint,
   onSetNonFamily = setMemberNonFamilyAction,
   onEndMembership = endMembershipAction,
   onFetchAnchors = listPlacedPersonsAction,

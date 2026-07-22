@@ -1,32 +1,34 @@
 "use client";
 
 /**
- * Add-a-relative form (issue #32, blended placement #285) — client component wrapping the
- * `addRelativeAction` server action.
+ * Add-a-relative form (issue #32, blended placement #285 / #318) — client component for the
+ * secondary +/kebab mint path.
  *
- * Minimal, matching the Kindred form conventions already used by the Ask tab (`.kin-form-label` /
- * `.kin-field` / `<KindredButton>`): a relation `<select>` (the five v1 relations), an OPTIONAL name
- * (blank => core mints an anonymous bridge relative), and optional DOB + life status. The current
- * family scope rides along in a hidden field; the server re-validates it (never trusts the client).
+ * Mint goes through typed {@link commitPlaceMint} / Placement (#318) — FormData is only used to
+ * collect HTML field values, then marshalled into a MintPlacement. Link uses {@link commitPlaceLink}.
  *
  * #285 / ADR-0027:
  *   - Child: co-parent checkboxes (multi-partner); none checked = this-parent-only (half by derivation).
  *   - Parent/child: nature defaults to biological (editable).
  *   - Partner: when the anchor has kids, confirm offer for step parent-of before write (never silent);
- *     declining writes partner-only.
+ *     declining writes partner-only. Offer orchestration is shared via {@link resolvePartnerChildrenOffer}.
  *
  * #251 / ADR-0023: when the typed name matches an unplaced family member, we pause and offer to
- * `linkExistingMember` (connect the person already in the family) instead of silently minting a
- * duplicate. "Add as someone new" still calls `addRelativeAction`. Offer-never-silent.
+ * link existing instead of silently minting a duplicate. Offer-never-silent.
  */
 import { useState, useTransition } from "react";
 import type { AddRelativeRelation, UnplacedMember } from "@chronicle/core";
-import type { KinshipNature } from "@chronicle/db";
+import type { KinshipNature, PersonSex } from "@chronicle/db";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { addRelativeAction } from "./actions";
 import { linkExistingMemberAction } from "../tree/actions";
-import { commitPlaceLink } from "../tree/place-confirm";
+import {
+  commitPlaceLink,
+  commitPlaceMint,
+  resolvePartnerChildrenOffer,
+  type MintPlacement,
+  type PlacementResult,
+} from "../tree/place-confirm";
 import { matchUnplacedByDisplayName, type UnplacedNameCandidate } from "./match-unplaced";
 
 const PARENT_CHILD_NATURES: readonly KinshipNature[] = [
@@ -37,6 +39,52 @@ const PARENT_CHILD_NATURES: readonly KinshipNature[] = [
   "unknown",
 ];
 
+type PendingMintFields = {
+  displayName?: string;
+  birthDate?: string;
+  lifeStatus?: "living" | "deceased";
+  deathYear?: number;
+  sex?: PersonSex;
+  nature?: KinshipNature;
+  coParentPersonIds?: string[];
+};
+
+function parseMintFieldsFromForm(
+  formData: FormData,
+  relation: AddRelativeRelation,
+  nature: KinshipNature,
+  selectedCoParents: ReadonlySet<string>,
+): PendingMintFields {
+  const rawName = formData.get("displayName");
+  const displayName = typeof rawName === "string" ? rawName.trim() : "";
+  const rawBirthDate = formData.get("birthDate");
+  const birthDate =
+    typeof rawBirthDate === "string" && rawBirthDate.trim() ? rawBirthDate.trim() : undefined;
+  const rawLifeStatus = formData.get("lifeStatus");
+  const lifeStatus = rawLifeStatus === "deceased" ? "deceased" : "living";
+  const rawDeathYear = formData.get("deathYear");
+  let deathYear: number | undefined;
+  if (lifeStatus === "deceased" && typeof rawDeathYear === "string" && rawDeathYear.trim()) {
+    const parsed = Number(rawDeathYear.trim());
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= new Date().getFullYear()) {
+      deathYear = parsed;
+    }
+  }
+  const rawSex = formData.get("sex");
+  const sex =
+    rawSex === "male" || rawSex === "female" || rawSex === "unknown" ? rawSex : undefined;
+  const coParents = relation === "child" ? [...selectedCoParents] : [];
+  return {
+    ...(displayName ? { displayName } : {}),
+    ...(birthDate ? { birthDate } : {}),
+    lifeStatus,
+    ...(deathYear !== undefined ? { deathYear } : {}),
+    ...(sex && sex !== "unknown" ? { sex } : {}),
+    ...(relation === "parent" || relation === "child" ? { nature } : {}),
+    ...(coParents.length > 0 ? { coParentPersonIds: coParents } : {}),
+  };
+}
+
 export function AddRelativeForm({
   familyId,
   anchorPersonId,
@@ -46,6 +94,7 @@ export function AddRelativeForm({
   childOptions = [],
   unplacedMembers = [],
   onLinkExisting = linkExistingMemberAction,
+  onMint,
   onSuccess,
 }: {
   familyId: string;
@@ -69,21 +118,18 @@ export function AddRelativeForm({
   unplacedMembers?: readonly UnplacedMember[];
   /** Overridable in tests; defaults to the real place-in-tree link action. */
   onLinkExisting?: typeof linkExistingMemberAction;
+  /** Typed mint adapter (#318); defaults to commitPlaceMint → addRelativeTypedAction. */
+  onMint?: (placement: MintPlacement) => Promise<PlacementResult>;
   /** Called after a successful add (no error). The tree modal uses it to close + refetch the anchor. */
   onSuccess?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  // Drives the conditional "Year they died" field — shown ONLY when the relative is deceased
-  // (spec §4). The select is controlled so the death-year field appears/disappears live.
   const [lifeStatus, setLifeStatus] = useState<"living" | "deceased">("living");
-  // Drives the conditional co-parent / partner-offer UI — shown ONLY for the matching relation.
   const [relation, setRelation] = useState<AddRelativeRelation>(initialRelation ?? "parent");
   const [displayName, setDisplayName] = useState("");
   const [nature, setNature] = useState<KinshipNature>("biological");
   const partners = coParentOptions ?? [];
-  // Co-parent checkboxes: preselect the predetermined partner from a couple seam; else none
-  // (this-parent-only until the user checks). Multi-partner: any subset.
   const [selectedCoParents, setSelectedCoParents] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     if (preselectedCoParentId && partners.some((p) => p.id === preselectedCoParentId)) {
@@ -91,18 +137,14 @@ export function AddRelativeForm({
     }
     return initial;
   });
-  // #251: after submit hits a name match, hold the pending FormData + candidates until the user
-  // picks "connect existing" or "add as someone new".
   const [pendingMatch, setPendingMatch] = useState<{
-    formData: FormData;
+    fields: PendingMintFields;
     matches: UnplacedNameCandidate[];
     selectedId: string;
   } | null>(null);
-  // #285: partner→kids confirm offer before write (never silent).
-  // When `linkExistingPersonId` is set, confirm/skip calls onLinkExisting (connect-existing path);
-  // otherwise confirm/skip mints via addRelativeAction (create-new path).
+  // Partner→kids offer — selection only; fields held separately. Shared resolvePartnerChildrenOffer.
   const [pendingStepOffer, setPendingStepOffer] = useState<{
-    formData: FormData;
+    fields: PendingMintFields;
     selectedChildIds: Set<string>;
     linkExistingPersonId?: string;
   } | null>(null);
@@ -112,28 +154,22 @@ export function AddRelativeForm({
     return matchUnplacedByDisplayName(name, unplacedMembers, exclude);
   }
 
-  function appendCoParents(formData: FormData) {
-    formData.delete("coParentPersonIds");
-    for (const id of selectedCoParents) {
-      formData.append("coParentPersonIds", id);
-    }
-  }
-
-  function appendStepParents(formData: FormData, childIds: Iterable<string>) {
-    formData.delete("stepParentOfChildIds");
-    for (const id of childIds) {
-      formData.append("stepParentOfChildIds", id);
-    }
-  }
-
-  function mintRelative(formData: FormData) {
+  function mintRelative(fields: PendingMintFields, stepParentOfChildIds: string[] | undefined) {
     setError(null);
     startTransition(async () => {
-      // Mint still posts the full FormData (DOB/sex/life) via addRelativeAction — the same server
-      // action PlaceConfirmModal's commitPlaceMint wraps for the tray New-person path (#286).
-      const result = await addRelativeAction(formData);
-      if (result?.error) {
-        setError(result.error);
+      const res = await commitPlaceMint(
+        familyId,
+        relation,
+        anchorPersonId ?? "",
+        {
+          ...fields,
+          stepParentOfChildIds,
+          anchorChildIds: childOptions.map((c) => c.id),
+        },
+        { onMint },
+      );
+      if (!res.ok) {
+        setError(res.error ?? hub.unplaced.actionFailed);
         return;
       }
       setPendingMatch(null);
@@ -144,59 +180,48 @@ export function AddRelativeForm({
 
   function onSubmit(formData: FormData) {
     setError(null);
-    if (relation === "child") appendCoParents(formData);
-    if (relation === "parent" || relation === "child") {
-      formData.set("nature", nature);
-    }
-
-    const rawName = formData.get("displayName");
-    const typed = typeof rawName === "string" ? rawName : displayName;
+    const fields = parseMintFieldsFromForm(formData, relation, nature, selectedCoParents);
+    const typed = fields.displayName ?? displayName;
     const matches = findMatches(typed);
     if (matches.length > 0) {
       const first = matches[0]!;
-      setPendingMatch({ formData, matches, selectedId: first.personId });
+      setPendingMatch({ fields, matches, selectedId: first.personId });
       return;
     }
 
-    // Partner→kids offer: pause when the anchor has children (ADR-0027 — never silent).
-    if (relation === "partner" && childOptions.length > 0) {
+    const offer = resolvePartnerChildrenOffer({
+      relation,
+      children: childOptions,
+      pendingSelection: null,
+    });
+    if (offer.type === "show-offer") {
       setPendingStepOffer({
-        formData,
-        selectedChildIds: new Set(childOptions.map((c) => c.id)),
+        fields,
+        selectedChildIds: offer.initialSelection,
       });
       return;
     }
 
-    mintRelative(formData);
+    mintRelative(fields, offer.stepParentOfChildIds);
   }
 
-  function linkExistingFromForm(existingPersonId: string, formData: FormData, stepKids: string[]) {
-    const rel = (formData.get("relation") as AddRelativeRelation) || relation;
-    const coParents =
-      rel === "child"
-        ? [...formData.getAll("coParentPersonIds")].filter(
-            (v): v is string => typeof v === "string" && !!v.trim(),
-          )
-        : [];
-    const rawNature = formData.get("nature");
-    const natureArg =
-      (rel === "parent" || rel === "child") &&
-      typeof rawNature === "string" &&
-      (PARENT_CHILD_NATURES as readonly string[]).includes(rawNature)
-        ? (rawNature as KinshipNature)
-        : undefined;
+  function linkExistingFromFields(
+    existingPersonId: string,
+    fields: PendingMintFields,
+    stepParentOfChildIds: string[] | undefined,
+  ) {
     setError(null);
     startTransition(async () => {
-      // Secondary +/kebab connect-existing (#286): same link helper as tray Place / PlaceConfirmModal.
       const res = await commitPlaceLink(
         familyId,
         existingPersonId,
-        rel,
+        relation,
         anchorPersonId ?? "",
         {
-          coParentPersonIds: coParents.length > 0 ? coParents : undefined,
-          stepParentOfChildIds: stepKids.length > 0 ? stepKids : undefined,
-          nature: natureArg,
+          coParentPersonIds: fields.coParentPersonIds,
+          stepParentOfChildIds,
+          nature: fields.nature,
+          anchorChildIds: childOptions.map((c) => c.id),
         },
         { onLink: onLinkExisting },
       );
@@ -213,42 +238,42 @@ export function AddRelativeForm({
   function connectExisting() {
     if (!pendingMatch) return;
     const existingPersonId = pendingMatch.selectedId;
-    const fd = pendingMatch.formData;
-    const rel = (fd.get("relation") as AddRelativeRelation) || relation;
-    // Partner→kids offer before link (ADR-0027 — never silent), same as create-new.
-    if (rel === "partner" && childOptions.length > 0) {
+    const fields = pendingMatch.fields;
+    const offer = resolvePartnerChildrenOffer({
+      relation,
+      children: childOptions,
+      pendingSelection: null,
+    });
+    if (offer.type === "show-offer") {
       setPendingMatch(null);
       setPendingStepOffer({
-        formData: fd,
-        selectedChildIds: new Set(childOptions.map((c) => c.id)),
+        fields,
+        selectedChildIds: offer.initialSelection,
         linkExistingPersonId: existingPersonId,
       });
       return;
     }
-    const stepKids =
-      rel === "partner"
-        ? [...fd.getAll("stepParentOfChildIds")].filter(
-            (v): v is string => typeof v === "string" && !!v.trim(),
-          )
-        : [];
-    linkExistingFromForm(existingPersonId, fd, stepKids);
+    linkExistingFromFields(existingPersonId, fields, offer.stepParentOfChildIds);
   }
 
   function confirmStepOffer(attachKids: boolean) {
     if (!pendingStepOffer) return;
-    const fd = pendingStepOffer.formData;
-    if (attachKids) {
-      appendStepParents(fd, pendingStepOffer.selectedChildIds);
-    } else {
-      appendStepParents(fd, []);
-    }
-    const stepKids = attachKids ? [...pendingStepOffer.selectedChildIds] : [];
+    const selection = attachKids ? pendingStepOffer.selectedChildIds : new Set<string>();
+    const offer = resolvePartnerChildrenOffer({
+      relation,
+      children: childOptions,
+      pendingSelection: selection,
+    });
+    if (offer.type !== "ready") return;
     if (pendingStepOffer.linkExistingPersonId) {
-      linkExistingFromForm(pendingStepOffer.linkExistingPersonId, fd, stepKids);
+      linkExistingFromFields(
+        pendingStepOffer.linkExistingPersonId,
+        pendingStepOffer.fields,
+        offer.stepParentOfChildIds,
+      );
       return;
     }
-    // Create-new path (or create-new after declining an existing-match).
-    mintRelative(fd);
+    mintRelative(pendingStepOffer.fields, offer.stepParentOfChildIds);
   }
 
   const matchName =
@@ -260,9 +285,7 @@ export function AddRelativeForm({
 
   return (
     <form action={onSubmit} style={{ display: "grid", gap: 20 }}>
-      {/* Current family scope — re-validated server-side against the viewer's own families. */}
       <input type="hidden" name="familyId" value={familyId} />
-      {/* Targeted add: the anchor person to hang the new relative off (server re-validates). */}
       {anchorPersonId ? (
         <input type="hidden" name="anchorPersonId" value={anchorPersonId} />
       ) : null}
@@ -551,16 +574,21 @@ export function AddRelativeForm({
             label={hub.kin.existingMatchCreateNew}
             disabled={pending}
             onClick={() => {
-              const fd = pendingMatch.formData;
-              if (relation === "partner" && childOptions.length > 0) {
+              const fields = pendingMatch.fields;
+              const offer = resolvePartnerChildrenOffer({
+                relation,
+                children: childOptions,
+                pendingSelection: null,
+              });
+              if (offer.type === "show-offer") {
                 setPendingMatch(null);
                 setPendingStepOffer({
-                  formData: fd,
-                  selectedChildIds: new Set(childOptions.map((c) => c.id)),
+                  fields,
+                  selectedChildIds: offer.initialSelection,
                 });
                 return;
               }
-              mintRelative(fd);
+              mintRelative(fields, offer.stepParentOfChildIds);
             }}
             data-testid="add-relative-create-new"
           />

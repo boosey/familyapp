@@ -6,19 +6,13 @@
  * relation `<select>`. Without an anchor, no hidden anchor field is emitted. The server action is
  * mocked so this stays a pure client-form test.
  */
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-
-const { addRelativeAction } = vi.hoisted(() => ({
-  addRelativeAction: vi.fn(async (_formData: FormData) => undefined),
-}));
-vi.mock("../app/hub/kin/actions", () => ({ addRelativeAction }));
 
 import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
 
 afterEach(() => {
   cleanup();
-  addRelativeAction.mockClear();
 });
 
 it("renders a hidden anchor input and preselects the relation when targeted", () => {

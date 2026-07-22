@@ -21,13 +21,15 @@ import {
   listPlacedPersonsAction,
   linkExistingMemberAction,
 } from "./actions";
-import { addRelativeAction } from "../kin/actions";
 import {
   commitPlaceLink,
   commitPlaceMint,
   PLACE_CONFIRM_NATURES,
   PLACE_CONFIRM_RELATIONS,
+  resolvePartnerChildrenOffer,
+  type MintPlacement,
   type PlaceConfirmSubject,
+  type PlacementResult,
 } from "./place-confirm";
 import styles from "./place-confirm-modal.module.css";
 
@@ -54,7 +56,8 @@ export interface PlaceConfirmModalProps {
   onClose: () => void;
   onSuccess: () => void;
   onLink?: typeof linkExistingMemberAction;
-  onMint?: typeof addRelativeAction;
+  /** Typed mint adapter (#318) — receives MintPlacement, not FormData. */
+  onMint?: (placement: MintPlacement) => Promise<PlacementResult>;
   onFetchAnchors?: typeof listPlacedPersonsAction;
   onFetchKinOptions?: typeof listPersonKinOptionsAction;
 }
@@ -240,14 +243,18 @@ export function PlaceConfirmModal({
   const showNature = relation === "parent" || relation === "child";
   const gated = pendingStepOffer !== null;
 
-  function doCommit(stepKids: string[]) {
+  function doCommit(stepParentOfChildIds: string[] | undefined) {
     setError(null);
     startTransition(async () => {
       const coParents = relation === "child" ? [...selectedCoParents] : [];
       const writeOpts = {
         coParentPersonIds: coParents.length > 0 ? coParents : undefined,
-        stepParentOfChildIds: relation === "partner" && stepKids.length > 0 ? stepKids : undefined,
+        // Explicit array (possibly empty) when offer resolved — never omit for partner+kids (#318).
+        stepParentOfChildIds:
+          relation === "partner" ? stepParentOfChildIds : undefined,
         nature: showNature ? nature : undefined,
+        // Always pass known kids so Placement rejects unresolved partner offers (#318).
+        anchorChildIds: children.map((c) => c.id),
       };
       if (subject.kind === "link") {
         const res = await commitPlaceLink(
@@ -284,11 +291,16 @@ export function PlaceConfirmModal({
 
   function onSubmit() {
     if (!hasReceiver || !kinOptionsReady) return;
-    if (relation === "partner" && children.length > 0 && pendingStepOffer === null) {
-      setPendingStepOffer(new Set(children.map((c) => c.id)));
+    const offer = resolvePartnerChildrenOffer({
+      relation,
+      children,
+      pendingSelection: pendingStepOffer,
+    });
+    if (offer.type === "show-offer") {
+      setPendingStepOffer(offer.initialSelection);
       return;
     }
-    doCommit(pendingStepOffer ? [...pendingStepOffer] : []);
+    doCommit(offer.stepParentOfChildIds);
   }
 
   const title =
@@ -494,7 +506,14 @@ export function PlaceConfirmModal({
                       className={styles.action}
                       data-testid="place-confirm-step-confirm"
                       disabled={pending}
-                      onClick={() => doCommit([...pendingStepOffer])}
+                      onClick={() => {
+                        const offer = resolvePartnerChildrenOffer({
+                          relation,
+                          children,
+                          pendingSelection: pendingStepOffer,
+                        });
+                        if (offer.type === "ready") doCommit(offer.stepParentOfChildIds);
+                      }}
                     >
                       {pending ? hub.unplaced.placing : hub.kin.stepParentOfferConfirm}
                     </button>

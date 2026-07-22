@@ -1,27 +1,16 @@
 // @vitest-environment jsdom
 /**
  * #251 — add-relative offers connect-existing when the typed name matches an unplaced member,
- * instead of silently minting a duplicate. "Add as someone new" still calls addRelativeAction.
+ * instead of silently minting a duplicate. "Add as someone new" mints via typed Placement (#318).
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UnplacedMember } from "@chronicle/core";
-
-const { addRelativeAction, linkExistingMemberAction } = vi.hoisted(() => ({
-  addRelativeAction: vi.fn(async (_formData: FormData) => undefined),
-  linkExistingMemberAction: vi.fn(async () => ({ ok: true as const })),
-}));
-vi.mock("../app/hub/kin/actions", () => ({ addRelativeAction }));
-vi.mock("../app/hub/tree/actions", () => ({
-  linkExistingMemberAction,
-}));
-
+import type { MintPlacement } from "@/app/hub/tree/placement";
 import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
 
 afterEach(() => {
   cleanup();
-  addRelativeAction.mockClear();
-  linkExistingMemberAction.mockClear();
 });
 
 const UNPLACED: UnplacedMember[] = [
@@ -30,13 +19,16 @@ const UNPLACED: UnplacedMember[] = [
 
 it("offers connect-existing when the typed name matches an unplaced member (#251)", async () => {
   const onSuccess = vi.fn();
+  const onMint = vi.fn(async () => ({ ok: true as const }));
+  const onLinkExisting = vi.fn(async () => ({ ok: true as const }));
   const { container } = render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="john"
       initialRelation="partner"
       unplacedMembers={UNPLACED}
-      onLinkExisting={linkExistingMemberAction}
+      onLinkExisting={onLinkExisting}
+      onMint={onMint}
       onSuccess={onSuccess}
     />,
   );
@@ -48,14 +40,14 @@ it("offers connect-existing when the typed name matches an unplaced member (#251
     fireEvent.submit(container.querySelector("form")!);
   });
 
-  expect(addRelativeAction).not.toHaveBeenCalled();
+  expect(onMint).not.toHaveBeenCalled();
   expect(screen.getByTestId("add-relative-existing-match")).toBeTruthy();
 
   await act(async () => {
     fireEvent.click(screen.getByTestId("add-relative-use-existing"));
   });
 
-  expect(linkExistingMemberAction).toHaveBeenCalledWith(
+  expect(onLinkExisting).toHaveBeenCalledWith(
     "fam-1",
     "kelly",
     "partner",
@@ -68,17 +60,20 @@ it("offers connect-existing when the typed name matches an unplaced member (#251
     },
   );
   expect(onSuccess).toHaveBeenCalled();
-  expect(addRelativeAction).not.toHaveBeenCalled();
+  expect(onMint).not.toHaveBeenCalled();
 });
 
-it("Add as someone new still mints via addRelativeAction (#251)", async () => {
+it("Add as someone new mints via typed MintPlacement (#251/#318)", async () => {
+  const onMint = vi.fn(async (_p: MintPlacement) => ({ ok: true as const }));
+  const onLinkExisting = vi.fn(async () => ({ ok: true as const }));
   const { container } = render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="john"
       initialRelation="partner"
       unplacedMembers={UNPLACED}
-      onLinkExisting={linkExistingMemberAction}
+      onLinkExisting={onLinkExisting}
+      onMint={onMint}
     />,
   );
 
@@ -94,21 +89,26 @@ it("Add as someone new still mints via addRelativeAction (#251)", async () => {
     fireEvent.click(screen.getByTestId("add-relative-create-new"));
   });
 
-  expect(linkExistingMemberAction).not.toHaveBeenCalled();
-  expect(addRelativeAction).toHaveBeenCalledTimes(1);
-  const fd = addRelativeAction.mock.calls[0]![0] as FormData;
-  expect(fd.get("displayName")).toBe("Kelly Boudreaux");
-  expect(fd.get("relation")).toBe("partner");
+  expect(onLinkExisting).not.toHaveBeenCalled();
+  expect(onMint).toHaveBeenCalledTimes(1);
+  const placement = onMint.mock.calls[0]![0];
+  expect(placement.kind).toBe("mint");
+  expect(placement.displayName).toBe("Kelly Boudreaux");
+  expect(placement.relation).toBe("partner");
+  expect(placement.receiverPersonId).toBe("john");
 });
 
 it("mints immediately when the name does not match an unplaced member", async () => {
+  const onMint = vi.fn(async () => ({ ok: true as const }));
+  const onLinkExisting = vi.fn(async () => ({ ok: true as const }));
   const { container } = render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="john"
       initialRelation="partner"
       unplacedMembers={UNPLACED}
-      onLinkExisting={linkExistingMemberAction}
+      onLinkExisting={onLinkExisting}
+      onMint={onMint}
     />,
   );
 
@@ -121,12 +121,14 @@ it("mints immediately when the name does not match an unplaced member", async ()
   });
 
   expect(screen.queryByTestId("add-relative-existing-match")).toBeNull();
-  expect(addRelativeAction).toHaveBeenCalledTimes(1);
-  expect(linkExistingMemberAction).not.toHaveBeenCalled();
+  expect(onMint).toHaveBeenCalledTimes(1);
+  expect(onLinkExisting).not.toHaveBeenCalled();
 });
 
 it("connect-existing for partner with childOptions shows step offer before link (#285)", async () => {
   const onSuccess = vi.fn();
+  const onMint = vi.fn(async () => ({ ok: true as const }));
+  const onLinkExisting = vi.fn(async () => ({ ok: true as const }));
   const kids = [
     { id: "kid-1", name: "Kid One" },
     { id: "kid-2", name: "Kid Two" },
@@ -138,7 +140,8 @@ it("connect-existing for partner with childOptions shows step offer before link 
       initialRelation="partner"
       childOptions={kids}
       unplacedMembers={UNPLACED}
-      onLinkExisting={linkExistingMemberAction}
+      onLinkExisting={onLinkExisting}
+      onMint={onMint}
       onSuccess={onSuccess}
     />,
   );
@@ -157,8 +160,7 @@ it("connect-existing for partner with childOptions shows step offer before link 
     fireEvent.click(screen.getByTestId("add-relative-use-existing"));
   });
 
-  // Must show ADR-0027 offer — never silently partner-only when kids exist.
-  expect(linkExistingMemberAction).not.toHaveBeenCalled();
+  expect(onLinkExisting).not.toHaveBeenCalled();
   expect(screen.getByTestId("add-relative-step-offer")).toBeTruthy();
 
   await act(async () => {
@@ -168,7 +170,7 @@ it("connect-existing for partner with childOptions shows step offer before link 
     fireEvent.click(screen.getByTestId("add-relative-step-confirm"));
   });
 
-  expect(linkExistingMemberAction).toHaveBeenCalledWith(
+  expect(onLinkExisting).toHaveBeenCalledWith(
     "fam-1",
     "kelly",
     "partner",
@@ -181,11 +183,13 @@ it("connect-existing for partner with childOptions shows step offer before link 
     },
   );
   expect(onSuccess).toHaveBeenCalled();
-  expect(addRelativeAction).not.toHaveBeenCalled();
+  expect(onMint).not.toHaveBeenCalled();
 });
 
-it("connect-existing partner step skip links partner-only (#285)", async () => {
+it("connect-existing partner step skip links partner-only with explicit empty ids (#285/#318)", async () => {
   const kids = [{ id: "kid-1", name: "Kid One" }];
+  const onMint = vi.fn(async () => ({ ok: true as const }));
+  const onLinkExisting = vi.fn(async () => ({ ok: true as const }));
   const { container } = render(
     <AddRelativeForm
       familyId="fam-1"
@@ -193,7 +197,8 @@ it("connect-existing partner step skip links partner-only (#285)", async () => {
       initialRelation="partner"
       childOptions={kids}
       unplacedMembers={UNPLACED}
-      onLinkExisting={linkExistingMemberAction}
+      onLinkExisting={onLinkExisting}
+      onMint={onMint}
     />,
   );
 
@@ -211,7 +216,7 @@ it("connect-existing partner step skip links partner-only (#285)", async () => {
     fireEvent.click(screen.getByTestId("add-relative-step-skip"));
   });
 
-  expect(linkExistingMemberAction).toHaveBeenCalledWith(
+  expect(onLinkExisting).toHaveBeenCalledWith(
     "fam-1",
     "kelly",
     "partner",
@@ -219,7 +224,7 @@ it("connect-existing partner step skip links partner-only (#285)", async () => {
     undefined,
     {
       coParentPersonIds: undefined,
-      stepParentOfChildIds: undefined,
+      stepParentOfChildIds: [],
       nature: undefined,
     },
   );
