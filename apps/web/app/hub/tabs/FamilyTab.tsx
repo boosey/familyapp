@@ -103,15 +103,15 @@ export function FamilyTab({
   // do NOT hand the zoom controls to FamilySurfaceNav on compact. SSR/first-paint = desktop.
   const compact = useIsCompact();
 
-  // #169 / #283: unplaced tray is Tree-only. List folds unplaced people into the searchable index
-  // without Place / Not-family / Remove controls.
+  // #169 / #286: Tree tray always mounts (unplaced members + New person). List never hosts it (#283).
   const unplacedTray =
-    view === "tree" && unplaced.length > 0 ? (
+    view === "tree" ? (
       <UnplacedMembers
         familyId={familyId}
         members={unplaced}
         viewerIsSteward={viewerIsSteward}
         variant="tray"
+        showNewPerson
       />
     ) : null;
 
@@ -224,9 +224,9 @@ export function FamilyTab({
             />
             {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
           </div>
-          {/* #161: unplaced members as a "not yet connected" tray BELOW the canvas — a separate strip
-              at the margin, deliberately OUTSIDE computeTreeLayout / the pan-zoom layer so it never
-              destabilizes the pedigree layout engine. List does not host this tray (#283). */}
+          {/* #161/#286: Tree tray (unplaced + New person) BELOW the canvas — outside computeTreeLayout /
+              the pan-zoom layer so it never destabilizes the pedigree layout engine. List does not
+              host this tray (#283). */}
           {unplacedTray}
         </>
       ) : (

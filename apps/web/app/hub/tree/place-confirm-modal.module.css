@@ -1,0 +1,124 @@
+/* Shared place-confirm modal (#286) — overlay geometry mirrors ModalShell / prior PlaceMemberModal. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift, 0 10px 25px rgba(0, 0, 0, 0.18));
+  padding: 24px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dialogTitle {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  font-weight: 500;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.dialogClose {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 4px;
+}
+
+.intro {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.lockedField {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md, 8px);
+}
+
+.action {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  min-height: var(--touch-min);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border-strong);
+  background: transparent;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-danger);
+  margin: 0;
+}
+
+.hint {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  color: var(--text-body);
+}
+
+.fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}

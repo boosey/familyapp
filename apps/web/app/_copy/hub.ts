@@ -1140,14 +1140,29 @@ export const hub = {
     lineGovernHeading: "This relationship",
     lineGovernHit: "Open relationship actions",
   },
+  // Tree place-confirm modal (#286 / ADR-0027) — shared by tray New person + unplaced Place.
+  // Desktop DnD (#287) and mobile Place→tap (#288) reopen this same surface.
+  placeConfirm: {
+    newPersonLabel: "New person",
+    mintHeading: "Place a new person",
+    mintIntro:
+      "Name them (optional), choose who they're related to, and confirm. Partner and child placement ask before writing step or co-parent edges.",
+    mintSubmit: "Add to tree",
+    subjectFieldLabel: "Placing",
+  },
   // Unplaced members (#161, ADR-0023) — active members who touch NO visible kinship edge, so they're
-  // invisible in the graph-only tree. Surfaced in BOTH views (a "not yet connected" tray on the tree,
-  // a section in the relatives list) with three actions: place in tree, leave as non-family, remove.
+  // invisible in the graph-only tree. Surfaced on the Tree tray (#283: List is browse-only) with Place,
+  // leave as non-family, and steward remove. The tray also hosts New person (#286).
   unplaced: {
     // Section / tray heading + the short explanation of why these people show up here.
     heading: "Not yet connected",
     intro:
       "These family members haven't been placed in the tree yet. Connect them to a relative, or set them aside.",
+    // Tray chrome when only New person is shown (no unplaced rows).
+    trayHeading: "Tree tray",
+    trayIntro: "Place someone who isn't on the tree yet, or add a new person.",
+    newPerson: "New person",
+    newPersonAria: "Add a new person to the tree",
     // Accessible group name wrapping the per-member action buttons.
     memberActionsAria: (name: string) => `Actions for ${name}`,
     // Fallback name for a member with no display name recorded.
