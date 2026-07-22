@@ -1,43 +1,53 @@
 "use client";
 /**
- * KinList — the Family tab's List view (2026-07-14). A read-only, searchable list of the viewer's
- * relatives in the current family, mirroring the old /hub/kin list (now removed). Adding relatives moved
- * to the Tree view's per-card affordances, so this surface is purely for browsing/finding kin; the
- * search box filters by name or relation, client-side over the already-loaded list.
+ * KinList — the Family tab's List view. A read-only, searchable people index of the full family
+ * projection (#283 / ADR-0023 amendment): members, edged tree-only relatives, and unplaced members.
+ * Each row shows a membership-first badge (Member vs tree-only) and may show a derived relation chip.
+ * List itself never mutates kinship edges or places members — placement and governance live on Tree.
  *
  * Styling: CSS Modules + data-skin Phase-2 (issue #266). Base classes are skin-neutral; Playful
  * signatures live in KinList.module.css under :global(:root[data-skin="playful"]) — no skin id in
  * component logic.
  */
 import { useMemo, useState } from "react";
-import type { KinListEntry, KinRelation } from "@chronicle/core";
+import type { KinRelation } from "@chronicle/core";
 import { hub } from "@/app/_copy";
+import type { FamilyListPerson } from "@/lib/family-list-people";
 import styles from "./KinList.module.css";
 
 function relationLabel(relation: KinRelation): string {
   return hub.kin.relationLabel[relation];
 }
 
-/** An identified relative shows their own name; an unidentified placeholder reads from its relation. */
-function displayNameFor(entry: KinListEntry): string {
-  if (entry.identified && entry.displayName) return entry.displayName;
-  return hub.kin.unknownOf(relationLabel(entry.relation));
+function membershipLabel(membership: FamilyListPerson["membership"]): string {
+  return membership === "member"
+    ? hub.kin.membershipBadge.member
+    : hub.kin.membershipBadge.treeOnly;
 }
 
-export function KinList({ kin }: { kin: KinListEntry[] }) {
+/** An identified person shows their name; an unidentified placeholder reads from its relation. */
+function displayNameFor(entry: FamilyListPerson): string {
+  if (entry.identified && entry.displayName) return entry.displayName;
+  if (entry.relation) return hub.kin.unknownOf(relationLabel(entry.relation));
+  return hub.kin.unknownRelative;
+}
+
+export function KinList({ people }: { people: FamilyListPerson[] }) {
   const [query, setQuery] = useState("");
 
   const trimmed = query.trim().toLowerCase();
   const results = useMemo(() => {
-    if (!trimmed) return kin;
-    return kin.filter((entry) => {
-      const haystack = `${displayNameFor(entry)} ${relationLabel(entry.relation)}`.toLowerCase();
+    if (!trimmed) return people;
+    return people.filter((entry) => {
+      const relation = entry.relation ? relationLabel(entry.relation) : "";
+      const haystack =
+        `${displayNameFor(entry)} ${relation} ${membershipLabel(entry.membership)}`.toLowerCase();
       return haystack.includes(trimmed);
     });
-  }, [kin, trimmed]);
+  }, [people, trimmed]);
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-testid="family-list">
       <input
         type="search"
         value={query}
@@ -47,7 +57,7 @@ export function KinList({ kin }: { kin: KinListEntry[] }) {
         className={styles.search}
       />
 
-      {kin.length === 0 ? (
+      {people.length === 0 ? (
         <EmptyCard>{hub.kin.empty}</EmptyCard>
       ) : results.length === 0 ? (
         <EmptyCard>{hub.kin.searchNoResults(query.trim())}</EmptyCard>
@@ -56,14 +66,29 @@ export function KinList({ kin }: { kin: KinListEntry[] }) {
           {results.map((entry) => {
             const known = Boolean(entry.identified && entry.displayName);
             return (
-              <li key={entry.personId} className={styles.row}>
-                <span className={known ? styles.name : `${styles.name} ${styles.nameUnknown}`}>
-                  {displayNameFor(entry)}
-                  {entry.lifeStatus === "deceased" ? (
-                    <span className={styles.deceased}>· {hub.kin.deceased}</span>
-                  ) : null}
+              <li
+                key={entry.personId}
+                className={styles.row}
+                data-testid={`family-list-row-${entry.personId}`}
+              >
+                <span className={styles.primary}>
+                  <span className={known ? styles.name : `${styles.name} ${styles.nameUnknown}`}>
+                    {displayNameFor(entry)}
+                    {entry.lifeStatus === "deceased" ? (
+                      <span className={styles.deceased}>· {hub.kin.deceased}</span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={styles.badge}
+                    data-testid={`family-list-badge-${entry.personId}`}
+                    data-membership={entry.membership}
+                  >
+                    {membershipLabel(entry.membership)}
+                  </span>
                 </span>
-                <span className={styles.relation}>{relationLabel(entry.relation)}</span>
+                {entry.relation ? (
+                  <span className={styles.relation}>{relationLabel(entry.relation)}</span>
+                ) : null}
               </li>
             );
           })}

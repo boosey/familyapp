@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * #254 — List-view "Relationships in this family" section. Surfaces steward Remove / subject Hide for
- * every actable visible edge (same controls as PersonDetails on the tree). Shown only when the viewer
- * can act on ≥1 edge. After a successful action, refreshes server props so the projection updates.
+ * #254 — "Relationships in this family" section (steward Remove / subject Hide for actable edges).
+ * #283 removed this from Family → List (browse-only). Tree governance lives on PersonDetails; this
+ * module remains for its skin/contract tests and any future non-List mount.
  *
  * Styling: CSS Modules + data-skin Phase-2 (issue #265). Shared GovernableEdgeList classes with the
  * tree person-details mount — no skin id in component logic.

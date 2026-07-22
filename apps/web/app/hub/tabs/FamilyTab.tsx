@@ -1,11 +1,11 @@
 "use client";
 /**
- * FamilyTab — the hub's "Family" tab content (the visual tree + the relatives list). The tree used to
+ * FamilyTab — the hub's "Family" tab content (the visual tree + the people list). The tree used to
  * be a standalone `/hub/tree` route and the relatives list a separate `/hub/kin` route; both are folded
  * in here.
  *
- *   - Tree view → the interactive <TreeCanvas> (pan/zoom, per-card add via modal).
- *   - List  view → the searchable read-only <KinList> of the viewer's relatives.
+ *   - Tree view → the interactive <TreeCanvas> (pan/zoom, per-card add via modal) + unplaced tray.
+ *   - List  view → browse-only searchable <KinList> of the full family people index (#283).
  *
  * The Tree/List selection is URL-driven now (#158): the `Family tree · List · Requests` selector lives
  * in <FamilySurfaceNav> (rendered by the page shell) and this component simply renders whichever `view`
@@ -17,13 +17,13 @@
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { GovernableKinEdge, KinListEntry, KinshipTreeData, UnplacedMember } from "@chronicle/core";
+import type { GovernableKinEdge, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
+import type { FamilyListPerson } from "@/lib/family-list-people";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
-import { GovernableEdgesSection } from "./GovernableEdgesSection";
 import { FamilyChips } from "../FamilyChips";
 import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
@@ -38,19 +38,20 @@ export interface FamilyTabProps {
   focusPersonId: string;
   viewerPersonId: string;
   tree: KinshipTreeData;
-  kin: KinListEntry[];
+  /** #283 — browse-only people index for List (members + tree-only + unplaced). */
+  listPeople: FamilyListPerson[];
   /** Which view to render — resolved by the page shell from `?view=` (#158). Defaults to the tree. */
   view?: FamilyView;
   /**
-   * #161/ADR-0023 — active members placed in NO visible kinship edge. Surfaced as a "not yet
-   * connected" tray (Tree view) and section (List view) with place/non-family/remove actions.
+   * #161/ADR-0023 — active members placed in NO visible kinship edge. Surfaced as a Tree tray only
+   * (#283: List is browse-only — no Place / Not-family / Remove on List).
    */
   unplaced?: UnplacedMember[];
-  /** Steward-only: gates the destructive "remove member" action in the unplaced surface. */
+  /** Steward-only: gates the destructive "remove member" action in the Tree unplaced surface. */
   viewerIsSteward?: boolean;
   /**
    * #254 — visible edges with Remove/Hide capability flags (from `listGovernableKinEdges`). Threaded
-   * into the tree's PersonDetails and the List-view relationships section.
+   * into the tree's PersonDetails only — List no longer hosts governable edges (#283).
    */
   governableEdges?: GovernableKinEdge[];
   /**
@@ -87,7 +88,7 @@ export function FamilyTab({
   focusPersonId,
   viewerPersonId,
   tree,
-  kin,
+  listPeople,
   view = "tree",
   unplaced = [],
   viewerIsSteward = false,
@@ -102,15 +103,15 @@ export function FamilyTab({
   // do NOT hand the zoom controls to FamilySurfaceNav on compact. SSR/first-paint = desktop.
   const compact = useIsCompact();
 
-  // #169: unplaced members fetch their anchor list family-wide (no longer limited to the tree
-  // window), so the parent no longer needs to compute anchorOptions from tree.nodes.
-  const unplacedPanel =
-    unplaced.length > 0 ? (
+  // #169 / #283: unplaced tray is Tree-only. List folds unplaced people into the searchable index
+  // without Place / Not-family / Remove controls.
+  const unplacedTray =
+    view === "tree" && unplaced.length > 0 ? (
       <UnplacedMembers
         familyId={familyId}
         members={unplaced}
         viewerIsSteward={viewerIsSteward}
-        variant={view === "tree" ? "tray" : "section"}
+        variant="tray"
       />
     ) : null;
 
@@ -225,16 +226,12 @@ export function FamilyTab({
           </div>
           {/* #161: unplaced members as a "not yet connected" tray BELOW the canvas — a separate strip
               at the margin, deliberately OUTSIDE computeTreeLayout / the pan-zoom layer so it never
-              destabilizes the pedigree layout engine. */}
-          {unplacedPanel}
+              destabilizes the pedigree layout engine. List does not host this tray (#283). */}
+          {unplacedTray}
         </>
       ) : (
-        <>
-          <KinList kin={kin} />
-          {/* #254: steward Remove / subject Hide for actable edges (same controls as PersonDetails). */}
-          <GovernableEdgesSection familyId={familyId} edges={governableEdges} />
-          {unplacedPanel}
-        </>
+        // #283: browse-only people index — no governable-edges section, no Place/Not-family/Remove.
+        <KinList people={listPeople} />
       )}
     </div>
   );

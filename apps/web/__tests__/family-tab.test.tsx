@@ -58,7 +58,7 @@ function renderTab(
       focusPersonId="p1"
       viewerPersonId="p1"
       tree={TREE}
-      kin={[]}
+      listPeople={[]}
       {...(view ? { view } : {})}
       {...(extra?.families ? { families: extra.families } : {})}
       {...(extra?.scopeId ? { scopeId: extra.scopeId } : {})}
@@ -94,6 +94,48 @@ describe("FamilyTab view rendering (URL-driven, #158)", () => {
     expect(screen.getByTestId("mock-list")).toBeTruthy();
     expect(screen.queryByTestId("mock-tree")).toBeNull();
     expect(screen.queryByTestId("tree-controls")).toBeNull();
+  });
+
+  it("#283: List view mounts no unplaced mutation tray and no governable-edges section", () => {
+    render(
+      <FamilyTab
+        familyId="F"
+        focusPersonId="p1"
+        viewerPersonId="p1"
+        tree={TREE}
+        listPeople={[]}
+        view="list"
+        unplaced={[
+          { personId: "u1", displayName: "Rosa", role: "member" },
+          { personId: "u2", displayName: "Marco", role: "member" },
+        ]}
+        viewerIsSteward={true}
+        governableEdges={[
+          {
+            edgeType: "parent_of",
+            personAId: "a",
+            personBId: "b",
+            personADisplayName: "A",
+            personAIdentified: true,
+            personBDisplayName: "B",
+            personBIdentified: true,
+            nature: null,
+            state: "asserted",
+            assertedBy: "p1",
+            viewerIsSteward: true,
+            viewerCanRemove: true,
+            viewerCanHide: false,
+          },
+        ]}
+        surface={{ active: "list", familiesParam: null, showRequests: false }}
+      />,
+    );
+    expect(screen.getByTestId("mock-list")).toBeTruthy();
+    expect(screen.queryByTestId("unplaced-members")).toBeNull();
+    expect(screen.queryByTestId("unplaced-place-u1")).toBeNull();
+    expect(screen.queryByTestId("unplaced-nonfamily-u1")).toBeNull();
+    expect(screen.queryByTestId("unplaced-remove-u1")).toBeNull();
+    expect(screen.queryByTestId("family-gov-edges")).toBeNull();
   });
 
   it("renders NO in-tab Tree/List radiogroup (the selector moved to FamilySurfaceNav)", () => {

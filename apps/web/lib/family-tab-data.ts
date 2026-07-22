@@ -4,7 +4,7 @@
  * tab's List view. This helper resolves BOTH surfaces' data in one place for the hub server component:
  *   - the focus-rooted kinship tree (`resolveKinshipTree`, rooted on `?anchor=` when valid, else the
  *     viewer) for the Tree view, and
- *   - the viewer's derived kin (`listMyKin`) for the List view.
+ *   - the browse-only people index (#283) for the List view.
  *
  * All reads go through the audited kinship front door; a forged/foreign `?anchor=` never materializes
  * (core's root guard returns an empty projection, so it fails the "focus is a real node" check and we
@@ -15,45 +15,53 @@ import {
   listUnplacedMembers,
   listFamiliesStewardedBy,
   listGovernableKinEdges,
+  listMembersOfFamily,
+  listPlacedPersons,
   resolveKinshipTree,
   AuthorizationError,
   type AuthContext,
   type GovernableKinEdge,
-  type KinListEntry,
   type KinshipTreeData,
   type UnplacedMember,
 } from "@chronicle/core";
 import type { Database } from "@chronicle/db";
+import {
+  projectFamilyListPeople,
+  type FamilyListPerson,
+} from "./family-list-people";
 
 export interface FamilyTabData {
   familyId: string;
   /** The FIXED focus person for the tree (anchor when valid, else the viewer). */
   focusPersonId: string;
   tree: KinshipTreeData;
-  kin: KinListEntry[];
+  /**
+   * #283 — browse-only people index for List: members ∪ edged tree-only kin ∪ unplaced members,
+   * with Member vs tree-only badges. Projection lives in `family-list-people.ts`.
+   */
+  listPeople: FamilyListPerson[];
   /**
    * #161/ADR-0023 — active members of this family placed in NO visible kinship edge (and not curated
-   * "non-family"). They're invisible in the graph-only tree, so the Family tab surfaces them in a "not
-   * yet connected" tray/section with place/leave-as-non-family/remove actions.
+   * "non-family"). Invisible in the graph-only tree; surfaced on Tree (tray) — not on List (#283).
    */
   unplaced: UnplacedMember[];
   /**
    * Whether the viewer is this family's STEWARD — gates the destructive "remove member" affordance in
-   * the unplaced surface (computed server-side so the button never flashes). The write path re-checks.
+   * the Tree unplaced surface (computed server-side so the button never flashes). The write path re-checks.
    */
   viewerIsSteward: boolean;
   /**
    * #254 — family's currently-visible edges with per-edge capability flags (steward Remove / subject
-   * Hide). Loaded separately from the windowed tree projection so the governance UI never relies on
-   * `KinshipTreeData.edges` (which lacks those flags).
+   * Hide). Loaded for Tree governance (PersonDetails); List no longer hosts governable edges (#283).
    */
   governableEdges: GovernableKinEdge[];
 }
 
 /**
- * Load the Family tab's tree + relatives for `familyId` (already validated against the viewer's own
- * active families by the caller). `focusParam` is the untrusted `?anchor=`/`?root=` deep-link. Returns
- * null when even the viewer's own self-root yields no tree (treated as the no-data empty state).
+ * Load the Family tab's tree + List people index for `familyId` (already validated against the
+ * viewer's own active families by the caller). `focusParam` is the untrusted `?anchor=`/`?root=`
+ * deep-link. Returns null when even the viewer's own self-root yields no tree (treated as the
+ * no-data empty state).
  */
 export async function loadFamilyTabData(
   db: Database,
@@ -90,12 +98,15 @@ export async function loadFamilyTabData(
   }
   if (!tree) return null;
 
-  const [kin, unplaced, stewarded, governableEdges] = await Promise.all([
+  const [kin, unplaced, stewarded, governableEdges, members, placed] = await Promise.all([
     listMyKin(db, ctx, familyId),
     listUnplacedMembers(db, ctx, familyId),
     listFamiliesStewardedBy(db, ctx.personId),
     listGovernableKinEdges(db, ctx, familyId),
+    listMembersOfFamily(db, familyId),
+    listPlacedPersons(db, ctx, familyId),
   ]);
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
-  return { familyId, focusPersonId, tree, kin, unplaced, viewerIsSteward, governableEdges };
+  const listPeople = projectFamilyListPeople({ kin, unplaced, members, placed });
+  return { familyId, focusPersonId, tree, listPeople, unplaced, viewerIsSteward, governableEdges };
 }

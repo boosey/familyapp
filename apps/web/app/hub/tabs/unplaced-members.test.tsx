@@ -2,8 +2,8 @@
 /**
  * #161 (ADR-0023) unplaced-members web tests — RENDER + WIRING (the data correctness is core-tested).
  *
- *   1. Unplaced members supplied by the core read render as rows in the List view AND as not-yet-
- *      connected tray cards in the Tree view (both surfaces, per ADR-0023).
+ *   1. Unplaced members supplied by the core read render as a not-yet-connected tray on the Tree
+ *      view. List is browse-only (#283) and must NOT host the unplaced mutation section.
  *   2. The three per-member actions are present and invoke the right (stubbed) server action:
  *      place-in-tree opens the link modal and calls linkExistingMember; "Not family" calls
  *      setMemberNonFamily(true); steward "Remove" requires an in-page confirm then calls endMembership.
@@ -91,14 +91,14 @@ function treeData(): KinshipTreeData {
   };
 }
 
-it("renders unplaced members as rows in the List view", () => {
+it("#283: List view does not render the unplaced mutation section", () => {
   render(
     <FamilyTab
       familyId="F"
       focusPersonId="self"
       viewerPersonId="self"
       tree={treeData()}
-      kin={[]}
+      listPeople={[]}
       unplaced={MEMBERS}
       viewerIsSteward={false}
       view="list"
@@ -106,10 +106,10 @@ it("renders unplaced members as rows in the List view", () => {
       surface={{ active: "list", familiesParam: null, showRequests: false }}
     />,
   );
-  const panel = screen.getByTestId("unplaced-members");
-  expect(within(panel).getByTestId("unplaced-row-u1")).toBeTruthy();
-  expect(within(panel).getByTestId("unplaced-row-u2")).toBeTruthy();
-  expect(panel.textContent).toContain("Rosa Esposito");
+  expect(screen.queryByTestId("unplaced-members")).toBeNull();
+  expect(screen.queryByTestId("unplaced-place-u1")).toBeNull();
+  expect(screen.queryByTestId("unplaced-nonfamily-u1")).toBeNull();
+  expect(screen.queryByTestId("unplaced-remove-u1")).toBeNull();
 });
 
 it("renders unplaced members as a not-yet-connected tray in the Tree view", () => {
@@ -119,7 +119,7 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
       focusPersonId="self"
       viewerPersonId="self"
       tree={treeData()}
-      kin={[]}
+      listPeople={[]}
       unplaced={MEMBERS}
       viewerIsSteward={false}
       view="tree"

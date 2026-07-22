@@ -381,15 +381,14 @@ export default async function HubPage({
                 focusPersonId={familyTabData.focusPersonId}
                 viewerPersonId={ctx.personId}
                 tree={familyTabData.tree}
-                kin={familyTabData.kin}
+                listPeople={familyTabData.listPeople}
                 // #158: the Tree/List choice is URL-driven now (?view=), resolved here and rendered by
                 // FamilyTab; the selector itself lives in <FamilySurfaceNav> above.
                 view={familyView}
-                // #161/ADR-0023: active members with no visible kinship edge, surfaced as a "not yet
-                // connected" tray/section with place/non-family/remove actions.
+                // #161/ADR-0023 + #283: unplaced members surface on Tree only (List is browse-only).
                 unplaced={familyTabData.unplaced}
                 viewerIsSteward={familyTabData.viewerIsSteward}
-                // #254: governable edges with Remove/Hide flags — not the windowed tree edges.
+                // #254 / #283: governable edges for Tree PersonDetails — not List.
                 governableEdges={familyTabData.governableEdges}
                 // Family filter chips (ADR-0021 §Tree, #48). Gate the chip data on >=2 families — the
                 // same rule AlbumSurface uses — so the client widget's next/navigation hooks stay out
