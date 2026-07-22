@@ -6,6 +6,9 @@
  * Occupancy: Sub tabs (Tree / List / Requests) → Family (scope chips when multi-family) → Views
  * (zoom/fit on tree). No Search/Filters. Invite stays on the trailing edge outside collapse.
  * One progressive row on every width — no HubToolbar / compact-strip swap.
+ *
+ * Call sites: FamilyTab (tree/list, with chips + zoom), RequestsTab (chips when ≥2 families; no
+ * Views), and the hub page no-family fallback (Sub tabs + Invite only).
  */
 import type { ComponentProps, ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -47,8 +50,8 @@ interface FamilySurfaceNavProps {
    *  `undefined` (a pending-only / gated viewer) renders no button. */
   inviteHref?: string;
   /**
-   * Family unit — single-select scope chips when ≥2 families. Omit on Requests / single-family so the
-   * unit is absent (not an empty icon).
+   * Family unit — single-select scope chips when ≥2 families. Omit on single-family / no-family so the
+   * unit is absent (not an empty icon). RequestsTab and FamilyTab both pass chips when multi-family.
    */
   row2Left?: ReactNode;
   /**

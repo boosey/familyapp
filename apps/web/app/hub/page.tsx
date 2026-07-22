@@ -345,11 +345,12 @@ export default async function HubPage({
             />
           )}
           {/* #158/#297: family + requests share one primary tab (Family), fronted by the progressive
-              control row. On the Requests tab (and the no-family case) FamilyTab is not mounted, so
-              FamilySurfaceNav renders HERE (Sub tabs + Invite; no Family/Views units). On the family
-              CONTENT tabs (tree/list) FamilyTab owns the progressive row (with chips/zoom), so we must
-              NOT also render a copy here — that would double the selector. */}
-          {showFamilySelector && !(activeTab === "family" && familyTabData) && (
+              control row. RequestsTab and FamilyTab each own their progressive row (chips fold in).
+              On the no-family case FamilyTab is not mounted, so FamilySurfaceNav renders HERE (Sub
+              tabs + Invite only). Never also render a copy above FamilyTab/RequestsTab. */}
+          {showFamilySelector &&
+            activeTab !== "requests" &&
+            !(activeTab === "family" && familyTabData) && (
             <FamilySurfaceNav
               active={familySelectorActive}
               familiesParam={familiesRaw}
@@ -440,10 +441,24 @@ export default async function HubPage({
             ))}
           {activeTab === "requests" && (
             <RequestsTab
-              families={activeFamilies.map((f) => ({ id: f.familyId, name: f.familyName, shortName: f.familyShortName }))}
+              families={
+                activeFamilies.length >= 2
+                  ? activeFamilies.map((f) => ({
+                      id: f.familyId,
+                      name: f.familyName,
+                      shortName: f.familyShortName,
+                    }))
+                  : []
+              }
               // #159: the Requests list scopes to the SAME resolved family the tree uses (`?families=`),
               // defaulting to the first active family when the filter is absent (never "all" for a steward).
               scopeFamilyId={familyTabFamilyId ?? "all"}
+              surface={{
+                familiesParam: familiesRaw,
+                showRequests: showRequestsItem,
+                requestsBadge: pendingRequests.length,
+                inviteHref: familyInviteHref,
+              }}
             />
           )}
         </section>

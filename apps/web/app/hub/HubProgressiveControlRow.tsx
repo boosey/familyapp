@@ -9,7 +9,7 @@
  * caller-supplied IconSheet nodes (#300 shells). Sub tabs menu-icon is a menu, not a sheet.
  *
  * Stories/Album/Family/Questions must not depend on HubToolbar's two-row composition for their
- * browse chrome (Album may still use HubToolbar until #302 lands on master).
+ * browse chrome.
  */
 import {
   useCallback,
@@ -44,6 +44,13 @@ export type SubTabsUnitSlot = {
 export type PrimaryActionSlot = {
   labeled: ReactNode;
   iconified: ReactNode;
+  /**
+   * When set, the visible action slot mounts this single node instead of switching between
+   * `labeled` / `iconified`. Use with {@link HubProgressiveControlRowProps.onActionFormChange} so a
+   * heavy host (Album Add Photos) is not dual-mounted; `labeled` / `iconified` stay measure-only
+   * width probes.
+   */
+  visible?: ReactNode;
 };
 
 export interface HubProgressiveControlRowProps {
@@ -56,6 +63,11 @@ export interface HubProgressiveControlRowProps {
   action?: PrimaryActionSlot;
   /** Optional full-width content below the row (e.g. Stories draft reminders). */
   belowRow?: ReactNode;
+  /**
+   * Fires when the resolved primary-action form changes. Album drives a single Add Photos host via
+   * {@link PrimaryActionSlot.visible}; Stories can ignore this (Tell is a cheap dual mount).
+   */
+  onActionFormChange?: (form: "labeled" | "iconified") => void;
   /**
    * Test seam: force available row width (skips ResizeObserver). When set with {@link forceWidths},
    * expansion is fully deterministic without layout.
@@ -148,6 +160,7 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
     views,
     action,
     belowRow,
+    onActionFormChange,
     forceAvailableWidth,
     forceWidths,
   } = props;
@@ -164,6 +177,16 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
 
   const [expansion, setExpansion] = useState<HubControlExpansion>(() => defaultExpansion(present));
   const [actionForm, setActionForm] = useState<"labeled" | "iconified">("labeled");
+  const actionFormRef = useRef<"labeled" | "iconified">("labeled");
+  const onActionFormChangeRef = useRef(onActionFormChange);
+  onActionFormChangeRef.current = onActionFormChange;
+
+  const applyActionForm = useCallback((next: "labeled" | "iconified") => {
+    if (actionFormRef.current === next) return;
+    actionFormRef.current = next;
+    setActionForm(next);
+    onActionFormChangeRef.current?.(next);
+  }, []);
 
   // Presence fingerprint — recompute when occupancy changes; slot element identity is read from props
   // at call time via ref so ReactNode identity churn does not retrigger the layout effect.
@@ -248,7 +271,7 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
     if (rowWidth <= 0) {
       const fallback = defaultExpansion(presentNow);
       setExpansion((prev) => (expansionEqual(prev, fallback) ? prev : fallback));
-      setActionForm((prev) => (prev === "labeled" ? prev : "labeled"));
+      applyActionForm("labeled");
       return;
     }
 
@@ -276,9 +299,9 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
     });
 
     // Bail when forms are unchanged — otherwise every resize frame re-commits the row + measure clones.
-    setActionForm((prev) => (prev === nextAction ? prev : nextAction));
+    applyActionForm(nextAction);
     setExpansion((prev) => (expansionEqual(prev, next) ? prev : next));
-  }, []);
+  }, [applyActionForm]);
 
   useLayoutEffect(() => {
     recompute();
@@ -344,7 +367,7 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
         ) : null}
         {action ? (
           <div className={s.action}>
-            {actionForm === "labeled" ? action.labeled : action.iconified}
+            {action.visible ?? (actionForm === "labeled" ? action.labeled : action.iconified)}
           </div>
         ) : null}
       </div>
