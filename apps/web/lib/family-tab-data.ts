@@ -130,7 +130,6 @@ export async function loadFamilyTabData(
             deathYear: persons.deathYear,
             sex: persons.sex,
             identified: persons.identified,
-            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, projected.map((p) => p.personId)))
@@ -148,7 +147,6 @@ export async function loadFamilyTabData(
             personId: r.id,
             identified: r.identified,
             lifeStatus: r.lifeStatus,
-            hasAccount: r.accountId !== null,
           })),
         )
       : new Map<string, TreeNode["inviteStatus"]>();

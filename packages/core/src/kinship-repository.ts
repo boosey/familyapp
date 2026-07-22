@@ -703,12 +703,11 @@ export interface TreeNode {
    *                        viewer's own active Families where this person is NOT an active member.
    *                        Applies whether or not the person has an Account (the canonical case: an
    *                        Account-holder Member of Family A is still invitable into Family B).
-   *   - `accepted`       — has an Account and NO membership gap (already an active member of every
-   *                        Family the viewer belongs to). Retained for backward compatibility with
-   *                        existing consumers; #335 retires this union member once they're migrated.
-   *   - `not-applicable` — otherwise (no account, no gap — nothing left to invite into).
+   *   - `not-applicable` — otherwise (no gap — already an active member of every Family the viewer
+   *                        belongs to, or nothing left to invite into). Account presence is NOT a
+   *                        separate status (#335 retired Account-centric `accepted`).
    */
-  inviteStatus: "invitable" | "pending" | "accepted" | "not-applicable";
+  inviteStatus: "invitable" | "pending" | "not-applicable";
 }
 
 export interface KinshipTreeData {
@@ -721,19 +720,16 @@ export interface KinshipTreeData {
 }
 
 /**
- * #332 (ADR-0028): the pure invite-status rule, factored out so the projection and the tests share
- * ONE source of truth. Membership-gap eligibility supersedes Slice D's Account-hides-Invite rule —
- * order matters:
- *   1. Not identified or deceased → `not-applicable` (never invitable regardless of gap/account).
- *   2. A LIVE pending invitation into the browsed family → `pending` (wins over a gap or an account —
- *      already-in-flight).
+ * #332 / #335 (ADR-0028): the pure invite-status rule, factored out so the projection and the tests
+ * share ONE source of truth. Membership-gap eligibility is the only Invite affordance model —
+ * Account presence is never its own status (#335 retired `accepted`):
+ *   1. Not identified or deceased → `not-applicable`.
+ *   2. A LIVE pending invitation into the browsed family → `pending`.
  *   3. A membership gap (the viewer has ≥1 active Family where this person is not an active member) →
- *      `invitable`, Account or not — this is the canonical Zach-on-Boudreaux → Carney case.
- *   4. An Account and no gap → `accepted` (compat path: already a member everywhere the viewer is).
- *   5. Otherwise → `not-applicable` (no account, no gap — nothing left to invite into).
+ *      `invitable`, Account or not — the canonical Zach-on-Boudreaux → Carney case.
+ *   4. Otherwise → `not-applicable` (no gap — already a member everywhere the viewer is).
  */
 export function inviteStatusFor(p: {
-  hasAccount: boolean;
   identified: boolean;
   lifeStatus: "living" | "deceased";
   hasLivePendingInvite: boolean;
@@ -742,7 +738,6 @@ export function inviteStatusFor(p: {
   if (!p.identified || p.lifeStatus === "deceased") return "not-applicable";
   if (p.hasLivePendingInvite) return "pending";
   if (p.hasMembershipGap) return "invitable";
-  if (p.hasAccount) return "accepted";
   return "not-applicable";
 }
 
@@ -753,7 +748,6 @@ export interface InviteStatusSubject {
   personId: string;
   identified: boolean;
   lifeStatus: "living" | "deceased";
-  hasAccount: boolean;
 }
 
 /**
@@ -835,7 +829,6 @@ export async function resolveInviteStatuses(
     result.set(
       s.personId,
       inviteStatusFor({
-        hasAccount: s.hasAccount,
         identified: s.identified,
         lifeStatus: s.lifeStatus,
         hasLivePendingInvite: pendingInvitedIds.has(s.personId),
@@ -1027,14 +1020,11 @@ export async function resolveKinshipTree(
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
             sex: persons.sex,
-            // Slice D (#6): account presence resolves `accepted`; `origin` is read as person metadata
-            // (bridge/mention/self/invitee) — neither is content.
-            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, ids));
 
-  // Slice D (#6) / #332 (ADR-0028) — resolve `inviteStatus` for every in-window person via the shared
+  // #332 / #335 (ADR-0028) — resolve `inviteStatus` for every in-window person via the shared
   // batch helper (factored out for #334 so List's `loadFamilyTabData` can hydrate the SAME real
   // status for people outside the tree window without duplicating these queries).
   const inviteStatusById = await resolveInviteStatuses(
@@ -1045,7 +1035,6 @@ export async function resolveKinshipTree(
       personId: r.id,
       identified: r.identified,
       lifeStatus: r.lifeStatus,
-      hasAccount: r.accountId !== null,
     })),
   );
 

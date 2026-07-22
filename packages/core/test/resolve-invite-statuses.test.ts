@@ -43,12 +43,12 @@ describe("resolveInviteStatuses", () => {
     await addMembership(db, { personId: unplaced.id, familyId: famA.id, role: "member" });
 
     const statuses = await resolveInviteStatuses(db, viewer.id, famA.id, [
-      { personId: unplaced.id, identified: true, lifeStatus: "living", hasAccount: false },
+      { personId: unplaced.id, identified: true, lifeStatus: "living" },
     ]);
     expect(statuses.get(unplaced.id)).toBe("invitable");
   });
 
-  it("resolves accepted (compat) for an account-holder with no membership gap", async () => {
+  it("resolves not-applicable for an account-holder with no membership gap (#335 retired accepted)", async () => {
     const viewer = await makePerson(db, "Viewer");
     const fam = await makeFamily(db, "Fam", viewer.id);
     await addMembership(db, { personId: viewer.id, familyId: fam.id, role: "steward" });
@@ -62,9 +62,9 @@ describe("resolveInviteStatuses", () => {
     await addMembership(db, { personId: holderId, familyId: fam.id, role: "member" });
 
     const statuses = await resolveInviteStatuses(db, viewer.id, fam.id, [
-      { personId: holderId, identified: true, lifeStatus: "living", hasAccount: true },
+      { personId: holderId, identified: true, lifeStatus: "living" },
     ]);
-    expect(statuses.get(holderId)).toBe("accepted");
+    expect(statuses.get(holderId)).toBe("not-applicable");
   });
 
   it("scopes a live pending invite to the given familyId, not the subject's other families", async () => {
@@ -88,12 +88,12 @@ describe("resolveInviteStatuses", () => {
     });
 
     const input = [
-      { personId: subject.id, identified: true, lifeStatus: "living" as const, hasAccount: false },
+      { personId: subject.id, identified: true, lifeStatus: "living" as const },
     ];
     const statusesInX = await resolveInviteStatuses(db, viewer.id, famX.id, input);
     const statusesInY = await resolveInviteStatuses(db, viewer.id, famY.id, input);
     expect(statusesInX.get(subject.id)).toBe("pending");
-    // No live invite scoped to famY and no membership gap → not-applicable (no account either).
+    // No live invite scoped to famY and no membership gap → not-applicable.
     expect(statusesInY.get(subject.id)).toBe("not-applicable");
   });
 
@@ -106,7 +106,7 @@ describe("resolveInviteStatuses", () => {
     const deceased = await makePerson(db, "Deceased");
 
     const statuses = await resolveInviteStatuses(db, viewer.id, famA.id, [
-      { personId: deceased.id, identified: true, lifeStatus: "deceased", hasAccount: false },
+      { personId: deceased.id, identified: true, lifeStatus: "deceased" },
     ]);
     expect(statuses.get(deceased.id)).toBe("not-applicable");
   });

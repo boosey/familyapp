@@ -276,7 +276,7 @@ export function PersonDetails({
           )}
 
           {/* #334 (originally Slice D #6): invite affordance — a button when invitable, a muted note
-              when pending, nothing for accepted / not-applicable. Clicking opens the in-place
+              when pending, nothing for not-applicable. Clicking opens the in-place
               person-bound Invite modal (the caller wires `onInvite` to open it). */}
           {onInvite && node.inviteStatus === "invitable" && (
             <div style={{ marginTop: 12 }}>

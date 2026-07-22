@@ -2,7 +2,7 @@
 /**
  * Tree Slice D (#6) invite-affordance tests, extended for #334 (ADR-0028):
  *   1. PersonDetails shows the Invite button ONLY for `invitable`; the muted "pending" note for
- *      `pending`; nothing for `accepted`/`not-applicable`. Clicking Invite calls the ONE handler.
+ *      `pending`; nothing for `not-applicable`. Clicking Invite calls the ONE handler.
  *   2. KebabMenu shows the Invite… item ONLY for `invitable`, and it calls the invite context handler
  *      (the SAME handler the sheet uses).
  *   3. From TreeCanvas, BOTH the details-sheet Invite button and the per-card kebab's Invite… item open
@@ -81,22 +81,19 @@ it("PersonDetails shows the muted pending note (and no button) for a pending per
   expect(screen.queryByTestId("tree-details-invite")).toBeNull();
 });
 
-it("PersonDetails shows no invite affordance for accepted / not-applicable", () => {
-  for (const status of ["accepted", "not-applicable"] as const) {
-    render(
-      <PersonDetails
-        node={node({ personId: `p-${status}`, inviteStatus: status })}
-        relationToViewer={null}
-        familyId="F"
-        onClose={() => {}}
-        onInvite={() => {}}
-        checkEditable={notEditable}
-      />,
-    );
-    expect(screen.queryByTestId("tree-details-invite")).toBeNull();
-    expect(screen.queryByTestId("tree-details-invite-pending")).toBeNull();
-    cleanup();
-  }
+it("PersonDetails shows no invite affordance for not-applicable", () => {
+  render(
+    <PersonDetails
+      node={node({ personId: "p-na", inviteStatus: "not-applicable" })}
+      relationToViewer={null}
+      familyId="F"
+      onClose={() => {}}
+      onInvite={() => {}}
+      checkEditable={notEditable}
+    />,
+  );
+  expect(screen.queryByTestId("tree-details-invite")).toBeNull();
+  expect(screen.queryByTestId("tree-details-invite-pending")).toBeNull();
 });
 
 /* ── 2. KebabMenu ──────────────────────────────────────────────────────────── */
@@ -122,8 +119,8 @@ it("KebabMenu shows Invite… only for an invitable person and calls the invite 
   expect(onInvite.mock.calls[0]![0].personId).toBe("k1");
 });
 
-it("KebabMenu hides Invite… for pending / accepted / not-applicable", () => {
-  for (const status of ["pending", "accepted", "not-applicable"] as const) {
+it("KebabMenu hides Invite… for pending / not-applicable", () => {
+  for (const status of ["pending", "not-applicable"] as const) {
     openKebab(node({ personId: `k-${status}`, inviteStatus: status }), () => {});
     expect(screen.queryByTestId("tree-kebab-invite")).toBeNull();
     cleanup();

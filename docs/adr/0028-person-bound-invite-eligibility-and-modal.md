@@ -59,11 +59,17 @@ in-app-only delivery stay out of scope.
 
 ## Consequences
 
-- Core projection / helpers must stop treating Account presence as automatic Invite suppression
-  (compatibility `accepted` may linger briefly for consumers; retirement is a follow-up contract
-  ticket).
+- Core projection / helpers use membership-gap Invite eligibility (ADR-0028). Account presence is
+  never its own `inviteStatus` — #335 retired the transitional Account-centric `accepted` value;
+  affordance is solely `invitable` / `pending` / `not-applicable`.
 - `createInvitation` gains a person-bound path; accept path must join Account-holders without a
   second Person.
 - Web List and Tree share one Invite modal; List still omits edge governance (ADR-0023 / ADR-0027).
 - Glossary terms (**Invite eligibility**, **Person-bound Invitation**, expanded **Dedup-on-invite**,
   **Family tab List**) stay aligned with this ADR.
+
+## Amendment (#335, 2026-07-22)
+
+Retired the compatibility `accepted` inviteStatus union member. After consumers migrated to
+membership-gap eligibility (#332–#334), Account presence no longer appears as a distinct Invite
+status — a Person with no membership gap is simply `not-applicable`.

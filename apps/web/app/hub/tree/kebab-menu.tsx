@@ -174,10 +174,9 @@ export function KebabMenu({ node, parentCount, partnerCount: _partnerCount, isFo
               {hub.tree.kebabFocus}
             </button>
           )}
-          {/* Invite… (Slice D, #6) — placed with the people-actions group, before Add…. Gated by the
-              server-projected eligibility (`inviteStatus === "invitable"`): identified, living, no
-              account, no live invitation. It opens the EXISTING invite flow pre-targeted; the same
-              handler backs the details sheet's Invite button. */}
+          {/* Invite… (ADR-0028) — people-actions group, before Add…. Gated by
+              `inviteStatus === "invitable"` (membership-gap eligibility). Opens the in-place
+              person-bound Invite modal; same handler as the details sheet Invite button. */}
           {node.inviteStatus === "invitable" && (
             <button
               type="button"
