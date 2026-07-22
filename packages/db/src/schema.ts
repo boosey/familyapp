@@ -591,6 +591,46 @@ export const intakeRevisions = pgTable(
   (t) => [index("intake_revisions_answer_idx").on(t.intakeAnswerId)],
 );
 
+/** Notification stream categories a Person can set a frequency for independently. */
+export const notificationStreamEnum = pgEnum("notification_stream", [
+  "questions_for_me",
+  "answers_to_my_asks",
+  "family_activity",
+]);
+
+/**
+ * Per-stream delivery frequency. `daily_digest` / `weekly_digest` are in the vocabulary for
+ * forward compatibility (#277); prefs UI v1 (#280) only offers every_item | off.
+ */
+export const notificationFrequencyEnum = pgEnum("notification_frequency", [
+  "every_item",
+  "daily_digest",
+  "weekly_digest",
+  "off",
+]);
+
+/**
+ * Person-global Notification stream preference (not per-Family). Absent row ⇒ every_item
+ * (resolved in @chronicle/core, not via a DB default on a missing row).
+ */
+export const notificationStreamPrefs = pgTable(
+  "notification_stream_prefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    stream: notificationStreamEnum("stream").notNull(),
+    frequency: notificationFrequencyEnum("frequency").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("notification_stream_prefs_person_idx").on(t.personId),
+    uniqueIndex("notification_stream_prefs_person_stream_uq").on(t.personId, t.stream),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Story — the unit of narrative. Owned by exactly one Person. Points to its canonical
 // Recording (required). A Story is a SINGLE row, never copied per family; which of the owner's
@@ -1934,6 +1974,10 @@ export type NewIntakeAnswer = typeof intakeAnswers.$inferInsert;
 export type IntakeRevision = typeof intakeRevisions.$inferSelect;
 export type NewIntakeRevision = typeof intakeRevisions.$inferInsert;
 export type IntakeOrigin = (typeof intakeOriginEnum.enumValues)[number];
+export type NotificationStream = (typeof notificationStreamEnum.enumValues)[number];
+export type NotificationFrequency = (typeof notificationFrequencyEnum.enumValues)[number];
+export type NotificationStreamPref = typeof notificationStreamPrefs.$inferSelect;
+export type NewNotificationStreamPref = typeof notificationStreamPrefs.$inferInsert;
 export type FamilyPhoto = typeof familyPhotos.$inferSelect;
 export type NewFamilyPhoto = typeof familyPhotos.$inferInsert;
 export type FamilyPhotoFamily = typeof familyPhotoFamilies.$inferSelect;
