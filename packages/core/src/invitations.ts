@@ -24,6 +24,7 @@ import {
   ThrottleError,
 } from "./errors";
 import { findActiveFamilyMemberByContact } from "./invite-member-guard";
+import { personVisibleToViewerAcrossFamilies } from "./kinship-repository";
 import { placeInvitedMemberOnAccept } from "./kinship-write";
 import { insertActiveMembership, isActiveMember } from "./memberships";
 import { defaultSpokenName } from "./names";
@@ -68,6 +69,20 @@ export interface CreateInvitationInput {
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
   ttlMs?: number;
+  /**
+   * Person-bound Invitation (issue #333, ADR-0028): binds the invitation to this EXISTING Person
+   * on create instead of minting a fresh provisional one — the Dedup-on-invite guarantee extended
+   * beyond cold contact matching to an invite started from an existing List/Tree Person. The Person
+   * must be identified and living; create refuses (`InvariantViolation`) otherwise, or if it does
+   * not exist. Create also refuses (`AlreadyFamilyMemberError`) when this Person already holds an
+   * ACTIVE membership in `familyId`. STANDING CHECK (hardening): the inviter must also have
+   * independent visibility into this Person — active co-membership in some shared family, or being
+   * able to see them on that family's tree (`personVisibleToViewerAcrossFamilies`) — else
+   * `AuthorizationError`. Being an active member of `familyId` alone is NOT sufficient standing to
+   * name an arbitrary Person UUID. Omitted => the ADR-0006 cold path (mints a provisional Person)
+   * runs unchanged.
+   */
+  existingInviteePersonId?: string;
 }
 
 export interface CreateInvitationResult {
@@ -116,6 +131,56 @@ export async function createInvitation(
       );
     }
 
+    // Person-bound Invitation (#333, ADR-0028): resolve + validate the existing Person up front —
+    // before any throttle counting, mirroring the placement of the contact-based already-member
+    // refusal below (a refused invite must never burn the inviter's generous throttle budget).
+    let boundPerson: { id: string; displayName: string | null } | null = null;
+    if (input.existingInviteePersonId) {
+      const [person] = await tx
+        .select({
+          id: persons.id,
+          displayName: persons.displayName,
+          identified: persons.identified,
+          lifeStatus: persons.lifeStatus,
+        })
+        .from(persons)
+        .where(eq(persons.id, input.existingInviteePersonId))
+        .limit(1);
+      if (!person) {
+        throw new InvariantViolation(
+          `person-bound invitation target ${input.existingInviteePersonId} does not exist`,
+        );
+      }
+      if (!person.identified || person.lifeStatus !== "living") {
+        throw new InvariantViolation(
+          "person-bound invitation requires an identified, living person",
+        );
+      }
+      // Same-family duplicate-member guard, direct form (#119/#333): a precise personId+familyId
+      // check, stronger than (and in place of) the contact-based guard below for this path.
+      if (await isActiveMember(tx, person.id, input.familyId)) {
+        throw new AlreadyFamilyMemberError(
+          `${person.displayName ?? "this person"} is already an active member of this family`,
+        );
+      }
+      // STANDING CHECK (#333 hardening — load-bearing, do not remove): being an active member of the
+      // TARGET family is enough to CREATE an invitation, but not enough to name ANY Person UUID in the
+      // app as its anchor. The inviter must have independent standing to see this specific Person —
+      // active co-membership with them in some family, or being able to see them on that family's
+      // tree — mirroring the exact reachability the List/Tree surfaces already enforce. Without this,
+      // any member of the target family could probe arbitrary personIds and leak a stranger's name via
+      // the invite flow. Canonical case this still allows: Zach (active in Boudreaux) is visible to a
+      // Carney steward who is ALSO an active member of Boudreaux — shared family gives standing.
+      if (
+        !(await personVisibleToViewerAcrossFamilies(tx, input.inviterPersonId, person.id))
+      ) {
+        throw new AuthorizationError(
+          "inviter has no standing to invite this person — not visible in any family they share",
+        );
+      }
+      boundPerson = { id: person.id, displayName: person.displayName };
+    }
+
     // Invite-send throttle (issue #105) — a GENEROUS accident guard, not a rate-limit against
     // determined abuse. Two independent arms, each a rolling window counted over the invitations
     // table. Dedup (#117) refreshes one row in place instead of inserting per send, so the count
@@ -133,16 +198,20 @@ export async function createInvitation(
     // Same-family duplicate-member guard (issue #119): if the invitee's email or phone already
     // resolves to an ACTIVE member of this family (via their verified account contacts), inviting
     // them is a mistake — refuse before any throttle counting or dedup refresh. Runs before the
-    // throttle so a refused invite never burns the inviter's generous budget.
-    const conflictingMember = await findActiveFamilyMemberByContact(tx, {
-      familyId: input.familyId,
-      email: trimmedEmail,
-      phone: trimmedPhone,
-    });
-    if (conflictingMember) {
-      throw new AlreadyFamilyMemberError(
-        `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
-      );
+    // throttle so a refused invite never burns the inviter's generous budget. Skipped for the
+    // person-bound path (#333) — the direct personId+familyId check above already covers it more
+    // precisely, and the bound Person may itself legitimately hold the matching contact.
+    if (!boundPerson) {
+      const conflictingMember = await findActiveFamilyMemberByContact(tx, {
+        familyId: input.familyId,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+      });
+      if (conflictingMember) {
+        throw new AlreadyFamilyMemberError(
+          `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
+        );
+      }
     }
 
     const inviterWindowStart = new Date(
@@ -189,6 +258,108 @@ export async function createInvitation(
           `destination already received ${INVITE_THROTTLE_DESTINATION_LIMIT} invitations in the last 24 hours`,
         );
       }
+    }
+
+    // Person-bound create (#333, ADR-0028): skip the provisional-mint path entirely — anchor
+    // directly on the existing Person. If a live-or-dead pending invite already targets this exact
+    // (family, Person) pair, refresh it in place (mirrors the cold path's one-durable-link and
+    // refresh-in-place rules) instead of inserting a second row for the same invitee.
+    if (boundPerson) {
+      const [existingBound] = await tx
+        .select({
+          id: invitations.id,
+          tokenSealed: invitations.tokenSealed,
+          status: invitations.status,
+          expiresAt: invitations.expiresAt,
+        })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.familyId, input.familyId),
+            eq(invitations.inviteePersonId, boundPerson.id),
+            ne(invitations.status, "accepted"),
+          ),
+        )
+        .orderBy(desc(invitations.createdAt))
+        .limit(1);
+
+      const isLive =
+        existingBound !== undefined &&
+        existingBound.status === "pending" &&
+        (existingBound.expiresAt === null ||
+          existingBound.expiresAt.getTime() > Date.now());
+
+      if (existingBound) {
+        // Recover the durable token for a live invite; null forces rotation (dead invite, or a
+        // legacy row with nothing sealed under the active key) — same rule as the cold path (#116).
+        const durableToken = isLive ? openToken(existingBound.tokenSealed) : null;
+        await tx
+          .update(invitations)
+          .set({
+            inviterPersonId: input.inviterPersonId,
+            createdAt: new Date(),
+            sendCount: sql`${invitations.sendCount} + 1`,
+            ...(durableToken === null
+              ? {
+                  tokenHash: hashToken(token),
+                  tokenSealed: sealToken(token),
+                  status: "pending" as const,
+                  expiresAt,
+                }
+              : {}),
+            ...(input.inviteeName !== undefined
+              ? { inviteeName: input.inviteeName ?? null }
+              : {}),
+            ...(input.inviteeEmail !== undefined
+              ? { inviteeEmail: trimmedEmail }
+              : {}),
+            ...(input.inviteePhone !== undefined
+              ? { inviteePhone: trimmedPhone }
+              : {}),
+            ...(input.deliveryChannels !== undefined
+              ? { deliveryChannels: input.deliveryChannels ?? null }
+              : {}),
+            ...(input.relationshipLabel !== undefined
+              ? { relationshipLabel: input.relationshipLabel ?? null }
+              : {}),
+            ...(input.relationship !== undefined
+              ? { inviteRelationship: input.relationship ?? null }
+              : {}),
+            ...(input.role !== undefined ? { role: input.role } : {}),
+          })
+          .where(eq(invitations.id, existingBound.id));
+
+        return {
+          invitationId: existingBound.id,
+          token: durableToken ?? token,
+          inviteePersonId: boundPerson.id,
+        };
+      }
+
+      // No pending invite yet for this (family, Person) pair — insert one anchored directly on the
+      // existing Person. Prefill the invitee name from the Person's displayName when the caller
+      // supplied none, so the delivery/welcome copy always has a name to show.
+      const [row] = await tx
+        .insert(invitations)
+        .values({
+          tokenHash: hashToken(token),
+          tokenSealed: sealToken(token),
+          familyId: input.familyId,
+          inviterPersonId: input.inviterPersonId,
+          inviteePersonId: boundPerson.id,
+          inviteeName: input.inviteeName ?? boundPerson.displayName ?? null,
+          inviteeEmail: trimmedEmail,
+          inviteePhone: trimmedPhone,
+          deliveryChannels: input.deliveryChannels ?? null,
+          relationshipLabel: input.relationshipLabel ?? null,
+          inviteRelationship: input.relationship ?? null,
+          role: input.role ?? "member",
+          status: "pending",
+          expiresAt,
+        })
+        .returning({ id: invitations.id });
+
+      return { invitationId: row!.id, token, inviteePersonId: boundPerson.id };
     }
 
     // Re-invite dedup: a re-send to someone who was already invited but never joined must NOT mint a
@@ -563,12 +734,19 @@ export async function getInvitationByToken(
  * rejected with `InvariantViolation`. An edited `relationshipLabel` overrides the stored one (the
  * welcome screen lets the user correct it) before the row is persisted.
  *
- * ADR-0006 merge: the invitation anchored a provisional Account-less Person. Acceptance folds that
- * provisional Person into `acceptedPersonId` — queued Asks that targeted the provisional Person are
- * re-pointed to the accepting Person (so questions raised before the invitee joined actually reach
- * them), the invitation's anchor is re-pointed, and the now-empty provisional row is deleted. This
- * is the "acceptance is a link, not a create" outcome (ADR-0006) achieved by merge rather than an
- * in-place account link, so the ADR-0005 JIT provisioning path is left untouched.
+ * ADR-0006 merge: when the invitation anchored a genuine ADR-0006 provisional (`origin === "invitee"`,
+ * Account-less) and a DIFFERENT Person is accepting, acceptance folds that provisional Person into
+ * `acceptedPersonId` — queued Asks that targeted the provisional Person are re-pointed to the
+ * accepting Person (so questions raised before the invitee joined actually reach them), the
+ * invitation's anchor is re-pointed, and the now-empty provisional row is deleted. This is the
+ * "acceptance is a link, not a create" outcome (ADR-0006) achieved by merge rather than an in-place
+ * account link, so the ADR-0005 JIT provisioning path is left untouched.
+ *
+ * Person-bound invites (#333, ADR-0028) may instead anchor to a real, non-provisional Person (e.g. a
+ * `mention` placeholder or another `self` Person entered by a relative). That anchor must NEVER be
+ * silently deleted: a mismatched accept (accepting Person != anchor) against a non-provisional anchor
+ * is refused with `InvariantViolation` rather than merged/deleted. The Account-holder-accepts-their-
+ * own-invite case (accepting Person === anchor) always succeeds — no merge is attempted.
  */
 export async function acceptInvitation(
   db: Database,
@@ -615,24 +793,35 @@ export async function acceptInvitation(
     });
 
     // Merge the provisional invitee Person into the accepting Person, unless the invite already
-    // anchors to them (a no-op re-point). Guard: never destroy a Person that carries an Account —
-    // the provisional row is Account-less by construction, and anything else signals a corrupted
-    // anchor we must not silently delete.
+    // anchors to them (a no-op re-point, the person-bound Account-holder-accepts-their-own-invite
+    // case, #333). Guard: ONLY ever delete a Person that is a genuine ADR-0006 provisional —
+    // `origin === "invitee"` AND Account-less. A person-bound invite (#333, ADR-0028) may anchor to a
+    // real `mention`/`self` Person who happens to have no Account yet (e.g. a deceased-relative
+    // placeholder or a tree Person entered by a relative) — deleting THAT Person on a mismatched
+    // accept would destroy a real tree node the family already built, not clean up a throwaway
+    // placeholder. So a mismatched accept (accepter differs from the anchor) is refused unless the
+    // anchor is unambiguously a disposable provisional.
     const provisionalId = invite.inviteePersonId;
     if (provisionalId !== input.acceptedPersonId) {
-      const [provisional] = await tx
-        .select({ accountId: persons.accountId })
+      const [anchor] = await tx
+        .select({ accountId: persons.accountId, origin: persons.origin })
         .from(persons)
         .where(eq(persons.id, provisionalId))
         .limit(1);
-      if (!provisional) {
+      if (!anchor) {
         throw new InvariantViolation(
           "invitation's provisional invitee Person is missing — cannot merge",
         );
       }
-      if (provisional.accountId !== null) {
+      if (anchor.accountId !== null) {
         throw new InvariantViolation(
           "invitation's invitee anchor is an Account-bearing Person — refusing to merge/delete",
+        );
+      }
+      if (anchor.origin !== "invitee") {
+        throw new InvariantViolation(
+          "invitation's invitee anchor is not a disposable provisional (origin != 'invitee') — " +
+            "refusing to merge/delete a real tree Person; the accepting Person must match the anchor",
         );
       }
       // Move any Asks queued against the provisional invitee onto the real Person.

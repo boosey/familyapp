@@ -19,19 +19,37 @@ export function MemberInviteForm({
   families,
   seededFamily,
   defaultName,
+  defaultEmail,
+  defaultPhone,
+  existingInviteePersonId,
 }: {
-  /** The server action (createMemberInvite in InviteTab). */
-  action: (formData: FormData) => Promise<void>;
+  /**
+   * The server action. The cold Invite tab (`InviteTab.tsx`) binds its void-returning
+   * `createMemberInvite` directly as the native form `action`; the person-bound Invite modal
+   * (#334) instead binds the DISPATCH function `useActionState` returns (so the modal can read a
+   * result back in place, no redirect) — both shapes satisfy `<form action={…}>`.
+   */
+  action: (formData: FormData) => void | Promise<void>;
   /** ALL the viewer's active families — the designator's option set. */
   families: { id: string; name: string; shortName?: string | null }[];
   /** The family the designator seeds from the current browse filter (null = user must pick). */
   seededFamily: string | null;
   /** Pre-filled name when deep-linked from the tree's Invite affordance. */
   defaultName?: string;
+  /** #334 — best-effort email/phone prefill for the person-bound modal. MODAL-ONLY state: this never
+   *  writes back to the Person's own record, it only seeds the form fields for this one send. */
+  defaultEmail?: string;
+  defaultPhone?: string;
+  /**
+   * #334/#333 — when set, this invite is PERSON-BOUND: it anchors on this EXISTING Person instead of
+   * minting a fresh provisional one. Carried as a hidden field so the shared form needs no branching;
+   * the cold Invite tab never sets this.
+   */
+  existingInviteePersonId?: string;
 }) {
   const [name, setName] = useState(defaultName ?? "");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(defaultEmail ?? "");
+  const [phone, setPhone] = useState(defaultPhone ?? "");
 
   const hasEmail = email.trim().length > 0;
   const hasPhone = phone.trim().length > 0;
@@ -39,6 +57,9 @@ export function MemberInviteForm({
 
   return (
     <form action={action} style={{ display: "grid", gap: 20 }}>
+      {existingInviteePersonId && (
+        <input type="hidden" name="existingInviteePersonId" value={existingInviteePersonId} />
+      )}
       <label className="kin-form-label">
         {hub.invite.nameLabel}
         <input

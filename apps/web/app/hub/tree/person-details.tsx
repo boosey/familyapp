@@ -57,13 +57,24 @@ export interface PersonDetailsProps {
   familyId: string;
   /** #5: open the sheet directly in edit mode (used for unknown cards) when the viewer may edit. */
   startInEdit?: boolean;
+  /**
+   * #330 fix — Tree's node-anchored wrapper grows with the canvas, so `position: absolute` (the
+   * default, `"anchored"`) keeps the sheet pinned to that wrapper's own top/right corner, which is
+   * always in view for Tree's fixed-height frame. List's wrapper instead grows with the (potentially
+   * long, scrollable) row list, so an `"anchored"` sheet can land far below the viewport when a lower
+   * row is selected. `"viewport"` uses `position: fixed` with the SAME 12px inset so the sheet always
+   * stays on-screen regardless of scroll position. Tree never passes this — its behavior is unchanged.
+   */
+  placement?: "anchored" | "viewport";
   onClose: () => void;
   /** Called after a successful save so the canvas can refetch the anchor subtree. */
   onSaved?: (personId: string) => void;
   /**
-   * Slice D (#6): open the existing invite flow pre-targeted at this person + family. Rendered as an
-   * "Invite" button only when `node.inviteStatus === "invitable"`. The SAME handler backs the kebab's
-   * Invite… item (canvas passes it to both). Absent ⇒ no invite affordance (e.g. a bare test mount).
+   * #334 (originally Slice D #6): open the in-place person-bound Invite modal for this person.
+   * Rendered as an "Invite" button only when `node.inviteStatus === "invitable"`. The SAME handler
+   * backs the kebab's Invite… item on Tree (canvas passes it to both, #334 AC 5); List (`FamilyTab`)
+   * passes its own instance opening the same `PersonInviteModal`. Absent ⇒ no invite affordance (e.g.
+   * a bare test mount).
    */
   onInvite?: (node: TreeNode) => void;
   /**
@@ -87,6 +98,7 @@ export function PersonDetails({
   relationToViewer,
   familyId,
   startInEdit,
+  placement = "anchored",
   onClose,
   onSaved,
   onInvite,
@@ -155,8 +167,9 @@ export function PersonDetails({
       role="dialog"
       aria-label={name}
       data-testid="tree-person-details"
+      data-placement={placement}
       style={{
-        position: "absolute",
+        position: placement === "viewport" ? "fixed" : "absolute",
         top: 12,
         right: 12,
         width: 280,
@@ -262,9 +275,9 @@ export function PersonDetails({
             </div>
           )}
 
-          {/* Slice D (#6): invite affordance — a button when invitable, a muted note when pending,
-              nothing for accepted / not-applicable. Clicking opens the EXISTING invite flow
-              pre-targeted at this person + family (canvas wires `onInvite`). */}
+          {/* #334 (originally Slice D #6): invite affordance — a button when invitable, a muted note
+              when pending, nothing for not-applicable. Clicking opens the in-place
+              person-bound Invite modal (the caller wires `onInvite` to open it). */}
           {onInvite && node.inviteStatus === "invitable" && (
             <div style={{ marginTop: 12 }}>
               <KindredButton

@@ -135,6 +135,98 @@ export async function canViewerSeePerson(
 }
 
 /**
+ * Invite-standing check (#333, ADR-0028 hardening): is `personId` visible to `viewerPersonId`
+ * through some family they BOTH have a connection to? This is the gate a person-bound Invitation
+ * create must pass — without it, any active member of the TARGET family could hand
+ * `existingInviteePersonId` an arbitrary Person UUID from anywhere in the app, a cross-family PII
+ * leak (a stranger's name/relationship surfaced via the invite flow).
+ *
+ * "Visible" mirrors the same reachability `canViewerSeePerson` and the List/Tree projections use,
+ * generalized to a many-family standing check instead of a single boolean:
+ *   - `personId` is an ACTIVE Member of some family where the viewer also holds active membership, OR
+ *   - `personId` is an endpoint of a currently-VISIBLE kinship edge (latest-supersede + subject-hide
+ *     applied, same as {@link resolveKinshipProjection}) in some family where the viewer holds active
+ *     membership.
+ * Self is always standing (a person always has standing on themselves).
+ *
+ * Batched across the viewer's WHOLE family set in a small, fixed number of queries (membership
+ * lookup, co-membership check, one kinship-assertions scan, one hide-overlay scan) — never a query
+ * per candidate family, so an inviter who belongs to many families does not create an N+1.
+ */
+export async function personVisibleToViewerAcrossFamilies(
+  db: Pick<Database, "select">,
+  viewerPersonId: string,
+  personId: string,
+): Promise<boolean> {
+  if (viewerPersonId === personId) return true;
+
+  const viewerFamilyRows = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(
+      and(eq(memberships.personId, viewerPersonId), eq(memberships.status, "active")),
+    );
+  const familyIds = viewerFamilyRows.map((r) => r.familyId);
+  if (familyIds.length === 0) return false;
+
+  // Direct co-membership: `personId` is an active member of some family the viewer is also active in.
+  const [coMember] = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.status, "active"),
+        inArray(memberships.familyId, familyIds),
+      ),
+    )
+    .limit(1);
+  if (coMember) return true;
+
+  // Otherwise: is `personId` an endpoint of a VISIBLE kinship edge in ANY of those families? One
+  // query across every candidate family for the assertions, one for the hide overlay — mirrors
+  // resolveKinshipProjection's latest-supersede + subject-hide logic, generalized over families.
+  const rows = await db
+    .select()
+    .from(kinshipAssertions)
+    .where(inArray(kinshipAssertions.familyId, familyIds))
+    .orderBy(asc(kinshipAssertions.seq));
+  if (rows.length === 0) return false;
+
+  // Latest row per (family, edge) — rows arrive oldest→newest by seq, so the last write per key wins.
+  const latestByFamilyEdge = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    latestByFamilyEdge.set(`${r.familyId}${SEP}${edgeKey(r)}`, r);
+  }
+
+  const hideRows = await db
+    .select()
+    .from(kinshipSubjectHides)
+    .where(inArray(kinshipSubjectHides.familyId, familyIds))
+    .orderBy(asc(kinshipSubjectHides.seq));
+  const latestHideByFamilyEdgeSubject = new Map<string, boolean>();
+  for (const h of hideRows) {
+    // A hide is the subject's veto — ignore a malformed row whose subject is neither endpoint.
+    if (h.subjectPersonId !== h.personAId && h.subjectPersonId !== h.personBId) continue;
+    latestHideByFamilyEdgeSubject.set(
+      `${h.familyId}${SEP}${edgeKey(h)}${SEP}${h.subjectPersonId}`,
+      h.hidden,
+    );
+  }
+  const hiddenFamilyEdgeKeys = new Set<string>();
+  for (const [key, hidden] of latestHideByFamilyEdgeSubject) {
+    if (hidden) hiddenFamilyEdgeKeys.add(key.slice(0, key.lastIndexOf(SEP)));
+  }
+
+  for (const [familyEdgeKey, edge] of latestByFamilyEdge) {
+    if (!VISIBLE_STATES.has(edge.state)) continue; // denied → not shown
+    if (hiddenFamilyEdgeKeys.has(familyEdgeKey)) continue; // subject veto
+    if (edge.personAId === personId || edge.personBId === personId) return true;
+  }
+  return false;
+}
+
+/**
  * Resolve a family's current kinship projection for a viewer. The viewer MUST hold an active
  * membership in the family (kinship visibility is family-membership-scoped, ADR-0010) — otherwise
  * `AuthorizationError`. Returns only edges whose latest state is visible and which no subject has
@@ -597,15 +689,25 @@ export interface TreeNode {
   hasHiddenParents: boolean;
   hasHiddenChildren: boolean;
   /**
-   * Slice D (#6): whether this person can be invited to create their own Account. Kinship/person
-   * metadata (derived from `persons.accountId`/`identified`/`lifeStatus` + the `invitations` ledger) —
-   * NOT content, so it never widens the Story/Media front door.
-   *   - `accepted`       — already a real user (`accountId != null`).
-   *   - `pending`        — has a LIVE (`pending`, unexpired) invitation.
-   *   - `invitable`      — identified, living, no account, no live invitation.
-   *   - `not-applicable` — bridge/unidentified, deceased, or otherwise not invitable.
+   * Slice D (#6) / #332 (ADR-0028): whether this person can be invited into one of the viewer's
+   * Families. Kinship/person metadata (derived from `persons.accountId`/`identified`/`lifeStatus`,
+   * the `invitations` ledger, and `memberships`) — NOT content, so it never widens the Story/Media
+   * front door.
+   *
+   * ADR-0028 supersedes Slice D's Account-hides-Invite rule with **membership-gap eligibility**: an
+   * Account no longer auto-hides Invite. Order matters:
+   *   - `not-applicable` — bridge/unidentified, or deceased.
+   *   - `pending`        — has a LIVE (`pending`, unexpired) invitation INTO THE BROWSED family
+   *                        (family-scoped — a live invite into a different family does not count).
+   *   - `invitable`      — the viewer has a MEMBERSHIP GAP for this person: at least one of the
+   *                        viewer's own active Families where this person is NOT an active member.
+   *                        Applies whether or not the person has an Account (the canonical case: an
+   *                        Account-holder Member of Family A is still invitable into Family B).
+   *   - `not-applicable` — otherwise (no gap — already an active member of every Family the viewer
+   *                        belongs to, or nothing left to invite into). Account presence is NOT a
+   *                        separate status (#335 retired Account-centric `accepted`).
    */
-  inviteStatus: "invitable" | "pending" | "accepted" | "not-applicable";
+  inviteStatus: "invitable" | "pending" | "not-applicable";
 }
 
 export interface KinshipTreeData {
@@ -618,20 +720,123 @@ export interface KinshipTreeData {
 }
 
 /**
- * Slice D (#6): the pure invite-status rule, factored out so the projection and the tests share ONE
- * source of truth. Order matters — an account-holder is `accepted` even if a stale pending row lingers;
- * a live invite is `pending`; only then does the identified-living-no-account case become `invitable`.
+ * #332 / #335 (ADR-0028): the pure invite-status rule, factored out so the projection and the tests
+ * share ONE source of truth. Membership-gap eligibility is the only Invite affordance model —
+ * Account presence is never its own status (#335 retired `accepted`):
+ *   1. Not identified or deceased → `not-applicable`.
+ *   2. A LIVE pending invitation into the browsed family → `pending`.
+ *   3. A membership gap (the viewer has ≥1 active Family where this person is not an active member) →
+ *      `invitable`, Account or not — the canonical Zach-on-Boudreaux → Carney case.
+ *   4. Otherwise → `not-applicable` (no gap — already a member everywhere the viewer is).
  */
 export function inviteStatusFor(p: {
-  accountId: string | null;
   identified: boolean;
   lifeStatus: "living" | "deceased";
   hasLivePendingInvite: boolean;
+  hasMembershipGap: boolean;
 }): TreeNode["inviteStatus"] {
-  if (p.accountId !== null) return "accepted";
+  if (!p.identified || p.lifeStatus === "deceased") return "not-applicable";
   if (p.hasLivePendingInvite) return "pending";
-  if (p.identified && p.lifeStatus === "living") return "invitable";
+  if (p.hasMembershipGap) return "invitable";
   return "not-applicable";
+}
+
+/** One person's raw metadata inputs to {@link resolveInviteStatuses} — everything `inviteStatusFor`
+ *  needs EXCEPT the two batched facts (`hasLivePendingInvite`/`hasMembershipGap`) that the helper
+ *  itself resolves. */
+export interface InviteStatusSubject {
+  personId: string;
+  identified: boolean;
+  lifeStatus: "living" | "deceased";
+}
+
+/**
+ * #334 (ADR-0028/#332 shared helper): batch-resolve `TreeNode["inviteStatus"]` for an ARBITRARY set
+ * of persons — not just a `resolveKinshipTree` window. Factored out of that function so a second
+ * consumer (List's `loadFamilyTabData`, which must hydrate a real invite status for people OUTSIDE
+ * the tree window — #334) shares the exact same two batched queries and the exact same
+ * `inviteStatusFor` rule, instead of re-deriving them and risking drift.
+ *
+ * Same contract `resolveKinshipTree` applies to its window:
+ *   - "live pending invite" is scoped to `familyId` (the browsed/current family) — an invite into a
+ *     different family never marks a person `pending` here.
+ *   - "membership gap" is computed across `viewingPersonId`'s WHOLE active-family set (not just
+ *     `familyId`) — the canonical case is a person the viewer sees in Family A who is invitable into
+ *     Family B because the viewer belongs to B and this person doesn't.
+ *
+ * Batched: one query for the viewer's own active families, one for every subject's active families,
+ * one for live pending invites scoped to `familyId` — never a query per subject.
+ */
+export async function resolveInviteStatuses(
+  db: Database,
+  viewingPersonId: string,
+  familyId: string,
+  subjects: readonly InviteStatusSubject[],
+): Promise<Map<string, TreeNode["inviteStatus"]>> {
+  const result = new Map<string, TreeNode["inviteStatus"]>();
+  if (subjects.length === 0) return result;
+  const ids = subjects.map((s) => s.personId);
+
+  // Which subjects have a LIVE (pending, unexpired) invitation INTO THIS FAMILY. `expiresAt === null`
+  // is treated as non-expiring (mirrors `acceptInvitation`'s expiry convention).
+  const now = Date.now();
+  const inviteRows = await db
+    .select({ inviteePersonId: invitations.inviteePersonId, expiresAt: invitations.expiresAt })
+    .from(invitations)
+    .where(
+      and(
+        inArray(invitations.inviteePersonId, ids),
+        eq(invitations.familyId, familyId),
+        eq(invitations.status, "pending"),
+      ),
+    );
+  const pendingInvitedIds = new Set<string>();
+  for (const iv of inviteRows) {
+    if (iv.expiresAt === null || iv.expiresAt.getTime() >= now) {
+      pendingInvitedIds.add(iv.inviteePersonId);
+    }
+  }
+
+  // Membership-gap eligibility (#332): does the VIEWER hold active membership in some family where
+  // this subject does NOT? Computed across ALL of the viewer's active families.
+  const viewerFamilyRows = await db
+    .select({ familyId: memberships.familyId })
+    .from(memberships)
+    .where(and(eq(memberships.personId, viewingPersonId), eq(memberships.status, "active")));
+  const viewerFamilyIds = viewerFamilyRows.map((r) => r.familyId);
+
+  const activeFamiliesByPerson = new Map<string, Set<string>>();
+  if (viewerFamilyIds.length > 0) {
+    const memberRows = await db
+      .select({ personId: memberships.personId, familyId: memberships.familyId })
+      .from(memberships)
+      .where(and(inArray(memberships.personId, ids), eq(memberships.status, "active")));
+    for (const row of memberRows) {
+      let s = activeFamiliesByPerson.get(row.personId);
+      if (s === undefined) {
+        s = new Set<string>();
+        activeFamiliesByPerson.set(row.personId, s);
+      }
+      s.add(row.familyId);
+    }
+  }
+  const hasMembershipGap = (personId: string): boolean => {
+    const theirFamilies = activeFamiliesByPerson.get(personId);
+    return viewerFamilyIds.some((fid) => !theirFamilies?.has(fid));
+  };
+
+  for (const s of subjects) {
+    result.set(
+      s.personId,
+      inviteStatusFor({
+        identified: s.identified,
+        lifeStatus: s.lifeStatus,
+        hasLivePendingInvite: pendingInvitedIds.has(s.personId),
+        hasMembershipGap: hasMembershipGap(s.personId),
+      }),
+    );
+  }
+  return result;
 }
 
 /**
@@ -815,39 +1020,23 @@ export async function resolveKinshipTree(
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
             sex: persons.sex,
-            // Slice D (#6): account presence resolves `accepted`; `origin` is read as person metadata
-            // (bridge/mention/self/invitee) — neither is content.
-            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, ids));
 
-  // Slice D (#6): which in-window persons have a LIVE (pending, unexpired) invitation INTO THIS FAMILY.
-  // Id-cheap: we select only the invitee id + expiry for the materialized ids, never the whole
-  // invitations table. Scoped by `familyId` — `persons` rows are global, so a person who is genuinely
-  // invitable in THIS family's tree but has a live pending invite anchored to a DIFFERENT family must
-  // NOT show `pending` here (that would hide a legitimate Invite affordance). `invitations.familyId`
-  // is the required scoping column. `expiresAt === null` is treated as non-expiring (mirrors
-  // `acceptInvitation`'s expiry convention).
-  const pendingInvitedIds = new Set<string>();
-  if (ids.length > 0) {
-    const now = Date.now();
-    const inviteRows = await db
-      .select({ inviteePersonId: invitations.inviteePersonId, expiresAt: invitations.expiresAt })
-      .from(invitations)
-      .where(
-        and(
-          inArray(invitations.inviteePersonId, ids),
-          eq(invitations.familyId, familyId),
-          eq(invitations.status, "pending"),
-        ),
-      );
-    for (const iv of inviteRows) {
-      if (iv.expiresAt === null || iv.expiresAt.getTime() >= now) {
-        pendingInvitedIds.add(iv.inviteePersonId);
-      }
-    }
-  }
+  // #332 / #335 (ADR-0028) — resolve `inviteStatus` for every in-window person via the shared
+  // batch helper (factored out for #334 so List's `loadFamilyTabData` can hydrate the SAME real
+  // status for people outside the tree window without duplicating these queries).
+  const inviteStatusById = await resolveInviteStatuses(
+    db,
+    viewer!,
+    familyId,
+    rows.map((r) => ({
+      personId: r.id,
+      identified: r.identified,
+      lifeStatus: r.lifeStatus,
+    })),
+  );
 
   const nodes: TreeNode[] = rows.map((r) => ({
     personId: r.id,
@@ -860,12 +1049,7 @@ export async function resolveKinshipTree(
     relationToRoot: r.id === rootPersonId ? "self" : (relationOf.get(r.id) ?? null),
     hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
     hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,
-    inviteStatus: inviteStatusFor({
-      accountId: r.accountId,
-      identified: r.identified,
-      lifeStatus: r.lifeStatus,
-      hasLivePendingInvite: pendingInvitedIds.has(r.id),
-    }),
+    inviteStatus: inviteStatusById.get(r.id) ?? "not-applicable",
   }));
 
   // Materialized-but-nonexistent ids (only the invalid root, realistically) don't become nodes; drop

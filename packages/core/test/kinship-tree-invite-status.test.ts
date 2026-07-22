@@ -1,14 +1,15 @@
 /**
- * Slice D (#6): the `inviteStatus` projection truth table on `resolveKinshipTree` (and the pure
- * `inviteStatusFor` rule it shares). Kinship/person metadata only — this reads persons + the
- * invitations ledger, never Story/Media, so it never widens the content front door.
+ * #332 / #335 (ADR-0028): the `inviteStatus` projection truth table on `resolveKinshipTree`
+ * (and the pure `inviteStatusFor` rule it shares). Kinship/person metadata only — this reads persons +
+ * the invitations ledger + memberships, never Story/Media, so it never widens the content front door.
  *
- * Rule (order matters):
- *   - `accepted`       — the person has an `accountId` (already a real user) — wins even over a
- *                        lingering pending row.
- *   - `pending`        — the person has a LIVE (`pending`, unexpired) invitation.
- *   - `invitable`      — identified, living, no account, no live invitation.
- *   - `not-applicable` — bridge/unidentified, deceased, or otherwise not invitable.
+ * Rule (order matters; #335 retired Account-centric `accepted`):
+ *   - `not-applicable` — bridge/unidentified, deceased, OR no membership gap (already a member of
+ *                        every family the viewer belongs to). Account presence is not its own status.
+ *   - `pending`        — the person has a LIVE (`pending`, unexpired) invitation INTO THE BROWSED
+ *                        family — wins even over a membership gap.
+ *   - `invitable`      — the viewer has a MEMBERSHIP GAP for this person (≥1 of the viewer's active
+ *                        families where the person is not an active member) — Account or not.
  *
  * Seeding goes through `resolveKinshipTree`: each subject is wired to the viewer/root by a `parent_of`
  * edge so it materializes in-window, then we assert the projected node's `inviteStatus`.
@@ -57,71 +58,69 @@ async function familyWithViewer() {
   return { viewer, fam };
 }
 
+/**
+ * Two families, one viewer active (steward) in BOTH — the setup for the canonical membership-gap
+ * scenario (#332, ADR-0028): "Zach on Boudreaux → invitable into Carney". `hasMembershipGap` is
+ * computed across ALL of the viewer's active families, not just the browsed one, so a gap in `famB`
+ * can make a person `invitable` even while their tree node is materialized on `famA`.
+ */
+async function twoFamiliesForViewer() {
+  const viewer = await makePerson(db, "Sofia Carney-Boudreaux");
+  const famA = await makeFamily(db, "Boudreaux", viewer.id);
+  const famB = await makeFamily(db, "Carney", viewer.id);
+  await addMembership(db, { personId: viewer.id, familyId: famA.id, role: "steward" });
+  await addMembership(db, { personId: viewer.id, familyId: famB.id, role: "steward" });
+  return { viewer, famA, famB };
+}
+
 function nodeStatus(tree: KinshipTreeData, id: string): string | undefined {
   return tree.nodes.find((n) => n.personId === id)?.inviteStatus;
 }
 
-describe("inviteStatusFor — pure rule", () => {
-  it("accepted wins over a lingering pending invite", () => {
-    expect(
-      inviteStatusFor({
-        accountId: "acct-1",
-        identified: true,
-        lifeStatus: "living",
-        hasLivePendingInvite: true,
-      }),
-    ).toBe("accepted");
+describe("inviteStatusFor — pure rule (membership-gap eligibility, ADR-0028 / #335)", () => {
+  const base = {
+    identified: true,
+    lifeStatus: "living" as const,
+    hasLivePendingInvite: false,
+    hasMembershipGap: false,
+  };
+
+  it("invitable when there is a membership gap (Account-holder or not)", () => {
+    expect(inviteStatusFor({ ...base, hasMembershipGap: true })).toBe("invitable");
   });
 
-  it("pending when a live invite exists and no account", () => {
+  it("not-applicable when there is no membership gap (Account no longer yields accepted)", () => {
+    expect(inviteStatusFor({ ...base, hasMembershipGap: false })).toBe("not-applicable");
+  });
+
+  it("pending wins over a membership gap", () => {
     expect(
       inviteStatusFor({
-        accountId: null,
-        identified: true,
-        lifeStatus: "living",
+        ...base,
+        hasMembershipGap: true,
         hasLivePendingInvite: true,
       }),
     ).toBe("pending");
   });
 
-  it("invitable when identified, living, no account, no live invite", () => {
+  it("not-applicable for an unidentified person even with a membership gap", () => {
     expect(
-      inviteStatusFor({
-        accountId: null,
-        identified: true,
-        lifeStatus: "living",
-        hasLivePendingInvite: false,
-      }),
-    ).toBe("invitable");
-  });
-
-  it("not-applicable for an unidentified person", () => {
-    expect(
-      inviteStatusFor({
-        accountId: null,
-        identified: false,
-        lifeStatus: "living",
-        hasLivePendingInvite: false,
-      }),
+      inviteStatusFor({ ...base, identified: false, hasMembershipGap: true }),
     ).toBe("not-applicable");
   });
 
-  it("not-applicable for a deceased person", () => {
+  it("not-applicable for a deceased person even with a membership gap", () => {
     expect(
-      inviteStatusFor({
-        accountId: null,
-        identified: true,
-        lifeStatus: "deceased",
-        hasLivePendingInvite: false,
-      }),
+      inviteStatusFor({ ...base, lifeStatus: "deceased", hasMembershipGap: true }),
     ).toBe("not-applicable");
   });
 });
 
 describe("resolveKinshipTree — inviteStatus projection (truth table)", () => {
-  it("account-holder → accepted", async () => {
+  it("account-holder with no membership gap → not-applicable (#335 retired accepted)", async () => {
     const { viewer, fam } = await familyWithViewer();
-    // An account-backed person is already a real user.
+    // An account-backed person who is already an active member of the (only) family the viewer
+    // belongs to — no membership gap → not-applicable (Invite stays hidden; Account is irrelevant).
     const { personId: holderId } = await createAccountWithPerson(db, {
       authProviderUserId: "mock:holder",
       provider: "clerk",
@@ -129,10 +128,64 @@ describe("resolveKinshipTree — inviteStatus projection (truth table)", () => {
       email: "holder@example.com",
       displayName: "Marco Esposito",
     });
+    await addMembership(db, { personId: holderId, familyId: fam.id, role: "member" });
     await edgeRootParentOf(fam.id, viewer.id, holderId);
 
     const tree = await resolveKinshipTree(db, account(viewer.id), fam.id, viewer.id);
-    expect(nodeStatus(tree, holderId)).toBe("accepted");
+    expect(nodeStatus(tree, holderId)).toBe("not-applicable");
+  });
+
+  it("account-holder on Family A is invitable when the viewer has a membership gap in Family B (canonical Zach → Carney, #332)", async () => {
+    const { viewer, famA, famB } = await twoFamiliesForViewer();
+    void famB; // establishes the viewer's second family — the gap Zach falls into
+    // Zach is a real account-holder and an active member of famA (Boudreaux) — but NOT of famB
+    // (Carney), where the viewer also holds active membership. That's a membership gap, so Zach is
+    // `invitable` even though he's viewed here, on famA's tree, where he's already a member.
+    const { personId: zachId } = await createAccountWithPerson(db, {
+      authProviderUserId: "mock:zach",
+      provider: "clerk",
+      emailVerified: true,
+      email: "zach@example.com",
+      displayName: "Zach Boudreaux",
+    });
+    await addMembership(db, { personId: zachId, familyId: famA.id, role: "member" });
+    await edgeRootParentOf(famA.id, viewer.id, zachId);
+
+    const tree = await resolveKinshipTree(db, account(viewer.id), famA.id, viewer.id);
+    expect(nodeStatus(tree, zachId)).toBe("invitable");
+  });
+
+  it("account-holder already an active member of ALL the viewer's families → not-applicable", async () => {
+    const { viewer, famA, famB } = await twoFamiliesForViewer();
+    const { personId: markId } = await createAccountWithPerson(db, {
+      authProviderUserId: "mock:mark",
+      provider: "clerk",
+      emailVerified: true,
+      email: "mark@example.com",
+      displayName: "Mark Carney",
+    });
+    // No gap: Mark is an active member of BOTH families the viewer belongs to.
+    await addMembership(db, { personId: markId, familyId: famA.id, role: "member" });
+    await addMembership(db, { personId: markId, familyId: famB.id, role: "member" });
+    await edgeRootParentOf(famA.id, viewer.id, markId);
+
+    const tree = await resolveKinshipTree(db, account(viewer.id), famA.id, viewer.id);
+    expect(nodeStatus(tree, markId)).toBe("not-applicable");
+  });
+
+  it("pending invite into the browsed family wins even when the viewer also has a gap elsewhere", async () => {
+    const { viewer, famA } = await twoFamiliesForViewer();
+    // No account; a live pending invite scoped to famA (the browsed family). The viewer ALSO has a
+    // membership gap in famB (the invitee holds no membership there at all) — pending still wins.
+    const { inviteePersonId } = await createInvitation(db, {
+      familyId: famA.id,
+      inviterPersonId: viewer.id,
+      inviteeName: "Priya",
+    });
+    await edgeRootParentOf(famA.id, viewer.id, inviteePersonId);
+
+    const tree = await resolveKinshipTree(db, account(viewer.id), famA.id, viewer.id);
+    expect(nodeStatus(tree, inviteePersonId)).toBe("pending");
   });
 
   it("live pending invitation → pending", async () => {
@@ -206,9 +259,10 @@ describe("resolveKinshipTree — inviteStatus projection (truth table)", () => {
   });
 
   it("scopes pending status by family — an invite into family X does not mark the person pending in family Y", async () => {
-    // The same global Person is a member of / materialized in two families. A LIVE pending invitation
-    // anchored to family X must NOT leak `pending` into family Y's tree (that would hide a legitimate
-    // Invite affordance in Y). Scoped by `invitations.familyId`.
+    // The same global Person is a member of family X and materialized (but NOT an active member) in
+    // family Y. A LIVE pending invitation anchored to family X must NOT leak `pending` into family Y's
+    // tree (that would hide a legitimate Invite affordance in Y). Scoped by `invitations.familyId`.
+    // `shared` is not an active member of Y, so viewerY has a membership gap there too — `invitable`.
     const shared = await makePerson(db, "Chiara"); // identified, living, no account
 
     // Family X: viewerX invites `shared` — a live pending invite scoped to X.
@@ -224,15 +278,15 @@ describe("resolveKinshipTree — inviteStatus projection (truth table)", () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
 
-    // Family Y: a DIFFERENT family, `shared` materialized, NO invite into Y.
+    // Family Y: a DIFFERENT family. `shared` is materialized on Y's tree via a kinship edge, but is
+    // NOT an active member of Y — a membership gap for viewerY — and has NO invite into Y.
     const { viewer: viewerY, fam: famY } = await familyWithViewer();
-    await addMembership(db, { personId: shared.id, familyId: famY.id, role: "member" });
     await edgeRootParentOf(famY.id, viewerY.id, shared.id);
 
     const treeX = await resolveKinshipTree(db, account(viewerX.id), famX.id, viewerX.id);
     const treeY = await resolveKinshipTree(db, account(viewerY.id), famY.id, viewerY.id);
     expect(nodeStatus(treeX, shared.id)).toBe("pending"); // still pending in X
-    expect(nodeStatus(treeY, shared.id)).toBe("invitable"); // NOT pending in Y
+    expect(nodeStatus(treeY, shared.id)).toBe("invitable"); // NOT pending in Y; gap → invitable
   });
 
   it("revoked invitation on an otherwise-eligible person → invitable (not pending)", async () => {

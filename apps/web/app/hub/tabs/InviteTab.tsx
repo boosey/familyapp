@@ -10,19 +10,19 @@
  * clears it; otherwise it renders the two forms.
  */
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { createInvitation, listActiveFamiliesForPerson, AlreadyFamilyMemberError, ThrottleError } from "@chronicle/core";
-import type { InviteRelationship } from "@chronicle/db";
-import { inviteRelationshipEnum, memberships, persons } from "@chronicle/db/schema";
+import { memberships, persons } from "@chronicle/db/schema";
 import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
 import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
 import { parseInviteIntent, planInviteChannels } from "@/lib/invite-delivery-channels";
+import { parseInviteRelationship } from "@/lib/invite-relationship";
+import { resolveInviteOrigin } from "@/lib/invite-origin";
 import type { FamilyFilter } from "@/lib/family-filter";
-import { resolvePublicOrigin } from "@/lib/public-origin";
 import {
   INVITE_FLASH_COOKIE,
   INVITE_FLASH_PATH,
@@ -37,18 +37,6 @@ import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
 import { MemberInviteForm } from "./MemberInviteForm";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
-
-async function origin(): Promise<string> {
-  const h = await headers();
-  // Prefer the configured public origin (APP_BASE_URL); fall back to request headers. In prod this
-  // never emits a localhost link — resolvePublicOrigin throws if it can't determine a real origin.
-  return resolvePublicOrigin({
-    configuredBaseUrl: process.env.APP_BASE_URL,
-    host: h.get("host"),
-    forwardedProto: h.get("x-forwarded-proto"),
-    isProduction: process.env.NODE_ENV === "production",
-  });
-}
 
 async function createInvite(formData: FormData): Promise<void> {
   "use server";
@@ -79,15 +67,6 @@ async function createInvite(formData: FormData): Promise<void> {
     maxAge: 60,
   });
   redirect("/hub?tab=invite");
-}
-
-/** Narrow an arbitrary form value to the fixed relationship vocabulary; anything else ⇒ "other"
- *  (the safe no-auto-placement fallback — never a guessed edge). The vocabulary is read straight from
- *  the Drizzle enum so this guard can never drift from the schema when a value is added. */
-function parseInviteRelationship(raw: string): InviteRelationship {
-  return (inviteRelationshipEnum.enumValues as readonly string[]).includes(raw)
-    ? (raw as InviteRelationship)
-    : "other";
 }
 
 async function createMemberInvite(formData: FormData): Promise<void> {
@@ -336,7 +315,7 @@ export async function InviteTab({
 
   /* ── Narrator result (show-once) ────────────────────────────────────────────── */
   if (narratorToken) {
-    const link = `${await origin()}/s/${narratorToken}`;
+    const link = `${await resolveInviteOrigin()}/s/${narratorToken}`;
     return (
       <LinkResult
         title={hub.invite.narratorReadyTitle}
@@ -349,7 +328,7 @@ export async function InviteTab({
 
   /* ── Member result (show-once) ───────────────────────────────────────────── */
   if (memberToken) {
-    const link = `${await origin()}/join/${memberToken}`;
+    const link = `${await resolveInviteOrigin()}/join/${memberToken}`;
     const sendingTo = jar.get(MEMBER_INVITE_TARGETS_FLASH_COOKIE)?.value;
     return (
       <LinkResult

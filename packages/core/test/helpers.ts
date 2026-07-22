@@ -1,5 +1,6 @@
 import { media, stories, storyRecordings } from "@chronicle/db/content";
 import {
+  accounts,
   consentRecords,
   families,
   memberships,
@@ -18,6 +19,25 @@ export async function makePerson(db: Database, displayName: string) {
   const [p] = await db
     .insert(persons)
     .values({ displayName, spokenName: displayName })
+    .returning();
+  return p!;
+}
+
+/**
+ * An Account-holder Person — needed for scenarios where the invitee already signed up (e.g. an
+ * Account-holder accepting a person-bound invitation into a second family, ADR-0028).
+ */
+export async function makeAccountPerson(db: Database, displayName: string) {
+  const [acct] = await db
+    .insert(accounts)
+    .values({
+      authProviderUserId: `user_${Math.random()}`,
+      email: `${Math.random()}@example.com`,
+    })
+    .returning({ id: accounts.id });
+  const [p] = await db
+    .insert(persons)
+    .values({ displayName, spokenName: displayName, accountId: acct!.id })
     .returning();
   return p!;
 }
