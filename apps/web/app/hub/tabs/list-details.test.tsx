@@ -11,14 +11,21 @@
  *      non-empty `governableEdges` that DO touch the selected person (Tree-only affordance, #254).
  *   3. Stories/Photos/Mentions links are present with the same hrefs Tree uses.
  *   4. Edit shows up when the (mocked) editability probe says editable — same seam Tree relies on.
- *   5. No Invite button / pending note on the List path (#334 wires Invite later; omitted here).
+ *   5. No Invite button / pending note for a row whose resolved node carries no live `inviteStatus`
+ *      (`resolveListPersonNode` synthesizes `"not-applicable"` for any row outside the tree window —
+ *      unrelated to whether `onInvite` is wired).
+ *   6. #334 — when a List row's resolved node IS `invitable` (i.e. present in the tree window with a
+ *      real `inviteStatus`), the Invite button appears and opens the SAME in-place `PersonInviteModal`
+ *      Tree uses, wired via `FamilyTab`'s `onInvite`.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { GovernableKinEdge, KinshipTreeData } from "@chronicle/core";
+import type { GovernableKinEdge, KinshipTreeData, TreeNode } from "@chronicle/core";
+import { hub } from "@/app/_copy";
 import type { FamilyListPerson } from "@/lib/family-list-people";
 import { hydrateFamilyListPeopleIdentity, resolveListPersonNode } from "@/lib/family-list-people";
 import type { SavePersonEditResult } from "../tree/actions";
+import type { PersonInviteFormState, PersonInviteTargetsResult } from "../tree/person-invite-actions";
 import { PersonDetails } from "../tree/person-details";
 import { FamilyTab } from "./FamilyTab";
 
@@ -89,17 +96,26 @@ const MARCO: FamilyListPerson = {
   sex: "unknown",
 };
 
-function renderListTab(over: { governableEdges?: GovernableKinEdge[] } = {}) {
+function renderListTab(
+  over: {
+    governableEdges?: GovernableKinEdge[];
+    tree?: KinshipTreeData;
+    fetchInviteTargets?: (personId: string) => Promise<PersonInviteTargetsResult>;
+    submitInvite?: (prevState: PersonInviteFormState, formData: FormData) => Promise<PersonInviteFormState>;
+  } = {},
+) {
   render(
     <FamilyTab
       familyId="F"
       focusPersonId="self"
       viewerPersonId="self"
-      tree={treeData()}
+      tree={over.tree ?? treeData()}
       listPeople={[MARCO]}
       view="list"
       governableEdges={over.governableEdges ?? []}
       surface={{ active: "list", familiesParam: null, showRequests: false }}
+      fetchInviteTargets={over.fetchInviteTargets}
+      submitInvite={over.submitInvite}
     />,
   );
 }
@@ -152,12 +168,65 @@ it("hides Edit when the editability probe says not editable", async () => {
   await waitFor(() => expect(screen.queryByTestId("tree-details-edit")).toBeNull());
 });
 
-it("never shows an Invite button or pending note on the List path (#334 lands the modal separately)", async () => {
+it("never shows an Invite button or pending note for a row with no live invite status", async () => {
   renderListTab();
   fireEvent.click(screen.getByTestId("family-list-row-marco"));
   await screen.findByTestId("tree-person-details");
   expect(screen.queryByTestId("tree-details-invite")).toBeNull();
   expect(screen.queryByTestId("tree-details-invite-pending")).toBeNull();
+});
+
+it("#334 — Invite from List details opens the SAME in-place PersonInviteModal Tree uses", async () => {
+  // Give Marco a real, invitable resolved node by putting him in the tree window `resolveListPersonNode`
+  // prefers — this is the one path where List's synthesized node carries a live `inviteStatus` today.
+  const invitableTree: KinshipTreeData = {
+    familyId: "F",
+    rootPersonId: "self",
+    nodes: [
+      {
+        personId: "marco",
+        displayName: "Marco",
+        identified: true,
+        lifeStatus: "living",
+        birthYear: null,
+        deathYear: null,
+        relationToRoot: "sibling",
+        hasHiddenParents: false,
+        hasHiddenChildren: false,
+        sex: "unknown",
+        inviteStatus: "invitable",
+      } satisfies TreeNode,
+    ],
+    edges: [],
+  };
+  const fetchInviteTargets = vi.fn(
+    async (): Promise<PersonInviteTargetsResult> => ({
+      ok: true,
+      data: {
+        families: [{ id: "F", name: "The Carneys", shortName: null }],
+        seededFamilyId: "F",
+        displayName: "Marco",
+        email: "",
+        phone: "",
+      },
+    }),
+  );
+  renderListTab({ tree: invitableTree, fetchInviteTargets, submitInvite: vi.fn() });
+
+  fireEvent.click(screen.getByTestId("family-list-row-marco"));
+  const details = await screen.findByTestId("tree-person-details");
+  fireEvent.click(screen.getByTestId("tree-details-invite"));
+
+  const modal = await screen.findByTestId("person-invite-modal");
+  expect(modal.getAttribute("aria-label")).toBe(hub.personInvite.heading("Marco"));
+  expect(fetchInviteTargets).toHaveBeenCalledWith("marco");
+  // The details sheet stays mounted underneath the modal (#334 AC 4) — List and Tree share this rule.
+  expect(details).toBeTruthy();
+  expect(screen.getByTestId("tree-person-details")).toBeTruthy();
+
+  fireEvent.click(screen.getByTestId("person-invite-close"));
+  expect(screen.queryByTestId("person-invite-modal")).toBeNull();
+  expect(screen.getByTestId("tree-person-details")).toBeTruthy();
 });
 
 it("closing the sheet (×) clears the selection", async () => {

@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Tree Slice D (#6) invite-affordance tests:
+ * Tree Slice D (#6) invite-affordance tests, extended for #334 (ADR-0028):
  *   1. PersonDetails shows the Invite button ONLY for `invitable`; the muted "pending" note for
  *      `pending`; nothing for `accepted`/`not-applicable`. Clicking Invite calls the ONE handler.
  *   2. KebabMenu shows the Invite… item ONLY for `invitable`, and it calls the invite context handler
  *      (the SAME handler the sheet uses).
- *   3. From TreeCanvas, inviting deep-links to the EXISTING invite flow pre-targeted at this
- *      person + family (`/hub?tab=invite&families=<familyId>&inviteeName=<name>`) — no new invite logic;
- *      the target flow's form still posts to `createInvitation`.
+ *   3. From TreeCanvas, BOTH the details-sheet Invite button and the per-card kebab's Invite… item open
+ *      the SAME in-place `PersonInviteModal` (#334 AC 1/5) — the old `/hub?tab=invite&…` deep-link
+ *      (`navigate`) is retired; `TreeCanvas` no longer even accepts a `navigate` prop for this path.
+ *   4. A successful send through the modal leaves the details sheet mounted and open underneath it
+ *      (#334 AC 4) — the modal never closes/replaces `PersonDetails`.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -18,6 +20,7 @@ import { KebabMenu } from "./kebab-menu";
 import { TreeInviteProvider } from "./invite-context";
 import { TreeCanvas } from "./tree-canvas";
 import type { PersonEditabilityResult } from "./actions";
+import type { PersonInviteFormState, PersonInviteTargetsResult } from "./person-invite-actions";
 
 afterEach(cleanup);
 
@@ -127,7 +130,7 @@ it("KebabMenu hides Invite… for pending / accepted / not-applicable", () => {
   }
 });
 
-/* ── 3. TreeCanvas → existing invite flow, pre-targeted ─────────────────────── */
+/* ── 3. TreeCanvas → the in-place PersonInviteModal (#334) ───────────────────── */
 
 const FOCUS = "p-self";
 
@@ -159,30 +162,103 @@ function selfWithInvitableChild(): KinshipTreeData {
   };
 }
 
-it("inviting from the tree deep-links to the existing invite flow, pre-targeted at person + family", () => {
-  const navigate = vi.fn();
+/** Injected fake for `fetchInviteTargets` — never touches the real DB/auth context. */
+async function fakeInviteTargets(): Promise<PersonInviteTargetsResult> {
+  return {
+    ok: true,
+    data: {
+      families: [{ id: "FAM-1", name: "The Riccis", shortName: null }],
+      seededFamilyId: "FAM-1",
+      displayName: "Elena Ricci",
+      email: "",
+      phone: "",
+    },
+  };
+}
+
+function openElenaKebabInvite() {
+  const kebabs = screen.getAllByTestId("tree-kebab-trigger");
+  // Trigger every kebab open, then click the invite item that appears (only Elena is invitable).
+  for (const k of kebabs) act(() => fireEvent.click(k));
+  act(() => fireEvent.click(screen.getByTestId("tree-kebab-invite")));
+}
+
+it("kebab Invite opens the in-place PersonInviteModal — the old deep-link is retired", () => {
   render(
     <TreeCanvas
       familyId="FAM-1"
       focusPersonId={FOCUS}
       viewerPersonId={FOCUS}
       initial={selfWithInvitableChild()}
-      navigate={navigate}
+      fetchInviteTargets={fakeInviteTargets}
+      submitInvite={vi.fn()}
     />,
   );
 
-  // Open Elena's kebab and click Invite…
-  const kebabs = screen.getAllByTestId("tree-kebab-trigger");
-  // Trigger every kebab open, then click the invite item that appears (only Elena is invitable).
-  for (const k of kebabs) act(() => fireEvent.click(k));
-  const inviteItem = screen.getByTestId("tree-kebab-invite");
-  act(() => fireEvent.click(inviteItem));
+  openElenaKebabInvite();
 
-  expect(navigate).toHaveBeenCalledTimes(1);
-  const url = navigate.mock.calls[0]![0] as string;
-  const parsed = new URL(url, "https://example.test");
-  expect(parsed.pathname).toBe("/hub");
-  expect(parsed.searchParams.get("tab")).toBe("invite"); // the EXISTING invite flow
-  expect(parsed.searchParams.get("families")).toBe("FAM-1"); // family pre-targeted
-  expect(parsed.searchParams.get("inviteeName")).toBe("Elena Ricci"); // name pre-filled
+  // TreeCanvas no longer accepts (or uses) a `navigate` prop for this path — the modal is the only
+  // possible outcome, so there is nothing left to assert a deep-link DIDN'T happen beyond this.
+  const modal = screen.getByTestId("person-invite-modal");
+  expect(modal.getAttribute("aria-label")).toBe(hub.personInvite.heading("Elena Ricci"));
+});
+
+it("the details-sheet Invite button opens the SAME modal the kebab opens (#334 AC 5)", async () => {
+  render(
+    <TreeCanvas
+      familyId="FAM-1"
+      focusPersonId={FOCUS}
+      viewerPersonId={FOCUS}
+      initial={selfWithInvitableChild()}
+      fetchInviteTargets={fakeInviteTargets}
+      submitInvite={vi.fn()}
+    />,
+  );
+
+  fireEvent.doubleClick(screen.getByTestId("tree-node-pos-elena"));
+  await screen.findByTestId("tree-person-details");
+  fireEvent.click(screen.getByTestId("tree-details-invite"));
+
+  const modal = await screen.findByTestId("person-invite-modal");
+  expect(modal.getAttribute("aria-label")).toBe(hub.personInvite.heading("Elena Ricci"));
+});
+
+it("a successful send through the modal leaves PersonDetails mounted and open (#334 AC 4)", async () => {
+  const submitInvite = vi.fn(
+    async (): Promise<PersonInviteFormState> => ({
+      status: "sent",
+      link: "https://tellmeagain.app/join/tok123",
+      sendingTo: null,
+    }),
+  );
+  render(
+    <TreeCanvas
+      familyId="FAM-1"
+      focusPersonId={FOCUS}
+      viewerPersonId={FOCUS}
+      initial={selfWithInvitableChild()}
+      fetchInviteTargets={fakeInviteTargets}
+      submitInvite={submitInvite}
+    />,
+  );
+
+  fireEvent.doubleClick(screen.getByTestId("tree-node-pos-elena"));
+  await screen.findByTestId("tree-person-details");
+  fireEvent.click(screen.getByTestId("tree-details-invite"));
+  await screen.findByTestId("person-invite-modal");
+
+  fireEvent.change(screen.getByPlaceholderText(hub.invite.emailPlaceholder), {
+    target: { value: "elena@example.com" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: hub.invite.sendToEmail }));
+  });
+
+  await screen.findByTestId("person-invite-sent");
+  expect(screen.getByTestId("tree-person-details")).toBeTruthy();
+
+  // Closing the (now-successful) modal via Done still leaves the details sheet mounted and open.
+  fireEvent.click(screen.getByTestId("person-invite-done"));
+  expect(screen.queryByTestId("person-invite-modal")).toBeNull();
+  expect(screen.getByTestId("tree-person-details")).toBeTruthy();
 });

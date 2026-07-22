@@ -77,6 +77,7 @@ import {
   ZOOM_MIN,
 } from "./tree-constants";
 import { PersonDetails } from "./person-details";
+import { PersonInviteModal, type PersonInviteModalProps } from "./PersonInviteModal";
 import { KebabMenu } from "./kebab-menu";
 import { TreeInviteProvider } from "./invite-context";
 import { edgeKey, mergeEdges, mergeNodes } from "./merge";
@@ -126,13 +127,6 @@ export interface TreeCanvasProps {
   pan?: { x: number; y: number };
   onPanChange?: (updater: (p: { x: number; y: number }) => { x: number; y: number }) => void;
   /**
-   * Slice D (#6): navigate to a URL (the invite affordance opens the EXISTING invite flow). Defaults to
-   * a full-page nav via `window.location.assign` — matching the tree's router-free discipline (the
-   * canvas mounts standalone in unit tests without a Next router). Overridable so a test can assert the
-   * pre-targeted invite URL without a real navigation.
-   */
-  navigate?: (url: string) => void;
-  /**
    * #251 — active members not yet on a kinship edge. Passed into AddRelativeModal so typing a
    * colliding name can offer connect-existing instead of minting a duplicate.
    */
@@ -162,6 +156,13 @@ export interface TreeCanvasProps {
     zone: PlaceZone;
     relation: AddRelativeRelation;
   }) => void;
+  /**
+   * #334 — overridable seams for the person-bound Invite modal (mirrors `fetchSubtree`'s injection
+   * pattern above): default to the real server actions; tests inject fakes so opening/submitting the
+   * modal never touches the real DB/auth context.
+   */
+  fetchInviteTargets?: PersonInviteModalProps["fetchTargets"];
+  submitInvite?: PersonInviteModalProps["submitInvite"];
 }
 
 
@@ -258,12 +259,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     onScaleChange,
     pan: panProp,
     onPanChange,
-    navigate = defaultNavigate,
     unplacedMembers = [],
     onFamilyMutation,
     governableEdges = [],
     placeSubject = null,
     onPlaceZoneChosen,
+    fetchInviteTargets,
+    submitInvite,
   }: TreeCanvasProps,
   ref,
 ) {
@@ -302,6 +304,10 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // for an UNKNOWN card (unidentified / nameless); the sheet only honors it when the server says the
   // viewer may edit — otherwise it falls back to the read-only view.
   const [details, setDetails] = useState<{ id: string; startInEdit: boolean } | null>(null);
+  // #334 — the person-bound Invite modal target, or null. A sibling overlay of `details`, not a
+  // replacement for it: both can be mounted at once, so the details sheet stays open under the modal
+  // and after a successful send (AC 4).
+  const [inviteNode, setInviteNode] = useState<TreeNode | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
   /** #289 — actable edges opened from a line hit-target. */
   const [lineGovEdges, setLineGovEdges] = useState<GovernableKinEdge[] | null>(null);
@@ -554,22 +560,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     setAddTarget({ anchorPersonId, relation, coParentPersonId });
   }, []);
 
-  // --- Invite (Slice D, #6) ----------------------------------------------------------------------
-  // ONE handler backing BOTH entry points (the details-sheet button and the kebab item). It opens the
-  // EXISTING invite flow (`/hub?tab=invite`) pre-targeted at this person + family — no new invite logic:
-  //   - `families=<familyId>` makes that family the deliberate, pre-selected target (the hub collapses
-  //     the browse filter to the single scope InviteTab honors, ADR-0021), AND
-  //   - `inviteeName=<displayName>` pre-fills the member-invite name field.
-  // The invited person's displayName seeds the name; the form still posts to `createInvitation`.
-  const onInvite = useCallback(
-    (node: TreeNode) => {
-      const params = new URLSearchParams({ tab: "invite", families: familyId });
-      const name = node.displayName?.trim();
-      if (name) params.set("inviteeName", name);
-      navigate(`/hub?${params.toString()}`);
-    },
-    [familyId, navigate],
-  );
+  // --- Invite (#334, ADR-0028) -------------------------------------------------------------------
+  // ONE handler backing BOTH entry points (the details-sheet button and the kebab item, #5) — it opens
+  // the IN-PLACE PersonInviteModal (below) instead of navigating away to `/hub?tab=invite` (#334
+  // retires that deep-link). The modal fetches its own server-prepared targets from `personId`.
+  const onInvite = useCallback((node: TreeNode) => {
+    setInviteNode(node);
+  }, []);
 
   // After a successful add, top the anchor's subtree back up so the new relative appears, then close.
   const refetchAnchor = useCallback(
@@ -1019,6 +1016,16 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
         />
       )}
 
+      {inviteNode && (
+        <PersonInviteModal
+          personId={inviteNode.personId}
+          fallbackName={inviteNode.displayName}
+          onClose={() => setInviteNode(null)}
+          fetchTargets={fetchInviteTargets}
+          submitInvite={submitInvite}
+        />
+      )}
+
       {zonePlace && (
         <PlaceConfirmModal
           familyId={familyId}
@@ -1041,11 +1048,6 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     </TreeFocusProvider>
   );
 });
-
-/** Default full-page navigation for the invite affordance (router-free; see the `navigate` prop). */
-function defaultNavigate(url: string): void {
-  if (typeof window !== "undefined") window.location.assign(url);
-}
 
 /** A thin caret glyph pointing UP by default; rotated to point down. */
 function Caret({ down }: { down: boolean }) {

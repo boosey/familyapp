@@ -7,8 +7,9 @@
  *   - Tree view → the interactive <TreeCanvas> (pan/zoom, per-card add via modal) + unplaced tray.
  *   - List  view → searchable <KinList> of the full family people index (#283). Never hosts
  *     placement/Not-family/Remove or the unplaced tray — but #330 lets a row open the SAME
- *     <PersonDetails> sheet Tree uses (details, Edit, Stories/Photos/Mentions) with edge governance
- *     and the Invite affordance omitted (no `governableEdges`, no `onInvite`).
+ *     <PersonDetails> sheet Tree uses (details, Edit, Stories/Photos/Mentions), with edge governance
+ *     omitted (no `governableEdges` — Tree-only, #283) and Invite (#334) wired to the SAME in-place
+ *     <PersonInviteModal> Tree uses.
  *
  * The Tree/List selection is URL-driven now (#158): the `Family tree · List · Requests` selector lives
  * in <FamilySurfaceNav> (rendered by the page shell) and this component simply renders whichever `view`
@@ -23,7 +24,13 @@
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AddRelativeRelation, GovernableKinEdge, KinshipTreeData, UnplacedMember } from "@chronicle/core";
+import type {
+  AddRelativeRelation,
+  GovernableKinEdge,
+  KinshipTreeData,
+  TreeNode,
+  UnplacedMember,
+} from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import type { FamilyListPerson } from "@/lib/family-list-people";
 import { resolveListPersonNode } from "@/lib/family-list-people";
@@ -34,6 +41,7 @@ import {
 } from "../tree/place-confirm";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
 import { PersonDetails } from "../tree/person-details";
+import { PersonInviteModal, type PersonInviteModalProps } from "../tree/PersonInviteModal";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
@@ -99,6 +107,13 @@ export interface FamilyTabProps {
     requestsBadge?: number;
     inviteHref?: string;
   };
+  /**
+   * #334 — overridable seams for the person-bound Invite modal (mirrors `TreeCanvas`'s own injection
+   * pattern), threaded to BOTH the Tree canvas's modal and List's own modal so a single override covers
+   * either view. Default to the real server actions in production; tests inject fakes.
+   */
+  fetchInviteTargets?: PersonInviteModalProps["fetchTargets"];
+  submitInvite?: PersonInviteModalProps["submitInvite"];
 }
 
 export function FamilyTab({
@@ -114,6 +129,8 @@ export function FamilyTab({
   families = [],
   scopeId,
   surface,
+  fetchInviteTargets,
+  submitInvite,
 }: FamilyTabProps) {
   const router = useRouter();
   // Compact still gates Place→tap→zone (#288); zoom/fit are the progressive Views unit (#297), not a
@@ -126,6 +143,9 @@ export function FamilyTab({
 
   // #330 — List's selected row opens the same PersonDetails sheet Tree uses, no governable edges.
   const [selectedListPerson, setSelectedListPerson] = useState<FamilyListPerson | null>(null);
+  // #334 — List's Invite modal target, a SIBLING overlay of `selectedListPerson`'s details sheet (not
+  // a replacement): closing the modal never closes the details sheet underneath it (AC 4).
+  const [listInviteNode, setListInviteNode] = useState<TreeNode | null>(null);
 
   // #169 / #286: Tree tray always mounts (unplaced members + New person). List never hosts it (#283).
   // On compact, Place/New start a canvas session instead of the unlocked-receiver modal.
@@ -245,10 +265,6 @@ export function FamilyTab({
               onPanChange={(updater) => setPan(updater)}
               scale={scale}
               onScaleChange={(updater) => setScale(updater)}
-              // Slice D (#6): client-side nav for the invite deep-link so pan/zoom state isn't lost to a
-              // full reload (the rest of /hub uses router.push). TreeCanvas keeps window.location.assign as
-              // its DEFAULT so it stays mountable without a router in unit tests.
-              navigate={(url) => router.push(url)}
               unplacedMembers={unplaced}
               onFamilyMutation={() => router.refresh()}
               governableEdges={governableEdges}
@@ -267,6 +283,8 @@ export function FamilyTab({
                     }
                   : undefined
               }
+              fetchInviteTargets={fetchInviteTargets}
+              submitInvite={submitInvite}
             />
           </div>
           {/* #161/#286: Tree tray (unplaced + New person) BELOW the canvas — outside computeTreeLayout /
@@ -293,11 +311,11 @@ export function FamilyTab({
         </>
       ) : (
         // #283: no Place/Not-family/Remove/unplaced tray on List. #330: a row DOES open the same
-        // PersonDetails sheet Tree uses — `governableEdges`/`onInvite` are omitted (edge governance
-        // and Invite stay Tree-only). Unlike Tree's fixed-height canvas frame, this wrapper grows with
-        // the (potentially long, scrollable) row list, so the sheet uses `placement="viewport"`
-        // (`position: fixed`, same 12px inset) instead of Tree's `position: absolute` default — a
-        // lower row's sheet would otherwise park itself off-screen (#330).
+        // PersonDetails sheet Tree uses — `governableEdges` stays omitted (edge governance is Tree-only),
+        // but `onInvite` (#334) wires the SAME in-place Invite modal Tree uses. Unlike Tree's fixed-height
+        // canvas frame, this wrapper grows with the (potentially long, scrollable) row list, so the sheet
+        // uses `placement="viewport"` (`position: fixed`, same 12px inset) instead of Tree's
+        // `position: absolute` default — a lower row's sheet would otherwise park itself off-screen (#330).
         <div style={{ position: "relative" }}>
           <KinList people={listPeople} onSelectPerson={setSelectedListPerson} />
           {selectedListPerson && (
@@ -309,6 +327,18 @@ export function FamilyTab({
               placement="viewport"
               onClose={() => setSelectedListPerson(null)}
               onSaved={() => router.refresh()}
+              // #334 — the SAME in-place Invite modal Tree uses. `governableEdges` stays omitted (edge
+              // governance is Tree-only, #283).
+              onInvite={(node) => setListInviteNode(node)}
+            />
+          )}
+          {listInviteNode && (
+            <PersonInviteModal
+              personId={listInviteNode.personId}
+              fallbackName={listInviteNode.displayName}
+              onClose={() => setListInviteNode(null)}
+              fetchTargets={fetchInviteTargets}
+              submitInvite={submitInvite}
             />
           )}
         </div>

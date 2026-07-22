@@ -311,6 +311,25 @@ export const hub = {
     narratorLabel: "Who's telling the stories?",
     createLink: "Create their link",
   },
+  // Person-bound Invite modal (#334, ADR-0028) — the IN-PLACE modal opened from Tree's details sheet
+  // + kebab and List's details, all three sharing this one surface. Reuses most of `hub.invite`'s
+  // field copy (name/email/phone/relationship/family/send-action labels) via the shared
+  // `MemberInviteForm`; these are the modal-chrome-specific strings.
+  personInvite: {
+    heading: (name: string) => (name ? `Invite ${name}` : "Invite to join"),
+    close: "Close",
+    loading: "Loading invite options…",
+    loadError: "Couldn't load invite options. Please try again.",
+    // Every family the viewer belongs to already has this person as an active member — nothing left
+    // to invite them into (the family designator would otherwise be empty).
+    noEligibleFamilies:
+      "They're already a member of every family you belong to — there's nothing left to invite them into.",
+    // Non-committal fallback for a write-path failure not covered by a more specific hub.invite.* copy
+    // (e.g. the invite's standing check, or a missing/expired input) — leaks nothing about why.
+    genericError: "Couldn't send that invitation. Please try again.",
+    sentBlurb: "Send this to them, or copy the link below — it works whenever they're ready.",
+    done: "Done",
+  },
   requests: {
     signedOut: "Sign in to review join requests.",
     title: "Requests to join",

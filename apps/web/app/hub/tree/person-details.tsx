@@ -70,9 +70,11 @@ export interface PersonDetailsProps {
   /** Called after a successful save so the canvas can refetch the anchor subtree. */
   onSaved?: (personId: string) => void;
   /**
-   * Slice D (#6): open the existing invite flow pre-targeted at this person + family. Rendered as an
-   * "Invite" button only when `node.inviteStatus === "invitable"`. The SAME handler backs the kebab's
-   * Invite… item (canvas passes it to both). Absent ⇒ no invite affordance (e.g. a bare test mount).
+   * #334 (originally Slice D #6): open the in-place person-bound Invite modal for this person.
+   * Rendered as an "Invite" button only when `node.inviteStatus === "invitable"`. The SAME handler
+   * backs the kebab's Invite… item on Tree (canvas passes it to both, #334 AC 5); List (`FamilyTab`)
+   * passes its own instance opening the same `PersonInviteModal`. Absent ⇒ no invite affordance (e.g.
+   * a bare test mount).
    */
   onInvite?: (node: TreeNode) => void;
   /**
@@ -273,9 +275,9 @@ export function PersonDetails({
             </div>
           )}
 
-          {/* Slice D (#6): invite affordance — a button when invitable, a muted note when pending,
-              nothing for accepted / not-applicable. Clicking opens the EXISTING invite flow
-              pre-targeted at this person + family (canvas wires `onInvite`). */}
+          {/* #334 (originally Slice D #6): invite affordance — a button when invitable, a muted note
+              when pending, nothing for accepted / not-applicable. Clicking opens the in-place
+              person-bound Invite modal (the caller wires `onInvite` to open it). */}
           {onInvite && node.inviteStatus === "invitable" && (
             <div style={{ marginTop: 12 }}>
               <KindredButton
