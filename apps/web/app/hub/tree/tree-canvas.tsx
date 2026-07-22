@@ -22,12 +22,14 @@
  *     NOT become a drag (for double-tap detection). Carets & the kebab keep their own stopPropagation.
  *   - Per-direction CARETS expand/collapse a branch — CLIENT ONLY, off the fetch path.
  *   - A "+" opens the Add-a-relative MODAL (via TreeAddProvider); the per-card ⋮ opens the same modal.
- *   - Desktop tray → card-zone DnD (#287): while a tray place-drag is active, identified cards show
- *     top/bottom/side zones; drop opens PlaceConfirmModal (receiverLocked + relationFromZone). Canvas
- *     pan/zoom is unchanged when not dragging from the tray (drag source lives outside the pan layer).
- *   - The kebab Focus action re-roots the tree on that card (server refetch) and recomputes chips/ring,
- *     applying a PAN DELTA so the newly-focused card holds its on-screen position (camera visually still).
- *
+   *   - Desktop tray → card-zone DnD (#287): while a tray place-drag is active, identified cards show
+   *     top/bottom/side zones; drop opens PlaceConfirmModal (receiverLocked + relationFromZone). Canvas
+   *     pan/zoom is unchanged when not dragging from the tray (drag source lives outside the pan layer).
+   *   - Compact Place→tap→zone (#288): placeSubject selects a receiver with a single tap (anonymous
+   *     bridges ignored); then the same CardDropZones overlay in tap mode reports relationFromZone.
+   *   - The kebab Focus action re-roots the tree on that card (server refetch) and recomputes chips/ring,
+   *     applying a PAN DELTA so the newly-focused card holds its on-screen position (camera visually still).
+   *
  * Data loading (spec §7): the initial read is a bounded neighborhood; after each expansion a BACKGROUND
  * fetch tops the buffer up to one layer past the frontier. Best-effort, off the critical path.
  *
@@ -93,7 +95,11 @@ import {
   zoneDropModalProps,
 } from "./place-drag";
 import { useActivePlaceDrag } from "./use-active-place-drag";
-import type { PlaceConfirmSubject } from "./place-confirm";
+import {
+  relationFromZone,
+  type PlaceConfirmSubject,
+  type PlaceZone,
+} from "./place-confirm";
 
 /** Imperative controls FamilyTab drives from the (lifted-out) controls row. */
 export interface TreeCanvasHandle {
@@ -141,6 +147,21 @@ export interface TreeCanvasProps {
    * Remove/Hide are reachable from the tree (not the windowed `initial.edges`, which lack flags).
    */
   governableEdges?: readonly GovernableKinEdge[];
+  /**
+   * #288 — when set, a mobile Place→tap→zone session is active. Single-tap a person to show zones;
+   * zone choice reports via {@link onPlaceZoneChosen}. Pan/zoom stay the canvas gestures (no
+   * person-drag placement). Desktop DnD (#287) does not use this prop.
+   */
+  placeSubject?: PlaceConfirmSubject | null;
+  /**
+   * #288 — fired when the user taps a zone on a selected person during a canvas place session.
+   */
+  onPlaceZoneChosen?: (args: {
+    receiverPersonId: string;
+    receiverDisplayName: string;
+    zone: PlaceZone;
+    relation: AddRelativeRelation;
+  }) => void;
 }
 
 
@@ -241,6 +262,8 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     unplacedMembers = [],
     onFamilyMutation,
     governableEdges = [],
+    placeSubject = null,
+    onPlaceZoneChosen,
   }: TreeCanvasProps,
   ref,
 ) {
@@ -249,6 +272,14 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const [expansion, setExpansion] = useState<ExpansionState>(EMPTY_EXPANSION);
   // The FOCUS person (relation root) — seeded from the prop, re-rooted only by the kebab Focus action.
   const [focusPersonId, setFocusPersonId] = useState(initialFocusPersonId);
+  // #288 — person selected for zone pick during a mobile Place session (not the focus person).
+  const [placeReceiverId, setPlaceReceiverId] = useState<string | null>(null);
+  const placingOnCanvas = placeSubject != null;
+
+  // Clear the zone target when the parent cancels / completes the place session.
+  useEffect(() => {
+    if (!placingOnCanvas) setPlaceReceiverId(null);
+  }, [placingOnCanvas]);
 
   // Camera state. CONTROLLED when the parent passes pan/scale (§5 — FamilyTab owns them for the
   // lifted-out controls row); otherwise managed internally (bare test mounts). The `pan`/`scale` values
@@ -682,6 +713,18 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
       lastTapRef.current = null;
       return;
     }
+    // #288 — during Place→tap→zone, a single tap selects the receiver (zones appear). Details
+    // double-tap is suppressed for the session; pan/zoom remain the canvas gestures above.
+    // Anonymous bridges are inert (#312 parity) — never become place receivers.
+    if (placingOnCanvas) {
+      lastTapRef.current = null;
+      const n = nodeById.get(id);
+      if (!n || isAnonymousBridge(n)) return;
+      setDetails(null);
+      setLineGovEdges(null);
+      setPlaceReceiverId(id);
+      return;
+    }
     const now = e.timeStamp;
     const last = lastTapRef.current;
     if (last && last.id === id && now - last.t <= DOUBLE_TAP_MS) {
@@ -694,6 +737,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // Native double-click (mouse / keyboard-driven) also opens the sheet — a11y + non-pointer paths.
   // Suppressed when the immediately-preceding pointer sequence was a drag (a pan, not a tap).
   const onNodeDoubleClick = (id: string) => {
+    if (placingOnCanvas) return;
     if (lastWasDragRef.current) {
       lastWasDragRef.current = false;
       return;
@@ -831,6 +875,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
             const inert = isAnonymousBridge(p.node);
             const isFocus = p.personId === focusPersonId;
             const isViewer = p.personId === viewerPersonId;
+            const showZones = !inert && placingOnCanvas && placeReceiverId === p.personId;
             return (
               <div
                 key={p.personId}
@@ -847,7 +892,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                   isViewer={isViewer}
                   squareCorner={squareCornerByPerson.get(p.personId)}
                   kebab={
-                    inert ? undefined : (
+                    inert || placingOnCanvas ? undefined : (
                       <KebabMenu
                         node={p.node}
                         parentCount={c.parents}
@@ -857,10 +902,11 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                     )
                   }
                 />
-                {/* #287 — zone overlays only while a tray place-drag is active (pan unaffected otherwise). */}
+                {/* #287 drop / #288 tap — same CardDropZones + relationFromZone; never on inert bridges. */}
                 {!inert && activePlaceDrag ? (
                   <CardDropZones
                     personId={p.personId}
+                    mode="drop"
                     active
                     onZoneDrop={(zone) => {
                       const payload = getActivePlaceDrag() ?? activePlaceDrag;
@@ -879,6 +925,19 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                         subject: props.subject,
                         receiver: props.receiver,
                         initialRelation: props.initialRelation,
+                      });
+                    }}
+                  />
+                ) : showZones ? (
+                  <CardDropZones
+                    personId={p.personId}
+                    mode="tap"
+                    onZoneChoose={(zone) => {
+                      onPlaceZoneChosen?.({
+                        receiverPersonId: p.personId,
+                        receiverDisplayName: displayNameFor(p.node),
+                        zone,
+                        relation: relationFromZone(zone),
                       });
                     }}
                   />

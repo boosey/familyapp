@@ -193,4 +193,26 @@
   outline-offset: 2px;
 }
 
+/* #288 — mobile Place→tap→zone session hint in the tray. */
+.placeHint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.placeHintText {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
 /* Modal overlay/dialog styles live in place-confirm-modal.module.css (#286). */

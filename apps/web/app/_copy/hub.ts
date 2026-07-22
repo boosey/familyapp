@@ -1157,6 +1157,15 @@ export const hub = {
     zoneParent: "Parent",
     zoneChild: "Child",
     zonePartner: "Partner",
+    // #288 — mobile Place → tap person → tap zone (ADR-0027). Same zone map as #287 (relationFromZone).
+    placeZonesAria: "Choose how they're related",
+    placeZoneParent: "Place as parent",
+    placeZoneChild: "Place as child",
+    placeZonePartner: "Place as partner",
+    placeTapHintLink: (name: string) =>
+      `Tap someone on the tree, then a zone, to place ${name}.`,
+    placeTapHintMint: "Tap someone on the tree, then a zone, to place the new person.",
+    placeTapCancel: "Cancel placing",
   },
   // Tree place-confirm modal (#286 / ADR-0027) — shared by tray New person + unplaced Place.
   // Desktop DnD (#287) and mobile Place→tap (#288) reopen this same surface.

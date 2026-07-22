@@ -14,14 +14,21 @@
  * This component owns ONLY the family-selector row (#159): the shared single-select <FamilyChips>
  * (`?families=`) with the tree's `Fit / − / +` controls right-justified on the same row (tree view
  * only). Camera state (pan/scale) is lifted here so those controls can drive the canvas.
+ *
+ * #288 — on compact viewports, Place / New person run Place→tap person→tap zone into the shared
+ * PlaceConfirmModal (desktop keeps the unlocked-receiver modal; #287 owns tray DnD).
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { GovernableKinEdge, KinshipTreeData, UnplacedMember } from "@chronicle/core";
+import type { AddRelativeRelation, GovernableKinEdge, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import type { FamilyListPerson } from "@/lib/family-list-people";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
+import {
+  type PlaceConfirmSubject,
+} from "../tree/place-confirm";
+import { PlaceConfirmModal } from "../tree/place-confirm-modal";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
@@ -32,6 +39,13 @@ import styles from "./FamilyTab.module.css";
 const clampScale = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
 
 export type FamilyView = "tree" | "list";
+
+type MobilePlaceConfirm = {
+  subject: PlaceConfirmSubject;
+  receiverPersonId: string;
+  receiverDisplayName: string;
+  relation: AddRelativeRelation;
+};
 
 export interface FamilyTabProps {
   familyId: string;
@@ -103,7 +117,12 @@ export function FamilyTab({
   // do NOT hand the zoom controls to FamilySurfaceNav on compact. SSR/first-paint = desktop.
   const compact = useIsCompact();
 
+  // #288 — mobile Place→tap→zone session (subject picking) + locked-receiver confirm after a zone tap.
+  const [canvasPlaceSubject, setCanvasPlaceSubject] = useState<PlaceConfirmSubject | null>(null);
+  const [mobilePlaceConfirm, setMobilePlaceConfirm] = useState<MobilePlaceConfirm | null>(null);
+
   // #169 / #286: Tree tray always mounts (unplaced members + New person). List never hosts it (#283).
+  // On compact, Place/New start a canvas session instead of the unlocked-receiver modal.
   const unplacedTray =
     view === "tree" ? (
       <UnplacedMembers
@@ -112,6 +131,23 @@ export function FamilyTab({
         viewerIsSteward={viewerIsSteward}
         variant="tray"
         showNewPerson
+        onStartCanvasPlace={
+          compact
+            ? (subject) => {
+                setMobilePlaceConfirm(null);
+                setCanvasPlaceSubject(subject);
+              }
+            : undefined
+        }
+        canvasPlaceSubject={compact ? canvasPlaceSubject : null}
+        onCancelCanvasPlace={
+          compact
+            ? () => {
+                setCanvasPlaceSubject(null);
+                setMobilePlaceConfirm(null);
+              }
+            : undefined
+        }
       />
     ) : null;
 
@@ -221,6 +257,21 @@ export function FamilyTab({
               unplacedMembers={unplaced}
               onFamilyMutation={() => router.refresh()}
               governableEdges={governableEdges}
+              placeSubject={compact ? canvasPlaceSubject : null}
+              onPlaceZoneChosen={
+                compact
+                  ? ({ receiverPersonId, receiverDisplayName, relation }) => {
+                      if (!canvasPlaceSubject) return;
+                      setMobilePlaceConfirm({
+                        subject: canvasPlaceSubject,
+                        receiverPersonId,
+                        receiverDisplayName,
+                        relation,
+                      });
+                      setCanvasPlaceSubject(null);
+                    }
+                  : undefined
+              }
             />
             {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
           </div>
@@ -228,6 +279,23 @@ export function FamilyTab({
               the pan-zoom layer so it never destabilizes the pedigree layout engine. List does not
               host this tray (#283). */}
           {unplacedTray}
+          {mobilePlaceConfirm ? (
+            <PlaceConfirmModal
+              familyId={familyId}
+              subject={mobilePlaceConfirm.subject}
+              receiver={{
+                personId: mobilePlaceConfirm.receiverPersonId,
+                displayName: mobilePlaceConfirm.receiverDisplayName,
+              }}
+              receiverLocked
+              initialRelation={mobilePlaceConfirm.relation}
+              onClose={() => setMobilePlaceConfirm(null)}
+              onSuccess={() => {
+                setMobilePlaceConfirm(null);
+                router.refresh();
+              }}
+            />
+          ) : null}
         </>
       ) : (
         // #283: browse-only people index — no governable-edges section, no Place/Not-family/Remove.
