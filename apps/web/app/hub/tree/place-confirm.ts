@@ -53,6 +53,11 @@ export type PlaceConfirmWriteOpts = {
   coParentPersonIds?: string[];
   stepParentOfChildIds?: string[];
   nature?: KinshipNature;
+  /**
+   * When provided (partner confirm UIs), enforces ADR-0027 offer-never-silent on commit:
+   * partner + kids requires an explicit `stepParentOfChildIds` array (possibly empty = decline).
+   */
+  anchorChildIds?: string[];
 };
 
 export type PlaceConfirmLinkDeps = {
@@ -102,24 +107,28 @@ export async function commitPlaceLink(
     nature: relation === "parent" || relation === "child" ? opts.nature : undefined,
   };
 
-  const res = await commitPlacement(placement, {
-    onLink: async (p) => {
-      const cps = p.coParentPersonIds ?? [];
-      const result = await onLink(
-        p.familyId,
-        p.existingPersonId,
-        p.relation,
-        p.receiverPersonId,
-        cps.length === 1 ? cps[0] : undefined,
-        {
-          coParentPersonIds: cps.length > 0 ? cps : undefined,
-          stepParentOfChildIds: p.stepParentOfChildIds,
-          nature: p.nature,
-        },
-      );
-      return result.ok ? { ok: true } : { ok: false };
+  const res = await commitPlacement(
+    placement,
+    {
+      onLink: async (p) => {
+        const cps = p.coParentPersonIds ?? [];
+        const result = await onLink(
+          p.familyId,
+          p.existingPersonId,
+          p.relation,
+          p.receiverPersonId,
+          cps.length === 1 ? cps[0] : undefined,
+          {
+            coParentPersonIds: cps.length > 0 ? cps : undefined,
+            stepParentOfChildIds: p.stepParentOfChildIds,
+            nature: p.nature,
+          },
+        );
+        return result.ok ? { ok: true } : { ok: false };
+      },
     },
-  });
+    opts.anchorChildIds !== undefined ? { anchorChildIds: opts.anchorChildIds } : undefined,
+  );
   return { ok: res.ok };
 }
 
@@ -139,6 +148,10 @@ export async function commitPlaceMint(
     lifeStatus?: "living" | "deceased";
     deathYear?: number;
     sex?: PersonSex;
+    /**
+     * When provided, enforces offer-never-silent on partner commits (same as link path).
+     */
+    anchorChildIds?: string[];
   },
   deps: PlaceConfirmMintDeps = {},
 ): Promise<{ ok: boolean; error?: string }> {
@@ -171,7 +184,11 @@ export async function commitPlaceMint(
         : undefined,
   };
 
-  return commitPlacement(placement, { onMint });
+  return commitPlacement(
+    placement,
+    { onMint },
+    fields.anchorChildIds !== undefined ? { anchorChildIds: fields.anchorChildIds } : undefined,
+  );
 }
 
 export const PLACE_CONFIRM_RELATIONS: readonly AddRelativeRelation[] = [

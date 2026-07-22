@@ -253,6 +253,8 @@ export function PlaceConfirmModal({
         stepParentOfChildIds:
           relation === "partner" ? stepParentOfChildIds : undefined,
         nature: showNature ? nature : undefined,
+        // Always pass known kids so Placement rejects unresolved partner offers (#318).
+        anchorChildIds: children.map((c) => c.id),
       };
       if (subject.kind === "link") {
         const res = await commitPlaceLink(

@@ -220,3 +220,59 @@ describe("resolvePartnerChildrenOffer (#318 — single orchestration)", () => {
     ).toEqual({ type: "ready", stepParentOfChildIds: undefined });
   });
 });
+
+describe("commitPlaceMint / commitPlaceLink enforce offer on production path (#318)", () => {
+  it("commitPlaceMint rejects partner+kids when stepParentOfChildIds omitted", async () => {
+    const { commitPlaceMint } = await import("./place-confirm");
+    const onMint = vi.fn(async () => ({ ok: true as const }));
+    const res = await commitPlaceMint(
+      "F",
+      "partner",
+      "anchor",
+      {
+        displayName: "Pat",
+        anchorChildIds: ["kid-1"],
+        // stepParentOfChildIds deliberately omitted
+      },
+      { onMint },
+    );
+    expect(res).toEqual({ ok: false, error: "offer-unresolved" });
+    expect(onMint).not.toHaveBeenCalled();
+  });
+
+  it("commitPlaceMint accepts explicit empty decline with anchorChildIds", async () => {
+    const { commitPlaceMint } = await import("./place-confirm");
+    const onMint = vi.fn(async (p: MintPlacement) => {
+      expect(p.stepParentOfChildIds).toEqual([]);
+      return { ok: true as const };
+    });
+    const res = await commitPlaceMint(
+      "F",
+      "partner",
+      "anchor",
+      {
+        displayName: "Pat",
+        stepParentOfChildIds: [],
+        anchorChildIds: ["kid-1"],
+      },
+      { onMint },
+    );
+    expect(res).toEqual({ ok: true });
+    expect(onMint).toHaveBeenCalledTimes(1);
+  });
+
+  it("commitPlaceLink rejects unresolved partner offer when anchorChildIds set", async () => {
+    const { commitPlaceLink } = await import("./place-confirm");
+    const onLink = vi.fn(async () => ({ ok: true as const }));
+    const res = await commitPlaceLink(
+      "F",
+      "u1",
+      "partner",
+      "anchor",
+      { anchorChildIds: ["kid-1"] },
+      { onLink },
+    );
+    expect(res).toEqual({ ok: false });
+    expect(onLink).not.toHaveBeenCalled();
+  });
+});

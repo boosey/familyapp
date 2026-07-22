@@ -164,6 +164,7 @@ export function AddRelativeForm({
         {
           ...fields,
           stepParentOfChildIds,
+          anchorChildIds: childOptions.map((c) => c.id),
         },
         { onMint },
       );
@@ -220,6 +221,7 @@ export function AddRelativeForm({
           coParentPersonIds: fields.coParentPersonIds,
           stepParentOfChildIds,
           nature: fields.nature,
+          anchorChildIds: childOptions.map((c) => c.id),
         },
         { onLink: onLinkExisting },
       );
