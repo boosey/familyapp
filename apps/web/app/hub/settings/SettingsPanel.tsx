@@ -7,10 +7,18 @@ import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
 import { KindredRecordingGesturePicker } from "@/app/_kindred/KindredRecordingGesturePicker";
 import { hub } from "@/app/_copy";
 import type { CSSProperties } from "react";
+import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
+import { NotificationsSection } from "./NotificationsSection";
 
-export function SettingsPanel() {
+export interface SettingsPanelProps {
+  notificationFrequencies: Record<NotificationStream, NotificationFrequency>;
+}
+
+export function SettingsPanel({ notificationFrequencies }: SettingsPanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+      <NotificationsSection initialFrequencies={notificationFrequencies} />
+
       <section aria-labelledby="settings-skin">
         <h2 id="settings-skin" style={sectionTitle}>
           {hub.settings.skinHeading}
