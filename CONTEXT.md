@@ -48,11 +48,12 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   changes. Current state (onboarded? member? living?) lives in `accountId` / `memberships` /
   `lifeStatus`, not here. The housekeeping reaper keys off `origin = invitee AND never accepted` —
   **never** off `mention`.
-- **Dedup-on-invite** — inviting a person already present as a `mention` must **not** mint a second
-  row; it reuses the existing Person and attaches the invitation. Default match heuristic is
-  *name + inviter*, but a match only **offers** ("is this the same person?") for the inviter to
-  confirm — never merges silently (two relatives can share a name; a mention and an invite can come
-  from different people).
+- **Dedup-on-invite** — inviting someone already known as a Person (a tree `mention`, a List/Tree
+  row, or any other existing identity) must **not** mint a second row; it reuses that Person and
+  attaches a **person-bound Invitation**. When the inviter starts from a cold contact rather than a
+  known row, the default match heuristic is *name + inviter*, but a match only **offers** ("is this
+  the same person?") for the inviter to confirm — never merges silently (two relatives can share a
+  name; a mention and an invite can come from different people).
 
 - **Placeholder (unidentified) Person** — a `mention` Person with **`identified = false`** and no
   name, existing only to **bridge a generation** the asserter can't or won't name (a granddaughter
@@ -94,8 +95,10 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   parent. Same **offer-never-silent** discipline as Dedup-on-invite and Finish check (ADR-0027).
 - **Family tab List** — the Family tab's **browse-only people index**: the full family projection
   (members and tree-placed kin), with a **Member** vs **tree-only** badge so membership and kinship
-  stay visually distinct. No placement, no relationship governance, no unplaced queue — those live on
-  the Tree (ADR-0023 amendment).
+  stay visually distinct. A List row may open the same **Person details** surface as Tree (Edit when
+  allowed, contribution links, and a person-bound Invite when eligible). List still does **not** host
+  placement, edge Remove/Hide, relationship governance, or the unplaced queue — those stay on the
+  Tree (ADR-0023 amendment, ADR-0028).
 - **Family tab Tree** — the Family tab's surface for **place, relate, and govern**. Holds the kinship
   canvas, the **tree tray** (unplaced members + New person), zone-based placement with confirm, and
   edge governance. Distinct from List (ADR-0023 amendment, ADR-0027).
@@ -153,10 +156,28 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 
 ## Joining a family (the new flows)
 - **Invitation** — a system-delivered link a member sends to someone (possibly unknown to the
-  system). The inviter supplies the invitee's contact; the system delivers the invite over an
-  **Outbound channel** and records that contact as the invitee's notification channel. Accepting it
-  creates/links the invitee's Account and an active Membership. (The invitation is thus the moment
-  the system learns how to reach a Person — the precondition for ever notifying them.)
+  system, or already known as a Person on List/Tree). The inviter supplies the invitee's contact
+  (or confirms a prefilled one); the system delivers the invite over an **Outbound channel** and
+  records that contact as the invitee's notification channel. Accepting it creates/links the
+  invitee's Account (when needed) and an active Membership in the target Family — without minting a
+  second Person when the invite was **person-bound**. (The invitation is thus often the moment the
+  system learns how to reach a Person — the precondition for ever notifying them.) One Invitation
+  targets exactly one Family (ADR-0023).
+- **Person-bound Invitation** — an Invitation attached to an **existing** Person on create
+  (**Dedup-on-invite**). Used when inviting from List or Tree details (or Tree kebab): reuse that
+  Person's row; refuse create if they already hold an active Membership in the target Family. Cold
+  invites (Invite tab, no known row) may still mint a provisional Person (ADR-0006); person-bound
+  create does not.
+- **Invite eligibility** — whether the viewer may be offered an Invite affordance for a given
+  Person. Eligibility is about **Membership gaps across the viewer's Families**, not "has never had
+  an Account." An identified living Person remains invitable when the viewer has at least one Family
+  where that Person is not an active Member. Having an Account does **not** by itself hide Invite —
+  pending status stays scoped to the Family being invited into (the chosen target), not some other
+  Family (ADR-0028).
+- **Co-member contacts** — active co-members *may* see each other's contact channels for product
+  flows that need them. The List/Tree Invite modal may **prefill** name and email/phone from those
+  contacts; Person details does not permanently surface contacts in this slice. An option for a
+  Person to hide contacts from family members is deferred (#331); not implemented here.
 - **Magic link** — a texted or emailed deep link whose token is a **passwordless login to the
   Person's existing Account**, routing straight to a specific question's answer page. Time-boxed and
   reusable within its window. The link is the password (a bearer credential), accepted deliberately
