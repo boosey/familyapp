@@ -33,6 +33,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     birthYear: over.birthYear ?? null,
     deathYear: over.deathYear ?? null,
     sex: over.sex ?? "unknown",
+    inviteStatus: over.inviteStatus ?? "not-applicable",
   };
 }
 

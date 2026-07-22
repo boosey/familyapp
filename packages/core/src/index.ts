@@ -285,6 +285,7 @@ export {
   listPlacedPersons,
   resolveKinshipTree,
   inviteStatusFor,
+  resolveInviteStatuses,
   canViewerSeePerson,
   personVisibleToViewerAcrossFamilies,
   bothEndpointsIdentified,
@@ -300,6 +301,7 @@ export {
   type TreeNode,
   type KinshipTreeData,
   type PlacedPersonView,
+  type InviteStatusSubject,
 } from "./kinship-repository";
 export {
   addRelative,

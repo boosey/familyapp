@@ -111,7 +111,7 @@ describe("projectFamilyListPeople (#283)", () => {
     }
   });
 
-  it("#330 fix — never invents identity: birthYear/deathYear/sex default null/null/unknown (loader hydrates them)", () => {
+  it("#330/#334 fix — never invents identity or invite status: birthYear/deathYear/sex/inviteStatus default null/null/unknown/not-applicable (loader hydrates them)", () => {
     const rows = projectFamilyListPeople({
       members: [member({ personId: "m" })],
       unplaced: [],
@@ -119,7 +119,13 @@ describe("projectFamilyListPeople (#283)", () => {
       placed: [],
     });
     expect(rows).toEqual([
-      expect.objectContaining({ personId: "m", birthYear: null, deathYear: null, sex: "unknown" }),
+      expect.objectContaining({
+        personId: "m",
+        birthYear: null,
+        deathYear: null,
+        sex: "unknown",
+        inviteStatus: "not-applicable",
+      }),
     ]);
   });
 });
@@ -135,11 +141,23 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
       new Map([
         [
           "eleanor",
-          { lifeStatus: "deceased" as const, birthYear: 1940, deathYear: 2010, sex: "female" as const },
+          {
+            lifeStatus: "deceased" as const,
+            birthYear: 1940,
+            deathYear: 2010,
+            sex: "female" as const,
+            inviteStatus: "not-applicable" as const,
+          },
         ],
         [
           "marco",
-          { lifeStatus: "living" as const, birthYear: 1975, deathYear: null, sex: "male" as const },
+          {
+            lifeStatus: "living" as const,
+            birthYear: 1975,
+            deathYear: null,
+            sex: "male" as const,
+            inviteStatus: "invitable" as const,
+          },
         ],
       ]),
     );
@@ -148,12 +166,14 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
       birthYear: 1940,
       deathYear: 2010,
       sex: "female",
+      inviteStatus: "not-applicable",
     });
     expect(hydrated.find((r) => r.personId === "marco")).toMatchObject({
       lifeStatus: "living",
       birthYear: 1975,
       deathYear: null,
       sex: "male",
+      inviteStatus: "invitable",
     });
   });
 
@@ -169,7 +189,16 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
     const hydrated = hydrateFamilyListPeopleIdentity(
       projected,
       new Map([
-        ["rosa", { lifeStatus: "deceased", birthYear: 1920, deathYear: 1995, sex: "female" }],
+        [
+          "rosa",
+          {
+            lifeStatus: "deceased",
+            birthYear: 1920,
+            deathYear: 1995,
+            sex: "female",
+            inviteStatus: "not-applicable",
+          },
+        ],
       ]),
     );
     expect(hydrated[0]).toMatchObject({
@@ -199,6 +228,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     birthYear: over.birthYear ?? null,
     deathYear: over.deathYear ?? null,
     sex: over.sex ?? "unknown",
+    inviteStatus: over.inviteStatus ?? "not-applicable",
   };
 }
 
@@ -276,9 +306,25 @@ describe("resolveListPersonNode (#330)", () => {
     expect(resolved.sex).toBe("female");
   });
 
-  it("synthesizes not-applicable invite status even for an identified living unplaced member", () => {
-    // #330: List never surfaces an invite affordance for a synthesized node — Invite stays Tree-only
-    // until #334 wires the modal.
+  it("#334 fix — synthesizes the person's REAL inviteStatus, not a hardcoded not-applicable", () => {
+    // Critical-bug regression: `resolveListPersonNode` used to hardcode `inviteStatus: "not-applicable"`
+    // for every synthesized node — a person outside the tree window (any unplaced member, or a
+    // tree-only relative outside the rendered window) could never show List's Invite affordance even
+    // when the loader-hydrated `FamilyListPerson.inviteStatus` was real and `"invitable"`.
+    const resolved = resolveListPersonNode(
+      person({
+        personId: "rosa",
+        displayName: "Rosa",
+        identified: true,
+        lifeStatus: "living",
+        inviteStatus: "invitable",
+      }),
+      [],
+    );
+    expect(resolved.inviteStatus).toBe("invitable");
+  });
+
+  it("synthesizes not-applicable invite status when the hydrated FamilyListPerson carries it (e.g. deceased/no gap)", () => {
     const resolved = resolveListPersonNode(
       person({ personId: "rosa", displayName: "Rosa", identified: true, lifeStatus: "living" }),
       [],

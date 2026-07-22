@@ -18,10 +18,12 @@ import {
   listMembersOfFamily,
   listPlacedPersons,
   resolveKinshipTree,
+  resolveInviteStatuses,
   AuthorizationError,
   type AuthContext,
   type GovernableKinEdge,
   type KinshipTreeData,
+  type TreeNode,
   type UnplacedMember,
 } from "@chronicle/core";
 import { inArray } from "drizzle-orm";
@@ -113,9 +115,11 @@ export async function loadFamilyTabData(
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
   const projected = projectFamilyListPeople({ kin, unplaced, members, placed });
 
-  // #330 fix — hydrate REAL lifeStatus/birthYear/deathYear/sex from `persons` for every projected id, so
-  // `resolveListPersonNode` never has to synthesize a null/"unknown"/"living" placeholder for a person
-  // outside the current tree window (List's projector itself has no identity source).
+  // #330/#334 fix — hydrate REAL lifeStatus/birthYear/deathYear/sex/inviteStatus from `persons` (+ the
+  // shared `resolveInviteStatuses` batch, ADR-0028/#332) for every projected id, so
+  // `resolveListPersonNode` never has to synthesize a null/"unknown"/"living"/"not-applicable"
+  // placeholder for a person outside the current tree window (List's projector itself has no identity
+  // or invite-status source).
   const identityRows =
     projected.length > 0
       ? await db
@@ -125,10 +129,29 @@ export async function loadFamilyTabData(
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
             sex: persons.sex,
+            identified: persons.identified,
+            accountId: persons.accountId,
           })
           .from(persons)
           .where(inArray(persons.id, projected.map((p) => p.personId)))
       : [];
+  // #334 — same batch invite-status rule `resolveKinshipTree` applies to its window, scoped to THIS
+  // (browsed) family for pending-invite purposes and to the viewer's WHOLE active-family set for the
+  // membership-gap check (see `resolveInviteStatuses`'s doc comment).
+  const inviteStatusById =
+    identityRows.length > 0
+      ? await resolveInviteStatuses(
+          db,
+          viewerId,
+          familyId,
+          identityRows.map((r) => ({
+            personId: r.id,
+            identified: r.identified,
+            lifeStatus: r.lifeStatus,
+            hasAccount: r.accountId !== null,
+          })),
+        )
+      : new Map<string, TreeNode["inviteStatus"]>();
   const identityById = new Map<string, FamilyListPersonIdentity>(
     identityRows.map((r) => [
       r.id,
@@ -137,6 +160,7 @@ export async function loadFamilyTabData(
         birthYear: r.birthYear,
         deathYear: r.deathYear,
         sex: r.sex ?? "unknown",
+        inviteStatus: inviteStatusById.get(r.id) ?? "not-applicable",
       },
     ]),
   );

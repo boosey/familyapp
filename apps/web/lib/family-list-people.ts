@@ -39,6 +39,15 @@ export interface FamilyListPerson {
   birthYear: number | null;
   deathYear: number | null;
   sex: PersonSex;
+  /**
+   * #334 fix — the person's REAL `inviteStatus` (never invented), so `resolveListPersonNode` can
+   * synthesize an accurate `TreeNode` for people outside the current tree window and List's Invite
+   * button/pending note show for them too. `projectFamilyListPeople` itself has no invite-status
+   * source, so it always leaves this `"not-applicable"`; the loader (`loadFamilyTabData`) hydrates the
+   * real value from `@chronicle/core`'s `resolveInviteStatuses` (the same ADR-0028/#332 batch rule
+   * `resolveKinshipTree` applies) via `hydrateFamilyListPeopleIdentity` below.
+   */
+  inviteStatus: TreeNode["inviteStatus"];
 }
 
 export interface ProjectFamilyListPeopleInput {
@@ -97,11 +106,13 @@ export function projectFamilyListPeople(input: ProjectFamilyListPeopleInput): Fa
       lifeStatus: kin?.lifeStatus ?? "living",
       membership: isMember ? "member" : "tree-only",
       relation: kin?.relation ?? null,
-      // No identity source in this pure projector — the loader hydrates these via
-      // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330).
+      // No identity/invite-status source in this pure projector — the loader hydrates these via
+      // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330) and
+      // List's Invite affordance reflects the person's REAL status (#334).
       birthYear: null,
       deathYear: null,
       sex: "unknown",
+      inviteStatus: "not-applicable",
     });
   }
 
@@ -124,15 +135,18 @@ export interface FamilyListPersonIdentity {
   birthYear: number | null;
   deathYear: number | null;
   sex: PersonSex;
+  /** #334 fix — the person's real `inviteStatus`, resolved by `@chronicle/core`'s `resolveInviteStatuses`. */
+  inviteStatus: TreeNode["inviteStatus"];
 }
 
 /**
- * #330 fix — merge real `lifeStatus`/`birthYear`/`deathYear`/`sex` onto `FamilyListPerson` rows after projection.
- * Kept separate from `projectFamilyListPeople` so that pure projector's inputs don't balloon with an
- * identity map it otherwise has no use for; `loadFamilyTabData` calls this once, after projecting,
- * with identity loaded from `persons` for the projected ids (same pattern Tree's hydration uses). A
- * person with no entry in `identityById` (should not happen — every projected id is a real Person —
- * but defends against a partial/failed identity load) keeps the projector's safe null/"unknown"
+ * #330/#334 fix — merge real `lifeStatus`/`birthYear`/`deathYear`/`sex`/`inviteStatus` onto
+ * `FamilyListPerson` rows after projection. Kept separate from `projectFamilyListPeople` so that pure
+ * projector's inputs don't balloon with an identity map it otherwise has no use for; `loadFamilyTabData`
+ * calls this once, after projecting, with identity loaded from `persons` (+ invite status from
+ * `resolveInviteStatuses`) for the projected ids (same pattern Tree's hydration uses). A person with no
+ * entry in `identityById` (should not happen — every projected id is a real Person — but defends
+ * against a partial/failed identity load) keeps the projector's safe null/"unknown"/"not-applicable"
  * defaults rather than crashing.
  */
 export function hydrateFamilyListPeopleIdentity(
@@ -148,21 +162,23 @@ export function hydrateFamilyListPeopleIdentity(
       birthYear: identity.birthYear,
       deathYear: identity.deathYear,
       sex: identity.sex,
+      inviteStatus: identity.inviteStatus,
     };
   });
 }
 
 /**
- * #330 — resolve a `TreeNode` for a List row so List can open the SAME `PersonDetails` sheet Tree
+ * #330/#334 — resolve a `TreeNode` for a List row so List can open the SAME `PersonDetails` sheet Tree
  * uses. A List row's person is often already materialized in the viewer's current tree window
- * (`treeNodes`) — prefer that node so dates/sex/hidden-edge flags are accurate. When it is NOT (e.g.
- * a tree-only relative outside the rendered window, or an unplaced member never placed on Tree),
- * synthesize a minimal node from the `FamilyListPerson` projection: birth/death year and sex come from
- * the loader-hydrated identity fields (real values — see {@link hydrateFamilyListPeopleIdentity} —
- * NEVER invented; a prior version defaulted these to null/"unknown" here, which let List's Edit→Save
- * silently wipe a real DOB/sex, #330), hidden-edge flags default to false (List has no edge-window
- * concept), and there is no live invitation surfaced on List (#334 wires the Invite modal separately),
- * so `inviteStatus` defaults to `"not-applicable"` regardless of the person's real status.
+ * (`treeNodes`) — prefer that node so dates/sex/hidden-edge flags (and its own `inviteStatus`) are
+ * accurate. When it is NOT (e.g. a tree-only relative outside the rendered window, or an unplaced
+ * member never placed on Tree), synthesize a minimal node from the `FamilyListPerson` projection:
+ * birth/death year, sex, and `inviteStatus` all come from the loader-hydrated fields (real values —
+ * see {@link hydrateFamilyListPeopleIdentity} — NEVER invented; a prior version defaulted birth/death/
+ * sex to null/"unknown" here, which let List's Edit→Save silently wipe a real DOB/sex, #330, and
+ * separately hardcoded `inviteStatus: "not-applicable"`, which hid List's Invite affordance for every
+ * synthesized row regardless of the person's real status, #334). Hidden-edge flags default to false —
+ * List has no edge-window concept.
  */
 export function resolveListPersonNode(
   person: FamilyListPerson,
@@ -181,6 +197,6 @@ export function resolveListPersonNode(
     relationToRoot: person.relation,
     hasHiddenParents: false,
     hasHiddenChildren: false,
-    inviteStatus: "not-applicable",
+    inviteStatus: person.inviteStatus,
   };
 }

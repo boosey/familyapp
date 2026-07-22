@@ -94,12 +94,14 @@ const MARCO: FamilyListPerson = {
   birthYear: null,
   deathYear: null,
   sex: "unknown",
+  inviteStatus: "not-applicable",
 };
 
 function renderListTab(
   over: {
     governableEdges?: GovernableKinEdge[];
     tree?: KinshipTreeData;
+    listPeople?: FamilyListPerson[];
     fetchInviteTargets?: (personId: string) => Promise<PersonInviteTargetsResult>;
     submitInvite?: (prevState: PersonInviteFormState, formData: FormData) => Promise<PersonInviteFormState>;
   } = {},
@@ -110,7 +112,7 @@ function renderListTab(
       focusPersonId="self"
       viewerPersonId="self"
       tree={over.tree ?? treeData()}
-      listPeople={[MARCO]}
+      listPeople={over.listPeople ?? [MARCO]}
       view="list"
       governableEdges={over.governableEdges ?? []}
       surface={{ active: "list", familiesParam: null, showRequests: false }}
@@ -229,6 +231,42 @@ it("#334 — Invite from List details opens the SAME in-place PersonInviteModal 
   expect(screen.getByTestId("tree-person-details")).toBeTruthy();
 });
 
+it("#334 fix — Invite shows for a List row NOT present in tree.nodes, once its FamilyListPerson.inviteStatus is hydrated invitable", async () => {
+  // The critical #334 gap: `resolveListPersonNode` used to hardcode `inviteStatus: "not-applicable"`
+  // for any row absent from `tree.nodes`, so List's Invite button never appeared for unplaced/
+  // off-window people even when they were genuinely invitable. This proves the fix WITHOUT stuffing
+  // Marco into `tree.nodes` (that would cheat — it'd just re-test the already-covered "in window"
+  // path above) — `tree` here has an EMPTY node list; only `listPeople`'s own hydrated
+  // `inviteStatus: "invitable"` drives the Invite affordance.
+  const invitableMarco: FamilyListPerson = { ...MARCO, inviteStatus: "invitable" };
+  const fetchInviteTargets = vi.fn(
+    async (): Promise<PersonInviteTargetsResult> => ({
+      ok: true,
+      data: {
+        families: [{ id: "F", name: "The Carneys", shortName: null }],
+        seededFamilyId: "F",
+        displayName: "Marco",
+        email: "",
+        phone: "",
+      },
+    }),
+  );
+  renderListTab({
+    listPeople: [invitableMarco],
+    tree: treeData(), // nodes: [] — Marco is NOT materialized in the tree window.
+    fetchInviteTargets,
+    submitInvite: vi.fn(),
+  });
+
+  fireEvent.click(screen.getByTestId("family-list-row-marco"));
+  await screen.findByTestId("tree-person-details");
+  fireEvent.click(screen.getByTestId("tree-details-invite"));
+
+  const modal = await screen.findByTestId("person-invite-modal");
+  expect(modal.getAttribute("aria-label")).toBe(hub.personInvite.heading("Marco"));
+  expect(fetchInviteTargets).toHaveBeenCalledWith("marco");
+});
+
 it("closing the sheet (×) clears the selection", async () => {
   renderListTab();
   fireEvent.click(screen.getByTestId("family-list-row-marco"));
@@ -267,6 +305,7 @@ it("#330 fix — Edit→Save from List sends the person's REAL birthYear/sex, no
     birthYear: 1940,
     deathYear: 2010,
     sex: "female",
+    inviteStatus: "not-applicable",
   };
   const node = resolveListPersonNode(eleanor, [] /* not in the tree window */);
   expect(node.birthYear).toBe(1940);
@@ -319,12 +358,22 @@ it("#330 fix — unplaced deceased member: hydrate → synthesize → Edit→Sav
       birthYear: null,
       deathYear: null,
       sex: "unknown" as const,
+      inviteStatus: "not-applicable" as const,
     },
   ];
   const [rosa] = hydrateFamilyListPeopleIdentity(
     projected,
     new Map([
-      ["rosa", { lifeStatus: "deceased", birthYear: 1920, deathYear: 1995, sex: "female" }],
+      [
+        "rosa",
+        {
+          lifeStatus: "deceased" as const,
+          birthYear: 1920,
+          deathYear: 1995,
+          sex: "female" as const,
+          inviteStatus: "not-applicable" as const,
+        },
+      ],
     ]),
   )!;
   const node = resolveListPersonNode(rosa!, []);
