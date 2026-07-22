@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * #161 (ADR-0023) unplaced-members web tests — RENDER + WIRING (the data correctness is core-tested).
+ * #161 (ADR-0023) unplaced-members web tests ΓÇö RENDER + WIRING (the data correctness is core-tested).
  *
  *   1. Unplaced members supplied by the core read render as a not-yet-connected tray on the Tree
  *      view. List is browse-only (#283) and must NOT host the unplaced mutation section.
@@ -8,15 +8,16 @@
  *      place-in-tree opens the link modal and calls linkExistingMember; "Not family" calls
  *      setMemberNonFamily(true); steward "Remove" requires an in-page confirm then calls endMembership.
  *   3. Remove is steward-only (hidden for a non-steward viewer). No native confirm() is used.
- *   4. #285 Place modal: partner→kids step offer after kin options resolve; never partner-only while loading.
+ *   4. #285 Place modal: partnerΓåÆkids step offer after kin options resolve; never partner-only while loading.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode, UnplacedMember } from "@chronicle/core";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyTab } from "./FamilyTab";
+import type { PersonKinOptionsResult } from "../tree/actions";
 
-// next/navigation — the panel calls router.refresh() after a successful action; FamilyTab's
+// next/navigation ΓÇö the panel calls router.refresh() after a successful action; FamilyTab's
 // FamilyChips also reads usePathname/useSearchParams, so the mock supplies all three.
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -26,10 +27,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { listPersonKinOptionsAction } = vi.hoisted(() => ({
-  listPersonKinOptionsAction: vi.fn(async () => ({
-    ok: true as const,
-    partners: [] as { id: string; name: string }[],
-    children: [] as { id: string; name: string }[],
+  listPersonKinOptionsAction: vi.fn(async (): Promise<PersonKinOptionsResult> => ({
+    ok: true,
+    partners: [],
+    children: [],
   })),
 }));
 vi.mock("../tree/actions", async (importOriginal) => {
@@ -44,8 +45,8 @@ afterEach(() => {
   cleanup();
   refresh.mockReset();
   listPersonKinOptionsAction.mockReset();
-  listPersonKinOptionsAction.mockImplementation(async () => ({
-    ok: true as const,
+  listPersonKinOptionsAction.mockImplementation(async (): Promise<PersonKinOptionsResult> => ({
+    ok: true,
     partners: [],
     children: [],
   }));
@@ -103,7 +104,7 @@ function renderPanel(over: Partial<React.ComponentProps<typeof UnplacedMembers>>
   return { onLink, onSetNonFamily, onEndMembership, onFetchAnchors };
 }
 
-/* ── 1. Both surfaces render the unplaced members ─────────────────────────────── */
+/* ΓöÇΓöÇ 1. Both surfaces render the unplaced members ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 
 function treeData(): KinshipTreeData {
   return {
@@ -154,7 +155,7 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
   const tray = screen.getByTestId("unplaced-members");
   expect(within(tray).getByTestId("unplaced-row-u1")).toBeTruthy();
   expect(within(tray).getByTestId("tree-tray-new-person")).toBeTruthy();
-  // It sits OUTSIDE the pan/zoom layer (the layout engine) — the tray is not inside tree-pan-layer.
+  // It sits OUTSIDE the pan/zoom layer (the layout engine) ΓÇö the tray is not inside tree-pan-layer.
   const panLayer = screen.getByTestId("tree-pan-layer");
   expect(panLayer.contains(tray)).toBe(false);
 });
@@ -177,7 +178,7 @@ it("#286: Tree tray shows New person even when there are no unplaced members", (
   expect(screen.getByTestId("tree-tray-new-person")).toBeTruthy();
 });
 
-/* ── 2. Actions invoke the right handler ──────────────────────────────────────── */
+/* ΓöÇΓöÇ 2. Actions invoke the right handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 
 it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingMember with anchor + relation", async () => {
   const { onLink, onFetchAnchors } = renderPanel();
@@ -191,7 +192,7 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
     // Let the microtask queue flush so the fetch resolves.
     await new Promise((r) => setTimeout(r, 0));
   });
-  // Kin options load after anchor is seeded — submit stays disabled until ready.
+  // Kin options load after anchor is seeded ΓÇö submit stays disabled until ready.
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
@@ -220,7 +221,7 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
 
 it("place-in-tree excludes the member being placed from seed anchors (#250)", async () => {
   // Zero-edge seed fallback returns every active member, including the one being placed.
-  // The modal must not offer a self-link — only the other seed person remains.
+  // The modal must not offer a self-link ΓÇö only the other seed person remains.
   renderPanel({
     onFetchAnchors: vi.fn(async () => ({
       ok: true as const,
@@ -287,7 +288,7 @@ it("steward Remove requires an in-page confirm, then calls endMembership (no nat
   confirmSpy.mockRestore();
 });
 
-/* ── 3. Remove is steward-only ────────────────────────────────────────────────── */
+/* ΓöÇΓöÇ 3. Remove is steward-only ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 
 it("hides the Remove action for a non-steward viewer", () => {
   renderPanel({ viewerIsSteward: false });
@@ -350,7 +351,7 @@ it("#286: New person and Place both open the shared place-confirm modal", async 
   expect(screen.getByTestId("place-confirm-subject")).toBeTruthy();
 });
 
-/* ── 4. Place modal partner→kids step offer (#285 / ADR-0027) ─────────────────── */
+/* ΓöÇΓöÇ 4. Place modal partnerΓåÆkids step offer (#285 / ADR-0027) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 
 async function openPlaceModalReady(onFetchAnchors?: ReturnType<typeof vi.fn>) {
   const { onLink } = renderPanel(
@@ -369,8 +370,8 @@ async function openPlaceModalReady(onFetchAnchors?: ReturnType<typeof vi.fn>) {
 }
 
 it("place partner with anchor kids shows step offer then links with stepParentOfChildIds (#285)", async () => {
-  listPersonKinOptionsAction.mockImplementation(async () => ({
-    ok: true as const,
+  listPersonKinOptionsAction.mockImplementation(async (): Promise<PersonKinOptionsResult> => ({
+    ok: true,
     partners: [],
     children: [
       { id: "kid-1", name: "Kid One" },
@@ -406,11 +407,7 @@ it("place partner with anchor kids shows step offer then links with stepParentOf
 });
 
 it("place partner submit stays disabled while kin options are still loading (#285)", async () => {
-  let resolveKin!: (value: {
-    ok: true;
-    partners: { id: string; name: string }[];
-    children: { id: string; name: string }[];
-  }) => void;
+  let resolveKin!: (value: PersonKinOptionsResult) => void;
   listPersonKinOptionsAction.mockImplementation(
     () =>
       new Promise((resolve) => {
@@ -425,7 +422,7 @@ it("place partner submit stays disabled while kin options are still loading (#28
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  // Anchors ready, kin still pending — must not allow a silent partner-only submit.
+  // Anchors ready, kin still pending ΓÇö must not allow a silent partner-only submit.
   const submit = screen.getByTestId("place-confirm-submit") as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   fireEvent.change(screen.getByTestId("place-confirm-relation"), {
@@ -451,10 +448,10 @@ it("place partner submit stays disabled while kin options are still loading (#28
 });
 
 it("place modal kin-options reject keeps submit disabled and shows error (#285/#286)", async () => {
-  listPersonKinOptionsAction.mockImplementation(async () => ({
-    ok: false as const,
-    error: "failed" as const,
-  }) as never);
+  listPersonKinOptionsAction.mockImplementation(async (): Promise<PersonKinOptionsResult> => ({
+    ok: false,
+    error: "failed",
+  }));
 
   const { onLink } = await openPlaceModalReady();
 
