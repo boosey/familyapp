@@ -1,8 +1,6 @@
 /*
- * StoriesTab — the Stories surface chrome: the toolbar's R1-left mode group + R1-right actions cluster
- * (#190), plus the resume list ("Finish what you started") + empty states. The two-row layout itself is
- * the shared HubToolbar (#189); this file styles only the SLOT content. No Playful structural
- * signatures — pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
+ * StoriesTab — Stories surface chrome: progressive control-row slot styles (#301), resume list, empties.
+ * The progressive row lives in HubProgressiveControlRow; this file styles reminders / resume / empties.
  */
 
 .wrap {
@@ -11,31 +9,7 @@
   gap: 28px;
 }
 
-/* ADR-0025 Increment 3 — the compact control STRIP layout (Stories' pills + [View][Family][Filter]
-   icon-sheets + iconified Tell, reminders below) now lives in the SHARED ../HubControlStrip.module.css
-   (imported as `strip` in StoriesSurface), so Stories/Album/Family can't diverge. The classes formerly
-   here (.mobileStrip/.mobileStripPills/.mobileStripRight/.mobileReminders) moved there verbatim. */
-
-/* R1-left group (#190): the Feed/Timeline/Search pill nav (shared HubSubNav) with the Search field
-   beside it (Search mode only). A quiet inline row that wraps on narrow viewports; the toolbar's `.left`
-   slot owns the outer spacing. */
-.modeGroup {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* R1-right actions cluster (#138, #190): both compact reminders (draft + intake) sit BESIDE the "Tell a
-   story" button. The toolbar's `.right` slot already right-justifies this cluster; here we only lay its
-   children out and let it wrap as a unit on narrow viewports. */
-.actionsCluster {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
+/* Draft + intake reminders (below-row on the progressive control row). */
 
 /* Compact reminder button — shared by the draft-reminder (a toggle <button>) and the intake reminder
    (a <Link>), #138. Sized to the same height as the other controls (NOT a tall panel/banner): two

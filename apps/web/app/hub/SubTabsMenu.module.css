@@ -1,0 +1,53 @@
+/* SubTabsMenu — lightweight mode menu for progressive Sub tabs menu-icon stage (#301). Tokens only. */
+
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: var(--space-1);
+  min-width: 10rem;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-lift);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-3) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--accent-soft);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.itemActive {
+  color: var(--accent-strong);
+  font-weight: 600;
+}

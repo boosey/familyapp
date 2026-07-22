@@ -76,21 +76,29 @@ export const hub = {
   },
   // ADR-0025 collapsed browse panels — per-concern IconSheet triggers (View/Family/Filter/Search).
   // Compact (< 40rem) opens a BottomSheet; wide opens an AnchoredPopover (#300). Panel body is shared.
-  // Family/Questions still mount IconSheet only on the compact strip until #297. (The former single
-  // "⚙ Filters & view" gear + MobileControlSheet were removed in Increment 3.)
+  // Stories/Album progressive row (#301/#302) collapses these by precedence; Family/Questions still use
+  // the compact strip until #297.
   mobileControls: {
     // Accessible name for an IconSheet's active-filter count badge (n = active filters for that icon).
     activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
     // Shared ✕ close control for BottomSheet and AnchoredPopover.
     close: "Close",
-    // ADR-0025 Phase B Increment 3 — the single "⚙ Filters & view" gear splits into per-concern labeled
-    // icon-sheets: View (layout options), Family (the family selector), Filter (search + facets).
-    // Each string is BOTH the tiny icon label and its panel title (sheet or popover).
+    // Per-concern labeled icon-sheets: View (layout), Family (selector), Filter (Album facets), Search
+    // (Stories text search — never labeled "Filter"). Each string is BOTH the tiny icon label and its
+    // panel title (sheet or popover).
     viewLabel: "View",
     familyLabel: "Family",
     filterLabel: "Filter",
-    // The primary action (Tell a story) is iconified on the compact strip (labeled on desktop). This is
-    // the icon button's accessible name.
+    /** Stories collapsed search (#301) — Search glyph/label/panel, not Filter. */
+    searchLabel: "Search",
+    // Sub tabs progressive stages (#301): iconized pills keep mode names as accessible names; menu-icon
+    // opens a lightweight menu (not a sheet) of the same modes. `subTabsLabel` is the tiny caption under
+    // the menu-icon glyph (clarity bet — labeled collapsed icons).
+    subTabsLabel: "Modes",
+    subTabsMenuAria: "Browse modes",
+    modeFeedAria: "Feed",
+    modeTimelineAria: "Timeline",
+    // The primary action (Tell a story) may iconify under width pressure (outside collapse precedence).
     tellAria: "Tell a story",
   },
   stories: {

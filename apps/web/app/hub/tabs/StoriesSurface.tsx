@@ -1,42 +1,31 @@
 "use client";
 
 /**
- * StoriesSurface (#190) — the Stories tab's client owner of the shared two-row {@link HubToolbar}.
- * It replaces the old split of a server "control row" (StoriesControls) plus the browse body's own
- * inline "view options" row: everything top-of-tab now lives in ONE toolbar, and this component owns
- * the client state that drives it.
+ * StoriesSurface (#301) — Stories tab owner of the progressive hub control row.
  *
- *   R1:  [Feed / Timeline pills] [search field]  ·······  [reminders + Tell a story]
- *   R2:  [Family selector chips]                  ·······  [Masonry / Column]
+ * One control row on every width: Sub tabs (Feed / Timeline) → Family → Search → Views, with Tell on
+ * the trailing edge outside collapse. Expansion comes from {@link resolveHubControlExpansion} via
+ * {@link HubProgressiveControlRow}. Collapsed Search is Search (not Filter). No Filters unit. No
+ * binary HubToolbar vs compact-strip swap — Family/Questions keep HubToolbar until #297.
  *
- * State owned here (was scattered across StoryBrowse + StoriesControls before #190):
- *  - `mode` (Feed/Timeline) — the R1-left pill toggle; seeded from `?mode=` so the Read view's Back can
- *    restore it, then local for instant switching.
- *  - `query` — the persistent R1-left Search field; a non-empty query replaces the feed/timeline body
- *    with results (#3), so Search is no longer a mode. Threaded to the browse body.
- *  - `feedView` (Masonry/Column) — the R2-right selector (Feed mode only); persisted to localStorage.
- *  - `expanded` — the draft-reminder's in-place resume list toggle.
- *
- * The family chips (R2-left) and the reminders + Tell cluster (R1-right) are still gated exactly as
- * before, and every "is this slot empty?" decision is computed HERE (not guessed by the toolbar) so
- * HubToolbar's empty-row rule fires: a mode with no view selector + a <2-family viewer collapses R2
- * entirely, and the toolbar keeps the content below flush.
- *
- * All authorization already happened upstream (StoriesTab → loadHubFeed → listStoriesForViewer); this
- * only renders + narrows what the server producer handed down.
+ * State owned here (unchanged from #190):
+ *  - `mode` (Feed/Timeline) — seeded from `?mode=`, then local
+ *  - `query` — persistent Search; non-empty replaces feed/timeline body
+ *  - `feedView` (Masonry/Column) — Feed mode only; localStorage
+ *  - `expanded` — draft-reminder resume list toggle
  */
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { hub } from "@/app/_copy";
 import { relativeShortDate } from "@/lib/relative-time";
-import { LayoutGrid, UsersRound, ListFilter, SquarePen } from "lucide-react";
-import { HubToolbar } from "../HubToolbar";
+import { History, LayoutGrid, Newspaper, Search, SquarePen, UsersRound } from "lucide-react";
+import { HubProgressiveControlRow } from "../HubProgressiveControlRow";
 import { IconSheet } from "../IconSheet";
 import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
-import strip from "../HubControlStrip.module.css";
-import { useIsCompact } from "@/app/_kindred/useIsCompact";
+import { HUB_SUB_TABS_GLYPH_SIZE } from "../hub-progressive-control-constants";
 import { HubSubNav, type HubSubNavItem } from "../HubSubNav";
+import { SubTabsMenu } from "../SubTabsMenu";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
 import { ActionButton } from "@/app/_kindred/ActionButton";
 import { SearchField } from "@/app/_kindred/SearchField";
@@ -63,22 +52,20 @@ export interface StoriesSurfaceProps {
   /** Whether the filter is "all" (every active family selected). */
   allSelected: boolean;
   /**
-   * The active families driving the R2-left chip bar. The chip bar mounts only for ≥2 families (one
-   * family has nothing to filter); FamilyChips also self-renders null under that count, but the MOUNT is
-   * gated here too so the toolbar's empty-row rule can see R2-left as truly empty.
+   * The active families driving the Family unit. Mounted only for ≥2 families (one family has nothing
+   * to filter); FamilyChips also self-renders null under that count.
    */
   activeFamilies: ViewerFamily[];
   /** The chips' selected value: "all" (every chip ON) or the concrete selected-id set. */
   chipSelected: string[] | "all";
-  /** The viewer's own ask-less drafts still in review — the R1-right reminder + resume list. */
+  /** The viewer's own ask-less drafts still in review — reminder + resume list. */
   selfDrafts: SelfDraft[];
-  /** #138: whether the biographical intake is incomplete — the compact intake reminder in R1-right. */
+  /** #138: whether the biographical intake is incomplete — compact intake reminder. */
   intakeIncomplete: boolean;
   /**
-   * Which body to render below the toolbar:
-   *  - "none"  → the honest all-off empty state (filter=none): the toolbar (esp. the family chips) stays
-   *              so the viewer can turn a family back on.
-   *  - "empty" → no in-scope stories: a welcoming empty note; `emptyCopy` picks pending-vs-generic.
+   * Which body to render below the control row:
+   *  - "none"  → honest all-off empty state (filter=none); Family chips stay so a family can turn on.
+   *  - "empty" → no in-scope stories; `emptyCopy` picks pending-vs-generic.
    *  - "browse"→ the StoryBrowse feed/timeline/search body.
    */
   body: "none" | "empty" | "browse";
@@ -100,30 +87,17 @@ export function StoriesSurface({
   body,
   emptyCopy,
 }: StoriesSurfaceProps) {
-  // `useSearchParams()` can be null during SSR / static generation (no router context) — guard the read
-  // so a server/static render of an empty-state body doesn't throw (mirrors FamilyChips' null handling).
+  // `useSearchParams()` can be null during SSR / static generation (no router context) — guard the read.
   const searchParams = useSearchParams();
 
-  // ADR-0024: on a phone (< 40rem) the secondary controls (search, family chips, view selector) move
-  // into a "⚙ Filters & view" bottom sheet; the sub-nav + Tell-a-story stay on a compact primary row.
-  // Desktop (≥ 40rem) renders the existing inline HubToolbar unchanged. SSR/first-paint = desktop.
-  const compact = useIsCompact();
-
-  // Initial mode from the URL (?mode=) so the Read view's Back can restore it; then local state for
-  // instant, no-server-roundtrip switching.
   const modeParam = searchParams?.get("mode") ?? null;
   const initialMode: BrowseMode = BROWSE_MODES.includes(modeParam as BrowseMode)
     ? (modeParam as BrowseMode)
     : "feed";
   const [mode, setMode] = useState<BrowseMode>(initialMode);
   const [query, setQuery] = useState("");
-  // A non-empty query REPLACES the feed/timeline body with search results (#3): the search field is
-  // persistent (always beside the pills while browsing), not a mode. This flag also hides the
-  // Masonry/Column selector while searching — the feed body it steers isn't on screen.
   const searching = query.trim() !== "";
 
-  // Feed layout (Feed mode only). SSR-safe default ("masonry" — the new-viewer default per ADR-0021);
-  // a stored preference is hydrated in a client-only effect so it wins without a hydration mismatch.
   const [feedView, setFeedView] = useState<FeedView>("masonry");
   useEffect(() => {
     try {
@@ -142,27 +116,79 @@ export function StoriesSurface({
     }
   }
 
-  // Draft-reminder in-place resume list toggle.
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const hasDrafts = selfDrafts.length > 0;
-
   const browsing = body === "browse";
 
-  /* ── R1-left: the mode pills (shared HubSubNav) + the persistent Search field ─────────────────── */
-  // The pills + field only steer the browse body — hide them in the empty states (no body to steer),
-  // matching the old behaviour where the mode toggle lived inside StoryBrowse (present only when browsing).
-  const modeItems: HubSubNavItem[] = BROWSE_MODES.map((m) => ({
+  const modeItemsLabeled: HubSubNavItem[] = BROWSE_MODES.map((m) => ({
     key: m,
     label: m === "feed" ? hub.browse.modeFeed : hub.browse.modeTimeline,
   }));
-  const modeNav = browsing ? (
-    <HubSubNav ariaLabel={hub.shell.tabStories} items={modeItems} active={mode} onSelect={(k) => setMode(k as BrowseMode)} />
+  const modeItemsIconPills: HubSubNavItem[] = BROWSE_MODES.map((m) => ({
+    key: m,
+    ariaLabel: m === "feed" ? hub.mobileControls.modeFeedAria : hub.mobileControls.modeTimelineAria,
+    label:
+      m === "feed" ? (
+        <Newspaper size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ) : (
+        <History size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ),
+  }));
+  const modeMenuItems = BROWSE_MODES.map((m) => ({
+    key: m,
+    label: m === "feed" ? hub.browse.modeFeed : hub.browse.modeTimeline,
+  }));
+
+  const subTabsLabeled = browsing ? (
+    <HubSubNav
+      layout="intrinsic"
+      ariaLabel={hub.shell.tabStories}
+      items={modeItemsLabeled}
+      active={mode}
+      onSelect={(k) => setMode(k as BrowseMode)}
+    />
   ) : null;
-  // Persistent search field (#3): always beside the pills while browsing; a non-empty query replaces
-  // the feed/timeline body with results (handled in StoryBrowse), so it is no longer a mode. The ONE
-  // shared SearchField primitive — the same field the Album filter uses.
-  const searchField = browsing ? (
+  const subTabsIconPills = browsing ? (
+    <HubSubNav
+      layout="intrinsic"
+      ariaLabel={hub.shell.tabStories}
+      items={modeItemsIconPills}
+      active={mode}
+      onSelect={(k) => setMode(k as BrowseMode)}
+    />
+  ) : null;
+  const subTabsMenu = browsing ? (
+    <SubTabsMenu
+      items={modeMenuItems}
+      active={mode}
+      onSelect={(k) => setMode(k as BrowseMode)}
+    />
+  ) : null;
+
+  const chipsFiltered =
+    activeFamilies.length >= 2 &&
+    chipSelected !== "all" &&
+    chipSelected.length !== activeFamilies.length;
+  const searchActive = searching;
+
+  const familyExpanded =
+    activeFamilies.length >= 2 ? (
+      <FamilyChips inline families={activeFamilies} selected={chipSelected} />
+    ) : null;
+  const familyCollapsed =
+    activeFamilies.length >= 2 ? (
+      <IconSheet
+        icon={UsersRound}
+        label={hub.mobileControls.familyLabel}
+        sheetTitle={hub.mobileControls.familyLabel}
+        badgeCount={chipsFiltered ? 1 : 0}
+      >
+        <FamilyChips inline families={activeFamilies} selected={chipSelected} />
+      </IconSheet>
+    ) : null;
+
+  const searchExpanded = browsing ? (
     <SearchField
       value={query}
       onChange={setQuery}
@@ -170,18 +196,54 @@ export function StoriesSurface({
       ariaLabel={hub.browse.searchPlaceholder}
     />
   ) : null;
-  const row1Left =
-    modeNav || searchField ? (
-      <div className={styles.modeGroup}>
-        {modeNav}
-        {searchField}
-      </div>
-    ) : null;
+  const searchCollapsed = browsing ? (
+    <IconSheet
+      icon={Search}
+      label={hub.mobileControls.searchLabel}
+      sheetTitle={hub.mobileControls.searchLabel}
+      badgeCount={searchActive ? 1 : 0}
+    >
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder={hub.browse.searchPlaceholder}
+        ariaLabel={hub.browse.searchPlaceholder}
+      />
+    </IconSheet>
+  ) : null;
 
-  /* ── R1-right: draft + intake reminders, then the Tell-a-story button ─────────────────────────── */
-  // The two compact reminders (draft + intake) are extracted so the compact strip can move them to a
-  // full-width row BELOW the icon strip (they don't fit inline beside the pills + 3 icons + action at
-  // 360px); desktop keeps them inline beside the Tell button exactly as before.
+  const viewExpanded =
+    browsing && mode === "feed" && !searching ? (
+      <SegmentedControl
+        variant="radio"
+        ariaLabel={hub.browse.viewSelectorAria}
+        active={feedView}
+        onSelect={(k) => changeFeedView(k as FeedView)}
+        items={[
+          { key: "masonry", label: hub.browse.viewMasonry },
+          { key: "column", label: hub.browse.viewColumn },
+        ]}
+      />
+    ) : null;
+  const viewCollapsed = viewExpanded ? (
+    <IconSheet
+      icon={LayoutGrid}
+      label={hub.mobileControls.viewLabel}
+      sheetTitle={hub.mobileControls.viewLabel}
+    >
+      <SegmentedControl
+        variant="radio"
+        ariaLabel={hub.browse.viewSelectorAria}
+        active={feedView}
+        onSelect={(k) => changeFeedView(k as FeedView)}
+        items={[
+          { key: "masonry", label: hub.browse.viewMasonry },
+          { key: "column", label: hub.browse.viewColumn },
+        ]}
+      />
+    </IconSheet>
+  ) : null;
+
   const reminders =
     hasDrafts || intakeIncomplete ? (
       <>
@@ -190,7 +252,6 @@ export function StoriesSurface({
             type="button"
             className={styles.reminderButton}
             aria-expanded={expanded}
-            // Point aria-controls at the list only once it's rendered — a dangling ref is an a11y bug.
             aria-controls={expanded ? listId : undefined}
             onClick={() => setExpanded((v) => !v)}
           >
@@ -208,119 +269,51 @@ export function StoriesSurface({
       </>
     ) : null;
 
-  // Desktop: labeled Tell button. Compact: iconified (label yields to fit the 360px budget alongside the
-  // visible pills + up to three labeled icons), keeping its accessible name via aria-label.
-  const tellButtonDesktop = <ActionButton href="/hub/tell">{hub.stories.tellTitle}</ActionButton>;
-  const tellButtonCompact = (
+  const tellLabeled = <ActionButton href="/hub/tell">{hub.stories.tellTitle}</ActionButton>;
+  const tellIconified = (
     <ActionButton href="/hub/tell" aria-label={hub.mobileControls.tellAria}>
       <SquarePen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
     </ActionButton>
   );
 
-  const row1Right = (
-    <div className={styles.actionsCluster}>
-      {reminders}
-      {tellButtonDesktop}
-    </div>
-  );
-
-  /* ── R2-left: the family selector chips (≥2 families only) ─────────────────────────────────────── */
-  const familyChips =
-    activeFamilies.length >= 2 ? (
-      <FamilyChips inline families={activeFamilies} selected={chipSelected} />
-    ) : null;
-
-  // ADR-0025 Increment 4 — per-icon active badges on the compact strip. Reuses the SAME detection the
-  // single "⚙" gear's summed count used (searching / chip subset), now split per icon: the Filter icon
-  // badges an active search, the Family icon badges a family SUBSET (some — not all — selected). The
-  // View icon is NEVER badged (a Masonry/Column layout choice hides no content). Each is a 0/1 count so
-  // the accent badge shows a "1" (single-source: these same signals drive nothing else here).
-  const filterActive = searching; // the only thing in the Stories Filter sheet is the search field
-  const chipsFiltered =
-    activeFamilies.length >= 2 &&
-    chipSelected !== "all" &&
-    chipSelected.length !== activeFamilies.length;
-
-  /* ── R2-right: the Masonry/Column feed-view selector (Feed mode, not while searching) ──────────── */
-  const viewSelector =
-    browsing && mode === "feed" && !searching ? (
-      <SegmentedControl
-        variant="radio"
-        ariaLabel={hub.browse.viewSelectorAria}
-        active={feedView}
-        onSelect={(k) => changeFeedView(k as FeedView)}
-        items={[
-          { key: "masonry", label: hub.browse.viewMasonry },
-          { key: "column", label: hub.browse.viewColumn },
-        ]}
-      />
-    ) : null;
-
-  // ADR-0025 Increment 3/4 — the compact control strip. The single "⚙ Filters & view" gear split into
-  // per-concern labeled icon-sheets: View ← the Masonry/Column selector (feed mode, not searching);
-  // Family ← the family chips (≥2 families); Filter ← the search field. Each icon renders ONLY when its
-  // content exists (a 1-family viewer has no Family icon; searching hides the View icon). Increment 4:
-  // the Family + Filter icons badge when they're narrowing the view (chip subset / active search); View
-  // is never badged (a layout choice hides no content).
-  // NON-STICKY (ADR-0025 2026-07-20 amendment): this is normal top-matter that scrolls away with content.
   return (
     <div className={styles.wrap}>
-      {compact ? (
-        <>
-          <div className={strip.strip}>
-            {/* Sub-tab pills stay VISIBLE inline (primary wayfinding, never behind an icon). The wrapper
-                is the strip's explicit shrink valve (flex:1 1 auto; min-width:0) so the pills absorb any
-                horizontal deficit and the icon cluster never has to shrink/wrap at 360px. */}
-            <div className={strip.pills}>{modeNav}</div>
-            <div className={strip.right}>
-              {viewSelector ? (
-                <IconSheet
-                  icon={LayoutGrid}
-                  label={hub.mobileControls.viewLabel}
-                  sheetTitle={hub.mobileControls.viewLabel}
-                >
-                  {viewSelector}
-                </IconSheet>
-              ) : null}
-              {familyChips ? (
-                <IconSheet
-                  icon={UsersRound}
-                  label={hub.mobileControls.familyLabel}
-                  sheetTitle={hub.mobileControls.familyLabel}
-                  badgeCount={chipsFiltered ? 1 : 0}
-                >
-                  {familyChips}
-                </IconSheet>
-              ) : null}
-              {searchField ? (
-                <IconSheet
-                  icon={ListFilter}
-                  label={hub.mobileControls.filterLabel}
-                  sheetTitle={hub.mobileControls.filterLabel}
-                  badgeCount={filterActive ? 1 : 0}
-                >
-                  {searchField}
-                </IconSheet>
-              ) : null}
-              {tellButtonCompact}
-            </div>
-          </div>
-          {/* Reminders don't fit inline at 360px beside pills + 3 icons + action — full-width row below,
-              still reachable. Absent when there are no drafts and intake is complete. */}
-          {reminders ? <div className={strip.belowRow}>{reminders}</div> : null}
-        </>
-      ) : (
-        <HubToolbar row1Left={row1Left} row1Right={row1Right} row2Left={familyChips} row2Right={viewSelector} />
-      )}
+      <HubProgressiveControlRow
+        subTabs={
+          subTabsLabeled && subTabsIconPills && subTabsMenu
+            ? {
+                labeled: subTabsLabeled,
+                iconPills: subTabsIconPills,
+                menuIcon: subTabsMenu,
+              }
+            : undefined
+        }
+        family={
+          familyExpanded && familyCollapsed
+            ? { expanded: familyExpanded, collapsed: familyCollapsed }
+            : undefined
+        }
+        search={
+          searchExpanded && searchCollapsed
+            ? { expanded: searchExpanded, collapsed: searchCollapsed }
+            : undefined
+        }
+        views={
+          viewExpanded && viewCollapsed
+            ? { expanded: viewExpanded, collapsed: viewCollapsed }
+            : undefined
+        }
+        action={{
+          labeled: tellLabeled,
+          iconified: tellIconified,
+        }}
+        belowRow={reminders}
+      />
 
-      {/* Resume: the viewer's own ask-less drafts still in review, revealed by the draft reminder. Each
-          links to /hub/tell/[storyId]. Full-width BELOW the toolbar (not inside a toolbar slot). */}
       {hasDrafts && expanded ? (
         <ul id={listId} className={styles.resumeList}>
           {selfDrafts.map((d) => (
             <li key={d.storyId} className={styles.resumeItem}>
-              {/* Per-draft date meta id so each identical "Finish" link is distinguishable to a screen
-                  reader (WCAG 2.4.4 — link purpose from its accessible description). */}
               <span id={`meta-${d.storyId}`} className={styles.resumeMeta}>
                 {hub.questions.recordedAt(relativeShortDate(d.recordedAt))}
               </span>
@@ -337,9 +330,6 @@ export function StoriesSurface({
       ) : null}
 
       {body === "none" ? (
-        // Explicit empty selection (ADR-0021): every chip toggled OFF is an honest empty state — no
-        // browse pool — rather than a silent "show all". The chip bar stays (above) so the viewer can
-        // turn a family back on. Mirrors AlbumSurface's `none` short-circuit.
         <p className={styles.emptyText}>{hub.stories.noFamiliesSelected}</p>
       ) : body === "empty" ? (
         <p className={styles.emptyTextMuted}>{emptyCopy}</p>

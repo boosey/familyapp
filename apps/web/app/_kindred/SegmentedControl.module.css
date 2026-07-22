@@ -85,6 +85,20 @@
   outline-offset: 2px;
 }
 
+/* Intrinsic-width group for the progressive hub control row (#301): measure and render Sub tabs at
+ * natural pill width on every viewport so labeled stage is not phone-stretched (and cramped) when it
+ * fits. Additive alongside `.group` — does not change Family/Questions fill-on-phone behaviour. */
+.groupIntrinsic {
+  display: inline-flex;
+  width: auto;
+  flex-wrap: nowrap;
+}
+
+.groupIntrinsic .pill {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
 /* ── Bare chip variant (family selector — multi-select filter + single-select designator, #2/#6) ──
    The SAME raised-white selected look as `.pill`, but WITHOUT the enclosing box (a boxed multi-active
    group reads wrong). Off-state carries a quiet border so a standalone chip still reads as tappable. */
