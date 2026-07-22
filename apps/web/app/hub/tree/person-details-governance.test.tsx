@@ -5,8 +5,9 @@
  * (threaded as `governableEdges`); the sheet only lists edges that touch the opened person AND that
  * the viewer can act on.
  *
- * Issue #265 — same GovernableEdgeList module classes as List-view (shared edge chrome; no divergent
- * skin special-case in TS). CSS-source guards live in governable-edges-section.test.tsx.
+ * Issue #265 — shared GovernableEdgeList edge chrome with List-view (`.list`/`.edge`/`.sentence`);
+ * compact `.sectionDense`/`.headingDense` for the 280px sheet. CSS-source guards live in
+ * governable-edges-section.test.tsx.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -220,11 +221,13 @@ it("does not show nature picker on partner edges or for non-stewards (#255)", as
 });
 
 describe("PersonDetails gov edges — playful signature (#265)", () => {
-  it("renders list / edge / sentence / heading with the shared module classes (card chrome)", async () => {
+  it("renders shared edge chrome plus dense section/heading (not List-page classes)", async () => {
     renderDetails([edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true })]);
     const section = await screen.findByTestId("tree-details-gov-edges");
-    expect(section.className).toContain(styles.section);
-    expect(screen.getByText(hub.kin.govHeading).className).toContain(styles.heading);
+    expect(section.className).toContain(styles.sectionDense);
+    expect(section.className).not.toContain(styles.section);
+    expect(screen.getByText(hub.kin.govHeading).className).toContain(styles.headingDense);
+    expect(screen.getByText(hub.kin.govHeading).className).not.toContain(styles.heading);
     expect(screen.queryByText(hub.kin.govIntro)).toBeNull();
     const edgeItem = screen.getByTestId("tree-details-gov-edge");
     expect(edgeItem.className).toContain(styles.edge);

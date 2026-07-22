@@ -7,6 +7,7 @@
  * and suppressed under reduce-motion / solemn. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
+/* List-page section chrome only — not for the 280px tree person-details sheet. */
 .section {
   max-width: 720px;
   margin-top: 28px;
@@ -25,6 +26,19 @@
   font-size: var(--text-ui-sm);
   color: var(--text-muted);
   margin: 0 0 16px;
+}
+
+/* Tree sheet: compact section/heading so the gov h3 does not compete with the person title. */
+.sectionDense {
+  margin-top: 16px;
+}
+
+.headingDense {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--text-meta);
+  margin: 0 0 10px;
 }
 
 .list {

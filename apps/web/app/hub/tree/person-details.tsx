@@ -297,9 +297,9 @@ export function PersonDetails({
             <section
               data-testid="tree-details-gov-edges"
               aria-labelledby="tree-details-gov-heading"
-              className={govStyles.section}
+              className={govStyles.sectionDense}
             >
-              <h3 id="tree-details-gov-heading" className={govStyles.heading}>
+              <h3 id="tree-details-gov-heading" className={govStyles.headingDense}>
                 {hub.kin.govHeading}
               </h3>
               <ul className={govStyles.list}>
