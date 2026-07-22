@@ -113,14 +113,15 @@ export async function loadFamilyTabData(
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
   const projected = projectFamilyListPeople({ kin, unplaced, members, placed });
 
-  // #330 fix — hydrate REAL birthYear/deathYear/sex from `persons` for every projected id, so
-  // `resolveListPersonNode` never has to synthesize a null/"unknown" placeholder for a person outside
-  // the current tree window (List's projector itself has no identity source).
+  // #330 fix — hydrate REAL lifeStatus/birthYear/deathYear/sex from `persons` for every projected id, so
+  // `resolveListPersonNode` never has to synthesize a null/"unknown"/"living" placeholder for a person
+  // outside the current tree window (List's projector itself has no identity source).
   const identityRows =
     projected.length > 0
       ? await db
           .select({
             id: persons.id,
+            lifeStatus: persons.lifeStatus,
             birthYear: persons.birthYear,
             deathYear: persons.deathYear,
             sex: persons.sex,
@@ -129,7 +130,15 @@ export async function loadFamilyTabData(
           .where(inArray(persons.id, projected.map((p) => p.personId)))
       : [];
   const identityById = new Map<string, FamilyListPersonIdentity>(
-    identityRows.map((r) => [r.id, { birthYear: r.birthYear, deathYear: r.deathYear, sex: r.sex ?? "unknown" }]),
+    identityRows.map((r) => [
+      r.id,
+      {
+        lifeStatus: r.lifeStatus,
+        birthYear: r.birthYear,
+        deathYear: r.deathYear,
+        sex: r.sex ?? "unknown",
+      },
+    ]),
   );
   const listPeople = hydrateFamilyListPeopleIdentity(projected, identityById);
   return { familyId, focusPersonId, tree, listPeople, unplaced, viewerIsSteward, governableEdges };

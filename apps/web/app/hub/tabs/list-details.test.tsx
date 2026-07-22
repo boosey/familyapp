@@ -17,7 +17,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { GovernableKinEdge, KinshipTreeData } from "@chronicle/core";
 import type { FamilyListPerson } from "@/lib/family-list-people";
-import { resolveListPersonNode } from "@/lib/family-list-people";
+import { hydrateFamilyListPeopleIdentity, resolveListPersonNode } from "@/lib/family-list-people";
 import type { SavePersonEditResult } from "../tree/actions";
 import { PersonDetails } from "../tree/person-details";
 import { FamilyTab } from "./FamilyTab";
@@ -231,6 +231,63 @@ it("#330 fix — Edit→Save from List sends the person's REAL birthYear/sex, no
     displayName: "Eleanor R.",
     birthYear: 1940,
     sex: "female",
+    lifeStatus: "deceased",
     deathYear: 2010,
+  });
+});
+
+it("#330 fix — unplaced deceased member: hydrate → synthesize → Edit→Save preserves lifeStatus and deathYear", async () => {
+  // Unplaced members have no kin entry, so the projector defaults lifeStatus to "living". Without
+  // identity hydration, resolveListPersonNode would synthesize living and Save would revive them.
+  const projected = [
+    {
+      personId: "rosa",
+      displayName: "Rosa",
+      identified: true,
+      lifeStatus: "living" as const,
+      membership: "member" as const,
+      relation: null,
+      birthYear: null,
+      deathYear: null,
+      sex: "unknown" as const,
+    },
+  ];
+  const [rosa] = hydrateFamilyListPeopleIdentity(
+    projected,
+    new Map([
+      ["rosa", { lifeStatus: "deceased", birthYear: 1920, deathYear: 1995, sex: "female" }],
+    ]),
+  )!;
+  const node = resolveListPersonNode(rosa!, []);
+  expect(node.lifeStatus).toBe("deceased");
+  expect(node.deathYear).toBe(1995);
+
+  const saveEdit = vi.fn(
+    async (_familyId: string, _personId: string, _patch: unknown): Promise<SavePersonEditResult> => ({
+      ok: true,
+    }),
+  );
+  render(
+    <PersonDetails
+      node={node}
+      relationToViewer={null}
+      familyId="F"
+      placement="viewport"
+      onClose={() => {}}
+      checkEditable={async () => ({ ok: true, editable: true })}
+      saveEdit={saveEdit}
+    />,
+  );
+  fireEvent.click(await screen.findByTestId("tree-details-edit"));
+  fireEvent.change(screen.getByTestId("tree-edit-name"), { target: { value: "Rosa M." } });
+  fireEvent.click(screen.getByTestId("tree-edit-save"));
+
+  await waitFor(() => expect(saveEdit).toHaveBeenCalledTimes(1));
+  const [, , patch] = saveEdit.mock.calls[0]!;
+  expect(patch).toMatchObject({
+    displayName: "Rosa M.",
+    lifeStatus: "deceased",
+    deathYear: 1995,
+    birthYear: 1920,
   });
 });

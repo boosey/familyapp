@@ -120,13 +120,14 @@ function membershipRank(m: FamilyListMembershipBadge): number {
 
 /** Real identity fields sourced from `persons` — see {@link hydrateFamilyListPeopleIdentity}. */
 export interface FamilyListPersonIdentity {
+  lifeStatus: KinListEntry["lifeStatus"];
   birthYear: number | null;
   deathYear: number | null;
   sex: PersonSex;
 }
 
 /**
- * #330 fix — merge real `birthYear`/`deathYear`/`sex` onto `FamilyListPerson` rows after projection.
+ * #330 fix — merge real `lifeStatus`/`birthYear`/`deathYear`/`sex` onto `FamilyListPerson` rows after projection.
  * Kept separate from `projectFamilyListPeople` so that pure projector's inputs don't balloon with an
  * identity map it otherwise has no use for; `loadFamilyTabData` calls this once, after projecting,
  * with identity loaded from `persons` for the projected ids (same pattern Tree's hydration uses). A
@@ -143,6 +144,7 @@ export function hydrateFamilyListPeopleIdentity(
     if (!identity) return p;
     return {
       ...p,
+      lifeStatus: identity.lifeStatus,
       birthYear: identity.birthYear,
       deathYear: identity.deathYear,
       sex: identity.sex,

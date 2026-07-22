@@ -125,7 +125,7 @@ describe("projectFamilyListPeople (#283)", () => {
 });
 
 describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
-  it("merges real birthYear/deathYear/sex onto matching rows", () => {
+  it("merges real lifeStatus/birthYear/deathYear/sex onto matching rows", () => {
     const rows = [
       person({ personId: "eleanor" }),
       person({ personId: "marco" }),
@@ -133,19 +133,51 @@ describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
     const hydrated = hydrateFamilyListPeopleIdentity(
       rows,
       new Map([
-        ["eleanor", { birthYear: 1940, deathYear: 2010, sex: "female" as const }],
-        ["marco", { birthYear: 1975, deathYear: null, sex: "male" as const }],
+        [
+          "eleanor",
+          { lifeStatus: "deceased" as const, birthYear: 1940, deathYear: 2010, sex: "female" as const },
+        ],
+        [
+          "marco",
+          { lifeStatus: "living" as const, birthYear: 1975, deathYear: null, sex: "male" as const },
+        ],
       ]),
     );
     expect(hydrated.find((r) => r.personId === "eleanor")).toMatchObject({
+      lifeStatus: "deceased",
       birthYear: 1940,
       deathYear: 2010,
       sex: "female",
     });
     expect(hydrated.find((r) => r.personId === "marco")).toMatchObject({
+      lifeStatus: "living",
       birthYear: 1975,
       deathYear: null,
       sex: "male",
+    });
+  });
+
+  it("overwrites projector's default lifeStatus: living for unplaced members without kin", () => {
+    const projected = projectFamilyListPeople({
+      members: [member({ personId: "rosa", displayName: "Rosa" })],
+      unplaced: [unplaced({ personId: "rosa", displayName: "Rosa" })],
+      kin: [],
+      placed: [],
+    });
+    expect(projected[0]!.lifeStatus).toBe("living");
+
+    const hydrated = hydrateFamilyListPeopleIdentity(
+      projected,
+      new Map([
+        ["rosa", { lifeStatus: "deceased", birthYear: 1920, deathYear: 1995, sex: "female" }],
+      ]),
+    );
+    expect(hydrated[0]).toMatchObject({
+      personId: "rosa",
+      lifeStatus: "deceased",
+      birthYear: 1920,
+      deathYear: 1995,
+      sex: "female",
     });
   });
 
