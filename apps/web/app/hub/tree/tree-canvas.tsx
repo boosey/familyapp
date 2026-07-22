@@ -21,7 +21,7 @@
  *     wherever it started. Cards no longer stop-propagate *move*; a card only intercepts a tap that did
  *     NOT become a drag (for double-tap detection). Carets & the kebab keep their own stopPropagation.
  *   - Per-direction CARETS expand/collapse a branch — CLIENT ONLY, off the fetch path.
- *   - A "+" opens the Add-a-relative MODAL (via TreeAddProvider); the per-card ⋮ opens the same modal.
+ *   - A "+" opens the Add-a-relative MODAL (via TreeCallbacksProvider); the per-card ⋮ opens the same modal.
    *   - Desktop tray → card-zone DnD (#287): while a tray place-drag is active, identified cards show
    *     top/bottom/side zones; drop opens PlaceConfirmModal (receiverLocked + relationFromZone). Canvas
    *     pan/zoom is unchanged when not dragging from the tray (drag source lives outside the pan layer).
@@ -78,11 +78,9 @@ import {
 } from "./tree-constants";
 import { PersonDetails } from "./person-details";
 import { KebabMenu } from "./kebab-menu";
-import { TreeInviteProvider } from "./invite-context";
+import { TreeCallbacksProvider, type OpenAddRelative } from "./tree-callbacks-context";
 import { edgeKey, mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
-import { TreeAddProvider, type OpenAddRelative } from "./add-relative-context";
-import { TreeFocusProvider } from "./focus-context";
 import { LineGovernanceMenu } from "./line-governance-menu";
 import { actableEdgesForHit } from "./line-governance";
 import { AddRelativeModal } from "./add-relative-modal";
@@ -549,7 +547,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
 
   // --- Add-a-relative (modal over the tree, spec 2026-07-14) -------------------------------------
   // The "+" gutter buttons and the per-card ⋮ menu open ONE Add modal now (/hub/kin is gone).
-  // `openAdd` is shared with those child components via TreeAddProvider.
+  // `openAdd` is shared with those child components via TreeCallbacksProvider.
   const openAdd: OpenAddRelative = useCallback((anchorPersonId, relation, coParentPersonId) => {
     setAddTarget({ anchorPersonId, relation, coParentPersonId });
   }, []);
@@ -758,9 +756,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const detailsNode = details ? (nodeById.get(details.id) ?? null) : null;
 
   return (
-    <TreeFocusProvider value={onFocus}>
-    <TreeInviteProvider value={onInvite}>
-    <TreeAddProvider value={openAdd}>
+    <TreeCallbacksProvider value={{ openAdd, focusPerson: onFocus, invitePerson: onInvite }}>
     <div style={{ position: "relative" }}>
       {/* The Fit/−/+ controls moved OUT of the canvas into FamilyTab's view-selector row (§5). */}
 
@@ -1036,9 +1032,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
         />
       )}
     </div>
-    </TreeAddProvider>
-    </TreeInviteProvider>
-    </TreeFocusProvider>
+    </TreeCallbacksProvider>
   );
 });
 

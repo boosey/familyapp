@@ -21,7 +21,7 @@ import { hub } from "@/app/_copy";
 import {
   mintPlacementToAddRelativeInput,
   type MintPlacement,
-} from "../tree/placement";
+} from "./placement";
 
 export type ActionResult = { error: string } | undefined;
 
