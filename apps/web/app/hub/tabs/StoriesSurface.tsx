@@ -6,7 +6,7 @@
  * One control row on every width: Sub tabs (Feed / Timeline) → Family → Search → Views, with Tell on
  * the trailing edge outside collapse. Expansion comes from {@link resolveHubControlExpansion} via
  * {@link HubProgressiveControlRow}. Collapsed Search is Search (not Filter). No Filters unit. No
- * binary HubToolbar vs compact-strip swap — Family/Questions keep HubToolbar until #297.
+ * binary HubToolbar vs compact-strip swap. Family/Questions share this primitive (#297).
  *
  * State owned here (unchanged from #190):
  *  - `mode` (Feed/Timeline) — seeded from `?mode=`, then local

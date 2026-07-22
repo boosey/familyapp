@@ -82,10 +82,9 @@ export interface FamilyTabProps {
    */
   scopeId?: string;
   /**
-   * R1 slot data for the shared {@link FamilySurfaceNav}/HubToolbar (#189). The Family CONTENT tabs
-   * render the full two-row toolbar here (R1 = selector + Invite, R2 = this component's family selector
-   * + zoom controls) so it's ONE toolbar block, not a page-level R1 above a separate in-tab R2. These
-   * are the same values the page hands the standalone FamilySurfaceNav on the Requests / no-family path.
+   * Progressive control-row data for {@link FamilySurfaceNav} (#297). The Family CONTENT tabs render
+   * Sub tabs + Invite + this component's Family chips / Views (zoom) so chrome is ONE row. Same values
+   * the page hands the standalone FamilySurfaceNav on the Requests / no-family path.
    */
   surface: {
     /** Which selector item is active — `"tree"`/`"list"` here (Requests is never the content tab). */
@@ -112,9 +111,8 @@ export function FamilyTab({
   surface,
 }: FamilyTabProps) {
   const router = useRouter();
-  // ADR-0025 device round: on a phone the zoom controls float ON the tree canvas (a bottom sheet would
-  // cover the tree being zoomed), and the family chips move into the strip's Family IconSheet — so we
-  // do NOT hand the zoom controls to FamilySurfaceNav on compact. SSR/first-paint = desktop.
+  // Compact still gates Place→tap→zone (#288); zoom/fit are the progressive Views unit (#297), not a
+  // floating canvas overlay.
   const compact = useIsCompact();
 
   // #288 — mobile Place→tap→zone session (subject picking) + locked-receiver confirm after a zone tap.
@@ -161,11 +159,8 @@ export function FamilyTab({
   const atMin = scale <= ZOOM_MIN + 0.001;
   const atMax = scale >= ZOOM_MAX - 0.001;
 
-  // R2 (the family-selector row) content, handed to the shared HubToolbar via FamilySurfaceNav. Compute
-  // EMPTINESS here rather than letting the toolbar guess: FamilyChips self-renders null for <2 families,
-  // but a <FamilyChips/> element is still a truthy node — so gate on families.length so the toolbar's
-  // empty-row rule fires. This preserves the old `showFamilyRow = tree || >=2 families` behaviour exactly
-  // (List view + <2 families → no R2 → content flush, no stray gap).
+  // Progressive Family unit: gate on families.length so a truthy <FamilyChips/> element never mounts an
+  // empty Family icon for a single-family viewer (List + <2 families → Sub tabs only).
   const familyChips =
     families.length >= 2 ? (
       <FamilyChips
@@ -218,12 +213,7 @@ export function FamilyTab({
 
   return (
     <div>
-      {/* The full shared two-row toolbar (#189): R1 = the Family selector + Invite (FamilySurfaceNav),
-          R2 = the single-select family chips (left) and the tree's Fit/−/+ controls (right). When R2
-          would be empty (List view + <2 families) HubToolbar's empty-row rule drops it, so the content
-          below stays flush — the old `showFamilyRow` behaviour, now centralized in the toolbar. */}
-      {/* Desktop hands the zoom controls to the toolbar's R2-right; on a phone we pass `undefined` there
-          and float them on the tree canvas below instead (see the tree branch). */}
+      {/* Progressive control row (#297): Sub tabs + Family chips + Views (zoom) + Invite trailing. */}
       <FamilySurfaceNav
         active={surface.active}
         familiesParam={surface.familiesParam}
@@ -231,14 +221,11 @@ export function FamilyTab({
         requestsBadge={surface.requestsBadge}
         inviteHref={surface.inviteHref}
         row2Left={familyChips}
-        row2Right={compact ? undefined : zoomControls}
+        row2Right={zoomControls}
       />
 
       {view === "tree" ? (
         <>
-          {/* On a phone the zoom controls float thumb-reachable over the canvas (ADR-0024 "tree controls
-              thumb-reachable"); the relative wrapper is their positioning context. On desktop they live
-              in the toolbar (above), so this wrapper just holds the canvas. */}
           <div className={styles.treeFrame}>
             <TreeCanvas
               ref={canvasRef}
@@ -273,7 +260,6 @@ export function FamilyTab({
                   : undefined
               }
             />
-            {compact ? <div className={styles.zoomFloat}>{zoomControls}</div> : null}
           </div>
           {/* #161/#286: Tree tray (unplaced + New person) BELOW the canvas — outside computeTreeLayout /
               the pan-zoom layer so it never destabilizes the pedigree layout engine. List does not

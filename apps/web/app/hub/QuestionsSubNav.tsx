@@ -1,12 +1,20 @@
 "use client";
 
+/**
+ * QuestionsSubNav (#297) — Questions surface owner of the progressive hub control row.
+ *
+ * Occupancy: Sub tabs only (To answer / Ask / Your asks). No Family/Search/Filters/Views and no
+ * trailing primary action. One progressive row on every width — no HubToolbar / compact-strip swap.
+ */
+import type { ComponentProps } from "react";
 import { useRouter } from "next/navigation";
+import { CircleHelp, MessageSquarePlus, MessagesSquare } from "lucide-react";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
-import { HubToolbar } from "./HubToolbar";
+import { HubProgressiveControlRow } from "./HubProgressiveControlRow";
 import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
-import { useIsCompact } from "@/app/_kindred/useIsCompact";
-import strip from "./HubControlStrip.module.css";
+import { HUB_SUB_TABS_GLYPH_SIZE } from "./hub-progressive-control-constants";
+import { SubTabsMenu } from "./SubTabsMenu";
 
 interface QuestionsSubNavProps {
   /** The active ask surface key: "questions" (To answer), "ask", or "asks". */
@@ -17,6 +25,10 @@ interface QuestionsSubNavProps {
   /** #142: the viewer's pending-ask count — badges the "To answer" sub-link; absent/0 hides the badge.
    *  Mirrors the top-level Questions tab badge (same `listPendingAsksForNarrator` count). */
   toAnswerBadge?: number;
+  /** Test seam: force progressive-row width (skips ResizeObserver). */
+  forceAvailableWidth?: number;
+  /** Test seam: skip DOM measurement and use these widths. */
+  forceWidths?: ComponentProps<typeof HubProgressiveControlRow>["forceWidths"];
 }
 
 const SUB_TABS = [
@@ -25,57 +37,93 @@ const SUB_TABS = [
   { key: "asks", label: hub.shell.questionsSubYourAsks },
 ] as const;
 
-/**
- * QuestionsSubNav (Task 3, #189, #192) — the Questions surface's adoption of the shared two-row
- * {@link HubToolbar}. The three ask surfaces (To answer = `questions`, Ask a question = `ask`, Your asks
- * = `asks`) live under one primary tab; this row switches among them. It renders as an R1-left
- * {@link HubSubNav} pill row (the single-sourced pill style) — with NO R1-right action and NO R2 row, so
- * HubToolbar's empty-row rule drops the second row entirely (no reserved vertical space) and the pills
- * sit flush against the list below.
- *
- * Behaviour is unchanged: selection is client-driven (`router.push`) to the SAME existing
- * `?tab=questions|ask|asks` keys, preserving `?families=` the way HubPrimaryNav does (omitted when absent).
- * The per-key content in page.tsx is unchanged. The #142 pending-ask badge on "To answer" is preserved.
- *
- * ADR-0025 device round: on a PHONE the pills render in the shared {@link HubControlStrip} `.strip`/
- * `.pills` layout — byte-for-byte the container Stories' Feed/Timeline `modeNav` uses — so the two
- * selectors read identically. Questions has no icons/action, so the strip is just the full-width pill
- * row. Desktop (`useIsCompact() === false`, incl. server + first paint) keeps the inline {@link
- * HubToolbar} R1-left, unchanged.
- */
-export function QuestionsSubNav({ active, familiesParam, toAnswerBadge }: QuestionsSubNavProps) {
+export function QuestionsSubNav({
+  active,
+  familiesParam,
+  toAnswerBadge,
+  forceAvailableWidth,
+  forceWidths,
+}: QuestionsSubNavProps) {
   const router = useRouter();
-  const compact = useIsCompact();
 
-  const items: HubSubNavItem[] = SUB_TABS.map((tab) => ({
+  function navigate(key: string) {
+    const params = new URLSearchParams({ tab: key });
+    if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
+    router.push(`/hub?${params.toString()}`);
+  }
+
+  function toAnswerBadgeProps(key: string): { badge?: number; badgeLabel?: string } {
+    if (key !== "questions" || toAnswerBadge == null || toAnswerBadge <= 0) return {};
+    return { badge: toAnswerBadge, badgeLabel: hub.shell.unreadAria(toAnswerBadge) };
+  }
+
+  function toAnswerAriaLabel(key: string, base: string): string {
+    const badge = toAnswerBadgeProps(key);
+    return badge.badgeLabel ? `${base}, ${badge.badgeLabel}` : base;
+  }
+
+  const labeledItems: HubSubNavItem[] = SUB_TABS.map((tab) => ({
     key: tab.key,
     label: tab.label,
-    ...(tab.key === "questions" && toAnswerBadge != null && toAnswerBadge > 0
-      ? { badge: toAnswerBadge, badgeLabel: hub.shell.unreadAria(toAnswerBadge) }
-      : {}),
+    ...toAnswerBadgeProps(tab.key),
   }));
 
-  const nav = (
-    <HubSubNav
-      ariaLabel={hub.shell.questionsSubNavAria}
-      items={items}
-      active={active}
-      onSelect={(key) => {
-        const params = new URLSearchParams({ tab: key });
-        if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
-        router.push(`/hub?${params.toString()}`);
+  const iconPillItems: HubSubNavItem[] = SUB_TABS.map((tab) => {
+    const icon =
+      tab.key === "questions" ? (
+        <CircleHelp size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ) : tab.key === "ask" ? (
+        <MessageSquarePlus size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ) : (
+        <MessagesSquare size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      );
+    return {
+      key: tab.key,
+      label: icon,
+      // Fold badge into aria-label — HubSubNav's ariaLabel replaces the accessible name from children.
+      ariaLabel: toAnswerAriaLabel(tab.key, tab.label),
+      ...toAnswerBadgeProps(tab.key),
+    };
+  });
+
+  const menuItems = SUB_TABS.map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    ...toAnswerBadgeProps(tab.key),
+  }));
+
+  return (
+    <HubProgressiveControlRow
+      subTabs={{
+        labeled: (
+          <HubSubNav
+            layout="intrinsic"
+            ariaLabel={hub.shell.questionsSubNavAria}
+            items={labeledItems}
+            active={active}
+            onSelect={navigate}
+          />
+        ),
+        iconPills: (
+          <HubSubNav
+            layout="intrinsic"
+            ariaLabel={hub.shell.questionsSubNavAria}
+            items={iconPillItems}
+            active={active}
+            onSelect={navigate}
+          />
+        ),
+        menuIcon: (
+          <SubTabsMenu
+            items={menuItems}
+            active={active}
+            ariaLabel={hub.shell.questionsSubNavAria}
+            onSelect={navigate}
+          />
+        ),
       }}
+      forceAvailableWidth={forceAvailableWidth}
+      forceWidths={forceWidths}
     />
   );
-
-  // Phone: the shared strip layout (identical to Stories' modeNav container) — pills full-width, no
-  // icons/action. Desktop: the inline HubToolbar R1-left (empty-row rule drops the second row).
-  if (compact) {
-    return (
-      <div className={strip.strip}>
-        <div className={strip.pills}>{nav}</div>
-      </div>
-    );
-  }
-  return <HubToolbar row1Left={nav} />;
 }

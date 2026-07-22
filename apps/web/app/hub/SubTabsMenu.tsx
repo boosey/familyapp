@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * SubTabsMenu (#301) — menu-icon stage for progressive Sub tabs. Opens a lightweight menu of browse
- * modes (Feed / Timeline, …), not a sheet/popover. Mechanics mirror AddPhotosMenu / OwnerActionMenu:
- * click-outside, Escape, role="menu".
+ * SubTabsMenu (#301/#297) — menu-icon stage for progressive Sub tabs. Opens a lightweight menu of
+ * browse modes (Feed / Timeline / Tree / …), not a sheet/popover. Mechanics mirror AddPhotosMenu /
+ * OwnerActionMenu: click-outside, Escape, role="menu". When an item carries a pending count (Family
+ * Requests / Questions To-answer), the trigger badges that count so it stays visible under menu-icon.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Rows3 } from "lucide-react";
@@ -12,11 +13,16 @@ import {
   HUB_SUB_TABS_GLYPH_SIZE,
 } from "./hub-progressive-control-constants";
 import sheet from "./IconSheet.module.css";
+import hubTabStyles from "./HubTabs.module.css";
 import s from "./SubTabsMenu.module.css";
 
 export interface SubTabsMenuItem {
   key: string;
   label: string;
+  /** Optional numeric badge (#297 Family Requests / Questions To-answer); hidden when absent or 0. */
+  badge?: number;
+  /** Accessible label for the badge (the caller owns what the count MEANS). */
+  badgeLabel?: string;
 }
 
 export interface SubTabsMenuProps {
@@ -40,6 +46,13 @@ export function SubTabsMenu({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
 
+  const badged = items.find((item) => item.badge != null && item.badge > 0);
+  const triggerBadge = badged?.badge ?? 0;
+  const triggerLabel =
+    triggerBadge > 0 && badged?.badgeLabel
+      ? `${ariaLabel}, ${badged.badgeLabel}`
+      : ariaLabel;
+
   useEffect(() => {
     if (!open) return;
     const onDocPointer = (e: PointerEvent) => {
@@ -61,7 +74,7 @@ export function SubTabsMenu({
       <button
         type="button"
         className={sheet.trigger}
-        aria-label={ariaLabel}
+        aria-label={triggerLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -69,6 +82,11 @@ export function SubTabsMenu({
       >
         <span className={sheet.iconWrap}>
           {icon ?? <Rows3 size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />}
+          {triggerBadge > 0 ? (
+            <span className={sheet.badge} aria-hidden="true">
+              {triggerBadge}
+            </span>
+          ) : null}
         </span>
         <span className={sheet.label} aria-hidden="true">
           {hub.mobileControls.subTabsLabel}
@@ -78,6 +96,15 @@ export function SubTabsMenu({
         <div id={menuId} className={s.menu} role="menu" aria-label={ariaLabel}>
           {items.map((item) => {
             const isActive = item.key === active;
+            const badge =
+              item.badge != null && item.badge > 0 ? (
+                <span
+                  className={hubTabStyles.badge}
+                  aria-label={item.badgeLabel ?? String(item.badge)}
+                >
+                  {item.badge}
+                </span>
+              ) : null;
             return (
               <button
                 key={item.key}
@@ -91,6 +118,7 @@ export function SubTabsMenu({
                 }}
               >
                 {item.label}
+                {badge}
               </button>
             );
           })}

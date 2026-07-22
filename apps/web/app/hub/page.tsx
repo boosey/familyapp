@@ -344,12 +344,11 @@ export default async function HubPage({
               toAnswerBadge={pendingAsks.length}
             />
           )}
-          {/* #158/#189: family + requests share one primary tab (Family), fronted by the shared two-row
-              HubToolbar. R1 is the `Family tree · List · Requests` selector + right-justified Invite; R2
-              is the family selector + view controls. On the Requests tab (and the no-family case) there is
-              no R2 content, so the toolbar is R1 only — rendered HERE. On the family CONTENT tabs
-              (tree/list) FamilyTab renders the FULL toolbar (R1 threaded in + its own R2), so we must NOT
-              also render an R1-only copy here — that would double the selector row. */}
+          {/* #158/#297: family + requests share one primary tab (Family), fronted by the progressive
+              control row. On the Requests tab (and the no-family case) FamilyTab is not mounted, so
+              FamilySurfaceNav renders HERE (Sub tabs + Invite; no Family/Views units). On the family
+              CONTENT tabs (tree/list) FamilyTab owns the progressive row (with chips/zoom), so we must
+              NOT also render a copy here — that would double the selector. */}
           {showFamilySelector && !(activeTab === "family" && familyTabData) && (
             <FamilySurfaceNav
               active={familySelectorActive}
