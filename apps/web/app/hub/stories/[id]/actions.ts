@@ -350,7 +350,7 @@ export async function untagStorySubjectAction(formData: FormData): Promise<Actio
  */
 export async function askFollowUpAction(formData: FormData): Promise<ActionResult> {
   beginLogContext();
-  const { db, auth } = await getRuntime();
+  const { db, auth, dispatchAskActionableNotify } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
   const viewerId = viewerPersonId(ctx);
@@ -381,12 +381,24 @@ export async function askFollowUpAction(formData: FormData): Promise<ActionResul
   plog("story", "askFollowUp: received", { person: viewerPersonId(ctx), story: sourceStoryId });
 
   try {
-    await createAsk(db, ctx, {
+    const ask = await createAsk(db, ctx, {
       targetPersonId,
       questionText,
       sourceStoryId,
     });
     plog("story", "askFollowUp: success", { story: sourceStoryId });
+    // #276: best-effort email the askee that a question is waiting. Never fails the follow-up ask.
+    try {
+      await dispatchAskActionableNotify({ askId: ask.id });
+    } catch (dispatchErr) {
+      plogError("story", "askFollowUp: ask.actionable.notify dispatch failed", {
+        ask: ask.id,
+        error:
+          dispatchErr instanceof Error
+            ? `${dispatchErr.name}: ${dispatchErr.message}`
+            : String(dispatchErr),
+      });
+    }
   } catch (err) {
     // The real error (e.g. AuthorizationError wording) is logged server-side; the client gets a
     // single generic message so internal authorization phrasing is never surfaced verbatim.

@@ -69,8 +69,13 @@ import {
   makeDispatchStorySharedNotify,
   type DispatchStorySharedNotify,
 } from "./dispatch-story-shared-notify";
+import {
+  makeDispatchAskActionableNotify,
+  type DispatchAskActionableNotify,
+} from "./dispatch-ask-actionable-notify";
 import { deliverInvite } from "./deliver-invite";
 import { deliverStorySharedPings } from "./deliver-story-shared-pings";
+import { deliverQuestionsForMePing } from "./deliver-questions-for-me-ping";
 import { resolvePublicOrigin } from "./public-origin";
 
 export { isClerkConfigured, isInngestConfigured };
@@ -271,6 +276,14 @@ type Runtime = {
    * synchronously via the composite notifier. Best-effort — callers catch errors.
    */
   dispatchStorySharedNotify: DispatchStorySharedNotify;
+  /**
+   * Dispatch the "Ask became actionable" askee email (#276). Same durable-vs-synchronous split as
+   * `dispatchStorySharedNotify`: Inngest → enqueue `ask.actionable.notify`; else email
+   * synchronously via the composite notifier. Best-effort — callers catch errors. Call sites are
+   * AskTab's `submitAsk` and `askFollowUpAction` ONLY, after a successful `createAsk` — never
+   * inside core's `createAsk`, session-offer, or dev-seed.
+   */
+  dispatchAskActionableNotify: DispatchAskActionableNotify;
   /**
    * True when `INNGEST_EVENT_KEY` is set, i.e. `dispatchPipeline` takes the durable enqueue path.
    * (In prod the serve route ALSO needs `INNGEST_SIGNING_KEY`; see `lib/inngest-config.ts`.)
@@ -505,6 +518,21 @@ async function build(): Promise<Runtime> {
         origin,
       });
     });
+    // "Ask became actionable" askee ping (#276): email the askee after createAsk succeeds.
+    jobQueue.register("ask.actionable.notify", async (p) => {
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: true,
+      });
+      await deliverQuestionsForMePing({
+        db,
+        notifier,
+        askId: p.askId,
+        origin,
+      });
+    });
     // Orphaned album-object reaper (issue #90) — the app's ONLY scheduled job. The upload path is
     // put-then-record, so abandoned direct uploads leave write-once `family-photos/` objects with
     // no DB row; this hourly sweep hard-deletes any that are older than the safety window. Cron is
@@ -573,6 +601,25 @@ async function build(): Promise<Runtime> {
     },
   });
 
+  const dispatchAskActionableNotify = makeDispatchAskActionableNotify({
+    inngestConfigured,
+    ...(inngestJobQueue ? { inngestJobQueue } : {}),
+    deliver: async ({ askId }) => {
+      const origin = resolvePublicOrigin({
+        configuredBaseUrl: process.env.APP_BASE_URL,
+        host: null,
+        forwardedProto: null,
+        isProduction: process.env.NODE_ENV === "production",
+      });
+      await deliverQuestionsForMePing({
+        db,
+        notifier,
+        askId,
+        origin,
+      });
+    },
+  });
+
   return {
     db,
     storage,
@@ -585,6 +632,7 @@ async function build(): Promise<Runtime> {
     dispatchPipeline,
     dispatchInviteDelivery,
     dispatchStorySharedNotify,
+    dispatchAskActionableNotify,
     inngestConfigured,
     ...(inngest ? { inngest } : {}),
     narratorMemory: noopNarratorMemorySink,
