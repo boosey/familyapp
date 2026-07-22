@@ -6,6 +6,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PlaceConfirmModal } from "./place-confirm-modal";
+import type { MintPlacement } from "./placement";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -47,8 +48,8 @@ async function flush() {
   });
 }
 
-it("New person mint opens shared modal with unlocked receiver, relation, and nature (#286)", async () => {
-  const onMint = vi.fn(async (_fd: FormData) => undefined);
+it("New person mint opens shared modal with unlocked receiver, relation, and nature (#286/#318)", async () => {
+  const onMint = vi.fn(async (_p: MintPlacement) => ({ ok: true as const }));
   render(
     <PlaceConfirmModal
       familyId="F"
@@ -80,11 +81,15 @@ it("New person mint opens shared modal with unlocked receiver, relation, and nat
   });
 
   expect(onMint).toHaveBeenCalledTimes(1);
-  const fd = onMint.mock.calls[0]![0];
-  expect(fd.get("displayName")).toBe("Ada");
-  expect(fd.get("anchorPersonId")).toBe("elena");
-  expect(fd.get("relation")).toBe("child");
-  expect(fd.get("nature")).toBe("biological");
+  const placement = onMint.mock.calls[0]![0];
+  expect(placement).toMatchObject({
+    kind: "mint",
+    familyId: "F",
+    displayName: "Ada",
+    receiverPersonId: "elena",
+    relation: "child",
+    nature: "biological",
+  });
 });
 
 it("locked receiver (zone/kebab path) shows read-only receiver name (#286)", async () => {
@@ -190,6 +195,44 @@ it("partner→kids offer waits for kin options then never silent-writes (#286)",
     coParentPersonIds: undefined,
     nature: undefined,
     stepParentOfChildIds: ["kid-1"],
+  });
+});
+
+it("partner→kids skip commits explicit empty stepParentOfChildIds (#318 offer-never-silent)", async () => {
+  listPersonKinOptionsAction.mockImplementation(async () => ({
+    ok: true as const,
+    partners: [],
+    children: [{ id: "kid-1", name: "Kid One" }],
+  }));
+  const onLink = vi.fn(async () => ({ ok: true as const }));
+
+  render(
+    <PlaceConfirmModal
+      familyId="F"
+      subject={{ kind: "link", personId: "u1", displayName: "Rosa" }}
+      onLink={onLink}
+      onFetchAnchors={fetchAnchors}
+      onClose={() => {}}
+      onSuccess={() => {}}
+    />,
+  );
+  await flush();
+  await flush();
+
+  fireEvent.change(screen.getByTestId("place-confirm-relation"), { target: { value: "partner" } });
+  await act(async () => {
+    fireEvent.submit(screen.getByTestId("place-confirm-submit").closest("form")!);
+  });
+  expect(onLink).not.toHaveBeenCalled();
+
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("place-confirm-step-skip"));
+  });
+
+  expect(onLink).toHaveBeenCalledWith("F", "u1", "partner", "self", undefined, {
+    coParentPersonIds: undefined,
+    nature: undefined,
+    stepParentOfChildIds: [],
   });
 });
 

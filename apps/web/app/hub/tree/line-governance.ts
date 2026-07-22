@@ -2,7 +2,7 @@
  * #289 — resolve layout edge-hit refs to actable GovernableKinEdge rows (capability flags from core).
  */
 import type { GovernableKinEdge } from "@chronicle/core";
-import { actableEdges } from "../kin/edge-sentence";
+import { actableEdges } from "./edge-sentence";
 import type { ConnectorEdgeRef } from "./tree-layout";
 
 function refsMatch(edge: GovernableKinEdge, ref: ConnectorEdgeRef): boolean {

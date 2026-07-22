@@ -1,21 +1,15 @@
 // @vitest-environment jsdom
 /**
- * #285 / ADR-0027 — partner add must prompt for step parent-of to existing kids before write
- * (never silent). Declining writes partner-only.
+ * #285 / #318 / ADR-0027 — partner add must prompt for step parent-of to existing kids before write
+ * (never silent). Declining writes partner-only. Mint goes through typed Placement.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-
-const { addRelativeAction } = vi.hoisted(() => ({
-  addRelativeAction: vi.fn(async (_formData: FormData) => undefined),
-}));
-vi.mock("../app/hub/kin/actions", () => ({ addRelativeAction }));
-
-import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
+import type { MintPlacement } from "@/app/hub/tree/placement";
+import { AddRelativeForm } from "@/app/hub/tree/add-relative-form";
 
 afterEach(() => {
   cleanup();
-  addRelativeAction.mockClear();
 });
 
 const KIDS = [
@@ -24,12 +18,14 @@ const KIDS = [
 ];
 
 it("pauses on partner submit to offer step parent-of when the anchor has children", async () => {
+  const onMint = vi.fn(async () => ({ ok: true as const }));
   render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="anchor"
       initialRelation="partner"
       childOptions={KIDS}
+      onMint={onMint}
     />,
   );
 
@@ -38,23 +34,24 @@ it("pauses on partner submit to offer step parent-of when the anchor has childre
   });
 
   expect(screen.getByTestId("add-relative-step-offer")).toBeTruthy();
-  expect(addRelativeAction).not.toHaveBeenCalled();
+  expect(onMint).not.toHaveBeenCalled();
 });
 
-it("Continue forwards checked kids as stepParentOfChildIds", async () => {
+it("Continue forwards checked kids as stepParentOfChildIds on typed MintPlacement", async () => {
+  const onMint = vi.fn(async (_p: MintPlacement) => ({ ok: true as const }));
   render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="anchor"
       initialRelation="partner"
       childOptions={KIDS}
+      onMint={onMint}
     />,
   );
 
   await act(async () => {
     fireEvent.submit(screen.getByRole("button", { name: /add relative/i }).closest("form")!);
   });
-  // Uncheck kid-2
   await act(async () => {
     fireEvent.click(screen.getByTestId("add-relative-step-child-kid-2"));
   });
@@ -62,18 +59,23 @@ it("Continue forwards checked kids as stepParentOfChildIds", async () => {
     fireEvent.click(screen.getByTestId("add-relative-step-confirm"));
   });
 
-  expect(addRelativeAction).toHaveBeenCalledTimes(1);
-  const fd = addRelativeAction.mock.calls[0]![0] as FormData;
-  expect(fd.getAll("stepParentOfChildIds")).toEqual(["kid-1"]);
+  expect(onMint).toHaveBeenCalledTimes(1);
+  const placement = onMint.mock.calls[0]![0];
+  expect(placement.kind).toBe("mint");
+  expect(placement.relation).toBe("partner");
+  expect(placement.receiverPersonId).toBe("anchor");
+  expect(placement.stepParentOfChildIds).toEqual(["kid-1"]);
 });
 
-it("Partner only skips step parent-of (empty stepParentOfChildIds)", async () => {
+it("Partner only skips step parent-of (explicit empty stepParentOfChildIds)", async () => {
+  const onMint = vi.fn(async (_p: MintPlacement) => ({ ok: true as const }));
   render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="anchor"
       initialRelation="partner"
       childOptions={KIDS}
+      onMint={onMint}
     />,
   );
 
@@ -84,18 +86,19 @@ it("Partner only skips step parent-of (empty stepParentOfChildIds)", async () =>
     fireEvent.click(screen.getByTestId("add-relative-step-skip"));
   });
 
-  expect(addRelativeAction).toHaveBeenCalledTimes(1);
-  const fd = addRelativeAction.mock.calls[0]![0] as FormData;
-  expect(fd.getAll("stepParentOfChildIds")).toEqual([]);
+  expect(onMint).toHaveBeenCalledTimes(1);
+  expect(onMint.mock.calls[0]![0].stepParentOfChildIds).toEqual([]);
 });
 
 it("does not prompt when the anchor has no children", async () => {
+  const onMint = vi.fn(async (_p: MintPlacement) => ({ ok: true as const }));
   render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="anchor"
       initialRelation="partner"
       childOptions={[]}
+      onMint={onMint}
     />,
   );
 
@@ -104,5 +107,6 @@ it("does not prompt when the anchor has no children", async () => {
   });
 
   expect(screen.queryByTestId("add-relative-step-offer")).toBeNull();
-  expect(addRelativeAction).toHaveBeenCalledTimes(1);
+  expect(onMint).toHaveBeenCalledTimes(1);
+  expect(onMint.mock.calls[0]![0].stepParentOfChildIds).toBeUndefined();
 });

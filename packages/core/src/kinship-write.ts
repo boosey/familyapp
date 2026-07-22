@@ -401,8 +401,9 @@ async function resolveStepParentOfChildIds(
 }
 
 /**
- * Default nature for ordinary parent/child generative edges (ADR-0027 / #285). Sibling scaffolds and
- * invite auto-placement keep their own `"unknown"` defaults elsewhere.
+ * Default nature for ordinary parent/child generative edges (ADR-0027 / #285). Sibling scaffolds
+ * still force `"unknown"` inside {@link writeRelationEdges}; invite-accept uses this same helper
+ * via the generative path (#320) — no invite-forked nature default.
  */
 function defaultParentChildNature(nature: KinshipNature | undefined): KinshipNature {
   return nature ?? "biological";
@@ -636,7 +637,7 @@ export async function addRelative(
 }
 
 // ===========================================================================
-// Accept-time auto-placement from a structured invite relationship (#164, ADR-0023).
+// Accept-time auto-placement from a structured invite relationship (#164, ADR-0023 / #320).
 //
 // When an invitation carried a STRUCTURED relationship (the fixed invite vocabulary) and is
 // accepted, the new member should appear in the family's tree the instant they join — the exact
@@ -644,6 +645,11 @@ export async function addRelative(
 // this: an invite that said "Son" was discarded on accept, leaving the member invisible). Only the
 // six DIRECT primitives auto-place; `other` records "no auto-edge" and the member is left unplaced
 // for #161 — a sibling/grandparent/in-law needs a bridge node (ADR-0017) and is NEVER guessed here.
+//
+// #320: placement goes through the SAME generative write path as manual place (`writeRelationEdges`)
+// via a thin invite→relation adapter. ADR-0023 exclusions (no sibling/grandparent bridges) are
+// adapter policy on that seam — not a second insert dialect. Nature defaults and first-asserter-
+// wins / Placeholder minting stay single-sourced inside `writeRelationEdges`.
 //
 // The auto-written edge is NOT privileged: it is a normal `asserted` edge, actor = the inviter, so
 // it flows through the SAME governance overlay as any manual assertion — first-asserter-wins, the
@@ -654,22 +660,47 @@ export async function addRelative(
 /** A tx/db handle that can read, insert edges, and update the invitee's `sex`. */
 type PlacementTx = DbOrTx & Pick<Database, "update">;
 
+/** Direct invite relations only — never sibling/grandparent (ADR-0023). */
+export type InviteAcceptRelation = Extract<AddRelativeRelation, "parent" | "child" | "partner">;
+
+export interface InviteAcceptPlacementPlan {
+  /** Generative relation for {@link writeRelationEdges} (anchor = inviter, target = invitee). */
+  relation: InviteAcceptRelation;
+  /** Sex to fill on the invitee when currently unset. */
+  sex: PersonSex;
+}
+
 /**
- * The invite-picker vocabulary → (edge to write, invitee sex) placement table (#164). The value
- * names the INVITEE's role relative to the INVITER (the actor): `son` ⇒ the invitee is the inviter's
- * son ⇒ the inviter is a parent of the invitee; `mother` ⇒ the invitee is the inviter's mother ⇒ the
- * invitee is a parent of the inviter. `other` is absent — it writes no edge and touches no sex.
+ * ADR-0023 invite→generative adapter (#320). Maps the invite-picker vocabulary (invitee's role
+ * relative to the inviter) onto `parent` / `child` / `partner` for the shared write path.
+ * Sibling/grandparent are intentionally absent — those need bridge scaffolding and stay unplaced
+ * (`other`) until a human places them.
  */
-const INVITE_PLACEMENT: Record<
+export function planInviteAcceptPlacement(
+  relationship: Exclude<InviteRelationship, "other">,
+): InviteAcceptPlacementPlan {
+  // Total over the six direct values; `T | undefined` only under `noUncheckedIndexedAccess`.
+  const plan = INVITE_ACCEPT_PLACEMENT[relationship];
+  if (plan === undefined) {
+    throw new InvariantViolation(`no placement for invite relationship '${relationship}'`);
+  }
+  return plan;
+}
+
+/**
+ * The invite-picker vocabulary → generative relation + invitee sex (#164 / #320).
+ * `son` ⇒ child of inviter; `mother` ⇒ parent of inviter; spouse ⇒ partner. `other` is absent.
+ */
+const INVITE_ACCEPT_PLACEMENT: Record<
   Exclude<InviteRelationship, "other">,
-  { edge: "partner" | "inviteeIsParent" | "inviterIsParent"; sex: PersonSex }
+  InviteAcceptPlacementPlan
 > = {
-  wife: { edge: "partner", sex: "female" },
-  husband: { edge: "partner", sex: "male" },
-  mother: { edge: "inviteeIsParent", sex: "female" },
-  father: { edge: "inviteeIsParent", sex: "male" },
-  son: { edge: "inviterIsParent", sex: "male" },
-  daughter: { edge: "inviterIsParent", sex: "female" },
+  wife: { relation: "partner", sex: "female" },
+  husband: { relation: "partner", sex: "male" },
+  mother: { relation: "parent", sex: "female" },
+  father: { relation: "parent", sex: "male" },
+  son: { relation: "child", sex: "male" },
+  daughter: { relation: "child", sex: "female" },
 };
 
 export interface PlaceInvitedMemberResult {
@@ -680,12 +711,13 @@ export interface PlaceInvitedMemberResult {
 }
 
 /**
- * Auto-place a just-accepted member from the invite's structured relationship (#164). MUST run
- * inside `acceptInvitation`'s transaction so the membership, merge, and edge commit atomically.
+ * Auto-place a just-accepted member from the invite's structured relationship (#164 / #320). MUST
+ * run inside `acceptInvitation`'s transaction so the membership, merge, and edge commit atomically.
  * `inviterPersonId` is the actor (and the anchor the edge attaches to); `inviteePersonId` is the
  * REAL accepting Person (the provisional has already been merged away by the caller). Writes exactly
- * ONE primitive edge for a direct relationship and matches the invitee's `sex` to the gendered pick;
- * `other` (and any nullish relationship — handled by the caller) writes nothing.
+ * ONE primitive edge for a direct relationship via {@link writeRelationEdges} and matches the
+ * invitee's `sex` to the gendered pick; `other` (and any nullish relationship — handled by the
+ * caller) writes nothing.
  *
  * The `sex` write is CONSERVATIVE — only when the invitee's sex is currently unset (`null`/`unknown`)
  * — so accepting a second-family invite can never clobber a sex the member set themselves. The
@@ -709,26 +741,35 @@ export async function placeInvitedMemberOnAccept(
   if (me === inviteePersonId) {
     return { edgeId: null, sexSet: null };
   }
-  // `INVITE_PLACEMENT` is total over the six direct values; the lookup is `T | undefined` only under
-  // `noUncheckedIndexedAccess`, so the guard is a type-narrowing formality (unreachable at runtime).
-  const plan = INVITE_PLACEMENT[input.relationship];
-  if (plan === undefined) {
-    throw new InvariantViolation(`no placement for invite relationship '${input.relationship}'`);
-  }
 
-  let edgeId: string;
-  switch (plan.edge) {
-    case "partner":
-      edgeId = await insertPartneredWith(tx, familyId, me, me, inviteePersonId);
-      break;
-    case "inviteeIsParent":
-      // The invitee is a parent of the inviter (mother/father).
-      edgeId = await insertParentOf(tx, familyId, me, inviteePersonId, me, "unknown");
-      break;
-    case "inviterIsParent":
-      // The inviter is a parent of the invitee (son/daughter).
-      edgeId = await insertParentOf(tx, familyId, me, me, inviteePersonId, "unknown");
-      break;
+  const plan = planInviteAcceptPlacement(input.relationship);
+  // Same nature default as addRelative / linkExistingMember — not an invite-forked "unknown".
+  const nature: KinshipNature =
+    plan.relation === "parent" || plan.relation === "child"
+      ? defaultParentChildNature(undefined)
+      : "unknown";
+
+  const { edgeIds, bridgePersonIds } = await writeRelationEdges(tx, {
+    familyId,
+    me,
+    anchor: me,
+    targetPersonId: inviteePersonId,
+    relation: plan.relation,
+    nature,
+    // ADR-0023: never silently attach step-kids or co-parents on invite-accept.
+  });
+
+  // Direct adapter relations must never mint ADR-0017 bridges (sibling/grandparent are excluded).
+  if (bridgePersonIds.length > 0) {
+    throw new InvariantViolation(
+      `invite-accept minted unexpected bridge person(s) for '${input.relationship}'`,
+    );
+  }
+  const edgeId = edgeIds[0];
+  if (edgeId === undefined || edgeIds.length !== 1) {
+    throw new InvariantViolation(
+      `invite-accept expected exactly one edge for '${input.relationship}', got ${edgeIds.length}`,
+    );
   }
 
   // Match the invitee's sex to the gendered pick — but only fill an unset value (see doc above).

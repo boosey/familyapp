@@ -8,14 +8,14 @@
  * self-endpoint subject -> Hide. The server actions re-check every gate, so these flags are
  * affordances, not the authorization.
  *
- * Re-homed onto the Family tree (#254): PersonDetails + the List-view relationships section. Nature
+ * Re-homed onto the Family tree (#254/#319): PersonDetails + line-governance menu. Nature
  * correction (#255) uses the existing append-only `correctEdge` path - partner edges have no nature
  * control. On success, `onSuccess` reports which action ran so the mount can prune client tree
  * state only for deny/hide (affirm/correct must keep the edge visible - TreeCanvas merge won't
  * restore a wrongly pruned edge when only `state`/`nature` changed).
  *
  * Layout: KinEdgeControls.module.css (token-only). Scrapbook Phase-2 signatures live on the shared
- * GovernableEdgeList `.edge` card — not on these controls (#265).
+ * GovernableEdgeList `.edge` card — not on these controls (#265). List does not mount these (#283).
  */
 import { useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
@@ -28,7 +28,7 @@ import {
   denyEdgeAction,
   hideEdgeAction,
   type ActionResult,
-} from "./actions";
+} from "./kin-actions";
 import styles from "./KinEdgeControls.module.css";
 
 /** Which governance control succeeded — mount points prune the tree only for deny/hide. */

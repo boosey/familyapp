@@ -17,7 +17,7 @@ import type { KinshipTreeData, TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { PersonDetails } from "./person-details";
 import { KebabMenu } from "./kebab-menu";
-import { TreeInviteProvider } from "./invite-context";
+import { TreeCallbacksProvider } from "./tree-callbacks-context";
 import { TreeCanvas } from "./tree-canvas";
 import type { PersonEditabilityResult } from "./actions";
 import type { PersonInviteFormState, PersonInviteTargetsResult } from "./person-invite-actions";
@@ -100,9 +100,15 @@ it("PersonDetails shows no invite affordance for not-applicable", () => {
 
 function openKebab(n: TreeNode, onInvite: (node: TreeNode) => void) {
   render(
-    <TreeInviteProvider value={onInvite}>
+    <TreeCallbacksProvider
+      value={{
+        openAdd: () => {},
+        focusPerson: () => {},
+        invitePerson: onInvite,
+      }}
+    >
       <KebabMenu node={n} parentCount={0} partnerCount={0} />
-    </TreeInviteProvider>,
+    </TreeCallbacksProvider>,
   );
   act(() => {
     screen.getByTestId("tree-kebab-trigger").click();

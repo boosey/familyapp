@@ -43,7 +43,7 @@ import { PlaceConfirmModal } from "../tree/place-confirm-modal";
 import { PersonDetails } from "../tree/person-details";
 import { PersonInviteModal, type PersonInviteModalProps } from "../tree/PersonInviteModal";
 import { KinList } from "./KinList";
-import { UnplacedMembers } from "./UnplacedMembers";
+import { UnplacedMembers } from "../tree/UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
 import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
@@ -97,7 +97,7 @@ export interface FamilyTabProps {
   /**
    * Progressive control-row data for {@link FamilySurfaceNav} (#297). The Family CONTENT tabs render
    * Sub tabs + Invite + this component's Family chips / Views (zoom) so chrome is ONE row. Same values
-   * the page hands the standalone FamilySurfaceNav on the Requests / no-family path.
+   * RequestsTab uses when it owns the progressive row on the Requests path.
    */
   surface: {
     /** Which selector item is active — `"tree"`/`"list"` here (Requests is never the content tab). */

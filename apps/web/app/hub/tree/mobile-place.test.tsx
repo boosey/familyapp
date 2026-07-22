@@ -12,7 +12,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { KinshipTreeData, TreeNode, UnplacedMember } from "@chronicle/core";
 import { TreeCanvas } from "./tree-canvas";
 import { FamilyTab } from "../tabs/FamilyTab";
-import { UnplacedMembers } from "../tabs/UnplacedMembers";
+import { UnplacedMembers } from "./UnplacedMembers";
 import { DRAG_SLOP_PX } from "./tree-constants";
 
 afterEach(cleanup);

@@ -21,9 +21,9 @@ import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { GovernableKinEdge, KinRelation, PersonSex, TreeNode } from "@chronicle/core";
 import { KindredButton } from "@/app/_kindred";
-import { KinEdgeControls } from "../kin/kin-edge-controls";
-import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "../kin/edge-sentence";
-import govStyles from "../kin/GovernableEdgeList.module.css";
+import { KinEdgeControls } from "./kin-edge-controls";
+import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "./edge-sentence";
+import govStyles from "./GovernableEdgeList.module.css";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
 import {
   personEditabilityAction,

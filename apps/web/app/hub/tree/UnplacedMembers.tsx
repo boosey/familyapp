@@ -23,15 +23,14 @@ import {
   linkExistingMemberAction,
   listPlacedPersonsAction,
   setMemberNonFamilyAction,
-} from "../tree/actions";
-import { addRelativeAction } from "../kin/actions";
-import { PlaceConfirmModal } from "../tree/place-confirm-modal";
-import type { PlaceConfirmSubject } from "../tree/place-confirm";
+} from "./actions";
+import { PlaceConfirmModal } from "./place-confirm-modal";
+import type { MintPlacement, PlaceConfirmSubject, PlacementResult } from "./place-confirm";
 import {
   setActivePlaceDrag,
   writePlaceDrag,
   type PlaceDragPayload,
-} from "../tree/place-drag";
+} from "./place-drag";
 import styles from "./UnplacedMembers.module.css";
 
 /** A person already placed in the tree, offered as an anchor to link an unplaced member to. */
@@ -63,7 +62,8 @@ export interface UnplacedMembersProps {
   onCancelCanvasPlace?: () => void;
   /** Overridable in tests so the actions can be stubbed without a server round-trip. */
   onLink?: typeof linkExistingMemberAction;
-  onMint?: typeof addRelativeAction;
+  /** Typed mint (#318) — FormData is not the seam; omit to use commitPlaceMint default. */
+  onMint?: (placement: MintPlacement) => Promise<PlacementResult>;
   onSetNonFamily?: typeof setMemberNonFamilyAction;
   onEndMembership?: typeof endMembershipAction;
   onFetchAnchors?: typeof listPlacedPersonsAction;
@@ -89,7 +89,7 @@ export function UnplacedMembers({
   canvasPlaceSubject = null,
   onCancelCanvasPlace,
   onLink = linkExistingMemberAction,
-  onMint = addRelativeAction,
+  onMint,
   onSetNonFamily = setMemberNonFamilyAction,
   onEndMembership = endMembershipAction,
   onFetchAnchors = listPlacedPersonsAction,

@@ -7,7 +7,7 @@
  */
 import { useEffect } from "react";
 import type { AddRelativeRelation, UnplacedMember } from "@chronicle/core";
-import { AddRelativeForm } from "../kin/add-relative-form";
+import { AddRelativeForm } from "./add-relative-form";
 import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 

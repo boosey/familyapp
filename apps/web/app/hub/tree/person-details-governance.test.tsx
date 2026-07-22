@@ -5,28 +5,33 @@
  * (threaded as `governableEdges`); the sheet only lists edges that touch the opened person AND that
  * the viewer can act on.
  *
- * Issue #265 — shared GovernableEdgeList edge chrome with List-view (`.list`/`.edge`/`.sentence`);
- * compact `.sectionDense`/`.headingDense` for the 280px sheet. CSS-source guards live in
- * governable-edges-section.test.tsx.
+ * Issue #265 — shared GovernableEdgeList edge chrome (`.list`/`.edge`/`.sentence`);
+ * compact `.sectionDense`/`.headingDense` for the 280px sheet. CSS-source Scrapbook guards live below.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { GovernableKinEdge, TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import styles from "../kin/GovernableEdgeList.module.css";
+import styles from "./GovernableEdgeList.module.css";
 import { PersonDetails } from "./person-details";
 import type { PersonEditabilityResult, SavePersonEditResult } from "./actions";
 
 afterEach(cleanup);
 
-vi.mock("../kin/actions", () => ({
+vi.mock("./kin-actions", () => ({
   affirmEdgeAction: vi.fn(async () => undefined),
   denyEdgeAction: vi.fn(async () => undefined),
   hideEdgeAction: vi.fn(async () => undefined),
   correctEdgeAction: vi.fn(async () => undefined),
 }));
 
-import { affirmEdgeAction, correctEdgeAction, denyEdgeAction, hideEdgeAction } from "../kin/actions";
+import { affirmEdgeAction, correctEdgeAction, denyEdgeAction, hideEdgeAction } from "./kin-actions";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(join(here, "GovernableEdgeList.module.css"), "utf8");
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -235,5 +240,20 @@ describe("PersonDetails gov edges — Scrapbook signature (#265)", () => {
     expect(screen.getByText(hub.kin.edgeParentOf("Alice", "Bob")).className).toContain(
       styles.sentence,
     );
+  });
+
+  it("GovernableEdgeList.module.css declares the restrained Scrapbook signature block", () => {
+    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
+    expect(css).toContain("var(--shadow-lift)");
+    // Dense stewardship guardrail: no full-scrapbook markers (tape / tilt / highlighter).
+    expect(css).not.toContain("var(--tape-bg)");
+    expect(css).not.toMatch(/--tilt/);
+    expect(css).not.toContain("var(--highlighter)");
+  });
+
+  it("GovernableEdgeList.module.css declares the reduce-motion + solemn suppression block", () => {
+    expect(css).toContain(':global(:root[data-reduce-motion="on"])');
+    expect(css).toContain(':global(:root[data-skin="scrapbook"] [data-tone="solemn"])');
+    expect(css).toMatch(/transform:\s*none/);
   });
 });

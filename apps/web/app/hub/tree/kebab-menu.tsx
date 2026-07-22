@@ -7,11 +7,11 @@
  * not).
  *
  * The FIRST item is **Focus** (tree Slice A #2) — it re-roots the tree on this card (via
- * TreeFocusProvider's `onFocus`), recomputing relation chips + the focus badge without moving the
+ * TreeCallbacksProvider's `focusPerson`), recomputing relation chips + the focus badge without moving the
  * camera. It is OMITTED on the card that is already the focus person. (Slice B will insert Stories
  * contributed / Photos contributed / Mentions above Focus.)
  *
- * The remaining items open the tree's shared Add-a-relative MODAL (via TreeAddProvider), anchored on
+ * The remaining items open the tree's shared Add-a-relative MODAL (via TreeCallbacksProvider), anchored on
  * `node.personId` with the chosen relation. They write nothing themselves — the modal's form does.
  * Items are GATED by the loaded adjacency counts so we never offer an impossible add (a person already
  * has ≤2 parents). Multi-partner is allowed (ADR-0027 / #285) — "Add partner" is always offered:
@@ -22,9 +22,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
-import { useTreeAdd } from "./add-relative-context";
-import { useTreeFocus } from "./focus-context";
-import { useTreeInvite } from "./invite-context";
+import { useTreeAdd, useTreeFocus, useTreeInvite } from "./tree-callbacks-context";
 
 /** The three contribution destinations (tree Slice B), placed BEFORE Focus in the menu. */
 const CONTRIBUTION_ITEMS: { section: "stories" | "photos" | "mentions"; label: string; testId: string }[] = [

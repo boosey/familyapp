@@ -6,9 +6,9 @@
  */
 import type { GovernableKinEdge } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import { KinEdgeControls, type KinEdgeGovernAction } from "../kin/kin-edge-controls";
-import { edgeSentence, governableEdgeKey } from "../kin/edge-sentence";
-import govStyles from "../kin/GovernableEdgeList.module.css";
+import { KinEdgeControls, type KinEdgeGovernAction } from "./kin-edge-controls";
+import { edgeSentence, governableEdgeKey } from "./edge-sentence";
+import govStyles from "./GovernableEdgeList.module.css";
 import styles from "./line-governance-menu.module.css";
 
 export function LineGovernanceMenu({

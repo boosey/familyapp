@@ -88,7 +88,7 @@ export const hub = {
     viewLabel: "View",
     familyLabel: "Family",
     filterLabel: "Filter",
-    /** Stories collapsed search (#301) — Search glyph/label/panel, not Filter. */
+    // Stories (#301) + Album (#302) collapsed search — Search glyph/label/panel, not Filter.
     searchLabel: "Search",
     // Sub tabs progressive stages (#301/#297): iconized pills keep mode names as accessible names;
     // menu-icon opens a lightweight menu (not a sheet) of the same modes. `subTabsLabel` is the tiny
@@ -622,8 +622,8 @@ export const hub = {
     googlePhotosDisconnect: "Disconnect Google Photos",
     // Trigger for the right-justified "Add Photos ▾" dropdown that consolidates every album entry
     // point (#93): the device picker, Google connect/import, and — below a divider — Manage connections.
-    // On the compact strip the trigger is iconified (ImagePlus); `addPhotosMenu` still supplies its
-    // aria-label (accessible name unchanged across the icon/label swap), so no separate key is needed.
+    // Progressive row (#302): may iconify under width pressure (ImagePlus); `addPhotosMenu` still supplies
+    // its aria-label (accessible name unchanged across the icon/label swap), so no separate key is needed.
     addPhotosMenu: "Add Photos",
     // First menu item: opens the OS file picker (the hidden file input). Shown only when file upload
     // is available (#93 — replaced the old standalone "Add to album" button).
