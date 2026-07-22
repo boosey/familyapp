@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * HubProgressiveControlRow (#301) — one progressive-collapse control row for Stories/Album.
+ * HubProgressiveControlRow (#301/#297) — one progressive-collapse control row for hub browse surfaces.
  *
  * Observes available width, measures natural widths of each unit form (Sub tabs stages + binary
  * expanded/collapsed), reserves trailing primary-action width, and asks
  * {@link resolveHubControlExpansion} which forms to show. Collapsed Family/Search/Filters/Views are
  * caller-supplied IconSheet nodes (#300 shells). Sub tabs menu-icon is a menu, not a sheet.
  *
- * Stories/Album must not depend on HubToolbar's two-row composition; Family/Questions keep that until
- * #297.
+ * Stories/Album/Family/Questions must not depend on HubToolbar's two-row composition for their
+ * browse chrome (Album may still use HubToolbar until #302 lands on master).
  */
 import {
   useCallback,

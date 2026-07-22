@@ -7,7 +7,7 @@
  * URL-driven since #158) hides them.
  */
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode } from "@chronicle/core";
 // FamilyTab calls useRouter() (Slice D #6: client-side nav) and mounts <FamilyChips>, which calls
 // usePathname()/useSearchParams() unconditionally (React hooks run before its <2-family self-hide).
@@ -78,6 +78,14 @@ function renderTab(view: "tree" | "list" = "tree") {
   );
 }
 
+/** Live progressive row only — HubProgressiveControlRow also mounts aria-hidden measure clones
+ *  of Views (Fit/−/+) that duplicate data-testid and break document-wide getByTestId. */
+function controlRow(): HTMLElement {
+  const row = document.querySelector("[data-hub-progressive-control-row]");
+  if (!row) throw new Error("missing [data-hub-progressive-control-row]");
+  return row as HTMLElement;
+}
+
 function scaleOf(): number {
   const layer = screen.getByTestId("tree-pan-layer");
   const m = /scale\(\s*(-?[\d.]+)\s*\)/.exec(layer.style.transform);
@@ -87,10 +95,11 @@ function scaleOf(): number {
 
 it("renders Fit + zoom-in + zoom-out controls on the family-selector row (tree view)", () => {
   renderTab();
-  expect(screen.getByTestId("tree-controls")).toBeTruthy();
-  expect(screen.getByTestId("tree-fit")).toBeTruthy();
-  expect(screen.getByTestId("tree-zoom-in")).toBeTruthy();
-  expect(screen.getByTestId("tree-zoom-out")).toBeTruthy();
+  const row = within(controlRow());
+  expect(row.getByTestId("tree-controls")).toBeTruthy();
+  expect(row.getByTestId("tree-fit")).toBeTruthy();
+  expect(row.getByTestId("tree-zoom-in")).toBeTruthy();
+  expect(row.getByTestId("tree-zoom-out")).toBeTruthy();
 });
 
 it("the list view hides the tree controls", () => {
@@ -101,22 +110,24 @@ it("the list view hides the tree controls", () => {
 
 it("the row controls DRIVE the canvas: zoom in/out change the scale", async () => {
   renderTab();
+  const row = within(controlRow());
   expect(scaleOf()).toBeCloseTo(1, 5);
 
-  await act(async () => screen.getByTestId("tree-zoom-in").click());
+  await act(async () => row.getByTestId("tree-zoom-in").click());
   expect(scaleOf()).toBeGreaterThan(1);
 
   const zoomed = scaleOf();
-  await act(async () => screen.getByTestId("tree-zoom-out").click());
+  await act(async () => row.getByTestId("tree-zoom-out").click());
   expect(scaleOf()).toBeLessThan(zoomed);
 });
 
 it("Fit (via the imperative handle) sets a finite zoom-to-fit scale", async () => {
   renderTab();
-  await act(async () => screen.getByTestId("tree-zoom-in").click());
-  await act(async () => screen.getByTestId("tree-zoom-in").click());
+  const row = within(controlRow());
+  await act(async () => row.getByTestId("tree-zoom-in").click());
+  await act(async () => row.getByTestId("tree-zoom-in").click());
   const before = scaleOf();
-  await act(async () => screen.getByTestId("tree-fit").click());
+  await act(async () => row.getByTestId("tree-fit").click());
   const after = scaleOf();
   expect(after).not.toBeCloseTo(before, 5);
   expect(Number.isFinite(after)).toBe(true);

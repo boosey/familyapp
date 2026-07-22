@@ -8,7 +8,7 @@
  * stubbed (this is a pure view + chip-row test).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { KinshipTreeData } from "@chronicle/core";
 
 // TreeCanvas is stubbed to ECHO the family it's rendering, so a `?families=` change (→ a different
@@ -29,18 +29,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("tab=family"),
 }));
 
-// useIsCompact drives BOTH FamilyTab (where the zoom controls go) and FamilySurfaceNav (toolbar vs
-// strip). Default false = desktop (the existing toolbar-row assertions below rely on it).
+// useIsCompact still gates Place→tap→zone (#288). Zoom/fit live on the progressive Views unit (#297).
 let compact = false;
 vi.mock("@/app/_kindred/useIsCompact", () => ({ useIsCompact: () => compact }));
 
 import { FamilyTab } from "@/app/hub/tabs/FamilyTab";
-// The toolbar's row class — used to assert the empty-row rule fires at the FamilyTab CALL SITE (not
-// just in the isolated HubToolbar unit test): the List view with <2 families must collapse R2 so only
-// ONE row (R1) renders, guarding the `<FamilyChips/>`-element-vs-null truthiness trap from regressing.
-import toolbarStyles from "@/app/hub/HubToolbar.module.css";
-import familyStyles from "@/app/hub/tabs/FamilyTab.module.css";
-import { hub } from "@/app/_copy";
 
 const TREE: KinshipTreeData = { familyId: "F", rootPersonId: "p1", nodes: [], edges: [] };
 
@@ -86,7 +79,9 @@ describe("FamilyTab view rendering (URL-driven, #158)", () => {
     renderTab();
     expect(screen.getByTestId("mock-tree")).toBeTruthy();
     expect(screen.queryByTestId("mock-list")).toBeNull();
-    expect(screen.getByTestId("tree-controls")).toBeTruthy();
+    const row = document.querySelector("[data-hub-progressive-control-row]");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByTestId("tree-controls")).toBeTruthy();
   });
 
   it("renders the List view for view=list, hiding the tree controls", () => {
@@ -184,56 +179,60 @@ describe("FamilyTab family filter chip bar (ADR-0021 §Tree, #48)", () => {
   });
 });
 
-// #189: the load-bearing empty-row rule, asserted at the FamilyTab CALL SITE (the isolated HubToolbar
-// test proves the rule; these prove FamilyTab actually TRIPS it by passing `null` — not a truthy
-// <FamilyChips/> element — for the empty R2 slots). A rendered toolbar row = a `.row` element.
-describe("FamilyTab shared-toolbar empty-row rule (#189)", () => {
-  it("List view + <2 families → R2 empty → only ONE toolbar row (R1), flush with content", () => {
+// #297: progressive occupancy at the FamilyTab call site — omit absent units (no truthy empty
+// <FamilyChips/>), keep zoom as Views on tree, single progressive row (no HubToolbar).
+describe("FamilyTab progressive control occupancy (#297)", () => {
+  it("List view + <2 families → Sub tabs only (no Family / Views units)", () => {
     const { container } = renderTab("list"); // default families=[] (single-family viewer)
-    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(1);
-    // Neither chip bar nor zoom controls → R2 truly absent.
+    const row = container.querySelector("[data-hub-progressive-control-row]");
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute("data-family")).toBe("none");
+    expect(row?.getAttribute("data-views")).toBe("none");
+    expect(document.querySelector("[data-hub-toolbar]")).toBeNull();
     expect(screen.queryByRole("group", { name: "Filter by family" })).toBeNull();
     expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 
-  it("Tree view (even <2 families) → R2 has zoom controls → BOTH rows render", () => {
-    const { container } = renderTab("tree"); // single-family: no chips, but tree still gets zoom
-    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(2);
-    expect(screen.getByTestId("tree-controls")).toBeTruthy();
+  it("Tree view (even <2 families) → Views unit has zoom controls; no Family unit", () => {
+    const { container } = renderTab("tree");
+    const row = container.querySelector("[data-hub-progressive-control-row]");
+    expect(row?.getAttribute("data-family")).toBe("none");
+    expect(row?.getAttribute("data-views")).toBe("expanded");
+    expect(within(row as HTMLElement).getByTestId("tree-controls")).toBeTruthy();
   });
 
-  it("List view + >=2 families → R2 has the chip bar → BOTH rows render", () => {
+  it("List view + >=2 families → Family unit present; no Views", () => {
     const { container } = renderTab("list", {
       families: TWO_FAMILIES,
       scopeId: "fam-a",
       familyId: "fam-a",
     });
-    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(2);
+    const row = container.querySelector("[data-hub-progressive-control-row]");
+    expect(row?.getAttribute("data-family")).toBe("expanded");
+    expect(row?.getAttribute("data-views")).toBe("none");
     expect(screen.getByRole("group", { name: "Filter by family" })).toBeTruthy();
     expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 });
 
-// ADR-0025 device round (Pass 2): on a PHONE the tree's Fit/−/+ zoom controls FLOAT on the tree canvas
-// (a bottom sheet would cover the tree being zoomed), NOT in the toolbar. The strip has no View icon.
-describe("FamilyTab compact — zoom floats on the tree, not in a sheet", () => {
-  it("tree view: the zoom controls render inside the floating .zoomFloat overlay on the canvas", () => {
+// #297: zoom/fit are the Views unit on the progressive row (including compact) — no canvas float.
+describe("FamilyTab — zoom lives on progressive Views (not a canvas float)", () => {
+  it("tree view: zoom controls are only inside the progressive row", () => {
     compact = true;
     const { container } = renderTab("tree");
-    const float = container.querySelector(`.${familyStyles.zoomFloat}`);
-    expect(float).not.toBeNull();
-    // The Fit/−/+ controls live inside the float overlay (not in a toolbar row).
-    expect(float!.querySelector('[data-testid="tree-controls"]')).not.toBeNull();
-    // No desktop toolbar rows on the compact branch (FamilySurfaceNav renders the strip, not HubToolbar).
-    expect(container.querySelectorAll(`.${toolbarStyles.row}`).length).toBe(0);
-    // And no View icon-sheet on the Family strip.
-    expect(screen.queryByRole("button", { name: hub.mobileControls.viewLabel })).toBeNull();
+    const row = container.querySelector("[data-hub-progressive-control-row]");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByTestId("tree-controls")).toBeTruthy();
+    // Measure probes duplicate the node outside the row; nothing else in the tree frame should host it.
+    const outsideRow = [...container.querySelectorAll('[data-testid="tree-controls"]')].filter(
+      (el) => !row!.contains(el) && !el.closest('[aria-hidden="true"]'),
+    );
+    expect(outsideRow).toHaveLength(0);
   });
 
-  it("list view: no zoom float (the tree isn't shown)", () => {
+  it("list view: no tree-controls", () => {
     compact = true;
-    const { container } = renderTab("list");
-    expect(container.querySelector(`.${familyStyles.zoomFloat}`)).toBeNull();
+    renderTab("list");
     expect(screen.queryByTestId("tree-controls")).toBeNull();
   });
 });

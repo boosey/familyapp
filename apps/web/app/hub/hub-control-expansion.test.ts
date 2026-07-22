@@ -206,7 +206,7 @@ describe("resolveHubControlExpansion", () => {
     expect(result.subTabs).toBe("menu-icon");
   });
 
-  it("skips absent units (Stories: no Filters; Album: no Sub tabs)", () => {
+  it("skips absent units (Stories: no Filters; Album: no Sub tabs; Family/Questions sets)", () => {
     // Stories-like occupancy: Sub tabs + Family + Search + Views (no Filters)
     const stories = resolveHubControlExpansion({
       availableWidth: 1000,
@@ -246,6 +246,38 @@ describe("resolveHubControlExpansion", () => {
       search: "expanded",
       filters: "expanded",
       views: "collapsed-icon",
+    });
+
+    // Family-like occupancy (#297): Sub tabs + Family + Views (no Search/Filters); Invite reserved.
+    // Full labeled + family + views = 180+160+100 = 440; budget 440-48=392 → collapse Views first
+    // (labeled + family + views-icon = 380).
+    const familySurf = resolveHubControlExpansion({
+      availableWidth: 440,
+      reservedActionWidth: 48,
+      present: { subTabs: true, family: true, views: true },
+      widths: { subTabs: SUB_TABS, family: FAMILY, views: VIEWS },
+    });
+    expect(familySurf).toEqual({
+      subTabs: "labeled",
+      family: "expanded",
+      search: null,
+      filters: null,
+      views: "collapsed-icon",
+    });
+
+    // Questions-like occupancy (#297): Sub tabs only (no Family/Search/Filters/Views, no action).
+    const questions = resolveHubControlExpansion({
+      availableWidth: 200,
+      reservedActionWidth: 0,
+      present: { subTabs: true },
+      widths: { subTabs: SUB_TABS },
+    });
+    expect(questions).toEqual({
+      subTabs: "labeled",
+      family: null,
+      search: null,
+      filters: null,
+      views: null,
     });
   });
 

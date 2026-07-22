@@ -76,28 +76,31 @@ export const hub = {
   },
   // ADR-0025 collapsed browse panels — per-concern IconSheet triggers (View/Family/Filter/Search).
   // Compact (< 40rem) opens a BottomSheet; wide opens an AnchoredPopover (#300). Panel body is shared.
-  // Stories/Album progressive row (#301/#302) collapses these by precedence; Family/Questions still use
-  // the compact strip until #297.
+  // Hub progressive row (#296/#297) collapses these by precedence on Stories/Album/Family/Questions.
   mobileControls: {
     // Accessible name for an IconSheet's active-filter count badge (n = active filters for that icon).
     activeCountAria: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active`,
     // Shared ✕ close control for BottomSheet and AnchoredPopover.
     close: "Close",
-    // Per-concern labeled icon-sheets: View (layout), Family (selector), Filter (Album facets), Search
-    // (Stories text search — never labeled "Filter"). Each string is BOTH the tiny icon label and its
-    // panel title (sheet or popover).
+    // Per-concern labeled icon-sheets: View (layout / tree zoom), Family (selector), Filter (Album
+    // facets), Search (Stories text search — never labeled "Filter"). Each string is BOTH the tiny
+    // icon label and its panel title (sheet or popover).
     viewLabel: "View",
     familyLabel: "Family",
     filterLabel: "Filter",
     /** Stories collapsed search (#301) — Search glyph/label/panel, not Filter. */
     searchLabel: "Search",
-    // Sub tabs progressive stages (#301): iconized pills keep mode names as accessible names; menu-icon
-    // opens a lightweight menu (not a sheet) of the same modes. `subTabsLabel` is the tiny caption under
-    // the menu-icon glyph (clarity bet — labeled collapsed icons).
+    // Sub tabs progressive stages (#301/#297): iconized pills keep mode names as accessible names;
+    // menu-icon opens a lightweight menu (not a sheet) of the same modes. `subTabsLabel` is the tiny
+    // caption under the menu-icon glyph (clarity bet — labeled collapsed icons).
     subTabsLabel: "Modes",
     subTabsMenuAria: "Browse modes",
     modeFeedAria: "Feed",
     modeTimelineAria: "Timeline",
+    /** Family Sub tabs icon-pills (#297). */
+    modeTreeAria: "Tree",
+    modeListAria: "List",
+    modeRequestsAria: "Requests",
     // The primary action (Tell a story) may iconify under width pressure (outside collapse precedence).
     tellAria: "Tell a story",
   },

@@ -139,9 +139,8 @@ real iOS Safari. Therefore no increment is "done" on devtools alone:
   *(Stories/Album progressive row supersedes the fixed three-icon strip — see Amendment 2026-07-21)*
 - Desktop is untouched (top tabs + inline `HubToolbar`), so the mobile branch is additive behind
   `useIsCompact`; regression risk is confined to the compact path.
-  *(superseded — see Amendment 2026-07-21; for Stories/Album secondary browse chrome only. Desktop
-  top primary tabs and the compact bottom tab bar remain. Family/Questions keep the prior
-  toolbar/strip until a follow-up.)*
+  *(superseded — see Amendment 2026-07-21 for progressive secondary browse chrome on Stories/Album/
+  Family/Questions. Desktop top primary tabs and the compact bottom tab bar remain.)*
 - Phase B remains incomplete after this: pinch-zoom, momentum sheets, and native modals are still owed
   under ADR-0024.
 
@@ -192,9 +191,11 @@ panels (bottom sheet vs anchored popover), not which controls exist.
   `resolveHubControlExpansion` resolver. Component wiring stays thin; CSS/breakpoint booleans are not
   the behavior seam for precedence.
 
-- **Scope.** Stories and Album only in this wave. Family and Questions stay on the existing
-  toolbar/strip until a follow-up adopts the same primitive. Keep the two-row toolbar component
-  available for those tabs; Stories/Album must not depend on the old two-row composition.
+- **Scope.** Stories, Album, Family, and Questions share the progressive-collapse control row
+  (`HubProgressiveControlRow` + `resolveHubControlExpansion`). Surfaces omit vocabulary units they
+  do not have. Album on master may still finish its #302 land separately; Family/Questions adopt the
+  same primitive in #297. Keep the two-row `HubToolbar` available only while a surface still depends
+  on it; migrated surfaces must not depend on the old two-row composition.
 
 - **Clarity.** Accessible names for collapsed icons and the Sub tabs menu; labeled collapsed icons
   where ambiguity requires it (same clarity bet as the original icon-sheet work).
@@ -204,6 +205,6 @@ panels (bottom sheet vs anchored popover), not which controls exist.
 - Mobile and desktop stop maintaining two separate control IAs for Stories/Album; mid-widths fold
   gradually by priority instead of swapping chrome.
 - Implementers must treat the superseded bullets above as historical; the Amendment is authoritative
-  for Stories/Album secondary browse chrome.
-- Family/Questions migration and sticky-row revisit remain follow-ups; parked ADR-0024 items stay
-  parked.
+  for hub secondary browse chrome (Stories / Album / Family / Questions).
+- Family/Questions share the same progressive control-row primitive (#297); sticky-row revisit
+  remains a follow-up; parked ADR-0024 items stay parked.

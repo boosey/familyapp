@@ -1,16 +1,31 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { UsersRound, UserRoundPlus } from "lucide-react";
+/**
+ * FamilySurfaceNav (#297) — Family surface owner of the progressive hub control row.
+ *
+ * Occupancy: Sub tabs (Tree / List / Requests) → Family (scope chips when multi-family) → Views
+ * (zoom/fit on tree). No Search/Filters. Invite stays on the trailing edge outside collapse.
+ * One progressive row on every width — no HubToolbar / compact-strip swap.
+ */
+import type { ComponentProps, ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Inbox,
+  List,
+  Network,
+  UserRoundPlus,
+  UsersRound,
+  ZoomIn,
+} from "lucide-react";
 import { hub } from "@/app/_copy";
 import { FAMILIES_PARAM } from "@/lib/family-filter";
-import { HubToolbar } from "./HubToolbar";
-import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
 import { ActionButton } from "@/app/_kindred/ActionButton";
+import { HubProgressiveControlRow } from "./HubProgressiveControlRow";
+import { HubSubNav, type HubSubNavItem } from "./HubSubNav";
 import { IconSheet } from "./IconSheet";
 import { ICON_SHEET_GLYPH_SIZE } from "./icon-sheet-constants";
-import { useIsCompact } from "@/app/_kindred/useIsCompact";
-import strip from "./HubControlStrip.module.css";
+import { HUB_SUB_TABS_GLYPH_SIZE } from "./hub-progressive-control-constants";
+import { SubTabsMenu } from "./SubTabsMenu";
 
 /** The active Family-surface view the selector highlights. */
 export type FamilySurfaceView = "tree" | "list" | "requests";
@@ -28,22 +43,23 @@ interface FamilySurfaceNavProps {
    *  Requests item; absent/0 hides the badge. Deliberately the aggregate (not the scoped subset) so a
    *  steward still sees that requests exist in a family they haven't selected (#159). */
   requestsBadge?: number;
-  /** The member-only Invite entry point (`/hub?tab=invite[&families=…]`), right-justified on R1 and
-   *  present on every sub-tab. `undefined` (a pending-only / gated viewer) renders no button. */
+  /** The member-only Invite entry point (`/hub?tab=invite[&families=…]`), trailing primary action.
+   *  `undefined` (a pending-only / gated viewer) renders no button. */
   inviteHref?: string;
   /**
-   * Optional second-row slots (#189). The Family CONTENT tabs (tree/list) pass the single-select
-   * FamilyChips here (`row2Left`) and, in the tree view, the Fit/−/+ zoom controls (`row2Right`) — both
-   * built inside the client FamilyTab, so they're threaded through as ready-made nodes. Omitting both
-   * (Requests tab, no-family) collapses the toolbar to R1 only via HubToolbar's empty-row rule.
-   *
-   * ADR-0025 device round: on a PHONE `row2Left` (the family chips) moves INTO the Family IconSheet on
-   * the shared control strip, and `row2Right` (zoom) is NOT rendered here at all — FamilyTab floats the
-   * zoom controls onto the tree canvas instead (a bottom sheet would cover the tree you're zooming), so
-   * it passes `row2Right={undefined}` on compact.
+   * Family unit — single-select scope chips when ≥2 families. Omit on Requests / single-family so the
+   * unit is absent (not an empty icon).
    */
   row2Left?: ReactNode;
+  /**
+   * Views unit — Fit/−/+ zoom controls (tree view only). Omit on List/Requests. Collapsed form is an
+   * IconSheet (sheet on compact, popover on wide per #300).
+   */
   row2Right?: ReactNode;
+  /** Test seam: force progressive-row width (skips ResizeObserver). */
+  forceAvailableWidth?: number;
+  /** Test seam: skip DOM measurement and use these widths. */
+  forceWidths?: ComponentProps<typeof HubProgressiveControlRow>["forceWidths"];
 }
 
 const SELECTOR: { key: FamilySurfaceView; label: string; tab: string; view?: string }[] = [
@@ -52,22 +68,16 @@ const SELECTOR: { key: FamilySurfaceView; label: string; tab: string; view?: str
   { key: "requests", label: hub.shell.tabRequests, tab: "requests" },
 ];
 
-/**
- * FamilySurfaceNav (#158, #189) — the Family surface's control block. R1 carries the `Family tree · List
- * · Requests` selector (a shared {@link HubSubNav} pill row) + the member-only Invite.
- *
- * DESKTOP (`useIsCompact() === false`, incl. server + first paint): the two-row {@link HubToolbar} —
- * R1 = selector + Invite, R2 = the family selector + zoom controls the content tabs hand in
- * (`row2Left`/`row2Right`), with HubToolbar's empty-row rule dropping R2 on the Requests / no-family
- * path. BYTE-FOR-BYTE unchanged.
- *
- * PHONE: the shared {@link HubControlStrip} layout, consistent with Stories/Album/Questions — the
- * selector pills in `.pills` (visible wayfinding), the family chips (`row2Left`) folded into a Family
- * {@link IconSheet} (≥2 families only), and the Invite action ICONIFIED (UserRoundPlus). Family has NO
- * separate Filter (the chips ARE the family selector = the Family icon) and NO View icon (the zoom
- * controls float on the tree, not a sheet). Selection routing, `?families=`/`?view=` preservation, and
- * the Requests badge are unchanged across both branches.
- */
+function hrefFor(
+  item: (typeof SELECTOR)[number],
+  familiesParam: string | null,
+): string {
+  const params = new URLSearchParams({ tab: item.tab });
+  if (item.view) params.set("view", item.view);
+  if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
+  return `/hub?${params.toString()}`;
+}
+
 export function FamilySurfaceNav({
   active,
   familiesParam,
@@ -76,40 +86,71 @@ export function FamilySurfaceNav({
   inviteHref,
   row2Left,
   row2Right,
+  forceAvailableWidth,
+  forceWidths,
 }: FamilySurfaceNavProps) {
-  const compact = useIsCompact();
+  const router = useRouter();
   const selector = showRequests ? SELECTOR : SELECTOR.filter((i) => i.key !== "requests");
 
-  function hrefFor(item: (typeof SELECTOR)[number]): string {
-    const params = new URLSearchParams({ tab: item.tab });
-    if (item.view) params.set("view", item.view);
-    if (familiesParam !== null) params.set(FAMILIES_PARAM, familiesParam);
-    return `/hub?${params.toString()}`;
+  function requestsBadgeProps(key: FamilySurfaceView): {
+    badge?: number;
+    badgeLabel?: string;
+  } {
+    if (key !== "requests" || requestsBadge == null || requestsBadge <= 0) return {};
+    return { badge: requestsBadge, badgeLabel: hub.shell.unreadAria(requestsBadge) };
   }
 
-  const items: HubSubNavItem[] = selector.map((item) => ({
+  function requestsAriaLabel(key: FamilySurfaceView, base: string): string {
+    const badge = requestsBadgeProps(key);
+    return badge.badgeLabel ? `${base}, ${badge.badgeLabel}` : base;
+  }
+
+  const labeledItems: HubSubNavItem[] = selector.map((item) => ({
     key: item.key,
-    // Compact uses the SHORT "Tree" so the 3 equal-width pills fit one line beside the icon + Invite;
-    // desktop keeps the roomy "Family tree". List/Requests are already short.
-    label: item.key === "tree" && compact ? hub.shell.familySubTreeShort : item.label,
-    href: hrefFor(item),
-    ...(item.key === "requests" && requestsBadge != null && requestsBadge > 0
-      ? { badge: requestsBadge, badgeLabel: hub.shell.unreadAria(requestsBadge) }
-      : {}),
+    // Labeled stage: short "Tree" keeps three pills measurable without wrapping (same bet as the
+    // old compact strip); List/Requests are already short.
+    label: item.key === "tree" ? hub.shell.familySubTreeShort : item.label,
+    href: hrefFor(item, familiesParam),
+    ...requestsBadgeProps(item.key),
   }));
 
-  const nav = <HubSubNav ariaLabel={hub.shell.familySubNavAria} items={items} active={active} />;
+  const iconPillItems: HubSubNavItem[] = selector.map((item) => {
+    const icon =
+      item.key === "tree" ? (
+        <Network size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ) : item.key === "list" ? (
+        <List size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      ) : (
+        <Inbox size={HUB_SUB_TABS_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+      );
+    const baseAria =
+      item.key === "tree"
+        ? hub.mobileControls.modeTreeAria
+        : item.key === "list"
+          ? hub.mobileControls.modeListAria
+          : hub.mobileControls.modeRequestsAria;
+    return {
+      key: item.key,
+      label: icon,
+      href: hrefFor(item, familiesParam),
+      // Fold badge into aria-label — HubSubNav's ariaLabel replaces the accessible name from children.
+      ariaLabel: requestsAriaLabel(item.key, baseAria),
+      ...requestsBadgeProps(item.key),
+    };
+  });
 
-  if (compact) {
-    // Phone: the shared strip — pills (visible) + Family chips sheet (when present) + iconified Invite.
-    return (
-      <div className={strip.strip}>
-        <div className={strip.pills}>{nav}</div>
-        <div className={strip.right}>
-          {row2Left ? (
-            // Increment 4: NO badge here. The Family chips on this tab are a single-select SCOPE (always
-            // exactly one family's tree is shown), not a filter that hides content — a badge would be
-            // meaningless (there is no "narrowed subset" state; something is always selected).
+  const menuItems = selector.map((item) => ({
+    key: item.key,
+    label: item.label,
+    ...requestsBadgeProps(item.key),
+  }));
+
+  const family =
+    row2Left != null
+      ? {
+          expanded: row2Left,
+          collapsed: (
+            // Single-select scope — never badge (there is no "narrowed subset"; something is always on).
             <IconSheet
               icon={UsersRound}
               label={hub.mobileControls.familyLabel}
@@ -117,23 +158,74 @@ export function FamilySurfaceNav({
             >
               {row2Left}
             </IconSheet>
-          ) : null}
-          {inviteHref ? (
-            <ActionButton href={inviteHref} aria-label={hub.shell.inviteAria}>
-              <UserRoundPlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
-            </ActionButton>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
+          ),
+        }
+      : undefined;
 
-  // Desktop: the unchanged two-row toolbar.
-  const invite = inviteHref ? (
-    <ActionButton href={inviteHref}>{hub.shell.tabInvite}</ActionButton>
-  ) : null;
+  const views =
+    row2Right != null
+      ? {
+          expanded: row2Right,
+          collapsed: (
+            <IconSheet
+              icon={ZoomIn}
+              label={hub.mobileControls.viewLabel}
+              sheetTitle={hub.mobileControls.viewLabel}
+            >
+              {row2Right}
+            </IconSheet>
+          ),
+        }
+      : undefined;
+
+  const action = inviteHref
+    ? {
+        labeled: <ActionButton href={inviteHref}>{hub.shell.tabInvite}</ActionButton>,
+        iconified: (
+          <ActionButton href={inviteHref} aria-label={hub.shell.inviteAria}>
+            <UserRoundPlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+          </ActionButton>
+        ),
+      }
+    : undefined;
 
   return (
-    <HubToolbar row1Left={nav} row1Right={invite} row2Left={row2Left} row2Right={row2Right} />
+    <HubProgressiveControlRow
+      subTabs={{
+        labeled: (
+          <HubSubNav
+            layout="intrinsic"
+            ariaLabel={hub.shell.familySubNavAria}
+            items={labeledItems}
+            active={active}
+          />
+        ),
+        iconPills: (
+          <HubSubNav
+            layout="intrinsic"
+            ariaLabel={hub.shell.familySubNavAria}
+            items={iconPillItems}
+            active={active}
+          />
+        ),
+        menuIcon: (
+          <SubTabsMenu
+            items={menuItems}
+            active={active}
+            ariaLabel={hub.shell.familySubNavAria}
+            onSelect={(key) => {
+              const item = selector.find((i) => i.key === key);
+              if (!item) return;
+              router.push(hrefFor(item, familiesParam));
+            }}
+          />
+        ),
+      }}
+      family={family}
+      views={views}
+      action={action}
+      forceAvailableWidth={forceAvailableWidth}
+      forceWidths={forceWidths}
+    />
   );
 }
