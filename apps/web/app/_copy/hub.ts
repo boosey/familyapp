@@ -829,7 +829,21 @@ export const hub = {
   settings: {
     backToHub: "← Back to hub",
     title: "Settings",
-    subtitle: "Display preferences for this device.",
+    subtitle: "Notifications sync to your account. Display preferences stay on this device.",
+    notificationsHeading: "Notifications",
+    notificationsIntro:
+      "Choose how often you hear from Tell Me Again. These choices sync across your devices.",
+    notificationsSaving: "Saving…",
+    notificationsSaved: "Saved",
+    notificationsSaveError: "Could not save — try again.",
+    streamLabels: {
+      questions_for_me: "Questions for me",
+      answers_to_my_asks: "Answers to my asks",
+      family_activity: "Family activity",
+    },
+    frequencyEveryItem: "Every item",
+    frequencyOff: "Off",
+    streamFrequencyAria: (streamLabel: string) => `${streamLabel} frequency`,
     textSizeHeading: "Text size",
     textSizeIntro: "Makes everything on the screen a little larger or smaller.",
     paletteHeading: "Color palette",
