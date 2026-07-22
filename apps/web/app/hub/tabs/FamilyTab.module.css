@@ -83,3 +83,15 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* #337 — post-reconcile success toast (aria-live status). */
+.reconcileToast {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+}

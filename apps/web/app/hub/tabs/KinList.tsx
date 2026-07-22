@@ -8,17 +8,25 @@
  *
  * #330 — a row is activatable (click/Enter/Space via `onSelectPerson`) so the caller (FamilyTab) can
  * open the SAME `PersonDetails` sheet Tree uses (details/Edit/Stories·Photos·Mentions), just without
- * the governable-edges section or the Invite affordance. `onSelectPerson` is optional so KinList stays
- * mountable read-only (e.g. isolated unit tests) when omitted.
+ * the governable-edges section. `onSelectPerson` is optional so KinList stays mountable read-only
+ * (e.g. isolated unit tests) when omitted.
+ *
+ * #337 — steward-only **This is the same person as…** on a row ⋮ when complementary candidates exist
+ * (H+). Non-stewards never see it; placeholders never start the flow. The ⋮ sits OUTSIDE the row's
+ * select button so we never nest interactive controls.
  *
  * Styling: CSS Modules + data-skin Phase-2 (issue #266). Base classes are skin-neutral; Scrapbook
  * signatures live in KinList.module.css under :global(:root[data-skin="scrapbook"]) — no skin id in
  * component logic.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KinRelation } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import type { FamilyListPerson } from "@/lib/family-list-people";
+import {
+  asReconcilePerson,
+  type FamilyListPerson,
+} from "@/lib/family-list-people";
+import { canOfferReconcile } from "@/lib/reconcile-eligibility";
 import styles from "./KinList.module.css";
 
 function relationLabel(relation: KinRelation): string {
@@ -42,10 +50,30 @@ export interface KinListProps {
   people: FamilyListPerson[];
   /** #330 — activates a row (click/Enter/Space); omitted ⇒ rows render as plain, inert list items. */
   onSelectPerson?: (person: FamilyListPerson) => void;
+  /** #337 — steward-only reconcile affordance. */
+  viewerIsSteward?: boolean;
+  /** Opens the shared reconcile flow for this person id. */
+  onReconcile?: (personId: string) => void;
+  /** After a successful reconcile, briefly highlight the winner row. */
+  highlightedPersonId?: string | null;
 }
 
-export function KinList({ people, onSelectPerson }: KinListProps) {
+export function KinList({
+  people,
+  onSelectPerson,
+  viewerIsSteward = false,
+  onReconcile,
+  highlightedPersonId = null,
+}: KinListProps) {
   const [query, setQuery] = useState("");
+  const pool = useMemo(() => people.map(asReconcilePerson), [people]);
+
+  // #337 — after success the winner may not match the current search (e.g. reconciled from a
+  // mention-name query onto a differently named member). Clear search when a highlight arrives so
+  // the focused row is actually rendered for scroll/outline.
+  useEffect(() => {
+    if (highlightedPersonId) setQuery("");
+  }, [highlightedPersonId]);
 
   const trimmed = query.trim().toLowerCase();
   const results = useMemo(() => {
@@ -77,54 +105,146 @@ export function KinList({ people, onSelectPerson }: KinListProps) {
         <ul className={styles.list}>
           {results.map((entry) => {
             const known = Boolean(entry.identified && entry.displayName);
-            const rowContent = (
-              <>
-                <span className={styles.primary}>
-                  <span className={known ? styles.name : `${styles.name} ${styles.nameUnknown}`}>
-                    {displayNameFor(entry)}
-                    {entry.lifeStatus === "deceased" ? (
-                      <span className={styles.deceased}>· {hub.kin.deceased}</span>
-                    ) : null}
-                  </span>
-                  <span
-                    className={styles.badge}
-                    data-testid={`family-list-badge-${entry.personId}`}
-                    data-membership={entry.membership}
-                  >
-                    {membershipLabel(entry.membership)}
-                  </span>
+            const start = asReconcilePerson(entry);
+            const showReconcile =
+              onReconcile != null && canOfferReconcile(viewerIsSteward, start, pool);
+            const highlighted = highlightedPersonId === entry.personId;
+
+            const primary = (
+              <span className={styles.primary}>
+                <span className={known ? styles.name : `${styles.name} ${styles.nameUnknown}`}>
+                  {displayNameFor(entry)}
+                  {entry.lifeStatus === "deceased" ? (
+                    <span className={styles.deceased}>· {hub.kin.deceased}</span>
+                  ) : null}
                 </span>
+                <span
+                  className={styles.badge}
+                  data-testid={`family-list-badge-${entry.personId}`}
+                  data-membership={entry.membership}
+                >
+                  {membershipLabel(entry.membership)}
+                </span>
+              </span>
+            );
+
+            const rowEnd = (
+              <span className={styles.rowEnd}>
                 {entry.relation ? (
                   <span className={styles.relation}>{relationLabel(entry.relation)}</span>
                 ) : null}
-              </>
+                {showReconcile ? (
+                  <ListRowMenu
+                    personId={entry.personId}
+                    onReconcile={() => onReconcile(entry.personId)}
+                  />
+                ) : null}
+              </span>
             );
-            // Without a handler the row stays a plain, inert `<li>` (matches the pre-#330 markup
-            // exactly). With a handler the row becomes a real `<button>` for native click + keyboard
-            // (Enter/Space) activation and focus semantics; the `<li>` around it carries no class.
-            return onSelectPerson ? (
-              <li key={entry.personId}>
-                <button
-                  type="button"
-                  className={`${styles.row} ${styles.rowButton}`}
-                  data-testid={`family-list-row-${entry.personId}`}
-                  onClick={() => onSelectPerson(entry)}
-                >
-                  {rowContent}
-                </button>
-              </li>
-            ) : (
+
+            // Row chrome lives on `<li>` so the optional ⋮ can sit beside the select control without
+            // nesting buttons. With `onSelectPerson`, the name/badge area is the activatable button and
+            // carries `family-list-row-*` (matches #330 tests / a11y). Without it, the inert `<li>`
+            // carries the same test id (pre-#330 markup shape).
+            return (
               <li
                 key={entry.personId}
                 className={styles.row}
-                data-testid={`family-list-row-${entry.personId}`}
+                data-testid={onSelectPerson ? undefined : `family-list-row-${entry.personId}`}
+                data-highlighted={highlighted ? "true" : undefined}
+                ref={
+                  highlighted
+                    ? (el) => {
+                        // jsdom has no scrollIntoView; skip in tests, run in the browser.
+                        if (el && typeof el.scrollIntoView === "function") {
+                          el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        }
+                      }
+                    : undefined
+                }
               >
-                {rowContent}
+                {onSelectPerson ? (
+                  <button
+                    type="button"
+                    className={styles.rowSelect}
+                    data-testid={`family-list-row-${entry.personId}`}
+                    onClick={() => onSelectPerson(entry)}
+                  >
+                    {primary}
+                  </button>
+                ) : (
+                  primary
+                )}
+                {rowEnd}
               </li>
             );
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function ListRowMenu({ personId, onReconcile }: { personId: string; onReconcile: () => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocPointer = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={styles.rowMenu}>
+      <button
+        type="button"
+        data-testid={`family-list-kebab-${personId}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={hub.reconcile.moreActionsAria}
+        className={styles.kebabTrigger}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <span aria-hidden="true">{"⋮"}</span>
+      </button>
+      {open ? (
+        <div
+          id={menuId}
+          role="menu"
+          data-testid={`family-list-menu-${personId}`}
+          className={styles.kebabMenu}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-testid={`family-list-reconcile-${personId}`}
+            className={styles.kebabItem}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+              onReconcile();
+            }}
+          >
+            {hub.reconcile.action}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

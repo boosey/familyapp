@@ -4,6 +4,9 @@
  * Pure projection at the list-data seam: union of active members, edged (placed) kin, and unplaced
  * members into one browse-only row model with a membership-first badge (Member vs tree-only). No
  * placement or governance fields — those stay on Tree.
+ *
+ * #337 — `reconcileSide` is hydrated server-side (origin + accountId) so List + Tree can gate steward
+ * Reconciliation ("This is the same person as…") without a second client round-trip.
  */
 import type {
   FamilyMemberView,
@@ -14,6 +17,12 @@ import type {
   TreeNode,
   UnplacedMember,
 } from "@chronicle/core";
+import type { PersonOrigin } from "@chronicle/db";
+import {
+  reconcileSideOf,
+  type ReconcilePersonView,
+  type ReconcileSide,
+} from "./reconcile-eligibility";
 
 /** Membership-first badge on List — never Origin / Account / mention jargon. */
 export type FamilyListMembershipBadge = "member" | "tree-only";
@@ -48,6 +57,12 @@ export interface FamilyListPerson {
    * `resolveKinshipTree` applies) via `hydrateFamilyListPeopleIdentity` below.
    */
   inviteStatus: TreeNode["inviteStatus"];
+  /**
+   * #337 — which reconcile side this person can occupy in the selected family, or null when neither
+   * (placeholder, account-less member, non-member non-mention). Projector leaves null; loader hydrates
+   * from origin + accountId.
+   */
+  reconcileSide: ReconcileSide | null;
 }
 
 export interface ProjectFamilyListPeopleInput {
@@ -106,13 +121,15 @@ export function projectFamilyListPeople(input: ProjectFamilyListPeopleInput): Fa
       lifeStatus: kin?.lifeStatus ?? "living",
       membership: isMember ? "member" : "tree-only",
       relation: kin?.relation ?? null,
-      // No identity/invite-status source in this pure projector — the loader hydrates these via
-      // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330) and
-      // List's Invite affordance reflects the person's REAL status (#334).
+      // No identity/invite/reconcile source in this pure projector — the loader hydrates these via
+      // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330),
+      // List's Invite affordance reflects the person's REAL status (#334), and #337 reconcile gating
+      // has origin/account without a client round-trip.
       birthYear: null,
       deathYear: null,
       sex: "unknown",
       inviteStatus: "not-applicable",
+      reconcileSide: null,
     });
   }
 
@@ -137,17 +154,18 @@ export interface FamilyListPersonIdentity {
   sex: PersonSex;
   /** #334 fix — the person's real `inviteStatus`, resolved by `@chronicle/core`'s `resolveInviteStatuses`. */
   inviteStatus: TreeNode["inviteStatus"];
+  /** #337 — `persons.origin` for reconcile eligibility. */
+  origin: PersonOrigin;
+  /** #337 — `persons.accountId` for member-with-account eligibility. */
+  accountId: string | null;
 }
 
 /**
- * #330/#334 fix — merge real `lifeStatus`/`birthYear`/`deathYear`/`sex`/`inviteStatus` onto
- * `FamilyListPerson` rows after projection. Kept separate from `projectFamilyListPeople` so that pure
- * projector's inputs don't balloon with an identity map it otherwise has no use for; `loadFamilyTabData`
- * calls this once, after projecting, with identity loaded from `persons` (+ invite status from
- * `resolveInviteStatuses`) for the projected ids (same pattern Tree's hydration uses). A person with no
- * entry in `identityById` (should not happen — every projected id is a real Person — but defends
- * against a partial/failed identity load) keeps the projector's safe null/"unknown"/"not-applicable"
- * defaults rather than crashing.
+ * #330/#334/#337 fix — merge real identity + inviteStatus + reconcileSide onto `FamilyListPerson`
+ * rows after projection. Kept separate from `projectFamilyListPeople` so that pure projector's inputs
+ * don't balloon; `loadFamilyTabData` calls this once, after projecting, with identity loaded from
+ * `persons` (+ invite status from `resolveInviteStatuses`) for the projected ids. A person with no
+ * entry in `identityById` keeps the projector's safe defaults rather than crashing.
  */
 export function hydrateFamilyListPeopleIdentity(
   people: readonly FamilyListPerson[],
@@ -156,6 +174,14 @@ export function hydrateFamilyListPeopleIdentity(
   return people.map((p) => {
     const identity = identityById.get(p.personId);
     if (!identity) return p;
+    const reconcileSide = reconcileSideOf({
+      personId: p.personId,
+      displayName: p.displayName,
+      identified: p.identified,
+      isActiveMember: p.membership === "member",
+      hasAccount: identity.accountId !== null,
+      isMention: identity.origin === "mention",
+    });
     return {
       ...p,
       lifeStatus: identity.lifeStatus,
@@ -163,8 +189,22 @@ export function hydrateFamilyListPeopleIdentity(
       deathYear: identity.deathYear,
       sex: identity.sex,
       inviteStatus: identity.inviteStatus,
+      reconcileSide,
     };
   });
+}
+
+/** Convert a List row into the reconcile eligibility view (for candidate pickers). */
+export function asReconcilePerson(p: FamilyListPerson): ReconcilePersonView {
+  return {
+    personId: p.personId,
+    displayName: p.displayName,
+    identified: p.identified,
+    isActiveMember: p.membership === "member",
+    // Reconstruct flags from reconcileSide so callers don't need raw origin/account.
+    hasAccount: p.reconcileSide === "member",
+    isMention: p.reconcileSide === "mention",
+  };
 }
 
 /**

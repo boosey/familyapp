@@ -105,6 +105,7 @@ function openKebab(n: TreeNode, onInvite: (node: TreeNode) => void) {
         openAdd: () => {},
         focusPerson: () => {},
         invitePerson: onInvite,
+        reconcilePerson: () => {},
       }}
     >
       <KebabMenu node={n} parentCount={0} partnerCount={0} />

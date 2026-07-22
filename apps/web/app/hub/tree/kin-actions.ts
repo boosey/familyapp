@@ -9,6 +9,7 @@ import {
   denyEdge,
   hideEdge,
   listActiveFamiliesForPerson,
+  reconcileMentionIntoAccount,
   unhideEdge,
   type AddRelativeInput,
   type AddRelativeRelation,
@@ -346,4 +347,79 @@ export async function hideEdgeAction(formData: FormData): Promise<ActionResult> 
 /** Subject un-hides an edge they previously hid (#34). */
 export async function unhideEdgeAction(formData: FormData): Promise<ActionResult> {
   return runEdgeAction(formData, "unhideEdge", (db, ctx, ref) => unhideEdge(db, ctx, ref));
+}
+
+// ---------------------------------------------------------------------------
+// #337 — Steward Reconciliation ("This is the same person as…").
+// Wires existing `reconcileMentionIntoAccount` — does not change merge semantics.
+// UI may start from either side; this action always receives mention (loser) +
+// account (winner) person ids. Core re-checks steward + family scope.
+// ---------------------------------------------------------------------------
+
+export type ReconcileActionResult =
+  | { ok: true; accountPersonId: string }
+  | { ok: false; error: string };
+
+/**
+ * Reconcile an identified tree-only mention into an active member-with-account in `familyId`.
+ * Args are UNTRUSTED: family is re-validated against the viewer's active families; core re-checks
+ * steward + person-scope + mention/account guards.
+ */
+export async function reconcileMentionAction(input: {
+  familyId: string;
+  mentionPersonId: string;
+  accountPersonId: string;
+}): Promise<ReconcileActionResult> {
+  beginLogContext();
+  const { db, auth } = await getRuntime();
+  const ctx = await auth.getCurrentAuthContext();
+  if (ctx.kind !== "account") {
+    return { ok: false, error: hub.actions.notSignedIn };
+  }
+
+  const { familyId, mentionPersonId, accountPersonId } = input;
+  if (
+    typeof familyId !== "string" ||
+    !familyId ||
+    typeof mentionPersonId !== "string" ||
+    !mentionPersonId ||
+    typeof accountPersonId !== "string" ||
+    !accountPersonId
+  ) {
+    return { ok: false, error: hub.actions.invalidInput };
+  }
+
+  const activeFamilies = await listActiveFamiliesForPerson(db, ctx.personId);
+  if (!activeFamilies.some((f) => f.familyId === familyId)) {
+    return { ok: false, error: hub.actions.invalidInput };
+  }
+
+  try {
+    const result = await reconcileMentionIntoAccount(db, ctx, {
+      familyId,
+      mentionPersonId,
+      accountPersonId,
+    });
+    if (!result.allowed) {
+      plogError("kin", "reconcileMention: not allowed", {
+        family: familyId,
+        reason: result.reason,
+      });
+      return { ok: false, error: result.reason ?? hub.reconcile.failed };
+    }
+    plog("kin", "reconcileMention: success", {
+      family: familyId,
+      mention: mentionPersonId,
+      account: accountPersonId,
+    });
+  } catch (err) {
+    plogError("kin", "reconcileMention: error", {
+      family: familyId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: hub.reconcile.failed };
+  }
+
+  revalidatePath("/hub");
+  return { ok: true, accountPersonId };
 }

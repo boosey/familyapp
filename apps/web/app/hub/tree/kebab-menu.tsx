@@ -22,7 +22,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { AddRelativeRelation, TreeNode } from "@chronicle/core";
-import { useTreeAdd, useTreeFocus, useTreeInvite } from "./tree-callbacks-context";
+import { useTreeAdd, useTreeFocus, useTreeInvite, useTreeReconcile } from "./tree-callbacks-context";
+import { canOfferReconcile, type ReconcilePersonView } from "@/lib/reconcile-eligibility";
 
 /** The three contribution destinations (tree Slice B), placed BEFORE Focus in the menu. */
 const CONTRIBUTION_ITEMS: { section: "stories" | "photos" | "mentions"; label: string; testId: string }[] = [
@@ -39,6 +40,17 @@ export interface KebabMenuProps {
   partnerCount: number;
   /** True when this card is already the focus person — the Focus item is then omitted. */
   isFocus?: boolean;
+  /**
+   * #337 — steward Reconciliation. When set with a non-empty complementary pool for this node,
+   * shows **This is the same person as…**. Hidden for non-stewards and when the picker would be empty.
+   */
+  reconcile?: {
+    viewerIsSteward: boolean;
+    /** Eligibility view for THIS card (from the family List index). */
+    start: ReconcilePersonView | null;
+    /** Full family pool for complementary candidates. */
+    pool: readonly ReconcilePersonView[];
+  };
 }
 
 interface Item {
@@ -47,13 +59,25 @@ interface Item {
   testId: string;
 }
 
-export function KebabMenu({ node, parentCount, partnerCount: _partnerCount, isFocus }: KebabMenuProps) {
+export function KebabMenu({
+  node,
+  parentCount,
+  partnerCount: _partnerCount,
+  isFocus,
+  reconcile,
+}: KebabMenuProps) {
   const openAdd = useTreeAdd();
   const focusPerson = useTreeFocus();
   const invitePerson = useTreeInvite();
+  const reconcilePerson = useTreeReconcile();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+
+  const showReconcile =
+    reconcile != null &&
+    reconcile.start != null &&
+    canOfferReconcile(reconcile.viewerIsSteward, reconcile.start, reconcile.pool);
 
   // Close on outside click / Escape (nice-to-have per spec).
   useEffect(() => {
@@ -189,6 +213,23 @@ export function KebabMenu({ node, parentCount, partnerCount: _partnerCount, isFo
               style={MENU_ITEM_STYLE}
             >
               {hub.tree.kebabInvite}
+            </button>
+          )}
+          {/* #337 — Steward Reconciliation. Steward-only; hidden when complementary picker empty. */}
+          {showReconcile && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="tree-kebab-reconcile"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                reconcilePerson(node.personId);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={MENU_ITEM_STYLE}
+            >
+              {hub.reconcile.action}
             </button>
           )}
           {items.map((it) => (

@@ -1053,6 +1053,30 @@ export const hub = {
     // Generic failure for a governance/hide action.
     govActionFailed: "Couldn't do that. Please try again.",
   },
+  // #337 — Steward Reconciliation (domain term). UI label stays "This is the same person as…".
+  reconcile: {
+    /** Menu / button label — product language, not "merge". */
+    action: "This is the same person as…",
+    /** Accessible name for the List/Tree ⋮ trigger when reconcile is the steward action. */
+    moreActionsAria: "More actions",
+    pickerHeading: "This is the same person as…",
+    pickerClose: "Close",
+    pickerIntroMention:
+      "Choose the family member with an account who is the same person. Their tree connections move to that member.",
+    pickerIntroMember:
+      "Choose the tree-only relative who is the same person. That relative’s connections move here.",
+    pickerEmpty: "No matching people in this family.",
+    confirmHeading: "Confirm they’re the same person",
+    confirmClose: "Close",
+    confirmBody: (mentionName: string, memberName: string) =>
+      `${mentionName} will be treated as the same person as ${memberName}. Tree connections move to ${memberName}; the tree-only entry leaves the family view.`,
+    confirmSubmit: "Confirm",
+    confirmCancel: "Cancel",
+    confirming: "Working…",
+    successToast: (winnerName: string) => `Updated — focusing ${winnerName}.`,
+    failed: "Couldn't do that. Please try again.",
+    unnamed: "someone unnamed",
+  },
   // Tree Slice B — the per-person contributions page (/hub/person/[personId]) with three tabs:
   // Stories contributed · Photos contributed · Mentions. Deep-linked via ?section=.
   personPage: {

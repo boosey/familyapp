@@ -80,6 +80,7 @@ import { PersonDetails } from "./person-details";
 import { PersonInviteModal, type PersonInviteModalProps } from "./PersonInviteModal";
 import { KebabMenu } from "./kebab-menu";
 import { TreeCallbacksProvider, type OpenAddRelative } from "./tree-callbacks-context";
+import type { ReconcilePersonView } from "@/lib/reconcile-eligibility";
 import { edgeKey, mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
 import { LineGovernanceMenu } from "./line-governance-menu";
@@ -161,6 +162,17 @@ export interface TreeCanvasProps {
    */
   fetchInviteTargets?: PersonInviteModalProps["fetchTargets"];
   submitInvite?: PersonInviteModalProps["submitInvite"];
+  /**
+   * #337 — steward Reconciliation. When set, eligible cards show **This is the same person as…**
+   * in the kebab; the canvas opens via TreeCallbacksProvider → `onReconcile`.
+   */
+  reconcile?: {
+    viewerIsSteward: boolean;
+    /** personId → eligibility view (from the family List index). */
+    byPersonId: ReadonlyMap<string, ReconcilePersonView>;
+    pool: readonly ReconcilePersonView[];
+    onReconcile: (personId: string) => void;
+  };
 }
 
 
@@ -264,6 +276,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
     onPlaceZoneChosen,
     fetchInviteTargets,
     submitInvite,
+    reconcile,
   }: TreeCanvasProps,
   ref,
 ) {
@@ -753,8 +766,13 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const detailsNode = details ? (nodeById.get(details.id) ?? null) : null;
 
   const treeCallbacks = useMemo(
-    () => ({ openAdd, focusPerson: onFocus, invitePerson: onInvite }),
-    [openAdd, onFocus, onInvite],
+    () => ({
+      openAdd,
+      focusPerson: onFocus,
+      invitePerson: onInvite,
+      reconcilePerson: reconcile?.onReconcile ?? (() => {}),
+    }),
+    [openAdd, onFocus, onInvite, reconcile?.onReconcile],
   );
 
   return (
@@ -896,6 +914,15 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                         parentCount={c.parents}
                         partnerCount={c.partners}
                         isFocus={isFocus}
+                        reconcile={
+                          reconcile
+                            ? {
+                                viewerIsSteward: reconcile.viewerIsSteward,
+                                start: reconcile.byPersonId.get(p.personId) ?? null,
+                                pool: reconcile.pool,
+                              }
+                            : undefined
+                        }
                       />
                     )
                   }

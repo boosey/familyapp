@@ -34,6 +34,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     deathYear: over.deathYear ?? null,
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
+    reconcileSide: "reconcileSide" in over ? (over.reconcileSide ?? null) : null,
   };
 }
 
