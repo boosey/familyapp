@@ -24,10 +24,14 @@ import {
   type KinshipTreeData,
   type UnplacedMember,
 } from "@chronicle/core";
+import { inArray } from "drizzle-orm";
+import { persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import {
+  hydrateFamilyListPeopleIdentity,
   projectFamilyListPeople,
   type FamilyListPerson,
+  type FamilyListPersonIdentity,
 } from "./family-list-people";
 
 export interface FamilyTabData {
@@ -107,6 +111,26 @@ export async function loadFamilyTabData(
     listPlacedPersons(db, ctx, familyId),
   ]);
   const viewerIsSteward = stewarded.some((f) => f.familyId === familyId);
-  const listPeople = projectFamilyListPeople({ kin, unplaced, members, placed });
+  const projected = projectFamilyListPeople({ kin, unplaced, members, placed });
+
+  // #330 fix — hydrate REAL birthYear/deathYear/sex from `persons` for every projected id, so
+  // `resolveListPersonNode` never has to synthesize a null/"unknown" placeholder for a person outside
+  // the current tree window (List's projector itself has no identity source).
+  const identityRows =
+    projected.length > 0
+      ? await db
+          .select({
+            id: persons.id,
+            birthYear: persons.birthYear,
+            deathYear: persons.deathYear,
+            sex: persons.sex,
+          })
+          .from(persons)
+          .where(inArray(persons.id, projected.map((p) => p.personId)))
+      : [];
+  const identityById = new Map<string, FamilyListPersonIdentity>(
+    identityRows.map((r) => [r.id, { birthYear: r.birthYear, deathYear: r.deathYear, sex: r.sex ?? "unknown" }]),
+  );
+  const listPeople = hydrateFamilyListPeopleIdentity(projected, identityById);
   return { familyId, focusPersonId, tree, listPeople, unplaced, viewerIsSteward, governableEdges };
 }

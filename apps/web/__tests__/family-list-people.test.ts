@@ -13,7 +13,11 @@ import type {
   UnplacedMember,
 } from "@chronicle/core";
 import type { FamilyListPerson } from "@/lib/family-list-people";
-import { projectFamilyListPeople, resolveListPersonNode } from "@/lib/family-list-people";
+import {
+  hydrateFamilyListPeopleIdentity,
+  projectFamilyListPeople,
+  resolveListPersonNode,
+} from "@/lib/family-list-people";
 
 function kin(over: Partial<KinListEntry> & { personId: string }): KinListEntry {
   return {
@@ -106,6 +110,50 @@ describe("projectFamilyListPeople (#283)", () => {
       expect(row.membership === "member" || row.membership === "tree-only").toBe(true);
     }
   });
+
+  it("#330 fix — never invents identity: birthYear/deathYear/sex default null/null/unknown (loader hydrates them)", () => {
+    const rows = projectFamilyListPeople({
+      members: [member({ personId: "m" })],
+      unplaced: [],
+      kin: [],
+      placed: [],
+    });
+    expect(rows).toEqual([
+      expect.objectContaining({ personId: "m", birthYear: null, deathYear: null, sex: "unknown" }),
+    ]);
+  });
+});
+
+describe("hydrateFamilyListPeopleIdentity (#330 fix)", () => {
+  it("merges real birthYear/deathYear/sex onto matching rows", () => {
+    const rows = [
+      person({ personId: "eleanor" }),
+      person({ personId: "marco" }),
+    ];
+    const hydrated = hydrateFamilyListPeopleIdentity(
+      rows,
+      new Map([
+        ["eleanor", { birthYear: 1940, deathYear: 2010, sex: "female" as const }],
+        ["marco", { birthYear: 1975, deathYear: null, sex: "male" as const }],
+      ]),
+    );
+    expect(hydrated.find((r) => r.personId === "eleanor")).toMatchObject({
+      birthYear: 1940,
+      deathYear: 2010,
+      sex: "female",
+    });
+    expect(hydrated.find((r) => r.personId === "marco")).toMatchObject({
+      birthYear: 1975,
+      deathYear: null,
+      sex: "male",
+    });
+  });
+
+  it("leaves a row's safe defaults untouched when no identity entry matches (defensive, should not happen)", () => {
+    const rows = [person({ personId: "ghost" })];
+    const hydrated = hydrateFamilyListPeopleIdentity(rows, new Map());
+    expect(hydrated).toEqual(rows);
+  });
 });
 
 function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyListPerson {
@@ -116,6 +164,9 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     lifeStatus: over.lifeStatus ?? "living",
     membership: over.membership ?? "member",
     relation: "relation" in over ? (over.relation ?? null) : null,
+    birthYear: over.birthYear ?? null,
+    deathYear: over.deathYear ?? null,
+    sex: over.sex ?? "unknown",
   };
 }
 
@@ -168,6 +219,29 @@ describe("resolveListPersonNode (#330)", () => {
       hasHiddenChildren: false,
       inviteStatus: "not-applicable",
     });
+  });
+
+  it("#330 fix — hydrates the REAL birthYear/deathYear/sex from the FamilyListPerson when synthesizing (never null/unknown for a known person)", () => {
+    // This is the critical-bug regression: before the fix, a person absent from `tree.nodes` (any
+    // unplaced member, or a tree-only relative outside the rendered window) synthesized
+    // birthYear/deathYear: null and sex: "unknown" UNCONDITIONALLY, even when the loader had real
+    // values for them — so an Edit→Save from List (which always sends these fields) could silently
+    // wipe a real DOB/sex. The node must now carry the FamilyListPerson's own hydrated identity.
+    const resolved = resolveListPersonNode(
+      person({
+        personId: "eleanor",
+        displayName: "Eleanor",
+        relation: "parent",
+        lifeStatus: "deceased",
+        birthYear: 1940,
+        deathYear: 2010,
+        sex: "female",
+      }),
+      [], // NOT in the current tree window — must synthesize.
+    );
+    expect(resolved.birthYear).toBe(1940);
+    expect(resolved.deathYear).toBe(2010);
+    expect(resolved.sex).toBe("female");
   });
 
   it("synthesizes not-applicable invite status even for an identified living unplaced member", () => {

@@ -9,6 +9,7 @@ import type {
   FamilyMemberView,
   KinListEntry,
   KinRelation,
+  PersonSex,
   PlacedPersonView,
   TreeNode,
   UnplacedMember,
@@ -27,6 +28,17 @@ export interface FamilyListPerson {
   membership: FamilyListMembershipBadge;
   /** Derived relation to the viewer when known; null for self, unplaced, or unrelated members. */
   relation: KinRelation | null;
+  /**
+   * #330 fix — REAL identity fields (never invented) so `resolveListPersonNode` can synthesize an
+   * accurate `TreeNode` for people outside the current tree window. `projectFamilyListPeople` itself
+   * has no identity source, so it always leaves these null/"unknown"; the loader
+   * (`loadFamilyTabData`) hydrates them from `persons` via `hydrateFamilyListPeopleIdentity` below.
+   * Without this, Edit→Save from List could silently wipe a real birth year / sex (it always writes
+   * whatever the sheet was seeded with).
+   */
+  birthYear: number | null;
+  deathYear: number | null;
+  sex: PersonSex;
 }
 
 export interface ProjectFamilyListPeopleInput {
@@ -85,6 +97,11 @@ export function projectFamilyListPeople(input: ProjectFamilyListPeopleInput): Fa
       lifeStatus: kin?.lifeStatus ?? "living",
       membership: isMember ? "member" : "tree-only",
       relation: kin?.relation ?? null,
+      // No identity source in this pure projector — the loader hydrates these via
+      // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330).
+      birthYear: null,
+      deathYear: null,
+      sex: "unknown",
     });
   }
 
@@ -101,15 +118,49 @@ function membershipRank(m: FamilyListMembershipBadge): number {
   return m === "member" ? 0 : 1;
 }
 
+/** Real identity fields sourced from `persons` — see {@link hydrateFamilyListPeopleIdentity}. */
+export interface FamilyListPersonIdentity {
+  birthYear: number | null;
+  deathYear: number | null;
+  sex: PersonSex;
+}
+
+/**
+ * #330 fix — merge real `birthYear`/`deathYear`/`sex` onto `FamilyListPerson` rows after projection.
+ * Kept separate from `projectFamilyListPeople` so that pure projector's inputs don't balloon with an
+ * identity map it otherwise has no use for; `loadFamilyTabData` calls this once, after projecting,
+ * with identity loaded from `persons` for the projected ids (same pattern Tree's hydration uses). A
+ * person with no entry in `identityById` (should not happen — every projected id is a real Person —
+ * but defends against a partial/failed identity load) keeps the projector's safe null/"unknown"
+ * defaults rather than crashing.
+ */
+export function hydrateFamilyListPeopleIdentity(
+  people: readonly FamilyListPerson[],
+  identityById: ReadonlyMap<string, FamilyListPersonIdentity>,
+): FamilyListPerson[] {
+  return people.map((p) => {
+    const identity = identityById.get(p.personId);
+    if (!identity) return p;
+    return {
+      ...p,
+      birthYear: identity.birthYear,
+      deathYear: identity.deathYear,
+      sex: identity.sex,
+    };
+  });
+}
+
 /**
  * #330 — resolve a `TreeNode` for a List row so List can open the SAME `PersonDetails` sheet Tree
  * uses. A List row's person is often already materialized in the viewer's current tree window
  * (`treeNodes`) — prefer that node so dates/sex/hidden-edge flags are accurate. When it is NOT (e.g.
  * a tree-only relative outside the rendered window, or an unplaced member never placed on Tree),
- * synthesize a minimal node from the `FamilyListPerson` projection: List's projection carries no
- * birth/death year, sex, or hidden-edge data, so those default to "unknown"/null/false, and there is
- * no live invitation surfaced on List (#334 wires the Invite modal separately), so `inviteStatus`
- * defaults to `"not-applicable"` regardless of the person's real status.
+ * synthesize a minimal node from the `FamilyListPerson` projection: birth/death year and sex come from
+ * the loader-hydrated identity fields (real values — see {@link hydrateFamilyListPeopleIdentity} —
+ * NEVER invented; a prior version defaulted these to null/"unknown" here, which let List's Edit→Save
+ * silently wipe a real DOB/sex, #330), hidden-edge flags default to false (List has no edge-window
+ * concept), and there is no live invitation surfaced on List (#334 wires the Invite modal separately),
+ * so `inviteStatus` defaults to `"not-applicable"` regardless of the person's real status.
  */
 export function resolveListPersonNode(
   person: FamilyListPerson,
@@ -122,9 +173,9 @@ export function resolveListPersonNode(
     displayName: person.displayName,
     identified: person.identified,
     lifeStatus: person.lifeStatus,
-    birthYear: null,
-    deathYear: null,
-    sex: "unknown",
+    birthYear: person.birthYear,
+    deathYear: person.deathYear,
+    sex: person.sex,
     relationToRoot: person.relation,
     hasHiddenParents: false,
     hasHiddenChildren: false,

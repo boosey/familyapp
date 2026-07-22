@@ -294,8 +294,10 @@ export function FamilyTab({
       ) : (
         // #283: no Place/Not-family/Remove/unplaced tray on List. #330: a row DOES open the same
         // PersonDetails sheet Tree uses — `governableEdges`/`onInvite` are omitted (edge governance
-        // and Invite stay Tree-only). The wrapper needs `position: relative` because PersonDetails is
-        // `position: absolute` (mirrors TreeCanvas's own wrapper around the canvas + sheet).
+        // and Invite stay Tree-only). Unlike Tree's fixed-height canvas frame, this wrapper grows with
+        // the (potentially long, scrollable) row list, so the sheet uses `placement="viewport"`
+        // (`position: fixed`, same 12px inset) instead of Tree's `position: absolute` default — a
+        // lower row's sheet would otherwise park itself off-screen (#330).
         <div style={{ position: "relative" }}>
           <KinList people={listPeople} onSelectPerson={setSelectedListPerson} />
           {selectedListPerson && (
@@ -304,6 +306,7 @@ export function FamilyTab({
               node={resolveListPersonNode(selectedListPerson, tree.nodes)}
               relationToViewer={selectedListPerson.relation}
               familyId={familyId}
+              placement="viewport"
               onClose={() => setSelectedListPerson(null)}
               onSaved={() => router.refresh()}
             />

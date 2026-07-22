@@ -17,6 +17,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { GovernableKinEdge, KinshipTreeData } from "@chronicle/core";
 import type { FamilyListPerson } from "@/lib/family-list-people";
+import { resolveListPersonNode } from "@/lib/family-list-people";
+import type { SavePersonEditResult } from "../tree/actions";
+import { PersonDetails } from "../tree/person-details";
 import { FamilyTab } from "./FamilyTab";
 
 // next/navigation — FamilyTab's onSaved calls router.refresh(); FamilyChips also reads
@@ -81,6 +84,9 @@ const MARCO: FamilyListPerson = {
   lifeStatus: "living",
   membership: "member",
   relation: "sibling",
+  birthYear: null,
+  deathYear: null,
+  sex: "unknown",
 };
 
 function renderListTab(over: { governableEdges?: GovernableKinEdge[] } = {}) {
@@ -160,4 +166,71 @@ it("closing the sheet (×) clears the selection", async () => {
   await screen.findByTestId("tree-person-details");
   fireEvent.click(screen.getByTestId("tree-details-close"));
   expect(screen.queryByTestId("tree-person-details")).toBeNull();
+});
+
+it("opens the sheet with position:fixed (viewport placement) so a long List never parks it off-screen (#330)", async () => {
+  // PersonDetails' host on Tree is a fixed-height canvas frame, so `position: absolute` (its default)
+  // always lands the sheet in view. List's host instead grows with the (potentially long, scrollable)
+  // row list, so the sheet would park itself far below the viewport for a lower row. FamilyTab must
+  // pass `placement="viewport"` on the List path so the sheet stays `position: fixed` in view.
+  renderListTab();
+  fireEvent.click(screen.getByTestId("family-list-row-marco"));
+  const sheet = await screen.findByTestId("tree-person-details");
+  expect(sheet.getAttribute("data-placement")).toBe("viewport");
+  expect(sheet.style.position).toBe("fixed");
+});
+
+it("#330 fix — Edit→Save from List sends the person's REAL birthYear/sex, not synthesized null/unknown", async () => {
+  // Regression for the critical bug: `resolveListPersonNode` used to synthesize birthYear: null,
+  // deathYear: null, sex: "unknown" whenever the person wasn't in `tree.nodes` (any unplaced member,
+  // or a tree-only relative outside the rendered window). `PersonEditForm` ALWAYS sends
+  // displayName/sex/lifeStatus/birthYear on save, so that could silently wipe a real DOB/sex. This
+  // mounts `PersonDetails` directly with the exact node `resolveListPersonNode` resolves for a List
+  // person who has known identity but is absent from the tree window (empty `tree.nodes`, mirroring
+  // FamilyTab's real wiring) and asserts Save's patch carries the REAL values.
+  const eleanor: FamilyListPerson = {
+    personId: "eleanor",
+    displayName: "Eleanor",
+    identified: true,
+    lifeStatus: "deceased",
+    membership: "tree-only",
+    relation: "parent",
+    birthYear: 1940,
+    deathYear: 2010,
+    sex: "female",
+  };
+  const node = resolveListPersonNode(eleanor, [] /* not in the tree window */);
+  expect(node.birthYear).toBe(1940);
+  expect(node.sex).toBe("female");
+
+  const saveEdit = vi.fn(
+    async (_familyId: string, _personId: string, _patch: unknown): Promise<SavePersonEditResult> => ({
+      ok: true,
+    }),
+  );
+  render(
+    <PersonDetails
+      node={node}
+      relationToViewer="parent"
+      familyId="F"
+      placement="viewport"
+      onClose={() => {}}
+      checkEditable={async () => ({ ok: true, editable: true })}
+      saveEdit={saveEdit}
+    />,
+  );
+  fireEvent.click(await screen.findByTestId("tree-details-edit"));
+  // Save WITHOUT touching birth year / sex — the bug reproduces even when the user only edits the
+  // name, since the form always re-sends every field from its (previously wrong) initial state.
+  fireEvent.change(screen.getByTestId("tree-edit-name"), { target: { value: "Eleanor R." } });
+  fireEvent.click(screen.getByTestId("tree-edit-save"));
+
+  await waitFor(() => expect(saveEdit).toHaveBeenCalledTimes(1));
+  const [, , patch] = saveEdit.mock.calls[0]!;
+  expect(patch).toMatchObject({
+    displayName: "Eleanor R.",
+    birthYear: 1940,
+    sex: "female",
+    deathYear: 2010,
+  });
 });

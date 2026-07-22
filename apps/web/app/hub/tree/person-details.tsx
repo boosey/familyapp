@@ -57,6 +57,15 @@ export interface PersonDetailsProps {
   familyId: string;
   /** #5: open the sheet directly in edit mode (used for unknown cards) when the viewer may edit. */
   startInEdit?: boolean;
+  /**
+   * #330 fix — Tree's node-anchored wrapper grows with the canvas, so `position: absolute` (the
+   * default, `"anchored"`) keeps the sheet pinned to that wrapper's own top/right corner, which is
+   * always in view for Tree's fixed-height frame. List's wrapper instead grows with the (potentially
+   * long, scrollable) row list, so an `"anchored"` sheet can land far below the viewport when a lower
+   * row is selected. `"viewport"` uses `position: fixed` with the SAME 12px inset so the sheet always
+   * stays on-screen regardless of scroll position. Tree never passes this — its behavior is unchanged.
+   */
+  placement?: "anchored" | "viewport";
   onClose: () => void;
   /** Called after a successful save so the canvas can refetch the anchor subtree. */
   onSaved?: (personId: string) => void;
@@ -87,6 +96,7 @@ export function PersonDetails({
   relationToViewer,
   familyId,
   startInEdit,
+  placement = "anchored",
   onClose,
   onSaved,
   onInvite,
@@ -155,8 +165,9 @@ export function PersonDetails({
       role="dialog"
       aria-label={name}
       data-testid="tree-person-details"
+      data-placement={placement}
       style={{
-        position: "absolute",
+        position: placement === "viewport" ? "fixed" : "absolute",
         top: 12,
         right: 12,
         width: 280,

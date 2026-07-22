@@ -30,6 +30,9 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     lifeStatus: over.lifeStatus ?? "living",
     membership: over.membership ?? "member",
     relation: "relation" in over ? (over.relation ?? null) : "parent",
+    birthYear: over.birthYear ?? null,
+    deathYear: over.deathYear ?? null,
+    sex: over.sex ?? "unknown",
   };
 }
 
