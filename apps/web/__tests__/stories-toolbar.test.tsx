@@ -1,22 +1,16 @@
 // @vitest-environment jsdom
 /**
- * Issue #190 — the Stories tab is normalized onto the shared two-row HubToolbar (#189):
+ * Stories tab control chrome (#190 behaviour, #301 layout) — progressive hub control row.
  *
- *   R1:  [Feed/Timeline pills] [search field]  ·······  [Tell a Story ▸ + reminders]
- *   R2:  [Family selector]                     ·······  [Masonry/Column]
- *
- * These tests pin the HOIST: the Feed/Timeline mode toggle + a PERSISTENT search field live in R1-left
- * of the toolbar (shared HubSubNav pill style, no bespoke Stories pill), "Tell a story" + draft/intake
- * reminders sit right-justified in R1, the family selector chips move to R2-left, and the
- * Masonry/Column feed-view selector moves to R2-right. Behaviour (search filtering, view toggle,
- * family narrowing) is unchanged — only placement moves — and the empty-row rule holds (a row with no
- * items must not render).
+ * One row: Sub tabs (Feed/Timeline) → Family → Search → Views, with Tell trailing. Reminders sit
+ * below the row. Behaviour (search filtering, view toggle, family narrowing, draft resume) is
+ * unchanged from #190; placement moved off the two-row HubToolbar onto HubProgressiveControlRow.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoriesTab } from "@/app/hub/tabs/StoriesTab";
 import { hub } from "@/app/_copy";
-import toolbarStyles from "@/app/hub/HubToolbar.module.css";
+import progressiveStyles from "@/app/hub/HubProgressiveControlRow.module.css";
 import segStyles from "@/app/_kindred/SegmentedControl.module.css";
 import type { MemberWithStories } from "@/lib/hub-data";
 import type { ViewerFamily } from "@/app/hub/tabs/story-browse-types";
@@ -102,21 +96,17 @@ function renderPopulated(over: {
   );
 }
 
-/** The rendered HubToolbar rows (in order). */
-function toolbarRows(container: HTMLElement): HTMLElement[] {
-  const toolbar = container.querySelector(`.${toolbarStyles.toolbar}`) as HTMLElement | null;
-  if (!toolbar) return [];
-  return Array.from(toolbar.querySelectorAll(`.${toolbarStyles.row}`)) as HTMLElement[];
+function progressiveRow(container: HTMLElement): HTMLElement {
+  const row = container.querySelector("[data-hub-progressive-control-row]");
+  if (!row) throw new Error("expected HubProgressiveControlRow");
+  return row as HTMLElement;
 }
 
-describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
-  it("renders the browse mode pills as shared HubSubNav pills (Feed/Timeline only) in R1", () => {
+describe("StoriesTab controls (#301) — progressive control row", () => {
+  it("renders browse mode pills as shared HubSubNav pills (Feed/Timeline only) in the row", () => {
     const { container } = renderPopulated();
-    const rows = toolbarRows(container);
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-    const r1 = rows[0]!;
-    // Only Feed/Timeline are modes now, in R1, using the shared pill nav (labelled region).
-    const nav = r1.querySelector('nav[aria-label]');
+    const row = progressiveRow(container);
+    const nav = row.querySelector("nav[aria-label]");
     expect(nav).toBeTruthy();
     for (const label of [hub.browse.modeFeed, hub.browse.modeTimeline]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
@@ -125,40 +115,37 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     expect(screen.queryByRole("button", { name: hub.browse.modeSearch })).toBeNull();
   });
 
-  it("puts 'Tell a story' right-justified in R1 (the toolbar's right slot)", () => {
+  it("puts 'Tell a story' in the trailing action slot", () => {
     const { container } = renderPopulated();
     const tell = screen.getByRole("link", { name: hub.stories.tellTitle });
     expect(tell.getAttribute("href")).toBe("/hub/tell");
-    // It lives in a right-justified toolbar slot on R1.
-    const rightSlot = tell.closest(`.${toolbarStyles.right}`);
-    expect(rightSlot).toBeTruthy();
-    expect(toolbarRows(container)[0]!.contains(tell)).toBe(true);
+    const actionSlot = tell.closest(`.${progressiveStyles.action}`);
+    expect(actionSlot).toBeTruthy();
+    expect(progressiveRow(container).contains(tell)).toBe(true);
+    expect(progressiveRow(container).getAttribute("data-action")).toBe("labeled");
   });
 
-  it("moves the family selector chips to R2-left", () => {
+  it("places family selector chips in the progressive row when ≥2 families", () => {
     const { container } = renderPopulated({ activeFamilies: [famA, famB] });
     const chips = screen.getByRole("group", { name: hub.shell.familyFilterAria });
-    const rows = toolbarRows(container);
-    expect(rows.length).toBe(2);
-    // Chips are in the SECOND row's left slot.
-    expect(rows[1]!.contains(chips)).toBe(true);
-    expect(chips.closest(`.${toolbarStyles.left}`)).toBeTruthy();
+    const row = progressiveRow(container);
+    expect(row.contains(chips)).toBe(true);
+    expect(row.getAttribute("data-family")).toBe("expanded");
   });
 
-  it("moves the Masonry/Column feed-view selector to R2-right (Feed mode)", () => {
+  it("places the Masonry/Column feed-view selector in the progressive row (Feed mode)", () => {
     const { container } = renderPopulated({ activeFamilies: [famA, famB] });
     const viewSel = screen.getByRole("radiogroup", { name: hub.browse.viewSelectorAria });
-    const rows = toolbarRows(container);
-    expect(rows[1]!.contains(viewSel)).toBe(true);
-    expect(viewSel.closest(`.${toolbarStyles.right}`)).toBeTruthy();
+    const row = progressiveRow(container);
+    expect(row.contains(viewSel)).toBe(true);
+    expect(row.getAttribute("data-views")).toBe("expanded");
   });
 
-  it("shows the persistent search field beside the pills in R1 whenever browsing (not a mode)", () => {
+  it("shows the persistent search field in the row whenever browsing (not a mode)", () => {
     const { container } = renderPopulated();
-    // The field is ALWAYS present while browsing — no mode click needed.
     const input = screen.getByRole("searchbox");
-    // The search input rides R1 (beside the pills), NOT the content body below the toolbar.
-    expect(toolbarRows(container)[0]!.contains(input)).toBe(true);
+    expect(progressiveRow(container).contains(input)).toBe(true);
+    expect(progressiveRow(container).getAttribute("data-search")).toBe("expanded");
   });
 
   it("typing in the persistent field filters the pool (search replaces the feed/timeline body)", () => {
@@ -172,40 +159,36 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     expect(titles.some((t) => t.includes("Story A"))).toBe(false);
   });
 
-  it("hides the Masonry/Column selector outside Feed mode (row collapses, empty-row rule)", () => {
+  it("hides the Masonry/Column selector outside Feed mode", () => {
     const { container } = renderPopulated({ activeFamilies: [famA] });
-    // Single family → no chips → R2-left empty. In Feed mode R2-right (view selector) keeps R2 alive.
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: hub.browse.modeTimeline }));
-    // Timeline: no view selector, single family → no chips → R2 has no content → row not rendered.
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
-    const rows = toolbarRows(container);
-    // Only R1 remains.
-    expect(rows.length).toBe(1);
+    expect(progressiveRow(container).getAttribute("data-views")).toBe("none");
   });
 
-  it("collapses R2 for a single-family viewer while searching (view selector hidden, no chips)", () => {
+  it("omits Views while searching (single-family viewer has no Family unit either)", () => {
     const { container } = renderPopulated({ activeFamilies: [famA] });
-    // Feed mode, single family: the Masonry/Column selector keeps R2 alive.
-    expect(toolbarRows(container).length).toBe(2);
+    expect(progressiveRow(container).getAttribute("data-family")).toBe("none");
+    expect(progressiveRow(container).getAttribute("data-views")).toBe("expanded");
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "storm" } });
-    // Searching replaces the feed body → the layout selector hides; single family → no chips → R2 gone.
     expect(screen.queryByRole("radiogroup", { name: hub.browse.viewSelectorAria })).toBeNull();
-    expect(toolbarRows(container).length).toBe(1);
+    expect(progressiveRow(container).getAttribute("data-views")).toBe("none");
   });
 
-  it("keeps the draft + intake reminders right-justified in R1 beside 'Tell a story'", () => {
+  it("keeps draft + intake reminders below the progressive row (not competing with browse units)", () => {
     const { container } = renderPopulated({
       intakeIncomplete: true,
       selfDrafts: [{ storyId: "d1", kind: "text", recordedAt: new Date().toISOString() }],
     });
     const draft = screen.getByRole("button", { name: /draft/i });
     const intake = screen.getByRole("link", { name: hub.intake.aria });
-    const r1 = toolbarRows(container)[0]!;
-    expect(r1.contains(draft)).toBe(true);
-    expect(r1.contains(intake)).toBe(true);
-    expect(draft.closest(`.${toolbarStyles.right}`)).toBeTruthy();
-    expect(intake.closest(`.${toolbarStyles.right}`)).toBeTruthy();
+    const row = progressiveRow(container);
+    expect(row.contains(draft)).toBe(false);
+    expect(row.contains(intake)).toBe(false);
+    const below = draft.closest(`.${progressiveStyles.belowRow}`);
+    expect(below).toBeTruthy();
+    expect(below!.contains(intake)).toBe(true);
   });
 
   it("expands the per-draft resume list in place when the draft reminder is clicked", () => {
@@ -245,19 +228,17 @@ describe("StoriesTab toolbar (#190) — two-row HubToolbar layout", () => {
     expect(screen.getByRole("link", { name: hub.stories.tellTitle })).toBeTruthy();
   });
 
-  it("uses the shared toolbar/pill CSS, not a bespoke Stories pill row", () => {
-    renderPopulated();
-    // The mode nav is a shared HubSubNav pill row using the ONE boxed pill look (segStyles.pill inside
-    // a segStyles.group box — single-sourced with the SegmentedControl view selectors), in a toolbar row.
+  it("uses the shared pill CSS in the progressive row, not a bespoke Stories pill row", () => {
+    const { container } = renderPopulated();
     const pill = screen.getByRole("button", { name: hub.browse.modeFeed });
     expect(pill.className).toContain(segStyles.pill);
     expect(pill.closest(`.${segStyles.group}`)).toBeTruthy();
-    expect(pill.closest(`.${toolbarStyles.row}`)).toBeTruthy();
+    expect(progressiveRow(container).contains(pill)).toBe(true);
   });
 });
 
-describe("StoriesTab toolbar (#190) — empty states still show the toolbar", () => {
-  it("all-off (filter=none) keeps the family chips (R2) + Tell (R1) above the honest empty state", () => {
+describe("StoriesTab controls (#301) — empty states still show the control row", () => {
+  it("all-off (filter=none) keeps the family chips + Tell above the honest empty state", () => {
     render(
       <StoriesTab
         {...baseProps}
