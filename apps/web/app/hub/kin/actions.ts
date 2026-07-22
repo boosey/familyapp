@@ -115,13 +115,45 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
 
   const sex = parseSex(formData.get("sex"));
 
-  // Co-parent (relation=child only): a non-empty trimmed string from the "Other parent" picker.
-  // Forwarded ONLY for relation=child — core re-validates it belongs to the family and ignores it
-  // entirely for every other relation.
-  const rawCoParent = formData.get("coParentPersonId");
-  const coParentPersonId =
-    relation === "child" && typeof rawCoParent === "string" && rawCoParent.trim()
-      ? rawCoParent.trim()
+  // Co-parents (relation=child only): one or many checkbox values (#285). Prefer plural field;
+  // keep singular for older callers. Core re-validates attachability.
+  const coParentPersonIds =
+    relation === "child"
+      ? [
+          ...formData.getAll("coParentPersonIds"),
+          ...formData.getAll("coParentPersonId"),
+        ]
+          .filter((v): v is string => typeof v === "string" && !!v.trim())
+          .map((v) => v.trim())
+      : [];
+  // Dedupe while preserving order.
+  const uniqueCoParents = [...new Set(coParentPersonIds)];
+
+  // Partner→kids offer (relation=partner only): explicit step parent-of targets (#285 / ADR-0027).
+  const stepParentOfChildIds =
+    relation === "partner"
+      ? [
+          ...formData.getAll("stepParentOfChildIds"),
+        ]
+          .filter((v): v is string => typeof v === "string" && !!v.trim())
+          .map((v) => v.trim())
+      : [];
+  const uniqueStepKids = [...new Set(stepParentOfChildIds)];
+
+  // Ordinary parent/child nature (#285); core defaults to biological when omitted.
+  const VALID_NATURES_ADD: ReadonlySet<KinshipNature> = new Set<KinshipNature>([
+    "biological",
+    "adoptive",
+    "step",
+    "foster",
+    "unknown",
+  ]);
+  const rawNature = formData.get("nature");
+  const nature =
+    (relation === "parent" || relation === "child") &&
+    typeof rawNature === "string" &&
+    VALID_NATURES_ADD.has(rawNature as KinshipNature)
+      ? (rawNature as KinshipNature)
       : undefined;
 
   const input: AddRelativeInput = {
@@ -136,7 +168,10 @@ export async function addRelativeAction(formData: FormData): Promise<ActionResul
     ...(deathYear !== undefined ? { deathYear } : {}),
     // Omitted/"unknown"/malformed => omit entirely; core defaults the created person to "unknown".
     ...(sex && sex !== "unknown" ? { sex } : {}),
-    ...(coParentPersonId ? { coParentPersonId } : {}),
+    ...(nature ? { nature } : {}),
+    ...(uniqueCoParents.length === 1 ? { coParentPersonId: uniqueCoParents[0] } : {}),
+    ...(uniqueCoParents.length > 0 ? { coParentPersonIds: uniqueCoParents } : {}),
+    ...(uniqueStepKids.length > 0 ? { stepParentOfChildIds: uniqueStepKids } : {}),
   };
 
   plog("kin", "addRelative: received", {

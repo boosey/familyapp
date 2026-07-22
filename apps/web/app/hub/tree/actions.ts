@@ -19,6 +19,7 @@ import {
   linkExistingMember,
   listActiveFamiliesForPerson,
   listPlacedPersons,
+  resolveKinshipProjection,
   resolveKinshipTree,
   setMemberNonFamily,
   updatePersonIdentityAsEditor,
@@ -28,9 +29,11 @@ import {
   type PlacedPersonView,
   type TreeWindow,
 } from "@chronicle/core";
+import type { KinshipNature } from "@chronicle/db";
 import { beginLogContext, plog, plogError } from "@chronicle/pipeline";
 import { revalidatePath } from "next/cache";
 import { getRuntime } from "@/lib/runtime";
+import { hub } from "@/app/_copy";
 
 export type FetchSubtreeResult =
   | { ok: true; data: KinshipTreeData }
@@ -233,6 +236,61 @@ export async function listPlacedPersonsAction(
   }
 }
 
+export type PersonKinOptionsResult =
+  | {
+      ok: true;
+      partners: { id: string; name: string }[];
+      children: { id: string; name: string }[];
+    }
+  | { ok: false; error: "unauthorized" | "invalid" | "failed" };
+
+/**
+ * Partners + children of a placed person for Place-form confirm UI (#285 / ADR-0027). Derived from
+ * the family's visible kinship projection — never invents edges. Used for co-parent checkboxes
+ * (child place) and the partner→kids step offer.
+ */
+export async function listPersonKinOptionsAction(
+  familyId: string,
+  personId: string,
+): Promise<PersonKinOptionsResult> {
+  beginLogContext();
+  const scoped = await resolveFamilyScopedActor(familyId);
+  if (!scoped.ok) return scoped;
+  if (typeof personId !== "string" || !personId) return { ok: false, error: "invalid" };
+  try {
+    const { edges } = await resolveKinshipProjection(scoped.db, scoped.ctx, familyId);
+    const partnerIds: string[] = [];
+    const childIds: string[] = [];
+    for (const e of edges) {
+      if (e.edgeType === "partnered_with") {
+        const other =
+          e.personAId === personId ? e.personBId : e.personBId === personId ? e.personAId : null;
+        if (other) partnerIds.push(other);
+      } else if (e.edgeType === "parent_of" && e.personAId === personId) {
+        childIds.push(e.personBId);
+      }
+    }
+    // Names from the placed-person catalog (active members + edge endpoints); fall back for bridges.
+    const catalog = await listPlacedPersons(scoped.db, scoped.ctx, familyId);
+    const nameById = new Map(
+      catalog.map((p) => [p.personId, p.displayName?.trim() || hub.kin.edgeUnknownPerson] as const),
+    );
+    const nameOf = (id: string) => nameById.get(id) ?? hub.kin.edgeUnknownPerson;
+    return {
+      ok: true,
+      partners: partnerIds.map((id) => ({ id, name: nameOf(id) })),
+      children: childIds.map((id) => ({ id, name: nameOf(id) })),
+    };
+  } catch (err) {
+    plogError("tree", "listPersonKinOptions: error", {
+      family: familyId,
+      person: personId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, error: "failed" };
+  }
+}
+
 export type LinkExistingMemberActionResult =
   | { ok: true }
   | { ok: false; error: "unauthorized" | "invalid" | "not-allowed" | "failed" };
@@ -248,8 +306,13 @@ export async function linkExistingMemberAction(
   existingPersonId: string,
   relation: AddRelativeRelation,
   anchorPersonId?: string,
-  /** Optional second parent when relation=child (same semantics as addRelative). */
+  /** Optional second parent when relation=child (same semantics as addRelative). Prefer `opts.coParentPersonIds`. */
   coParentPersonId?: string,
+  opts?: {
+    coParentPersonIds?: string[];
+    stepParentOfChildIds?: string[];
+    nature?: KinshipNature;
+  },
 ): Promise<LinkExistingMemberActionResult> {
   beginLogContext();
   const scoped = await resolveFamilyScopedActor(familyId);
@@ -262,17 +325,27 @@ export async function linkExistingMemberAction(
   }
   const anchor =
     typeof anchorPersonId === "string" && anchorPersonId.trim() ? anchorPersonId.trim() : undefined;
-  const coParent =
-    relation === "child" && typeof coParentPersonId === "string" && coParentPersonId.trim()
-      ? coParentPersonId.trim()
-      : undefined;
+  const coParents = [
+    ...(opts?.coParentPersonIds ?? []),
+    ...(relation === "child" && typeof coParentPersonId === "string" && coParentPersonId.trim()
+      ? [coParentPersonId.trim()]
+      : []),
+  ];
+  const uniqueCoParents = [...new Set(coParents)];
+  const stepKids =
+    relation === "partner" && opts?.stepParentOfChildIds
+      ? [...new Set(opts.stepParentOfChildIds.filter((id) => typeof id === "string" && id.trim()))]
+      : [];
   try {
     const result = await linkExistingMember(scoped.db, scoped.ctx, {
       familyId,
       relation,
       existingPersonId,
       ...(anchor ? { anchorPersonId: anchor } : {}),
-      ...(coParent ? { coParentPersonId: coParent } : {}),
+      ...(uniqueCoParents.length === 1 ? { coParentPersonId: uniqueCoParents[0] } : {}),
+      ...(uniqueCoParents.length > 0 ? { coParentPersonIds: uniqueCoParents } : {}),
+      ...(stepKids.length > 0 ? { stepParentOfChildIds: stepKids } : {}),
+      ...(opts?.nature ? { nature: opts.nature } : {}),
     });
     if (!result.allowed) {
       plogError("tree", "linkExistingMember: not allowed", { family: familyId, reason: result.reason });

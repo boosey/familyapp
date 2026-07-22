@@ -8,6 +8,7 @@
  *      place-in-tree opens the link modal and calls linkExistingMember; "Not family" calls
  *      setMemberNonFamily(true); steward "Remove" requires an in-page confirm then calls endMembership.
  *   3. Remove is steward-only (hidden for a non-steward viewer). No native confirm() is used.
+ *   4. #285 Place modal: partner→kids step offer after kin options resolve; never partner-only while loading.
  */
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -24,9 +25,30 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
 }));
 
+const { listPersonKinOptionsAction } = vi.hoisted(() => ({
+  listPersonKinOptionsAction: vi.fn(async () => ({
+    ok: true as const,
+    partners: [] as { id: string; name: string }[],
+    children: [] as { id: string; name: string }[],
+  })),
+}));
+vi.mock("../tree/actions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../tree/actions")>();
+  return {
+    ...actual,
+    listPersonKinOptionsAction,
+  };
+});
+
 afterEach(() => {
   cleanup();
   refresh.mockReset();
+  listPersonKinOptionsAction.mockReset();
+  listPersonKinOptionsAction.mockImplementation(async () => ({
+    ok: true as const,
+    partners: [],
+    children: [],
+  }));
 });
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
@@ -149,11 +171,19 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
     // Let the microtask queue flush so the fetch resolves.
     await new Promise((r) => setTimeout(r, 0));
   });
+  // Kin options load after anchor is seeded — submit stays disabled until ready.
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
 
   expect(onFetchAnchors).toHaveBeenCalledWith("F");
   const anchor = screen.getByTestId("place-member-anchor") as HTMLSelectElement;
   const relation = screen.getByTestId("place-member-relation") as HTMLSelectElement;
   fireEvent.change(anchor, { target: { value: "elena" } });
+  // Anchor change re-fetches kin options.
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
   fireEvent.change(relation, { target: { value: "child" } });
 
   await act(async () => {
@@ -161,7 +191,11 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   });
 
   expect(onLink).toHaveBeenCalledTimes(1);
-  expect(onLink).toHaveBeenCalledWith("F", "u1", "child", "elena");
+  expect(onLink).toHaveBeenCalledWith("F", "u1", "child", "elena", undefined, {
+    coParentPersonIds: undefined,
+    nature: "biological",
+    stepParentOfChildIds: undefined,
+  });
 });
 
 it("place-in-tree excludes the member being placed from seed anchors (#250)", async () => {
@@ -252,4 +286,104 @@ it("renders nothing when there are no unplaced members", () => {
     />,
   );
   expect(screen.queryByTestId("unplaced-members")).toBeNull();
+});
+
+/* ── 4. Place modal partner→kids step offer (#285 / ADR-0027) ─────────────────── */
+
+async function openPlaceModalReady(onFetchAnchors?: ReturnType<typeof vi.fn>) {
+  const { onLink } = renderPanel(
+    onFetchAnchors
+      ? { onFetchAnchors: onFetchAnchors as never }
+      : {},
+  );
+  act(() => screen.getByTestId("unplaced-place-u1").click());
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  return { onLink };
+}
+
+it("place partner with anchor kids shows step offer then links with stepParentOfChildIds (#285)", async () => {
+  listPersonKinOptionsAction.mockImplementation(async () => ({
+    ok: true as const,
+    partners: [],
+    children: [
+      { id: "kid-1", name: "Kid One" },
+      { id: "kid-2", name: "Kid Two" },
+    ],
+  }));
+
+  const { onLink } = await openPlaceModalReady();
+
+  fireEvent.change(screen.getByTestId("place-member-relation"), {
+    target: { value: "partner" },
+  });
+
+  await act(async () => {
+    fireEvent.submit(screen.getByTestId("place-member-submit").closest("form")!);
+  });
+
+  expect(onLink).not.toHaveBeenCalled();
+  expect(screen.getByTestId("place-member-step-offer")).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("place-member-step-child-kid-2"));
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("place-member-step-confirm"));
+  });
+
+  expect(onLink).toHaveBeenCalledWith("F", "u1", "partner", "self", undefined, {
+    coParentPersonIds: undefined,
+    nature: undefined,
+    stepParentOfChildIds: ["kid-1"],
+  });
+});
+
+it("place partner submit stays disabled while kin options are still loading (#285)", async () => {
+  let resolveKin!: (value: {
+    ok: true;
+    partners: { id: string; name: string }[];
+    children: { id: string; name: string }[];
+  }) => void;
+  listPersonKinOptionsAction.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveKin = resolve;
+      }),
+  );
+
+  renderPanel();
+  act(() => screen.getByTestId("unplaced-place-u1").click());
+
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  // Anchors ready, kin still pending — must not allow a silent partner-only submit.
+  const submit = screen.getByTestId("place-member-submit") as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  fireEvent.change(screen.getByTestId("place-member-relation"), {
+    target: { value: "partner" },
+  });
+  expect(submit.disabled).toBe(true);
+
+  await act(async () => {
+    resolveKin({
+      ok: true,
+      partners: [],
+      children: [{ id: "kid-1", name: "Kid One" }],
+    });
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  expect(submit.disabled).toBe(false);
+
+  await act(async () => {
+    fireEvent.submit(submit.closest("form")!);
+  });
+  expect(screen.getByTestId("place-member-step-offer")).toBeTruthy();
 });

@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 /**
- * Companion regression for the tree's "predetermined parents" add (2026-07-14): when a couple's seam
- * "+" is clicked, the co-parent is the OTHER partner and must arrive PRE-SELECTED in the "Other parent"
- * picker (not left on the first partner). This is what makes the click's POSITION bind both parents,
- * and what makes it correct once a person has more than one partner. The server action is mocked so
- * this stays a pure client-form test.
+ * Companion regression for the tree's "predetermined parents" add (2026-07-14) + #285 checkboxes:
+ * when a couple's seam "+" is clicked, the co-parent is the OTHER partner and must arrive
+ * PRE-CHECKED in the co-parent checkbox list (not left on the first partner). Multi-partner:
+ * any subset may be checked; none = this-parent-only.
  */
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 const { addRelativeAction } = vi.hoisted(() => ({
   addRelativeAction: vi.fn(async (_formData: FormData) => undefined),
@@ -26,14 +25,15 @@ afterEach(() => {
   addRelativeAction.mockClear();
 });
 
-function coParentSelect(container: HTMLElement): HTMLSelectElement {
-  const el = container.querySelector('select[name="coParentPersonId"]');
-  expect(el).toBeTruthy();
-  return el as HTMLSelectElement;
+function checkedIds(): string[] {
+  return OPTIONS.filter((p) => {
+    const el = screen.getByTestId(`add-relative-coparent-${p.id}`) as HTMLInputElement;
+    return el.checked;
+  }).map((p) => p.id);
 }
 
-it("pre-selects the clicked couple's co-parent, not merely the first partner", () => {
-  const { container } = render(
+it("pre-checks the clicked couple's co-parent, not merely the first partner", () => {
+  render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="partner-a"
@@ -42,11 +42,11 @@ it("pre-selects the clicked couple's co-parent, not merely the first partner", (
       preselectedCoParentId="partner-b"
     />,
   );
-  expect(coParentSelect(container).value).toBe("partner-b");
+  expect(checkedIds()).toEqual(["partner-b"]);
 });
 
-it("falls back to the first partner when no co-parent was predetermined", () => {
-  const { container } = render(
+it("checks none when no co-parent was predetermined (this-parent-only default)", () => {
+  render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="partner-a"
@@ -54,11 +54,11 @@ it("falls back to the first partner when no co-parent was predetermined", () => 
       coParentOptions={OPTIONS}
     />,
   );
-  expect(coParentSelect(container).value).toBe("partner-a");
+  expect(checkedIds()).toEqual([]);
 });
 
 it("ignores a predetermined co-parent that isn't among the options (defensive)", () => {
-  const { container } = render(
+  render(
     <AddRelativeForm
       familyId="fam-1"
       anchorPersonId="partner-a"
@@ -67,5 +67,13 @@ it("ignores a predetermined co-parent that isn't among the options (defensive)",
       preselectedCoParentId="ghost"
     />,
   );
-  expect(coParentSelect(container).value).toBe("partner-a");
+  expect(checkedIds()).toEqual([]);
+});
+
+it("defaults parent/child nature to biological", () => {
+  render(
+    <AddRelativeForm familyId="fam-1" anchorPersonId="a" initialRelation="child" />,
+  );
+  const nature = screen.getByTestId("add-relative-nature") as HTMLSelectElement;
+  expect(nature.value).toBe("biological");
 });
