@@ -1,12 +1,13 @@
 # ADR-0025 — Mobile Phase B, part 1: native navigation & control IA
 
-Status: Accepted (2026-07-19)
+Status: Accepted (amended 2026-07-21)
 
 Supersedes the "park B" stance of [ADR-0024](0024-responsive-mobile-pass-graceful-a-now-native-b-later.md)
 for the **navigation + control** slice of B only. ADR-0024's other parked B items (pinch-zoom on the
 tree, real drag/momentum bottom-sheets, per-surface native modals) stay parked and are explicitly out
 of scope here. Relates to #230 and the `RESPONSIVE_BREAKPOINTS_REM` guard
-(`app/_kindred/responsive-breakpoints.test.ts`).
+(`app/_kindred/responsive-breakpoints.test.ts`). Progressive control-row amendment relates to #296 /
+#298.
 
 ## Context
 
@@ -32,6 +33,8 @@ deliver.
 with a collapse-on-scroll header, and expose secondary controls as per-concern labeled icon sheets —
 while keeping sub-tab wayfinding visible.** Mobile-only (`< 40rem` via `useIsCompact`); desktop keeps
 today's top tabs + inline `HubToolbar` unchanged.
+*(secondary control-chrome clauses — per-concern sheets, always-visible sub-tabs, desktop two-row
+toolbar — superseded for Stories/Album; see Amendment 2026-07-21. Primary nav IA unchanged.)*
 
 Load-bearing choices (in dependency order):
 
@@ -43,6 +46,8 @@ Load-bearing choices (in dependency order):
   tree/list/requests) are primary wayfinding, not a view preference — they remain visible inline. They
   are NOT hidden behind an icon. (The earlier "fold sub-tabs into a view icon" idea is rejected: it
   hides where-am-I to save space the bottom-bar move already reclaimed.)
+  *(superseded for Stories/Album — see Amendment 2026-07-21; Family/Questions sub-tabs stay visible
+  inline until a follow-up)*
 
 - **Per-concern control icons, not one gear.** The single `⚙ Filters & view` sheet splits into up to
   three labeled icon triggers, each opening its own `BottomSheet`:
@@ -51,12 +56,18 @@ Load-bearing choices (in dependency order):
   - **Family** — the existing family selector. Badged when the selection is a *subset* (not "all").
   - **Filter** — search + facet filters for the active sub-tab/view. Badged when any filter is set.
   A tab renders only the icons that have content (e.g. Questions has no View/Filter → neither renders).
+  *(superseded for Stories/Album — see Amendment 2026-07-21; Family/Questions keep this model until
+  a follow-up)*
 
 - **Labeled icons + iconified action.** Icons carry a tiny text label (bare glyphs for "view"/"family"
   test as ambiguous). To fit the 360px floor alongside visible sub-tab pills, the primary **action
   button is iconified** (`Tell`→✎, `Add photos`→＋, `Invite`→👤+); it keeps its label on desktop. The
   360px budget was the deciding constraint — labeled icons + a text action button overflow, so the
   action label is what yields.
+  *(Stories/Album: primary actions stay outside progressive-collapse precedence and may iconify
+  under width pressure — including on wide viewports when the trailing action must shrink — see
+  Amendment 2026-07-21. Clarity bet on labeled collapsed icons remains. Family/Questions keep the
+  prior compact-iconify / desktop-label split until a follow-up.)*
 
 - **Collapse-on-scroll top bar.** A slim top app-bar (small family name + account avatar) shows at
   scroll-top and slides away as the viewer scrolls into content. This is what actually delivers
@@ -97,7 +108,9 @@ Load-bearing choices (in dependency order):
 - **2:** collapse-on-scroll top app-bar (family name + account avatar).
 - **3:** control strip — visible sub-tab pills + `[View][Family][Filter]` labeled lucide icons +
   iconified action, per tab; split `MobileControlSheet` into per-icon sheets.
+  *(shipped as prior model; Stories/Album progressive row replaces this — see Amendment 2026-07-21)*
 - **4:** per-icon Family + Filter active badges (View unbadged).
+  *(Stories/Album badge semantics per Amendment 2026-07-21 — Search/Filters split, Views unbadged)*
 
 ## Verification gate (definition of done for EVERY increment)
 
@@ -123,7 +136,74 @@ real iOS Safari. Therefore no increment is "done" on devtools alone:
 - Splitting one gear into three icon sheets adds control surface (three triggers, three sheets) whose
   payoff is legibility, not pixels. Accepted deliberately; revisit if on-device testing shows the trio
   is fussier than the single gear it replaces.
+  *(Stories/Album progressive row supersedes the fixed three-icon strip — see Amendment 2026-07-21)*
 - Desktop is untouched (top tabs + inline `HubToolbar`), so the mobile branch is additive behind
   `useIsCompact`; regression risk is confined to the compact path.
+  *(superseded — see Amendment 2026-07-21; for Stories/Album secondary browse chrome only. Desktop
+  top primary tabs and the compact bottom tab bar remain. Family/Questions keep the prior
+  toolbar/strip until a follow-up.)*
 - Phase B remains incomplete after this: pinch-zoom, momentum sheets, and native modals are still owed
   under ADR-0024.
+
+## Amendment 2026-07-21 — Progressive hub control row (Stories + Album)
+
+Relates to #296 / #298. Primary navigation IA from this ADR is **unchanged**: bottom tab bar on
+compact, top primary tabs on wide, collapse-on-scroll header, compact breakpoint for primary nav, and
+the non-sticky control strip (2026-07-20) still stand. This amendment replaces only the secondary
+browse **control-chrome** rules that assumed a binary compact strip vs desktop two-row toolbar and
+that forbade collapsing Sub tabs behind an icon.
+
+### Decision
+
+One **progressive-collapse control row** on every width for Stories and Album. Browse controls share a
+vocabulary; each present unit expands to its fullest form when there is room; when space runs out,
+lower-precedence units collapse to icons first. Phone vs wide changes only the shell for collapsed
+panels (bottom sheet vs anchored popover), not which controls exist.
+
+- **Shared vocabulary with occupancy.** Units: **Sub tabs**, **Family**, **Search**, **Filters**,
+  **Views**. A surface omits units it does not have (e.g. Stories has no Filters; Album has no Sub
+  tabs; single-family viewers have no Family). Do not invent empty chrome for vocabulary symmetry.
+
+- **Expansion precedence** (highest claim first): Sub tabs → Family → Search → Filters → Views.
+  Collapse in reverse. Views collapse first when space is scarce.
+
+- **Sub tabs three stages:** (1) labeled pills; (2) iconized pills as an inline group; (3) single
+  menu icon that opens a Feed/Timeline (etc.) menu. Other units are binary: full inline or collapsed
+  icon → panel. While deciding which secondaries stay expanded, always choose the richest Sub-tabs
+  stage that fits with the current set; the **menu-icon stage is allowed only after every present
+  lower-precedence unit is collapsed** (or absent).
+
+- **Open patterns.** Sub tabs menu-icon → menu (not a sheet). Family / Search / Filters / Views →
+  bottom sheet on compact viewports, anchored popover on wide viewports; panel body content is shared.
+
+- **Primary actions outside collapse.** Tell / Add Photos reserve trailing width and sit outside
+  expansion precedence; they may iconify under width pressure. They do not compete with
+  Sub tabs → Views expansion math.
+
+- **Search vs Filters.** Stories collapsed search is labeled and presented as **Search** (not Filter).
+  Album keeps Search and Filters as separate units when facets exist. Filters collapse before Search
+  when both cannot stay expanded.
+
+- **Badging.** Collapsed Family badges when the selection is a subset. Collapsed Search / Filters
+  badge when refinement is active. Views do **not** badge merely for the current layout.
+
+- **Measuring / seam.** The row observes available width and uses measured natural widths of each unit
+  form (including Sub-tabs stages) plus reserved action width as inputs to a pure
+  `resolveHubControlExpansion` resolver. Component wiring stays thin; CSS/breakpoint booleans are not
+  the behavior seam for precedence.
+
+- **Scope.** Stories and Album only in this wave. Family and Questions stay on the existing
+  toolbar/strip until a follow-up adopts the same primitive. Keep the two-row toolbar component
+  available for those tabs; Stories/Album must not depend on the old two-row composition.
+
+- **Clarity.** Accessible names for collapsed icons and the Sub tabs menu; labeled collapsed icons
+  where ambiguity requires it (same clarity bet as the original icon-sheet work).
+
+### Consequences
+
+- Mobile and desktop stop maintaining two separate control IAs for Stories/Album; mid-widths fold
+  gradually by priority instead of swapping chrome.
+- Implementers must treat the superseded bullets above as historical; the Amendment is authoritative
+  for Stories/Album secondary browse chrome.
+- Family/Questions migration and sticky-row revisit remain follow-ups; parked ADR-0024 items stay
+  parked.
