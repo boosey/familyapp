@@ -84,8 +84,14 @@ export function PlaceConfirmModal({
   onFetchKinOptions = listPersonKinOptionsAction,
 }: PlaceConfirmModalProps) {
   const headingName = subjectLabel(subject);
-  const [receiverId, setReceiverId] = useState(receiverProp?.personId ?? "");
-  const [receiverName, setReceiverName] = useState(receiverProp?.displayName ?? "");
+  // Primitive deps for the anchors effect — object identity of `subject` / `receiverProp`
+  // must not re-trigger a fetch or reset the user's receiver mid-confirm (#286 review).
+  const subjectKind = subject.kind;
+  const subjectPersonId = subject.kind === "link" ? subject.personId : null;
+  const receiverPersonId = receiverProp?.personId ?? null;
+  const receiverDisplayName = receiverProp?.displayName ?? null;
+  const [receiverId, setReceiverId] = useState(receiverPersonId ?? "");
+  const [receiverName, setReceiverName] = useState(receiverDisplayName ?? "");
   const [relation, setRelation] = useState<AddRelativeRelation>(initialRelation);
   const [nature, setNature] = useState<KinshipNature>("biological");
   const [displayName, setDisplayName] = useState(
@@ -97,8 +103,10 @@ export function PlaceConfirmModal({
   const [loadingAnchors, setLoadingAnchors] = useState(!receiverLocked && !receiverProp);
   const [partners, setPartners] = useState<{ id: string; name: string }[]>(partnersProp ?? []);
   const [children, setChildren] = useState<{ id: string; name: string }[]>(childrenProp ?? []);
+  // Both lists must be seeded before we treat kin as ready (AND, not OR) — partial seed
+  // would skip the kids fetch and risk a silent partner→kids write (#287/#288 reuse).
   const [kinLoadedFor, setKinLoadedFor] = useState<string | null>(
-    partnersProp !== undefined || childrenProp !== undefined
+    partnersProp !== undefined && childrenProp !== undefined
       ? (receiverProp?.personId ?? null)
       : null,
   );
@@ -111,9 +119,9 @@ export function PlaceConfirmModal({
 
   // Fetch anchors when the receiver is not locked (tray Place / New without a zone target).
   useEffect(() => {
-    if (receiverLocked && receiverProp) {
-      setReceiverId(receiverProp.personId);
-      setReceiverName(receiverProp.displayName);
+    if (receiverLocked && receiverPersonId) {
+      setReceiverId(receiverPersonId);
+      setReceiverName(receiverDisplayName ?? "");
       setLoadingAnchors(false);
       return;
     }
@@ -123,7 +131,7 @@ export function PlaceConfirmModal({
       const res = await onFetchAnchors(familyId);
       if (cancelled) return;
       if (res.ok) {
-        const excludeId = subject.kind === "link" ? subject.personId : null;
+        const excludeId = subjectKind === "link" ? subjectPersonId : null;
         const opts = res.persons
           .filter((p) => p.personId !== excludeId)
           .map((p) => ({
@@ -131,19 +139,21 @@ export function PlaceConfirmModal({
             name: p.displayName?.trim() || hub.kin.edgeUnknownPerson,
           }));
         setAnchors(opts);
-        if (receiverProp && opts.some((o) => o.id === receiverProp.personId)) {
-          setReceiverId(receiverProp.personId);
-          setReceiverName(receiverProp.displayName);
-        } else {
-          const first = opts[0];
-          if (first) {
-            setReceiverId(first.id);
-            setReceiverName(first.name);
-          } else {
-            setReceiverId("");
-            setReceiverName("");
+        // Prefer explicit receiver prop, else keep current selection when still valid
+        // (same exclude-id / familyId must not wipe a mid-confirm pick).
+        setReceiverId((prev) => {
+          if (receiverPersonId && opts.some((o) => o.id === receiverPersonId)) {
+            setReceiverName(receiverDisplayName ?? "");
+            return receiverPersonId;
           }
-        }
+          if (prev && opts.some((o) => o.id === prev)) {
+            setReceiverName(opts.find((o) => o.id === prev)?.name ?? "");
+            return prev;
+          }
+          const first = opts[0];
+          setReceiverName(first?.name ?? "");
+          return first?.id ?? "";
+        });
       } else {
         setError(hub.unplaced.actionFailed);
       }
@@ -153,7 +163,15 @@ export function PlaceConfirmModal({
     return () => {
       cancelled = true;
     };
-  }, [familyId, onFetchAnchors, receiverLocked, receiverProp, subject]);
+  }, [
+    familyId,
+    onFetchAnchors,
+    receiverLocked,
+    receiverPersonId,
+    receiverDisplayName,
+    subjectKind,
+    subjectPersonId,
+  ]);
 
   // Load partners + children for the current receiver unless the caller seeded both.
   useEffect(() => {
