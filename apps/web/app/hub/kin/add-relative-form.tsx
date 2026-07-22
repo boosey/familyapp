@@ -26,6 +26,7 @@ import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { addRelativeAction } from "./actions";
 import { linkExistingMemberAction } from "../tree/actions";
+import { commitPlaceLink } from "../tree/place-confirm";
 import { matchUnplacedByDisplayName, type UnplacedNameCandidate } from "./match-unplaced";
 
 const PARENT_CHILD_NATURES: readonly KinshipNature[] = [
@@ -128,6 +129,8 @@ export function AddRelativeForm({
   function mintRelative(formData: FormData) {
     setError(null);
     startTransition(async () => {
+      // Mint still posts the full FormData (DOB/sex/life) via addRelativeAction — the same server
+      // action PlaceConfirmModal's commitPlaceMint wraps for the tray New-person path (#286).
       const result = await addRelativeAction(formData);
       if (result?.error) {
         setError(result.error);
@@ -184,17 +187,18 @@ export function AddRelativeForm({
         : undefined;
     setError(null);
     startTransition(async () => {
-      const res = await onLinkExisting(
+      // Secondary +/kebab connect-existing (#286): same link helper as tray Place / PlaceConfirmModal.
+      const res = await commitPlaceLink(
         familyId,
         existingPersonId,
         rel,
-        anchorPersonId,
-        coParents.length === 1 ? coParents[0] : undefined,
+        anchorPersonId ?? "",
         {
           coParentPersonIds: coParents.length > 0 ? coParents : undefined,
           stepParentOfChildIds: stepKids.length > 0 ? stepKids : undefined,
           nature: natureArg,
         },
+        { onLink: onLinkExisting },
       );
       if (!res.ok) {
         setError(hub.kin.existingMatchFailed);

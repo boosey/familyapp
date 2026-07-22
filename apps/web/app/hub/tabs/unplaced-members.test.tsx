@@ -93,6 +93,7 @@ function renderPanel(over: Partial<React.ComponentProps<typeof UnplacedMembers>>
       members={MEMBERS}
       viewerIsSteward={over.viewerIsSteward ?? false}
       variant={over.variant ?? "section"}
+      showNewPerson={over.showNewPerson}
       onLink={onLink}
       onSetNonFamily={onSetNonFamily}
       onEndMembership={onEndMembership}
@@ -152,9 +153,28 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
   // The tray is present in the tree view (variant "tray" adds the section testid) and lists the members.
   const tray = screen.getByTestId("unplaced-members");
   expect(within(tray).getByTestId("unplaced-row-u1")).toBeTruthy();
+  expect(within(tray).getByTestId("tree-tray-new-person")).toBeTruthy();
   // It sits OUTSIDE the pan/zoom layer (the layout engine) — the tray is not inside tree-pan-layer.
   const panLayer = screen.getByTestId("tree-pan-layer");
   expect(panLayer.contains(tray)).toBe(false);
+});
+
+it("#286: Tree tray shows New person even when there are no unplaced members", () => {
+  render(
+    <FamilyTab
+      familyId="F"
+      focusPersonId="self"
+      viewerPersonId="self"
+      tree={treeData()}
+      listPeople={[]}
+      unplaced={[]}
+      viewerIsSteward={false}
+      view="tree"
+      surface={{ active: "tree", familiesParam: null, showRequests: false }}
+    />,
+  );
+  expect(screen.getByTestId("unplaced-members")).toBeTruthy();
+  expect(screen.getByTestId("tree-tray-new-person")).toBeTruthy();
 });
 
 /* ── 2. Actions invoke the right handler ──────────────────────────────────────── */
@@ -164,8 +184,8 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   act(() => screen.getByTestId("unplaced-place-u1").click());
 
   // Modal opens; anchors are fetched asynchronously.
-  expect(screen.getByTestId("place-member-modal")).toBeTruthy();
-  expect(screen.getByTestId("place-member-loading-anchors")).toBeTruthy();
+  expect(screen.getByTestId("place-confirm-modal")).toBeTruthy();
+  expect(screen.getByTestId("place-confirm-loading-anchors")).toBeTruthy();
 
   await act(async () => {
     // Let the microtask queue flush so the fetch resolves.
@@ -177,8 +197,8 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   });
 
   expect(onFetchAnchors).toHaveBeenCalledWith("F");
-  const anchor = screen.getByTestId("place-member-anchor") as HTMLSelectElement;
-  const relation = screen.getByTestId("place-member-relation") as HTMLSelectElement;
+  const anchor = screen.getByTestId("place-confirm-receiver") as HTMLSelectElement;
+  const relation = screen.getByTestId("place-confirm-relation") as HTMLSelectElement;
   fireEvent.change(anchor, { target: { value: "elena" } });
   // Anchor change re-fetches kin options.
   await act(async () => {
@@ -187,7 +207,7 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   fireEvent.change(relation, { target: { value: "child" } });
 
   await act(async () => {
-    fireEvent.submit(screen.getByTestId("place-member-submit").closest("form")!);
+    fireEvent.submit(screen.getByTestId("place-confirm-submit").closest("form")!);
   });
 
   expect(onLink).toHaveBeenCalledTimes(1);
@@ -216,10 +236,10 @@ it("place-in-tree excludes the member being placed from seed anchors (#250)", as
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  const anchor = screen.getByTestId("place-member-anchor") as HTMLSelectElement;
+  const anchor = screen.getByTestId("place-confirm-receiver") as HTMLSelectElement;
   const options = Array.from(anchor.options).map((o) => o.value);
   expect(options).toEqual(["john"]);
-  expect(screen.queryByTestId("place-member-no-anchors")).toBeNull();
+  expect(screen.queryByTestId("place-confirm-no-anchors")).toBeNull();
 });
 
 it("place-in-tree shows no-anchors when the only seed person is the member (#250)", async () => {
@@ -235,8 +255,8 @@ it("place-in-tree shows no-anchors when the only seed person is the member (#250
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  expect(screen.getByTestId("place-member-no-anchors")).toBeTruthy();
-  expect(screen.queryByTestId("place-member-anchor")).toBeNull();
+  expect(screen.getByTestId("place-confirm-no-anchors")).toBeTruthy();
+  expect(screen.queryByTestId("place-confirm-receiver")).toBeNull();
 });
 
 it("'Not family' calls setMemberNonFamily(true) and offers a Move-back undo", async () => {
@@ -277,7 +297,7 @@ it("hides the Remove action for a non-steward viewer", () => {
   expect(screen.getByTestId("unplaced-nonfamily-u1")).toBeTruthy();
 });
 
-it("renders nothing when there are no unplaced members", () => {
+it("renders nothing when there are no unplaced members and New person is off", () => {
   render(
     <UnplacedMembers
       familyId="F"
@@ -286,6 +306,48 @@ it("renders nothing when there are no unplaced members", () => {
     />,
   );
   expect(screen.queryByTestId("unplaced-members")).toBeNull();
+});
+
+it("#286: Tree tray with showNewPerson stays mounted when unplaced is empty", () => {
+  render(
+    <UnplacedMembers
+      familyId="F"
+      members={[]}
+      viewerIsSteward
+      variant="tray"
+      showNewPerson
+    />,
+  );
+  expect(screen.getByTestId("unplaced-members")).toBeTruthy();
+  expect(screen.getByTestId("tree-tray-new-person")).toBeTruthy();
+});
+
+it("#286: New person and Place both open the shared place-confirm modal", async () => {
+  const { onLink } = renderPanel({ showNewPerson: true, variant: "tray" });
+  act(() => screen.getByTestId("tree-tray-new-person").click());
+  expect(screen.getByTestId("place-confirm-modal")).toBeTruthy();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(screen.getByTestId("place-confirm-name")).toBeTruthy();
+  expect(onLink).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(window, { key: "Escape" });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(screen.queryByTestId("place-confirm-modal")).toBeNull();
+
+  act(() => screen.getByTestId("unplaced-place-u1").click());
+  expect(screen.getByTestId("place-confirm-modal")).toBeTruthy();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(screen.queryByTestId("place-confirm-name")).toBeNull();
+  expect(screen.getByTestId("place-confirm-subject")).toBeTruthy();
 });
 
 /* ── 4. Place modal partner→kids step offer (#285 / ADR-0027) ─────────────────── */
@@ -318,22 +380,22 @@ it("place partner with anchor kids shows step offer then links with stepParentOf
 
   const { onLink } = await openPlaceModalReady();
 
-  fireEvent.change(screen.getByTestId("place-member-relation"), {
+  fireEvent.change(screen.getByTestId("place-confirm-relation"), {
     target: { value: "partner" },
   });
 
   await act(async () => {
-    fireEvent.submit(screen.getByTestId("place-member-submit").closest("form")!);
+    fireEvent.submit(screen.getByTestId("place-confirm-submit").closest("form")!);
   });
 
   expect(onLink).not.toHaveBeenCalled();
-  expect(screen.getByTestId("place-member-step-offer")).toBeTruthy();
+  expect(screen.getByTestId("place-confirm-step-offer")).toBeTruthy();
 
   await act(async () => {
-    fireEvent.click(screen.getByTestId("place-member-step-child-kid-2"));
+    fireEvent.click(screen.getByTestId("place-confirm-step-child-kid-2"));
   });
   await act(async () => {
-    fireEvent.click(screen.getByTestId("place-member-step-confirm"));
+    fireEvent.click(screen.getByTestId("place-confirm-step-confirm"));
   });
 
   expect(onLink).toHaveBeenCalledWith("F", "u1", "partner", "self", undefined, {
@@ -364,9 +426,9 @@ it("place partner submit stays disabled while kin options are still loading (#28
   });
 
   // Anchors ready, kin still pending — must not allow a silent partner-only submit.
-  const submit = screen.getByTestId("place-member-submit") as HTMLButtonElement;
+  const submit = screen.getByTestId("place-confirm-submit") as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
-  fireEvent.change(screen.getByTestId("place-member-relation"), {
+  fireEvent.change(screen.getByTestId("place-confirm-relation"), {
     target: { value: "partner" },
   });
   expect(submit.disabled).toBe(true);
@@ -385,5 +447,28 @@ it("place partner submit stays disabled while kin options are still loading (#28
   await act(async () => {
     fireEvent.submit(submit.closest("form")!);
   });
-  expect(screen.getByTestId("place-member-step-offer")).toBeTruthy();
+  expect(screen.getByTestId("place-confirm-step-offer")).toBeTruthy();
+});
+
+it("place modal kin-options reject keeps submit disabled and shows error (#285/#286)", async () => {
+  listPersonKinOptionsAction.mockImplementation(async () => ({
+    ok: false as const,
+    error: "failed" as const,
+  }) as never);
+
+  const { onLink } = await openPlaceModalReady();
+
+  const submit = screen.getByTestId("place-confirm-submit") as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  expect(screen.getByTestId("place-confirm-error").textContent).toMatch(/Couldn't do that/i);
+
+  fireEvent.change(screen.getByTestId("place-confirm-relation"), {
+    target: { value: "partner" },
+  });
+  await act(async () => {
+    fireEvent.submit(submit.closest("form")!);
+  });
+
+  expect(submit.disabled).toBe(true);
+  expect(onLink).not.toHaveBeenCalled();
 });
