@@ -148,6 +148,13 @@ export {
   type StorySharedPingRecipient,
 } from "./story-shared-pings";
 export {
+  DEFAULT_NOTIFICATION_FREQUENCY,
+  NOTIFICATION_STREAMS,
+  getNotificationStreamFrequency,
+  setNotificationStreamFrequency,
+  listNotificationStreamFrequencies,
+} from "./notification-prefs";
+export {
   AlreadyFamilyMemberError,
   AuthorizationError,
   InvariantViolation,
