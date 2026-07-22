@@ -1,29 +1,41 @@
 /**
- * Shared place-confirm seam (#286 / ADR-0027) — types, zone→relation mapping, and write helpers
- * used by the Tree tray (unplaced link + New person mint) and by secondary +/kebab paths.
+ * Shared place-confirm seam (#286 / #318 / ADR-0027) — zone types, subject shapes, and thin
+ * adapters over the typed {@link commitPlacement} write seam.
  *
  * Desktop DnD (#287) and mobile Place→tap (#288) open the same PlaceConfirmModal with
  * `receiverLocked: true` and `initialRelation` from {@link relationFromZone}.
+ *
+ * Mint no longer round-trips FormData as the real seam — {@link commitPlaceMint} builds a
+ * {@link MintPlacement} and commits through typed adapters.
  */
 import type { AddRelativeRelation } from "@chronicle/core";
-import type { KinshipNature } from "@chronicle/db";
-import { addRelativeAction } from "../kin/actions";
+import type { KinshipNature, PersonSex } from "@chronicle/db";
+import { addRelativeTypedAction } from "../kin/actions";
 import { linkExistingMemberAction } from "./actions";
+import {
+  commitPlacement,
+  type LinkPlacement,
+  type MintPlacement,
+  type PlacementResult,
+  relationFromZone,
+  type PlaceZone,
+} from "./placement";
 
-/** Card drop / tap zones (ADR-0027). No sibling zone — sibling is child-on-parent or Add sibling. */
-export type PlaceZone = "top" | "bottom" | "side";
-
-/** Map a zone choice to the pre-filled place-confirm relation. */
-export function relationFromZone(zone: PlaceZone): AddRelativeRelation {
-  switch (zone) {
-    case "top":
-      return "parent";
-    case "bottom":
-      return "child";
-    case "side":
-      return "partner";
-  }
-}
+export type { PlaceZone };
+export { relationFromZone };
+export {
+  assertPartnerChildrenOfferResolved,
+  commitPlacement,
+  mintPlacementToAddRelativeInput,
+  partnerChildrenOfferRequired,
+  resolvePartnerChildrenOffer,
+  type InvitePlanPlacement,
+  type LinkPlacement,
+  type MintPlacement,
+  type Placement,
+  type PlacementDeps,
+  type PlacementResult,
+} from "./placement";
 
 export type PlaceConfirmSubject =
   | {
@@ -44,11 +56,19 @@ export type PlaceConfirmWriteOpts = {
 };
 
 export type PlaceConfirmLinkDeps = {
-  onLink?: typeof linkExistingMemberAction;
+  onLink?: (
+    familyId: string,
+    existingPersonId: string,
+    relation: AddRelativeRelation,
+    receiverPersonId: string,
+    coParentPersonId?: string,
+    opts?: PlaceConfirmWriteOpts,
+  ) => Promise<{ ok: boolean }>;
 };
 
 export type PlaceConfirmMintDeps = {
-  onMint?: typeof addRelativeAction;
+  /** Typed mint adapter — receives {@link MintPlacement}, not FormData. */
+  onMint?: (placement: MintPlacement) => Promise<PlacementResult>;
 };
 
 /**
@@ -62,28 +82,49 @@ export async function commitPlaceLink(
   opts: PlaceConfirmWriteOpts = {},
   deps: PlaceConfirmLinkDeps = {},
 ): Promise<{ ok: boolean }> {
-  const onLink = deps.onLink ?? linkExistingMemberAction;
+  const onLink =
+    deps.onLink ??
+    ((fid, existingId, rel, receiverId, _coParent, writeOpts) =>
+      linkExistingMemberAction(fid, existingId, rel, receiverId, undefined, writeOpts));
+
   const coParents = opts.coParentPersonIds ?? [];
-  const res = await onLink(
+  const placement: LinkPlacement = {
+    kind: "link",
     familyId,
     existingPersonId,
     relation,
     receiverPersonId,
-    coParents.length === 1 ? coParents[0] : undefined,
-    {
-      coParentPersonIds: coParents.length > 0 ? coParents : undefined,
-      stepParentOfChildIds:
-        relation === "partner" && (opts.stepParentOfChildIds?.length ?? 0) > 0
-          ? opts.stepParentOfChildIds
-          : undefined,
-      nature: relation === "parent" || relation === "child" ? opts.nature : undefined,
+    coParentPersonIds: coParents.length > 0 ? coParents : undefined,
+    stepParentOfChildIds:
+      relation === "partner" && opts.stepParentOfChildIds !== undefined
+        ? opts.stepParentOfChildIds
+        : undefined,
+    nature: relation === "parent" || relation === "child" ? opts.nature : undefined,
+  };
+
+  const res = await commitPlacement(placement, {
+    onLink: async (p) => {
+      const cps = p.coParentPersonIds ?? [];
+      const result = await onLink(
+        p.familyId,
+        p.existingPersonId,
+        p.relation,
+        p.receiverPersonId,
+        cps.length === 1 ? cps[0] : undefined,
+        {
+          coParentPersonIds: cps.length > 0 ? cps : undefined,
+          stepParentOfChildIds: p.stepParentOfChildIds,
+          nature: p.nature,
+        },
+      );
+      return result.ok ? { ok: true } : { ok: false };
     },
-  );
+  });
   return { ok: res.ok };
 }
 
 /**
- * Mint a new person and place them relative to the receiver — same core seam +/kebab mint uses.
+ * Mint a new person and place them relative to the receiver — typed Placement, no FormData.
  */
 export async function commitPlaceMint(
   familyId: string,
@@ -94,31 +135,43 @@ export async function commitPlaceMint(
     nature?: KinshipNature;
     coParentPersonIds?: string[];
     stepParentOfChildIds?: string[];
+    birthDate?: string;
+    lifeStatus?: "living" | "deceased";
+    deathYear?: number;
+    sex?: PersonSex;
   },
   deps: PlaceConfirmMintDeps = {},
 ): Promise<{ ok: boolean; error?: string }> {
-  const onMint = deps.onMint ?? addRelativeAction;
-  const fd = new FormData();
-  fd.set("familyId", familyId);
-  fd.set("anchorPersonId", receiverPersonId);
-  fd.set("relation", relation);
-  if (fields.displayName?.trim()) fd.set("displayName", fields.displayName.trim());
-  if ((relation === "parent" || relation === "child") && fields.nature) {
-    fd.set("nature", fields.nature);
-  }
-  if (relation === "child") {
-    for (const id of fields.coParentPersonIds ?? []) {
-      fd.append("coParentPersonIds", id);
-    }
-  }
-  if (relation === "partner") {
-    for (const id of fields.stepParentOfChildIds ?? []) {
-      fd.append("stepParentOfChildIds", id);
-    }
-  }
-  const result = await onMint(fd);
-  if (result?.error) return { ok: false, error: result.error };
-  return { ok: true };
+  const onMint =
+    deps.onMint ??
+    (async (placement: MintPlacement): Promise<PlacementResult> => {
+      const result = await addRelativeTypedAction(placement);
+      if (result?.error) return { ok: false, error: result.error };
+      return { ok: true };
+    });
+
+  const placement: MintPlacement = {
+    kind: "mint",
+    familyId,
+    relation,
+    receiverPersonId,
+    displayName: fields.displayName,
+    birthDate: fields.birthDate,
+    lifeStatus: fields.lifeStatus,
+    deathYear: fields.deathYear,
+    sex: fields.sex,
+    nature: relation === "parent" || relation === "child" ? fields.nature : undefined,
+    coParentPersonIds:
+      relation === "child" && (fields.coParentPersonIds?.length ?? 0) > 0
+        ? fields.coParentPersonIds
+        : undefined,
+    stepParentOfChildIds:
+      relation === "partner" && fields.stepParentOfChildIds !== undefined
+        ? fields.stepParentOfChildIds
+        : undefined,
+  };
+
+  return commitPlacement(placement, { onMint });
 }
 
 export const PLACE_CONFIRM_RELATIONS: readonly AddRelativeRelation[] = [

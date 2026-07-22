@@ -1,11 +1,11 @@
 /**
- * place-confirm helpers (#286) — zone→relation mapping for future DnD/tap, plus write-arg shape.
+ * place-confirm re-exports Placement seam (#318). Zone mapping covered in placement.test.ts.
  */
 import { describe, expect, it } from "vitest";
 import { relationFromZone } from "./place-confirm";
 
-describe("relationFromZone (#286 / ADR-0027)", () => {
-  it("maps top/bottom/side to parent/child/partner (no sibling zone)", () => {
+describe("relationFromZone (re-export)", () => {
+  it("maps top/bottom/side to parent/child/partner", () => {
     expect(relationFromZone("top")).toBe("parent");
     expect(relationFromZone("bottom")).toBe("child");
     expect(relationFromZone("side")).toBe("partner");
