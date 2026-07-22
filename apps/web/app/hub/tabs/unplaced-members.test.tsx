@@ -161,7 +161,11 @@ it("place-in-tree opens the link modal, fetches anchors, and calls linkExistingM
   });
 
   expect(onLink).toHaveBeenCalledTimes(1);
-  expect(onLink).toHaveBeenCalledWith("F", "u1", "child", "elena");
+  expect(onLink).toHaveBeenCalledWith("F", "u1", "child", "elena", undefined, {
+    coParentPersonIds: undefined,
+    nature: "biological",
+    stepParentOfChildIds: undefined,
+  });
 });
 
 it("place-in-tree excludes the member being placed from seed anchors (#250)", async () => {
