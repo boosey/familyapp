@@ -9,7 +9,7 @@
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
-import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
+import { AddRelativeForm } from "@/app/hub/tree/add-relative-form";
 
 afterEach(() => {
   cleanup();

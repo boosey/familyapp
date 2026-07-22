@@ -14,10 +14,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { KinshipTreeData, TreeNode, UnplacedMember } from "@chronicle/core";
 import { UnplacedMembers } from "./UnplacedMembers";
-import { FamilyTab } from "./FamilyTab";
-import type { PersonKinOptionsResult } from "../tree/actions";
+import { FamilyTab } from "../tabs/FamilyTab";
+import type { PersonKinOptionsResult } from "./actions";
 
-// next/navigation ΓÇö the panel calls router.refresh() after a successful action; FamilyTab's
+// next/navigation — the panel calls router.refresh() after a successful action; FamilyTab's
 // FamilyChips also reads usePathname/useSearchParams, so the mock supplies all three.
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -33,8 +33,8 @@ const { listPersonKinOptionsAction } = vi.hoisted(() => ({
     children: [],
   })),
 }));
-vi.mock("../tree/actions", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../tree/actions")>();
+vi.mock("./actions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./actions")>();
   return {
     ...actual,
     listPersonKinOptionsAction,
@@ -165,7 +165,7 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
 
 it("#287: tray drag handle writes place-drag payload and arms the active-drag store", async () => {
   const { setActivePlaceDrag, getActivePlaceDrag, PLACE_DRAG_MIME } = await import(
-    "../tree/place-drag"
+    "./place-drag"
   );
   setActivePlaceDrag(null);
   renderPanel({ variant: "tray", showNewPerson: true });

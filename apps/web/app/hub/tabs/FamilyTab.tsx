@@ -30,7 +30,7 @@ import {
 } from "../tree/place-confirm";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
 import { KinList } from "./KinList";
-import { UnplacedMembers } from "./UnplacedMembers";
+import { UnplacedMembers } from "../tree/UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
 import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";

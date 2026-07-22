@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UnplacedMember } from "@chronicle/core";
 import type { MintPlacement } from "@/app/hub/tree/placement";
-import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
+import { AddRelativeForm } from "@/app/hub/tree/add-relative-form";
 
 afterEach(() => {
   cleanup();

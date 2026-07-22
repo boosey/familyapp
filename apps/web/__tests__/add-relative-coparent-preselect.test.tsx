@@ -11,9 +11,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 const { addRelativeAction } = vi.hoisted(() => ({
   addRelativeAction: vi.fn(async (_formData: FormData) => undefined),
 }));
-vi.mock("../app/hub/kin/actions", () => ({ addRelativeAction }));
+vi.mock("../app/hub/tree/kin-actions", () => ({ addRelativeAction }));
 
-import { AddRelativeForm } from "@/app/hub/kin/add-relative-form";
+import { AddRelativeForm } from "@/app/hub/tree/add-relative-form";
 
 const OPTIONS = [
   { id: "partner-a", name: "Partner A" },

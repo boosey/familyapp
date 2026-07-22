@@ -24,7 +24,7 @@ vi.mock("@chronicle/core", async () => {
   };
 });
 
-import { addRelativeAction } from "@/app/hub/kin/actions";
+import { addRelativeAction } from "@/app/hub/tree/kin-actions";
 
 const FAMILY_ID = "fam-1";
 

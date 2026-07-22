@@ -11,7 +11,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { KebabMenu } from "@/app/hub/tree/kebab-menu";
-import { TreeAddProvider, type OpenAddRelative } from "@/app/hub/tree/add-relative-context";
+import { TreeCallbacksProvider, type OpenAddRelative } from "@/app/hub/tree/tree-callbacks-context";
 
 afterEach(cleanup);
 
@@ -34,13 +34,19 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
 /** Render the menu inside a capturing provider and open it (items only exist once open). */
 function open(props: { parentCount: number; partnerCount: number; personId?: string; onAdd?: OpenAddRelative }) {
   render(
-    <TreeAddProvider value={props.onAdd ?? (() => {})}>
+    <TreeCallbacksProvider
+      value={{
+        openAdd: props.onAdd ?? (() => {}),
+        focusPerson: () => {},
+        invitePerson: () => {},
+      }}
+    >
       <KebabMenu
         node={node({ personId: props.personId ?? "n1" })}
         parentCount={props.parentCount}
         partnerCount={props.partnerCount}
       />
-    </TreeAddProvider>,
+    </TreeCallbacksProvider>,
   );
   act(() => {
     screen.getByTestId("tree-kebab-trigger").click();

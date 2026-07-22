@@ -23,14 +23,14 @@ import {
   linkExistingMemberAction,
   listPlacedPersonsAction,
   setMemberNonFamilyAction,
-} from "../tree/actions";
-import { PlaceConfirmModal } from "../tree/place-confirm-modal";
-import type { MintPlacement, PlaceConfirmSubject, PlacementResult } from "../tree/place-confirm";
+} from "./actions";
+import { PlaceConfirmModal } from "./place-confirm-modal";
+import type { MintPlacement, PlaceConfirmSubject, PlacementResult } from "./place-confirm";
 import {
   setActivePlaceDrag,
   writePlaceDrag,
   type PlaceDragPayload,
-} from "../tree/place-drag";
+} from "./place-drag";
 import styles from "./UnplacedMembers.module.css";
 
 /** A person already placed in the tree, offered as an anchor to link an unplaced member to. */

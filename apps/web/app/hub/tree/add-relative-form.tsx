@@ -21,14 +21,14 @@ import type { AddRelativeRelation, UnplacedMember } from "@chronicle/core";
 import type { KinshipNature, PersonSex } from "@chronicle/db";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { linkExistingMemberAction } from "../tree/actions";
+import { linkExistingMemberAction } from "./actions";
 import {
   commitPlaceLink,
   commitPlaceMint,
   resolvePartnerChildrenOffer,
   type MintPlacement,
   type PlacementResult,
-} from "../tree/place-confirm";
+} from "./place-confirm";
 import { matchUnplacedByDisplayName, type UnplacedNameCandidate } from "./match-unplaced";
 
 const PARENT_CHILD_NATURES: readonly KinshipNature[] = [

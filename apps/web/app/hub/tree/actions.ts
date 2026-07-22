@@ -7,7 +7,7 @@
  * then merges the returned nodes/edges into its set. Re-centering (`?root=`) is plain navigation and
  * needs no action.
  *
- * Mirrors /hub/kin/actions.ts discipline: beginLogContext → getRuntime → auth guard → family
+ * Mirrors ./kin-actions.ts discipline: beginLogContext → getRuntime → auth guard → family
  * re-validation against the viewer's OWN active families → core call. `resolveKinshipTree` re-checks
  * membership + applies the subject-hide overlay itself; this is defense in depth. The core read
  * rejects anonymous viewers upstream, so a signed-out caller can never reach kinship data.

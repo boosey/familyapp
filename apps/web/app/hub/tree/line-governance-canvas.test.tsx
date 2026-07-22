@@ -10,7 +10,7 @@ import { TreeCanvas } from "./tree-canvas";
 
 afterEach(cleanup);
 
-vi.mock("../kin/actions", () => ({
+vi.mock("./kin-actions", () => ({
   affirmEdgeAction: vi.fn(async () => undefined),
   denyEdgeAction: vi.fn(async () => undefined),
   hideEdgeAction: vi.fn(async () => undefined),

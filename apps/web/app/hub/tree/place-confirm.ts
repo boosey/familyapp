@@ -10,7 +10,7 @@
  */
 import type { AddRelativeRelation } from "@chronicle/core";
 import type { KinshipNature, PersonSex } from "@chronicle/db";
-import { addRelativeTypedAction } from "../kin/actions";
+import { addRelativeTypedAction } from "./kin-actions";
 import { linkExistingMemberAction } from "./actions";
 import {
   commitPlacement,
