@@ -128,6 +128,17 @@ function browseUnitCount(present: HubControlPresentUnits): number {
     .length;
 }
 
+/** Structural equality — ResizeObserver fires every frame during drag-resize; skip setState when forms are unchanged. */
+function expansionEqual(a: HubControlExpansion, b: HubControlExpansion): boolean {
+  return (
+    a.subTabs === b.subTabs &&
+    a.family === b.family &&
+    a.search === b.search &&
+    a.filters === b.filters &&
+    a.views === b.views
+  );
+}
+
 export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
   const {
     subTabs,
@@ -235,8 +246,9 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
 
     // No useful measurement yet (SSR / first paint before layout) — keep richest defaults.
     if (rowWidth <= 0) {
-      setExpansion(defaultExpansion(presentNow));
-      setActionForm("labeled");
+      const fallback = defaultExpansion(presentNow);
+      setExpansion((prev) => (expansionEqual(prev, fallback) ? prev : fallback));
+      setActionForm((prev) => (prev === "labeled" ? prev : "labeled"));
       return;
     }
 
@@ -263,8 +275,9 @@ export function HubProgressiveControlRow(props: HubProgressiveControlRowProps) {
       widths,
     });
 
-    setActionForm(nextAction);
-    setExpansion(next);
+    // Bail when forms are unchanged — otherwise every resize frame re-commits the row + measure clones.
+    setActionForm((prev) => (prev === nextAction ? prev : nextAction));
+    setExpansion((prev) => (expansionEqual(prev, next) ? prev : next));
   }, []);
 
   useLayoutEffect(() => {
