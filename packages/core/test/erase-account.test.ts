@@ -23,11 +23,13 @@ import {
   invitations,
   invitationDismissals,
   memberships,
+  notificationStreamPrefs,
   persons,
   storyFamilies,
   voiceCaptions,
 } from "@chronicle/db/schema";
 import { eraseAccount } from "../src/erasure-repository";
+import { setNotificationStreamFrequency } from "../src/notification-prefs";
 
 let db: Database;
 beforeEach(async () => {
@@ -302,6 +304,27 @@ describe("eraseAccount — tears down the Google Photos connection (OAuth secret
         .select()
         .from(googlePhotosConnections)
         .where(eq(googlePhotosConnections.personId, person.id)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("eraseAccount — tears down notification stream prefs (hard-delete)", () => {
+  it("deletes notification_stream_prefs rows so the person hard-deletes instead of demoting", async () => {
+    const { person } = await makeAccountPerson("Prefed");
+    // personStillReferenced counts notification_stream_prefs — leftover rows would force demote.
+    await setNotificationStreamFrequency(db, person.id, "family_activity", "daily_digest");
+
+    const result = await eraseAccount(db, { personId: person.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.outcome).toBe("deleted");
+    expect(await db.select().from(persons).where(eq(persons.id, person.id))).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(notificationStreamPrefs)
+        .where(eq(notificationStreamPrefs.personId, person.id)),
     ).toHaveLength(0);
   });
 });

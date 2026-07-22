@@ -656,9 +656,9 @@ export async function eraseAccount(
     }
 
     // (f) The person's own inbound rows that would block their deletion / are theirs to reclaim:
-    //     intake answers (+ their revisions cascade), pending invitations they were INVITED to,
-    //     join requests / link sessions that are theirs, and their Google Photos connection. Kept
-    //     minimal + FK-guided.
+    //     intake answers (+ their revisions cascade), notification stream prefs, pending invitations
+    //     they were INVITED to, join requests / link sessions that are theirs, and their Google
+    //     Photos connection. Kept minimal + FK-guided.
     await tx.delete(intakeAnswers).where(eq(intakeAnswers.personId, personId));
     await tx
       .delete(notificationStreamPrefs)
