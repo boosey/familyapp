@@ -313,10 +313,11 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   audited authorization read**, so each person's digest contains only what they may see, and never
   their own activity. Contrast with an event Notification, which fires on a single triggering event.
 - **Notification stream** — a category of Notification a Person sets a frequency for independently
-  (`every item` | `daily digest` | `weekly digest`). Three streams: **questions-for-me** (default
-  daily), **answers-to-my-asks** (default every item — it is the payoff), **family activity**
-  (default weekly). One event may feed two streams (an answered Ask rewards the asker *and* enters
-  everyone else's family-activity digest), de-duplicated so no one is told twice.
+  (`every item` | `daily digest` | `weekly digest` | `off`). Three streams: **questions-for-me**,
+  **answers-to-my-asks**, and **family activity** — all default to `every item` (absent preference
+  means every item; `off` is first-class silence for that stream). One event may feed two streams
+  (an answered Ask rewards the asker *and* enters everyone else's family-activity digest),
+  de-duplicated so no one is told twice.
 - **Social loop** — the retention pattern where one Person's contribution (a shared Story, an Ask)
   generates a Notification to the rest of the family, whose response (listening, asking back)
   generates the next. The family's own warmth is the fuel; no external data source is required.
