@@ -235,7 +235,7 @@ export default async function HubPage({
   // shows it, and only while the biographical intake is unfinished.
   const intakeIncomplete = !isBiographicalProfileComplete(viewerRow?.biographicalAnchors ?? {});
 
-  // Issue #124 (Playful de-clutter): the primary nav is exactly FOUR tabs — Stories · Album · Family
+  // Issue #124 (Scrapbook de-clutter): the primary nav is exactly FOUR tabs — Stories · Album · Family
   // · Questions — with no global "Tell a story" CTA (the single Tell affordance lives on the Stories
   // tab, #125) and no "More ▾" overflow menu. Two surfaces fold onto a primary tab, each switched by a
   // secondary sub-nav below: the three ask surfaces (questions/ask/asks) fold onto Questions, and the

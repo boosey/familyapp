@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * QuestionsTab (issue #208) — asserts the to-answer inbox cards render their CSS-module classes and
- * carry the Playful decorative signature, AND that QuestionsTab.module.css declares both the
- * data-skin="playful" signature block and the reduce-motion / solemn suppression block. Mirrors
+ * carry the Scrapbook decorative signature, AND that QuestionsTab.module.css declares both the
+ * data-skin="scrapbook" signature block and the reduce-motion / solemn suppression block. Mirrors
  * StoryCard.test.tsx; the CSS-file assertions follow the contrast.test.ts pattern of reading the
  * stylesheet source.
  */
@@ -32,7 +32,7 @@ function makeAsk(id: string): PendingAskForNarrator {
 
 afterEach(cleanup);
 
-describe("QuestionsTab — playful signature", () => {
+describe("QuestionsTab — Scrapbook signature", () => {
   it("renders each ask as a card with the module card + question + action classes", () => {
     render(<QuestionsTab asks={[makeAsk("a1")]} draftsByAskId={{}} />);
     const question = screen.getByText("Tell me about the boat #a1");
@@ -67,8 +67,8 @@ describe("QuestionsTab — playful signature", () => {
     expect(container.querySelector(`.${styles.empty}`)).toBeTruthy();
   });
 
-  it("QuestionsTab.module.css declares the playful signature block", () => {
-    expect(css).toContain(':global(:root[data-skin="playful"])');
+  it("QuestionsTab.module.css declares the Scrapbook signature block", () => {
+    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
     expect(css).toMatch(/rotate\(var\(--tilt/);
     expect(css).toContain("var(--tape-bg)");
     expect(css).toContain("var(--highlighter)");

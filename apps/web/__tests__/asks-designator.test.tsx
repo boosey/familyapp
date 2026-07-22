@@ -125,7 +125,7 @@ describe("AsksDesignator — seed + list scoping (no write-back)", () => {
   });
 });
 
-describe("AsksDesignator — playful signature (issue #208)", () => {
+describe("AsksDesignator — Scrapbook signature (issue #208)", () => {
   const css = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "../app/hub/tabs/AsksDesignator.module.css"),
     "utf8",
@@ -156,8 +156,8 @@ describe("AsksDesignator — playful signature (issue #208)", () => {
     expect(container.querySelector(`.${askStyles.status}`)).toBeTruthy();
   });
 
-  it("module CSS declares the playful signature + suppression blocks", () => {
-    expect(css).toContain(':global(:root[data-skin="playful"])');
+  it("module CSS declares the Scrapbook signature + suppression blocks", () => {
+    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
     expect(css).toMatch(/rotate\(var\(--tilt/);
     expect(css).toContain("var(--tape-bg)");
     expect(css).toContain("var(--highlighter)");

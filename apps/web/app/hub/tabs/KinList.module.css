@@ -1,9 +1,9 @@
 /*
  * KinList — Family → List relatives. Base chrome is token-driven & skin-neutral (reproduces the
- * former inline values 1:1). Playful Phase-2 is deliberately restrained for a dense searchable list:
+ * former inline values 1:1). Scrapbook Phase-2 is deliberately restrained for a dense searchable list:
  * soft hover-lift + stickerized relation chip only — no tape, tilt, or highlighter (those fight
  * scanability; StoryCard / QuestionsTab keep the full scrapbook kit). Signatures are skin-scoped via
- * :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * :global(:root[data-skin="scrapbook"]) and suppressed under reduce-motion / solemn.
  * See apps/web/app/_skins/CSS-MODULES.md.
  */
 
@@ -105,20 +105,20 @@
   margin: 0;
 }
 
-/* ---- Playful structural signatures (restrained) ---------------------------------------------
+/* ---- Scrapbook structural signatures (restrained) ---------------------------------------------
    Dense-list kit: hover-lift on rows + sticker chip on the relation label. No tape / tilt /
    highlighter — those belong on scrapbook cards, not a searchable kin roster. */
 
-:global(:root[data-skin="playful"]) .row {
+:global(:root[data-skin="scrapbook"]) .row {
   transition: transform var(--dur-settle) var(--ease-quiet),
     box-shadow var(--dur-settle) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .row:hover {
+:global(:root[data-skin="scrapbook"]) .row:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lift);
 }
 
-:global(:root[data-skin="playful"]) .relation {
+:global(:root[data-skin="scrapbook"]) .relation {
   background: var(--sticker-sky-bg);
   color: var(--sticker-sky-ink);
   border-radius: var(--radius-pill);
@@ -127,19 +127,19 @@
 }
 
 /* Suppress structural signatures under reduce-motion OR solemn.
-   Solemn uses the stronger `:root[data-skin="playful"] [data-tone="solemn"]` form so it out-specifies
-   the playful rules when tone is on a container (see StoryDetailClient.module.css / #227). */
+   Solemn uses the stronger `:root[data-skin="scrapbook"] [data-tone="solemn"]` form so it out-specifies
+   the Scrapbook rules when tone is on a container (see StoryDetailClient.module.css / #227). */
 :global(:root[data-reduce-motion="on"]) .row,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .row {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .row {
   transition: none;
 }
 :global(:root[data-reduce-motion="on"]) .row:hover,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .row:hover {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .row:hover {
   transform: none;
   box-shadow: none;
 }
 :global(:root[data-reduce-motion="on"]) .relation,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .relation {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .relation {
   background: none;
   color: var(--text-muted);
   padding: 0;

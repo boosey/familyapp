@@ -3,7 +3,7 @@
  * port of the former inline `CSSProperties` objects (values already token-driven). The Masonry/Column
  * feed-view selector, the Feed/Timeline mode toggle, and the timeline's widen toggle now all route
  * through the shared _kindred/SegmentedControl (#1/#5), so this file no longer carries any pill styling.
- * No Playful structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
+ * No Scrapbook structural signatures here — this surface is pure chrome. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
 /* The former bespoke `.segmentGroup`/`.modePill` view/mode pills were removed once every selector moved

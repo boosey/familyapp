@@ -15,7 +15,7 @@
  * family-less ask would otherwise never appear and silently vanish), we keep such asks visible under
  * EVERY designated family — they belong to the asker regardless of family context. See the filter below.
  *
- * Styling lives in AsksDesignator.module.css (token-driven base + skin-scoped Playful signatures:
+ * Styling lives in AsksDesignator.module.css (token-driven base + skin-scoped Scrapbook signatures:
  * tilt/tape/highlighter/sticker status pill/hover-lift, suppressed under reduce-motion / solemn).
  * Tilt math stays in TS (card-tilt). See apps/web/app/_skins/CSS-MODULES.md.
  */

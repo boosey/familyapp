@@ -61,10 +61,23 @@ describe("KindredSkinPicker", () => {
     expect(document.documentElement.getAttribute("data-skin")).toBe("heirloom");
   });
 
+  it("shows Scrapbook (not Playful) as the warm-skin label", () => {
+    render(<KindredSkinPicker />);
+    expect(screen.getByLabelText(hub.settings.skinLabels.scrapbook)).toBeTruthy();
+    expect(screen.getByText(hub.settings.skinShort.scrapbook).textContent).toBe("Scrapbook");
+    expect(screen.queryByText("Playful")).toBeNull();
+  });
+
   it("re-applies the stored skin on mount", () => {
     localStorage.setItem(PREFERENCES.skin.storageKey, "heirloom");
     render(<KindredSkinPicker />);
     expect(document.documentElement.getAttribute("data-skin")).toBe("heirloom");
+  });
+
+  it("coerces stale kin-skin=playful to scrapbook on mount", () => {
+    localStorage.setItem(PREFERENCES.skin.storageKey, "playful");
+    render(<KindredSkinPicker />);
+    expect(document.documentElement.getAttribute("data-skin")).toBe("scrapbook");
   });
 });
 

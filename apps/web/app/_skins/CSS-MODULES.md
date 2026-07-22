@@ -10,7 +10,7 @@ signatures require classes. Rules:
 4. **Skin signatures hook hashed classes via `:global`:**
    ```css
    .card { /* base, token-driven, skin-neutral */ }
-   :global(:root[data-skin="playful"]) .card:nth-child(odd) { transform: rotate(-0.6deg); }
+   :global(:root[data-skin="scrapbook"]) .card:nth-child(odd) { transform: rotate(-0.6deg); }
    ```
 5. **Every structural signature is suppressed under reduce-motion OR solemn:**
    ```css

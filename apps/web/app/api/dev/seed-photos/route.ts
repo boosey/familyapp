@@ -1,5 +1,5 @@
 /**
- * PREVIEW-ONLY, auth-gated demo seed for the hub Stories masonry (visual review of the Playful skin).
+ * PREVIEW-ONLY, auth-gated demo seed for the hub Stories masonry (visual review of the Scrapbook skin).
  *
  * POST `/api/dev/seed-photos` seeds three stories OWNED BY the authenticated caller — a 0-photo
  * text-only card, a 1-photo card, and a 2-photo collage card — so the hub feed shows every varied

@@ -14,7 +14,7 @@
  * state only for deny/hide (affirm/correct must keep the edge visible - TreeCanvas merge won't
  * restore a wrongly pruned edge when only `state`/`nature` changed).
  *
- * Layout: KinEdgeControls.module.css (token-only). Playful Phase-2 signatures live on the shared
+ * Layout: KinEdgeControls.module.css (token-only). Scrapbook Phase-2 signatures live on the shared
  * GovernableEdgeList `.edge` card — not on these controls (#265).
  */
 import { useState, useTransition } from "react";

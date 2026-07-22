@@ -141,7 +141,7 @@ it("shows nature picker on steward parent_of only and submits correctEdgeAction 
   expect(formData.get("edgeType")).toBe("parent_of");
 });
 
-describe("GovernableEdgesSection — playful signature (#265)", () => {
+describe("GovernableEdgesSection — Scrapbook signature (#265)", () => {
   it("renders section / heading / intro / list / edge / sentence with module classes", () => {
     render(
       <GovernableEdgesSection
@@ -161,8 +161,8 @@ describe("GovernableEdgesSection — playful signature (#265)", () => {
     );
   });
 
-  it("GovernableEdgeList.module.css declares the restrained playful signature block", () => {
-    expect(css).toContain(':global(:root[data-skin="playful"])');
+  it("GovernableEdgeList.module.css declares the restrained Scrapbook signature block", () => {
+    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
     expect(css).toContain("var(--shadow-lift)");
     // Dense stewardship guardrail: no full-scrapbook markers (tape / tilt / highlighter).
     expect(css).not.toContain("var(--tape-bg)");
@@ -172,7 +172,7 @@ describe("GovernableEdgesSection — playful signature (#265)", () => {
 
   it("GovernableEdgeList.module.css declares the reduce-motion + solemn suppression block", () => {
     expect(css).toContain(':global(:root[data-reduce-motion="on"])');
-    expect(css).toContain(':global(:root[data-skin="playful"] [data-tone="solemn"])');
+    expect(css).toContain(':global(:root[data-skin="scrapbook"] [data-tone="solemn"])');
     expect(css).toMatch(/transform:\s*none/);
   });
 });

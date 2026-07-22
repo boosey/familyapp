@@ -139,7 +139,7 @@ describe("KinList", () => {
   });
 });
 
-describe("KinList — playful signature (#266)", () => {
+describe("KinList — Scrapbook signature (#266)", () => {
   it("renders rows / search / relation with module classes", () => {
     render(<KinList people={PEOPLE} />);
     expect(screen.getByRole("searchbox", { name: hub.kin.searchAria }).className).toContain(
@@ -156,8 +156,8 @@ describe("KinList — playful signature (#266)", () => {
     expect(container.querySelector(`.${styles.empty}`)).toBeTruthy();
   });
 
-  it("KinList.module.css declares the restrained playful signature block", () => {
-    expect(css).toContain(':global(:root[data-skin="playful"])');
+  it("KinList.module.css declares the restrained Scrapbook signature block", () => {
+    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
     expect(css).toContain("var(--shadow-lift)");
     expect(css).toContain("var(--sticker-sky-bg)");
     // Dense-list guardrail: no full-scrapbook markers (tape / tilt / highlighter).
@@ -168,14 +168,14 @@ describe("KinList — playful signature (#266)", () => {
 
   it("KinList.module.css declares the reduce-motion + solemn suppression block", () => {
     expect(css).toContain(':global(:root[data-reduce-motion="on"])');
-    expect(css).toContain(':global(:root[data-skin="playful"] [data-tone="solemn"])');
+    expect(css).toContain(':global(:root[data-skin="scrapbook"] [data-tone="solemn"])');
     expect(css).toMatch(/transform:\s*none/);
     // Sticker chip (relation) must reset under both axes — not only the hover-lift.
     expect(css).toMatch(
       /:global\(:root\[data-reduce-motion="on"\]\) \.relation[\s\S]*?background:\s*none/,
     );
     expect(css).toMatch(
-      /:global\(:root\[data-skin="playful"\] \[data-tone="solemn"\]\) \.relation[\s\S]*?background:\s*none/,
+      /:global\(:root\[data-skin="scrapbook"\] \[data-tone="solemn"\]\) \.relation[\s\S]*?background:\s*none/,
     );
   });
 });

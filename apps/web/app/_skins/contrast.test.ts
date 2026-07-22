@@ -1,4 +1,4 @@
-// Regression guard for the Playful accent contrast fix.
+// Regression guard for the Scrapbook accent contrast fix.
 //
 // The first cut shipped `--accent-on: #FFFFFF` on `--accent: #EF7A54` — white on bright coral is
 // 2.77:1, which fails WCAG AA (below even the 3.0 large-text bar). This test parses the skin token
@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (p: string) => readFileSync(join(here, p), "utf8");
-const playful = read("./playful.css");
+const scrapbook = read("./scrapbook.css");
 const heirloom = read("../_kindred/tokens.css"); // heirloom = the base/default skin (see tokens.css)
 
 /**
@@ -57,7 +57,7 @@ function contrast(a: string, b: string): number {
 }
 
 const AA = 4.5;
-// Playful's accent is BRIGHT CORAL by owner decision (approved "Playful & warm" mockup, 2026-07-17):
+// Scrapbook's accent is BRIGHT CORAL by owner decision (approved "Scrapbook & warm" mockup, 2026-07-17):
 // white on #EF7A54 is 2.77:1, below AA, and that is the intended brand look ("i want the brighter
 // colors, that is exactly why we started this"). So the bright-coral + candy-sticker pairs are NOT
 // held to AA — only to a legibility FLOOR that still trips a truly-invisible regression. Body reading
@@ -87,10 +87,10 @@ const HEIRLOOM_ACCENT_PAIRS = [
   ["--accent-strong", "--surface-page"],
 ] as const;
 
-// Playful's intentional brand pairs — bright coral fills + candy stickers. Below AA by design; guarded
+// Scrapbook's intentional brand pairs — bright coral fills + candy stickers. Below AA by design; guarded
 // only against total illegibility. If any of these ever needs strict AA, that's a design decision, not
 // a silent token drift.
-const PLAYFUL_BRAND_PAIRS = [
+const SCRAPBOOK_BRAND_PAIRS = [
   ["--accent-on", "--accent"], // white on bright coral button (2.77:1 — brand)
   ["--accent-on", "--accent-strong"], // white on deeper coral (hover)
   ["--accent-strong", "--surface-card"], // accent-coloured text on light
@@ -110,7 +110,7 @@ function assertAA(css: string, fg: string, bg: string): void {
 }
 
 describe("skin contrast", () => {
-  for (const [name, css] of [["playful", playful], ["heirloom", heirloom]] as const) {
+  for (const [name, css] of [["scrapbook", scrapbook], ["heirloom", heirloom]] as const) {
     it(`${name}: body reading text meets AA`, () => {
       for (const [fg, bg] of BODY_TEXT_PAIRS) assertAA(css, fg, bg);
     });
@@ -135,9 +135,9 @@ describe("skin contrast", () => {
     });
   }
 
-  it("playful: bright brand pairs stay above the legibility floor (below AA by owner choice)", () => {
-    for (const [fg, bg] of PLAYFUL_BRAND_PAIRS) {
-      const ratio = contrast(tokenHex(playful, fg), tokenHex(playful, bg));
+  it("Scrapbook: bright brand pairs stay above the legibility floor (below AA by owner choice)", () => {
+    for (const [fg, bg] of SCRAPBOOK_BRAND_PAIRS) {
+      const ratio = contrast(tokenHex(scrapbook, fg), tokenHex(scrapbook, bg));
       expect(
         ratio,
         `${fg} on ${bg} was ${ratio.toFixed(2)}:1 (brand pair; need >= ${BRAND_FLOOR})`,

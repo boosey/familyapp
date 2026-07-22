@@ -33,7 +33,7 @@ export interface HubTabsProps {
 }
 
 /**
- * Issue #124 (Playful de-clutter): the primary hub nav renders exactly the four primary tabs, each
+ * Issue #124 (Scrapbook de-clutter): the primary hub nav renders exactly the four primary tabs, each
  * with an optional numeric badge (the Family tab badges the steward's pending join-request count; the
  * Questions tab badges pending asks). There is no longer a global "＋ Tell a story" CTA (a single
  * Tell-a-story affordance lives on the Stories tab, #125) and no "More ▾" overflow menu — the two

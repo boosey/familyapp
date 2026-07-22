@@ -1,7 +1,7 @@
 /*
  * StoryDetailClient — the story READ surface. Base is token-driven and skin-neutral (it reproduces
- * the former inline styles 1:1, values already tokenized); the Playful structural signatures are
- * skin-scoped via :global(:root[data-skin="playful"]) and suppressed under reduce-motion / solemn.
+ * the former inline styles 1:1, values already tokenized); the Scrapbook structural signatures are
+ * skin-scoped via :global(:root[data-skin="scrapbook"]) and suppressed under reduce-motion / solemn.
  * The signature mirrors StoryCard (highlighter title, sticker tags, tape+tilt+hover-lift) but the
  * tilt/tape/lift ride the MEDIA block only — the page itself is full-width and static, so a wobbling
  * page would read as a bug. The reactions row gets warmth (a soft panel), never tilt. See
@@ -190,7 +190,7 @@
   margin-top: 12px;
 }
 
-/* ---- Manage-sharing modal (light playful: warmth only, no stickers/tape/tilt) ---------------- */
+/* ---- Manage-sharing modal (light Scrapbook: warmth only, no stickers/tape/tilt) ---------------- */
 .modalScrim {
   position: fixed;
   inset: 0;
@@ -233,7 +233,7 @@
   margin-top: 8px;
 }
 
-/* Shared light-playful buttons: gentle depth, warm focus, rounder — NO tilt/tape/stickers. */
+/* Shared light-Scrapbook buttons: gentle depth, warm focus, rounder — NO tilt/tape/stickers. */
 .btnGhost {
   padding: 8px 16px;
   border-radius: var(--radius-pill);
@@ -268,8 +268,8 @@
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--dur-fade) var(--ease-quiet), transform var(--dur-fade) var(--ease-quiet);
 }
-/* Light playful: the primary CTA carries the warm coral→amber gradient + a soft lift on hover. */
-:global(:root[data-skin="playful"]) .btnPrimary {
+/* Light Scrapbook: the primary CTA carries the warm coral→amber gradient + a soft lift on hover. */
+:global(:root[data-skin="scrapbook"]) .btnPrimary {
   background: var(--accent-gradient);
 }
 .btnPrimary:hover:not(:disabled) {
@@ -297,11 +297,11 @@
 }
 
 /* ===========================================================================================
-   Playful structural signatures — skin-scoped, suppressed under reduce-motion / solemn below.
+   Scrapbook structural signatures — skin-scoped, suppressed under reduce-motion / solemn below.
    =========================================================================================== */
 
 /* Highlighter wash behind the title (text stays --text-body). */
-:global(:root[data-skin="playful"]) .title {
+:global(:root[data-skin="scrapbook"]) .title {
   background-image: linear-gradient(var(--highlighter), var(--highlighter));
   background-repeat: no-repeat;
   background-position: 0 82%;
@@ -310,7 +310,7 @@
 
 /* Warmer reactions row — a soft card panel with the shelf shadow so the actions feel tactile
    rather than floating flat on the page. Reuses existing surface/shadow/radius tokens. */
-:global(:root[data-skin="playful"]) .reactions {
+:global(:root[data-skin="scrapbook"]) .reactions {
   padding: 10px 14px;
   background: var(--surface-card);
   border: var(--border-width) solid var(--border);
@@ -320,17 +320,17 @@
 
 /* Tape strip + tilt + hover-lift on the MEDIA block (the one card-like element on the page). The
    tilt reads from the inline --tilt custom property (parity math stays in TS, per convention). */
-:global(:root[data-skin="playful"]) .mediaBlock {
+:global(:root[data-skin="scrapbook"]) .mediaBlock {
   transform: rotate(var(--tilt, 0deg));
   transition: transform var(--dur-settle) var(--ease-quiet),
     box-shadow var(--dur-settle) var(--ease-quiet);
   border-radius: var(--radius-md);
 }
-:global(:root[data-skin="playful"]) .mediaBlock:hover {
+:global(:root[data-skin="scrapbook"]) .mediaBlock:hover {
   transform: rotate(0deg) translateY(-2px);
   box-shadow: var(--shadow-lift);
 }
-:global(:root[data-skin="playful"]) .mediaBlock::before {
+:global(:root[data-skin="scrapbook"]) .mediaBlock::before {
   content: "";
   position: absolute;
   top: -10px;
@@ -344,19 +344,19 @@
 }
 
 /* ---- Suppress ALL structural signatures under reduce-motion OR solemn ------------------------
-   The solemn suppressors carry the `:root[data-skin="playful"]` prefix DELIBERATELY: the playful
-   rules above are `:root[data-skin="playful"] .x` (specificity 0,3,0), and `data-tone="solemn"` is
+   The solemn suppressors carry the `:root[data-skin="scrapbook"]` prefix DELIBERATELY: the Scrapbook
+   rules above are `:root[data-skin="scrapbook"] .x` (specificity 0,3,0), and `data-tone="solemn"` is
    applied on a CONTAINER (never on <html>), so a bare `[data-tone="solemn"] .x` (0,2,0) would LOSE
    the cascade and fail to suppress. Prefixing with the always-present root skin attribute makes the
-   suppressor `:root[data-skin="playful"] [data-tone="solemn"] .x` (0,4,0) — it out-specifies the
-   playful rule and matches container-applied solemn. Reduce-motion suppressors already win (they use
-   `:root`, tie 0,3,0, and come later in source). Guarded by light-playful-suppression.test.ts. */
+   suppressor `:root[data-skin="scrapbook"] [data-tone="solemn"] .x` (0,4,0) — it out-specifies the
+   Scrapbook rule and matches container-applied solemn. Reduce-motion suppressors already win (they use
+   `:root`, tie 0,3,0, and come later in source). Guarded by light-Scrapbook-suppression.test.ts. */
 :global(:root[data-reduce-motion="on"]) .title,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .title {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .title {
   background-image: none;
 }
 :global(:root[data-reduce-motion="on"]) .reactions,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .reactions {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .reactions {
   padding: 0;
   background: none;
   border: none;
@@ -364,21 +364,21 @@
   box-shadow: none;
 }
 :global(:root[data-reduce-motion="on"]) .mediaBlock,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .mediaBlock {
   transform: none;
   box-shadow: none;
 }
 :global(:root[data-reduce-motion="on"]) .mediaBlock:hover,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock:hover {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .mediaBlock:hover {
   transform: none;
   box-shadow: none;
 }
 :global(:root[data-reduce-motion="on"]) .mediaBlock::before,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .mediaBlock::before {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .mediaBlock::before {
   display: none;
 }
-/* The primary CTA's gradient is a playful color signature (not motion): revert it to the solid accent
+/* The primary CTA's gradient is a Scrapbook color signature (not motion): revert it to the solid accent
    under solemn only. Left intact under reduce-motion (a gradient is not motion). */
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .btnPrimary {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .btnPrimary {
   background: var(--accent);
 }

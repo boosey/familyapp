@@ -1,7 +1,7 @@
 /**
- * Deterministic per-story card layout picker for the Playful masonry feed.
+ * Deterministic per-story card layout picker for the Scrapbook masonry feed.
  *
- * The approved "Playful & warm" mockup mixes card layouts so the feed reads like an editorial
+ * The approved "Scrapbook & warm" mockup mixes card layouts so the feed reads like an editorial
  * scrapbook rather than the same photo-top tile repeating. This module assigns each story a layout
  * that is (a) CONSTRAINED by the story's actual photos — a photo layout is never chosen for a
  * photoless story — and (b) VARIED by a stable hash of the story id, so the same story always gets

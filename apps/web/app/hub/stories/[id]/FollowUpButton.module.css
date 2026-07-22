@@ -1,8 +1,8 @@
 /*
- * FollowUpButton — the "Ask a follow-up" affordance + inline panel (#77). LIGHT PLAYFUL: warmth
+ * FollowUpButton — the "Ask a follow-up" affordance + inline panel (#77). LIGHT Scrapbook: warmth
  * only — a rounder pill trigger, gentle depth on the panel and primary button, a warm hover/focus.
  * NO stickers / tape / tilt (this is a form, not a decorative surface). Token-driven; the primary
- * button picks up the warm coral→amber gradient under Playful. See _skins/CSS-MODULES.md.
+ * button picks up the warm coral→amber gradient under Scrapbook. See _skins/CSS-MODULES.md.
  */
 
 /* Pill trigger — reads as a friendly chip; warms on hover/focus. */
@@ -120,7 +120,7 @@
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--dur-fade) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .btnPrimary {
+:global(:root[data-skin="scrapbook"]) .btnPrimary {
   background: var(--accent-gradient);
 }
 .btnPrimary:hover:not(:disabled) {
@@ -146,10 +146,10 @@
 :global([data-tone="solemn"]) .btnPrimary:hover {
   box-shadow: none;
 }
-/* The gradient is a playful COLOR signature (not motion): revert to the solid accent under solemn
-   only. The prefix `:root[data-skin="playful"]` (specificity 0,4,0) out-specifies the playful gradient
-   rule above (`:root[data-skin="playful"] .btnPrimary`, 0,3,0) and matches container-applied solemn;
+/* The gradient is a Scrapbook COLOR signature (not motion): revert to the solid accent under solemn
+   only. The prefix `:root[data-skin="scrapbook"]` (specificity 0,4,0) out-specifies the Scrapbook gradient
+   rule above (`:root[data-skin="scrapbook"] .btnPrimary`, 0,3,0) and matches container-applied solemn;
    a bare `[data-tone="solemn"]` (0,2,0) would lose the cascade. Left intact under reduce-motion. */
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .btnPrimary {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .btnPrimary {
   background: var(--accent);
 }

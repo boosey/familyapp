@@ -752,16 +752,16 @@ Decided 2026-07-17. Spec: `docs/99-pruned/superpowers/specs/2026-07-17-invite-de
     justified yet; noted here so it's a conscious, revisitable deferral rather than an
     overlooked gap.
 
-## Family-tree cards stay plain — no Playful decorative signature (issue #223, 2026-07-19)
+## Family-tree cards stay plain — no Scrapbook decorative signature (issue #223, 2026-07-19)
 
 Decided 2026-07-19 by the owner after reviewing rendered options (interactive specimen of Plain /
-Restrained / Full-scrapbook treatments in the real Playful palette). Split from #210; sibling
+Restrained / Full-scrapbook treatments in the real Scrapbook palette). Split from #210; sibling
 onboarding decision is #222; folds into the exclusion review #206.
 
 - **The tree cards (`hub/tree/person-node.tsx`, `hub/tree/person-details.tsx`) keep their
   token-driven-but-flat state as the intended end state. No tape, tilt, sticker chips, highlighter,
   or shadow-shelf.** This is a deliberate design decision, NOT a missed Phase-2 migration. The 2026-07-19
-  playful-skin audit correctly flagged them as taste-sensitive; the owner's call is that on this surface
+  scrapbook-skin audit correctly flagged them as taste-sensitive; the owner's call is that on this surface
   **readability wins over decorative warmth.**
   - The tree is a dense, information-first surface: every card is a *person* (many deceased, shown as
     `1924–2009`), and the cards are wired together by a descent-connector grid that carries meaning.

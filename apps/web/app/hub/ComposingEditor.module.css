@@ -1,7 +1,7 @@
 /*
  * ComposingEditor — the live story-composing / capture surface. The whole subtree is tone="solemn"
  * (set on `.capture` in ComposingEditor.tsx): this is the emotional core, so it stays calm — NO
- * Playful tilt/tape/highlighter. Token-driven; a straight port of the capture-chrome inline styles
+ * Scrapbook tilt/tape/highlighter. Token-driven; a straight port of the capture-chrome inline styles
  * (the persistent capture footer + the voice/type mode toggles). See _skins/CSS-MODULES.md.
  */
 

@@ -1,10 +1,10 @@
 /**
- * Light-playful suppression regression (#209, cold-review follow-up).
+ * Light-Scrapbook suppression regression (#209, cold-review follow-up).
  *
- * The three "light playful" story-detail form surfaces (StoryEditor, FollowUpButton, OwnerActionMenu)
+ * The three "light Scrapbook" story-detail form surfaces (StoryEditor, FollowUpButton, OwnerActionMenu)
  * each carry exactly one decorative warmth treatment, and the acceptance criteria require every such
  * treatment to be suppressed under the right tone/motion axes. The suppression is CSS-only (jsdom can't
- * compute it), so — like StoryDetailClient.playful.test.tsx — these assert the guard selectors exist in
+ * compute it), so — like StoryDetailClient.scrapbook.test.tsx — these assert the guard selectors exist in
  * the module SOURCE. This closes the gap the cold reviewer flagged: without it, a future refactor of
  * these three modules could silently drop a suppressor with no red test.
  *
@@ -32,7 +32,7 @@ function guardCovers(css: string, attr: string, className: string): boolean {
 const REDUCE_MOTION = 'data-reduce-motion="on"';
 const SOLEMN = 'data-tone="solemn"';
 
-describe("Light-playful form surfaces — suppression guards (#209)", () => {
+describe("Light-Scrapbook form surfaces — suppression guards (#209)", () => {
   it("StoryEditor drops the warm focus glow under solemn (glow is not motion)", () => {
     const css = readModule("StoryEditor.module.css");
     expect(guardCovers(css, SOLEMN, "textField")).toBe(true);
@@ -42,10 +42,10 @@ describe("Light-playful form surfaces — suppression guards (#209)", () => {
     const css = readModule("FollowUpButton.module.css");
     expect(guardCovers(css, REDUCE_MOTION, "btnPrimary")).toBe(true);
     expect(guardCovers(css, SOLEMN, "btnPrimary")).toBe(true);
-    // The playful gradient (`:root[data-skin="playful"] .btnPrimary`, 0,3,0) must be reverted by a
+    // The Scrapbook gradient (`:root[data-skin="scrapbook"] .btnPrimary`, 0,3,0) must be reverted by a
     // cascade-WINNING solemn rule: data-skin + data-tone in the same selector (0,4,0). A bare
     // `[data-tone="solemn"]` (0,2,0) would lose, leaving a warm gradient button in a solemn context.
-    expect(/\[data-skin="playful"\][^{]*\[data-tone="solemn"\][^{]*\.btnPrimary/.test(css)).toBe(true);
+    expect(/\[data-skin="scrapbook"\][^{]*\[data-tone="solemn"\][^{]*\.btnPrimary/.test(css)).toBe(true);
   });
 
   it("OwnerActionMenu collapses confirm-button depth under BOTH reduce-motion and solemn", () => {

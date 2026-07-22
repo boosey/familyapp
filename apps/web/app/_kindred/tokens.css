@@ -52,7 +52,7 @@
   /* Error/danger ink — a deep brick red that reads clearly on the warm paper surfaces and harmonizes
    * with the terracotta family. AA-guarded on surface-card/page by _skins/contrast.test.ts. Consumed by
    * form/validation error text across the app (was previously an UNDEFINED token with a hardcoded #b00
-   * fallback that always rendered — see the contrast guard). Playful overrides with a brighter red;
+   * fallback that always rendered — see the contrast guard). Scrapbook overrides with a brighter red;
    * the archive/hearth theme variants override with hue-matched reds. */
   --text-danger: #A4291B;
   /* Neutral modal/dialog backdrop scrim — theme- and skin-neutral (both skins inherit this base value).
@@ -70,7 +70,7 @@
   --highlighter: #EFE0C4;
   /* "Tell a story" invite-card fill — heirloom keeps a quiet solid accent (no gradient). */
   --tell-card-bg: var(--accent);
-  --accent-gradient: var(--accent); /* heirloom stays solid; Playful overrides with a coral→amber gradient */
+  --accent-gradient: var(--accent); /* heirloom stays solid; Scrapbook overrides with a coral→amber gradient */
   --sticker-coral-bg: #F3DACE;  --sticker-coral-ink: #9E4830;
   --sticker-sky-bg:   #DCE6EC;  --sticker-sky-ink:   #3C566A;
   --sticker-leaf-bg:  #DEE4D6;  --sticker-leaf-ink:  #4C5B3A;
@@ -119,7 +119,7 @@
  *     a dedicated `[data-skin="heirloom"]` palette block would out-specify and break them), and its
  *     LANGUAGE tokens are the block below. The `:root[data-skin="heirloom"]` selector is listed
  *     explicitly on that block so `data-skin="heirloom"` is a REAL, greppable selector, not inert.
- *   • "playful" — a full skin in `_skins/playful.css` that bakes in its own palette + language.
+ *   • "scrapbook" — a full skin in `_skins/scrapbook.css` that bakes in its own palette + language.
  * The per-skin token contract both must satisfy is `_skins/skin-contract.ts` (guard test). */
 :root, :root[data-skin="heirloom"] {
   /* fonts — next/font injects the variables; these add the fallbacks */

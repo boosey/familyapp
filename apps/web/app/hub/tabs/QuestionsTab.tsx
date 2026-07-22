@@ -17,7 +17,7 @@ interface QuestionsTabProps {
  * "Answer" (no draft recorded yet) and "Review & approve" (draft exists). Both states link to
  * /hub/answer/[askId] — the full-screen in-hub record→review page. Server component.
  *
- * Styling lives in QuestionsTab.module.css (token-driven base + skin-scoped Playful signatures:
+ * Styling lives in QuestionsTab.module.css (token-driven base + skin-scoped Scrapbook signatures:
  * tilt/tape/highlighter/sticker/hover-lift, suppressed under reduce-motion / solemn). Tilt math
  * stays in TS (card-tilt) per the repo convention. See apps/web/app/_skins/CSS-MODULES.md.
  */

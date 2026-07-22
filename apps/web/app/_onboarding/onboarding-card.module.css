@@ -1,8 +1,8 @@
 /*
- * Shared onboarding-card module — base primitives (token-driven, skin-neutral) + the Playful
+ * Shared onboarding-card module — base primitives (token-driven, skin-neutral) + the Scrapbook
  * "full signature" (shadow-shelf, tape strip, highlighter wash, sticker eyebrow). The base classes
  * reproduce the former inline WelcomeFlow / AboutYouFlow / join primitives 1:1, so nothing changes
- * under the neutral skin; the signatures are skin-scoped via :global(:root[data-skin="playful"]) and
+ * under the neutral skin; the signatures are skin-scoped via :global(:root[data-skin="scrapbook"]) and
  * suppressed under reduce-motion / solemn. Mirrors StoryCard.module.css. See _skins/CSS-MODULES.md.
  */
 
@@ -68,16 +68,16 @@
   margin: 20px 0 0;
 }
 
-/* ---- Playful "full signature" ------------------------------------------------------------------
+/* ---- Scrapbook "full signature" ------------------------------------------------------------------
    All hook the hashed classes via :global and are suppressed under reduce-motion / solemn below. */
 
 /* Chunky shadow-shelf replacing the soft float. */
-:global(:root[data-skin="playful"]) .card {
+:global(:root[data-skin="scrapbook"]) .card {
   box-shadow: var(--shadow-card);
 }
 
 /* Tape strip — decorative bright coral fill, no text ever sits on it (mirrors StoryCard geometry). */
-:global(:root[data-skin="playful"]) .card::before {
+:global(:root[data-skin="scrapbook"]) .card::before {
   content: "";
   position: absolute;
   top: -10px;
@@ -91,7 +91,7 @@
 }
 
 /* Highlighter wash behind the headline (text stays --text-body). */
-:global(:root[data-skin="playful"]) .headline {
+:global(:root[data-skin="scrapbook"]) .headline {
   background-image: linear-gradient(var(--highlighter), var(--highlighter));
   background-repeat: no-repeat;
   background-position: 0 78%;
@@ -99,7 +99,7 @@
 }
 
 /* Sticker eyebrow — coral pill. */
-:global(:root[data-skin="playful"]) .eyebrow {
+:global(:root[data-skin="scrapbook"]) .eyebrow {
   background: var(--sticker-coral-bg);
   color: var(--sticker-coral-ink);
   border-radius: var(--radius-pill);

@@ -163,7 +163,7 @@ export function AboutYouFlow({
 
   /* ── Layout primitives (mirrors WelcomeFlow) ───────────────────────────── */
   // page/card/headline/sub/errorBox moved to _onboarding/onboarding-card.module.css (classes carry
-  // the Playful signature). monoEyebrow (the progress line) stays inline — it's not an eyebrow chip.
+  // the Scrapbook signature). monoEyebrow (the progress line) stays inline — it's not an eyebrow chip.
   const monoEyebrow: CSSProperties = {
     fontFamily: "var(--font-mono)",
     fontSize: "var(--text-label)",

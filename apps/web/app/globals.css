@@ -1,7 +1,7 @@
 /* Kindred — global base. Tokens (colors, typography, spacing, motion) live in tokens.css. */
 @import url('./_kindred/tokens.css');
 /* Skin token blocks layer on top (data-skin selectors, specificity 0,2,0 beats base :root). */
-@import url('./_skins/playful.css');
+@import url('./_skins/scrapbook.css');
 
 * { box-sizing: border-box; }
 
@@ -323,7 +323,7 @@ select.kin-field { appearance: none; background-image: linear-gradient(45deg, tr
   scroll-behavior: auto !important;
 }
 
-/* Solemn subtree — dial Playful whimsy down (dignity guard, spec §4.5). Mutes the decorative
+/* Solemn subtree — dial Scrapbook whimsy down (dignity guard, spec §4.5). Mutes the decorative
  * palette so tape/sticker/highlighter fills fall back to calm surfaces even before a module
  * adds its own structural suppression. Warmth (rounded type, soft shadow) is intentionally kept. */
 [data-tone="solemn"] {

@@ -220,7 +220,7 @@ it("does not show nature picker on partner edges or for non-stewards (#255)", as
   expect(screen.queryByRole("button", { name: hub.kin.correct })).toBeNull();
 });
 
-describe("PersonDetails gov edges — playful signature (#265)", () => {
+describe("PersonDetails gov edges — Scrapbook signature (#265)", () => {
   it("renders shared edge chrome plus dense section/heading (not List-page classes)", async () => {
     renderDetails([edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true })]);
     const section = await screen.findByTestId("tree-details-gov-edges");

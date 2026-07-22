@@ -6,12 +6,12 @@ import { PREFERENCES } from "./preferences/registry";
 import { readPreference, setPreference, applyPreference } from "./preferences/client";
 
 const pref = PREFERENCES.skin;
-// Preview-only swatch colours. These MIRROR each skin's palette (playful → _skins/playful.css,
+// Preview-only swatch colours. These MIRROR each skin's palette (Scrapbook → _skins/scrapbook.css,
 // heirloom → tokens.css) and are a deliberate small duplication: the swatches must paint the OTHER
 // skin's colours while the current skin's tokens are active, so they can't be var(--token). If a
 // skin's page/accent changes, update the matching entry here. (Follow-up: derive at build time.)
 const SWATCH: Record<SkinId, { page: string; accent: string }> = {
-  playful:  { page: "#FBF1DE", accent: "#CC4A22" },
+  scrapbook: { page: "#FBF1DE", accent: "#CC4A22" },
   heirloom: { page: "#F4ECE0", accent: "#BD5B3D" },
 };
 

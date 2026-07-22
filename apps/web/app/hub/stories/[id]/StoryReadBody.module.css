@@ -1,6 +1,6 @@
 /*
  * StoryReadBody — the finished-story read surface: a Prose ↔ Transcript segmented toggle above the
- * story text. Token-driven, skin-neutral (no Playful structural signatures — this is a calm read
+ * story text. Token-driven, skin-neutral (no Scrapbook structural signatures — this is a calm read
  * surface). Prose reads in --font-read; the segmented tabs are --font-ui. See _skins/CSS-MODULES.md.
  *
  * NB: `.prose` MUST render as a single <p> blob — highlight-to-treasure (Task 8) selects across the

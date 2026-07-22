@@ -19,7 +19,7 @@
  *     `--border-strong` when sex is unknown), separated from the avatar by a `--surface-card` rim.
  *     It marks the card the tree is currently rooted on and moves with the focus person on re-focus.
  *     (Replaced an earlier outer ring drawn as a box-shadow, which detached from the card at the
- *     Playful skin's thick border + large corner radius.)
+ *     Scrapbook skin's thick border + large corner radius.)
  *   - Anonymous bridge (`identified === false`) — dashed border, `?` avatar, italic "Unknown
  *     <relation>", no dates, no chip. INERT (carets/kebab suppressed by the canvas/layout, not here).
  *

@@ -247,7 +247,7 @@ it("renders relationToRoot as the chip; focus card is blank; viewer card reads '
 
 // ---- 5. Focus badge color + it moves; unknown → neutral ----------------------------------------
 // The focus marker is now a badge pinned to the avatar (was an outer ring box-shadow, which detached
-// from the card in the Playful skin). It lives ONLY on the focus card and carries the sex color.
+// from the card in the Scrapbook skin). It lives ONLY on the focus card and carries the sex color.
 function badgeOf(personId: string): HTMLElement | null {
   return screen.queryByTestId(`tree-node-focus-badge-${personId}`);
 }
