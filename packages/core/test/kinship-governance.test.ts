@@ -15,9 +15,11 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   addMembership,
+  addRelative,
   affirmEdge,
   correctEdge,
   denyEdge,
+  hideEdge,
   listGovernableKinEdges,
   normalizeEdgeEndpoints,
   resolveKinshipProjection,
@@ -436,5 +438,92 @@ describe("listGovernableKinEdges (read composition for the governance UI)", () =
     await addMembership(db, { personId: other.id, familyId: fam.id, role: "member" });
     const asOther = await listGovernableKinEdges(db, account(other.id), fam.id);
     expect(asOther[0]!.viewerCanHide).toBe(false);
+  });
+
+  it("#259/#289 — no affirm/hide/deny affordances on sibling-scaffold placeholder edges", async () => {
+    // Parentless steward adds a sibling → ADR-0017 mints two unidentified parents + partner + four
+    // parent_of bridges. Steward must NOT be offered Endorse/Hide/Remove on any of those.
+    const { steward, member, fam } = await familyWithStewardAndMember();
+    const siblingAdd = await addRelative(db, account(steward.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Brent",
+    });
+    expect(siblingAdd.allowed).toBe(true);
+    expect(siblingAdd.bridgePersonIds).toHaveLength(2);
+
+    // Also a named parent_of elsewhere so capability clearing is edge-local, not family-wide.
+    await assertParentOf(db, {
+      familyId: fam.id,
+      parent: steward.id,
+      child: member.id,
+      actor: steward.id,
+    });
+
+    const edges = await listGovernableKinEdges(db, account(steward.id), fam.id);
+    const scaffold = edges.filter((e) => !e.personAIdentified || !e.personBIdentified);
+    expect(scaffold.length).toBeGreaterThanOrEqual(5); // 4 parent_of + 1 partnered_with
+    for (const e of scaffold) {
+      expect(e.viewerIsSteward).toBe(false);
+      expect(e.viewerCanRemove).toBe(false);
+      expect(e.viewerCanHide).toBe(false);
+    }
+
+    const named = edges.find(
+      (e) =>
+        e.edgeType === "parent_of" &&
+        e.personAIdentified &&
+        e.personBIdentified &&
+        (e.personAId === steward.id || e.personBId === steward.id) &&
+        (e.personAId === member.id || e.personBId === member.id),
+    );
+    expect(named).toBeDefined();
+    expect(named!.viewerCanRemove).toBe(true);
+    expect(named!.viewerIsSteward).toBe(true);
+  });
+});
+
+describe("governance writes refuse unidentified placeholder endpoints (#259/#289)", () => {
+  it("affirm/deny/correct/hide are rejected when either endpoint is identified=false", async () => {
+    const { steward, fam } = await familyWithStewardAndMember();
+    const siblingAdd = await addRelative(db, account(steward.id), {
+      familyId: fam.id,
+      relation: "sibling",
+      displayName: "Brent",
+    });
+    expect(siblingAdd.allowed).toBe(true);
+    const [p1, p2] = siblingAdd.bridgePersonIds!;
+
+    const partnerRef: EdgeRef = {
+      familyId: fam.id,
+      edgeType: "partnered_with",
+      personAId: p1!,
+      personBId: p2!,
+    };
+    const parentRef: EdgeRef = {
+      familyId: fam.id,
+      edgeType: "parent_of",
+      personAId: p1!,
+      personBId: steward.id,
+    };
+
+    expect(await affirmEdge(db, account(steward.id), partnerRef)).toMatchObject({
+      allowed: false,
+      reason: expect.stringMatching(/placeholder|unidentified|unnamed/i),
+    });
+    expect(await denyEdge(db, account(steward.id), parentRef)).toMatchObject({
+      allowed: false,
+      reason: expect.stringMatching(/placeholder|unidentified|unnamed/i),
+    });
+    expect(
+      await correctEdge(db, account(steward.id), { ref: parentRef, nature: "biological" }),
+    ).toMatchObject({
+      allowed: false,
+      reason: expect.stringMatching(/placeholder|unidentified|unnamed/i),
+    });
+    expect(await hideEdge(db, account(steward.id), parentRef)).toMatchObject({
+      allowed: false,
+      reason: expect.stringMatching(/placeholder|unidentified|unnamed/i),
+    });
   });
 });

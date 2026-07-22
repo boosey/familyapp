@@ -12,7 +12,7 @@
  * endpoint confirmation. Every insert normalizes its endpoints via `normalizeEdgeEndpoints` (shared
  * with the read side) so partnered_with (A,B)/(B,A) collapse to one logical edge.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
 import type {
@@ -990,6 +990,26 @@ async function latestEdgeRow(
   };
 }
 
+/** #259/#289 — refuse governance/hide when either endpoint is an unidentified placeholder. */
+export const PLACEHOLDER_EDGE_GOVERNANCE_REASON =
+  "relationships involving an unnamed placeholder cannot be governed";
+
+async function requireIdentifiedEndpoints(
+  db: DbOrTx,
+  personAId: string,
+  personBId: string,
+): Promise<KinshipEdgeActionResult | null> {
+  const rows = await db
+    .select({ id: persons.id, identified: persons.identified })
+    .from(persons)
+    .where(inArray(persons.id, [personAId, personBId]));
+  const byId = new Map(rows.map((r) => [r.id, r.identified]));
+  if (!(byId.get(personAId) && byId.get(personBId))) {
+    return { allowed: false, reason: PLACEHOLDER_EDGE_GOVERNANCE_REASON };
+  }
+  return null;
+}
+
 /**
  * Shared server-side gate for a STEWARD governance action: the actor must be a real account AND be
  * THIS family's steward, and the target edge must already exist. Returns the normalized endpoints on
@@ -1017,6 +1037,8 @@ async function requireStewardOverExistingEdge(
   if (existing === null) {
     return { ok: false, result: { allowed: false, reason: "edge does not exist in this family" } };
   }
+  const placeholder = await requireIdentifiedEndpoints(db, existing.personAId, existing.personBId);
+  if (placeholder) return { ok: false, result: placeholder };
   return {
     ok: true,
     personAId: existing.personAId,
@@ -1077,6 +1099,8 @@ async function requireDenyAuthorityOverExistingEdge(
   if (existing === null) {
     return { ok: false, result: { allowed: false, reason: "edge does not exist in this family" } };
   }
+  const placeholder = await requireIdentifiedEndpoints(db, existing.personAId, existing.personBId);
+  if (placeholder) return { ok: false, result: placeholder };
   if (steward !== ctx.personId) {
     const asserter = await originalAsserterPersonId(db, ref);
     if (asserter !== ctx.personId) {
@@ -1265,6 +1289,9 @@ async function appendSubjectHide(
     return { allowed: false, reason: "edge does not exist in this family" };
   }
   const { personAId, personBId } = existing;
+
+  const placeholder = await requireIdentifiedEndpoints(db, personAId, personBId);
+  if (placeholder) return placeholder;
 
   // The actor must be an endpoint of the (normalized) edge — the subject the edge is ABOUT.
   if (me !== personAId && me !== personBId) {

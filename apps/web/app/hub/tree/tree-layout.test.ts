@@ -816,6 +816,71 @@ describe("no direct same-row bus (partners connect by proximity + the descent bu
   });
 });
 
+describe("line-click edgeHits (#289) — stored generative edges only", () => {
+  it("emits partner + parent_of hit-targets for a couple with a child", () => {
+    const nodes = [node("me", { sex: "male" }), node("spouse", { sex: "female" }), node("kid")];
+    const edges = [partneredWith("me", "spouse"), parentOf("me", "kid"), parentOf("spouse", "kid")];
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
+
+    const partnerHits = l.edgeHits.filter((h) => h.edgeRefs.some((r) => r.edgeType === "partnered_with"));
+    expect(partnerHits.length).toBeGreaterThanOrEqual(1);
+    expect(
+      partnerHits.some((h) =>
+        h.edgeRefs.some(
+          (r) =>
+            r.edgeType === "partnered_with" &&
+            ((r.personAId === "me" && r.personBId === "spouse") ||
+              (r.personAId === "spouse" && r.personBId === "me")),
+        ),
+      ),
+    ).toBe(true);
+
+    const parentHits = l.edgeHits.filter((h) => h.edgeRefs.some((r) => r.edgeType === "parent_of"));
+    expect(parentHits.length).toBeGreaterThanOrEqual(1);
+    const parentRefs = parentHits.flatMap((h) => h.edgeRefs).filter((r) => r.edgeType === "parent_of");
+    expect(parentRefs.some((r) => r.personAId === "me" && r.personBId === "kid")).toBe(true);
+    expect(parentRefs.some((r) => r.personAId === "spouse" && r.personBId === "kid")).toBe(true);
+  });
+
+  it("emits a partner hit for a childless couple (no descent bus)", () => {
+    const nodes = [node("me", { sex: "male" }), node("spouse", { sex: "female" })];
+    const edges = [partneredWith("me", "spouse")];
+    const l = computeTreeLayout(input({ focusPersonId: "me", nodes, edges }));
+    expect(l.connectors).toHaveLength(0);
+    expect(l.edgeHits.some((h) => h.edgeRefs.some((r) => r.edgeType === "partnered_with"))).toBe(true);
+  });
+
+  it("does not invent sibling edgeRefs on a multi-child inverted-U bar", () => {
+    const nodes = [
+      node("me", { sex: "male" }),
+      node("spouse", { sex: "female" }),
+      node("k1"),
+      node("k2"),
+    ];
+    const edges = [
+      partneredWith("me", "spouse"),
+      parentOf("me", "k1"),
+      parentOf("spouse", "k1"),
+      parentOf("me", "k2"),
+      parentOf("spouse", "k2"),
+    ];
+    const l = computeTreeLayout(
+      input({
+        focusPersonId: "me",
+        nodes,
+        edges,
+        expansion: expansion({ expandedChildren: new Set([coupleKey("me", "spouse")]) }),
+      }),
+    );
+    // Only parent_of / partnered_with — never a synthetic sibling edge type.
+    for (const h of l.edgeHits) {
+      for (const r of h.edgeRefs) {
+        expect(r.edgeType === "parent_of" || r.edgeType === "partnered_with").toBe(true);
+      }
+    }
+  });
+});
+
 describe("descendants center under their parents — multi-child bus stays connected (regression)", () => {
   it("2 children of a right-shifted couple sit UNDER the couple; the riser lands within the child bar", () => {
     // DAVID ⋈ MARIA with an expanded sibling (aunt ANNA pushes the couple right) and two children.

@@ -269,6 +269,7 @@ export {
   resolveKinshipTree,
   inviteStatusFor,
   canViewerSeePerson,
+  bothEndpointsIdentified,
   DEFAULT_TREE_WINDOW,
   type KinshipProjection,
   type ResolvedKinshipEdge,
