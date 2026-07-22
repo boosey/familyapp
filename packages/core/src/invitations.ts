@@ -68,6 +68,16 @@ export interface CreateInvitationInput {
   role?: MembershipRole;
   /** Time to live in ms. Defaults to 14 days. */
   ttlMs?: number;
+  /**
+   * Person-bound Invitation (issue #333, ADR-0028): binds the invitation to this EXISTING Person
+   * on create instead of minting a fresh provisional one — the Dedup-on-invite guarantee extended
+   * beyond cold contact matching to an invite started from an existing List/Tree Person. The Person
+   * must be identified and living; create refuses (`InvariantViolation`) otherwise, or if it does
+   * not exist. Create also refuses (`AlreadyFamilyMemberError`) when this Person already holds an
+   * ACTIVE membership in `familyId`. Omitted => the ADR-0006 cold path (mints a provisional Person)
+   * runs unchanged.
+   */
+  existingInviteePersonId?: string;
 }
 
 export interface CreateInvitationResult {
@@ -116,6 +126,41 @@ export async function createInvitation(
       );
     }
 
+    // Person-bound Invitation (#333, ADR-0028): resolve + validate the existing Person up front —
+    // before any throttle counting, mirroring the placement of the contact-based already-member
+    // refusal below (a refused invite must never burn the inviter's generous throttle budget).
+    let boundPerson: { id: string; displayName: string | null } | null = null;
+    if (input.existingInviteePersonId) {
+      const [person] = await tx
+        .select({
+          id: persons.id,
+          displayName: persons.displayName,
+          identified: persons.identified,
+          lifeStatus: persons.lifeStatus,
+        })
+        .from(persons)
+        .where(eq(persons.id, input.existingInviteePersonId))
+        .limit(1);
+      if (!person) {
+        throw new InvariantViolation(
+          `person-bound invitation target ${input.existingInviteePersonId} does not exist`,
+        );
+      }
+      if (!person.identified || person.lifeStatus !== "living") {
+        throw new InvariantViolation(
+          "person-bound invitation requires an identified, living person",
+        );
+      }
+      // Same-family duplicate-member guard, direct form (#119/#333): a precise personId+familyId
+      // check, stronger than (and in place of) the contact-based guard below for this path.
+      if (await isActiveMember(tx, person.id, input.familyId)) {
+        throw new AlreadyFamilyMemberError(
+          `${person.displayName ?? "this person"} is already an active member of this family`,
+        );
+      }
+      boundPerson = { id: person.id, displayName: person.displayName };
+    }
+
     // Invite-send throttle (issue #105) — a GENEROUS accident guard, not a rate-limit against
     // determined abuse. Two independent arms, each a rolling window counted over the invitations
     // table. Dedup (#117) refreshes one row in place instead of inserting per send, so the count
@@ -133,16 +178,20 @@ export async function createInvitation(
     // Same-family duplicate-member guard (issue #119): if the invitee's email or phone already
     // resolves to an ACTIVE member of this family (via their verified account contacts), inviting
     // them is a mistake — refuse before any throttle counting or dedup refresh. Runs before the
-    // throttle so a refused invite never burns the inviter's generous budget.
-    const conflictingMember = await findActiveFamilyMemberByContact(tx, {
-      familyId: input.familyId,
-      email: trimmedEmail,
-      phone: trimmedPhone,
-    });
-    if (conflictingMember) {
-      throw new AlreadyFamilyMemberError(
-        `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
-      );
+    // throttle so a refused invite never burns the inviter's generous budget. Skipped for the
+    // person-bound path (#333) — the direct personId+familyId check above already covers it more
+    // precisely, and the bound Person may itself legitimately hold the matching contact.
+    if (!boundPerson) {
+      const conflictingMember = await findActiveFamilyMemberByContact(tx, {
+        familyId: input.familyId,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+      });
+      if (conflictingMember) {
+        throw new AlreadyFamilyMemberError(
+          `${conflictingMember.displayName ?? "this person"} is already an active member of this family (matched on ${conflictingMember.matchedOn})`,
+        );
+      }
     }
 
     const inviterWindowStart = new Date(
@@ -189,6 +238,108 @@ export async function createInvitation(
           `destination already received ${INVITE_THROTTLE_DESTINATION_LIMIT} invitations in the last 24 hours`,
         );
       }
+    }
+
+    // Person-bound create (#333, ADR-0028): skip the provisional-mint path entirely — anchor
+    // directly on the existing Person. If a live-or-dead pending invite already targets this exact
+    // (family, Person) pair, refresh it in place (mirrors the cold path's one-durable-link and
+    // refresh-in-place rules) instead of inserting a second row for the same invitee.
+    if (boundPerson) {
+      const [existingBound] = await tx
+        .select({
+          id: invitations.id,
+          tokenSealed: invitations.tokenSealed,
+          status: invitations.status,
+          expiresAt: invitations.expiresAt,
+        })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.familyId, input.familyId),
+            eq(invitations.inviteePersonId, boundPerson.id),
+            ne(invitations.status, "accepted"),
+          ),
+        )
+        .orderBy(desc(invitations.createdAt))
+        .limit(1);
+
+      const isLive =
+        existingBound !== undefined &&
+        existingBound.status === "pending" &&
+        (existingBound.expiresAt === null ||
+          existingBound.expiresAt.getTime() > Date.now());
+
+      if (existingBound) {
+        // Recover the durable token for a live invite; null forces rotation (dead invite, or a
+        // legacy row with nothing sealed under the active key) — same rule as the cold path (#116).
+        const durableToken = isLive ? openToken(existingBound.tokenSealed) : null;
+        await tx
+          .update(invitations)
+          .set({
+            inviterPersonId: input.inviterPersonId,
+            createdAt: new Date(),
+            sendCount: sql`${invitations.sendCount} + 1`,
+            ...(durableToken === null
+              ? {
+                  tokenHash: hashToken(token),
+                  tokenSealed: sealToken(token),
+                  status: "pending" as const,
+                  expiresAt,
+                }
+              : {}),
+            ...(input.inviteeName !== undefined
+              ? { inviteeName: input.inviteeName ?? null }
+              : {}),
+            ...(input.inviteeEmail !== undefined
+              ? { inviteeEmail: trimmedEmail }
+              : {}),
+            ...(input.inviteePhone !== undefined
+              ? { inviteePhone: trimmedPhone }
+              : {}),
+            ...(input.deliveryChannels !== undefined
+              ? { deliveryChannels: input.deliveryChannels ?? null }
+              : {}),
+            ...(input.relationshipLabel !== undefined
+              ? { relationshipLabel: input.relationshipLabel ?? null }
+              : {}),
+            ...(input.relationship !== undefined
+              ? { inviteRelationship: input.relationship ?? null }
+              : {}),
+            ...(input.role !== undefined ? { role: input.role } : {}),
+          })
+          .where(eq(invitations.id, existingBound.id));
+
+        return {
+          invitationId: existingBound.id,
+          token: durableToken ?? token,
+          inviteePersonId: boundPerson.id,
+        };
+      }
+
+      // No pending invite yet for this (family, Person) pair — insert one anchored directly on the
+      // existing Person. Prefill the invitee name from the Person's displayName when the caller
+      // supplied none, so the delivery/welcome copy always has a name to show.
+      const [row] = await tx
+        .insert(invitations)
+        .values({
+          tokenHash: hashToken(token),
+          tokenSealed: sealToken(token),
+          familyId: input.familyId,
+          inviterPersonId: input.inviterPersonId,
+          inviteePersonId: boundPerson.id,
+          inviteeName: input.inviteeName ?? boundPerson.displayName ?? null,
+          inviteeEmail: trimmedEmail,
+          inviteePhone: trimmedPhone,
+          deliveryChannels: input.deliveryChannels ?? null,
+          relationshipLabel: input.relationshipLabel ?? null,
+          inviteRelationship: input.relationship ?? null,
+          role: input.role ?? "member",
+          status: "pending",
+          expiresAt,
+        })
+        .returning({ id: invitations.id });
+
+      return { invitationId: row!.id, token, inviteePersonId: boundPerson.id };
     }
 
     // Re-invite dedup: a re-send to someone who was already invited but never joined must NOT mint a
