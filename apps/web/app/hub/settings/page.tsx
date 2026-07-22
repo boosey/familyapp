@@ -1,9 +1,11 @@
 /**
- * /hub/settings — device-local app preferences (text size, color palette).
+ * /hub/settings — notification stream preferences (synced to the account) plus device-local app
+ * preferences (text size, color palette, motion, recording gesture, look and feel).
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getRuntime } from "@/lib/runtime";
+import { listNotificationStreamFrequencies } from "@/lib/notification-prefs";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { hub } from "@/app/_copy";
 import { SettingsPanel } from "./SettingsPanel";
@@ -18,6 +20,8 @@ export default async function SettingsPage() {
 
   const dest = await resolvePostAuthRoute(db, ctx.personId);
   if (dest === "/welcome") redirect(dest);
+
+  const frequencies = await listNotificationStreamFrequencies(db, ctx.personId);
 
   return (
     <main
@@ -74,7 +78,7 @@ export default async function SettingsPage() {
           </p>
         </header>
 
-        <SettingsPanel />
+        <SettingsPanel notificationFrequencies={frequencies} />
       </div>
     </main>
   );
