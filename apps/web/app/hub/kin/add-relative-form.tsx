@@ -98,9 +98,12 @@ export function AddRelativeForm({
     selectedId: string;
   } | null>(null);
   // #285: partner→kids confirm offer before write (never silent).
+  // When `linkExistingPersonId` is set, confirm/skip calls onLinkExisting (connect-existing path);
+  // otherwise confirm/skip mints via addRelativeAction (create-new path).
   const [pendingStepOffer, setPendingStepOffer] = useState<{
     formData: FormData;
     selectedChildIds: Set<string>;
+    linkExistingPersonId?: string;
   } | null>(null);
 
   function findMatches(name: string): UnplacedNameCandidate[] {
@@ -164,18 +167,15 @@ export function AddRelativeForm({
     mintRelative(formData);
   }
 
-  function connectExisting() {
-    if (!pendingMatch) return;
-    const existingPersonId = pendingMatch.selectedId;
-    const fd = pendingMatch.formData;
-    const rel = (fd.get("relation") as AddRelativeRelation) || relation;
+  function linkExistingFromForm(existingPersonId: string, formData: FormData, stepKids: string[]) {
+    const rel = (formData.get("relation") as AddRelativeRelation) || relation;
     const coParents =
-      rel === "child" ? [...fd.getAll("coParentPersonIds")].filter((v): v is string => typeof v === "string" && !!v.trim()) : [];
-    const stepKids =
-      rel === "partner"
-        ? [...fd.getAll("stepParentOfChildIds")].filter((v): v is string => typeof v === "string" && !!v.trim())
+      rel === "child"
+        ? [...formData.getAll("coParentPersonIds")].filter(
+            (v): v is string => typeof v === "string" && !!v.trim(),
+          )
         : [];
-    const rawNature = fd.get("nature");
+    const rawNature = formData.get("nature");
     const natureArg =
       (rel === "parent" || rel === "child") &&
       typeof rawNature === "string" &&
@@ -206,6 +206,30 @@ export function AddRelativeForm({
     });
   }
 
+  function connectExisting() {
+    if (!pendingMatch) return;
+    const existingPersonId = pendingMatch.selectedId;
+    const fd = pendingMatch.formData;
+    const rel = (fd.get("relation") as AddRelativeRelation) || relation;
+    // Partner→kids offer before link (ADR-0027 — never silent), same as create-new.
+    if (rel === "partner" && childOptions.length > 0) {
+      setPendingMatch(null);
+      setPendingStepOffer({
+        formData: fd,
+        selectedChildIds: new Set(childOptions.map((c) => c.id)),
+        linkExistingPersonId: existingPersonId,
+      });
+      return;
+    }
+    const stepKids =
+      rel === "partner"
+        ? [...fd.getAll("stepParentOfChildIds")].filter(
+            (v): v is string => typeof v === "string" && !!v.trim(),
+          )
+        : [];
+    linkExistingFromForm(existingPersonId, fd, stepKids);
+  }
+
   function confirmStepOffer(attachKids: boolean) {
     if (!pendingStepOffer) return;
     const fd = pendingStepOffer.formData;
@@ -214,7 +238,12 @@ export function AddRelativeForm({
     } else {
       appendStepParents(fd, []);
     }
-    // If the typed name also matched an unplaced member, that path already ran first; here we mint.
+    const stepKids = attachKids ? [...pendingStepOffer.selectedChildIds] : [];
+    if (pendingStepOffer.linkExistingPersonId) {
+      linkExistingFromForm(pendingStepOffer.linkExistingPersonId, fd, stepKids);
+      return;
+    }
+    // Create-new path (or create-new after declining an existing-match).
     mintRelative(fd);
   }
 

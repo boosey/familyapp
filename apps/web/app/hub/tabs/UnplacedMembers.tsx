@@ -330,6 +330,8 @@ function PlaceMemberModal({
   const [loadingAnchors, setLoadingAnchors] = useState(true);
   const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
   const [children, setChildren] = useState<{ id: string; name: string }[]>([]);
+  /** Anchor id for which `partners`/`children` are current; null while a fetch is in flight. */
+  const [kinLoadedFor, setKinLoadedFor] = useState<string | null>(null);
   const [selectedCoParents, setSelectedCoParents] = useState<Set<string>>(new Set());
   const [pendingStepOffer, setPendingStepOffer] = useState<Set<string> | null>(null);
 
@@ -365,22 +367,29 @@ function PlaceMemberModal({
   }, [familyId, member.personId, onFetchAnchors]);
 
   // When the chosen anchor changes, load their partners + children for confirm UI (#285).
+  // Invalidate immediately via kinLoadedFor !== anchorId so a stale empty/previous list cannot
+  // silence the partner step offer (submit waits until kin options resolve for this anchor).
   useEffect(() => {
     let cancelled = false;
     async function loadKin() {
       if (!anchorId) {
         setPartners([]);
         setChildren([]);
+        setKinLoadedFor(null);
         return;
       }
+      setPartners([]);
+      setChildren([]);
+      setSelectedCoParents(new Set());
+      setPendingStepOffer(null);
+      setKinLoadedFor(null);
       const res = await listPersonKinOptionsAction(familyId, anchorId);
       if (cancelled) return;
       if (res.ok) {
         setPartners(res.partners);
         setChildren(res.children);
-        setSelectedCoParents(new Set());
-        setPendingStepOffer(null);
       }
+      setKinLoadedFor(anchorId);
     }
     void loadKin();
     return () => {
@@ -399,6 +408,9 @@ function PlaceMemberModal({
   }, [onClose]);
 
   const hasAnchors = anchors.length > 0;
+  // True only when partners/children belong to the current anchor (closes the race where
+  // children=[] before listPersonKinOptionsAction returns → silent partner-only write).
+  const kinOptionsReady = !!anchorId && kinLoadedFor === anchorId;
 
   function doLink(stepKids: string[]) {
     setError(null);
@@ -425,7 +437,7 @@ function PlaceMemberModal({
   }
 
   function onSubmit() {
-    if (!hasAnchors || !anchorId) return;
+    if (!hasAnchors || !anchorId || !kinOptionsReady) return;
     if (relation === "partner" && children.length > 0 && pendingStepOffer === null) {
       setPendingStepOffer(new Set(children.map((c) => c.id)));
       return;
@@ -608,7 +620,7 @@ function PlaceMemberModal({
                 type="submit"
                 className={styles.action}
                 data-testid="place-member-submit"
-                disabled={pending}
+                disabled={pending || !kinOptionsReady}
               >
                 {pending ? hub.unplaced.placing : hub.unplaced.placeSubmit}
               </button>
