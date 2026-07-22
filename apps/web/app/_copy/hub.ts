@@ -892,6 +892,8 @@ export const hub = {
       child: "Child",
       partner: "Partner",
       sibling: "Sibling",
+      half_sibling: "Half-sibling",
+      step_sibling: "Step-sibling",
       grandparent: "Grandparent",
       grandchild: "Grandchild",
       aunt_uncle: "Aunt/Uncle",

@@ -1,7 +1,8 @@
 /**
  * Tests for the kinship read surface (ADR-0016, issue #31): family-membership auth, latest-supersede
  * resolution, first-asserter-wins, the subject-hide veto overlay, per-family scoping, and the
- * derived-relation walk (sibling = shares-a-parent, cousin = parents-are-siblings).
+ * derived-relation walk (sibling/half/step by parent count + partner-bridge, cousin = parents
+ * share ≥1 parent).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
@@ -220,22 +221,28 @@ describe("resolveKinshipProjection — resolution", () => {
 });
 
 describe("deriveKin — derived relations", () => {
-  it("derives sibling (shares-a-parent) and cousin (parents-are-siblings)", async () => {
+  it("derives sibling (two shared parents), half_sibling (one), and cousin (parents share ≥1)", async () => {
     const { member, fam } = await familyWithMember();
     const gp = await makePerson(db, "Grandparent");
     const pa = await makePerson(db, "Parent");
+    const co = await makePerson(db, "CoParent");
     const au = await makePerson(db, "AuntUncle");
     const root = await makePerson(db, "Root");
     const sib = await makePerson(db, "Sibling");
+    const half = await makePerson(db, "HalfSib");
     const cousin = await makePerson(db, "Cousin");
 
-    // GP is parent of PA and AU (=> PA, AU are siblings).
+    // GP is parent of PA and AU (=> PA, AU share ≥1 parent → aunt/uncle walk).
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: gp.id, b: pa.id, actor: member.id });
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: gp.id, b: au.id, actor: member.id });
-    // PA is parent of Root and Sibling (=> Root, Sibling share a parent).
+    // PA + CoParent are parents of Root and Sibling (full siblings).
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: pa.id, b: root.id, actor: member.id });
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: co.id, b: root.id, actor: member.id });
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: pa.id, b: sib.id, actor: member.id });
-    // AU is parent of Cousin (=> Cousin's parent AU is a sibling of Root's parent PA).
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: co.id, b: sib.id, actor: member.id });
+    // Half shares only PA with Root.
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: pa.id, b: half.id, actor: member.id });
+    // AU is parent of Cousin (=> Cousin's parent AU shares a parent with Root's parent PA).
     await assert(db, { familyId: fam.id, edgeType: "parent_of", a: au.id, b: cousin.id, actor: member.id });
 
     const { edges } = await resolveKinshipProjection(db, account(member.id), fam.id);
@@ -243,6 +250,7 @@ describe("deriveKin — derived relations", () => {
     expect(relationOf(edges, root.id, pa.id)).toBe("parent");
     expect(relationOf(edges, root.id, gp.id)).toBe("grandparent");
     expect(relationOf(edges, root.id, sib.id)).toBe("sibling");
+    expect(relationOf(edges, root.id, half.id)).toBe("half_sibling");
     expect(relationOf(edges, root.id, au.id)).toBe("aunt_uncle");
     expect(relationOf(edges, root.id, cousin.id)).toBe("cousin");
     // Root is not its own kin.
