@@ -470,13 +470,28 @@ export interface GovernableKinEdge {
   /** The Person who ORIGINALLY asserted this edge (the earliest ledger row's actor) — audit + #256's
    *  asserter-retract gate (`viewerCanRemove`). */
   assertedBy: string;
-  /** True iff the viewer is THIS family's steward — may affirm/deny/correct any edge. */
+  /** True iff the viewer may affirm/correct THIS edge: family steward AND both endpoints identified
+   *  (#259 — placeholder scaffold edges are not stewardship targets). */
   viewerIsSteward: boolean;
-  /** True iff the viewer is a self-account endpoint of THIS edge — may hide/unhide it. */
+  /** True iff the viewer is a self-account endpoint of THIS edge — may hide/unhide it (cleared when
+   *  either endpoint is unidentified, #259). */
   viewerCanHide: boolean;
   /** True iff the viewer may DENY (remove) this specific edge (#256): the steward, OR the Person who
-   *  originally asserted it. Narrower than `viewerIsSteward` — affirm/correct stay steward-only. */
+   *  originally asserted it — cleared when either endpoint is unidentified (#259). Narrower than
+   *  `viewerIsSteward` for named edges — affirm/correct stay steward-only. */
   viewerCanRemove: boolean;
+}
+
+/**
+ * #259/#289 — structural placeholder edges (either endpoint `identified = false`) are not governance
+ * targets: Endorse / Hide / Remove / Correct must not be offered, and writes must refuse. Pure so the
+ * read composition and write gates share one rule.
+ */
+export function bothEndpointsIdentified(edge: {
+  personAIdentified: boolean;
+  personBIdentified: boolean;
+}): boolean {
+  return edge.personAIdentified && edge.personBIdentified;
 }
 
 /**
@@ -486,7 +501,8 @@ export interface GovernableKinEdge {
  * steward-of-this-family (a single `families` lookup) and, per edge, whether the viewer is a
  * self-account endpoint of it (so the hide control appears only where it applies) and whether the
  * viewer is the steward or the edge's original asserter (`viewerCanRemove`, #256 — drives the Family
- * tree's Remove affordance). The flags are advisory; the write path re-verifies them.
+ * tree's Remove affordance). Capability flags are cleared when either endpoint is unidentified (#259).
+ * The flags are advisory; the write path re-verifies them.
  */
 export async function listGovernableKinEdges(
   db: Database,
@@ -502,7 +518,7 @@ export async function listGovernableKinEdges(
     .from(families)
     .where(eq(families.id, familyId))
     .limit(1);
-  const viewerIsSteward = fam?.stewardPersonId === viewer;
+  const viewerIsFamilySteward = fam?.stewardPersonId === viewer;
 
   // Hydrate every endpoint's display fields + account-ness in one query.
   const ids = Array.from(new Set(edges.flatMap((e) => [e.personAId, e.personBId])));
@@ -522,20 +538,23 @@ export async function listGovernableKinEdges(
     const a = byId.get(e.personAId);
     const b = byId.get(e.personBId);
     const viewerIsEndpoint = viewer === e.personAId || viewer === e.personBId;
+    const personAIdentified = a?.identified ?? false;
+    const personBIdentified = b?.identified ?? false;
+    const governable = bothEndpointsIdentified({ personAIdentified, personBIdentified });
     return {
       edgeType: e.edgeType,
       personAId: e.personAId,
       personBId: e.personBId,
       personADisplayName: a?.displayName ?? null,
-      personAIdentified: a?.identified ?? false,
+      personAIdentified,
       personBDisplayName: b?.displayName ?? null,
-      personBIdentified: b?.identified ?? false,
+      personBIdentified,
       nature: e.nature,
       state: e.state,
       assertedBy: e.assertedBy,
-      viewerIsSteward,
-      viewerCanHide: viewerIsEndpoint && viewerHasAccount,
-      viewerCanRemove: viewerIsSteward || e.assertedBy === viewer,
+      viewerIsSteward: governable && viewerIsFamilySteward,
+      viewerCanHide: governable && viewerIsEndpoint && viewerHasAccount,
+      viewerCanRemove: governable && (viewerIsFamilySteward || e.assertedBy === viewer),
     };
   });
 }

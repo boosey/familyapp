@@ -78,6 +78,8 @@ import { edgeKey, mergeEdges, mergeNodes } from "./merge";
 import { fetchSubtreeAction, type FetchSubtreeResult } from "./actions";
 import { TreeAddProvider, type OpenAddRelative } from "./add-relative-context";
 import { TreeFocusProvider } from "./focus-context";
+import { LineGovernanceMenu } from "./line-governance-menu";
+import { actableEdgesForHit } from "./line-governance";
 import { AddRelativeModal } from "./add-relative-modal";
 
 /** Imperative controls FamilyTab drives from the (lifted-out) controls row. */
@@ -250,6 +252,8 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   // viewer may edit — otherwise it falls back to the read-only view.
   const [details, setDetails] = useState<{ id: string; startInEdit: boolean } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
+  /** #289 — actable edges opened from a line hit-target. */
+  const [lineGovEdges, setLineGovEdges] = useState<GovernableKinEdge[] | null>(null);
 
   // Track which frontier centers we've already background-fetched, so top-up never re-fetches the same
   // node twice (idempotent, quiet, off the critical path).
@@ -680,6 +684,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const openDetails = (id: string) => {
     const n = nodeById.get(id);
     const nameless = !n || n.displayName == null || n.displayName.trim().length === 0;
+    setLineGovEdges(null);
     setDetails({ id, startInEdit: nameless });
   };
 
@@ -729,28 +734,72 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
             height: layout.bounds.height,
           }}
         >
-          {/* Connector layer (SVG, behind node cards). */}
+          {/* Connector layer (SVG, behind node cards). Visual strokes stay pointer-events:none;
+              #289 hit-targets are a separate stroke layer with fat invisible paths. */}
           <svg
             width={layout.bounds.width}
             height={layout.bounds.height}
             viewBox={`0 0 ${layout.bounds.width} ${layout.bounds.height}`}
-            style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", overflow: "visible" }}
-            aria-hidden="true"
+            style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}
           >
             {/* Only descent buses are drawn — same-row cards (partners, siblings) are never joined by a
                 direct line; a partnership reads from proximity and connects down through this bus. The
                 U / inverted-U corners are rounded at paint time (the layout emits exact polylines). */}
-            {layout.connectors.map((c, i) => (
-              <path
-                key={i}
-                d={roundedPath(c.d, 8)}
-                fill="none"
-                stroke="var(--border-strong)"
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            ))}
+            <g style={{ pointerEvents: "none" }}>
+              {layout.connectors.map((c, i) => (
+                <path
+                  key={`viz-${i}`}
+                  d={roundedPath(c.d, 8)}
+                  fill="none"
+                  stroke="var(--border-strong)"
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              ))}
+            </g>
+            {/* #289 — fat invisible hit strokes for stored parent_of / partnered_with only. */}
+            <g>
+              {layout.edgeHits.map((hit, i) => (
+                <path
+                  key={`hit-${i}`}
+                  d={hit.d}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={14}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                  data-testid="tree-edge-hit"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={hub.tree.lineGovernHit}
+                  onPointerDown={(e) => {
+                    // Keep the canvas from treating this as a pan start.
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const actable = actableEdgesForHit(governableEdges, hit.edgeRefs);
+                    if (actable.length === 0) {
+                      setLineGovEdges(null);
+                      return;
+                    }
+                    setDetails(null);
+                    setLineGovEdges(actable);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const actable = actableEdgesForHit(governableEdges, hit.edgeRefs);
+                    if (actable.length === 0) return;
+                    setDetails(null);
+                    setLineGovEdges(actable);
+                  }}
+                />
+              ))}
+            </g>
           </svg>
 
           {/* Node cards. Identified cards carry a per-card ⋮; anonymous bridges are inert. */}
@@ -799,6 +848,21 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           ))}
         </div>
       </div>
+
+      {lineGovEdges && lineGovEdges.length > 0 && (
+        <LineGovernanceMenu
+          familyId={familyId}
+          edges={lineGovEdges}
+          onClose={() => setLineGovEdges(null)}
+          onEdgeGoverned={(edge, kind) => {
+            if (kind === "deny" || kind === "hide") {
+              const key = `${edge.edgeType}:${edge.personAId}:${edge.personBId}`;
+              setEdges((prev) => prev.filter((e) => edgeKey(e) !== key));
+            }
+            onFamilyMutation?.();
+          }}
+        />
+      )}
 
       {detailsNode && details && (
         <PersonDetails

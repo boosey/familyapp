@@ -1,0 +1,46 @@
+/*
+ * #289 — line-click governance popover on the tree canvas. Token-only; sits above the canvas.
+ */
+
+.root {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100% - 24px));
+  max-height: min(70%, 480px);
+  overflow: auto;
+  background: var(--surface-elevated, var(--surface-card));
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px 18px;
+  box-shadow: var(--shadow-raised, 0 8px 24px color-mix(in srgb, var(--text-body) 18%, transparent));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.heading {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--text-meta);
+  margin: 0;
+}
+
+.close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+}

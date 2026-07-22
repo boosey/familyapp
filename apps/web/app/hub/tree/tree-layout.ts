@@ -89,6 +89,21 @@ export interface Connector {
   kind: "descent" | "partner";
 }
 
+/**
+ * #289 — invisible (or fat-hit) path for line-click governance on a stored generative edge.
+ * Derived sibling connectors never appear here (ADR-0027).
+ */
+export interface ConnectorEdgeRef {
+  edgeType: "parent_of" | "partnered_with";
+  personAId: string;
+  personBId: string;
+}
+
+export interface EdgeHitTarget {
+  d: string;
+  edgeRefs: readonly ConnectorEdgeRef[];
+}
+
 /** The three directions a card's affordance can point. */
 export type AffordanceDirection = "parents" | "siblings" | "children";
 
@@ -126,6 +141,8 @@ export interface TreeLayout {
   placed: PlacedNode[];
   unions: PlacedUnion[];
   connectors: Connector[];
+  /** #289 — hit-targets for stored parent_of / partnered_with strokes (not sibling bars). */
+  edgeHits: EdgeHitTarget[];
   affordances: Affordance[];
   bounds: { width: number; height: number };
 }
@@ -755,7 +772,28 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
   //   2. vertical riser — from the join/midpoint (or lone parent's bottom) down to the child-bar level.
   //   3. "inverted-U" — 2+ children only: a horizontal bar with a vertical down to EACH child; a single
   //      child gets NO inverted-U (the riser drops straight into it).
+  //
+  // #289 line-click: `edgeHits` maps stored generative edges onto hit geometry. Partner hits ride the
+  // U floor (or a mid-card seam for childless couples). Parent hits ride each child drop. The inverted-U
+  // sibling BAR itself is never a hit-target (derived siblings have no line menu — ADR-0027).
   const connectors: Connector[] = [];
+  const edgeHits: EdgeHitTarget[] = [];
+
+  const partnerRef = (aId: string, bId: string): ConnectorEdgeRef => {
+    const [personAId, personBId] = aId < bId ? [aId, bId] : [bId, aId];
+    return { edgeType: "partnered_with", personAId, personBId };
+  };
+  const parentRefsToChild = (parentIds: readonly string[], childId: string): ConnectorEdgeRef[] => {
+    const refs: ConnectorEdgeRef[] = [];
+    for (const e of sortedEdges) {
+      if (e.edgeType !== "parent_of" || e.personBId !== childId) continue;
+      if (parentIds.includes(e.personAId)) {
+        refs.push({ edgeType: "parent_of", personAId: e.personAId, personBId: e.personBId });
+      }
+    }
+    return refs;
+  };
+
   for (const couple of couplesByCenter) {
     const partner = couple.rightId;
     const kids = coupleChildren(couple.leftId, partner).filter((c) => isDrawn(c));
@@ -773,12 +811,18 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
       .sort((a, b) => a.x - b.x);
     const childTopY = sortedKids[0]!.y - NODE_H / 2;
     const barY = (joinY + childTopY) / 2;
+    const parentIds = partner ? [couple.leftId, partner] : [couple.leftId];
 
     // 1. The U — two parents only.
     if (right) {
       connectors.push({
         kind: "descent",
         d: `M ${left.x} ${parentBottomY} L ${left.x} ${joinY} L ${right.x} ${joinY} L ${right.x} ${right.y + NODE_H / 2}`,
+      });
+      // Partner hit rides the U floor (stored partnered_with).
+      edgeHits.push({
+        d: `M ${left.x} ${joinY} L ${right.x} ${joinY}`,
+        edgeRefs: [partnerRef(couple.leftId, partner!)],
       });
     }
 
@@ -790,7 +834,10 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     if (sortedKids.length === 1) {
       // One child → NO inverted-U: drop straight into it (a short horizontal jog only if it's off-center).
       const c = sortedKids[0]!;
-      connectors.push({ kind: "descent", d: `M ${busCenterX} ${barY} L ${c.x} ${barY} L ${c.x} ${childTopY}` });
+      const d = `M ${busCenterX} ${barY} L ${c.x} ${barY} L ${c.x} ${childTopY}`;
+      connectors.push({ kind: "descent", d });
+      const refs = parentRefsToChild(parentIds, c.personId);
+      if (refs.length > 0) edgeHits.push({ d: `M ${c.x} ${barY} L ${c.x} ${childTopY}`, edgeRefs: refs });
     } else {
       // 2+ children → an inverted-U whose TOP CORNERS are emitted inside one polyline so they can be
       // ROUNDED at render time; children not on a rounded leg drop from the bar as separate verticals
@@ -818,6 +865,33 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
         });
         for (let i = 1; i < sortedKids.length - 1; i++) connectors.push(drop(sortedKids[i]!.x));
       }
+      // Parent hits: one vertical per child. The horizontal sibling bar is intentionally omitted.
+      for (const c of sortedKids) {
+        const refs = parentRefsToChild(parentIds, c.personId);
+        if (refs.length > 0) {
+          edgeHits.push({ d: `M ${c.x} ${barY} L ${c.x} ${childTopY}`, edgeRefs: refs });
+        }
+      }
+    }
+  }
+  // Partner hits for EVERY drawn couple (including childless — no descent U to ride).
+  {
+    const seen = new Set<string>();
+    for (const u of unions) {
+      const key = coupleKey(u.aPersonId, u.bPersonId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const a = posOf.get(u.aPersonId);
+      const b = posOf.get(u.bPersonId);
+      if (!a || !b) continue;
+      const left = a.x <= b.x ? a : b;
+      const right = a.x <= b.x ? b : a;
+      // Seam at card bottoms — same height as the U feeders when kids exist (hit stacks with U floor).
+      const seamY = left.y + NODE_H / 2;
+      edgeHits.push({
+        d: `M ${left.x} ${seamY} L ${right.x} ${seamY}`,
+        edgeRefs: [partnerRef(u.aPersonId, u.bPersonId)],
+      });
     }
   }
   // NO partner-link connector: two cards sharing a row are never joined by a direct horizontal line at
@@ -998,7 +1072,7 @@ export function computeTreeLayout(input: LayoutInput): TreeLayout {
     height = Math.max(height, a.y + NODE_H / 2);
   }
 
-  return { placed, unions, connectors, affordances, bounds: { width, height } };
+  return { placed, unions, connectors, edgeHits, affordances, bounds: { width, height } };
 }
 
 // ---------------------------------------------------------------------------

@@ -1135,6 +1135,10 @@ export const hub = {
     // Sibling caret aria labels (ego-centric redesign, spec §3/§4).
     collapseSiblings: "Collapse siblings",
     expandSiblings: "Show siblings",
+    // #289 — line-click governance on stored parent_of / partnered_with strokes.
+    lineGovernMenu: "Relationship actions",
+    lineGovernHeading: "This relationship",
+    lineGovernHit: "Open relationship actions",
   },
   // Unplaced members (#161, ADR-0023) — active members who touch NO visible kinship edge, so they're
   // invisible in the graph-only tree. Surfaced in BOTH views (a "not yet connected" tray on the tree,
