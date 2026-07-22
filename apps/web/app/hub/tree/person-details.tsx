@@ -23,6 +23,7 @@ import type { GovernableKinEdge, KinRelation, PersonSex, TreeNode } from "@chron
 import { KindredButton } from "@/app/_kindred";
 import { KinEdgeControls } from "../kin/kin-edge-controls";
 import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "../kin/edge-sentence";
+import govStyles from "../kin/GovernableEdgeList.module.css";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
 import {
   personEditabilityAction,
@@ -291,38 +292,24 @@ export function PersonDetails({
             </p>
           )}
 
-          {/* #254 — steward Remove / subject Hide for edges touching this person. */}
+          {/* #254/#265 — steward Remove / subject Hide; shared GovernableEdgeList chrome with List. */}
           {actableEdges.length > 0 && (
             <section
               data-testid="tree-details-gov-edges"
               aria-labelledby="tree-details-gov-heading"
-              style={{ marginTop: 16 }}
+              className={govStyles.section}
             >
-              <h3
-                id="tree-details-gov-heading"
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-ui-sm)",
-                  fontWeight: 600,
-                  color: "var(--text-meta)",
-                  margin: "0 0 10px",
-                }}
-              >
+              <h3 id="tree-details-gov-heading" className={govStyles.heading}>
                 {hub.kin.govHeading}
               </h3>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
+              <ul className={govStyles.list}>
                 {actableEdges.map((edge) => (
-                  <li key={governableEdgeKey(edge)} data-testid="tree-details-gov-edge">
-                    <p
-                      style={{
-                        fontFamily: "var(--font-ui)",
-                        fontSize: "var(--text-ui-sm)",
-                        color: "var(--text-body)",
-                        margin: 0,
-                      }}
-                    >
-                      {edgeSentence(edge)}
-                    </p>
+                  <li
+                    key={governableEdgeKey(edge)}
+                    data-testid="tree-details-gov-edge"
+                    className={govStyles.edge}
+                  >
+                    <p className={govStyles.sentence}>{edgeSentence(edge)}</p>
                     <KinEdgeControls
                       familyId={familyId}
                       edge={edge}

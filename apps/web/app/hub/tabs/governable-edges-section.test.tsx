@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 /**
  * #254/#255 — List-view relationships section: actable edges only; steward nature picker on parent_of.
+ *
+ * Issue #265 — Phase-2 skin signatures: shared GovernableEdgeList module classes + CSS-source
+ * guards for data-skin / reduce-motion / solemn (mirrors KinList #266; restrained — no tape/tilt).
  */
-import { afterEach, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { GovernableKinEdge } from "@chronicle/core";
 import { hub } from "@/app/_copy";
+import styles from "../kin/GovernableEdgeList.module.css";
 import { GovernableEdgesSection } from "./GovernableEdgesSection";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(join(here, "../kin/GovernableEdgeList.module.css"), "utf8");
 
 afterEach(cleanup);
 
@@ -129,4 +139,40 @@ it("shows nature picker on steward parent_of only and submits correctEdgeAction 
   const formData = (correctEdgeAction as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as FormData;
   expect(formData.get("nature")).toBe("step");
   expect(formData.get("edgeType")).toBe("parent_of");
+});
+
+describe("GovernableEdgesSection — playful signature (#265)", () => {
+  it("renders section / heading / intro / list / edge / sentence with module classes", () => {
+    render(
+      <GovernableEdgesSection
+        familyId="F"
+        edges={[edge({ personAId: "a", personBId: "b", viewerIsSteward: true })]}
+      />,
+    );
+    const section = screen.getByTestId("family-gov-edges");
+    expect(section.className).toContain(styles.section);
+    expect(screen.getByText(hub.kin.govHeading).className).toContain(styles.heading);
+    expect(screen.getByText(hub.kin.govIntro).className).toContain(styles.intro);
+    const edgeItem = screen.getByTestId("family-gov-edge");
+    expect(edgeItem.className).toContain(styles.edge);
+    expect(edgeItem.closest("ul")!.className).toContain(styles.list);
+    expect(screen.getByText(hub.kin.edgePartneredWith("Alice", "Bob")).className).toContain(
+      styles.sentence,
+    );
+  });
+
+  it("GovernableEdgeList.module.css declares the restrained playful signature block", () => {
+    expect(css).toContain(':global(:root[data-skin="playful"])');
+    expect(css).toContain("var(--shadow-lift)");
+    // Dense stewardship guardrail: no full-scrapbook markers (tape / tilt / highlighter).
+    expect(css).not.toContain("var(--tape-bg)");
+    expect(css).not.toMatch(/--tilt/);
+    expect(css).not.toContain("var(--highlighter)");
+  });
+
+  it("GovernableEdgeList.module.css declares the reduce-motion + solemn suppression block", () => {
+    expect(css).toContain(':global(:root[data-reduce-motion="on"])');
+    expect(css).toContain(':global(:root[data-skin="playful"] [data-tone="solemn"])');
+    expect(css).toMatch(/transform:\s*none/);
+  });
 });

@@ -4,12 +4,16 @@
  * #254 — List-view "Relationships in this family" section. Surfaces steward Remove / subject Hide for
  * every actable visible edge (same controls as PersonDetails on the tree). Shown only when the viewer
  * can act on ≥1 edge. After a successful action, refreshes server props so the projection updates.
+ *
+ * Styling: CSS Modules + data-skin Phase-2 (issue #265). Shared GovernableEdgeList classes with the
+ * tree person-details mount — no skin id in component logic.
  */
 import { useRouter } from "next/navigation";
 import type { GovernableKinEdge } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import { KinEdgeControls } from "../kin/kin-edge-controls";
 import { actableEdges, edgeSentence, governableEdgeKey } from "../kin/edge-sentence";
+import styles from "../kin/GovernableEdgeList.module.css";
 
 export function GovernableEdgesSection({
   familyId,
@@ -25,53 +29,17 @@ export function GovernableEdgesSection({
   return (
     <section
       data-testid="family-gov-edges"
-      style={{ maxWidth: 720, marginTop: 28 }}
+      className={styles.section}
       aria-labelledby="family-gov-heading"
     >
-      <h2
-        id="family-gov-heading"
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-story)",
-          fontWeight: 500,
-          color: "var(--text-body)",
-          margin: "0 0 6px",
-        }}
-      >
+      <h2 id="family-gov-heading" className={styles.heading}>
         {hub.kin.govHeading}
       </h2>
-      <p
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--text-ui-sm)",
-          color: "var(--text-muted)",
-          margin: "0 0 16px",
-        }}
-      >
-        {hub.kin.govIntro}
-      </p>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
+      <p className={styles.intro}>{hub.kin.govIntro}</p>
+      <ul className={styles.list}>
         {actable.map((edge) => (
-          <li
-            key={governableEdgeKey(edge)}
-            data-testid="family-gov-edge"
-            style={{
-              background: "var(--surface-card)",
-              border: "var(--border-width) solid var(--border)",
-              borderRadius: "var(--radius-lg)",
-              padding: "16px 20px",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui)",
-                color: "var(--text-body)",
-                margin: 0,
-              }}
-            >
-              {edgeSentence(edge)}
-            </p>
+          <li key={governableEdgeKey(edge)} data-testid="family-gov-edge" className={styles.edge}>
+            <p className={styles.sentence}>{edgeSentence(edge)}</p>
             <KinEdgeControls
               familyId={familyId}
               edge={edge}

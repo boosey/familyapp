@@ -1,0 +1,50 @@
+/*
+ * KinEdgeControls — shared Remove / Hide / nature controls for governable edges.
+ * Token-only layout (no skin signatures here; Playful Phase-2 lives on GovernableEdgeList .edge).
+ */
+
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inlineForm {
+  display: inline;
+}
+
+.correctForm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.natureLabel {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.natureCaption {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-meta);
+}
+
+.natureSelect {
+  min-height: auto;
+  padding: 4px 8px;
+  width: auto;
+}
+
+.error {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-danger);
+  margin: 4px 0 0;
+}

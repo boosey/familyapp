@@ -13,6 +13,9 @@
  * control. On success, `onSuccess` reports which action ran so the mount can prune client tree
  * state only for deny/hide (affirm/correct must keep the edge visible - TreeCanvas merge won't
  * restore a wrongly pruned edge when only `state`/`nature` changed).
+ *
+ * Layout: KinEdgeControls.module.css (token-only). Playful Phase-2 signatures live on the shared
+ * GovernableEdgeList `.edge` card — not on these controls (#265).
  */
 import { useState, useTransition } from "react";
 import { KindredButton } from "@/app/_kindred";
@@ -26,6 +29,7 @@ import {
   hideEdgeAction,
   type ActionResult,
 } from "./actions";
+import styles from "./KinEdgeControls.module.css";
 
 /** Which governance control succeeded — mount points prune the tree only for deny/hide. */
 export type KinEdgeGovernAction = "affirm" | "deny" | "hide" | "correct";
@@ -82,7 +86,7 @@ function ActionButton({
     });
   }
   return (
-    <form action={onSubmit} style={{ display: "inline" }}>
+    <form action={onSubmit} className={styles.inlineForm}>
       <EdgeFields familyId={familyId} edge={edge} />
       <KindredButton
         type="submit"
@@ -127,21 +131,18 @@ function CorrectNatureForm({
   return (
     <form
       action={onSubmit}
-      style={{ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
+      className={styles.correctForm}
       data-testid="kin-edge-correct-nature"
     >
       <EdgeFields familyId={familyId} edge={edge} />
-      <label className="kin-form-label" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-meta)" }}>
-          {hub.kin.natureFieldLabel}
-        </span>
+      <label className={`kin-form-label ${styles.natureLabel}`}>
+        <span className={styles.natureCaption}>{hub.kin.natureFieldLabel}</span>
         <select
           name="nature"
-          className="kin-field"
+          className={`kin-field ${styles.natureSelect}`}
           defaultValue={defaultNature}
           disabled={pending}
           aria-label={hub.kin.natureFieldLabel}
-          style={{ minHeight: "auto", padding: "4px 8px", width: "auto" }}
         >
           {NATURE_OPTIONS.map((n) => (
             <option key={n} value={n}>
@@ -175,10 +176,7 @@ export function KinEdgeControls({
   if (!edge.viewerCanRemove && !edge.viewerCanHide) return null;
 
   return (
-    <div
-      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}
-      data-testid="kin-edge-controls"
-    >
+    <div className={styles.root} data-testid="kin-edge-controls">
       {edge.viewerIsSteward && edge.state !== "affirmed" ? (
         <ActionButton
           familyId={familyId}
@@ -226,16 +224,7 @@ export function KinEdgeControls({
         />
       ) : null}
       {error ? (
-        <p
-          role="alert"
-          style={{
-            width: "100%",
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-danger)",
-            margin: "4px 0 0",
-          }}
-        >
+        <p role="alert" className={styles.error}>
           {error}
         </p>
       ) : null}

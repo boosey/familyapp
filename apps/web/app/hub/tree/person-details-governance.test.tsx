@@ -4,11 +4,15 @@
  * kin page onto the tree details sheet. Capability flags come from `listGovernableKinEdges`
  * (threaded as `governableEdges`); the sheet only lists edges that touch the opened person AND that
  * the viewer can act on.
+ *
+ * Issue #265 — same GovernableEdgeList module classes as List-view (shared edge chrome; no divergent
+ * skin special-case in TS). CSS-source guards live in governable-edges-section.test.tsx.
  */
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { GovernableKinEdge, TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
+import styles from "../kin/GovernableEdgeList.module.css";
 import { PersonDetails } from "./person-details";
 import type { PersonEditabilityResult, SavePersonEditResult } from "./actions";
 
@@ -213,4 +217,20 @@ it("does not show nature picker on partner edges or for non-stewards (#255)", as
   expect(await screen.findByRole("button", { name: hub.kin.hide })).toBeTruthy();
   expect(screen.queryByTestId("kin-edge-correct-nature")).toBeNull();
   expect(screen.queryByRole("button", { name: hub.kin.correct })).toBeNull();
+});
+
+describe("PersonDetails gov edges — playful signature (#265)", () => {
+  it("renders list / edge / sentence / heading with the shared module classes (card chrome)", async () => {
+    renderDetails([edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true })]);
+    const section = await screen.findByTestId("tree-details-gov-edges");
+    expect(section.className).toContain(styles.section);
+    expect(screen.getByText(hub.kin.govHeading).className).toContain(styles.heading);
+    expect(screen.queryByText(hub.kin.govIntro)).toBeNull();
+    const edgeItem = screen.getByTestId("tree-details-gov-edge");
+    expect(edgeItem.className).toContain(styles.edge);
+    expect(edgeItem.closest("ul")!.className).toContain(styles.list);
+    expect(screen.getByText(hub.kin.edgeParentOf("Alice", "Bob")).className).toContain(
+      styles.sentence,
+    );
+  });
 });
