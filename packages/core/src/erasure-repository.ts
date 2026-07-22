@@ -41,6 +41,7 @@ import {
   families,
   googlePhotosConnections,
   intakeAnswers,
+  notificationStreamPrefs,
   invitations,
   joinRequests,
   linkSessions,
@@ -655,10 +656,13 @@ export async function eraseAccount(
     }
 
     // (f) The person's own inbound rows that would block their deletion / are theirs to reclaim:
-    //     intake answers (+ their revisions cascade), pending invitations they were INVITED to,
-    //     join requests / link sessions that are theirs, and their Google Photos connection. Kept
-    //     minimal + FK-guided.
+    //     intake answers (+ their revisions cascade), notification stream prefs, pending invitations
+    //     they were INVITED to, join requests / link sessions that are theirs, and their Google
+    //     Photos connection. Kept minimal + FK-guided.
     await tx.delete(intakeAnswers).where(eq(intakeAnswers.personId, personId));
+    await tx
+      .delete(notificationStreamPrefs)
+      .where(eq(notificationStreamPrefs.personId, personId));
     await tx
       .delete(invitations)
       .where(and(eq(invitations.inviteePersonId, personId), eq(invitations.status, "pending")));
@@ -742,6 +746,7 @@ async function personStillReferenced(tx: TxLike, personId: string): Promise<bool
     UNION ALL SELECT 1 FROM join_requests WHERE requester_person_id = ${p} OR decided_by_person_id = ${p}
     UNION ALL SELECT 1 FROM google_photos_connections WHERE person_id = ${p}
     UNION ALL SELECT 1 FROM intake_answers WHERE person_id = ${p}
+    UNION ALL SELECT 1 FROM notification_stream_prefs WHERE person_id = ${p}
     UNION ALL SELECT 1 FROM intake_revisions WHERE actor_person_id = ${p}
     UNION ALL SELECT 1 FROM story_views WHERE person_id = ${p}
     UNION ALL SELECT 1 FROM story_favorites WHERE person_id = ${p}

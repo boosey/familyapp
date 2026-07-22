@@ -20,6 +20,8 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."notification_frequency" AS ENUM('every_item', 'daily_digest', 'weekly_digest', 'off');
+CREATE TYPE "public"."notification_stream" AS ENUM('questions_for_me', 'answers_to_my_asks', 'family_activity');
 CREATE TYPE "public"."occurred_kind" AS ENUM('date', 'circa', 'period');
 CREATE TYPE "public"."person_origin" AS ENUM('self', 'invitee', 'mention');
 CREATE TYPE "public"."person_sex" AS ENUM('male', 'female', 'unknown');
@@ -318,6 +320,15 @@ CREATE TABLE "mock_auth_users" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "notification_stream_prefs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"person_id" uuid NOT NULL,
+	"stream" "notification_stream" NOT NULL,
+	"frequency" "notification_frequency" NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "persons" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"display_name" text,
@@ -539,6 +550,7 @@ ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_invited_by_person_id_p
 ALTER TABLE "media" ADD CONSTRAINT "media_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "notification_stream_prefs" ADD CONSTRAINT "notification_stream_prefs_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_created_by_person_id_persons_id_fk" FOREIGN KEY ("created_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "photo_people" ADD CONSTRAINT "photo_people_photo_id_family_photos_id_fk" FOREIGN KEY ("photo_id") REFERENCES "public"."family_photos"("id") ON DELETE cascade ON UPDATE no action;
@@ -617,6 +629,8 @@ CREATE INDEX "memberships_person_idx" ON "memberships" USING btree ("person_id")
 CREATE INDEX "memberships_family_idx" ON "memberships" USING btree ("family_id");
 CREATE UNIQUE INDEX "mock_auth_users_email_uq" ON "mock_auth_users" USING btree ("email");
 CREATE UNIQUE INDEX "mock_auth_users_provider_id_uq" ON "mock_auth_users" USING btree ("auth_provider_user_id");
+CREATE INDEX "notification_stream_prefs_person_idx" ON "notification_stream_prefs" USING btree ("person_id");
+CREATE UNIQUE INDEX "notification_stream_prefs_person_stream_uq" ON "notification_stream_prefs" USING btree ("person_id","stream");
 CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_id");
 CREATE UNIQUE INDEX "photo_people_photo_person_uq" ON "photo_people" USING btree ("photo_id","person_id");
 CREATE INDEX "photo_people_photo_idx" ON "photo_people" USING btree ("photo_id");
