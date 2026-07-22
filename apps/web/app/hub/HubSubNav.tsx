@@ -18,6 +18,11 @@ export interface HubSubNavItem {
   badge?: number;
   /** Accessible label for the badge (the caller owns what the count MEANS). */
   badgeLabel?: string;
+  /**
+   * Optional accessible name override (#301 icon-pills): when the visible label is an icon-only
+   * glyph, set this so the pill still announces "Feed" / "Timeline" (etc.).
+   */
+  ariaLabel?: string;
 }
 
 export interface HubSubNavProps {
@@ -28,6 +33,12 @@ export interface HubSubNavProps {
   active: string;
   /** Button-mode click handler (receives the item key). Ignored by link items. */
   onSelect?: (key: string) => void;
+  /**
+   * Layout for the pill group. `fill` (default) keeps the phone full-width SegmentedControl behaviour
+   * for Family/Questions. `intrinsic` hugs content — required for progressive Sub tabs measurement
+   * and non-cramped labeled pills when that stage fits (#301).
+   */
+  layout?: "fill" | "intrinsic";
 }
 
 /**
@@ -36,9 +47,18 @@ export interface HubSubNavProps {
  * in a labelled <nav>. The pill look is the shared _kindred/SegmentedControl `.group`/`.pill` (#1/#5)
  * and the count `.badge` is HubTabs.module.css; the toolbar owns the outer spacing.
  */
-export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps) {
+export function HubSubNav({
+  ariaLabel,
+  items,
+  active,
+  onSelect,
+  layout = "fill",
+}: HubSubNavProps) {
+  const groupClass =
+    layout === "intrinsic" ? `${seg.group} ${seg.groupIntrinsic}` : seg.group;
+
   return (
-    <nav className={seg.group} aria-label={ariaLabel}>
+    <nav className={groupClass} aria-label={ariaLabel}>
       {items.map((item) => {
         const isActive = item.key === active;
         const badge =
@@ -55,6 +75,7 @@ export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps
               href={item.href}
               className={seg.pill}
               aria-current={isActive ? "page" : undefined}
+              aria-label={item.ariaLabel}
             >
               {item.label}
               {badge}
@@ -68,6 +89,7 @@ export function HubSubNav({ ariaLabel, items, active, onSelect }: HubSubNavProps
             type="button"
             className={seg.pill}
             aria-current={isActive ? "page" : undefined}
+            aria-label={item.ariaLabel}
             onClick={() => onSelect?.(item.key)}
           >
             {item.label}

@@ -1,0 +1,55 @@
+/* HubProgressiveControlRow (#301) — ONE progressive-collapse control row for Stories/Album.
+ * Same vocabulary on every width; expansion comes from resolveHubControlExpansion. Phone vs wide
+ * only changes IconSheet shell (sheet vs popover), not which controls exist. Non-sticky. */
+
+.row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  margin-bottom: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.units {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Off-screen natural-width probes — measure each unit form without affecting layout.
+ * Keep height auto so getBoundingClientRect still reports intrinsic widths. */
+.measure {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.measureItem {
+  display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Full-width row below for reminders that do not compete with browse expansion. */
+.belowRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: var(--space-2);
+}

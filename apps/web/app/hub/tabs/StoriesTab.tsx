@@ -136,8 +136,8 @@ export function StoriesTab({
   const emptyCopy = viewerFamilies.length === 0 ? hub.shell.pendingEmpty : hub.stories.empty;
 
   return (
-    // The shared two-row HubToolbar (#190) + the browse/empty body, all owned by the client
-    // StoriesSurface (it holds the mode/search/feed-view/reminder state that drives the toolbar). It
+    // The progressive hub control row (#301) + the browse/empty body, all owned by the client
+    // StoriesSurface (it holds the mode/search/feed-view/reminder state that drives the row). It
     // reads `?mode=` via useSearchParams, so it sits under a Suspense boundary like the old StoryBrowse.
     <Suspense>
       <StoriesSurface
