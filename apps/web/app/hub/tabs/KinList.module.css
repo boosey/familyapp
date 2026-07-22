@@ -49,6 +49,23 @@
   padding: 16px 20px;
 }
 
+/* #330 — a row rendered as a <button> (List → PersonDetails) needs its browser-default button chrome
+   reset so it reads identically to the plain <li> row above; `.row`'s own background/border/padding
+   already apply since both elements share that class. */
+.rowButton {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 .primary {
   display: flex;
   flex-wrap: wrap;

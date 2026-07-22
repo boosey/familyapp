@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { hub } from "@/app/_copy";
 import type { FamilyListPerson } from "@/lib/family-list-people";
@@ -136,6 +136,50 @@ describe("KinList", () => {
     expect(screen.queryByTestId("family-gov-edges")).toBeNull();
     expect(screen.queryByText(hub.unplaced.place)).toBeNull();
     expect(screen.queryByText(hub.unplaced.leaveNonFamily)).toBeNull();
+  });
+
+  // #330 — a row opens PersonDetails via the caller's `onSelectPerson`; without it, rows stay inert.
+  describe("row activation (#330)", () => {
+    it("without onSelectPerson, a row is a plain inert list item (no button)", () => {
+      render(<KinList people={PEOPLE} />);
+      const row = screen.getByTestId("family-list-row-marco");
+      expect(row.tagName).toBe("LI");
+      expect(screen.queryByRole("button", { name: /Marco/ })).toBeNull();
+    });
+
+    it("with onSelectPerson, a row is a real button and clicking it calls back with the full person", () => {
+      const onSelectPerson = vi.fn();
+      render(<KinList people={PEOPLE} onSelectPerson={onSelectPerson} />);
+      const row = screen.getByTestId("family-list-row-marco");
+      expect(row.tagName).toBe("BUTTON");
+      fireEvent.click(row);
+      expect(onSelectPerson).toHaveBeenCalledTimes(1);
+      expect(onSelectPerson).toHaveBeenCalledWith(
+        expect.objectContaining({ personId: "marco", displayName: "Marco" }),
+      );
+    });
+
+    it("a button row is keyboard-activatable (native <button> semantics)", () => {
+      const onSelectPerson = vi.fn();
+      render(<KinList people={PEOPLE} onSelectPerson={onSelectPerson} />);
+      const row = screen.getByTestId("family-list-row-marco") as HTMLButtonElement;
+      row.focus();
+      expect(document.activeElement).toBe(row);
+      fireEvent.click(row); // jsdom doesn't synthesize Enter→click on buttons; assert the semantics.
+      expect(onSelectPerson).toHaveBeenCalledTimes(1);
+    });
+
+    it("selecting a different row after a search filter still resolves the right person", () => {
+      const onSelectPerson = vi.fn();
+      render(<KinList people={PEOPLE} onSelectPerson={onSelectPerson} />);
+      fireEvent.change(screen.getByRole("searchbox", { name: hub.kin.searchAria }), {
+        target: { value: "eleanor" },
+      });
+      fireEvent.click(screen.getByTestId("family-list-row-eleanor"));
+      expect(onSelectPerson).toHaveBeenCalledWith(
+        expect.objectContaining({ personId: "eleanor", membership: "tree-only" }),
+      );
+    });
   });
 });
 

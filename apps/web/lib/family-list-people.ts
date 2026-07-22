@@ -10,6 +10,7 @@ import type {
   KinListEntry,
   KinRelation,
   PlacedPersonView,
+  TreeNode,
   UnplacedMember,
 } from "@chronicle/core";
 
@@ -98,4 +99,35 @@ export function projectFamilyListPeople(input: ProjectFamilyListPeopleInput): Fa
 
 function membershipRank(m: FamilyListMembershipBadge): number {
   return m === "member" ? 0 : 1;
+}
+
+/**
+ * #330 — resolve a `TreeNode` for a List row so List can open the SAME `PersonDetails` sheet Tree
+ * uses. A List row's person is often already materialized in the viewer's current tree window
+ * (`treeNodes`) — prefer that node so dates/sex/hidden-edge flags are accurate. When it is NOT (e.g.
+ * a tree-only relative outside the rendered window, or an unplaced member never placed on Tree),
+ * synthesize a minimal node from the `FamilyListPerson` projection: List's projection carries no
+ * birth/death year, sex, or hidden-edge data, so those default to "unknown"/null/false, and there is
+ * no live invitation surfaced on List (#334 wires the Invite modal separately), so `inviteStatus`
+ * defaults to `"not-applicable"` regardless of the person's real status.
+ */
+export function resolveListPersonNode(
+  person: FamilyListPerson,
+  treeNodes: readonly TreeNode[],
+): TreeNode {
+  const existing = treeNodes.find((n) => n.personId === person.personId);
+  if (existing) return existing;
+  return {
+    personId: person.personId,
+    displayName: person.displayName,
+    identified: person.identified,
+    lifeStatus: person.lifeStatus,
+    birthYear: null,
+    deathYear: null,
+    sex: "unknown",
+    relationToRoot: person.relation,
+    hasHiddenParents: false,
+    hasHiddenChildren: false,
+    inviteStatus: "not-applicable",
+  };
 }

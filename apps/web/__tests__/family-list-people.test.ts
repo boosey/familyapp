@@ -5,8 +5,15 @@
  * membership-first badges (Member vs tree-only). No mutation fields.
  */
 import { describe, expect, it } from "vitest";
-import type { FamilyMemberView, KinListEntry, PlacedPersonView, UnplacedMember } from "@chronicle/core";
-import { projectFamilyListPeople } from "@/lib/family-list-people";
+import type {
+  FamilyMemberView,
+  KinListEntry,
+  PlacedPersonView,
+  TreeNode,
+  UnplacedMember,
+} from "@chronicle/core";
+import type { FamilyListPerson } from "@/lib/family-list-people";
+import { projectFamilyListPeople, resolveListPersonNode } from "@/lib/family-list-people";
 
 function kin(over: Partial<KinListEntry> & { personId: string }): KinListEntry {
   return {
@@ -98,5 +105,78 @@ describe("projectFamilyListPeople (#283)", () => {
     for (const row of rows) {
       expect(row.membership === "member" || row.membership === "tree-only").toBe(true);
     }
+  });
+});
+
+function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyListPerson {
+  return {
+    personId: over.personId,
+    displayName: "displayName" in over ? (over.displayName ?? null) : over.personId,
+    identified: over.identified ?? true,
+    lifeStatus: over.lifeStatus ?? "living",
+    membership: over.membership ?? "member",
+    relation: "relation" in over ? (over.relation ?? null) : null,
+  };
+}
+
+function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
+  return {
+    personId: over.personId,
+    displayName: over.displayName ?? over.personId,
+    identified: over.identified ?? true,
+    lifeStatus: over.lifeStatus ?? "living",
+    birthYear: over.birthYear ?? null,
+    deathYear: over.deathYear ?? null,
+    relationToRoot: over.relationToRoot ?? null,
+    hasHiddenParents: over.hasHiddenParents ?? false,
+    hasHiddenChildren: over.hasHiddenChildren ?? false,
+    sex: over.sex ?? "unknown",
+    inviteStatus: over.inviteStatus ?? "not-applicable",
+  };
+}
+
+describe("resolveListPersonNode (#330)", () => {
+  it("prefers the already-materialized tree node when the person is in the current window", () => {
+    const treeNode = node({
+      personId: "marco",
+      displayName: "Marco",
+      birthYear: 1980,
+      sex: "male",
+      inviteStatus: "invitable",
+    });
+    const resolved = resolveListPersonNode(person({ personId: "marco", displayName: "Marco" }), [
+      treeNode,
+    ]);
+    expect(resolved).toBe(treeNode);
+  });
+
+  it("synthesizes a minimal node with safe defaults when absent from the tree window", () => {
+    const resolved = resolveListPersonNode(
+      person({ personId: "eleanor", displayName: "Eleanor", relation: "parent", lifeStatus: "deceased" }),
+      [],
+    );
+    expect(resolved).toEqual({
+      personId: "eleanor",
+      displayName: "Eleanor",
+      identified: true,
+      lifeStatus: "deceased",
+      birthYear: null,
+      deathYear: null,
+      sex: "unknown",
+      relationToRoot: "parent",
+      hasHiddenParents: false,
+      hasHiddenChildren: false,
+      inviteStatus: "not-applicable",
+    });
+  });
+
+  it("synthesizes not-applicable invite status even for an identified living unplaced member", () => {
+    // #330: List never surfaces an invite affordance for a synthesized node — Invite stays Tree-only
+    // until #334 wires the modal.
+    const resolved = resolveListPersonNode(
+      person({ personId: "rosa", displayName: "Rosa", identified: true, lifeStatus: "living" }),
+      [],
+    );
+    expect(resolved.inviteStatus).toBe("not-applicable");
   });
 });

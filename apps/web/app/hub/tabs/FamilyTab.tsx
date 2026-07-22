@@ -5,7 +5,10 @@
  * in here.
  *
  *   - Tree view → the interactive <TreeCanvas> (pan/zoom, per-card add via modal) + unplaced tray.
- *   - List  view → browse-only searchable <KinList> of the full family people index (#283).
+ *   - List  view → searchable <KinList> of the full family people index (#283). Never hosts
+ *     placement/Not-family/Remove or the unplaced tray — but #330 lets a row open the SAME
+ *     <PersonDetails> sheet Tree uses (details, Edit, Stories/Photos/Mentions) with edge governance
+ *     and the Invite affordance omitted (no `governableEdges`, no `onInvite`).
  *
  * The Tree/List selection is URL-driven now (#158): the `Family tree · List · Requests` selector lives
  * in <FamilySurfaceNav> (rendered by the page shell) and this component simply renders whichever `view`
@@ -23,12 +26,14 @@ import { useRouter } from "next/navigation";
 import type { AddRelativeRelation, GovernableKinEdge, KinshipTreeData, UnplacedMember } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import type { FamilyListPerson } from "@/lib/family-list-people";
+import { resolveListPersonNode } from "@/lib/family-list-people";
 import { TreeCanvas, type TreeCanvasHandle } from "../tree/tree-canvas";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../tree/tree-constants";
 import {
   type PlaceConfirmSubject,
 } from "../tree/place-confirm";
 import { PlaceConfirmModal } from "../tree/place-confirm-modal";
+import { PersonDetails } from "../tree/person-details";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "./UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
@@ -118,6 +123,9 @@ export function FamilyTab({
   // #288 — mobile Place→tap→zone session (subject picking) + locked-receiver confirm after a zone tap.
   const [canvasPlaceSubject, setCanvasPlaceSubject] = useState<PlaceConfirmSubject | null>(null);
   const [mobilePlaceConfirm, setMobilePlaceConfirm] = useState<MobilePlaceConfirm | null>(null);
+
+  // #330 — List's selected row opens the same PersonDetails sheet Tree uses, no governable edges.
+  const [selectedListPerson, setSelectedListPerson] = useState<FamilyListPerson | null>(null);
 
   // #169 / #286: Tree tray always mounts (unplaced members + New person). List never hosts it (#283).
   // On compact, Place/New start a canvas session instead of the unlocked-receiver modal.
@@ -284,8 +292,23 @@ export function FamilyTab({
           ) : null}
         </>
       ) : (
-        // #283: browse-only people index — no governable-edges section, no Place/Not-family/Remove.
-        <KinList people={listPeople} />
+        // #283: no Place/Not-family/Remove/unplaced tray on List. #330: a row DOES open the same
+        // PersonDetails sheet Tree uses — `governableEdges`/`onInvite` are omitted (edge governance
+        // and Invite stay Tree-only). The wrapper needs `position: relative` because PersonDetails is
+        // `position: absolute` (mirrors TreeCanvas's own wrapper around the canvas + sheet).
+        <div style={{ position: "relative" }}>
+          <KinList people={listPeople} onSelectPerson={setSelectedListPerson} />
+          {selectedListPerson && (
+            <PersonDetails
+              key={selectedListPerson.personId}
+              node={resolveListPersonNode(selectedListPerson, tree.nodes)}
+              relationToViewer={selectedListPerson.relation}
+              familyId={familyId}
+              onClose={() => setSelectedListPerson(null)}
+              onSaved={() => router.refresh()}
+            />
+          )}
+        </div>
       )}
     </div>
   );

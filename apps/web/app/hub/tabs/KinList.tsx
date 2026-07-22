@@ -1,9 +1,15 @@
 "use client";
 /**
- * KinList — the Family tab's List view. A read-only, searchable people index of the full family
- * projection (#283 / ADR-0023 amendment): members, edged tree-only relatives, and unplaced members.
- * Each row shows a membership-first badge (Member vs tree-only) and may show a derived relation chip.
- * List itself never mutates kinship edges or places members — placement and governance live on Tree.
+ * KinList — the Family tab's List view. A searchable people index of the full family projection
+ * (#283 / ADR-0023 amendment): members, edged tree-only relatives, and unplaced members. Each row
+ * shows a membership-first badge (Member vs tree-only) and may show a derived relation chip. List
+ * itself never mutates kinship edges or places members — placement and edge governance (Remove/Hide)
+ * live on Tree only.
+ *
+ * #330 — a row is activatable (click/Enter/Space via `onSelectPerson`) so the caller (FamilyTab) can
+ * open the SAME `PersonDetails` sheet Tree uses (details/Edit/Stories·Photos·Mentions), just without
+ * the governable-edges section or the Invite affordance. `onSelectPerson` is optional so KinList stays
+ * mountable read-only (e.g. isolated unit tests) when omitted.
  *
  * Styling: CSS Modules + data-skin Phase-2 (issue #266). Base classes are skin-neutral; Scrapbook
  * signatures live in KinList.module.css under :global(:root[data-skin="scrapbook"]) — no skin id in
@@ -32,7 +38,13 @@ function displayNameFor(entry: FamilyListPerson): string {
   return hub.kin.unknownRelative;
 }
 
-export function KinList({ people }: { people: FamilyListPerson[] }) {
+export interface KinListProps {
+  people: FamilyListPerson[];
+  /** #330 — activates a row (click/Enter/Space); omitted ⇒ rows render as plain, inert list items. */
+  onSelectPerson?: (person: FamilyListPerson) => void;
+}
+
+export function KinList({ people, onSelectPerson }: KinListProps) {
   const [query, setQuery] = useState("");
 
   const trimmed = query.trim().toLowerCase();
@@ -65,12 +77,8 @@ export function KinList({ people }: { people: FamilyListPerson[] }) {
         <ul className={styles.list}>
           {results.map((entry) => {
             const known = Boolean(entry.identified && entry.displayName);
-            return (
-              <li
-                key={entry.personId}
-                className={styles.row}
-                data-testid={`family-list-row-${entry.personId}`}
-              >
+            const rowContent = (
+              <>
                 <span className={styles.primary}>
                   <span className={known ? styles.name : `${styles.name} ${styles.nameUnknown}`}>
                     {displayNameFor(entry)}
@@ -89,6 +97,29 @@ export function KinList({ people }: { people: FamilyListPerson[] }) {
                 {entry.relation ? (
                   <span className={styles.relation}>{relationLabel(entry.relation)}</span>
                 ) : null}
+              </>
+            );
+            // Without a handler the row stays a plain, inert `<li>` (matches the pre-#330 markup
+            // exactly). With a handler the row becomes a real `<button>` for native click + keyboard
+            // (Enter/Space) activation and focus semantics; the `<li>` around it carries no class.
+            return onSelectPerson ? (
+              <li key={entry.personId}>
+                <button
+                  type="button"
+                  className={`${styles.row} ${styles.rowButton}`}
+                  data-testid={`family-list-row-${entry.personId}`}
+                  onClick={() => onSelectPerson(entry)}
+                >
+                  {rowContent}
+                </button>
+              </li>
+            ) : (
+              <li
+                key={entry.personId}
+                className={styles.row}
+                data-testid={`family-list-row-${entry.personId}`}
+              >
+                {rowContent}
               </li>
             );
           })}
