@@ -189,6 +189,21 @@ describe("FamilySurfaceNav progressive control row (#297)", () => {
     expect(within(row).getByText(REQUESTS).closest("a")).not.toBeNull();
   });
 
+  it("accepts Family chips on Requests (progressive Family unit present)", () => {
+    render(
+      <FamilySurfaceNav
+        active="requests"
+        familiesParam={null}
+        showRequests
+        row2Left={<div data-testid="fam-chips">chips</div>}
+      />,
+    );
+    const row = visibleRow();
+    expect(row.getAttribute("data-family")).toBe("expanded");
+    expect(within(row).getByTestId("fam-chips")).toBeTruthy();
+    expect(row.getAttribute("data-views")).toBe("none");
+  });
+
   it("menu-icon stage navigates via router.push, preserving ?families=", () => {
     render(
       <FamilySurfaceNav
