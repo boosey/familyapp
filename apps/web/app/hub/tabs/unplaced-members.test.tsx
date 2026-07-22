@@ -158,6 +158,42 @@ it("renders unplaced members as a not-yet-connected tray in the Tree view", () =
   // It sits OUTSIDE the pan/zoom layer (the layout engine) ΓÇö the tray is not inside tree-pan-layer.
   const panLayer = screen.getByTestId("tree-pan-layer");
   expect(panLayer.contains(tray)).toBe(false);
+  // #287: desktop tray exposes dedicated drag handles (SSR/jsdom = non-compact).
+  expect(within(tray).getByTestId("unplaced-drag-u1")).toBeTruthy();
+  expect(within(tray).getByTestId("tree-tray-new-person").getAttribute("draggable")).toBe("true");
+});
+
+it("#287: tray drag handle writes place-drag payload and arms the active-drag store", async () => {
+  const { setActivePlaceDrag, getActivePlaceDrag, PLACE_DRAG_MIME } = await import(
+    "../tree/place-drag"
+  );
+  setActivePlaceDrag(null);
+  renderPanel({ variant: "tray", showNewPerson: true });
+
+  const handle = screen.getByTestId("unplaced-drag-u1");
+  const dataTransfer = {
+    setData: vi.fn(),
+    effectAllowed: "none" as string,
+  };
+  fireEvent.dragStart(handle, { dataTransfer });
+  expect(dataTransfer.setData).toHaveBeenCalledWith(
+    PLACE_DRAG_MIME,
+    expect.stringContaining('"personId":"u1"'),
+  );
+  expect(getActivePlaceDrag()).toEqual({
+    kind: "link",
+    personId: "u1",
+    displayName: "Rosa Esposito",
+  });
+
+  fireEvent.dragEnd(handle);
+  expect(getActivePlaceDrag()).toBeNull();
+
+  const neu = screen.getByTestId("tree-tray-new-person");
+  fireEvent.dragStart(neu, { dataTransfer });
+  expect(getActivePlaceDrag()).toEqual({ kind: "mint" });
+  fireEvent.dragEnd(neu);
+  expect(getActivePlaceDrag()).toBeNull();
 });
 
 it("#286: Tree tray shows New person even when there are no unplaced members", () => {

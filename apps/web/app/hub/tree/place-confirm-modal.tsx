@@ -5,7 +5,7 @@
  * Used by:
  *   - Tree tray: Place on an unplaced member (link) and New person (mint)
  *   - Secondary +/kebab (via the same write helpers in place-confirm.ts)
- *   - Future desktop DnD (#287) and mobile Place→tap (#288): open with receiverLocked +
+ *   - Desktop tray → zone DnD (#287) and mobile Place→tap (#288): open with receiverLocked +
  *     initialRelation from relationFromZone
  *
  * Grilled fields: receiver name fixed when locked (editable picker otherwise); relation editable;

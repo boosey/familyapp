@@ -22,6 +22,9 @@
  *     NOT become a drag (for double-tap detection). Carets & the kebab keep their own stopPropagation.
  *   - Per-direction CARETS expand/collapse a branch — CLIENT ONLY, off the fetch path.
  *   - A "+" opens the Add-a-relative MODAL (via TreeAddProvider); the per-card ⋮ opens the same modal.
+ *   - Desktop tray → card-zone DnD (#287): while a tray place-drag is active, identified cards show
+ *     top/bottom/side zones; drop opens PlaceConfirmModal (receiverLocked + relationFromZone). Canvas
+ *     pan/zoom is unchanged when not dragging from the tray (drag source lives outside the pan layer).
  *   - The kebab Focus action re-roots the tree on that card (server refetch) and recomputes chips/ring,
  *     applying a PAN DELTA so the newly-focused card holds its on-screen position (camera visually still).
  *
@@ -59,7 +62,7 @@ import {
   type Affordance,
   type ExpansionState,
 } from "./tree-layout";
-import { PersonNode, isAnonymousBridge } from "./person-node";
+import { PersonNode, isAnonymousBridge, displayNameFor } from "./person-node";
 import {
   AFFORDANCE_SIZE_PX,
   DOUBLE_TAP_MS,
@@ -81,6 +84,16 @@ import { TreeFocusProvider } from "./focus-context";
 import { LineGovernanceMenu } from "./line-governance-menu";
 import { actableEdgesForHit } from "./line-governance";
 import { AddRelativeModal } from "./add-relative-modal";
+import { CardDropZones } from "./card-drop-zones";
+import { PlaceConfirmModal } from "./place-confirm-modal";
+import {
+  getActivePlaceDrag,
+  setActivePlaceDrag,
+  subjectFromPlaceDrag,
+  zoneDropModalProps,
+} from "./place-drag";
+import { useActivePlaceDrag } from "./use-active-place-drag";
+import type { PlaceConfirmSubject } from "./place-confirm";
 
 /** Imperative controls FamilyTab drives from the (lifted-out) controls row. */
 export interface TreeCanvasHandle {
@@ -206,6 +219,13 @@ interface AddTarget {
   coParentPersonId?: string;
 }
 
+/** #287 — PlaceConfirmModal opened from a tray → zone drop (locked receiver + zone relation). */
+interface ZonePlaceTarget {
+  subject: PlaceConfirmSubject;
+  receiver: { personId: string; displayName: string };
+  initialRelation: AddRelativeRelation;
+}
+
 export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function TreeCanvas(
   {
     familyId,
@@ -254,6 +274,9 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
   /** #289 — actable edges opened from a line hit-target. */
   const [lineGovEdges, setLineGovEdges] = useState<GovernableKinEdge[] | null>(null);
+  /** #287 — confirm modal after tray → zone drop. */
+  const [zonePlace, setZonePlace] = useState<ZonePlaceTarget | null>(null);
+  const activePlaceDrag = useActivePlaceDrag();
 
   // Track which frontier centers we've already background-fetched, so top-up never re-fetches the same
   // node twice (idempotent, quiet, off the critical path).
@@ -834,6 +857,32 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                     )
                   }
                 />
+                {/* #287 — zone overlays only while a tray place-drag is active (pan unaffected otherwise). */}
+                {!inert && activePlaceDrag ? (
+                  <CardDropZones
+                    personId={p.personId}
+                    active
+                    onZoneDrop={(zone) => {
+                      const payload = getActivePlaceDrag() ?? activePlaceDrag;
+                      setActivePlaceDrag(null);
+                      const props = zoneDropModalProps(
+                        zone,
+                        {
+                          personId: p.personId,
+                          displayName: displayNameFor(p.node),
+                        },
+                        subjectFromPlaceDrag(payload),
+                      );
+                      setDetails(null);
+                      setAddTarget(null);
+                      setZonePlace({
+                        subject: props.subject,
+                        receiver: props.receiver,
+                        initialRelation: props.initialRelation,
+                      });
+                    }}
+                  />
+                ) : null}
               </div>
             );
           })}
@@ -905,6 +954,23 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
           onSuccess={() => {
             const anchor = addTarget.anchorPersonId;
             setAddTarget(null);
+            void refetchAnchor(anchor);
+            onFamilyMutation?.();
+          }}
+        />
+      )}
+
+      {zonePlace && (
+        <PlaceConfirmModal
+          familyId={familyId}
+          subject={zonePlace.subject}
+          receiver={zonePlace.receiver}
+          receiverLocked
+          initialRelation={zonePlace.initialRelation}
+          onClose={() => setZonePlace(null)}
+          onSuccess={() => {
+            const anchor = zonePlace.receiver.personId;
+            setZonePlace(null);
             void refetchAnchor(anchor);
             onFamilyMutation?.();
           }}

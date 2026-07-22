@@ -115,6 +115,42 @@
   background: var(--surface-sunken);
 }
 
+/* Desktop drag handle (#287) — dedicated source so Place / Not-family clicks stay clean. */
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  touch-action: none;
+  min-height: var(--touch-min);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragHandle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dragHint {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-meta);
+  user-select: none;
+}
+
 .tray {
   margin-top: 16px;
   padding: 14px 16px;
@@ -138,6 +174,14 @@
   background: var(--surface-card);
   color: var(--text-body);
   cursor: pointer;
+}
+
+.newPersonDraggable {
+  cursor: grab;
+}
+
+.newPersonDraggable:active {
+  cursor: grabbing;
 }
 
 .newPerson:hover {
