@@ -303,6 +303,7 @@ export {
 export {
   addRelative,
   linkExistingMember,
+  planInviteAcceptPlacement,
   affirmEdge,
   denyEdge,
   correctEdge,
@@ -314,6 +315,8 @@ export {
   type AddRelativeInput,
   type AddRelativeResult,
   type AddRelativeRelation,
+  type InviteAcceptPlacementPlan,
+  type InviteAcceptRelation,
   type LinkExistingMemberInput,
   type LinkExistingMemberResult,
   type EdgeRef,
