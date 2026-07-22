@@ -159,6 +159,10 @@ export {
   listNotificationStreamFrequencies,
 } from "./notification-prefs";
 export {
+  allowsImmediateDelivery,
+  shouldDeliverImmediately,
+} from "./notification-immediate";
+export {
   AlreadyFamilyMemberError,
   AuthorizationError,
   InvariantViolation,

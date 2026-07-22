@@ -6,16 +6,16 @@
  * behind the guarded content subpath — see CLAUDE.md "asks are open schema") solely for the
  * identity/question-text fields needed to address the outbound ping.
  *
- * Mirrors `listStorySharedPingRecipients` (#270 / C13b): same Person×stream prefs API
- * (`getNotificationStreamFrequency`) and the same verified-email-then-accounts.email resolution
+ * Mirrors `listStorySharedPingRecipients` (#270 / C13b): same Person×stream immediate-send
+ * gate (`shouldDeliverImmediately`) and the same verified-email-then-accounts.email resolution
  * (`resolvePersonEmails`). Only `off` suppresses immediate send — digest frequencies
  * (`daily_digest` / `weekly_digest`) are treated like `every_item` until digest assembly (#277)
- * exists to actually batch them.
+ * exists to actually batch them (plug point: `allowsImmediateDelivery` in notification-immediate).
  */
 import { eq } from "drizzle-orm";
 import { asks, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
-import { getNotificationStreamFrequency } from "./notification-prefs";
+import { shouldDeliverImmediately } from "./notification-immediate";
 import { resolvePersonEmails } from "./person-emails";
 
 export interface QuestionsForMePingContext {
@@ -70,12 +70,9 @@ export async function resolveQuestionsForMePing(
   // Self-ask safety: never notify the asker, even if askee === asker.
   if (ask.targetPersonId === ask.askerPersonId) return base;
 
-  const frequency = await getNotificationStreamFrequency(
-    db,
-    ask.targetPersonId,
-    "questions_for_me",
-  );
-  if (frequency === "off") return base;
+  if (!(await shouldDeliverImmediately(db, ask.targetPersonId, "questions_for_me"))) {
+    return base;
+  }
 
   const emailsByPerson = await resolvePersonEmails(db, [ask.targetPersonId]);
   const email = emailsByPerson.get(ask.targetPersonId);
