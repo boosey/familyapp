@@ -2,7 +2,7 @@
  * Arch-style scan guard for issue #211.
  *
  * `--text-danger` is defined in the base tokens (`_kindred/tokens.css`) and overridden per skin
- * (`_skins/playful.css`), so a call site must consume it as `var(--text-danger)` — WITHOUT a hex
+ * (`_skins/scrapbook.css`), so a call site must consume it as `var(--text-danger)` — WITHOUT a hex
  * fallback. A fallback (`var(--text-danger, #b00)`) is dead code at best, and at worst it silently
  * renders an off-palette red when someone typos the token name, hiding the mistake instead of
  * failing visibly. This test walks the app source and asserts no danger-token fallback survives.

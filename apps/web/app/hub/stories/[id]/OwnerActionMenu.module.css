@@ -1,6 +1,6 @@
 /*
  * OwnerActionMenu — the story-owner kebab menu + dropdown (edit / add photos / manage sharing /
- * delete). LIGHT PLAYFUL: warmth only — warm hover + focus on the trigger and menu items, gentle
+ * delete). LIGHT Scrapbook: warmth only — warm hover + focus on the trigger and menu items, gentle
  * depth on the dropdown card and the primary confirm button. NO stickers / tape / tilt (this is a
  * control surface). Token-driven; hover/focus states move to CSS (were inline JS handlers). See
  * _skins/CSS-MODULES.md.

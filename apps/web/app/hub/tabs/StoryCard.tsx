@@ -2,10 +2,10 @@
 
 /**
  * StoryCard — the story card rendered in the Hub feed (Feed mode), extracted from the former inline
- * `FeedCard` in StoryBrowse.tsx so the Playful structural signatures (tilt, tape, sticker tags,
+ * `FeedCard` in StoryBrowse.tsx so the Scrapbook structural signatures (tilt, tape, sticker tags,
  * highlighter) can hook the hashed CSS-module classes.
  *
- * In the Playful masonry feed the card is no longer always photo-top: `layout` (assigned
+ * In the Scrapbook masonry feed the card is no longer always photo-top: `layout` (assigned
  * deterministically per story by `pickStoryLayout`) selects one of several editorial variants so the
  * feed reads like a scrapbook, never the same tile repeating:
  *   • top      — photo above the body (the classic look; kept in rotation for contrast).

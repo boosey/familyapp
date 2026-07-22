@@ -181,12 +181,13 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   (text-only, direct structured fields). Distinct from the first-time **Intake** walk at
   `/hub/about-you`, which stays unchanged in onboarding; Profile is reached from the account menu
   for post-onboarding edits.
-- **Settings** — the signed-in screen for **app preferences**: text size and color palette
-  (Heirloom / Archive / Hearth). Light / dark / system appearance is deferred until dark tokens
-  exist. Device-local preferences, not identity (Profile) and not account actions (sign out stays
-  in the account menu).
+- **Settings** — the signed-in screen for **app preferences**: text size, color palette
+  (Heirloom / Archive / Hearth), and **Look and feel** (Scrapbook / Heirloom). Light / dark /
+  system appearance is deferred until dark tokens exist. Device-local preferences, not identity
+  (Profile) and not account actions (sign out stays in the account menu).
 - **App preference** — a **device-local** choice a Person makes for how the app looks or reads,
-  surfaced on **Settings** (today: reading size and color palette). A deliberately small, opt-in set —
+  surfaced on **Settings** (today: reading size, color palette, Look and feel, reduce motion,
+  recording gesture). A deliberately small, opt-in set —
   a UI value becomes an app preference only when it is promoted to one; the vast majority of UI values
   are fixed at build time and are not preferences. Distinct from **Profile** (identity) and from account
   actions. Because it is device-local, a preference does not follow a Person across devices unless it is

@@ -1,9 +1,9 @@
-/* Playful & Warm skin — token overrides. Selector specificity (0,2,0) intentionally beats the
+/* Scrapbook & Warm skin — token overrides. Selector specificity (0,2,0) intentionally beats the
  * base :root defaults so a component reading var(--token) re-skins with zero code changes.
  * NOTE: every token named in _skins/skin-contract.ts MUST be defined here (contract test). */
-:root[data-skin="playful"] {
+:root[data-skin="scrapbook"] {
   /* fonts */
-  /* One crisp humanist sans throughout, matching the approved "Playful & warm" mockup (Direction D —
+  /* One crisp humanist sans throughout, matching the approved "Scrapbook & warm" mockup (Direction D —
    * a single Segoe-like sans for display AND body, NOT the rounded Baloo/Nunito pairing). Source Sans 3
    * is the hosted, cross-platform near-match to Segoe UI (self-hosted via next/font, exposed as
    * --font-source-sans in layout.tsx), so the design renders identically on every OS rather than only
@@ -19,7 +19,7 @@
   --surface-page: #FBF1DE; --surface-card: #FFFDF8; --surface-sunken: #FFF6E6;
   --text-body: #3B2F2A; --text-muted: #927F6F; --text-meta: #52443C;
 
-  /* accent — BRIGHT CORAL, matching the owner-approved "Playful & warm" mockup
+  /* accent — BRIGHT CORAL, matching the owner-approved "Scrapbook & warm" mockup
    * (docs/design 2026-07-17 · directions.html Direction D). #EF7A54 is the PRIMARY accent: the
    * "＋ Tell a story" CTA, active nav pill, avatar, and reaction buttons all render in it with white
    * text. This is a deliberate BRAND choice: white on #EF7A54 is 2.77:1 (below WCAG AA), explicitly
@@ -38,7 +38,7 @@
   --border: #F0DCC0; --border-strong: #E4C89E; --focus-ring: #D85F39;
 
   /* Error/danger ink — a clear tomato red, deeper & more saturated than the coral --accent (#EF7A54)
-   * so error text never blurs into the brand accent, yet still AA on the bright playful surfaces
+   * so error text never blurs into the brand accent, yet still AA on the bright Scrapbook surfaces
    * (guarded in _skins/contrast.test.ts). */
   --text-danger: #C4362B;
 

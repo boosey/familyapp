@@ -1,8 +1,8 @@
 /*
- * StoryDateEditor — the Story date edit control (ADR-0026 #241). LIGHT PLAYFUL: warmth only — a
+ * StoryDateEditor — the Story date edit control (ADR-0026 #241). LIGHT Scrapbook: warmth only — a
  * quiet text trigger, rounder fields, gentle depth on the primary button. NO stickers / tape /
  * tilt (a small form, not a decorative surface). Token-driven and skin-neutral; the primary
- * button picks up the warm coral→amber gradient under Playful. See _skins/CSS-MODULES.md.
+ * button picks up the warm coral→amber gradient under Scrapbook. See _skins/CSS-MODULES.md.
  */
 
 /* Quiet text trigger — sits inline in the meta row next to the date itself. */
@@ -153,7 +153,7 @@
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--dur-fade) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .btnPrimary {
+:global(:root[data-skin="scrapbook"]) .btnPrimary {
   background: var(--accent-gradient);
 }
 .btnPrimary:hover:not(:disabled) {
@@ -179,8 +179,8 @@
 :global([data-tone="solemn"]) .btnPrimary:hover {
   box-shadow: none;
 }
-/* The gradient is a playful COLOR signature (not motion): revert to the solid accent under solemn
+/* The gradient is a Scrapbook COLOR signature (not motion): revert to the solid accent under solemn
    only (cascade-winning prefix, same discipline as the sibling modules). */
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .btnPrimary {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .btnPrimary {
   background: var(--accent);
 }

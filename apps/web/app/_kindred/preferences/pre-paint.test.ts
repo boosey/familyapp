@@ -51,10 +51,16 @@ describe("pre-paint script", () => {
     expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("on");
   });
 
-  it("defaults skin=playful, reduce-motion=off when unset", () => {
+  it("defaults skin=scrapbook, reduce-motion=off when unset", () => {
     runPrePaint();
-    expect(document.documentElement.getAttribute("data-skin")).toBe("playful");
+    expect(document.documentElement.getAttribute("data-skin")).toBe("scrapbook");
     expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("off");
+  });
+
+  it("coerces stale kin-skin=playful to scrapbook (pre-paint alias)", () => {
+    localStorage.setItem(PREFERENCES.skin.storageKey, "playful");
+    runPrePaint();
+    expect(document.documentElement.getAttribute("data-skin")).toBe("scrapbook");
   });
 
   it("ignores js-read preferences (no crash, no spurious DOM attrs)", () => {
@@ -62,7 +68,7 @@ describe("pre-paint script", () => {
     localStorage.setItem(PREFERENCES.recordingGestureDesktop.storageKey, "hold");
     runPrePaint();
     // Skin/reduce-motion defaults still apply; js-read must not invent attrs or CSS vars.
-    expect(document.documentElement.getAttribute("data-skin")).toBe("playful");
+    expect(document.documentElement.getAttribute("data-skin")).toBe("scrapbook");
     expect(document.documentElement.getAttribute("data-reduce-motion")).toBe("off");
     expect(document.documentElement.getAttribute("data-recording-gesture")).toBeNull();
     expect(document.documentElement.style.getPropertyValue("--recording-gesture")).toBe("");

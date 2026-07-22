@@ -13,7 +13,7 @@ export const hub = {
     tabStories: "Stories",
     // Sits between Stories and Questions — the hub's home for the Family album (#19).
     tabAlbum: "Album",
-    // Task 3 (Playful de-clutter): "Questions" is now the PRIMARY tab label, grouping the three
+    // Task 3 (Scrapbook de-clutter): "Questions" is now the PRIMARY tab label, grouping the three
     // ask-related surfaces (To answer / Ask a question / Your asks) under one primary tab with a
     // secondary sub-nav. It used to read "To answer" (that wording moved to questionsSubToAnswer).
     // The section heading inside the To-answer surface stays "Questions for you" (hub.questions.title).
@@ -34,7 +34,7 @@ export const hub = {
     questionsSubAsk: "Ask",
     questionsSubYourAsks: "Your asks",
     questionsSubNavAria: "Question sections",
-    // Issue #124 (Playful de-clutter): secondary sub-nav inside the Family primary tab — the tree/
+    // Issue #124 (Scrapbook de-clutter): secondary sub-nav inside the Family primary tab — the tree/
     // relatives view and the steward's Requests queue (which used to be a "More ▾" overflow entry).
     // The Requests sub-label reuses `tabRequests`.
     familySubTree: "Family tree",
@@ -871,11 +871,11 @@ export const hub = {
     skinIntro: "Choose how the app looks and feels on this device.",
     skinAria: "Look and feel",
     skinShort: {
-      playful: "Playful",
+      scrapbook: "Scrapbook",
       heirloom: "Heirloom",
     },
     skinLabels: {
-      playful: "Playful look — warm and rounded, coral accents",
+      scrapbook: "Scrapbook look — warm and rounded, coral accents",
       heirloom: "Heirloom look — classic serif, quieter chrome",
     },
     motionHeading: "Reduce motion",

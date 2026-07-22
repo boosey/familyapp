@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Capture is solemn (Phase 2 Task 6). The whole ComposingEditor subtree is the emotional core, so it
- * carries data-tone="solemn" on its outer container — that attribute is what dials the Playful skin's
+ * carries data-tone="solemn" on its outer container — that attribute is what dials the Scrapbook skin's
  * decorative palette / structural signatures down (the Task-1 globals guard + the module suppressions
  * key off `[data-tone="solemn"]`). This asserts the container ships the attribute in its calmest
  * phase (the take-0 capture entry, draft=null), which is the state every capture surface first renders.

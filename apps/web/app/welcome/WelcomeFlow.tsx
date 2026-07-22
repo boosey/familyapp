@@ -181,7 +181,7 @@ export function WelcomeFlow({
 
   /* ── Layout primitives ─────────────────────────────────────────────────── */
   // page/card/headline/sub/errorBox moved to _onboarding/onboarding-card.module.css (classes carry
-  // the Playful signature; inline styles would out-specify [data-skin]). The serif headline keeps its
+  // the Scrapbook signature; inline styles would out-specify [data-skin]). The serif headline keeps its
   // per-step font-size as an inline override on top of the module's .headline. voiceHint stays inline
   // (not part of the signature).
   const voiceHint: CSSProperties = {

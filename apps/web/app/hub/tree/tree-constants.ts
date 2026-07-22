@@ -95,7 +95,7 @@ export const AVATAR_SIZE_PX = 52;
 /**
  * Focus-person badge (Slice A #8): a small disc pinned to the avatar's lower-right corner that marks
  * the card the tree is currently rooted on. Replaced the earlier outer focus RING, which detached
- * from the card at the Playful skin's thick border + large corner radius. `_SIZE_PX` is the badge
+ * from the card at the Scrapbook skin's thick border + large corner radius. `_SIZE_PX` is the badge
  * diameter; `_GLYPH_PX` is the white target glyph inside it.
  */
 export const FOCUS_BADGE_SIZE_PX = 22;

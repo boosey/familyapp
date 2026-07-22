@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Playful signature regression (#209). The story READ surface carries the four structural moves that
+ * Scrapbook signature regression (#209). The story READ surface carries the four structural moves that
  * mirror StoryCard — highlighter-washed title, sticker candy tags (i % 4 rotation), and a media/photo
  * block that takes the tape+tilt+hover-lift (NOT the whole static page) plus a warmed reactions row.
  * The decoration itself is CSS-only and skin-scoped (jsdom can't compute it), so these assert the
@@ -64,7 +64,7 @@ function makeProps(over: Partial<StoryDetailClientProps> = {}): StoryDetailClien
   };
 }
 
-describe("StoryDetailClient — Playful signature structure (#209)", () => {
+describe("StoryDetailClient — Scrapbook signature structure (#209)", () => {
   it("washes the title with the highlighter class", () => {
     render(<StoryDetailClient {...makeProps()} />);
     const title = screen.getByText("The Long Drive Home");
@@ -126,23 +126,23 @@ describe("StoryDetailClient — Playful signature structure (#209)", () => {
     const cssPath = join(process.cwd(), "app/hub/stories/[id]/StoryDetailClient.module.css");
     const css = readFileSync(cssPath, "utf8");
 
-    // Reduce-motion suppressors win because they use :root (tie the playful rule's 0,3,0, later in
+    // Reduce-motion suppressors win because they use :root (tie the Scrapbook rule's 0,3,0, later in
     // source). Assert one exists per signature.
     for (const cls of ["title", "mediaBlock", "reactions"]) {
       expect(css).toMatch(new RegExp(`\\[data-reduce-motion="on"\\][^{]*\\.${cls}`));
     }
-    // Solemn is the load-bearing regression (#209 follow-up): the playful rules are
-    // `:root[data-skin="playful"] .x` (specificity 0,3,0) and data-tone is applied on a CONTAINER, so a
+    // Solemn is the load-bearing regression (#209 follow-up): the Scrapbook rules are
+    // `:root[data-skin="scrapbook"] .x` (specificity 0,3,0) and data-tone is applied on a CONTAINER, so a
     // bare `[data-tone="solemn"] .x` (0,2,0) LOSES the cascade and fails to suppress. Require the
-    // `[data-skin="playful"]` prefix in the SAME selector (=> 0,4,0) so the suppressor actually wins.
+    // `[data-skin="scrapbook"]` prefix in the SAME selector (=> 0,4,0) so the suppressor actually wins.
     for (const cls of ["title", "mediaBlock", "reactions"]) {
       expect(css).toMatch(
-        new RegExp(`\\[data-skin="playful"\\][^{]*\\[data-tone="solemn"\\][^{]*\\.${cls}`),
+        new RegExp(`\\[data-skin="scrapbook"\\][^{]*\\[data-tone="solemn"\\][^{]*\\.${cls}`),
       );
     }
     // The primary CTA gradient is a color signature that must revert to solid accent under solemn,
     // also cascade-winning.
-    expect(css).toMatch(/\[data-skin="playful"\][^{]*\[data-tone="solemn"\][^{]*\.btnPrimary/);
+    expect(css).toMatch(/\[data-skin="scrapbook"\][^{]*\[data-tone="solemn"\][^{]*\.btnPrimary/);
     // The tape strip is a ::before that must be display:none under suppression.
     expect(css).toContain(".mediaBlock::before");
   });

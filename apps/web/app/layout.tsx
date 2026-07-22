@@ -34,8 +34,8 @@ const dmMono = DM_Mono({
   variable: "--font-dm-mono",
 });
 
-// Playful skin display + read fonts (Baloo 2 headings, Nunito body). Exposed as CSS variables the
-// `_skins/playful.css` token block reads through `--font-baloo` / `--font-nunito`.
+// Scrapbook skin display + read fonts (Baloo 2 headings, Nunito body). Exposed as CSS variables the
+// `_skins/scrapbook.css` token block reads through `--font-baloo` / `--font-nunito`.
 const baloo = Baloo_2({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
@@ -51,10 +51,10 @@ const nunito = Nunito({
   variable: "--font-nunito",
 });
 
-// Playful skin display/UI/read face: Source Sans 3 — a hosted, cross-platform humanist sans that
-// closely matches the Segoe UI look the owner signed off on in the "Playful & warm" mockup, so the
+// Scrapbook skin display/UI/read face: Source Sans 3 — a hosted, cross-platform humanist sans that
+// closely matches the Segoe UI look the owner signed off on in the "Scrapbook & warm" mockup, so the
 // approved single-crisp-sans-throughout design renders the same on every OS (not just Windows).
-// Exposed as the `--font-source-sans` variable that `_skins/playful.css` points --font-display/ui/
+// Exposed as the `--font-source-sans` variable that `_skins/scrapbook.css` points --font-display/ui/
 // read/story at.
 const sourceSans = Source_Sans_3({
   subsets: ["latin"],

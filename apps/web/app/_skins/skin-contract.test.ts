@@ -11,10 +11,10 @@ const read = (p: string) => readFileSync(join(here, p), "utf8");
 // in the `:root, [data-theme…]` blocks and its language tokens in the `:root, :root[data-skin="heirloom"]`
 // block — all in tokens.css, so the whole heirloom contract is satisfied by this one file.
 const heirloom = read("../_kindred/tokens.css");
-const playful = read("./playful.css");
+const scrapbook = read("./scrapbook.css");
 
 describe("skin token contract", () => {
-  for (const skin of [["heirloom", heirloom], ["playful", playful]] as const) {
+  for (const skin of [["heirloom", heirloom], ["scrapbook", scrapbook]] as const) {
     const [name, css] = skin;
     it(`${name} declares every required token`, () => {
       const missing = REQUIRED_SKIN_TOKENS.filter((t) => !new RegExp(`${t}\\s*:`).test(css));

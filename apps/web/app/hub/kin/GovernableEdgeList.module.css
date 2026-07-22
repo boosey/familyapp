@@ -1,9 +1,9 @@
 /*
  * Governable edge lists — Family → List "Relationships in this family" and the tree person-details
  * sheet. Base chrome is token-driven & skin-neutral (reproduces the former List inline card values
- * 1:1). Playful Phase-2 is deliberately restrained for dense stewardship: soft hover-lift on edge
+ * 1:1). Scrapbook Phase-2 is deliberately restrained for dense stewardship: soft hover-lift on edge
  * cards only — no tape, tilt, highlighter, or scrapbook kit (those fight scanability; StoryCard /
- * QuestionsTab keep the full kit). Signatures are skin-scoped via :global(:root[data-skin="playful"])
+ * QuestionsTab keep the full kit). Signatures are skin-scoped via :global(:root[data-skin="scrapbook"])
  * and suppressed under reduce-motion / solemn. See apps/web/app/_skins/CSS-MODULES.md.
  */
 
@@ -63,28 +63,28 @@
   margin: 0;
 }
 
-/* ---- Playful structural signatures (restrained) ---------------------------------------------
+/* ---- Scrapbook structural signatures (restrained) ---------------------------------------------
    Dense stewardship kit: hover-lift on edge cards only. No tape / tilt / highlighter — those
    belong on scrapbook cards, not a governable relationship roster. */
 
-:global(:root[data-skin="playful"]) .edge {
+:global(:root[data-skin="scrapbook"]) .edge {
   transition: transform var(--dur-settle) var(--ease-quiet),
     box-shadow var(--dur-settle) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .edge:hover {
+:global(:root[data-skin="scrapbook"]) .edge:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lift);
 }
 
 /* Suppress structural signatures under reduce-motion OR solemn.
-   Solemn uses the stronger `:root[data-skin="playful"] [data-tone="solemn"]` form so it out-specifies
-   the playful rules when tone is on a container (see StoryDetailClient.module.css / #227). */
+   Solemn uses the stronger `:root[data-skin="scrapbook"] [data-tone="solemn"]` form so it out-specifies
+   the Scrapbook rules when tone is on a container (see StoryDetailClient.module.css / #227). */
 :global(:root[data-reduce-motion="on"]) .edge,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .edge {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .edge {
   transition: none;
 }
 :global(:root[data-reduce-motion="on"]) .edge:hover,
-:global(:root[data-skin="playful"] [data-tone="solemn"]) .edge:hover {
+:global(:root[data-skin="scrapbook"] [data-tone="solemn"]) .edge:hover {
   transform: none;
   box-shadow: none;
 }

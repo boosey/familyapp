@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Issue #124 (Playful de-clutter): <HubTabs> renders exactly the four primary tabs, each with an
+ * Issue #124 (Scrapbook de-clutter): <HubTabs> renders exactly the four primary tabs, each with an
  * optional numeric badge. There is no longer a "＋ Tell a story" CTA and no "More ▾" overflow menu —
  * the two conditional entries moved out of the chrome (Invite → Family surface button; Requests →
  * Family sub-nav, see FamilySubNav).

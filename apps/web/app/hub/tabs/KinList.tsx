@@ -5,8 +5,8 @@
  * Each row shows a membership-first badge (Member vs tree-only) and may show a derived relation chip.
  * List itself never mutates kinship edges or places members — placement and governance live on Tree.
  *
- * Styling: CSS Modules + data-skin Phase-2 (issue #266). Base classes are skin-neutral; Playful
- * signatures live in KinList.module.css under :global(:root[data-skin="playful"]) — no skin id in
+ * Styling: CSS Modules + data-skin Phase-2 (issue #266). Base classes are skin-neutral; Scrapbook
+ * signatures live in KinList.module.css under :global(:root[data-skin="scrapbook"]) — no skin id in
  * component logic.
  */
 import { useMemo, useState } from "react";

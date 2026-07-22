@@ -1,7 +1,7 @@
 /*
  * AsksDesignator (client) + AsksTab (server) — the asker's outbox. Base card is token-driven &
- * skin-neutral (reproduces the former inline values 1:1); Playful signatures (tilt, tape, sticker
- * status pill, highlighter, hover-lift) are skin-scoped via :global(:root[data-skin="playful"]) and
+ * skin-neutral (reproduces the former inline values 1:1); Scrapbook signatures (tilt, tape, sticker
+ * status pill, highlighter, hover-lift) are skin-scoped via :global(:root[data-skin="scrapbook"]) and
  * suppressed under reduce-motion / solemn. Mirrors StoryCard.module.css.
  * See apps/web/app/_skins/CSS-MODULES.md. Shared by AsksTab's inline empty state.
  */
@@ -118,25 +118,25 @@
   flex-shrink: 0;
 }
 
-/* ---- Playful structural signatures ----------------------------------------------------------
+/* ---- Scrapbook structural signatures ----------------------------------------------------------
    Hook the hashed classes via :global; suppressed under reduce-motion / solemn below. */
 
 /* Tilt: odd/even lean via the inline `--tilt` custom property (math stays in TS). */
-:global(:root[data-skin="playful"]) .card,
-:global(:root[data-skin="playful"]) .empty {
+:global(:root[data-skin="scrapbook"]) .card,
+:global(:root[data-skin="scrapbook"]) .empty {
   transform: rotate(var(--tilt, 0deg));
   transition: transform var(--dur-settle) var(--ease-quiet),
     box-shadow var(--dur-settle) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .card:hover,
-:global(:root[data-skin="playful"]) .empty:hover {
+:global(:root[data-skin="scrapbook"]) .card:hover,
+:global(:root[data-skin="scrapbook"]) .empty:hover {
   transform: rotate(0deg) translateY(-2px);
   box-shadow: var(--shadow-lift);
 }
 
 /* Tape strip — no photo, so anchor to the CARD itself (top-center). */
-:global(:root[data-skin="playful"]) .card::before,
-:global(:root[data-skin="playful"]) .empty::before {
+:global(:root[data-skin="scrapbook"]) .card::before,
+:global(:root[data-skin="scrapbook"]) .empty::before {
   content: "";
   position: absolute;
   top: -10px;
@@ -150,7 +150,7 @@
 }
 
 /* Highlighter wash behind the ask question text (text stays --text-body; AA-guarded). */
-:global(:root[data-skin="playful"]) .question {
+:global(:root[data-skin="scrapbook"]) .question {
   background-image: linear-gradient(var(--highlighter), var(--highlighter));
   background-repeat: no-repeat;
   background-position: 0 78%;
@@ -158,7 +158,7 @@
 }
 
 /* Sticker the status pill (the natural chip-like element on the ask card). */
-:global(:root[data-skin="playful"]) .status {
+:global(:root[data-skin="scrapbook"]) .status {
   background: var(--sticker-sky-bg);
   color: var(--sticker-sky-ink);
   border-radius: var(--radius-pill);

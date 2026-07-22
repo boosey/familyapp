@@ -832,7 +832,7 @@ export function ComposingEditor({
 
   // The whole composing/recording subtree is emotionally heavy → tone="solemn" (spec §4.5): the
   // Task-1 guard mutes the decorative palette and the modules kill tilt/tape/breathing under it, so
-  // capture stays calm even under the Playful skin. Every render phase below is produced by this inner
+  // capture stays calm even under the Scrapbook skin. Every render phase below is produced by this inner
   // function and wrapped in one solemn container (`display: contents`, so it adds no layout box).
   const renderPhase = () => {
   // ── PENDING-APPROVAL REVIEW (shrunk: title + relisten + edit + tier + Share/Discard) ──

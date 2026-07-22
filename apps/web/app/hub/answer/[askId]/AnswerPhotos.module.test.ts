@@ -1,6 +1,6 @@
 /**
  * AnswerPhotos.module.css + AskPhotoPicker tile hover (issue #208) — assert the photo CELLS get the
- * light-touch Playful hover-lift + accent ring, skin-scoped and suppressed under reduce-motion /
+ * light-touch Scrapbook hover-lift + accent ring, skin-scoped and suppressed under reduce-motion /
  * solemn. Follows the contrast.test.ts pattern of reading the stylesheet source.
  */
 import { readFileSync } from "node:fs";
@@ -15,9 +15,9 @@ const pickerCss = readFileSync(
   "utf8",
 );
 
-describe("answer subject-photo cell — playful hover-lift", () => {
+describe("answer subject-photo cell — Scrapbook hover-lift", () => {
   it("adds a skin-scoped hover-lift + accent ring, suppressed under reduce-motion / solemn", () => {
-    expect(answerCss).toContain(':global(:root[data-skin="playful"])');
+    expect(answerCss).toContain(':global(:root[data-skin="scrapbook"])');
     expect(answerCss).toContain("var(--shadow-lift)");
     expect(answerCss).toContain("var(--accent-soft)");
     expect(answerCss).toMatch(/translateY/);
@@ -27,9 +27,9 @@ describe("answer subject-photo cell — playful hover-lift", () => {
   });
 });
 
-describe("ask photo picker tile — playful hover-lift", () => {
+describe("ask photo picker tile — Scrapbook hover-lift", () => {
   it("adds a skin-scoped hover-lift, suppressed under reduce-motion / solemn", () => {
-    expect(pickerCss).toContain(':global(:root[data-skin="playful"])');
+    expect(pickerCss).toContain(':global(:root[data-skin="scrapbook"])');
     expect(pickerCss).toContain("var(--shadow-lift)");
     expect(pickerCss).toContain(':global(:root[data-reduce-motion="on"])');
     expect(pickerCss).toContain(':global([data-tone="solemn"])');

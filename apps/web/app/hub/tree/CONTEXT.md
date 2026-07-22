@@ -23,7 +23,7 @@ Legacy term for the focus person. Unlike the earlier design, the anchor is now *
 the kebab Focus action) and **carries a visual marker** — a small badge pinned to the avatar's
 lower-right corner (a white target glyph on the focus person's sex color: `--sex-male`/`--sex-female`,
 or `--border-strong` when sex is unknown). The badge moves with the focus person on re-focus. It
-replaced an earlier outer ring (a box-shadow), which detached from the card at the Playful skin's
+replaced an earlier outer ring (a box-shadow), which detached from the card at the Scrapbook skin's
 thick border + large corner radius. Prefer **focus person** / **camera** (above) in new interaction rules.
 
 ## Relation chip

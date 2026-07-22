@@ -121,12 +121,28 @@ describe("PREFERENCES registry parity with the folded-in constants", () => {
   });
 });
 
+describe("coerce — enum (skin aliases)", () => {
+  it("maps stale playful storage to scrapbook (not default-only coincidence)", () => {
+    expect(coerce(PREFERENCES.skin, "playful")).toBe("scrapbook");
+    expect(coerce(PREFERENCES.skin, "  playful  ")).toBe("scrapbook");
+  });
+  it("keeps canonical scrapbook / heirloom", () => {
+    expect(coerce(PREFERENCES.skin, "scrapbook")).toBe("scrapbook");
+    expect(coerce(PREFERENCES.skin, "heirloom")).toBe("heirloom");
+  });
+  it("falls back to scrapbook default for unknown skin ids", () => {
+    expect(coerce(PREFERENCES.skin, "midnight")).toBe("scrapbook");
+    expect(coerce(PREFERENCES.skin, null)).toBe("scrapbook");
+  });
+});
+
 describe("PREFERENCES registry — skin + reduce-motion", () => {
-  it("skin is an enum data-attr writing data-skin, defaulting to playful", () => {
+  it("skin is an enum data-attr writing data-skin, defaulting to scrapbook", () => {
     expect(PREFERENCES.skin.default).toBe(DEFAULT_SKIN_ID);
     expect(PREFERENCES.skin.storageKey).toBe(SKIN_STORAGE_KEY);
     expect(PREFERENCES.skin.validate).toMatchObject({ kind: "enum", values: SKIN_IDS });
     expect(PREFERENCES.skin.apply).toEqual({ strategy: "data-attr", attr: "data-skin" });
+    expect(PREFERENCES.skin.aliases).toEqual({ playful: "scrapbook" });
   });
   it("reduceMotion is an on/off enum writing data-reduce-motion", () => {
     expect(PREFERENCES.reduceMotion.default).toBe(DEFAULT_REDUCE_MOTION);

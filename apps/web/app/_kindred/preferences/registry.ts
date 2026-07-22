@@ -15,7 +15,12 @@ import {
 } from "@/lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
 import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
-import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
+import {
+  SKIN_IDS,
+  DEFAULT_SKIN_ID,
+  SKIN_STORAGE_KEY,
+  SKIN_ALIASES,
+} from "@/app/_kindred/skin-constants";
 import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
 import {
   RECORDING_GESTURE_VALUES,
@@ -44,6 +49,11 @@ export interface PreferenceDef {
   default: string | number;
   validate: PreferenceValidator;
   apply: PreferenceApply;
+  /**
+   * Optional stale→canonical map for enum preferences (e.g. `playful` → `scrapbook`).
+   * Checked after the canonical enum list; unknown values still fall back to `default`.
+   */
+  aliases?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -66,8 +76,10 @@ export function coerce(def: PreferenceDef, raw: string | null): string | number 
     const n = Number(trimmed);
     return Number.isInteger(n) && n >= 0 && n < v.length ? n : def.default;
   }
-  // enum
-  return v.values.includes(trimmed) ? trimmed : def.default;
+  // enum — canonical values first, then optional stale aliases, else default
+  if (v.values.includes(trimmed)) return trimmed;
+  const aliased = def.aliases?.[trimmed];
+  return aliased !== undefined ? aliased : def.default;
 }
 
 /**
@@ -121,6 +133,7 @@ export const PREFERENCES = {
     default: DEFAULT_SKIN_ID,
     validate: { kind: "enum", values: SKIN_IDS },
     apply: { strategy: "data-attr", attr: "data-skin" },
+    aliases: SKIN_ALIASES,
   },
   reduceMotion: {
     key: "reduce-motion",
@@ -157,5 +170,6 @@ export const ALL_PREFERENCES: readonly PreferenceDef[] = Object.values(PREFERENC
  */
 export function buildPrePaintScript(defs: readonly PreferenceDef[]): string {
   const data = JSON.stringify(defs);
-  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);if(raw!==null)raw=raw.trim();var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else{val=v.values.indexOf(raw)>=0?raw:d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="js-read"){continue;}if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
+  // Enum path: canonical values → optional d.aliases[raw] → default (mirrors TS `coerce`).
+  return `(function(){try{var D=${data};for(var i=0;i<D.length;i++){var d=D[i];var raw=localStorage.getItem(d.storageKey);if(raw!==null)raw=raw.trim();var v=d.validate,val;if(raw===null||raw===""){val=d.default;}else if(v.kind==="int-index"){var n=Number(raw);val=(Number.isInteger(n)&&n>=0&&n<v.length)?n:d.default;}else if(v.values.indexOf(raw)>=0){val=raw;}else if(d.aliases&&d.aliases[raw]!=null){val=d.aliases[raw];}else{val=d.default;}var a=d.apply,el=document.documentElement;if(a.strategy==="js-read"){continue;}if(a.strategy==="root-font-size"){var pt=a.steps[val];if(pt==null)pt=a.steps[0];if(pt==null)pt=0;el.style.fontSize=pt+a.unit;}else if(a.strategy==="data-attr"){el.setAttribute(a.attr,String(val));}else{el.style.setProperty(a.cssVar,String(val)+(a.unit||""));}}}catch(e){}})()`;
 }

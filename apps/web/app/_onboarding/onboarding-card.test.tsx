@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Regression guard for issue #222 — the "full playful signature" on the onboarding surfaces.
+ * Regression guard for issue #222 — the "full Scrapbook signature" on the onboarding surfaces.
  *
  * Two axes:
  *  1. jsdom render: WelcomeFlow (welcome step) carries the module .eyebrow / .headline / .card classes
@@ -53,8 +53,8 @@ describe("onboarding card — CSS suppression guard (issue #222 acceptance)", ()
   // Collapse whitespace so assertions are robust to formatting.
   const flat = css.replace(/\s+/g, " ");
 
-  it("scopes the playful signature to data-skin=playful (tape, highlighter, sticker)", () => {
-    expect(css).toContain(':root[data-skin="playful"]');
+  it("scopes the Scrapbook signature to data-skin=scrapbook (tape, highlighter, sticker)", () => {
+    expect(css).toContain(':root[data-skin="scrapbook"]');
     // tape strip on the card ::before
     expect(flat).toMatch(/\.card::before\s*\{[^}]*background:\s*var\(--tape-bg\)/);
     // highlighter wash on the headline

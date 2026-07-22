@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LandingExperience — the public "Tell Me Again" front door. A scroll-driven, Playful-skinned
+ * LandingExperience — the public "Tell Me Again" front door. A scroll-driven, Scrapbook-skinned
  * marketing page that clearly describes the product (the homepage Google's OAuth reviewer visits,
  * #154) and links the Privacy Policy (#153).
  *

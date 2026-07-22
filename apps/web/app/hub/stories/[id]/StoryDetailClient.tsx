@@ -324,7 +324,7 @@ export function StoryDetailClient({
           role="group"
           aria-label={hub.storyImages.galleryHeading}
           className={styles.mediaBlock}
-          // The Playful tilt reads this parity-driven value (math stays in TS, per the token convention).
+          // The Scrapbook tilt reads this parity-driven value (math stays in TS, per the token convention).
           style={{ "--tilt": "0.55deg" } as CSSProperties}
         >
           {storyImages.map((img) => (

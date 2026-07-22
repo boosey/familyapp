@@ -103,9 +103,9 @@
 }
 
 .familyName {
-  font-family: var(--font-display); /* was --font-story; Playful splits display from read */
+  font-family: var(--font-display); /* was --font-story; Scrapbook splits display from read */
   font-size: clamp(1.75rem, 4vw, var(--text-display));
-  font-weight: 800; /* Playful mockup Direction D: heavy display heading */
+  font-weight: 800; /* Scrapbook mockup Direction D: heavy display heading */
   color: var(--text-body);
   margin: 0;
   letter-spacing: -0.02em;
@@ -113,7 +113,7 @@
 
 .tabsRow {
   /* Sit the row clear of the header's dividing line: the active tab's raised-pill shadow extends 6px
-   * below the pill (Playful --shadow-card: 0 6px 0), so a positive margin moves the line down past
+   * below the pill (Scrapbook --shadow-card: 0 6px 0), so a positive margin moves the line down past
    * the shadow, plus a few pixels of visible separation, instead of letting them overlap. */
   margin-bottom: 9px;
   /* #234: flex row so the desktop account avatar sits at the right end — vertically centered with

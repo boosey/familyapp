@@ -1,6 +1,6 @@
 /*
  * Answer page subject-photo grid — the ask's photo(s) shown as answer-time context. Base image is
- * token-driven & skin-neutral (reproduces the former inline img values 1:1). Playful adds a light
+ * token-driven & skin-neutral (reproduces the former inline img values 1:1). Scrapbook adds a light
  * hover-lift + accent ring on the CELL (hover only — the img is non-interactive), mirroring album
  * thumbnails; skin-scoped and suppressed
  * under reduce-motion / solemn. See apps/web/app/_skins/CSS-MODULES.md.
@@ -15,12 +15,12 @@
   background: var(--surface-sunken);
 }
 
-/* ---- Playful: light hover-lift + accent ring (mirrors album thumbnails). ---- */
-:global(:root[data-skin="playful"]) .cell {
+/* ---- Scrapbook: light hover-lift + accent ring (mirrors album thumbnails). ---- */
+:global(:root[data-skin="scrapbook"]) .cell {
   transition: transform var(--dur-settle) var(--ease-quiet),
     box-shadow var(--dur-settle) var(--ease-quiet);
 }
-:global(:root[data-skin="playful"]) .cell:hover {
+:global(:root[data-skin="scrapbook"]) .cell:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lift), 0 0 0 3px var(--accent-soft);
 }

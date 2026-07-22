@@ -1,9 +1,9 @@
 /*
  * Landing experience ("Tell Me Again") — the public front door / OAuth homepage.
  *
- * Base classes are token-driven and skin-neutral (only tokens defined in EVERY skin). The Playful
+ * Base classes are token-driven and skin-neutral (only tokens defined in EVERY skin). The Scrapbook
  * flourishes — highlighter marker, keepsake tilt + tape, coral→amber gradient, sticker step numbers,
- * shelf shadow — hook `:global(:root[data-skin="playful"])` so a switch to heirloom degrades to a
+ * shelf shadow — hook `:global(:root[data-skin="scrapbook"])` so a switch to heirloom degrades to a
  * calm, legible page rather than referencing undefined Phase-2 tokens. All structural tilt/tape is
  * suppressed under reduce-motion / solemn (CSS-MODULES.md rule 5); scroll drift is driven by the
  * `--py-*` / `--sp` / `--hero` custom properties that LandingExperience writes, and which stay at
@@ -167,7 +167,7 @@
   margin: 0;
 }
 .mark {
-  /* the phrase itself — a marker wash slides in behind it under the playful skin */
+  /* the phrase itself — a marker wash slides in behind it under the Scrapbook skin */
   position: relative;
   display: inline;
   box-decoration-break: clone;
@@ -270,7 +270,7 @@
   color: var(--text-meta);
   margin: 0;
 }
-/* decorative "tape" tab — playful only */
+/* decorative "tape" tab — Scrapbook only */
 .tape {
   display: none;
 }
@@ -359,9 +359,9 @@
 }
 
 /* =====================================================================
- * Playful skin flourishes — decorative, scoped so heirloom degrades cleanly.
+ * Scrapbook skin flourishes — decorative, scoped so heirloom degrades cleanly.
  * ===================================================================== */
-:global(:root[data-skin="playful"]) .mark {
+:global(:root[data-skin="scrapbook"]) .mark {
   background-image: linear-gradient(
     to bottom,
     transparent 8%,
@@ -372,17 +372,17 @@
   padding: 0 0.08em;
   border-radius: var(--radius-sm);
 }
-:global(:root[data-skin="playful"]) .stepCard {
+:global(:root[data-skin="scrapbook"]) .stepCard {
   box-shadow: var(--shadow-card);
 }
-:global(:root[data-skin="playful"]) .stepCard:nth-child(1) { --tilt: -1.4deg; }
-:global(:root[data-skin="playful"]) .stepCard:nth-child(2) { --tilt: 0.8deg; }
-:global(:root[data-skin="playful"]) .stepCard:nth-child(3) { --tilt: -0.6deg; }
-:global(:root[data-skin="playful"]) .stepCard:hover {
+:global(:root[data-skin="scrapbook"]) .stepCard:nth-child(1) { --tilt: -1.4deg; }
+:global(:root[data-skin="scrapbook"]) .stepCard:nth-child(2) { --tilt: 0.8deg; }
+:global(:root[data-skin="scrapbook"]) .stepCard:nth-child(3) { --tilt: -0.6deg; }
+:global(:root[data-skin="scrapbook"]) .stepCard:hover {
   transform: rotate(0deg) translateY(-4px);
   box-shadow: var(--shadow-lift);
 }
-:global(:root[data-skin="playful"]) .tape {
+:global(:root[data-skin="scrapbook"]) .tape {
   display: block;
   position: absolute;
   top: -0.85rem;
@@ -393,11 +393,11 @@
   background: var(--tape-bg);
   border-radius: 2px;
 }
-:global(:root[data-skin="playful"]) .stepNum {
+:global(:root[data-skin="scrapbook"]) .stepNum {
   background: var(--accent-gradient);
   color: var(--accent-on);
 }
-:global(:root[data-skin="playful"]) .closingTitle {
+:global(:root[data-skin="scrapbook"]) .closingTitle {
   color: var(--accent-strong);
 }
 
