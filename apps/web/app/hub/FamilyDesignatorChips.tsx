@@ -22,6 +22,7 @@ export function FamilyDesignatorChips({
   name = "familyId",
   label,
   requiredMessage,
+  onSelectedChange,
 }: {
   /** ALL the viewer's active families; array order = chip order. */
   families: { id: string; name: string; shortName?: string | null }[];
@@ -33,6 +34,8 @@ export function FamilyDesignatorChips({
   label: string;
   /** Custom validity message when `required` blocks an empty submit. */
   requiredMessage: string;
+  /** Notifies the parent when the posted family id changes (empty string = none selected). */
+  onSelectedChange?: (familyId: string) => void;
 }) {
   const [value, setValue] = useState<string>(seeded ?? "");
   // A filter change is a same-route soft navigation (no remount) — only `seeded` changes. Re-seed on
@@ -58,6 +61,10 @@ export function FamilyDesignatorChips({
   useEffect(() => {
     inputRef.current?.setCustomValidity(effective ? "" : requiredMessage);
   }, [effective, requiredMessage]);
+
+  useEffect(() => {
+    onSelectedChange?.(effective);
+  }, [effective, onSelectedChange]);
 
   return (
     <div className="kin-form-label">
