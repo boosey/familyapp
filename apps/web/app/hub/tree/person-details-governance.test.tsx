@@ -1,38 +1,22 @@
 // @vitest-environment jsdom
 /**
- * #254/#255 — PersonDetails re-homes steward Remove / subject Hide / nature correct from the dead
- * kin page onto the tree details sheet. Capability flags come from `listGovernableKinEdges`
- * (threaded as `governableEdges`); the sheet only lists edges that touch the opened person AND that
- * the viewer can act on.
- *
- * Issue #265 — shared GovernableEdgeList edge chrome (`.list`/`.edge`/`.sentence`);
- * compact `.sectionDense`/`.headingDense` for the 280px sheet. CSS-source Scrapbook guards live below.
+ * PersonDetails sheet chrome — flat token module (#223) + hub ActionButton-styled icon row.
+ * Edge governance (#254/#265) lives on the line-governance menu, not this sheet.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { GovernableKinEdge, TreeNode } from "@chronicle/core";
+import type { TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import styles from "./GovernableEdgeList.module.css";
 import sheetStyles from "./PersonDetails.module.css";
 import { PersonDetails } from "./person-details";
 import type { PersonEditabilityResult, SavePersonEditResult } from "./actions";
 
 afterEach(cleanup);
 
-vi.mock("./kin-actions", () => ({
-  affirmEdgeAction: vi.fn(async () => undefined),
-  denyEdgeAction: vi.fn(async () => undefined),
-  hideEdgeAction: vi.fn(async () => undefined),
-  correctEdgeAction: vi.fn(async () => undefined),
-}));
-
-import { affirmEdgeAction, correctEdgeAction, denyEdgeAction, hideEdgeAction } from "./kin-actions";
-
 const here = dirname(fileURLToPath(import.meta.url));
-const css = readFileSync(join(here, "GovernableEdgeList.module.css"), "utf8");
 const sheetCss = readFileSync(join(here, "PersonDetails.module.css"), "utf8");
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
@@ -51,214 +35,9 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   };
 }
 
-function edge(over: Partial<GovernableKinEdge> & Pick<GovernableKinEdge, "personAId" | "personBId">): GovernableKinEdge {
-  return {
-    edgeType: over.edgeType ?? "parent_of",
-    personAId: over.personAId,
-    personBId: over.personBId,
-    personADisplayName: over.personADisplayName ?? "Alice",
-    personAIdentified: over.personAIdentified ?? true,
-    personBDisplayName: over.personBDisplayName ?? "Bob",
-    personBIdentified: over.personBIdentified ?? true,
-    nature: over.nature ?? "unknown",
-    state: over.state ?? "asserted",
-    assertedBy: over.assertedBy ?? over.personAId,
-    viewerIsSteward: over.viewerIsSteward ?? false,
-    viewerCanHide: over.viewerCanHide ?? false,
-    viewerCanRemove: over.viewerCanRemove ?? over.viewerIsSteward ?? false,
-  };
-}
-
 const editableNo = async (): Promise<PersonEditabilityResult> => ({ ok: true, editable: false });
+const editableYes = async (): Promise<PersonEditabilityResult> => ({ ok: true, editable: true });
 const saveOk = async (): Promise<SavePersonEditResult> => ({ ok: true });
-
-function renderDetails(governableEdges: GovernableKinEdge[], personId = "bob") {
-  const onEdgeGoverned = vi.fn();
-  render(
-    <PersonDetails
-      node={node({ personId, displayName: personId === "bob" ? "Bob" : "Alice" })}
-      relationToViewer={null}
-      familyId="F"
-      onClose={() => {}}
-      checkEditable={editableNo}
-      saveEdit={saveOk}
-      governableEdges={governableEdges}
-      onEdgeGoverned={onEdgeGoverned}
-    />,
-  );
-  return { onEdgeGoverned };
-}
-
-it("shows Remove for a steward on an edge touching the opened person", async () => {
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true }),
-  ]);
-  expect(await screen.findByTestId("tree-details-gov-edges")).toBeTruthy();
-  expect(screen.getByText(hub.kin.edgeParentOf("Alice", "Bob"))).toBeTruthy();
-  expect(screen.getByRole("button", { name: hub.kin.deny })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: hub.kin.hide })).toBeNull();
-});
-
-it("shows Hide when the viewer is a self-account endpoint (not steward)", async () => {
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob", viewerCanHide: true }),
-  ]);
-  expect(await screen.findByTestId("tree-details-gov-edges")).toBeTruthy();
-  expect(screen.getByRole("button", { name: hub.kin.hide })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: hub.kin.deny })).toBeNull();
-});
-
-it("shows both Remove and Hide when the steward is also an endpoint", async () => {
-  renderDetails([
-    edge({
-      personAId: "alice",
-      personBId: "bob",
-      viewerIsSteward: true,
-      viewerCanHide: true,
-    }),
-  ]);
-  expect(await screen.findByRole("button", { name: hub.kin.deny })).toBeTruthy();
-  expect(screen.getByRole("button", { name: hub.kin.hide })).toBeTruthy();
-});
-
-it("#256: shows Remove for the original asserter even when not steward", async () => {
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob", viewerIsSteward: false, viewerCanRemove: true }),
-  ]);
-  expect(await screen.findByTestId("tree-details-gov-edges")).toBeTruthy();
-  expect(screen.getByRole("button", { name: hub.kin.deny })).toBeTruthy();
-});
-
-it("#256: hides Remove for a viewer who is neither steward nor asserter (Charlie)", async () => {
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob", viewerIsSteward: false, viewerCanRemove: false }),
-  ]);
-  await waitFor(() => expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull());
-  expect(screen.queryByRole("button", { name: hub.kin.deny })).toBeNull();
-});
-
-it("hides the governance section when the viewer can neither Remove nor Hide", async () => {
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob" }),
-  ]);
-  await waitFor(() => expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull());
-  expect(screen.queryByRole("button", { name: hub.kin.deny })).toBeNull();
-  expect(screen.queryByRole("button", { name: hub.kin.hide })).toBeNull();
-});
-
-it("ignores edges that do not touch the opened person", async () => {
-  renderDetails(
-    [
-      edge({
-        personAId: "carol",
-        personBId: "dave",
-        personADisplayName: "Carol",
-        personBDisplayName: "Dave",
-        viewerIsSteward: true,
-      }),
-    ],
-    "bob",
-  );
-  await waitFor(() => expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull());
-});
-
-it("calls onEdgeGoverned with deny after a successful Remove", async () => {
-  const e = edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true });
-  const { onEdgeGoverned } = renderDetails([e]);
-  fireEvent.click(await screen.findByRole("button", { name: hub.kin.deny }));
-  await waitFor(() => expect(denyEdgeAction).toHaveBeenCalled());
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "deny"));
-});
-
-it("calls onEdgeGoverned with hide after a successful Hide", async () => {
-  const e = edge({ personAId: "alice", personBId: "bob", viewerCanHide: true });
-  const { onEdgeGoverned } = renderDetails([e]);
-  fireEvent.click(await screen.findByRole("button", { name: hub.kin.hide }));
-  await waitFor(() => expect(hideEdgeAction).toHaveBeenCalled());
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "hide"));
-});
-
-it("calls onEdgeGoverned with affirm after Endorse (must not be treated as a prune)", async () => {
-  const e = edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true, state: "asserted" });
-  const { onEdgeGoverned } = renderDetails([e]);
-  fireEvent.click(await screen.findByRole("button", { name: hub.kin.affirm }));
-  await waitFor(() => expect(affirmEdgeAction).toHaveBeenCalled());
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "affirm"));
-});
-
-it("shows nature picker for steward on parent_of and submits correctEdgeAction (#255)", async () => {
-  const e = edge({
-    personAId: "alice",
-    personBId: "bob",
-    viewerIsSteward: true,
-    nature: "biological",
-  });
-  const { onEdgeGoverned } = renderDetails([e]);
-  expect(await screen.findByTestId("kin-edge-correct-nature")).toBeTruthy();
-  const select = screen.getByLabelText(hub.kin.natureFieldLabel) as HTMLSelectElement;
-  expect(select.value).toBe("biological");
-  fireEvent.change(select, { target: { value: "adoptive" } });
-  fireEvent.click(screen.getByRole("button", { name: hub.kin.correct }));
-  await waitFor(() => expect(correctEdgeAction).toHaveBeenCalled());
-  const formData = (correctEdgeAction as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as FormData;
-  expect(formData.get("nature")).toBe("adoptive");
-  await waitFor(() => expect(onEdgeGoverned).toHaveBeenCalledWith(e, "correct"));
-});
-
-it("does not show nature picker on partner edges or for non-stewards (#255)", async () => {
-  renderDetails([
-    edge({
-      personAId: "alice",
-      personBId: "bob",
-      edgeType: "partnered_with",
-      nature: null,
-      viewerIsSteward: true,
-    }),
-  ]);
-  expect(await screen.findByRole("button", { name: hub.kin.deny })).toBeTruthy();
-  expect(screen.queryByTestId("kin-edge-correct-nature")).toBeNull();
-
-  cleanup();
-  renderDetails([
-    edge({ personAId: "alice", personBId: "bob", viewerCanHide: true, nature: "biological" }),
-  ]);
-  expect(await screen.findByRole("button", { name: hub.kin.hide })).toBeTruthy();
-  expect(screen.queryByTestId("kin-edge-correct-nature")).toBeNull();
-  expect(screen.queryByRole("button", { name: hub.kin.correct })).toBeNull();
-});
-
-describe("PersonDetails gov edges — Scrapbook signature (#265)", () => {
-  it("renders shared edge chrome plus dense section/heading (not List-page classes)", async () => {
-    renderDetails([edge({ personAId: "alice", personBId: "bob", viewerIsSteward: true })]);
-    const section = await screen.findByTestId("tree-details-gov-edges");
-    expect(section.className).toContain(styles.sectionDense);
-    expect(section.className).not.toContain(styles.section);
-    expect(screen.getByText(hub.kin.govHeading).className).toContain(styles.headingDense);
-    expect(screen.getByText(hub.kin.govHeading).className).not.toContain(styles.heading);
-    expect(screen.queryByText(hub.kin.govIntro)).toBeNull();
-    const edgeItem = screen.getByTestId("tree-details-gov-edge");
-    expect(edgeItem.className).toContain(styles.edge);
-    expect(edgeItem.closest("ul")!.className).toContain(styles.list);
-    expect(screen.getByText(hub.kin.edgeParentOf("Alice", "Bob")).className).toContain(
-      styles.sentence,
-    );
-  });
-
-  it("GovernableEdgeList.module.css declares the restrained Scrapbook signature block", () => {
-    expect(css).toContain(':global(:root[data-skin="scrapbook"])');
-    expect(css).toContain("var(--shadow-lift)");
-    // Dense stewardship guardrail: no full-scrapbook markers (tape / tilt / highlighter).
-    expect(css).not.toContain("var(--tape-bg)");
-    expect(css).not.toMatch(/--tilt/);
-    expect(css).not.toContain("var(--highlighter)");
-  });
-
-  it("GovernableEdgeList.module.css declares the reduce-motion + solemn suppression block", () => {
-    expect(css).toContain(':global(:root[data-reduce-motion="on"])');
-    expect(css).toContain(':global(:root[data-skin="scrapbook"] [data-tone="solemn"])');
-    expect(css).toMatch(/transform:\s*none/);
-  });
-});
 
 describe("PersonDetails sheet chrome — flat token module (#223)", () => {
   it("mounts the sheet on the hashed module class (no Phase-1 inline chrome)", async () => {
@@ -276,18 +55,56 @@ describe("PersonDetails sheet chrome — flat token module (#223)", () => {
     expect(sheet.className).toContain(sheetStyles.sheet);
   });
 
-  it("PersonDetails.module.css is token-driven, flat, and free of Scrapbook decorative signatures", () => {
+  it("PersonDetails.module.css keeps a flat sheet and ActionButton-styled icon actions", () => {
     expect(sheetCss).toContain("var(--surface-card)");
     expect(sheetCss).toContain("var(--border)");
     expect(sheetCss).toContain("var(--radius-lg)");
     expect(sheetCss).toContain("box-shadow: none");
+    expect(sheetCss).toContain("var(--tell-card-bg)");
+    expect(sheetCss).toContain("var(--shadow-card)");
     // Contract tokens only — the old inline --shadow-lg was not in the skin contract.
     expect(sheetCss).not.toContain("--shadow-lg");
-    expect(sheetCss).not.toContain("var(--shadow-card)");
-    expect(sheetCss).not.toContain("var(--shadow-lift)");
     expect(sheetCss).not.toContain("var(--tape-bg)");
     expect(sheetCss).not.toMatch(/--tilt/);
     expect(sheetCss).not.toContain("var(--highlighter)");
     expect(sheetCss).not.toContain("var(--sticker-");
+  });
+
+  it("does not render the Relationships-in-this-family section", async () => {
+    render(
+      <PersonDetails
+        node={node({ personId: "bob", displayName: "Bob" })}
+        relationToViewer={null}
+        familyId="F"
+        onClose={() => {}}
+        checkEditable={editableNo}
+        saveEdit={saveOk}
+      />,
+    );
+    await screen.findByTestId("tree-person-details");
+    expect(screen.queryByTestId("tree-details-gov-edges")).toBeNull();
+  });
+
+  it("puts Edit + Stories/Photos/Mentions icon actions in one row when editable", async () => {
+    render(
+      <PersonDetails
+        node={node({ personId: "bob", displayName: "Bob" })}
+        relationToViewer={null}
+        familyId="F"
+        onClose={() => {}}
+        checkEditable={editableYes}
+        saveEdit={saveOk}
+      />,
+    );
+    const row = await screen.findByTestId("tree-details-actions");
+    expect(row.className).toContain(sheetStyles.actions);
+    expect(row.contains(screen.getByTestId("tree-details-edit"))).toBe(true);
+    expect(row.contains(screen.getByTestId("tree-details-stories"))).toBe(true);
+    expect(row.contains(screen.getByTestId("tree-details-photos"))).toBe(true);
+    expect(row.contains(screen.getByTestId("tree-details-mentions"))).toBe(true);
+    expect(screen.getByTestId("tree-details-edit").className).toContain(sheetStyles.iconAction);
+    expect(screen.getByTestId("tree-details-stories").getAttribute("aria-label")).toBe(
+      hub.tree.detailsStories,
+    );
   });
 });

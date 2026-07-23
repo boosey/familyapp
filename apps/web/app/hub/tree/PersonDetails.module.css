@@ -1,9 +1,7 @@
 /*
- * PersonDetails — tree/List details sheet. Base chrome is token-driven & skin-neutral (reproduces
- * the former inline values, then tightens density). Intentionally FLAT under Scrapbook: no tape,
- * tilt, sticker chips, highlighter, or shadow-shelf (issue #223 / DECISIONS.md). Tokens still
- * re-skin surfaces/type/radii; structural signatures stay off so the sheet reads with the tree
- * cards, not StoryCard. See apps/web/app/_skins/CSS-MODULES.md.
+ * PersonDetails — tree/List details sheet. Base chrome is token-driven & skin-neutral.
+ * Sheet surface stays FLAT under Scrapbook (no tape/tilt/stickers on the card — issue #223).
+ * Action icons match hub ActionButton (#7): tell-card fill + shadow-card. See CSS-MODULES.md.
  */
 
 .sheet {
@@ -19,7 +17,7 @@
   background: var(--surface-card);
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-lg);
-  /* Flat — no --shadow-card shelf / --shadow-lift (issue #223). Matches person-node cards. */
+  /* Flat sheet — no shelf on the panel itself (#223). */
   box-shadow: none;
   padding: var(--space-4);
   z-index: 2;
@@ -80,10 +78,6 @@
   margin: 0 0 14px;
 }
 
-.actionRow {
-  margin-top: 10px;
-}
-
 .invitePending {
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
@@ -91,8 +85,49 @@
   margin: 10px 0 0;
 }
 
-/* Compact primary/secondary — denser than KindredButton "small" pills in a 280px sheet. */
-.button {
+/* Edit · Stories · Photos · Mentions — one row of hub ActionButton-styled icon hits. */
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.iconAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--tell-card-bg);
+  color: var(--accent-on);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.iconAction:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.iconAction:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Invite stays a labeled secondary control under the icon row. */
+.inviteRow {
+  margin-top: 10px;
+}
+
+.buttonSecondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -100,40 +135,14 @@
   min-height: var(--touch-min);
   padding: 6px 14px;
   border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border-strong);
+  background: transparent;
+  color: var(--text-body);
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
   font-weight: var(--weight-semibold);
   cursor: pointer;
-  text-decoration: none;
   box-sizing: border-box;
-}
-
-.button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.button:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.buttonPrimary {
-  composes: button;
-  border: none;
-  background: var(--accent);
-  color: var(--accent-on);
-}
-
-.buttonPrimary:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
-
-.buttonSecondary {
-  composes: button;
-  border: var(--border-width) solid var(--border-strong);
-  background: transparent;
-  color: var(--text-body);
 }
 
 .buttonSecondary:hover:not(:disabled) {
@@ -141,33 +150,14 @@
   border-color: var(--accent);
 }
 
-.nav {
-  display: grid;
-  gap: 4px;
-  margin-top: 12px;
-}
-
-.navLink {
-  display: flex;
-  align-items: center;
-  min-height: var(--touch-min);
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-ui);
-  font-size: var(--text-ui-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--accent-strong);
-  text-decoration: none;
-  background: transparent;
-}
-
-.navLink:hover {
-  background: var(--accent-soft);
-}
-
-.navLink:focus-visible {
+.buttonSecondary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.buttonSecondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ---- Edit form ------------------------------------------------------------------------------- */
@@ -227,4 +217,38 @@
   display: flex;
   gap: 8px;
   margin-top: 2px;
+}
+
+/* Save matches hub ActionButton fill; Cancel reuses .buttonSecondary. */
+.buttonPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--tell-card-bg);
+  color: var(--accent-on);
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.buttonPrimary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.buttonPrimary:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

@@ -3,8 +3,8 @@
  * PersonDetails — the details sheet opened by a DOUBLE-click/double-tap on a card (tree Slice A, and
  * Slice C's edit mode, #4/#5). Replaces the deleted PersonPanel.
  *
- * Chrome lives in PersonDetails.module.css (token-driven, skin-neutral). Scrapbook stays deliberately
- * FLAT here — no tape/tilt/stickers/shadow-shelf (issue #223); tokens still re-skin surfaces/type.
+ * Chrome lives in PersonDetails.module.css (token-driven). Sheet surface stays flat (#223); action
+ * icons match hub ActionButton (#7). Edge governance lives on the line-governance menu, not here.
  *
  * Slice A gave it a read-only view (name, dates, relation, nav links). Slice C (ADR-0021) adds an
  * EDIT affordance and an inline edit form, shown ONLY when the server says the viewer may edit this
@@ -21,11 +21,10 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { BookOpen, Images, Quote, SquarePen } from "lucide-react";
 import { hub } from "@/app/_copy";
-import type { GovernableKinEdge, KinRelation, PersonSex, TreeNode } from "@chronicle/core";
-import { KinEdgeControls } from "./kin-edge-controls";
-import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "./edge-sentence";
-import govStyles from "./GovernableEdgeList.module.css";
+import type { KinRelation, PersonSex, TreeNode } from "@chronicle/core";
+import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
 import styles from "./PersonDetails.module.css";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
 import {
@@ -80,17 +79,6 @@ export interface PersonDetailsProps {
    * a bare test mount).
    */
   onInvite?: (node: TreeNode) => void;
-  /**
-   * #254 — family's governable edges (capability flags included). The sheet filters to edges that
-   * touch this person AND that the viewer can act on (steward Remove / subject Hide).
-   */
-  governableEdges?: readonly GovernableKinEdge[];
-  /**
-   * #254/#255 — after a successful deny/hide/affirm/correct. Canvas must prune client edges only for
-   * deny/hide (affirm/correct keep the edge; same-family merge won't restore a wrongly dropped edge
-   * when only state/nature changed).
-   */
-  onEdgeGoverned?: (edge: GovernableKinEdge, kind: "affirm" | "deny" | "hide" | "correct") => void;
   /** Overridable for tests; default to the real server actions. */
   checkEditable?: CheckEditableFn;
   saveEdit?: SaveEditFn;
@@ -105,8 +93,6 @@ export function PersonDetails({
   onClose,
   onSaved,
   onInvite,
-  governableEdges = [],
-  onEdgeGoverned,
   checkEditable = personEditabilityAction,
   saveEdit = savePersonEditAction,
 }: PersonDetailsProps) {
@@ -117,7 +103,6 @@ export function PersonDetails({
   const anon = isAnonymousBridge(node);
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
   const rootRef = useRef<HTMLElement | null>(null);
-  const actableEdges = actableEdgesForPerson(governableEdges, node.personId);
 
   // Slice B: the three contribution links now point at the unified per-person page's sections.
   const storiesHref = `/hub/person/${node.personId}?section=stories`;
@@ -205,24 +190,49 @@ export function PersonDetails({
 
           {!hasName && !anon && <p className={styles.unknownNote}>{hub.tree.unknownRelative}</p>}
 
-          {editable && (
-            <div className={styles.actionRow}>
+          <div className={styles.actions} data-testid="tree-details-actions">
+            {editable && (
               <button
                 type="button"
                 data-testid="tree-details-edit"
-                className={styles.buttonPrimary}
+                className={styles.iconAction}
+                aria-label={hub.tree.editButton}
                 onClick={() => setEditing(true)}
               >
-                {hub.tree.editButton}
+                <SquarePen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
               </button>
-            </div>
-          )}
+            )}
+            <Link
+              href={storiesHref}
+              className={styles.iconAction}
+              data-testid="tree-details-stories"
+              aria-label={hub.tree.detailsStories}
+            >
+              <BookOpen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+            </Link>
+            <Link
+              href={photosHref}
+              className={styles.iconAction}
+              data-testid="tree-details-photos"
+              aria-label={hub.tree.detailsPhotos}
+            >
+              <Images size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+            </Link>
+            <Link
+              href={mentionsHref}
+              className={styles.iconAction}
+              data-testid="tree-details-mentions"
+              aria-label={hub.tree.detailsMentions}
+            >
+              <Quote size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+            </Link>
+          </div>
 
           {/* #334 (originally Slice D #6): invite affordance — a button when invitable, a muted note
               when pending, nothing for not-applicable. Clicking opens the in-place
               person-bound Invite modal (the caller wires `onInvite` to open it). */}
           {onInvite && node.inviteStatus === "invitable" && (
-            <div className={styles.actionRow}>
+            <div className={styles.inviteRow}>
               <button
                 type="button"
                 data-testid="tree-details-invite"
@@ -238,48 +248,6 @@ export function PersonDetails({
               {hub.tree.invitePendingNote}
             </p>
           )}
-
-          {/* #254/#265 — steward Remove / subject Hide; shared GovernableEdgeList chrome with List. */}
-          {actableEdges.length > 0 && (
-            <section
-              data-testid="tree-details-gov-edges"
-              aria-labelledby="tree-details-gov-heading"
-              className={govStyles.sectionDense}
-            >
-              <h3 id="tree-details-gov-heading" className={govStyles.headingDense}>
-                {hub.kin.govHeading}
-              </h3>
-              <ul className={govStyles.list}>
-                {actableEdges.map((edge) => (
-                  <li
-                    key={governableEdgeKey(edge)}
-                    data-testid="tree-details-gov-edge"
-                    className={govStyles.edge}
-                  >
-                    <p className={govStyles.sentence}>{edgeSentence(edge)}</p>
-                    <KinEdgeControls
-                      familyId={familyId}
-                      edge={edge}
-                      onSuccess={(kind) => onEdgeGoverned?.(edge, kind)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <nav className={styles.nav}>
-            {/* Slice B: all three contribution links are live destinations on the per-person page. */}
-            <Link href={storiesHref} className={styles.navLink} data-testid="tree-details-stories">
-              {hub.tree.detailsStories}
-            </Link>
-            <Link href={photosHref} className={styles.navLink} data-testid="tree-details-photos">
-              {hub.tree.detailsPhotos}
-            </Link>
-            <Link href={mentionsHref} className={styles.navLink} data-testid="tree-details-mentions">
-              {hub.tree.detailsMentions}
-            </Link>
-          </nav>
         </>
       )}
     </aside>
