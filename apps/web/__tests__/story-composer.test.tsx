@@ -256,8 +256,8 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
     expect(chipOn(chips[1]!)).toBe(false);
   });
 
-  it("HIDES the picker on the public tier (no per-family target)", () => {
-    const { container } = render(
+  it("has no Who-should-hear tier picker; Share always posts audienceTier=family", async () => {
+    render(
       <StoryComposer
         mode="tell"
         ask={null}
@@ -266,14 +266,14 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
         seededFamilyIds={["fam-a"]}
       />,
     );
-    // Visible on the default family tier…
+    expect(screen.queryByText(/who should hear/i)).toBeNull();
+    expect(document.querySelector('input[name="audienceTier"]')).toBeNull();
+    // Multi-family chips remain; Share still posts family tier.
     expect(screen.getByText(pickerText)).toBeTruthy();
-    // …then switching to public removes it.
-    const publicRadio = container.querySelector(
-      'input[name="audienceTier"][value="public"]',
-    ) as HTMLInputElement;
-    fireEvent.click(publicRadio);
-    expect(screen.queryByText(pickerText)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
+    await waitFor(() => expect(shareAnswerAction).toHaveBeenCalledOnce());
+    const form = shareAnswerAction.mock.calls[0]![0] as FormData;
+    expect(form.get("audienceTier")).toBe("family");
   });
 
   it("BLOCKS Share with an empty required selection — shows the guard, never calls the action", async () => {
