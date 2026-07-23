@@ -11,6 +11,7 @@
  * Views), and the hub page no-family fallback (Sub tabs + Invite only).
  */
 import type { ComponentProps, ReactNode } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Inbox,
@@ -29,9 +30,16 @@ import { IconSheet } from "./IconSheet";
 import { ICON_SHEET_GLYPH_SIZE } from "./icon-sheet-constants";
 import { HUB_SUB_TABS_GLYPH_SIZE } from "./hub-progressive-control-constants";
 import { SubTabsMenu } from "./SubTabsMenu";
+import { ColdInviteModal } from "./tabs/ColdInviteModal";
 
 /** The active Family-surface view the selector highlights. */
 export type FamilySurfaceView = "tree" | "list" | "requests";
+
+/** Cold Invite button payload — opens `ColdInviteModal` instead of navigating to `?tab=invite`. */
+export type FamilySurfaceInvite = {
+  families: { id: string; name: string; shortName?: string | null }[];
+  seededFamily: string | null;
+};
 
 interface FamilySurfaceNavProps {
   /** Which selector item is active (`aria-current="page"`). */
@@ -46,9 +54,9 @@ interface FamilySurfaceNavProps {
    *  Requests item; absent/0 hides the badge. Deliberately the aggregate (not the scoped subset) so a
    *  steward still sees that requests exist in a family they haven't selected (#159). */
   requestsBadge?: number;
-  /** The member-only Invite entry point (`/hub?tab=invite[&families=…]`), trailing primary action.
+  /** The member-only Invite entry point — trailing primary action that opens the cold Invite modal.
    *  `undefined` (a pending-only / gated viewer) renders no button. */
-  inviteHref?: string;
+  invite?: FamilySurfaceInvite;
   /**
    * Family unit — single-select scope chips when ≥2 families. Omit on single-family / no-family so the
    * unit is absent (not an empty icon). RequestsTab and FamilyTab both pass chips when multi-family.
@@ -86,13 +94,14 @@ export function FamilySurfaceNav({
   familiesParam,
   showRequests,
   requestsBadge,
-  inviteHref,
+  invite,
   row2Left,
   row2Right,
   forceAvailableWidth,
   forceWidths,
 }: FamilySurfaceNavProps) {
   const router = useRouter();
+  const [inviteOpen, setInviteOpen] = useState(false);
   const selector = showRequests ? SELECTOR : SELECTOR.filter((i) => i.key !== "requests");
 
   function requestsBadgeProps(key: FamilySurfaceView): {
@@ -181,11 +190,13 @@ export function FamilySurfaceNav({
         }
       : undefined;
 
-  const action = inviteHref
+  const action = invite
     ? {
-        labeled: <ActionButton href={inviteHref}>{hub.shell.tabInvite}</ActionButton>,
+        labeled: (
+          <ActionButton onClick={() => setInviteOpen(true)}>{hub.shell.tabInvite}</ActionButton>
+        ),
         iconified: (
-          <ActionButton href={inviteHref} aria-label={hub.shell.inviteAria}>
+          <ActionButton onClick={() => setInviteOpen(true)} aria-label={hub.shell.inviteAria}>
             <UserRoundPlus size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
           </ActionButton>
         ),
@@ -193,42 +204,51 @@ export function FamilySurfaceNav({
     : undefined;
 
   return (
-    <HubProgressiveControlRow
-      subTabs={{
-        labeled: (
-          <HubSubNav
-            layout="intrinsic"
-            ariaLabel={hub.shell.familySubNavAria}
-            items={labeledItems}
-            active={active}
-          />
-        ),
-        iconPills: (
-          <HubSubNav
-            layout="intrinsic"
-            ariaLabel={hub.shell.familySubNavAria}
-            items={iconPillItems}
-            active={active}
-          />
-        ),
-        menuIcon: (
-          <SubTabsMenu
-            items={menuItems}
-            active={active}
-            ariaLabel={hub.shell.familySubNavAria}
-            onSelect={(key) => {
-              const item = selector.find((i) => i.key === key);
-              if (!item) return;
-              router.push(hrefFor(item, familiesParam));
-            }}
-          />
-        ),
-      }}
-      family={family}
-      views={views}
-      action={action}
-      forceAvailableWidth={forceAvailableWidth}
-      forceWidths={forceWidths}
-    />
+    <>
+      <HubProgressiveControlRow
+        subTabs={{
+          labeled: (
+            <HubSubNav
+              layout="intrinsic"
+              ariaLabel={hub.shell.familySubNavAria}
+              items={labeledItems}
+              active={active}
+            />
+          ),
+          iconPills: (
+            <HubSubNav
+              layout="intrinsic"
+              ariaLabel={hub.shell.familySubNavAria}
+              items={iconPillItems}
+              active={active}
+            />
+          ),
+          menuIcon: (
+            <SubTabsMenu
+              items={menuItems}
+              active={active}
+              ariaLabel={hub.shell.familySubNavAria}
+              onSelect={(key) => {
+                const item = selector.find((i) => i.key === key);
+                if (!item) return;
+                router.push(hrefFor(item, familiesParam));
+              }}
+            />
+          ),
+        }}
+        family={family}
+        views={views}
+        action={action}
+        forceAvailableWidth={forceAvailableWidth}
+        forceWidths={forceWidths}
+      />
+      {invite && inviteOpen ? (
+        <ColdInviteModal
+          families={invite.families}
+          seededFamily={invite.seededFamily}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }

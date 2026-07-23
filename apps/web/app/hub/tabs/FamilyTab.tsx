@@ -52,7 +52,7 @@ import { ReconcileFlow } from "../kin/reconcile-flow";
 import { KinList } from "./KinList";
 import { UnplacedMembers } from "../tree/UnplacedMembers";
 import { FamilyChips } from "../FamilyChips";
-import { FamilySurfaceNav, type FamilySurfaceView } from "../FamilySurfaceNav";
+import { FamilySurfaceNav, type FamilySurfaceInvite, type FamilySurfaceView } from "../FamilySurfaceNav";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
 import styles from "./FamilyTab.module.css";
 
@@ -112,7 +112,7 @@ export interface FamilyTabProps {
     familiesParam: string | null;
     showRequests: boolean;
     requestsBadge?: number;
-    inviteHref?: string;
+    invite?: FamilySurfaceInvite;
   };
   /**
    * #334 — overridable seams for the person-bound Invite modal (mirrors `TreeCanvas`'s own injection
@@ -296,7 +296,7 @@ export function FamilyTab({
         familiesParam={surface.familiesParam}
         showRequests={surface.showRequests}
         requestsBadge={surface.requestsBadge}
-        inviteHref={surface.inviteHref}
+        invite={surface.invite}
         row2Left={familyChips}
         row2Right={zoomControls}
       />

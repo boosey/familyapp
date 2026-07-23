@@ -22,7 +22,7 @@ afterEach(() => {
 const TREE_SHORT = hub.shell.familySubTreeShort;
 const LIST = hub.tree.viewList;
 const REQUESTS = hub.shell.tabRequests;
-const INVITE = hub.shell.tabInvite;
+const INVITE_LABEL = hub.shell.tabInvite;
 
 function visibleRow(): HTMLElement {
   const row = document.querySelector("[data-hub-progressive-control-row]");
@@ -36,6 +36,11 @@ const COLLAPSE_VIEWS = {
   views: { expanded: 160, collapsedIcon: 48 },
   actionLabeled: 120,
   actionIconified: 48,
+};
+
+const INVITE = {
+  families: [{ id: "fam-a", name: "Esposito" }],
+  seededFamily: "fam-a" as string | null,
 };
 
 describe("FamilySurfaceNav progressive control row (#297)", () => {
@@ -91,18 +96,24 @@ describe("FamilySurfaceNav progressive control row (#297)", () => {
     expect(within(visibleRow()).queryByLabelText(hub.shell.unreadAria(0))).toBeNull();
   });
 
-  it("renders Invite as the trailing primary action when inviteHref is given", () => {
-    const href = "/hub?tab=invite&families=fam-a";
+  it("renders Invite as a button that opens the cold Invite modal", () => {
     const { rerender } = render(
-      <FamilySurfaceNav active="tree" familiesParam="fam-a" showRequests inviteHref={href} />,
+      <FamilySurfaceNav active="tree" familiesParam="fam-a" showRequests invite={INVITE} />,
     );
-    expect(screen.getByRole("link", { name: INVITE }).getAttribute("href")).toBe(href);
+    const inviteBtn = screen.getByRole("button", { name: INVITE_LABEL });
+    expect(inviteBtn.tagName).toBe("BUTTON");
+    expect(screen.queryByTestId("cold-invite-modal")).toBeNull();
+
+    fireEvent.click(inviteBtn);
+    expect(screen.getByTestId("cold-invite-modal")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: hub.invite.memberHeading })).toBeTruthy();
+
     expect(
       document.querySelector("[data-hub-progressive-control-row]")?.getAttribute("data-action"),
     ).toBe("labeled");
 
     rerender(<FamilySurfaceNav active="tree" familiesParam="fam-a" showRequests />);
-    expect(screen.queryByRole("link", { name: INVITE })).toBeNull();
+    expect(screen.queryByRole("button", { name: INVITE_LABEL })).toBeNull();
   });
 
   it("renders a single progressive control row (not HubToolbar two-row chrome)", () => {
@@ -111,7 +122,7 @@ describe("FamilySurfaceNav progressive control row (#297)", () => {
         active="tree"
         familiesParam="fam-a"
         showRequests
-        inviteHref="/hub?tab=invite"
+        invite={INVITE}
         row2Left={<div data-testid="fam-chips">chips</div>}
         row2Right={<div data-testid="tree-controls">zoom</div>}
       />,
@@ -129,7 +140,7 @@ describe("FamilySurfaceNav progressive control row (#297)", () => {
         active="tree"
         familiesParam="fam-a"
         showRequests
-        inviteHref="/hub?tab=invite"
+        invite={INVITE}
         row2Left={<div data-testid="fam-chips">chips</div>}
         row2Right={<div data-testid="tree-controls">zoom</div>}
         forceAvailableWidth={320}

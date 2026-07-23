@@ -1192,7 +1192,7 @@ export const hub = {
     // Slice D (#6) / ADR-0028 — invite affordance (details sheet + kebab). Shown only for an
     // `invitable` person (membership gap across the viewer's Families); `pending` shows the muted
     // note; `not-applicable` shows nothing (#335 retired Account-centric `accepted`).
-    inviteButton: "Invite to join",
+    inviteButton: "Invite to another family",
     kebabInvite: "Invite…",
     invitePendingNote: "Invitation pending",
     // Per-direction caret aria labels (collapse/expand an already-drawn branch; add via "+").
