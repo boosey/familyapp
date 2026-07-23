@@ -49,15 +49,12 @@ const importOneGooglePhotoAction = vi.fn(
 );
 const startGooglePhotosImportAction = vi.fn();
 const pollGooglePhotosImportAction = vi.fn();
-const completeGooglePhotosImportAction = vi.fn();
 const disconnectGooglePhotosAction = vi.fn();
 vi.mock("@/app/hub/album/google-photos-actions", () => ({
   listGooglePhotosImportAction: (...args: unknown[]) => listGooglePhotosImportAction(...args),
   importOneGooglePhotoAction: (...args: unknown[]) => importOneGooglePhotoAction(...args),
   startGooglePhotosImportAction: (...args: unknown[]) => startGooglePhotosImportAction(...args),
   pollGooglePhotosImportAction: (...args: unknown[]) => pollGooglePhotosImportAction(...args),
-  completeGooglePhotosImportAction: (...args: unknown[]) =>
-    completeGooglePhotosImportAction(...args),
   disconnectGooglePhotosAction: (...args: unknown[]) => disconnectGooglePhotosAction(...args),
 }));
 
@@ -101,6 +98,8 @@ function renderBoard(props?: Partial<React.ComponentProps<typeof AlbumBoard>>) {
       googlePhotosEmail={null}
       googlePhotosOauthConnected={false}
       googlePhotosOauthError={null}
+
+      emptyNote={hub.album.empty}
       photos={[]}
       {...props}
     />,
@@ -485,6 +484,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         googlePhotosEmail={null}
         googlePhotosOauthConnected={false}
         googlePhotosOauthError={null}
+
+        emptyNote={hub.album.empty}
         photos={[]}
       />,
     );
@@ -506,6 +507,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         googlePhotosEmail={null}
         googlePhotosOauthConnected={false}
         googlePhotosOauthError={null}
+
+        emptyNote={hub.album.empty}
         photos={[{ id: "dup-1", caption: null, canManage: true }]}
       />,
     );
@@ -534,6 +537,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         googlePhotosEmail={null}
         googlePhotosOauthConnected={false}
         googlePhotosOauthError={null}
+
+        emptyNote={hub.album.empty}
         photos={[]}
       />,
     );
@@ -573,6 +578,8 @@ describe("AlbumBoard optimistic tile (regression: no blank gap, no all-at-once)"
         googlePhotosEmail={null}
         googlePhotosOauthConnected={false}
         googlePhotosOauthError={null}
+
+        emptyNote={hub.album.empty}
         photos={[]}
       />,
     );

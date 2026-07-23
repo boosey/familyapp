@@ -4,9 +4,9 @@
  * Album grid (ADR-0009 caption · ADR-0008 delete · #18 · album enhancements 2026-07-13). Renders the
  * family album's photos in one of THREE layouts (item 7 — Grid / Masonry / List), sized by a shared
  * thumbnail-size slider (item 8), with a per-thumbnail hover/focus mini-toolbar (item 2). Because both
- * callers funnel through this ONE client component — the flag-off `AlbumSurface` (`<AlbumGrid photos>`)
- * and the flag-on `AlbumBoard` (`<AlbumGrid photos pendingTiles onRetryTile>`) — all three affordances
- * land for free on both paths.
+ * callers funnel through this ONE client component — `AlbumSurface`'s zero-family empty state
+ * (`<AlbumGrid photos>`) and `AlbumBoard` (`<AlbumGrid photos pendingTiles onRetryTile>`) — all three
+ * affordances land for free on both paths.
  *
  * Each tile/row is a BUTTON wrapping the photo: tapping it opens the `AlbumPhotoViewer` — a larger view
  * that HOSTS that photo's full options. The grid just owns which photo is open and mounts one viewer for

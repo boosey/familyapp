@@ -9,8 +9,9 @@
  * and re-validates the target albums on `record` — the client passes only its picker choice + the
  * server-issued ticket. On success it refreshes the server component so the new tiles appear.
  *
- * (When the F2 board mount is active, this component instead DELEGATES import to `AlbumBoard` via
- * `onImportFiles` — the per-item pool + placeholder tiles — and never runs this self-driving path.)
+ * This component always DELEGATES import to `AlbumBoard` via `onImportFiles`/`onImportGoogle` — the
+ * per-item pool + placeholder tiles. `AlbumBoard` is the SOLE mount now (GA); there is no self-driving
+ * path anymore.
  *
  * Multi-select (#16): the hidden file input carries `multiple`, so the OS picker lets the contributor
  * choose MANY photos at once. Each selected file becomes its own album photo placed into the SAME
@@ -30,13 +31,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { pickerUriForWeb } from "@chronicle/photos-google/picker";
 import {
-  completeGooglePhotosImportAction,
   disconnectGooglePhotosAction,
   pollGooglePhotosImportAction,
   startGooglePhotosImportAction,
 } from "./google-photos-actions";
-import { prepareAlbumPhoto } from "./prepare-photo";
-import { uploadPhotoDirect } from "./direct-upload";
 import { ImagePlus } from "lucide-react";
 import { hub } from "@/app/_copy";
 import { useIsCompact } from "@/app/_kindred/useIsCompact";
@@ -128,10 +126,10 @@ export function AlbumUploader({
   googlePhotosOauthConnected?: boolean;
   /** One-shot error flash after OAuth callback (`?googlePhotosError=`). */
   googlePhotosOauthError?: string | null;
-  /** F2 board mode (ADR-0015): when provided, hand import EXECUTION off to the board (per-item pool +
-   *  pending tiles) instead of running the batched actions. Absent → today's self-driving behavior. */
-  onImportFiles?: (files: File[], familyIds: string[]) => void;
-  onImportGoogle?: (sessionId: string, familyIds: string[]) => void;
+  /** Board delegates (ADR-0015 · F2, now GA): import EXECUTION is handed to the board (per-item pool +
+   *  pending tiles) — the uploader itself never drives an upload/import to completion. */
+  onImportFiles: (files: File[], familyIds: string[]) => void;
+  onImportGoogle: (sessionId: string, familyIds: string[]) => void;
   /**
    * Progressive control row (#302): when set, overrides compact-breakpoint iconification so Add Photos
    * iconifies by measured row width. Omit to keep the legacy useIsCompact path.
@@ -265,68 +263,15 @@ export function AlbumUploader({
     runUpload(chosen, []);
   }
 
-  // Run the actual per-file upload (or hand off to the board) against a settled destination. Called
-  // directly for a solo-family viewer, or from the destination modal's Add for a >1-family viewer.
+  // Run the actual per-file upload by handing execution off to the board against a settled destination.
+  // Called directly for a solo-family viewer, or from the destination modal's Add for a >1-family
+  // viewer. The board prepares each file per-item (so one prepare failure doesn't abort the batch) and
+  // drives the per-item pool — no prepare, no batched action, no transition here.
   function runUpload(selectedFiles: File[], chosenFamilies: string[]) {
-    // F2 board mode (ADR-0015): hand execution to the board — it prepares each file per-item (so one
-    // prepare failure doesn't abort the batch) and drives the per-item pool. No prepare, no batched
-    // action, no transition here.
-    if (onImportFiles) {
-      setError(null);
-      setNote(null);
-      onImportFiles(selectedFiles, chosenFamilies);
-      setSelected(seed());
-      return;
-    }
-    // issue #20 — direct-to-storage: this legacy (non-board) path uploads each file straight to object
-    // storage (request target → PUT bytes → record row) instead of POSTing bytes through a Server
-    // Action. The chosen albums (a solo contributor sends none; the server defaults to their sole
-    // family) ride along on each per-file `record`. Each file is independent — one failure never aborts
-    // the batch — and a partial success surfaces a soft note, matching the previous batch behavior.
-    startTransition(async () => {
-      let added = 0;
-      let failed = 0;
-      let hardError: string | null = null;
-      for (const file of selectedFiles) {
-        const prep = await prepareAlbumPhoto(file);
-        if (!prep.ok) {
-          // A prepare failure (HEIC or a canvas encode failure — issue #20 removed the size cap) is a
-          // hard, up-front error for this path: there is no per-tile retry here, so name it and stop.
-          hardError =
-            prep.error === "heic_unsupported"
-              ? hub.actions.photoHeicUnsupported
-              : hub.actions.photoEncodeFailed;
-          break;
-        }
-        // uploadPhotoDirect never throws — a network/server failure comes back as { error }.
-        const result = await uploadPhotoDirect(prep.file, chosenFamilies);
-        if ("error" in result) failed += 1;
-        else added += 1;
-      }
-
-      if (hardError) {
-        setError(hardError);
-        setNote(null);
-        // Files uploaded before the hard failure already landed — reflect them (and clear the
-        // consumed selection) instead of leaving them invisible until a manual reload.
-        if (added > 0) {
-          setSelected(seed());
-          router.refresh();
-        }
-        return;
-      }
-      if (added === 0) {
-        setError(hub.album.uploadError);
-        setNote(null);
-        return;
-      }
-      setError(null);
-      // A partial success (some files failed) is not an error — surface a soft note so the
-      // contributor knows exactly what landed and can retry the rest.
-      setNote(failed > 0 ? hub.album.photosPartial(added, failed) : null);
-      setSelected(seed());
-      router.refresh();
-    });
+    setError(null);
+    setNote(null);
+    onImportFiles(selectedFiles, chosenFamilies);
+    setSelected(seed());
   }
 
   // Open the OS file picker. Reset the input's value first so re-choosing the SAME file(s) still
@@ -480,7 +425,7 @@ export function AlbumUploader({
         setGoogleSessionReady(true);
         return;
       }
-      await runGoogleComplete(started.sessionId, []);
+      runGoogleComplete(started.sessionId, []);
     } catch {
       // A superseded loop must not report its own failure over the newer run.
       if (stale()) return;
@@ -497,52 +442,14 @@ export function AlbumUploader({
     }
   }
 
-  // Complete a ready Google import against a settled destination — the board handoff (F2) or the
-  // batched completion action. Called directly for a solo-family viewer (from `runGoogleImport`) or
-  // from the destination modal's Add for a >1-family viewer. Its own try/catch keeps a modal-driven
-  // completion (which runs OUTSIDE runGoogleImport's try) from surfacing as an unhandled rejection.
-  async function runGoogleComplete(sessionId: string, chosenFamilies: string[]) {
-    try {
-      // F2 board mode (ADR-0015): hand the session off to the board, which runs the list-first step +
-      // per-item pool and owns the progress display. Clear our own pending/note so the board's tiles
-      // are the single source of progress truth.
-      if (onImportGoogle) {
-        setNote(null);
-        setGooglePending(false);
-        onImportGoogle(sessionId, chosenFamilies);
-        return;
-      }
-
-      setGooglePending(true);
-      const formData = new FormData();
-      formData.append("sessionId", sessionId);
-      for (const familyId of chosenFamilies) formData.append("familyIds", familyId);
-      const completed = await completeGooglePhotosImportAction(formData);
-      if ("error" in completed) {
-        setError(completed.error);
-        setNote(null);
-        return;
-      }
-      setError(null);
-      setNote(
-        completed.failed > 0 || completed.skipped > 0
-          ? hub.album.googlePhotosPartial(
-              completed.added,
-              completed.failed,
-              completed.skipped,
-            )
-          : completed.added > 0
-            ? hub.album.googlePhotosPartial(completed.added, 0, 0)
-            : null,
-      );
-      setSelected(seed());
-      router.refresh();
-    } catch {
-      setError(hub.album.googlePhotosImportFailed);
-      setNote(null);
-    } finally {
-      setGooglePending(false);
-    }
+  // Complete a ready Google import against a settled destination by handing the session off to the
+  // board, which runs the list-first step + per-item pool and owns the progress display. Called
+  // directly for a solo-family viewer (from `runGoogleImport`) or from the destination modal's Add for
+  // a >1-family viewer. Never throws — the board owns its own error handling.
+  function runGoogleComplete(sessionId: string, chosenFamilies: string[]): void {
+    setNote(null);
+    setGooglePending(false);
+    onImportGoogle(sessionId, chosenFamilies);
   }
 
   // The destination modal's Add: run the stashed payload against the chosen destination, then close.
@@ -554,7 +461,7 @@ export function AlbumUploader({
     if (payload.kind === "upload") {
       runUpload(payload.files, chosenFamilies);
     } else {
-      void runGoogleComplete(payload.sessionId, chosenFamilies);
+      runGoogleComplete(payload.sessionId, chosenFamilies);
     }
   }
 

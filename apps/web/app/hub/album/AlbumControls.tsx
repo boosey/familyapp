@@ -5,8 +5,9 @@
  * hub control row. Occupancy: Family → Search → Filters → Views (no Sub tabs). Add Photos stays on
  * the trailing edge outside collapse. Search and Filters are separate units (Filters collapses first).
  *
- * Both album mount paths (flag-off AlbumSurface and flag-on AlbumBoard) render through this so the
- * control chrome cannot drift. State owned here:
+ * Both album mount paths (AlbumBoard for a viewer with ≥1 family; AlbumControls directly for the
+ * zero-family pending-only empty state) render through this so the control chrome cannot drift. State
+ * owned here:
  *  - `filter` (When/Search/facets) — threaded to AlbumGrid
  *  - `view` + `thumbPx` — Views unit, localStorage-persisted
  *
