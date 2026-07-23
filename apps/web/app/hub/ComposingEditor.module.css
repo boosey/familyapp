@@ -8,7 +8,7 @@
   display: contents;
 }
 
-/* Persistent capture footer — mic + type box, both live (append more takes). */
+/* Persistent capture footer — progressive action row + mic / type box. */
 .footer {
   border-top: none;
   padding-top: 16px;
@@ -16,22 +16,27 @@
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 20px;
-}
-
-/* Speak/Type + Polish with AI on one row under the prose field. */
-.actionRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   width: 100%;
   max-width: 480px;
-  flex-wrap: wrap;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* The voice⇄text input-mode segmented toggle group (both the footer and the capture-entry copies). */
+/* HubProgressiveControlRow sits flush in the footer (its own margin-bottom is for browse surfaces).
+ * Reverse the browse-units flex so visual order is Speak/Type · Polish while collapse precedence
+ * stays views-first (Speak/Type) then family (Polish). */
+.progressiveRow :global([data-hub-progressive-control-row]) {
+  margin-bottom: 0;
+}
+
+.progressiveRow :global([data-hub-progressive-control-row] > div:first-child) {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+}
+
+/* The voice⇄text input-mode segmented toggle (footer + capture-entry). */
 .modeGroup {
   display: inline-flex;
   gap: 4px;
@@ -41,12 +46,14 @@
   border: var(--border-width) solid var(--border);
 }
 
-.polishButton {
+/* Shared chip — Speak/Type segments, Polish, and Finish (labeled or icon-only). */
+.chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-height: 44px;
+  min-width: 44px;
   padding: 0 14px;
   border-radius: var(--radius-pill);
   border: var(--border-width) solid var(--accent);
@@ -56,23 +63,34 @@
   font-size: var(--text-label);
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--dur-fade), opacity var(--dur-fade);
+  white-space: nowrap;
+  transition: background var(--dur-fade), opacity var(--dur-fade), color var(--dur-fade);
 }
 
-.polishButton:disabled {
+.chipIconOnly {
+  padding: 0;
+  width: 44px;
+}
+
+.chip:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.polishButton:focus-visible {
+.chip:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 /* One option inside the mode toggle group. */
 .modeOption {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 36px;
-  padding: 0 18px;
+  min-width: 36px;
+  padding: 0 14px;
   border-radius: var(--radius-pill);
   border: none;
   background: transparent;
@@ -84,6 +102,11 @@
   transition: background var(--dur-fade), color var(--dur-fade);
 }
 
+.modeOptionIconOnly {
+  padding: 0;
+  width: 36px;
+}
+
 .modeOption[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-on);
@@ -93,7 +116,6 @@
   cursor: not-allowed;
 }
 
-/* A disabled, non-active option dims; the active one keeps its fill even while disabled. */
 .modeOption:disabled[aria-pressed="false"] {
   opacity: 0.5;
 }
@@ -107,13 +129,13 @@
 .textEntry {
   width: 100%;
   max-width: 480px;
+  align-self: center;
 }
 
 .textEntryActions {
   margin-top: 12px;
 }
 
-/* Capture-entry (take-0) continue button sits a touch lower than the footer's. */
 .textEntryActionsWide {
   margin-top: 16px;
 }

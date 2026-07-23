@@ -27,8 +27,9 @@
  * exists to enforce (§6). The old "Polishing your words…" poll gate is gone: each take is one
  * synchronous round-trip returning the new prose.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Keyboard, Mic, Sparkles } from "lucide-react";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
 import { useAudioLevel } from "@/app/_kindred/use-audio-level";
@@ -67,7 +68,10 @@ import {
   tagStorySubjectAction,
   untagStorySubjectAction,
 } from "./stories/[id]/actions";
+import { HubProgressiveControlRow } from "./HubProgressiveControlRow";
+import { ICON_SHEET_GLYPH_SIZE } from "./icon-sheet-constants";
 
+const CHIP_GLYPH = ICON_SHEET_GLYPH_SIZE;
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
 type Op = "share" | "discard" | null;
@@ -1043,31 +1047,88 @@ export function ComposingEditor({
           </div>
         )}
 
-        {/* Persistent capture footer — Speak/Type + Polish on one row, then mic/type + relisten. */}
+        {/* Persistent capture footer — progressive Speak/Type · Polish · Finish, then mic/type. */}
         <div className={styles.footer}>
-          <div className={styles.actionRow}>
-            <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
-              <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={busy} onClick={() => setInputMode("voice")} />
-              <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={busy} onClick={() => setInputMode("text")} />
-            </div>
-            <button
-              type="button"
-              className={styles.polishButton}
-              title={common.proseEditor.polishHint}
-              disabled={busy || polishing || proseDraft.trim().length === 0}
-              onClick={() => {
-                void (async () => {
-                  try {
-                    const next = await polishHandler(proseDraft);
-                    history.replace(next);
-                  } catch {
-                    setPendingError(common.proseEditor.polishError);
-                  }
-                })();
+          <div className={styles.progressiveRow}>
+            <HubProgressiveControlRow
+              // Collapse precedence (first to lose labels): views → family → action iconify.
+              // Render order is family then views; `.progressiveRow` reverses the units flex so the
+              // visual order is Speak/Type · Polish · Finish.
+              views={{
+                expanded: (
+                  <ModeToggle
+                    inputMode={inputMode}
+                    setInputMode={setInputMode}
+                    disabled={busy}
+                    iconOnly={false}
+                  />
+                ),
+                collapsed: (
+                  <ModeToggle
+                    inputMode={inputMode}
+                    setInputMode={setInputMode}
+                    disabled={busy}
+                    iconOnly
+                  />
+                ),
               }}
-            >
-              {polishing ? common.proseEditor.polishing : common.proseEditor.polish}
-            </button>
+              family={{
+                expanded: (
+                  <ChipButton
+                    icon={<Sparkles size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                    label={polishing ? common.proseEditor.polishing : hub.compose.polish}
+                    title={common.proseEditor.polishHint}
+                    disabled={busy || polishing || proseDraft.trim().length === 0}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const next = await polishHandler(proseDraft);
+                          history.replace(next);
+                        } catch {
+                          setPendingError(common.proseEditor.polishError);
+                        }
+                      })();
+                    }}
+                  />
+                ),
+                collapsed: (
+                  <ChipButton
+                    icon={<Sparkles size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                    ariaLabel={hub.compose.polishAria}
+                    title={common.proseEditor.polishHint}
+                    disabled={busy || polishing || proseDraft.trim().length === 0}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const next = await polishHandler(proseDraft);
+                          history.replace(next);
+                        } catch {
+                          setPendingError(common.proseEditor.polishError);
+                        }
+                      })();
+                    }}
+                  />
+                ),
+              }}
+              action={{
+                labeled: (
+                  <ChipButton
+                    icon={<Check size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                    label={hub.answer.finish}
+                    disabled={busy}
+                    onClick={onFinishDraft}
+                  />
+                ),
+                iconified: (
+                  <ChipButton
+                    icon={<Check size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                    ariaLabel={hub.compose.finishAria}
+                    disabled={busy}
+                    onClick={onFinishDraft}
+                  />
+                ),
+              }}
+            />
           </div>
 
           {inputMode === "voice" ? (
@@ -1165,16 +1226,6 @@ export function ComposingEditor({
             />
           </div>
         )}
-
-        {/* Finish — seals the draft (runs the speculative Finish-check first). */}
-        <KindredButton
-          label={hub.answer.finish}
-          variant="primary"
-          size="large"
-          fullWidth
-          disabled={busy}
-          onClick={onFinishDraft}
-        />
       </div>
     );
   }
@@ -1227,10 +1278,7 @@ export function ComposingEditor({
         </p>
       )}
 
-      <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
-        <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} onClick={() => setInputMode("voice")} />
-        <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} onClick={() => setInputMode("text")} />
-      </div>
+      <ModeToggle inputMode={inputMode} setInputMode={setInputMode} />
 
       {inputMode === "voice" ? (
         <>
@@ -1388,27 +1436,98 @@ function ErrorLine({ message }: { message: string }) {
   );
 }
 
-/* ── Capture-mode toggle option ────────────────────────────────────────────── */
-function ToggleOption({
+/* ── Capture action chips + Speak/Type toggle ──────────────────────────────── */
+
+function ChipButton({
+  icon,
   label,
-  active,
+  ariaLabel,
+  title,
   disabled,
   onClick,
 }: {
+  icon: ReactNode;
+  label?: string;
+  ariaLabel?: string;
+  title?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const iconOnly = !label;
+  return (
+    <button
+      type="button"
+      className={iconOnly ? `${styles.chip} ${styles.chipIconOnly}` : styles.chip}
+      title={title}
+      aria-label={ariaLabel ?? label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {icon}
+      {label ? <span>{label}</span> : null}
+    </button>
+  );
+}
+
+function ModeToggle({
+  inputMode,
+  setInputMode,
+  disabled,
+  iconOnly,
+}: {
+  inputMode: InputMode;
+  setInputMode: (m: InputMode) => void;
+  disabled?: boolean;
+  iconOnly?: boolean;
+}) {
+  return (
+    <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
+      <ToggleOption
+        label={hub.compose.speak}
+        icon={<Mic size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+        active={inputMode === "voice"}
+        disabled={disabled}
+        iconOnly={iconOnly}
+        onClick={() => setInputMode("voice")}
+      />
+      <ToggleOption
+        label={hub.compose.typeIt}
+        icon={<Keyboard size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+        active={inputMode === "text"}
+        disabled={disabled}
+        iconOnly={iconOnly}
+        onClick={() => setInputMode("text")}
+      />
+    </div>
+  );
+}
+
+function ToggleOption({
+  label,
+  icon,
+  active,
+  disabled,
+  iconOnly,
+  onClick,
+}: {
   label: string;
+  icon: ReactNode;
   active: boolean;
   disabled?: boolean;
+  iconOnly?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       aria-pressed={active}
+      aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={styles.modeOption}
+      className={iconOnly ? `${styles.modeOption} ${styles.modeOptionIconOnly}` : styles.modeOption}
     >
-      {label}
+      {icon}
+      {iconOnly ? null : <span>{label}</span>}
     </button>
   );
 }

@@ -444,9 +444,13 @@ export const hub = {
   compose: {
     backToStories: "← Back to stories",
     titleLabel: "Title",
-    typeIt: "Type it",
+    typeIt: "Type",
     textareaLabel: "Your story",
     speak: "Speak",
+    /** Short chip label on the composing Speak/Type · Polish · Finish row. */
+    polish: "Polish",
+    polishAria: "Polish with AI",
+    finishAria: "Finish",
     tellPrompt: "What do you want to remember?",
     textPlaceholder: "Write it however it comes to you.",
     continueLabel: "Continue",

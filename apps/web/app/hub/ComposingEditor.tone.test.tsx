@@ -58,9 +58,9 @@ it("capture voice sizes stay single-sourced (footer smaller than entry)", () => 
   expect(CAPTURE_VOICE_SIZE_FOOTER_PX).toBe(96);
 });
 
-it("ComposingEditor module exposes Speak/Type + Polish action row", () => {
+it("ComposingEditor module exposes progressive chip action row", () => {
   const dir = dirname(fileURLToPath(import.meta.url));
   const css = readFileSync(join(dir, "ComposingEditor.module.css"), "utf8");
-  expect(css).toContain(".actionRow");
-  expect(css).toContain(".polishButton");
+  expect(css).toContain(".progressiveRow");
+  expect(css).toContain(".chip");
 });

@@ -323,6 +323,6 @@ describe("StoryComposer compact composing (no playback strip)", () => {
     // Now everything except the mic is locked.
     expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /type it/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /^Type$/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
