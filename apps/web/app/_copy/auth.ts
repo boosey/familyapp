@@ -50,11 +50,12 @@ export const auth = {
     lede:
       "Tell Me Again is a private home for your family's stories — told in the voices of the people who lived them, and kept for everyone who comes after.",
     primaryCta: "Start your family",
+    findCta: "Find your family",
     signUp: "Sign up",
     signIn: "Sign in",
     scrollCue: "How it works",
     narratorNote:
-      "Invited to share a memory? You'll open your own personal link — there's nothing to sign into here.",
+      "Invited to share a memory? Follow your personal invite link to join the family in a couple of minutes.",
     what: {
       eyebrow: "What it is",
       title: "A home for your family's voices.",
@@ -75,13 +76,13 @@ export const auth = {
           n: "02",
           title: "They tell it",
           body:
-            "They answer out loud, in their own voice, right in their phone's browser. No account, no app, no setup.",
+            "They respond right from their phone's browser — no app to install, just a few minutes.",
         },
         {
           n: "03",
           title: "It's kept",
           body:
-            "We transcribe it gently and keep it in your family's private archive — searchable, safe, and there to hear again for years to come.",
+            "We transcribe it gently and keep it in your family's private archive — searchable, safe, and there for years to come.",
         },
       ],
     },
@@ -89,7 +90,7 @@ export const auth = {
       eyebrow: "Photos, too",
       title: "Bring in the photos your stories live in.",
       body:
-        "Upload photos straight from your device — or connect Google Photos to bring in the ones already there — and attach them to a memory. The wedding, the old kitchen, the road trip: a photograph pulls the story out of the person who was in it — who's there, where it was, what happened next. We use your photos only to help your family tell and keep these stories. They are never sold, never shared, and never used for advertising.",
+        "Upload photos straight from your device — or connect Google Photos to bring in the ones already there — and attach them to a memory. The wedding, the old kitchen, the road trip: a photograph pulls the story out of the person who was in it — who's there, where it was, what happened next. Your photos are used only to help your family tell and keep these stories — never sold, shared, or used for advertising.",
     },
     why: {
       eyebrow: "Why start now",
