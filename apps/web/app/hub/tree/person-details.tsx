@@ -21,7 +21,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Images, Quote, SquarePen } from "lucide-react";
+import { AtSign, BookOpen, Images, SquarePen } from "lucide-react";
 import { hub } from "@/app/_copy";
 import type { KinRelation, PersonSex, TreeNode } from "@chronicle/core";
 import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
@@ -224,7 +224,7 @@ export function PersonDetails({
               data-testid="tree-details-mentions"
               aria-label={hub.tree.detailsMentions}
             >
-              <Quote size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
+              <AtSign size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
             </Link>
           </div>
 
