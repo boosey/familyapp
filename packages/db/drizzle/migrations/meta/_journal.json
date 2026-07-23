@@ -232,6 +232,13 @@
       "when": 1784789054833,
       "tag": "0032_dizzy_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784831642913,
+      "tag": "0033_furry_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

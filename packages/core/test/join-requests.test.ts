@@ -4,16 +4,22 @@
  * approve (membership + status flip).
  */
 import { createTestDatabase, type Database } from "@chronicle/db";
+import { invitations, persons } from "@chronicle/db/schema";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   AuthorizationError,
   InvariantViolation,
+  acceptInvitation,
   addMembership,
   approveJoinRequest,
+  createAccountWithPerson,
   createFamily,
+  createInvitation,
   createJoinRequest,
   declineJoinRequest,
   isActiveMember,
+  listActiveMembershipsForPerson,
   listDecidedJoinRequestsForSteward,
   listJoinRequestsByRequester,
   listPendingJoinRequestsForSteward,
@@ -248,5 +254,137 @@ describe("listDecidedJoinRequestsForSteward", () => {
     await declineJoinRequest(db, { joinRequestId: j2.joinRequestId, deciderPersonId: steward.id });
     expect(await listDecidedJoinRequestsForSteward(db, steward.id, { limit: 1 })).toHaveLength(1);
     expect(await listDecidedJoinRequestsForSteward(db, steward.id, { limit: 0 })).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #354 — auto-approve on a matching invitation.
+// The production incident: an owner invited their sister; she signed up and used the discovery
+// "request to join" route instead of tapping the invite link, so the owner got a redundant approval
+// request for someone they had already vouched for. An invited person (verified-contact match on a
+// live invitation from the same family) is auto-approved instead of queued.
+// ---------------------------------------------------------------------------
+
+/** An account-backed requester with a verified email (the only kind the matcher trusts). */
+async function accountRequester(
+  email: string,
+  displayName = "Robyn",
+  opts: { verified?: boolean } = {},
+) {
+  const { personId } = await createAccountWithPerson(db, {
+    provider: "clerk",
+    authProviderUserId: `user_${email}`,
+    email,
+    emailVerified: opts.verified ?? true,
+    displayName,
+  });
+  return personId;
+}
+
+describe("createJoinRequest — auto-approve on a matching invitation (#354)", () => {
+  it("auto-approves, creates the membership, and stamps viaInvitationId", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    await createInvitation(db, {
+      familyId,
+      inviterPersonId: steward.id,
+      inviteeName: "Robyn",
+      inviteeEmail: "robyn@example.com",
+    });
+    const requester = await accountRequester("robyn@example.com");
+
+    const res = await createJoinRequest(db, { familyId, requesterPersonId: requester });
+    expect(res.autoApproved).toBe(true);
+    expect(await isActiveMember(db, requester, familyId)).toBe(true);
+
+    // The steward is never asked — nothing pending; the decided row reads approved-by-invitation.
+    expect(await listPendingJoinRequestsForSteward(db, steward.id)).toHaveLength(0);
+    const decided = await listDecidedJoinRequestsForSteward(db, steward.id);
+    expect(decided).toHaveLength(1);
+    expect(decided[0]?.status).toBe("approved");
+    expect(decided[0]?.requesterName).toBe("Robyn");
+    expect(decided[0]?.viaInvitationId).not.toBeNull();
+
+    // The invitation is consumed (accepted), so the emailed link is now spent.
+    const [invite] = await db
+      .select({ status: invitations.status })
+      .from(invitations)
+      .where(eq(invitations.id, decided[0]!.viaInvitationId!))
+      .limit(1);
+    expect(invite?.status).toBe("accepted");
+  });
+
+  it("does NOT auto-approve when there is no matching invitation (normal pending gate)", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    const requester = await accountRequester("stranger@example.com", "Stranger");
+
+    const res = await createJoinRequest(db, { familyId, requesterPersonId: requester });
+    expect(res.autoApproved).toBe(false);
+    expect(await isActiveMember(db, requester, familyId)).toBe(false);
+    const pending = await listPendingJoinRequestsForSteward(db, steward.id);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.requesterName).toBe("Stranger");
+  });
+
+  it("does NOT auto-approve on an UNVERIFIED contact match (a match is not proof of identity)", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    await createInvitation(db, {
+      familyId,
+      inviterPersonId: steward.id,
+      inviteeName: "Robyn",
+      inviteeEmail: "robyn@example.com",
+    });
+    // Same email, but the account never verified it — the matcher must ignore it.
+    const requester = await accountRequester("robyn@example.com", "Robyn", { verified: false });
+
+    const res = await createJoinRequest(db, { familyId, requesterPersonId: requester });
+    expect(res.autoApproved).toBe(false);
+    expect(await listPendingJoinRequestsForSteward(db, steward.id)).toHaveLength(1);
+  });
+
+  it("consumes the invitation so the emailed link cannot mint a SECOND membership", async () => {
+    const { steward, familyId } = await discoverableFamily();
+    const { token } = await createInvitation(db, {
+      familyId,
+      inviterPersonId: steward.id,
+      inviteeName: "Robyn",
+      inviteeEmail: "robyn@example.com",
+    });
+    const requester = await accountRequester("robyn@example.com");
+
+    await createJoinRequest(db, { familyId, requesterPersonId: requester });
+    // The still-outstanding link, tapped after the fact, must not create a duplicate membership.
+    await expect(
+      acceptInvitation(db, { token, acceptedPersonId: requester }),
+    ).rejects.toBeInstanceOf(InvariantViolation);
+    expect(await listActiveMembershipsForPerson(db, requester)).toHaveLength(1);
+  });
+
+  it("does NOT auto-approve (and does NOT throw) when the invite anchors to a real tree node, not a disposable provisional", async () => {
+    // Reproduces the production incident exactly: the invitee was ALREADY a `mention` tree node
+    // (person-bound invite, #333), distinct from the requester's account Person. acceptResolvedInvitation
+    // would REFUSE to merge/delete that node (it's a real Person, not a throwaway) — so auto-approve must
+    // skip this invite rather than throw, leaving a normal pending request for the steward to approve.
+    const { steward, familyId } = await discoverableFamily();
+    const { inviteePersonId } = await createInvitation(db, {
+      familyId,
+      inviterPersonId: steward.id,
+      inviteeName: "Robyn",
+      inviteeEmail: "robyn@example.com",
+    });
+    // Turn the freshly-minted provisional into a NON-disposable anchor (a real tree node).
+    await db
+      .update(persons)
+      .set({ origin: "mention" })
+      .where(eq(persons.id, inviteePersonId));
+    // The requester is a DIFFERENT Person (their own account), whose verified email matches the invite.
+    const requester = await accountRequester("robyn@example.com", "Robyn Amrhein");
+
+    const res = await createJoinRequest(db, { familyId, requesterPersonId: requester });
+    expect(res.autoApproved).toBe(false);
+    expect(await isActiveMember(db, requester, familyId)).toBe(false);
+    // Falls through to the normal steward gate — a pending request, no auto-approve, no crash.
+    const pending = await listPendingJoinRequestsForSteward(db, steward.id);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.requesterName).toBe("Robyn Amrhein");
   });
 });
