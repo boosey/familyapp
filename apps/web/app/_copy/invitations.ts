@@ -12,5 +12,12 @@ export const invitations = {
     // Twilio Messaging Policy: the initial SMS must include a clear opt-out (STOP) path.
     text: (inviterName: string, link: string) =>
       `${inviterName} invited you to join their family on ${common.appName}: ${link} Reply STOP to opt out, HELP for help. Msg & data rates may apply.`,
+    // HELP reply + opt-out confirmation. Required as message samples for Twilio Toll-Free
+    // Verification, and the bodies we send once STOP/HELP handling is wired. NOT yet honored in
+    // code — tracked in docs/runbooks/twilio-sms-go-live.md.
+    help: () =>
+      `${common.appName}: family invitations & account notices. Msg & data rates may apply. Reply STOP to unsubscribe. Help: privacy@tellmeagain.app`,
+    optOutConfirm: () =>
+      `You're unsubscribed from ${common.appName} texts and won't receive more. Reply HELP for help.`,
   },
 } as const;

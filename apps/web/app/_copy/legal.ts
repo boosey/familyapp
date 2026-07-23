@@ -87,7 +87,7 @@ export const legal = {
             p: "You can opt out of Tell Me Again text messages at any time by replying STOP to any message from us. After you opt out, you will receive a confirmation and we will stop sending SMS to that number. You can reply HELP for help, or contact us at privacy@tellmeagain.app. You may also request removal of your number by emailing us.",
           },
           {
-            p: "Mobile information and text messaging originator opt-in data and consent will not be shared with any third parties or affiliates for their marketing or promotional purposes. We do not sell, rent, or transfer SMS opt-in data or consent. Phone numbers may be processed by our SMS delivery provider solely to transmit messages you have consented to receive.",
+            p: "Mobile information and text messaging originator opt-in data and consent will not be shared with any third parties or affiliates for their own purposes, and will not be shared with any third parties or affiliates for marketing or promotional purposes. We do not sell, rent, or transfer SMS opt-in data or consent. Phone numbers may be processed by our SMS delivery provider solely to transmit messages you have consented to receive.",
           },
         ],
       },
