@@ -8,7 +8,7 @@
  * the URL-driven family selector, so this component holds no state and no chip bar). The approve/decline
  * Server Actions are passed straight through to `<form action={…}>`.
  */
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 
 export interface RequestRow {
@@ -145,16 +145,15 @@ export function RequestsList({ pending, decided, approve, decline }: RequestsLis
           <div style={{ display: "flex", gap: 10, flex: "0 0 auto" }}>
             <form action={decline}>
               <input type="hidden" name="joinRequestId" value={r.joinRequestId} />
-              <KindredButton
+              <ActionButton
                 type="submit"
                 label={hub.requests.decline}
                 variant="ghost"
-                size="small"
               />
             </form>
             <form action={approve}>
               <input type="hidden" name="joinRequestId" value={r.joinRequestId} />
-              <KindredButton type="submit" label={hub.requests.approve} size="small" />
+              <ActionButton type="submit" label={hub.requests.approve} />
             </form>
           </div>
         </li>

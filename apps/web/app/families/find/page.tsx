@@ -16,7 +16,7 @@ import {
   listDiscoverableFamilies,
   listJoinRequestsByRequester,
 } from "@chronicle/core";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { families } from "@/app/_copy";
 import { FamilyFinder } from "./FamilyFinder";
 
@@ -137,7 +137,7 @@ export default async function FamiliesFindPage({
             )}
           </p>
           <Link href="/families/find" style={{ textDecoration: "none" }}>
-            <KindredButton label={families.find.sentBack} variant="secondary" />
+            <ActionButton label={families.find.sentBack} variant="secondary" />
           </Link>
         </div>
       </main>

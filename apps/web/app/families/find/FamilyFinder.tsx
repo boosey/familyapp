@@ -9,7 +9,7 @@
  * the steward is preserved.
  */
 import { useMemo, useState } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { families as copy } from "@/app/_copy";
 import type { DiscoverableFamily } from "@chronicle/core";
 
@@ -146,7 +146,7 @@ export function FamilyFinder({
                 style={{ minHeight: 72 }}
               />
               <div>
-                <KindredButton
+                <ActionButton
                   type="submit"
                   label={copy.find.requestToJoin}
                   variant="secondary"

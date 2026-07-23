@@ -11,7 +11,8 @@
  * change (separate early-return trees would remount the button and drop the release).
  */
 import { useCallback, useRef, useState } from "react";
-import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
+import { KindredVoiceButton, KindredProseEditor } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { capture, common } from "@/app/_copy";
 import { CAPTURE_VOICE_SIZE_ENTRY_PX } from "@/lib/constants";
@@ -354,9 +355,9 @@ export function ApprovalRecorder({
         {/* Above the mic so appearing mid-hold grows the footer upward — mic stays at the bottom edge. */}
         {phase === "listening" ? (
           <div style={{ width: "100%", maxWidth: 440 }}>
-            <KindredButton variant="primary" size="large" fullWidth onClick={finish}>
+            <ActionButton variant="primary" fullWidth onClick={finish}>
               {capture.approve.imFinished}
-            </KindredButton>
+            </ActionButton>
           </div>
         ) : null}
         <KindredVoiceButton

@@ -1,5 +1,5 @@
-export { KindredButton } from "./KindredButton";
-export type { KindredButtonProps } from "./KindredButton";
+export { ActionButton } from "./ActionButton";
+export type { ActionButtonProps, ActionButtonVariant } from "./ActionButton";
 export { KindredVoiceButton } from "./KindredVoiceButton";
 export type { KindredVoiceButtonProps } from "./KindredVoiceButton";
 export { BreathingWaveform } from "./BreathingWaveform";

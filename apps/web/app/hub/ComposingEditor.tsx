@@ -32,7 +32,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, Keyboard, Mic, Redo2, Sparkles, Undo2 } from "lucide-react";
-import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
+import { KindredVoiceButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
 import { useAudioLevel } from "@/app/_kindred/use-audio-level";
 import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
@@ -978,19 +979,17 @@ export function ComposingEditor({
         {actionError && <ErrorLine message={actionError} />}
 
         <div style={{ marginBottom: 14 }}>
-          <KindredButton
+          <ActionButton
             label={hub.answer.shareWithFamily}
             variant="primary"
-            size="large"
             fullWidth
             disabled={isRemoving || shareBlockedNoFamily}
             onClick={handleShare}
           />
         </div>
-        <KindredButton
+        <ActionButton
           label={hub.answer.discard}
           variant="ghost"
-          size="small"
           fullWidth
           disabled={isRemoving}
           onClick={handleDiscard}
@@ -1033,10 +1032,9 @@ export function ComposingEditor({
               <p className={styles.followUpIntro}>{hub.answer.followUpIntro}</p>
               <p className={styles.followUpPrompt}>{followUp.prompt}</p>
               <div className={styles.followUpActions}>
-                <KindredButton
+                <ActionButton
                   label={hub.answer.thatsAllForNow}
                   variant="ghost"
-                  size="small"
                   disabled={busy}
                   onClick={onDeclineFollowUp}
                 />

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { BrandMark } from "@/app/_brand/BrandMark";
 import { auth, legal } from "@/app/_copy";
 import styles from "./landing.module.css";
@@ -33,13 +33,13 @@ function LandingCta() {
   return (
     <div className={styles.ctaRow}>
       <Link href="/sign-up" className={styles.ctaLink}>
-        <KindredButton label={landing.primaryCta} size="large" />
+        <ActionButton label={landing.primaryCta} />
       </Link>
       <Link href="/sign-up" className={styles.ctaLink}>
-        <KindredButton label={landing.findCta} variant="secondary" size="large" />
+        <ActionButton label={landing.findCta} variant="secondary" />
       </Link>
       <Link href="/sign-in" className={styles.ctaLink}>
-        <KindredButton label={landing.signIn} variant="secondary" size="large" />
+        <ActionButton label={landing.signIn} variant="secondary" />
       </Link>
     </div>
   );

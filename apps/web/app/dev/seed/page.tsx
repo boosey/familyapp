@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { runSeed } from "@/lib/dev-seed";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,7 +51,7 @@ export default async function DevSeedPage({
         </p>
 
         <form action={runReseed} style={{ marginTop: 28, maxWidth: 240 }}>
-          <KindredButton type="submit" label="Reseed" fullWidth />
+          <ActionButton type="submit" label="Reseed" fullWidth />
         </form>
 
         {seeded ? (
@@ -113,10 +113,10 @@ export default async function DevSeedPage({
             </ul>
             <div style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Link href="/dev/sign-in" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
-                <KindredButton label="Dev sign-in" variant="secondary" fullWidth />
+                <ActionButton label="Dev sign-in" variant="secondary" fullWidth />
               </Link>
               <Link href="/hub" style={{ flex: 1, minWidth: 160, textDecoration: "none" }}>
-                <KindredButton label="Hub" variant="secondary" fullWidth />
+                <ActionButton label="Hub" variant="secondary" fullWidth />
               </Link>
             </div>
           </section>

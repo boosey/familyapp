@@ -7,7 +7,7 @@
  * field carries the id the action re-checks stewardship against.
  */
 import { useState } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { families } from "@/app/_copy";
 import { suggestShortName } from "@/lib/suggest-short-name";
 
@@ -124,11 +124,10 @@ export function EditFamilyForm({
           </span>
         </span>
       </label>
-      <KindredButton
+      <ActionButton
         type="submit"
         label={families.edit.submit}
         fullWidth
-        size="large"
         disabled={empty}
       />
     </form>

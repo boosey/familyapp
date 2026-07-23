@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editAlbumCaptionAction, deleteAlbumPhotoAction } from "./actions";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import type { AlbumGridPhoto } from "./AlbumGrid";
@@ -168,14 +168,13 @@ export function AlbumPhotoViewer({
         }}
       >
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <KindredButton
+          <ActionButton
             variant="ghost"
-            size="small"
             onClick={onClose}
             aria-label={hub.album.closeViewer}
           >
             {hub.album.closeViewer}
-          </KindredButton>
+          </ActionButton>
         </div>
 
         {/* eslint-disable-next-line @next/next/no-img-element -- bytes are served by our audited auth

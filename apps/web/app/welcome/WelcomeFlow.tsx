@@ -19,7 +19,8 @@
 import { useState, useRef, useCallback, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
+import { KindredVoiceButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import {
   completeAccountOnboarding,
   transcribeOnboardingName,
@@ -218,9 +219,8 @@ export function WelcomeFlow({
             {welcome.introBody}
           </p>
           <div style={{ marginTop: 28 }}>
-            <KindredButton
+            <ActionButton
               label={welcome.begin}
-              size="large"
               onClick={() => goToStep("name")}
             />
           </div>
@@ -268,9 +268,8 @@ export function WelcomeFlow({
           </label>
 
           <div style={{ marginTop: 28 }}>
-            <KindredButton
+            <ActionButton
               label={welcome.continue}
-              size="large"
               fullWidth
               disabled={!nameComplete || voiceActive}
               onClick={() => goToStep("dob")}
@@ -363,9 +362,8 @@ export function WelcomeFlow({
           {error ? <p className={styles.errorBox}>{error}</p> : null}
 
           <div style={{ marginTop: 28 }}>
-            <KindredButton
+            <ActionButton
               label={welcome.continue}
-              size="large"
               fullWidth
               disabled={!dobComplete || busy || voiceActive}
               onClick={() => goToStep("phone")}
@@ -426,18 +424,16 @@ export function WelcomeFlow({
           {error ? <p className={styles.errorBox}>{error}</p> : null}
 
           <div style={{ marginTop: 28, display: "grid", gap: 10 }}>
-            <KindredButton
+            <ActionButton
               label={busy ? welcome.oneMoment : hasPhone ? welcome.continue : welcome.phoneSkip}
-              size="large"
               fullWidth
               disabled={!phoneStepReady || busy}
               onClick={() => void submit({ includePhone: hasPhone })}
               data-testid="welcome-phone-continue"
             />
             {hasPhone ? (
-              <KindredButton
+              <ActionButton
                 label={welcome.phoneSkip}
-                size="large"
                 fullWidth
                 variant="ghost"
                 disabled={busy}

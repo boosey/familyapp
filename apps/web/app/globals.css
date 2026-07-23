@@ -170,7 +170,7 @@ select.kin-field {
  * to nothing and the control paints with Clerk defaults (an invisible transparent
  * primary button was the visible symptom). We fix it here by (1) re-asserting the
  * tokens with `inherit` so `var()` resolves again from the wrapper, and (2) styling
- * the controls to match the Kindred forms (.kin-field / KindredButton).
+ * the controls to match the Kindred forms (.kin-field / the ActionButton CTAs).
  *
  * Selectors are prefixed with `.cl-rootBox` and marked `!important` so they win the
  * cascade over Clerk's own single-class rules regardless of the order Clerk injects
@@ -240,25 +240,28 @@ select.kin-field {
   --surface-card: inherit; --surface-page: inherit; --border: inherit; --border-strong: inherit;
   --text-body: inherit; --text-meta: inherit; --text-muted: inherit;
   --radius-md: inherit; --radius-pill: inherit; --font-ui: inherit; --text-label: inherit;
+  /* Bright-CTA tokens so the primary button matches ActionButton's gradient + shelf. */
+  --tell-card-bg: inherit; --shadow-card: inherit; --shadow-lift: inherit; --focus-ring: inherit;
 }
 
-/* Primary CTA → KindredButton (primary, pill). */
+/* Primary CTA → matches the primary ActionButton: bright coral→amber fill (--tell-card-bg),
+ * rounded-rect (--radius-md), card shelf, one compact size (was a larger flat-accent pill). */
 .cl-rootBox .cl-formButtonPrimary {
-  background: var(--accent) !important;
+  background: var(--tell-card-bg) !important;
   color: var(--accent-on) !important;
   border: none !important;
-  border-radius: var(--radius-pill) !important;
-  font: 600 1.0625rem var(--font-ui) !important;
-  min-height: 54px !important;
-  padding: 0 22px !important;
-  box-shadow: none !important;
+  border-radius: var(--radius-md) !important;
+  font: 600 var(--text-ui-sm) var(--font-ui) !important;
+  min-height: var(--touch-min) !important;
+  padding: 12px 22px !important;
+  box-shadow: var(--shadow-card) !important;
   text-transform: none !important;
   letter-spacing: 0 !important;
 }
-.cl-rootBox .cl-formButtonPrimary:hover { background: var(--accent-strong) !important; }
+.cl-rootBox .cl-formButtonPrimary:hover { box-shadow: var(--shadow-lift) !important; }
 .cl-rootBox .cl-formButtonPrimary:focus-visible {
-  box-shadow: 0 0 0 4px var(--accent-soft) !important;
-  outline: none !important;
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px !important;
 }
 
 /* Text / OTP inputs → .kin-field. */
@@ -312,15 +315,16 @@ select.kin-field {
   font: 600 var(--text-label) var(--font-ui) !important;
 }
 
-/* Social / alternate-method buttons → KindredButton (secondary, pill outline). */
+/* Social / alternate-method buttons → match the secondary ActionButton: outlined (--radius-md),
+ * soft-accent fill on hover, one compact size. */
 .cl-rootBox .cl-socialButtonsBlockButton,
 .cl-rootBox .cl-socialButtonsIconButton {
   background: transparent !important;
-  border: 1.5px solid var(--border-strong) !important;
-  border-radius: var(--radius-pill) !important;
+  border: var(--border-width) solid var(--border-strong) !important;
+  border-radius: var(--radius-md) !important;
   color: var(--text-body) !important;
-  font: 600 1.0625rem var(--font-ui) !important;
-  min-height: 52px !important;
+  font: 600 var(--text-ui-sm) var(--font-ui) !important;
+  min-height: var(--touch-min) !important;
   box-shadow: none !important;
 }
 .cl-rootBox .cl-socialButtonsBlockButton:hover,

@@ -8,7 +8,7 @@
  * Purely presentational: the parent owns the error and the retry.
  */
 import type { ReactNode } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 
 export interface AnswerReviewPendingProps {
@@ -39,10 +39,9 @@ export function AnswerReviewPending({
           >
             {error}
           </p>
-          <KindredButton
+          <ActionButton
             label={hub.answer.recordAgain}
             variant="secondary"
-            size="small"
             onClick={onRecordAgain}
           />
         </div>

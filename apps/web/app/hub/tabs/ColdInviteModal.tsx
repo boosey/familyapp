@@ -9,7 +9,7 @@
 import { useActionState, useEffect } from "react";
 import { hub } from "@/app/_copy";
 import { ModalShell } from "@/app/_kindred/ModalShell";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { MemberInviteForm } from "./MemberInviteForm";
 import { CopyButton } from "./CopyButton";
 import {
@@ -110,15 +110,14 @@ export function ColdInviteModal({
               <CopyButton value={state.link} />
             </div>
             <div>
-              <KindredButton
+              <ActionButton
                 variant="secondary"
-                size="small"
                 type="button"
                 data-testid="cold-invite-done"
                 onClick={onClose}
               >
                 {hub.personInvite.done}
-              </KindredButton>
+              </ActionButton>
             </div>
           </div>
         ) : families.length === 0 ? (

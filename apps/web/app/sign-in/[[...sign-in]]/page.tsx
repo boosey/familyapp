@@ -16,7 +16,7 @@ import { isClerkConfigured } from "@/lib/clerk-config";
 import { getRuntime } from "@/lib/runtime";
 import { mockSignIn } from "@/lib/auth-mock";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { AuthScreen } from "@/app/_auth/AuthScreen";
 import { auth } from "@/app/_copy";
 import { kindredClerkAppearance } from "@/lib/clerk-appearance";
@@ -105,7 +105,7 @@ export default async function SignInPage({
             placeholder={auth.signIn.passwordPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label={auth.signIn.submit} fullWidth size="large" />
+        <ActionButton type="submit" label={auth.signIn.submit} fullWidth />
       </form>
     </AuthScreen>
   );
