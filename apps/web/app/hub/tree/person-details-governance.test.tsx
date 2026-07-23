@@ -98,6 +98,10 @@ describe("PersonDetails sheet chrome — flat token module (#223)", () => {
     );
     const row = await screen.findByTestId("tree-details-actions");
     expect(row.className).toContain(sheetStyles.actions);
+    // The Edit button mounts a render tick after its container once the async editability probe
+    // resolves — await the child before the synchronous getBy assertions so this doesn't flake
+    // under parallel CI load (#353).
+    await screen.findByTestId("tree-details-edit");
     expect(row.contains(screen.getByTestId("tree-details-edit"))).toBe(true);
     expect(row.contains(screen.getByTestId("tree-details-stories"))).toBe(true);
     expect(row.contains(screen.getByTestId("tree-details-photos"))).toBe(true);
