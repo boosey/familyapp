@@ -112,6 +112,7 @@ export const auth = {
     footer: {
       tagline: "Family voices, kept for the people who come next.",
       privacy: "Privacy Policy",
+      terms: "Terms and Conditions",
       contact: "Contact",
     },
   },

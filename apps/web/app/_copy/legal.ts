@@ -20,7 +20,7 @@ export const legal = {
     title: "Privacy Policy",
     appName: "Tell Me Again",
     homeUrl: "https://tellmeagain.app",
-    contactEmail: "privacy@tellmeagain.app",
+    contactEmail: "support@tellmeagain.app",
     effectiveDate: "July 23, 2026",
     lastUpdated: "July 23, 2026",
 
@@ -84,7 +84,7 @@ export const legal = {
             p: "The primary way to opt in is during account setup: when you add your mobile number and check the SMS consent box on the welcome screens. We may also send a one-time family invitation text when a family member confirms you have agreed to receive that invitation by SMS.",
           },
           {
-            p: "You can opt out of Tell Me Again text messages at any time by replying STOP to any message from us. After you opt out, you will receive a confirmation and we will stop sending SMS to that number. You can reply HELP for help, or contact us at privacy@tellmeagain.app. You may also request removal of your number by emailing us.",
+            p: "You can opt out of Tell Me Again text messages at any time by replying STOP to any message from us. After you opt out, you will receive a confirmation and we will stop sending SMS to that number. You can reply HELP for help, or contact us at support@tellmeagain.app. You may also request removal of your number by emailing us.",
           },
           {
             p: "Mobile information and text messaging originator opt-in data and consent will not be shared with any third parties or affiliates for their own purposes, and will not be shared with any third parties or affiliates for marketing or promotional purposes. We do not sell, rent, or transfer SMS opt-in data or consent. Phone numbers may be processed by our SMS delivery provider solely to transmit messages you have consented to receive.",
@@ -160,7 +160,7 @@ export const legal = {
             list: [
               "Access and correct — view and update your account details in the app.",
               "Delete — remove stories, photos, and recordings, or request account deletion.",
-              "SMS opt-out — reply STOP to any Tell Me Again text message, or contact privacy@tellmeagain.app.",
+              "SMS opt-out — reply STOP to any Tell Me Again text message, or contact support@tellmeagain.app.",
               "Revoke Google access — disconnect Google Photos in the app or at myaccount.google.com/permissions.",
               "Control sharing — decide what is shared, with whom, and withdraw consent by removing or unsharing content.",
             ],
@@ -202,7 +202,179 @@ export const legal = {
         heading: "Contact Us",
         blocks: [
           {
-            p: "If you have questions about this Privacy Policy, SMS text messaging, or how we handle your information, contact us at privacy@tellmeagain.app.",
+            p: "If you have questions about this Privacy Policy, SMS text messaging, or how we handle your information, contact us at support@tellmeagain.app.",
+          },
+        ],
+      },
+    ] satisfies readonly LegalSection[],
+  },
+
+  // Terms & Conditions. The "Text Messaging (SMS)" section is load-bearing for
+  // Twilio A2P 10DLC / toll-free verification: carriers require a public page
+  // that discloses the messaging program, how consent is obtained, message
+  // frequency, that rates may apply, STOP/HELP handling, and — critically — that
+  // mobile opt-in data is NOT shared or sold to third parties for marketing.
+  // Do not weaken that section without re-checking Twilio/CTIA messaging policy.
+  terms: {
+    title: "Terms and Conditions",
+    appName: "Tell Me Again",
+    homeUrl: "https://tellmeagain.app",
+    contactEmail: "support@tellmeagain.app",
+    effectiveDate: "July 23, 2026",
+    lastUpdated: "July 23, 2026",
+
+    intro: [
+      "These Terms and Conditions (the “Terms”) govern your access to and use of Tell Me Again — the website and app at tellmeagain.app (the “Service”), operated by Tell Me Again (“we”, “us”, “our”). By creating an account, accepting an invitation, or otherwise using the Service, you agree to these Terms and to our Privacy Policy.",
+      "Please read the “Text Messaging (SMS)” section carefully — it describes how our text-message program works, including how to opt out.",
+    ],
+
+    sections: [
+      {
+        id: "eligibility",
+        heading: "Who May Use the Service",
+        blocks: [
+          {
+            p: "The Service is intended for adults (18 or older). You may record and share stories about children and other family members you are responsible for, but the Service is not for use by children creating their own accounts.",
+          },
+          {
+            p: "By using the Service you confirm that the information you provide is accurate and that you have the authority to invite the people whose contact details you enter.",
+          },
+        ],
+      },
+      {
+        id: "accounts",
+        heading: "Your Account",
+        blocks: [
+          {
+            p: "You are responsible for your account and for keeping your sign-in secure. Sign-in and authentication are handled by our authentication provider (Clerk). You are responsible for activity that happens under your account.",
+          },
+        ],
+      },
+      {
+        id: "your-content",
+        heading: "Your Content",
+        blocks: [
+          {
+            p: "You keep ownership of the stories, recordings, transcripts, photos, and other content you add. Your family's memories belong to your family.",
+          },
+          {
+            p: "You grant us a limited licence to store, process, and display your content solely to operate the Service for you and the family members you choose to share it with — for example, hosting your media, transcribing recordings, and rendering stories. We do not sell your content and we do not use it to train third-party advertising or AI models.",
+          },
+          {
+            p: "You are responsible for the content you add. Do not upload content that is unlawful, infringes others' rights, or that you do not have permission to share.",
+          },
+        ],
+      },
+      {
+        id: "sharing-consent",
+        heading: "Sharing and Consent",
+        blocks: [
+          {
+            p: "A story is visible to other family members only after you approve it for sharing and choose an audience. When you invite someone by entering their contact details, you confirm that you have their permission to be contacted about joining your family on the Service.",
+          },
+        ],
+      },
+      {
+        id: "sms",
+        heading: "Text Messaging (SMS)",
+        blocks: [
+          {
+            p: "Tell Me Again uses SMS text messages, delivered through our messaging provider (Twilio), to send family invitations and account- and service-related notifications. This is a transactional messaging program, not marketing.",
+          },
+          {
+            p: "How consent works. When an existing member invites you and chooses to send the invitation to your mobile number, you receive a one-time invitation text. By entering someone's mobile number and choosing “Send to phone,” the inviting member confirms they have that person's permission to be texted. If you are the account holder, you may also choose to receive optional service notifications by SMS; you consent to those when you turn them on. Consent to receive text messages is never a condition of using the Service.",
+          },
+          {
+            p: "Message types and frequency. Messages include invitations to join a family and, if you opt in, account, security, and Service notifications. Message frequency varies and is typically low.",
+          },
+          {
+            p: "Message and data rates may apply, according to your mobile carrier plan. We do not charge for text messages, but your carrier may.",
+          },
+          {
+            p: "Opting out and help. You can opt out of text messages at any time by replying STOP to any message; you will receive a single confirmation and then no further texts, except that we may still deliver a message you specifically request. Reply HELP for help, or contact us at support@tellmeagain.app.",
+          },
+          {
+            p: "Mobile information sharing. We do not share or sell your mobile phone number or SMS opt-in data with third parties or affiliates for their marketing or promotional purposes. We share this information only with service providers that help us deliver messages (such as Twilio) and only as needed to provide the Service. See our Privacy Policy for details.",
+          },
+          {
+            p: "Carrier disclaimer. Mobile carriers are not liable for delayed or undelivered messages.",
+          },
+        ],
+      },
+      {
+        id: "acceptable-use",
+        heading: "Acceptable Use",
+        blocks: [
+          { p: "When using the Service, you agree not to:" },
+          {
+            list: [
+              "Use the Service for any unlawful purpose or to harass, harm, or impersonate others.",
+              "Invite people to be contacted without their permission, or send messages you are not authorised to send.",
+              "Attempt to access content you are not authorised to see, or interfere with the security or operation of the Service.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "ai-content",
+        heading: "AI-Assisted Features",
+        blocks: [
+          {
+            p: "The Service uses automated tools to transcribe recordings and to clean up or render your words into readable stories. These tools work on your behalf to present what you said; the original recording and transcript remain the source of truth. AI-assisted steps are labelled where they appear.",
+          },
+        ],
+      },
+      {
+        id: "third-parties",
+        heading: "Third-Party Services",
+        blocks: [
+          {
+            p: "The Service relies on third-party providers — including hosting, database, storage, authentication, transcription, language-model, and messaging providers — to operate. Your use of the Service may be subject to those providers' terms where applicable. We are not responsible for third-party services outside our control.",
+          },
+        ],
+      },
+      {
+        id: "disclaimer",
+        heading: "Disclaimers",
+        blocks: [
+          {
+            p: "The Service is provided “as is” and “as available,” without warranties of any kind, whether express or implied, to the fullest extent permitted by law. We do not warrant that the Service will be uninterrupted, error-free, or that content will never be lost. You are encouraged to keep your own copies of anything important to you.",
+          },
+        ],
+      },
+      {
+        id: "liability",
+        heading: "Limitation of Liability",
+        blocks: [
+          {
+            p: "To the fullest extent permitted by law, we will not be liable for any indirect, incidental, special, consequential, or punitive damages, or for any loss of data, arising from your use of the Service. Nothing in these Terms limits liability that cannot be limited under applicable law.",
+          },
+        ],
+      },
+      {
+        id: "termination",
+        heading: "Suspension and Termination",
+        blocks: [
+          {
+            p: "You may stop using the Service and delete your account at any time. We may suspend or terminate access if you violate these Terms or to protect the Service or its users. You can request deletion of your account and personal content as described in our Privacy Policy.",
+          },
+        ],
+      },
+      {
+        id: "changes",
+        heading: "Changes to These Terms",
+        blocks: [
+          {
+            p: "We may update these Terms from time to time. When we make material changes, we will update the “Last updated” date above and, where appropriate, notify you. Your continued use of the Service after changes take effect means you accept the updated Terms.",
+          },
+        ],
+      },
+      {
+        id: "contact",
+        heading: "Contact Us",
+        blocks: [
+          {
+            p: "If you have questions about these Terms, contact us at support@tellmeagain.app.",
           },
         ],
       },

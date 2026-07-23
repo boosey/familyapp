@@ -244,6 +244,9 @@ export function LandingExperience() {
           <Link href="/privacy" className={styles.footerLink}>
             {landing.footer.privacy}
           </Link>
+          <Link href="/terms" className={styles.footerLink}>
+            {landing.footer.terms}
+          </Link>
           <a
             href={`mailto:${legal.privacy.contactEmail}`}
             className={styles.footerLink}
