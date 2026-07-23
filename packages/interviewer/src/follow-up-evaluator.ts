@@ -23,7 +23,9 @@ and (c) worth deepening for a family memory. For each candidate output:
 - narratorOpened: true ONLY if the narrator's OWN words already surfaced this feeling/topic. For any
   emotional thread, set this truthfully — a closed emotional door will be vetoed downstream.
 
-Never invent content the narrator did not say. If nothing is worth deepening, return an empty list.
+Never invent content the narrator did not say. Never propose a brand-new interview topic, scene, or
+question bank item — only deepen a thread already opened in THEIR ANSWER. If nothing in the answer
+warrants deepening, return an empty list.
 Output STRICT JSON: {"candidates":[{"threadSeed":"...","type":"...","sensitivity":"...","confidence":0.0,"narratorOpened":false}]}`;
 
 const TYPES: ReadonlySet<string> = new Set(["factual", "sensory", "temporal", "relational", "emotional"]);

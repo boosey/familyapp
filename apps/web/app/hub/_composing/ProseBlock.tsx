@@ -8,9 +8,10 @@
  * When `label` is null, no heading is rendered (compact capture). Default remains the story
  * surface's "Read it over…" copy for intake / callers that omit the prop.
  *
- * `showPolishButton` (default true) lets ComposingEditor hide the in-toolbar Polish when it owns a
- * Polish control on the Speak/Type row instead.
+ * `showPolishButton` / `showHistoryButtons` let ComposingEditor hide in-toolbar controls when it
+ * owns Polish (Speak/Type row) and Undo/Redo (top chrome next to Back).
  */
+import type { Ref } from "react";
 import { KindredProseEditor } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
 import type { ProseHistory } from "@/lib/use-prose-history";
@@ -22,6 +23,8 @@ export function ProseBlock({
   history,
   onPolish,
   showPolishButton = true,
+  showHistoryButtons = true,
+  textareaRef,
   label = hub.answer.reviewYourWords,
   rows = 12,
 }: {
@@ -31,13 +34,15 @@ export function ProseBlock({
   history: ProseHistory;
   onPolish: (text: string) => Promise<string>;
   showPolishButton?: boolean;
+  showHistoryButtons?: boolean;
+  textareaRef?: Ref<HTMLTextAreaElement | null>;
   /** Pass `null` to hide the heading (compact capture). */
   label?: string | null;
   /** Textarea row count; capture uses a shorter field. */
   rows?: number;
 }) {
   return (
-    <div style={{ marginBottom: label ? 24 : 12 }}>
+    <div style={{ marginBottom: label ? 24 : 8 }}>
       {label ? (
         <p
           style={{
@@ -60,6 +65,8 @@ export function ProseBlock({
         labels={common.proseEditor}
         onPolish={onPolish}
         showPolishButton={showPolishButton}
+        showHistoryButtons={showHistoryButtons}
+        textareaRef={textareaRef}
         rows={rows}
       />
     </div>

@@ -1089,13 +1089,24 @@ export async function recordFollowUpTakeAction(formData: FormData): Promise<Thre
       text: transcript,
       viewer: { kind: "account", personId: ctx.personId },
     });
-    const step = await runFollowUpStep(rt, {
-      storyId,
-      ownerPersonId: ctx.personId,
-      promptText: unresolved?.phrasedLine ?? "",
-      answerTranscript: transcript,
-      dating,
-    });
+    // Enhancement cascade only while the feature flag is on (mirrors take-0). Between takes this
+    // proposes dates / gap / enrich follow-ups on the CURRENT story — never a fresh bank question.
+    // Seed the evaluator with the follow-up they just answered, else the working prose so deepen
+    // cannot invent a new topic from an empty QUESTION THEY ANSWERED.
+    const policy = resolveFollowUpPolicyForRequest();
+    const step = policy.enabled
+      ? await runFollowUpStep(rt, {
+          storyId,
+          ownerPersonId: ctx.personId,
+          promptText:
+            unresolved?.phrasedLine ??
+            (proseField.trim()
+              ? `Continuing this story:\n${proseField.trim().slice(0, 500)}`
+              : ""),
+          answerTranscript: transcript,
+          dating,
+        })
+      : null;
     plog("answer", "recordFollowUpTake: appended", {
       story: storyId,
       followUp: step ? "proposed" : "none",

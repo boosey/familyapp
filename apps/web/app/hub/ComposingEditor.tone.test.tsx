@@ -37,7 +37,15 @@ vi.mock("./tag-suggestions-actions", () => ({
 afterEach(cleanup);
 
 it("does not wrap the capture subtree in data-tone=\"solemn\"", () => {
-  const { container } = render(<ComposingEditor ask={null} draft={null} backTab="/hub?tab=stories" />);
+  const { container } = render(
+    <ComposingEditor
+      ask={null}
+      draft={null}
+      backTab="/hub?tab=stories"
+      backHref="/hub?tab=stories"
+      backLabel="← Back to stories"
+    />,
+  );
 
   const root = container.firstElementChild;
   expect(root).not.toBeNull();
@@ -46,7 +54,15 @@ it("does not wrap the capture subtree in data-tone=\"solemn\"", () => {
 });
 
 it("uses the compact capture mic size on take-0 entry", () => {
-  render(<ComposingEditor ask={null} draft={null} backTab="/hub?tab=stories" />);
+  render(
+    <ComposingEditor
+      ask={null}
+      draft={null}
+      backTab="/hub?tab=stories"
+      backHref="/hub?tab=stories"
+      backLabel="← Back to stories"
+    />,
+  );
   const btn = screen.getByRole("button", { name: "Tap to speak" });
   expect(btn.style.width).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
   expect(btn.style.height).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
@@ -63,7 +79,10 @@ it("ComposingEditor module exposes progressive chip action row", () => {
   const css = readFileSync(join(dir, "ComposingEditor.module.css"), "utf8");
   expect(css).toContain(".progressiveRow");
   expect(css).toContain(".chip");
+  expect(css).toContain(".topChrome");
+  expect(css).toContain(".followUpStrip");
   // Full-width row aligned to the prose field: left cluster + trailing Finish (not a 480px pocket).
   expect(css).toMatch(/\.progressiveRow\s*\{[^}]*align-self:\s*stretch/s);
   expect(css).not.toMatch(/\.footer\s*\{[^}]*max-width:\s*480px/s);
+  expect(css).toMatch(/\.footer\s*\{[^}]*position:\s*sticky/s);
 });

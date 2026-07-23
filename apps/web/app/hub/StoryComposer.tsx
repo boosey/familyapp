@@ -10,6 +10,7 @@
  * The only mode-dependent behaviour is the discard destination (Stories tab vs Questions tab).
  */
 import { ComposingEditor, type DraftInfo } from "./ComposingEditor";
+import { hub } from "@/app/_copy";
 
 export type { DraftInfo, TakeInfo } from "./ComposingEditor";
 
@@ -55,6 +56,8 @@ export function StoryComposer({
   // Where a discard returns the narrator. A tell-mode draft came from the Stories tab; an answer came
   // from the Questions tab. (A legitimate mode-dependent branch.)
   const backTab = mode === "tell" ? "/hub?tab=stories" : "/hub?tab=questions";
+  const backHref = backTab;
+  const backLabel = mode === "tell" ? hub.compose.backToStories : hub.answer.backToQuestions;
 
   // Dev-time consistency guard. Real behavior is discriminated by ask-presence, NOT by `mode`; this
   // catches a caller whose `mode` disagrees with the actual `ask` prop.
@@ -73,6 +76,8 @@ export function StoryComposer({
       ask={ask}
       draft={draft}
       backTab={backTab}
+      backHref={backHref}
+      backLabel={backLabel}
       resumeHref={resumeHref}
       subjectPhotoId={subjectPhotoId}
       extraSubjectPhotoIds={extraSubjectPhotoIds}
