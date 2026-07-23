@@ -55,6 +55,8 @@ export interface KindredProseEditorProps {
   history?: ProseHistory;
   /** Copy overrides; English defaults are baked in. */
   labels?: Partial<KindredProseEditorLabels>;
+  /** Textarea visible rows. Default 12; capture passes a shorter height. */
+  rows?: number;
 }
 
 export function KindredProseEditor({
@@ -66,6 +68,7 @@ export function KindredProseEditor({
   historyKey,
   history: injectedHistory,
   labels,
+  rows = 12,
 }: KindredProseEditorProps) {
   const [focused, setFocused] = useState(false);
   const [polishing, setPolishing] = useState(false);
@@ -153,7 +156,7 @@ export function KindredProseEditor({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         disabled={busy}
-        rows={12}
+        rows={rows}
         aria-label={common.proseEditor.ariaLabel}
         aria-busy={polishing}
         style={{

@@ -9,8 +9,7 @@
  *  2. Tapping "That's all for now" runs declineFollowUpAction → clears the banner WITHOUT a refresh
  *     (non-clobbering) and stays composing.
  *  3. Recording again on the composing surface posts a follow-up take via recordFollowUpTakeAction.
- *  4. A draft with multiple takes renders a per-take relisten list, with a "Remove this part" drop
- *     only on the follow-up take (never on the initial answer).
+ *  4. Capture stays compact: no per-take audio playback strip on the composing surface.
  * Mocks the browser media stack (getUserMedia, MediaRecorder, object URLs) and the server actions.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -275,7 +274,7 @@ describe("StoryComposer follow-up loop (inline banner)", () => {
   });
 });
 
-describe("StoryComposer per-take relisten (draft composing)", () => {
+describe("StoryComposer compact composing (no playback strip)", () => {
   const draft: DraftInfo = {
     storyId: STORY_ID,
     recordedAt: new Date().toISOString(),
@@ -289,16 +288,12 @@ describe("StoryComposer per-take relisten (draft composing)", () => {
     ],
   };
 
-  it("renders a per-take relisten list with a drop only on the follow-up take", () => {
+  it("does not render per-take audio playback or drop-take controls", () => {
     render(<StoryComposer mode="answer" ask={ASK} draft={draft} />);
 
-    const audios = document.querySelectorAll("audio");
-    expect(audios).toHaveLength(2);
-    expect(screen.getByText("Your answer")).toBeTruthy();
-    expect(screen.getByText("Follow-up")).toBeTruthy();
-
-    const drops = screen.getAllByRole("button", { name: /Remove this part/ });
-    expect(drops).toHaveLength(1);
+    expect(document.querySelectorAll("audio")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /Remove this part/ })).toBeNull();
+    expect(screen.queryByText(/Read it over/i)).toBeNull();
   });
 
   it("locks the editor + toggle + Finish while a recording is in flight (cold-review finding 2)", async () => {
@@ -329,28 +324,5 @@ describe("StoryComposer per-take relisten (draft composing)", () => {
     expect((screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /^Finish$/ }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /type it/i }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("dropping a follow-up take (audio-only) shows the decision-(d) notice, refreshes, keeps the prose", async () => {
-    const KEPT_PROSE = "The prose of both takes.";
-    render(<StoryComposer mode="answer" ask={ASK} draft={draft} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Remove this part/ }));
-
-    await waitFor(() => expect(dropTakeAction).toHaveBeenCalledOnce());
-    const form = dropTakeAction.mock.calls[0]![0] as FormData;
-    expect(form.get("position")).toBe("1");
-    expect(form.get("storyId")).toBe(STORY_ID);
-
-    await waitFor(() =>
-      expect(screen.getByText(/Recording removed — edit the text above/)).toBeTruthy(),
-    );
-    expect(refresh).toHaveBeenCalledOnce();
-
-    // The prose editor text is UNTOUCHED (the words are kept on purpose).
-    const editor = screen.getByRole("textbox", {
-      name: /your story, in your words/i,
-    }) as HTMLTextAreaElement;
-    expect(editor.value).toBe(KEPT_PROSE);
   });
 });

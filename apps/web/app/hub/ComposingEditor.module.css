@@ -10,8 +10,8 @@
 
 /* Persistent capture footer — mic + type box, both live (append more takes). */
 .footer {
-  border-top: var(--border-width) solid var(--border);
-  padding-top: 24px;
+  border-top: none;
+  padding-top: 16px;
   margin-top: 8px;
   margin-bottom: 24px;
   display: flex;

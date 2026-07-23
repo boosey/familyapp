@@ -1,14 +1,12 @@
 "use client";
 
 /**
- * ProseBlock — the shared prose editor block (a heading + KindredProseEditor with lifted undo/redo
- * history + ✨Polish). Extracted from ComposingEditor (ADR-0014 Inc 4 slice 3) so BOTH the story
- * composing surface and the intake surface (AboutYouFlow) mount the exact same editor. The parent
- * owns the prose value + history (so an append/transcription can seed the prose as one undoable step
- * via `history.replace`, an event the editor doesn't emit).
+ * ProseBlock — shared prose editor (KindredProseEditor with lifted undo/redo history + ✨Polish).
+ * Extracted from ComposingEditor (ADR-0014 Inc 4 slice 3) so story composing and intake
+ * (AboutYouFlow) mount the same editor. The parent owns the prose value + history.
  *
- * `label` overrides the heading; it defaults to the story surface's "Read it over…" copy so
- * ComposingEditor keeps its wording unchanged while intake passes its own.
+ * When `label` is null, no heading is rendered (compact capture). Default remains the story
+ * surface's "Read it over…" copy for intake / callers that omit the prop.
  *
  * `showPolishButton` (default true) lets ComposingEditor hide the in-toolbar Polish when it owns a
  * Polish control on the Speak/Type row instead.
@@ -25,6 +23,7 @@ export function ProseBlock({
   onPolish,
   showPolishButton = true,
   label = hub.answer.reviewYourWords,
+  rows = 12,
 }: {
   proseDraft: string;
   setProseDraft: (v: string) => void;
@@ -32,22 +31,27 @@ export function ProseBlock({
   history: ProseHistory;
   onPolish: (text: string) => Promise<string>;
   showPolishButton?: boolean;
-  label?: string;
+  /** Pass `null` to hide the heading (compact capture). */
+  label?: string | null;
+  /** Textarea row count; capture uses a shorter field. */
+  rows?: number;
 }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <p
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--support)",
-          margin: "0 0 14px",
-        }}
-      >
-        {label}
-      </p>
+    <div style={{ marginBottom: label ? 24 : 12 }}>
+      {label ? (
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--support)",
+            margin: "0 0 14px",
+          }}
+        >
+          {label}
+        </p>
+      ) : null}
       <KindredProseEditor
         value={proseDraft}
         onChange={setProseDraft}
@@ -56,6 +60,7 @@ export function ProseBlock({
         labels={common.proseEditor}
         onPolish={onPolish}
         showPolishButton={showPolishButton}
+        rows={rows}
       />
     </div>
   );

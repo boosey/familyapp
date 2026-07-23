@@ -14,10 +14,9 @@
  *   1. no-draft            — voice⇄text capture entry (record/type take 0). `draft == null`.
  *   2. draft (composing)   — the live surface: the prose editor is ALWAYS mounted (undo/redo + ✨Polish)
  *                            with a persistent capture footer (mic + type box, both live → append more
- *                            takes), a compact per-take relisten strip, an inline follow-up banner, and
- *                            the Finish button. `draft.state === "draft"` OR, before the first refresh,
- *                            the client-optimistic `activeStoryId` (a take-0 follow_up arrives here
- *                            before any server prop).
+ *                            takes), an inline follow-up banner, and the Finish button.
+ *                            `draft.state === "draft"` OR, before the first refresh, the client-optimistic
+ *                            `activeStoryId` (a take-0 follow_up arrives here before any server prop).
  *   3. pending_approval    — shrunk review: confirm title + pick tier + Share/Discard (+ optional
  *                            ✨Polish). NO live append. `draft.state === "pending_approval"`.
  *
@@ -44,7 +43,6 @@ import {
   appendTypedTakeAction,
   declineFollowUpAction,
   finishDraftAction,
-  dropTakeAction,
   shareAnswerAction,
   discardAnswerAction,
   polishAnswerProseAction,
@@ -72,7 +70,7 @@ import {
 
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
 type Tier = "family" | "branch" | "public";
-type Op = "share" | "discard" | "drop" | null;
+type Op = "share" | "discard" | null;
 type InputMode = "voice" | "text";
 
 const TIER_ORDER: Tier[] = ["family", "branch", "public"];
@@ -198,9 +196,6 @@ export function ComposingEditor({
 
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  // Non-error transient notice (decision d): shown after a follow-up take's audio is removed — the
-  // take's words stay in the working prose on purpose, so this tells the narrator to edit them out.
-  const [dropNotice, setDropNotice] = useState<string | null>(null);
 
   // ── Finish-check offer (ADR-0014 Inc 3 slice 8) ─────────────────────────────
   const [finishOffer, setFinishOffer] = useState<{
@@ -770,37 +765,6 @@ export function ComposingEditor({
     }
   };
 
-  // Drop one take. Dropping take 0 discards the whole thread (→ `discarded` → hub). Dropping a
-  // follow-up take (position > 0) is AUDIO-ONLY (decision d): the words stay in the prose, the
-  // narrator edits them out; we show the notice and refresh the takes list.
-  const handleDropTake = async (position: number) => {
-    setActionError(null);
-    setDropNotice(null);
-    setOp("drop");
-    try {
-      const form = new FormData();
-      form.append("storyId", composingStoryId ?? draft!.storyId);
-      form.append("position", String(position));
-      const result = await dropTakeAction(form);
-      if ("error" in result) {
-        setActionError(result.error);
-        setOp(null);
-        return;
-      }
-      if (result.kind === "take_dropped") {
-        setDropNotice(hub.answer.takeDropped);
-        router.refresh();
-        setOp(null);
-        return;
-      }
-      await handleStep(result); // position 0 → `discarded` → hub
-      setOp(null);
-    } catch {
-      setActionError(hub.actions.removeFailed);
-      setOp(null);
-    }
-  };
-
   // ── Shared question header (answer mode only) ────────────────────────────────
   const questionHeader = ask ? (
     <div style={{ marginBottom: 32, textAlign: "center" }}>
@@ -909,6 +873,8 @@ export function ComposingEditor({
           disabled={isRemoving}
           history={history}
           onPolish={polishHandler}
+          label={null}
+          rows={6}
         />
 
         {/* Photos (ADR-0009 Phase 2) — attach from the owner's album, set a cover, remove, reorder.
@@ -987,11 +953,6 @@ export function ComposingEditor({
 
         {actionError && <ErrorLine message={actionError} />}
 
-        {/* Recording replay at the bottom — thumb reach, above Share/Discard. */}
-        <div style={{ margin: "8px 0 20px" }}>
-          <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} />
-        </div>
-
         <div style={{ marginBottom: 14 }}>
           <KindredButton
             label={hub.answer.shareWithFamily}
@@ -1014,7 +975,7 @@ export function ComposingEditor({
     );
   }
 
-  // ── DRAFT COMPOSING SURFACE (editor always mounted + footer + relisten + Finish) ──
+  // ── DRAFT COMPOSING SURFACE (editor always mounted + footer + Finish) ──
   if (composing) {
     const savingTake = recordPhase === "saving" || appending;
     // While ANY mutation is in flight — a recording (listening OR saving), a typed append, a decline, a
@@ -1034,9 +995,9 @@ export function ComposingEditor({
           history={history}
           onPolish={polishHandler}
           showPolishButton={false}
+          label={null}
+          rows={6}
         />
-
-        {dropNotice && <NoticeLine message={dropNotice} />}
 
         {/* Inline follow-up banner (replaces the old full-screen FollowUpPrompt). Declining is a peer
             path — a full-size ghost button, never a dead end. */}
@@ -1145,16 +1106,6 @@ export function ComposingEditor({
                 />
               </div>
             </div>
-          )}
-
-          {/* Compact per-take relisten strip at the bottom (thumb reach). */}
-          {draft && (
-            <RelistenStrip
-              takes={draft.takes}
-              mediaUrl={draft.mediaUrl}
-              onDrop={handleDropTake}
-              dropDisabled={op === "drop" || busy}
-            />
           )}
         </div>
 
@@ -1338,68 +1289,6 @@ export function ComposingEditor({
 
 /* ── Sub-components ─────────────────────────────────────────────────────────── */
 
-/** A per-take audio relisten strip. A thread-of-one keeps the single-take control; a multi-take thread
- * lists each take with its own relisten (+ a drop for follow-up takes when `onDrop` is provided). A
- * text story has no audio (takes: [], mediaUrl: "") → nothing renders. */
-function RelistenStrip({
-  takes,
-  mediaUrl,
-  onDrop,
-  dropDisabled,
-}: {
-  takes: TakeInfo[];
-  mediaUrl: string;
-  onDrop?: (position: number) => void;
-  dropDisabled?: boolean;
-}) {
-  if (takes.length > 1) {
-    return (
-      <div style={{ margin: "0 auto 32px", maxWidth: 480 }}>
-        {takes.map((take) => (
-          <div key={take.position} style={{ marginBottom: 20 }}>
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-label)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--support)",
-                margin: "0 0 8px",
-              }}
-            >
-              {take.isInitial ? hub.answer.initialAnswerLabel : hub.answer.followUpTakeLabel}
-            </p>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <audio controls src={take.mediaUrl} style={{ width: "100%", display: "block", borderRadius: "var(--radius-md)" }} />
-            {!take.isInitial && onDrop && (
-              <div style={{ marginTop: 8, textAlign: "right" }}>
-                <KindredButton
-                  label={hub.answer.dropTake}
-                  variant="ghost"
-                  size="small"
-                  disabled={dropDisabled}
-                  onClick={() => onDrop(take.position)}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (mediaUrl) {
-    return (
-      /* eslint-disable-next-line jsx-a11y/media-has-caption */
-      <audio
-        controls
-        src={mediaUrl}
-        style={{ width: "100%", maxWidth: 480, display: "block", margin: "0 auto 32px", borderRadius: "var(--radius-md)" }}
-      />
-    );
-  }
-  return null;
-}
-
 /** The audience-tier radio picker (mirrors ApprovalRecorder). */
 function TierPicker({ tier, setTier, disabled }: { tier: Tier; setTier: (t: Tier) => void; disabled: boolean }) {
   return (
@@ -1493,17 +1382,6 @@ function ErrorLine({ message }: { message: string }) {
     <p
       aria-live="polite"
       style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-danger)", margin: "0 0 16px", textAlign: "center" }}
-    >
-      {message}
-    </p>
-  );
-}
-
-function NoticeLine({ message }: { message: string }) {
-  return (
-    <p
-      aria-live="polite"
-      style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-meta)", margin: "0 0 16px", textAlign: "center" }}
     >
       {message}
     </p>
