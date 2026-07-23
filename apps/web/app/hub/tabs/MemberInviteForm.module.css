@@ -1,0 +1,30 @@
+/**
+ * MemberInviteForm — shared Invite chrome. Entry controls use global `.kin-field` / `.kin-locked`;
+ * this module owns rows that pair a control with InfoTooltip.
+ */
+
+.root {
+  display: grid;
+  gap: 14px;
+}
+
+.fieldWithInfo {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.fieldWithInfo > :first-child {
+  min-width: 0;
+}
+
+.contactStack {
+  display: grid;
+  gap: 10px;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+}

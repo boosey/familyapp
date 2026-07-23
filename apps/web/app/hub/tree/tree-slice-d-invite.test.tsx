@@ -254,6 +254,7 @@ it("a successful send through the modal leaves PersonDetails mounted and open (#
   fireEvent.change(screen.getByPlaceholderText(hub.invite.emailPlaceholder), {
     target: { value: "elena@example.com" },
   });
+  fireEvent.change(screen.getByTestId("invite-relationship"), { target: { value: "other" } });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: hub.invite.sendToEmail }));
   });
