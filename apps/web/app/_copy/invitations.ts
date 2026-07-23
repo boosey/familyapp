@@ -16,7 +16,7 @@ export const invitations = {
     // Verification, and the bodies we send once STOP/HELP handling is wired. NOT yet honored in
     // code — tracked in docs/runbooks/twilio-sms-go-live.md.
     help: () =>
-      `${common.appName}: family invitations & account notices. Msg & data rates may apply. Reply STOP to unsubscribe. Help: privacy@tellmeagain.app`,
+      `${common.appName}: family invitations & account notices. Msg & data rates may apply. Reply STOP to unsubscribe. Help: support@tellmeagain.app`,
     optOutConfirm: () =>
       `You're unsubscribed from ${common.appName} texts and won't receive more. Reply HELP for help.`,
   },
