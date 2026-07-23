@@ -10,8 +10,8 @@
  *   - Person-bound: name is always display-only; if either contact arrived prefilled, BOTH email and
  *     phone are display-only; relationship stays editable.
  *
- * Buttons enable/disable from live field state; the server action re-validates. Submit rides the
- * native form POST (`intent` distinguishes the three buttons).
+ * Buttons enable/disable from live field state (contacts + a chosen family); the server action
+ * re-validates. Submit rides the native form POST (`intent` distinguishes the three buttons).
  */
 import { useState } from "react";
 import { KindredButton } from "@/app/_kindred";
@@ -42,6 +42,14 @@ function LockedValue({
       </div>
     </>
   );
+}
+
+function initialFamilyId(
+  seededFamily: string | null,
+  families: { id: string }[],
+): string {
+  if (seededFamily) return seededFamily;
+  return families.length === 1 ? (families[0]?.id ?? "") : "";
 }
 
 export function MemberInviteForm({
@@ -80,6 +88,7 @@ export function MemberInviteForm({
   const [name, setName] = useState(defaultName ?? "");
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [phone, setPhone] = useState(defaultPhone ?? "");
+  const [familyId, setFamilyId] = useState(() => initialFamilyId(seededFamily, families));
 
   const lockName = personBound;
   // Person-bound: if either contact arrived prefilled, lock BOTH (display-only, not inputs).
@@ -89,6 +98,7 @@ export function MemberInviteForm({
   const hasEmail = email.trim().length > 0;
   const hasPhone = phone.trim().length > 0;
   const hasIdentifier = hasEmail || hasPhone;
+  const hasFamily = familyId.trim().length > 0;
 
   const relationshipOptions = (
     Object.keys(hub.invite.relationshipOptions) as (keyof typeof hub.invite.relationshipOptions)[]
@@ -176,6 +186,7 @@ export function MemberInviteForm({
         name="familyId"
         label={hub.invite.familyLabel}
         requiredMessage={hub.invite.familyRequired}
+        onSelectedChange={setFamilyId}
       />
       <div className={styles.actions}>
         <KindredButton
@@ -183,7 +194,7 @@ export function MemberInviteForm({
           name="intent"
           value="send_email"
           label={hub.invite.sendToEmail}
-          disabled={!hasEmail}
+          disabled={!hasEmail || !hasFamily}
           size="small"
         />
         <KindredButton
@@ -191,7 +202,7 @@ export function MemberInviteForm({
           name="intent"
           value="send_phone"
           label={hub.invite.sendToPhone}
-          disabled={!hasPhone}
+          disabled={!hasPhone || !hasFamily}
           variant="secondary"
           size="small"
         />
@@ -200,7 +211,7 @@ export function MemberInviteForm({
           name="intent"
           value="get_link"
           label={hub.invite.getLink}
-          disabled={!hasIdentifier}
+          disabled={!hasIdentifier || !hasFamily}
           variant="ghost"
           size="small"
         />

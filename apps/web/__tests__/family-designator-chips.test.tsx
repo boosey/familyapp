@@ -125,4 +125,19 @@ describe("FamilyDesignatorChips — single-select, no write-back", () => {
     expect(input.checkValidity()).toBe(true);
     expect(input.value).toBe("fam-b");
   });
+
+  it("notifies onSelectedChange when the posted family id changes", () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <FamilyDesignatorChips
+        families={FAMILIES}
+        seeded={null}
+        {...baseProps}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+    expect(onSelectedChange).toHaveBeenCalledWith("");
+    fireEvent.click(screen.getByRole("button", { name: "Marino" }));
+    expect(onSelectedChange).toHaveBeenCalledWith("fam-b");
+  });
 });
