@@ -8,7 +8,8 @@
   display: contents;
 }
 
-/* Persistent capture footer — progressive action row + mic / type box. */
+/* Persistent capture footer — progressive action row + mic / type box.
+ * Full width matches the prose field above; mic / type box stay centered below. */
 .footer {
   border-top: none;
   padding-top: 16px;
@@ -16,17 +17,19 @@
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   gap: 20px;
   width: 100%;
-  max-width: 480px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
-/* HubProgressiveControlRow sits flush in the footer (its own margin-bottom is for browse surfaces).
- * Reverse the browse-units flex so visual order is Speak/Type · Polish while collapse precedence
- * stays views-first (Speak/Type) then family (Polish). */
+/* Action row spans the edit-field width: Speak/Type · Polish flush left, Finish flush right.
+ * HubProgressiveControlRow already trails `.action` with margin-left: auto. Reverse browse units
+ * so visual order is Speak/Type · Polish while collapse precedence stays views → family. */
+.progressiveRow {
+  align-self: stretch;
+  width: 100%;
+}
+
 .progressiveRow :global([data-hub-progressive-control-row]) {
   margin-bottom: 0;
 }

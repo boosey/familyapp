@@ -1052,8 +1052,8 @@ export function ComposingEditor({
           <div className={styles.progressiveRow}>
             <HubProgressiveControlRow
               // Collapse precedence (first to lose labels): views → family → action iconify.
-              // Render order is family then views; `.progressiveRow` reverses the units flex so the
-              // visual order is Speak/Type · Polish · Finish.
+              // Layout: Speak/Type · Polish flush left with the prose field; Finish flush right.
+              // Render order is family then views; `.progressiveRow` reverses the units flex.
               views={{
                 expanded: (
                   <ModeToggle

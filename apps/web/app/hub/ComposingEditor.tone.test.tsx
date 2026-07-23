@@ -63,4 +63,7 @@ it("ComposingEditor module exposes progressive chip action row", () => {
   const css = readFileSync(join(dir, "ComposingEditor.module.css"), "utf8");
   expect(css).toContain(".progressiveRow");
   expect(css).toContain(".chip");
+  // Full-width row aligned to the prose field: left cluster + trailing Finish (not a 480px pocket).
+  expect(css).toMatch(/\.progressiveRow\s*\{[^}]*align-self:\s*stretch/s);
+  expect(css).not.toMatch(/\.footer\s*\{[^}]*max-width:\s*480px/s);
 });
