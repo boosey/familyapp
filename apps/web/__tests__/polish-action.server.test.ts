@@ -85,9 +85,20 @@ async function makePerson(db: Database, name = "Eleanor"): Promise<string> {
 // is a real story to polish against.
 async function seedStoryWithProse(personId: string): Promise<string> {
   authCtx = { kind: "account", personId };
-  const result = await composeStoryAction(
-    form({ text: "The summer we drove to the coast and the car broke down." }),
-  );
+  // Follow-ups run for every story now (default on). This helper only needs a `draft` with working
+  // prose to polish — dark the incidental follow-up via the emergency kill switch so the seed compose
+  // is deterministically `appended` regardless of the seed text.
+  const prevFlag = process.env.FOLLOW_UPS_ENABLED;
+  process.env.FOLLOW_UPS_ENABLED = "0";
+  let result;
+  try {
+    result = await composeStoryAction(
+      form({ text: "The summer we drove to the coast and the car broke down." }),
+    );
+  } finally {
+    if (prevFlag === undefined) delete process.env.FOLLOW_UPS_ENABLED;
+    else process.env.FOLLOW_UPS_ENABLED = prevFlag;
+  }
   if (!("kind" in result) || result.kind !== "appended") {
     throw new Error(`expected an appended step seeding the story, got ${JSON.stringify(result)}`);
   }

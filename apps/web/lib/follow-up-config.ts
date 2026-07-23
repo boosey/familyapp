@@ -1,7 +1,9 @@
 /**
- * Resolve the FollowUpPolicy for a request. v1: a single env flag (mirrors the isXConfigured()
- * idiom); the ONE place a subscription tier will later inject Partial<FollowUpPolicy> overrides.
- * Off by default so the feature lands dark.
+ * Resolve the FollowUpPolicy for a request. Follow-ups now run for EVERY story — typed or voice,
+ * self-initiated or answering an Ask — so `enabled` defaults to TRUE. This is still the ONE place a
+ * per-narrator opt-out (#351) will later inject a `Partial<FollowUpPolicy>` with `enabled:false`.
+ * The `FOLLOW_UPS_ENABLED` env var is no longer the feature switch — it survives only as an
+ * EMERGENCY GLOBAL KILL SWITCH (set it to "0"/"false" to dark the cascade everywhere at once).
  */
 import { resolveFollowUpPolicy, type FollowUpPolicy } from "@chronicle/interviewer";
 
@@ -20,6 +22,10 @@ import { resolveFollowUpPolicy, type FollowUpPolicy } from "@chronicle/interview
 export const FOLLOW_UP_BUDGET_MS = 16_000;
 
 export function resolveFollowUpPolicyForRequest(): FollowUpPolicy {
-  const enabled = process.env.FOLLOW_UPS_ENABLED === "1" || process.env.FOLLOW_UPS_ENABLED === "true";
+  // ON for everyone by default. The env var is only an emergency kill switch: exactly "0" or
+  // "false" (case-insensitive) darks the cascade globally; anything else — including unset —
+  // leaves follow-ups enabled.
+  const kill = process.env.FOLLOW_UPS_ENABLED?.trim().toLowerCase();
+  const enabled = !(kill === "0" || kill === "false");
   return resolveFollowUpPolicy({ enabled });
 }

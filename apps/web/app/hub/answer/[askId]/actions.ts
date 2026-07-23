@@ -350,13 +350,13 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
     return { error: hub.actions.saveFailed };
   }
 
-  // FLAG ON + answering a specific ask → additionally PROPOSE a follow-up seeded by the ask question.
-  // (A self-initiated telling has no ask question to seed the evaluator.) The take is already durable
-  // and appended above; runFollowUpStep degrades to `null` (stop proposing) on ANY evaluator/phraser
-  // failure or timeout, so a broken/slow evaluator can never block the draft — it just means "no
-  // follow-up proposed". There is no stitch-to-finish here anymore.
+  // Every story runs the follow-up process (typed OR voice, self-initiated OR answering an Ask) —
+  // the ONLY gate is `policy.enabled`, which now defaults on (per-narrator opt-out is #351). The take
+  // is already durable and appended above; runFollowUpStep degrades to `null` (stop proposing) on ANY
+  // evaluator/phraser failure or timeout, so a broken/slow evaluator can never block the draft — it
+  // just means "no follow-up proposed". There is no stitch-to-finish here anymore.
   const policy = resolveFollowUpPolicyForRequest();
-  if (policy.enabled && askId) {
+  if (policy.enabled) {
     // Tier A + dating context BEFORE cascade (spec §4.5): persist stated calendar first so the
     // temporal probe / gap-temporal cannot race a date we just wrote. Use the RAW transcript
     // (narrator words) — cleaned prose can drop calendar cues during cleanup.
@@ -366,10 +366,17 @@ export async function recordAnswerAction(formData: FormData): Promise<ThreadStep
       text: transcript,
       viewer: { kind: "account", personId: ctx.personId },
     });
+    // Seed the deepen evaluator with grounding so it cannot invent a NEW topic: the ask question
+    // when answering one, else a transcript-derived seed (mirrors the between-takes voice path).
+    const promptText = askQuestionText
+      ? askQuestionText
+      : transcript.trim()
+        ? `Telling this story:\n${transcript.trim().slice(0, 500)}`
+        : "";
     const step = await runFollowUpStep(rt, {
       storyId,
       ownerPersonId: ctx.personId,
-      promptText: askQuestionText,
+      promptText,
       answerTranscript: transcript,
       dating,
     });
@@ -409,9 +416,13 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
   // TEXT branch (ADR-0007): a typed telling, ask-optional. Only taken when there is no audio blob.
   if (!(audio instanceof Blob) && typeof text === "string") {
     if (text.trim().length === 0) return { error: hub.actions.invalidInput };
+    // Answering a specific ask supplies the question text to seed the follow-up evaluator; a
+    // self-initiated telling has none (stays "").
+    let askQuestionText = "";
     if (askId) {
       const ask = await assertAnswerableAsk(db, askId, ctx.personId);
       if (!ask.ok) return answerableAskError(ask.reason);
+      askQuestionText = ask.questionText;
     }
 
     // ADR-0009 Phase 3 subject/carry-forward — same rules as the voice path (see resolveSubjectPhotos).
@@ -451,14 +462,15 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
     // draft STAYS `draft` (Finish, a later slice, transitions it); this replaces the old monolithic
     // dispatchPipeline render. appendTypedTakeContribution trims internally, so the raw `text` is
     // passed straight through — surrounding whitespace never survives into stored prose.
+    let prose: string;
+    let appendedSegment: string;
     try {
-      const { prose, appendedSegment } = await appendTypedTakeContribution(db, {
+      ({ prose, appendedSegment } = await appendTypedTakeContribution(db, {
         storyId,
         ownerPersonId: ctx.personId,
         text,
         priorProse: null,
-      });
-      return { kind: "appended", storyId, prose, appendedSegment };
+      }));
     } catch (err) {
       plogError("answer", "composeStory(text): append failed", {
         story: storyId,
@@ -466,6 +478,37 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
       });
       return { error: hub.actions.saveFailed };
     }
+
+    // Every story runs the follow-up process — the typed take-0 is no exception (per-narrator opt-out
+    // is #351). The typed words ARE the answer transcript. The take is already durable and appended
+    // above; runFollowUpStep degrades to `null` on ANY failure/timeout, so it can never lose the take
+    // — the `appended` return below is always the fallback.
+    if (resolveFollowUpPolicyForRequest().enabled) {
+      // Dating BEFORE cascade (spec §4.5): persist stated calendar first so the temporal probe can't
+      // race a date we just wrote. The typed `text` is the narrator's words (no cleanup pass here).
+      const dating = await prepareAnswerDatingContext(rt.db, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        text,
+        viewer: { kind: "account", personId: ctx.personId },
+      });
+      // Seed the deepen evaluator: the ask question if answering one, else the typed text (so it
+      // can't invent a new topic from an empty prompt).
+      const promptText = askQuestionText
+        ? askQuestionText
+        : text.trim()
+          ? `Telling this story:\n${text.trim().slice(0, 500)}`
+          : "";
+      const step = await runFollowUpStep(rt, {
+        storyId,
+        ownerPersonId: ctx.personId,
+        promptText,
+        answerTranscript: text,
+        dating,
+      });
+      if (step) return { ...step, prose, appendedSegment };
+    }
+    return { kind: "appended", storyId, prose, appendedSegment };
   }
 
   // VOICE branch — delegate to the existing, well-tested path (now ask-optional too).
@@ -482,7 +525,8 @@ export async function composeStoryAction(formData: FormData): Promise<ThreadStep
  */
 export async function appendTypedTakeAction(formData: FormData): Promise<ThreadStep> {
   beginLogContext();
-  const { db, auth } = await getRuntime();
+  const rt = await getRuntime();
+  const { db, auth } = rt;
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") return { error: hub.actions.notSignedIn };
 
@@ -513,16 +557,17 @@ export async function appendTypedTakeAction(formData: FormData): Promise<ThreadS
     return { error: hub.actions.storyNotFound };
   }
 
+  let prose: string;
+  let appendedSegment: string;
   try {
-    const { prose, appendedSegment } = await appendTypedTakeContribution(db, {
+    ({ prose, appendedSegment } = await appendTypedTakeContribution(db, {
       storyId,
       ownerPersonId: ctx.personId,
       text,
       // Load-bearing: the CLIENT'S editor text, NOT a DB read — non-clobbering append.
       priorProse: proseField,
-    });
+    }));
     plog("answer", "appendTypedTake: appended", { story: storyId, ms: totalTimer() });
-    return { kind: "appended", storyId, prose, appendedSegment };
   } catch (err) {
     plogError("answer", "appendTypedTake: failed", {
       story: storyId,
@@ -530,6 +575,37 @@ export async function appendTypedTakeAction(formData: FormData): Promise<ThreadS
     });
     return { error: hub.actions.saveFailed };
   }
+
+  // Every take runs the follow-up process (typed take ≥1 included; per-narrator opt-out is #351).
+  // The take is already durable and appended above; runFollowUpStep degrades to `null` on ANY
+  // failure/timeout, so the `appended` return below is always the fallback — a slow/broken evaluator
+  // never loses the take.
+  if (resolveFollowUpPolicyForRequest().enabled) {
+    // Dating BEFORE cascade (spec §4.5): the typed `text` is the narrator's words for this take.
+    const dating = await prepareAnswerDatingContext(rt.db, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      text,
+      viewer: { kind: "account", personId: ctx.personId },
+    });
+    // Seed the deepen evaluator from the CLIENT'S current prose (the story so far), else the typed
+    // words, so it deepens the CURRENT story rather than inventing a new topic (mirrors the
+    // between-takes voice path).
+    const promptText = proseField.trim()
+      ? `Continuing this story:\n${proseField.trim().slice(0, 500)}`
+      : text.trim()
+        ? `Telling this story:\n${text.trim().slice(0, 500)}`
+        : "";
+    const step = await runFollowUpStep(rt, {
+      storyId,
+      ownerPersonId: ctx.personId,
+      promptText,
+      answerTranscript: text,
+      dating,
+    });
+    if (step) return { ...step, prose, appendedSegment };
+  }
+  return { kind: "appended", storyId, prose, appendedSegment };
 }
 
 /**

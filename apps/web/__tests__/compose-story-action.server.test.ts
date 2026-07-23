@@ -127,25 +127,34 @@ async function rowCount(db: Database, table: string): Promise<number> {
 
 describe("composeStoryAction — text path (Task 7)", () => {
   beforeEach(async () => {
+    // Default env (kill switch unset) → follow-ups ON for every story. These tests use an evaluator
+    // that proposes NOTHING, so the typed path still ends `appended` even with follow-ups running.
+    delete process.env.FOLLOW_UPS_ENABLED;
     runtimeDb = await createTestDatabase();
     runtimeStorage = new InMemoryMediaStorage();
     runtimeLlm = scriptedLlm();
     runtimeEvaluator = new ScriptedFollowUpEvaluator([]);
     runtimeTranscriber = new ScriptedTranscriber({ text: "unused" });
     // The text path appends the typed take synchronously and never dispatches — this is a stub that
-    // FAILS the test if it is ever called (a regression back to the monolithic render path).
+    // FAILS the test if it is ever called (a regression back to the monolithic render path). The
+    // follow-up cascade does NOT dispatch the pipeline, so it stays safe under follow-ups-ON.
     runtimeDispatch = async () => {
       throw new Error("dispatchPipeline must NOT be called on the typed-append text path");
     };
     authCtx = { kind: "none" };
   });
-  afterAll(() => {});
+  afterAll(() => {
+    delete process.env.FOLLOW_UPS_ENABLED;
+  });
 
   it("(a) a text telling with NO askId appends the typed take and stays at draft with the typed prose", async () => {
     const personId = await makePerson(runtimeDb);
     authCtx = { kind: "account", personId };
 
-    const TEXT = "The summer we drove to the coast and the car broke down.";
+    // Follow-ups run for every story now (default env). This test asserts the APPEND/provenance
+    // mechanics, so the text is DATED (stated year → temporal probe N/A) and the evaluator proposes
+    // NOTHING → the result stays `appended`; the follow-up-fires case is covered by (a2).
+    const TEXT = "The summer of 1975 we drove to the coast and the car broke down.";
     const result = await composeStoryAction(form({ text: TEXT }));
 
     // ADR-0014 Inc 3: the text path now appends the typed take synchronously → { kind:"appended" }.
@@ -177,6 +186,75 @@ describe("composeStoryAction — text path (Task 7)", () => {
     expect(authored[0]!.storyRecordingId).toBeNull();
   });
 
+  it("(a2) a text telling runs the follow-up process → returns a follow_up carrying prose + segment", async () => {
+    // NEW CONTRACT: every story runs the follow-up process — the typed take-0 is no exception. With
+    // an evaluator that proposes a STRONG candidate and default env (follow-ups ON), composeStoryAction
+    // returns a { kind:"follow_up" } step, carrying the just-appended prose + appendedSegment.
+    const personId = await makePerson(runtimeDb, "Nora");
+    authCtx = { kind: "account", personId };
+    const evaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+    runtimeEvaluator = evaluator;
+    runtimeLlm = scriptedLlm("Tell me more about that stained glass window.");
+    // dispatchPipeline must still never fire — the follow-up cascade doesn't render.
+    runtimeDispatch = async () => {
+      throw new Error("dispatchPipeline must NOT be called on the typed-append text path");
+    };
+
+    // Stated year → Tier A dates the draft; the temporal probe is N/A so the DEEPEN evaluator runs
+    // and its STRONG candidate wins (mirrors DATED_ANSWER in the voice prompt-seed describe).
+    const TEXT = DATED_ANSWER;
+    const result = await composeStoryAction(form({ text: TEXT }));
+
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that stained glass window.");
+    // The typed take is carried onto the follow_up step so the client seeds the editor optimistically.
+    expect(result.prose).toBe(TEXT);
+    expect(result.appendedSegment).toBe(TEXT);
+    // The deepen evaluator ran, seeded from the typed text (no ask → transcript-derived seed).
+    expect(evaluator.calls).toHaveLength(1);
+    expect(evaluator.calls[0]!.promptText).toContain(TEXT);
+    // The take is durably appended regardless of the follow-up outcome; draft stays draft.
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), result.storyId);
+    expect(story!.state).toBe("draft");
+    expect(story!.prose).toBe(TEXT);
+  });
+
+  it("(a3) FOLLOW_UPS_ENABLED=0 kill switch darks the typed cascade: appended, evaluator never called", async () => {
+    // Same setup as (a2) — an evaluator that WOULD propose a strong candidate — but the emergency kill
+    // switch is thrown. The typed path must return { kind:"appended" } (NOT a follow_up) and the
+    // evaluator must never be called (mirrors the voice kill-switch test in answer-follow-up-loop).
+    const prior = process.env.FOLLOW_UPS_ENABLED;
+    process.env.FOLLOW_UPS_ENABLED = "0";
+    try {
+      const personId = await makePerson(runtimeDb, "Nora");
+      authCtx = { kind: "account", personId };
+      const evaluator = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]]);
+      runtimeEvaluator = evaluator;
+      runtimeLlm = scriptedLlm("Tell me more about that stained glass window.");
+
+      const TEXT = DATED_ANSWER;
+      const result = await composeStoryAction(form({ text: TEXT }));
+
+      // Kill switch dark → no follow_up step; the typed take is appended synchronously.
+      if (!("kind" in result) || result.kind !== "appended") {
+        throw new Error(`expected an appended step, got ${JSON.stringify(result)}`);
+      }
+      expect(result.prose).toBe(TEXT);
+      expect(result.appendedSegment).toBe(TEXT);
+      // The cascade never ran — the evaluator was never consulted.
+      expect(evaluator.calls).toHaveLength(0);
+      // The take is still durably appended; draft stays draft.
+      const story = await getStoryForViewer(runtimeDb, ownerCtx(personId), result.storyId);
+      expect(story!.state).toBe("draft");
+      expect(story!.prose).toBe(TEXT);
+    } finally {
+      if (prior === undefined) delete process.env.FOLLOW_UPS_ENABLED;
+      else process.env.FOLLOW_UPS_ENABLED = prior;
+    }
+  });
+
   it("(b) an empty/whitespace text returns { error } and writes nothing", async () => {
     const personId = await makePerson(runtimeDb);
     authCtx = { kind: "account", personId };
@@ -200,15 +278,17 @@ describe("composeStoryAction — text path (Task 7)", () => {
  * render pipeline. The draft STAYS `draft` (Finish transitions it, a later slice), and
  * `dispatchPipeline` is NOT called. This locks the new per-take append contract end-to-end.
  */
-describe("recordAnswerAction — flag-off one-shot voice → per-take append (Inc 3 slice 3)", () => {
-  // The take's raw speech-to-text, and the cleanup pass's tidied output.
-  const RAW = "um so we drove to the coast you know and the car broke down";
-  const CLEANED = "We drove to the coast and the car broke down.";
+describe("recordAnswerAction — self-initiated one-shot voice → per-take append (Inc 3 slice 3)", () => {
+  // The take's raw speech-to-text, and the cleanup pass's tidied output. Dated (stated year) so the
+  // temporal probe is N/A: this test asserts the APPEND/provenance mechanics, and the evaluator
+  // proposes NOTHING, so the result stays `appended` even though follow-ups run for every story now.
+  const RAW = "um so in 1975 we drove to the coast you know and the car broke down";
+  const CLEANED = "In 1975 we drove to the coast and the car broke down.";
   let dispatchCalled = false;
 
   beforeEach(async () => {
-    // Self-initiated (no askId) is the flag-off branch regardless of policy; clear the flag anyway
-    // so this describe never depends on the flag-ON describe's env leaking in.
+    // Default env (kill switch unset) → follow-ups ON. Clear the flag so this describe never depends
+    // on a neighboring describe's env leaking in.
     delete process.env.FOLLOW_UPS_ENABLED;
     runtimeDb = await createTestDatabase();
     runtimeStorage = new InMemoryMediaStorage();

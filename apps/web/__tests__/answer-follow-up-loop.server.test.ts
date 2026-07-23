@@ -1195,8 +1195,49 @@ describe("follow-up actions (getRuntime-driven)", () => {
     expect(rows[0]!.evaluatorModelId).not.toBe("system:story-date");
   });
 
-  it("recordAnswerAction (FOLLOW_UPS_ENABLED=false + askId) stays dark: appended, evaluators never called", async () => {
-    process.env.FOLLOW_UPS_ENABLED = "false";
+  it("recordAnswerAction (default env, SELF-INITIATED, no askId) runs the follow-up process → proposes", async () => {
+    // NEW CONTRACT: every story runs the follow-up process — typed or voice, self-initiated or
+    // answering an ask. Default env (kill switch unset) → follow-ups ON. A self-initiated telling
+    // (NO askId) now DOES run the evaluators and can propose a follow-up, seeded by the transcript.
+    delete process.env.FOLLOW_UPS_ENABLED;
+    const ownerPersonId = (
+      await runtimeDb
+        .insert(persons)
+        .values({ displayName: "Nora", spokenName: "Nora", birthYear: 1950 })
+        .returning()
+    )[0]!.id;
+    authCtx = { kind: "account", personId: ownerPersonId };
+    runtimeLlm = scriptedLlm("Tell me more about that window.");
+    const deepen = new ScriptedFollowUpEvaluator([[STRONG_CANDIDATE]], "deepen-model");
+    runtimeEvaluator = deepen;
+    runtimeGapEvaluator = undefined; // deepen-only cascade
+    // Stated year → Tier A dates the draft; the temporal probe is N/A so the DEEPEN evaluator runs
+    // (an undated telling would short-circuit on the temporal probe before deepen).
+    const DATED_ANSWER =
+      "It had a beautiful stained glass window in the front hall that my grandmother loved in 1958.";
+    runtimeTranscriber = new ScriptedTranscriber({ text: DATED_ANSWER });
+
+    const result = await recordAnswerAction(
+      form({ audio: new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }) }),
+    );
+
+    if (!("kind" in result) || result.kind !== "follow_up") {
+      throw new Error(`expected a follow_up step, got ${JSON.stringify(result)}`);
+    }
+    expect(result.prompt).toBe("Tell me more about that window.");
+    // The deepen evaluator ran even with NO ask — seeded from the transcript, not a dead prompt.
+    expect(deepen.calls).toHaveLength(1);
+    // Seed grounding: with no ask, the promptText is derived from the transcript so deepen can't
+    // invent a new topic.
+    expect(deepen.calls[0]!.promptText).toContain(DATED_ANSWER.slice(0, 40));
+    const rows = await listFollowUpDecisionsForStory(runtimeDb, result.storyId);
+    expect(rows.length).toBeGreaterThan(0);
+    const story = await getStoryForViewer(runtimeDb, ownerCtx(ownerPersonId), result.storyId);
+    expect(story!.state).toBe("draft");
+  });
+
+  it("recordAnswerAction (FOLLOW_UPS_ENABLED=0 kill switch + askId) stays dark: appended, evaluators never called", async () => {
+    process.env.FOLLOW_UPS_ENABLED = "0";
     const ownerPersonId = (
       await runtimeDb
         .insert(persons)
