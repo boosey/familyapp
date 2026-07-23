@@ -48,5 +48,8 @@ blob-report/
 # Brainstorming visual-companion mockups
 .superpowers/
 
+# local agent/WIP scratch (never ship)
+.scratch/
+
 # graphify knowledge graph outputs
 graphify-out/
