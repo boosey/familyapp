@@ -28,6 +28,10 @@ ABSOLUTE RULES — non-negotiable:
   "I'd love to hear…" filler. Get to the question.
 - Never invent facts about the narrator or their family. Use any provided biographical anchors
   ONLY to set names or tone — never to state something as known fact.
+- The CONTEXT anchors (hometown, current location, occupation, sibling context, etc.) are
+  BACKGROUND ONLY. NEVER make an anchor the subject of your question — never ask the narrator to
+  date, describe, or elaborate on where they live/lived, their job, or any anchor. Ask ONLY about
+  what the narrator just told you in THIS turn.
 - When a family member's question is being relayed, name the asker warmly ("Sofia was
   wondering…") and frame the question kindly.
 - When you are doing a warm callback to a prior story, refer to it briefly and concretely
@@ -127,11 +131,33 @@ Curious and warm, never clinical or form-like. Never yes/no.`;
       if (intent.origin === "gap" || intent.origin === "system") {
         // Gap / system-probe follow-up: the seed names a SPECIFIC missing fact. Still ONE warm
         // question, still non-leading — we ask about the gap, we do NOT assert it exists.
+        // Grounding (bug: skiing-trip confabulation): system/gap seeds are often contentless
+        // (e.g. "about when this happened") and, with only background anchors to lean on, the LLM
+        // invents a subject from them. When we have the narrator's own words for THIS turn, quote
+        // them and pin the question to them so "this happened" refers to their story, not an anchor.
+        // Grounding is branched by gap kind. TEMPORAL: "when did this happen" genuinely refers back
+        // to the story they just told, so we use the STRICT wording ("ask ONLY about what they said
+        // here"). NON-temporal (relational/spatial/causal/identity): the gap is, by definition, a
+        // detail the narrator did NOT say — the strict wording would contradict the seed's "invite
+        // the missing detail" instruction. So we use a SOFTER grounding that still blocks
+        // anchor-confabulation without forbidding the missing detail.
+        const grounding = intent.answerExcerpt
+          ? intent.gapKind === "temporal"
+            ? `\nThe narrator just told you this — ask ONLY about what they said here, never about
+anything else (never about their hometown, where they live, their job, or any background detail):
+"""${intent.answerExcerpt}"""`
+            : `\nGround your question in the story the narrator just told (quoted below); ask about
+the missing detail above AS PART OF that story. Never pull in unrelated background — not their
+hometown, where they live, their job, or any CONTEXT anchor:
+"""${intent.answerExcerpt}"""`
+          : "";
         // Temporal (system dating probe or gap kind) carries extra wording discipline: welcome a
-        // fuzzy answer and never pressure for an exact date (issue #244 / story-dates).
+        // fuzzy answer and never pressure for an exact date (issue #244 / story-dates). The "when"
+        // refers to the story they JUST told (above) — never to any background anchor.
         const temporalGuidance =
           intent.gapKind === "temporal"
-            ? `\nThis is a WHEN question. Phrase it so an approximate answer is explicitly welcome — a
+            ? `\nThis is a WHEN question about the story they JUST told you (above) — not about any
+background detail. Phrase it so an approximate answer is explicitly welcome — a
 year, a season, or a rough period ("sometime in the late forties") is a perfectly good answer,
 along the lines of: "Do you remember about when that was? A year, or even a rough period, is
 fine." NEVER ask for, or imply you need, an exact date.`
@@ -139,7 +165,7 @@ fine." NEVER ask for, or imply you need, an exact date.`
         return `Type: FOLLOW-UP that gently fills in a detail the narrator did not mention.
 The missing detail to ask about (a ${intent.gapKind ?? "factual"} gap — do NOT assume the answer,
 just invite it): """${intent.threadSeed}"""
-Ask ONE short, open-ended question that draws out this detail. Reflect their own words where you can.${temporalGuidance}`;
+Ask ONE short, open-ended question that draws out this detail. Reflect their own words where you can.${grounding}${temporalGuidance}`;
       }
       return `Type: FOLLOW-UP on what the narrator just said.
 The narrator's last words (reflect using THEIR phrasing where possible, then ask ONE follow-up):

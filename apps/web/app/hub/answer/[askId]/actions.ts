@@ -52,6 +52,7 @@ import {
   detectDistress,
   detectOffRamp,
   proposeAndDisposeFollowUp,
+  toAnswerExcerpt,
   STORY_DATE_FOLLOW_UP_SEED,
   type FollowUpEvaluator,
   type SystemFollowUpProbe,
@@ -737,6 +738,10 @@ export async function runFollowUpStep(
             threadSeed: decision.selected.threadSeed,
             ...(origin ? { origin } : {}),
             ...(gapKind ? { gapKind } : {}),
+            // Ground the phrasing in the narrator's own words so a contentless system/gap seed
+            // (e.g. the temporal dating seed) can't be confabulated into a subject drawn from
+            // background anchors (skiing-trip → invented "move" bug).
+            ...(args.answerTranscript.trim() ? { answerExcerpt: toAnswerExcerpt(args.answerTranscript) } : {}),
           },
           anchors,
           priorStories: [],
