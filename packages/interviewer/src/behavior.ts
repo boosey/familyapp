@@ -37,6 +37,7 @@ import type {
   FollowUpPolicy,
   FollowUpType,
 } from "@chronicle/db";
+import { toAnswerExcerpt } from "./answer-excerpt";
 import type { BiographicalAnchors, PendingAsk, PriorStoryMemory } from "./contracts";
 import type { FollowUpCandidate, FollowUpEvaluation } from "./contracts";
 import type { GapKind } from "./gap-detection";
@@ -152,6 +153,12 @@ export type PromptIntent =
        * (e.g. temporal dating guidance).
        */
       gapKind?: GapKind;
+      /**
+       * A short (1-2 sentence) excerpt of the narrator's OWN words for THIS story, so the phraser
+       * grounds the question in what they actually said instead of confabulating from anchors. Set
+       * for system/gap probes whose seed is contentless (e.g. the temporal dating seed).
+       */
+      answerExcerpt?: string;
     }
   | {
       kind: "base";
@@ -315,7 +322,20 @@ export function pickNextIntent(input: PickInput): PromptIntent {
   //   5b. Otherwise the original reflection: if the last utterance was substantial, reflect on it.
   if (state.pendingGapFollowUp) {
     const { candidate, gapKind, origin } = state.pendingGapFollowUp;
-    return { kind: "follow_up", threadSeed: candidate.threadSeed, origin, gapKind };
+    // Ground the phrasing in the narrator's OWN words for THIS turn. System/gap seeds are often
+    // contentless (e.g. the temporal dating seed "about when this happened"); without a real
+    // referent the phraser confabulates a subject from background anchors. `lastNarratorUtterance`
+    // is the answer that triggered this queued follow-up (set by `ingestNarratorUtterance`).
+    const excerpt = state.lastNarratorUtterance
+      ? toAnswerExcerpt(state.lastNarratorUtterance)
+      : "";
+    return {
+      kind: "follow_up",
+      threadSeed: candidate.threadSeed,
+      origin,
+      gapKind,
+      ...(excerpt ? { answerExcerpt: excerpt } : {}),
+    };
   }
   const last = state.lastNarratorUtterance;
   if (last && last.trim().split(/\s+/).length >= 12) {

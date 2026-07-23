@@ -87,6 +87,8 @@ export {
 
 export { extractIntakeAnswer } from "./intake-extraction";
 
+export { toAnswerExcerpt } from "./answer-excerpt";
+
 export * from "./follow-up-policy";
 export type {
   FollowUpEvaluationInput,
