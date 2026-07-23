@@ -62,13 +62,18 @@
 }
 
 .lockedField {
+  /* Mirror global `.kin-locked` — prefer that class on new markup. */
   font-family: var(--font-ui);
-  font-size: var(--text-ui);
+  font-size: var(--text-ui-sm);
   color: var(--text-body);
-  padding: 10px 12px;
+  padding: 6px 8px;
+  min-height: var(--touch-min);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
   background: var(--surface-sunken);
   border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
 }
 
 .action {

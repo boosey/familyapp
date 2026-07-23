@@ -70,9 +70,11 @@ it("renders the family chips from the server-prepared (already-filtered) set, se
   const chip = screen.getByRole("button", { name: "The Riccis" });
   expect(chip.getAttribute("aria-pressed")).toBe("true"); // single eligible family auto-seeds
 
-  expect((screen.getByDisplayValue("Elena Ricci") as HTMLInputElement).name).toBe("inviteeName");
-  expect((screen.getByDisplayValue("elena@example.com") as HTMLInputElement).name).toBe("inviteeEmail");
-  expect((screen.getByDisplayValue("+15551234567") as HTMLInputElement).name).toBe("inviteePhone");
+  // Prefill with contacts → name + both contacts are display-only locked values (hidden inputs POST).
+  expect(screen.getByTestId("invite-name-locked").textContent).toBe("Elena Ricci");
+  expect(screen.getByTestId("invite-email-locked").textContent).toBe("elena@example.com");
+  expect(screen.getByTestId("invite-phone-locked").textContent).toBe("+15551234567");
+  expect(screen.queryByRole("textbox")).toBeNull();
 });
 
 it("does not seed a chip when more than one family is eligible", async () => {
@@ -157,10 +159,11 @@ it("submit success shows the ready-to-share link; Done calls onClose", async () 
     />,
   );
   await screen.findByText("The Riccis");
-  fireEvent.change(screen.getByDisplayValue("Elena Ricci"), { target: { value: "Elena Ricci" } });
+  expect(screen.getByTestId("invite-name-locked").textContent).toBe("Elena Ricci");
   fireEvent.change(screen.getByPlaceholderText(hub.invite.emailPlaceholder), {
     target: { value: "elena@example.com" },
   });
+  fireEvent.change(screen.getByTestId("invite-relationship"), { target: { value: "other" } });
 
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: hub.invite.sendToEmail }));
@@ -193,6 +196,7 @@ it("submit error shows an inline error and keeps the form mounted", async () => 
   fireEvent.change(screen.getByPlaceholderText(hub.invite.emailPlaceholder), {
     target: { value: "elena@example.com" },
   });
+  fireEvent.change(screen.getByTestId("invite-relationship"), { target: { value: "other" } });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: hub.invite.sendToEmail }));
   });

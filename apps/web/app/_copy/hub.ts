@@ -259,6 +259,8 @@ export const hub = {
     phoneInvalid: "That phone number doesn't look right — check the format and try again.",
     identifierHint:
       "Give at least one — an email or a phone number. It's how we recognize them if they join without the link, and how we avoid inviting the same person twice.",
+    // Accessible name for the circled-i that reveals `identifierHint` (replaces the always-on blurb).
+    identifierInfoAria: "Why we ask for an email or phone",
     identifierRequired:
       "Add an email or a phone number — at least one — so we can recognize them when they join.",
     emailRequired: "Add their email to send it by email — or choose another way below.",
@@ -276,6 +278,8 @@ export const hub = {
     relationshipQuestion: "How are they related to you?",
     relationshipHelp:
       "This places them correctly in your family tree when they join. Choose “Someone else” if none of these fit — you can position them later.",
+    // Accessible name for the circled-i that reveals `relationshipHelp`.
+    relationshipInfoAria: "Why we ask how they're related",
     // Option labels, keyed by the machine value sent to core.createInvitation.
     relationshipOptions: {
       wife: "My wife",
@@ -302,8 +306,8 @@ export const hub = {
     familyRequired: "Choose a family for this invitation.",
     // #118 — the three send actions. The phone button doubles as the SMS consent: pressing it IS
     // the explicit ask to text them.
-    sendToEmail: "Send to their email",
-    sendToPhone: "Text it to their phone",
+    sendToEmail: "Send email",
+    sendToPhone: "Send text",
     getLink: "Get a link to share",
     narratorHeading: "Set up someone to record",
     narratorBody:
