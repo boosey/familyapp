@@ -58,7 +58,7 @@ only warns). All set in **Vercel → Project → Settings → Environment Variab
 | `GOOGLE_PHOTOS_CLIENT_ID` / `_CLIENT_SECRET` / `_TOKEN_ENCRYPTION_KEY` | Google Photos import credentials (§D) |
 | `GOOGLE_PHOTOS_ENABLED` | Google Photos Connect / Import UI — set `true` (or `1`) to enable; **off by default** while Google OAuth verification is pending |
 | `FOLLOW_UPS_ENABLED` | follow-up questions (#77) — set `true` to enable |
-| `ALBUM_IMPORT_PROGRESS_ENABLED` | album import progress UI |
+| ~~`ALBUM_IMPORT_PROGRESS_ENABLED`~~ | retired (issue #152) — the per-item album import UI is now GA/unconditional; this var is a no-op if still set anywhere |
 
 > **Already-deployed note:** the Vercel beta is live, so R2/Groq/Inngest/ticket-secret may
 > already be set on Production. Verify with `vercel env ls production` before assuming you

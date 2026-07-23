@@ -6,8 +6,8 @@
  * chrome stays hidden (file upload only).
  *
  * Product rollout is gated by `GOOGLE_PHOTOS_ENABLED` (off by default) so Connect / Import stay
- * hidden while Google OAuth verification is pending — same idiom as `FOLLOW_UPS_ENABLED` and
- * `ALBUM_IMPORT_PROGRESS_ENABLED`. Credentials alone are not enough.
+ * hidden while Google OAuth verification is pending — same idiom as `FOLLOW_UPS_ENABLED`.
+ * Credentials alone are not enough.
  *
  * `getGooglePhotosDeps()` is the test seam: production returns the real `@chronicle/photos-google`
  * functions; tests override via `vi.mock("@/lib/google-photos-config", …)` or by replacing the

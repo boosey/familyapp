@@ -29,10 +29,8 @@ import { hub } from "@/app/_copy";
 import { warnAlbumCapHit } from "@/lib/album-cap";
 import { parseFamilyFilter, selectedIdList, deriveSingleScope } from "@/lib/family-filter";
 import { FamilyChips } from "../FamilyChips";
-import { AlbumUploader } from "./AlbumUploader";
 import { AlbumControls } from "./AlbumControls";
 import { AlbumBoard } from "./AlbumBoard";
-import { isAlbumImportProgressEnabled } from "@/lib/album-import-progress-config";
 import { isGooglePhotosConfigured } from "@/lib/google-photos-config";
 import { getActiveGooglePhotosConnection } from "@/lib/google-photos-connection";
 
@@ -164,45 +162,12 @@ export async function AlbumSurface({
   const familyFilterActive =
     active.length >= 2 && chipSelected !== "all" && chipSelected.length !== active.length;
 
-  // The shared uploader element — the add/import flow, ALWAYS present for a viewer with ≥1 family
-  // (ADR-0021). Rendered here once so BOTH the all-off (`none`) branch below and the main return can
-  // hand the SAME designator-seeded control to AlbumControls' `addSlot` (the filter and the designator
-  // are separate state). AlbumControls places it in the toolbar's R1-right on every path.
-  const uploaderControl = showUploader ? (
-    <AlbumUploader
-      families={active}
-      currentFamilyId={currentFamilyId}
-      scope={uploaderScope}
-      defaultSelected={defaultSelectedFamilyIds}
-      showFileUpload={showFileUpload}
-      googlePhotosConfigured={googleConfigured}
-      googlePhotosConnected={googleConn !== null}
-      googlePhotosEmail={googleConn?.googleAccountEmail ?? null}
-      googlePhotosOauthConnected={googlePhotosOauthConnected}
-      googlePhotosOauthError={googlePhotosOauthError}
-    />
-  ) : null;
-
-  // Explicit empty selection (`none`): an honest empty state (ADR-0021) — not a silent "show all". It
-  // routes through AlbumControls like every other path (no bespoke stacked-block render), so a ≥2-family
-  // viewer sees the SAME two-row toolbar — Add Photos (R1-right) + the chips they can turn back on
-  // (R2-left) — above the "no families selected" note. gridPhotos is empty here (nothing selected).
-  if (filter.kind === "none") {
-    return (
-      <AlbumControls
-        photos={gridPhotos}
-        addSlot={uploaderControl}
-        familyChips={chipsInline}
-        emptyNote={hub.album.noFamiliesSelected}
-      />
-    );
-  }
-
-  // ADR-0015 · F2 (flag-gated, dark in prod): when the in-grid per-item import progress feature is on
-  // AND the uploader is shown, hand the whole uploader+grid to the client `AlbumBoard`, which owns the
-  // per-item pool + placeholder tiles. `viewedFamilyIds` drives its reconciliation; `uploaderScope`
-  // seeds its AlbumUploader.
-  if (isAlbumImportProgressEnabled() && showUploader) {
+  // The board is the SOLE album import path now (GA — was ADR-0015 · F2, flag-gated behind
+  // ALBUM_IMPORT_PROGRESS_ENABLED; the flag is retired). It mounts UNCONDITIONALLY whenever the uploader
+  // is shown — covering both the explicit-empty-selection (`none`) filter state and the normal/empty
+  // grid states — and owns the per-item pool + placeholder tiles. `viewedFamilyIds` drives its
+  // reconciliation; `uploaderScope` seeds its AlbumUploader.
+  if (showUploader) {
     return (
       // #57: the browse chips ride INSIDE AlbumBoard's control row (no standalone `{chips}` sibling);
       // master's designator model supplies the uploader target (currentFamilyId + defaultSelected).
@@ -220,23 +185,22 @@ export async function AlbumSurface({
         googlePhotosOauthError={googlePhotosOauthError}
         photos={gridPhotos}
         familyChips={chipsInline}
-        familyFilterActive={familyFilterActive}
+        familyFilterActive={filter.kind === "none" ? undefined : familyFilterActive}
+        emptyNote={filter.kind === "none" ? hub.album.noFamiliesSelected : hub.album.empty}
       />
     );
   }
 
-  // The flag-off path funnels through AlbumControls too, so BOTH album paths compose the SAME two-row
-  // toolbar (the "Add Photos" affordance on the SAME row as the When/Search filters). AlbumControls owns
-  // the populated-vs-empty decision: with photos it renders the full toolbar + grid body; with an empty
-  // album it renders a minimal toolbar (Add Photos + family chips) above the welcoming note. A
-  // pending-only viewer (member of no family) gets the coherent hub-wide empty state.
+  // No uploader (a pending-only viewer, member of no family): AlbumControls owns the populated-vs-empty
+  // decision on its own — there is nothing to import here, so the board never mounts. The coherent
+  // hub-wide empty state shows above a minimal toolbar (family chips only; no add affordance).
   return (
     <AlbumControls
       photos={gridPhotos}
-      addSlot={uploaderControl}
+      addSlot={null}
       familyChips={chipsInline}
       familyFilterActive={familyFilterActive}
-      emptyNote={active.length === 0 ? hub.shell.pendingEmpty : hub.album.empty}
+      emptyNote={hub.shell.pendingEmpty}
     />
   );
 }

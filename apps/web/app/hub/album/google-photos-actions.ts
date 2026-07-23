@@ -6,8 +6,12 @@
  * Connect-once: refresh token lives encrypted in `google_photos_connections`. Each import:
  *   1. startGooglePhotosImportAction → mint access token → createPickerSession → { sessionId, pickerUri }
  *   2. Client opens pickerUri; polls pollGooglePhotosImportAction until mediaItemsSet
- *   3. completeGooglePhotosImportAction → list → download → EXIF → storage.put → createAlbumPhoto
- *      with source "google_picker" (same family-id validation as uploadAlbumPhotoAction).
+ *   3. listGooglePhotosImportAction (list-first, ADR-0015 · F2) → exact-N token-gated handles, so the
+ *      client can render exactly N placeholder tiles before any download begins → then
+ *      importOneGooglePhotoAction ONE PER ITEM (download → EXIF → storage.put → createAlbumPhoto with
+ *      source "google_picker", same family-id validation as uploadAlbumPhotoAction) through the client's
+ *      bounded concurrency pool (`AlbumBoard`), so each item resolves — or fails with tap-to-retry —
+ *      independently.
  *
  * Every action re-resolves auth on the server — identity is NEVER trusted from the client.
  */
@@ -53,9 +57,6 @@ export type StartImportResult =
   | GooglePhotosActionError;
 export type PollImportResult =
   | { ok: true; mediaItemsSet: boolean }
-  | GooglePhotosActionError;
-export type CompleteImportResult =
-  | { ok: true; added: number; failed: number; skipped: number; rejected: number }
   | GooglePhotosActionError;
 
 type AppRuntime = Awaited<ReturnType<typeof getRuntime>>;
@@ -233,114 +234,6 @@ export async function pollGooglePhotosImportAction(
     return { ok: true, mediaItemsSet: session.mediaItemsSet };
   } catch (err) {
     logGooglePhotosImportError("poll", err);
-    return { error: googlePhotosImportErrorFor(err) };
-  }
-}
-
-export async function completeGooglePhotosImportAction(
-  formData: FormData,
-): Promise<CompleteImportResult> {
-  if (!isGooglePhotosConfigured()) {
-    return { error: hub.album.googlePhotosUnavailable };
-  }
-  const gate = await requireAccount();
-  if (!gate.ok) return { error: gate.error };
-
-  const sessionId = formData.get("sessionId");
-  if (typeof sessionId !== "string" || sessionId === "") {
-    return { error: hub.actions.invalidInput };
-  }
-
-  const families = await resolveFamilyIds(
-    gate.runtime.db,
-    gate.personId,
-    formData,
-  );
-  if ("error" in families) return { error: families.error };
-
-  try {
-    const token = await resolveAccessToken(gate.personId, gate.runtime.db);
-    if (!token.ok) return { error: token.error };
-
-    const deps = getGooglePhotosDeps();
-    const { photos, skipped, rejected } = await deps.listPickedPhotos(
-      token.accessToken,
-      sessionId,
-    );
-    console.info(
-      `[google-photos/import:complete] listed ${photos.length} photo(s), skipped ${skipped}, rejected ${rejected}`,
-    );
-
-    if (photos.length === 0) {
-      if (skipped > 0) {
-        return { ok: true, added: 0, failed: 0, skipped, rejected };
-      }
-      return { error: hub.album.googlePhotosNothingImported };
-    }
-
-    const { storage, db } = gate.runtime;
-    let added = 0;
-    let failed = 0;
-    let lastFailureDetail: string | null = null;
-
-    for (const item of photos) {
-      try {
-        const downloaded = await deps.downloadPickedPhoto(
-          token.accessToken,
-          item,
-        );
-        let exif: PhotoExif = { capturedAt: null, gps: null };
-        try {
-          exif = await extractPhotoExif(downloaded.bytes);
-        } catch {
-          /* never fail the import on EXIF */
-        }
-        const storageKey = `family-photos/${randomUUID()}`;
-        await storage.put({
-          key: storageKey,
-          bytes: downloaded.bytes,
-          contentType:
-            downloaded.contentType || item.mimeType || "application/octet-stream",
-        });
-        await createAlbumPhoto(db, {
-          contributorPersonId: gate.personId,
-          familyIds: families.familyIds,
-          source: "google_picker",
-          storageKey,
-          caption: null,
-          exifCapturedAt: exif.capturedAt,
-          exifGps: exif.gps,
-        });
-        // Warm the grid thumbnail from the bytes already downloaded (issue #139); best-effort.
-        await warmThumbnail(storage, storageKey, downloaded.bytes);
-        added += 1;
-      } catch (err) {
-        failed += 1;
-        lastFailureDetail = sanitizeImportErrorDetail(err);
-        if (failed === 1) {
-          logGooglePhotosImportError("complete", err);
-          console.error(
-            `[google-photos/import:complete] storage/create failed for item ${item.id}` +
-              ` (${item.mimeType}, ${item.filename ?? "no-filename"})`,
-          );
-        }
-      }
-    }
-
-    if (added > 0) {
-      revalidatePath("/hub/album");
-      revalidatePath("/hub");
-    }
-    if (added === 0 && photos.length > 0) {
-      return {
-        error: lastFailureDetail
-          ? hub.actions.photoUploadFailedDetail(lastFailureDetail)
-          : hub.actions.photoUploadFailed,
-      };
-    }
-    return { ok: true, added, failed, skipped, rejected };
-  } catch (err) {
-    logGooglePhotosImportError("complete", err);
     return { error: googlePhotosImportErrorFor(err) };
   }
 }

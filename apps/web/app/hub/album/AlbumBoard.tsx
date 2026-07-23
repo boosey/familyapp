@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * AlbumBoard (ADR-0015 · F2) — the client wrapper that OWNS per-item import progress. It is mounted
- * by `AlbumSurface` ONLY when the `isAlbumImportProgressEnabled()` flag is on, so the whole feature
- * lands dark: the flag-off path never renders this component.
+ * AlbumBoard (ADR-0015 · F2) — the client wrapper that OWNS per-item import progress. It is the SOLE
+ * album import path (GA): `AlbumSurface` mounts it unconditionally whenever the uploader is shown. The
+ * feature was previously flag-gated behind `ALBUM_IMPORT_PROGRESS_ENABLED`; the flag is retired.
  *
  * The board hands `AlbumUploader` an `onImportFiles` / `onImportGoogle` delegate (board mode). When
  * the contributor chooses files (or finishes the Google picker), the uploader stops self-driving the
@@ -84,6 +84,9 @@ export function AlbumBoard(props: {
   /** Whether the `?families=` chip filter is narrowed (forwarded to AlbumControls for the mobile
    *  "Filters & view" trigger badge — the chips hide inside the closed sheet on a phone). */
   familyFilterActive?: boolean;
+  /** The empty-state note (surface-supplied: the `none`-filter "no families selected" copy, or the
+   *  normal "no photos yet" copy) — forwarded verbatim to AlbumControls. */
+  emptyNote: string;
 }) {
   const router = useRouter();
 
@@ -410,7 +413,7 @@ export function AlbumBoard(props: {
       familyChips={props.familyChips}
       familyFilterActive={props.familyFilterActive}
       notices={notices}
-      emptyNote={hub.album.empty}
+      emptyNote={props.emptyNote}
     />
   );
 }

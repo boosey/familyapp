@@ -66,7 +66,6 @@ import {
   verifyOAuthState,
 } from "@/lib/google-photos-oauth-state";
 import {
-  completeGooglePhotosImportAction,
   disconnectGooglePhotosAction,
   importOneGooglePhotoAction,
   listGooglePhotosImportAction,
@@ -243,7 +242,7 @@ describe("import actions", () => {
     });
   });
 
-  it("happy path: start → poll → complete imports with google_picker source", async () => {
+  it("happy path: start → poll → list → import-one lands a google_picker photo", async () => {
     stubConfiguredEnv();
     const personId = await makePerson("Rosa");
     const familyId = await makeFamily("Esposito", personId);
@@ -295,11 +294,30 @@ describe("import actions", () => {
     const polled = await pollGooglePhotosImportAction("sess-1");
     expect(polled).toEqual({ ok: true, mediaItemsSet: true });
 
+    const listed = await listGooglePhotosImportAction("sess-1");
+    expect(listed).toEqual({
+      ok: true,
+      count: 1,
+      items: [
+        {
+          id: "p1",
+          mimeType: "image/png",
+          filename: "a.png",
+          baseUrl: "https://lh3.googleusercontent.com/p/a",
+        },
+      ],
+      skipped: 1,
+      rejected: 0,
+    });
+
     const fd = new FormData();
-    fd.append("sessionId", "sess-1");
+    fd.append("id", "p1");
+    fd.append("mimeType", "image/png");
+    fd.append("filename", "a.png");
+    fd.append("baseUrl", "https://lh3.googleusercontent.com/p/a");
     fd.append("familyIds", familyId);
-    const completed = await completeGooglePhotosImportAction(fd);
-    expect(completed).toEqual({ ok: true, added: 1, failed: 0, skipped: 1, rejected: 0 });
+    const imported = await importOneGooglePhotoAction(fd);
+    expect("ok" in imported && imported.ok).toBe(true);
 
     const album = await listAlbumPhotos(runtimeDb, account(personId), familyId);
     expect(album).toHaveLength(1);

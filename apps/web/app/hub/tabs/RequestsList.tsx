@@ -10,6 +10,7 @@
  */
 import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
+import styles from "./RequestsList.module.css";
 
 export interface RequestRow {
   joinRequestId: string;
@@ -29,31 +30,6 @@ interface RequestsListProps {
   decline: (formData: FormData) => Promise<void>;
 }
 
-const rowStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: 20,
-  background: "var(--surface-card)",
-  border: "var(--border-width) solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "var(--shadow-card)",
-  padding: "20px 24px",
-} as const;
-
-const familyLabelStyle = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-label)",
-  letterSpacing: "var(--tracking-mono)",
-  color: "var(--support)",
-  marginBottom: 4,
-} as const;
-
-const nameStyle = {
-  fontFamily: "var(--font-story)",
-  fontSize: "var(--text-story)",
-  color: "var(--text-body)",
-} as const;
-
 /** First letter of the requester's name, for the avatar circle. */
 function initialOf(name: string): string {
   return (name.trim()[0] ?? "?").toUpperCase();
@@ -61,23 +37,7 @@ function initialOf(name: string): string {
 
 function Avatar({ name }: { name: string }) {
   return (
-    <span
-      aria-hidden="true"
-      style={{
-        flex: "0 0 auto",
-        width: 48,
-        height: 48,
-        borderRadius: "50%",
-        background: "var(--accent-soft)",
-        color: "var(--accent-strong)",
-        fontFamily: "var(--font-story)",
-        fontSize: "var(--text-story)",
-        fontWeight: 600,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
+    <span aria-hidden="true" className={styles.avatar}>
       {initialOf(name)}
     </span>
   );
@@ -86,63 +46,24 @@ function Avatar({ name }: { name: string }) {
 export function RequestsList({ pending, decided, approve, decline }: RequestsListProps) {
   if (pending.length === 0 && decided.length === 0) {
     return (
-      <div
-        style={{
-          marginTop: 24,
-          background: "var(--surface-card)",
-          border: "var(--border-width) solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          padding: 30,
-          textAlign: "center",
-        }}
-      >
-        <p
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "var(--text-story)",
-            color: "var(--text-muted)",
-            margin: 0,
-          }}
-        >
-          {hub.requests.empty}
-        </p>
+      <div className={styles.empty}>
+        <p className={styles.emptyText}>{hub.requests.empty}</p>
       </div>
     );
   }
 
   return (
-    <ul
-      style={{
-        listStyle: "none",
-        padding: 0,
-        margin: "24px 0 0",
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-      }}
-    >
+    <ul className={styles.list}>
       {pending.map((r) => (
-        <li key={r.joinRequestId} style={rowStyle}>
+        <li key={r.joinRequestId} className={styles.row}>
           <Avatar name={r.requesterName} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={familyLabelStyle}>{r.familyName.toUpperCase()}</div>
-            <div style={nameStyle}>{r.requesterName}</div>
-            {r.message ? (
-              <p
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-ui-sm)",
-                  color: "var(--text-meta)",
-                  lineHeight: "var(--leading-body)",
-                  margin: "8px 0 0",
-                }}
-              >
-                “{r.message}”
-              </p>
-            ) : null}
+          <div className={styles.content}>
+            <div className={styles.familyLabel}>{r.familyName.toUpperCase()}</div>
+            <div className={styles.name}>{r.requesterName}</div>
+            {r.message ? <p className={styles.message}>“{r.message}”</p> : null}
           </div>
           {/* Decline (ghost) before Approve (primary), per design. */}
-          <div style={{ display: "flex", gap: 10, flex: "0 0 auto" }}>
+          <div className={styles.actions}>
             <form action={decline}>
               <input type="hidden" name="joinRequestId" value={r.joinRequestId} />
               <ActionButton
@@ -162,22 +83,13 @@ export function RequestsList({ pending, decided, approve, decline }: RequestsLis
       {decided.map((r) => {
         const approved = r.status === "approved";
         return (
-          <li key={r.joinRequestId} style={rowStyle}>
+          <li key={r.joinRequestId} className={styles.row}>
             <Avatar name={r.requesterName} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={familyLabelStyle}>{r.familyName.toUpperCase()}</div>
-              <div style={nameStyle}>{r.requesterName}</div>
+            <div className={styles.content}>
+              <div className={styles.familyLabel}>{r.familyName.toUpperCase()}</div>
+              <div className={styles.name}>{r.requesterName}</div>
             </div>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-label)",
-                letterSpacing: "var(--tracking-mono)",
-                textTransform: "uppercase",
-                color: approved ? "var(--accent-strong)" : "var(--support)",
-                flex: "0 0 auto",
-              }}
-            >
+            <span className={styles.status} data-approved={approved ? "true" : "false"}>
               {(approved
                 ? r.viaInvitation
                   ? hub.requests.statusApprovedByInvitation
