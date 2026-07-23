@@ -27,6 +27,7 @@ import { hydrateFamilyListPeopleIdentity, resolveListPersonNode } from "@/lib/fa
 import type { SavePersonEditResult } from "../tree/actions";
 import type { PersonInviteFormState, PersonInviteTargetsResult } from "../tree/person-invite-actions";
 import { PersonDetails } from "../tree/person-details";
+import sheetStyles from "../tree/PersonDetails.module.css";
 import { FamilyTab } from "./FamilyTab";
 
 // next/navigation — FamilyTab's onSaved calls router.refresh(); FamilyChips also reads
@@ -276,16 +277,18 @@ it("closing the sheet (×) clears the selection", async () => {
   expect(screen.queryByTestId("tree-person-details")).toBeNull();
 });
 
-it("opens the sheet with position:fixed (viewport placement) so a long List never parks it off-screen (#330)", async () => {
+it("opens the sheet with viewport placement so a long List never parks it off-screen (#330)", async () => {
   // PersonDetails' host on Tree is a fixed-height canvas frame, so `position: absolute` (its default)
   // always lands the sheet in view. List's host instead grows with the (potentially long, scrollable)
   // row list, so the sheet would park itself far below the viewport for a lower row. FamilyTab must
-  // pass `placement="viewport"` on the List path so the sheet stays `position: fixed` in view.
+  // pass `placement="viewport"` on the List path; PersonDetails.module.css maps that to
+  // `position: fixed` via `[data-placement="viewport"]` (jsdom does not apply module CSS, so we
+  // assert the attr + class rather than `style.position`).
   renderListTab();
   fireEvent.click(screen.getByTestId("family-list-row-marco"));
   const sheet = await screen.findByTestId("tree-person-details");
   expect(sheet.getAttribute("data-placement")).toBe("viewport");
-  expect(sheet.style.position).toBe("fixed");
+  expect(sheet.className).toContain(sheetStyles.sheet);
 });
 
 it("#330 fix — Edit→Save from List sends the person's REAL birthYear/sex, not synthesized null/unknown", async () => {

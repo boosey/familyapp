@@ -1,0 +1,230 @@
+/*
+ * PersonDetails — tree/List details sheet. Base chrome is token-driven & skin-neutral (reproduces
+ * the former inline values, then tightens density). Intentionally FLAT under Scrapbook: no tape,
+ * tilt, sticker chips, highlighter, or shadow-shelf (issue #223 / DECISIONS.md). Tokens still
+ * re-skin surfaces/type/radii; structural signatures stay off so the sheet reads with the tree
+ * cards, not StoryCard. See apps/web/app/_skins/CSS-MODULES.md.
+ */
+
+.sheet {
+  top: 12px;
+  right: 12px;
+  width: 280px;
+  max-width: calc(100% - 24px);
+  /* Height cap (ADR-0024 Round B): tall edit form scrolls inside the panel. */
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  /* Flat — no --shadow-card shelf / --shadow-lift (issue #223). Matches person-node cards. */
+  box-shadow: none;
+  padding: var(--space-4);
+  z-index: 2;
+}
+
+.sheet[data-placement="anchored"] {
+  position: absolute;
+}
+
+.sheet[data-placement="viewport"] {
+  position: fixed;
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.title {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+  margin: 0 24px 4px 0;
+  font-style: normal;
+}
+
+.titleAnon {
+  composes: title;
+  font-style: italic;
+}
+
+.meta {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.unknownNote {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+  margin: 0 0 14px;
+}
+
+.actionRow {
+  margin-top: 10px;
+}
+
+.invitePending {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 10px 0 0;
+}
+
+/* Compact primary/secondary — denser than KindredButton "small" pills in a 280px sheet. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.buttonPrimary {
+  composes: button;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.buttonSecondary {
+  composes: button;
+  border: var(--border-width) solid var(--border-strong);
+  background: transparent;
+  color: var(--text-body);
+}
+
+.buttonSecondary:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.nav {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--accent-strong);
+  text-decoration: none;
+  background: transparent;
+}
+
+.navLink:hover {
+  background: var(--accent-soft);
+}
+
+.navLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Edit form ------------------------------------------------------------------------------- */
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin: 0 20px 0 0;
+}
+
+.formTitle {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+  margin: 0;
+}
+
+.field {
+  display: block;
+}
+
+.labelText {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  color: var(--text-meta);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-page);
+  color: var(--text-body);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.formError {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--text-danger);
+  margin: 0;
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}

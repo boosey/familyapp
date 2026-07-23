@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import type { GovernableKinEdge, TreeNode } from "@chronicle/core";
 import { hub } from "@/app/_copy";
 import styles from "./GovernableEdgeList.module.css";
+import sheetStyles from "./PersonDetails.module.css";
 import { PersonDetails } from "./person-details";
 import type { PersonEditabilityResult, SavePersonEditResult } from "./actions";
 
@@ -32,6 +33,7 @@ import { affirmEdgeAction, correctEdgeAction, denyEdgeAction, hideEdgeAction } f
 
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(here, "GovernableEdgeList.module.css"), "utf8");
+const sheetCss = readFileSync(join(here, "PersonDetails.module.css"), "utf8");
 
 function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
   return {
@@ -255,5 +257,37 @@ describe("PersonDetails gov edges — Scrapbook signature (#265)", () => {
     expect(css).toContain(':global(:root[data-reduce-motion="on"])');
     expect(css).toContain(':global(:root[data-skin="scrapbook"] [data-tone="solemn"])');
     expect(css).toMatch(/transform:\s*none/);
+  });
+});
+
+describe("PersonDetails sheet chrome — flat token module (#223)", () => {
+  it("mounts the sheet on the hashed module class (no Phase-1 inline chrome)", async () => {
+    render(
+      <PersonDetails
+        node={node({ personId: "bob", displayName: "Bob" })}
+        relationToViewer={null}
+        familyId="F"
+        onClose={() => {}}
+        checkEditable={editableNo}
+        saveEdit={saveOk}
+      />,
+    );
+    const sheet = await screen.findByTestId("tree-person-details");
+    expect(sheet.className).toContain(sheetStyles.sheet);
+  });
+
+  it("PersonDetails.module.css is token-driven, flat, and free of Scrapbook decorative signatures", () => {
+    expect(sheetCss).toContain("var(--surface-card)");
+    expect(sheetCss).toContain("var(--border)");
+    expect(sheetCss).toContain("var(--radius-lg)");
+    expect(sheetCss).toContain("box-shadow: none");
+    // Contract tokens only — the old inline --shadow-lg was not in the skin contract.
+    expect(sheetCss).not.toContain("--shadow-lg");
+    expect(sheetCss).not.toContain("var(--shadow-card)");
+    expect(sheetCss).not.toContain("var(--shadow-lift)");
+    expect(sheetCss).not.toContain("var(--tape-bg)");
+    expect(sheetCss).not.toMatch(/--tilt/);
+    expect(sheetCss).not.toContain("var(--highlighter)");
+    expect(sheetCss).not.toContain("var(--sticker-");
   });
 });

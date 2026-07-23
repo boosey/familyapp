@@ -47,3 +47,6 @@ blob-report/
 
 # Brainstorming visual-companion mockups
 .superpowers/
+
+# graphify knowledge graph outputs
+graphify-out/

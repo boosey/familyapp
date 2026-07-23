@@ -3,6 +3,9 @@
  * PersonDetails — the details sheet opened by a DOUBLE-click/double-tap on a card (tree Slice A, and
  * Slice C's edit mode, #4/#5). Replaces the deleted PersonPanel.
  *
+ * Chrome lives in PersonDetails.module.css (token-driven, skin-neutral). Scrapbook stays deliberately
+ * FLAT here — no tape/tilt/stickers/shadow-shelf (issue #223); tokens still re-skin surfaces/type.
+ *
  * Slice A gave it a read-only view (name, dates, relation, nav links). Slice C (ADR-0021) adds an
  * EDIT affordance and an inline edit form, shown ONLY when the server says the viewer may edit this
  * person. The editability predicate (`canEditPerson`) is NEVER shipped to the client: on open we call
@@ -20,10 +23,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { hub } from "@/app/_copy";
 import type { GovernableKinEdge, KinRelation, PersonSex, TreeNode } from "@chronicle/core";
-import { KindredButton } from "@/app/_kindred";
 import { KinEdgeControls } from "./kin-edge-controls";
 import { actableEdgesForPerson, edgeSentence, governableEdgeKey } from "./edge-sentence";
 import govStyles from "./GovernableEdgeList.module.css";
+import styles from "./PersonDetails.module.css";
 import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
 import {
   personEditabilityAction,
@@ -168,42 +171,14 @@ export function PersonDetails({
       aria-label={name}
       data-testid="tree-person-details"
       data-placement={placement}
-      style={{
-        position: placement === "viewport" ? "fixed" : "absolute",
-        top: 12,
-        right: 12,
-        width: 280,
-        maxWidth: "calc(100% - 24px)",
-        // Height cap (ADR-0024 Round B): this node-anchored side panel (NOT a centered modal — it stays
-        // a side panel this pass) needs its own cap so a tall edit form scrolls INSIDE the panel instead
-        // of running off the bottom of the canvas. Mirrors the tree canvas' 12px top/right inset.
-        maxHeight: "calc(100dvh - 24px)",
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        background: "var(--surface-card)",
-        border: "var(--border-width) solid var(--border)",
-        borderRadius: "var(--radius-lg)",
-        boxShadow: "var(--shadow-lg, 0 8px 30px rgba(0,0,0,0.12))",
-        padding: 20,
-        zIndex: 2,
-      }}
+      className={styles.sheet}
     >
       <button
         type="button"
         onClick={onClose}
         aria-label={hub.tree.detailsClose}
         data-testid="tree-details-close"
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 12,
-          border: "none",
-          background: "transparent",
-          cursor: "pointer",
-          fontSize: "1.25rem",
-          lineHeight: 1,
-          color: "var(--text-muted)",
-        }}
+        className={styles.close}
       >
         {"×"}
       </button>
@@ -222,56 +197,24 @@ export function PersonDetails({
         />
       ) : (
         <>
-          <h2
-            style={{
-              fontFamily: "var(--font-story)",
-              fontSize: "var(--text-story)",
-              fontWeight: 500,
-              color: "var(--text-body)",
-              margin: "0 24px 4px 0",
-              fontStyle: anon ? "italic" : "normal",
-            }}
-          >
-            {name}
-          </h2>
+          <h2 className={anon ? styles.titleAnon : styles.title}>{name}</h2>
 
           {(relation || dates) && (
-            <p
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                color: "var(--text-muted)",
-                margin: "0 0 4px",
-              }}
-            >
-              {[relation, dates].filter(Boolean).join(" · ")}
-            </p>
+            <p className={styles.meta}>{[relation, dates].filter(Boolean).join(" · ")}</p>
           )}
 
-          {!hasName && !anon && (
-            <p
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "0.7rem",
-                color: "var(--text-meta)",
-                margin: "0 0 18px",
-              }}
-            >
-              {hub.tree.unknownRelative}
-            </p>
-          )}
+          {!hasName && !anon && <p className={styles.unknownNote}>{hub.tree.unknownRelative}</p>}
 
           {editable && (
-            <div style={{ marginTop: 12 }}>
-              <KindredButton
-                variant="primary"
-                size="small"
+            <div className={styles.actionRow}>
+              <button
                 type="button"
                 data-testid="tree-details-edit"
+                className={styles.buttonPrimary}
                 onClick={() => setEditing(true)}
               >
                 {hub.tree.editButton}
-              </KindredButton>
+              </button>
             </div>
           )}
 
@@ -279,28 +222,19 @@ export function PersonDetails({
               when pending, nothing for not-applicable. Clicking opens the in-place
               person-bound Invite modal (the caller wires `onInvite` to open it). */}
           {onInvite && node.inviteStatus === "invitable" && (
-            <div style={{ marginTop: 12 }}>
-              <KindredButton
-                variant="secondary"
-                size="small"
+            <div className={styles.actionRow}>
+              <button
                 type="button"
                 data-testid="tree-details-invite"
+                className={styles.buttonSecondary}
                 onClick={() => onInvite(node)}
               >
                 {hub.tree.inviteButton}
-              </KindredButton>
+              </button>
             </div>
           )}
           {node.inviteStatus === "pending" && (
-            <p
-              data-testid="tree-details-invite-pending"
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--text-ui-sm)",
-                color: "var(--text-muted)",
-                margin: "12px 0 0",
-              }}
-            >
+            <p data-testid="tree-details-invite-pending" className={styles.invitePending}>
               {hub.tree.invitePendingNote}
             </p>
           )}
@@ -334,22 +268,16 @@ export function PersonDetails({
             </section>
           )}
 
-          <nav style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <nav className={styles.nav}>
             {/* Slice B: all three contribution links are live destinations on the per-person page. */}
-            <Link href={storiesHref} style={{ textDecoration: "none" }} data-testid="tree-details-stories">
-              <KindredButton variant="secondary" size="small" fullWidth type="button">
-                {hub.tree.detailsStories}
-              </KindredButton>
+            <Link href={storiesHref} className={styles.navLink} data-testid="tree-details-stories">
+              {hub.tree.detailsStories}
             </Link>
-            <Link href={photosHref} style={{ textDecoration: "none" }} data-testid="tree-details-photos">
-              <KindredButton variant="secondary" size="small" fullWidth type="button">
-                {hub.tree.detailsPhotos}
-              </KindredButton>
+            <Link href={photosHref} className={styles.navLink} data-testid="tree-details-photos">
+              {hub.tree.detailsPhotos}
             </Link>
-            <Link href={mentionsHref} style={{ textDecoration: "none" }} data-testid="tree-details-mentions">
-              <KindredButton variant="secondary" size="small" fullWidth type="button">
-                {hub.tree.detailsMentions}
-              </KindredButton>
+            <Link href={mentionsHref} className={styles.navLink} data-testid="tree-details-mentions">
+              {hub.tree.detailsMentions}
             </Link>
           </nav>
         </>
@@ -439,26 +367,6 @@ function PersonEditForm({
     }
   };
 
-  const labelStyle: React.CSSProperties = {
-    fontFamily: "var(--font-ui)",
-    fontSize: "0.72rem",
-    fontWeight: 600,
-    color: "var(--text-meta)",
-    display: "block",
-    marginBottom: 3,
-  };
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    boxSizing: "border-box",
-    fontFamily: "var(--font-ui)",
-    fontSize: "0.85rem",
-    padding: "6px 8px",
-    borderRadius: "var(--radius-md, 8px)",
-    border: "var(--border-width) solid var(--border)",
-    background: "var(--surface-page)",
-    color: "var(--text-body)",
-  };
-
   return (
     <form
       data-testid="tree-person-edit-form"
@@ -466,51 +374,41 @@ function PersonEditForm({
         e.preventDefault();
         void submit();
       }}
-      style={{ display: "grid", gap: 12, margin: "0 20px 0 0" }}
+      className={styles.form}
     >
-      <h2
-        style={{
-          fontFamily: "var(--font-story)",
-          fontSize: "var(--text-story)",
-          fontWeight: 500,
-          color: "var(--text-body)",
-          margin: 0,
-        }}
-      >
-        {hub.tree.editHeading}
-      </h2>
+      <h2 className={styles.formTitle}>{hub.tree.editHeading}</h2>
 
-      <label style={{ display: "block" }}>
-        <span style={labelStyle}>{hub.tree.editName}</span>
+      <label className={styles.field}>
+        <span className={styles.labelText}>{hub.tree.editName}</span>
         <input
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder={hub.tree.editNamePlaceholder}
           data-testid="tree-edit-name"
-          style={inputStyle}
+          className={styles.input}
         />
       </label>
 
-      <label style={{ display: "block" }}>
-        <span style={labelStyle}>{hub.tree.editBirthYear}</span>
+      <label className={styles.field}>
+        <span className={styles.labelText}>{hub.tree.editBirthYear}</span>
         <input
           type="number"
           inputMode="numeric"
           value={birthYear}
           onChange={(e) => setBirthYear(e.target.value)}
           data-testid="tree-edit-birth-year"
-          style={inputStyle}
+          className={styles.input}
         />
       </label>
 
-      <label style={{ display: "block" }}>
-        <span style={labelStyle}>{hub.tree.editSex}</span>
+      <label className={styles.field}>
+        <span className={styles.labelText}>{hub.tree.editSex}</span>
         <select
           value={sex}
           onChange={(e) => setSex(e.target.value as PersonSex)}
           data-testid="tree-edit-sex"
-          style={inputStyle}
+          className={styles.input}
         >
           <option value="unknown">{hub.tree.editSexUnknown}</option>
           <option value="female">{hub.tree.editSexFemale}</option>
@@ -518,13 +416,13 @@ function PersonEditForm({
         </select>
       </label>
 
-      <label style={{ display: "block" }}>
-        <span style={labelStyle}>{hub.tree.editLifeStatus}</span>
+      <label className={styles.field}>
+        <span className={styles.labelText}>{hub.tree.editLifeStatus}</span>
         <select
           value={lifeStatus}
           onChange={(e) => setLifeStatus(e.target.value as "living" | "deceased")}
           data-testid="tree-edit-life-status"
-          style={inputStyle}
+          className={styles.input}
         >
           <option value="living">{hub.tree.editLifeStatusLiving}</option>
           <option value="deceased">{hub.tree.editLifeStatusDeceased}</option>
@@ -532,54 +430,43 @@ function PersonEditForm({
       </label>
 
       {lifeStatus === "deceased" && (
-        <label style={{ display: "block" }}>
-          <span style={labelStyle}>{hub.tree.editDeathYear}</span>
+        <label className={styles.field}>
+          <span className={styles.labelText}>{hub.tree.editDeathYear}</span>
           <input
             type="number"
             inputMode="numeric"
             value={deathYear}
             onChange={(e) => setDeathYear(e.target.value)}
             data-testid="tree-edit-death-year"
-            style={inputStyle}
+            className={styles.input}
           />
         </label>
       )}
 
       {error && (
-        <p
-          role="alert"
-          data-testid="tree-edit-error"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "0.75rem",
-            color: "var(--text-danger)",
-            margin: 0,
-          }}
-        >
+        <p role="alert" data-testid="tree-edit-error" className={styles.formError}>
           {error}
         </p>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-        <KindredButton
-          variant="primary"
-          size="small"
+      <div className={styles.formActions}>
+        <button
           type="submit"
           disabled={saving}
           data-testid="tree-edit-save"
+          className={styles.buttonPrimary}
         >
           {saving ? hub.tree.editSaving : hub.tree.editSave}
-        </KindredButton>
-        <KindredButton
-          variant="secondary"
-          size="small"
+        </button>
+        <button
           type="button"
           disabled={saving}
           onClick={onCancel}
           data-testid="tree-edit-cancel"
+          className={styles.buttonSecondary}
         >
           {hub.tree.editCancel}
-        </KindredButton>
+        </button>
       </div>
     </form>
   );
