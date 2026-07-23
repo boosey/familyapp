@@ -34,7 +34,8 @@ import { CollapsingHeader } from "./CollapsingHeader";
 import { loadAccountMenu } from "@/app/_kindred/load-account-menu";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
-import { parseFamilyFilter, deriveSingleScope, FAMILIES_PARAM } from "@/lib/family-filter";
+import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
+import { seedDesignatorFamily } from "@/lib/family-designator";
 import { inviteTabVisible, requestsTabVisible, familyTabBadge } from "@/lib/hub-tabs";
 import { isBiographicalProfileComplete } from "@/lib/intake-profile";
 import { PendingInvitesBanner } from "./PendingInvitesBanner";
@@ -149,11 +150,21 @@ export default async function HubPage({
       : null;
   const familyView = viewParam === "list" ? "list" : "tree";
   // #144/#158: the member-only Invite entry point rides the shared Family selector row (<FamilySurfaceNav>).
-  // Same target + gate as before — you invite INTO a family, so it shows only for a viewer with ≥1
-  // family; `?families=` is preserved so the invite lands on the current scope. `undefined` renders no
-  // button.
-  const familyInviteHref = inviteTabVisible(activeFamilies.length)
-    ? `/hub?tab=invite${familiesRaw ? `&${FAMILIES_PARAM}=${encodeURIComponent(familiesRaw)}` : ""}`
+  // Same gate as before — you invite INTO a family, so it shows only for a viewer with ≥1 family.
+  // Opens the cold Invite modal (same chrome as person-bound Invite); `undefined` renders no button.
+  const designatorFamilies = activeFamilies.map((f) => ({
+    id: f.familyId,
+    name: f.familyName,
+    shortName: f.familyShortName,
+  }));
+  const familyInvite = inviteTabVisible(activeFamilies.length)
+    ? {
+        families: designatorFamilies,
+        seededFamily: seedDesignatorFamily(
+          filter,
+          designatorFamilies.map((f) => f.id),
+        ),
+      }
     : undefined;
 
   const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches, accountMenu] = await Promise.all([
@@ -356,7 +367,7 @@ export default async function HubPage({
               familiesParam={familiesRaw}
               showRequests={showRequestsItem}
               requestsBadge={pendingRequests.length}
-              inviteHref={familyInviteHref}
+              invite={familyInvite}
             />
           )}
           {activeTab === "questions" && <QuestionsTab asks={pendingAsks} draftsByAskId={draftsByAskId} />}
@@ -409,7 +420,7 @@ export default async function HubPage({
                   familiesParam: familiesRaw,
                   showRequests: showRequestsItem,
                   requestsBadge: pendingRequests.length,
-                  inviteHref: familyInviteHref,
+                  invite: familyInvite,
                 }}
               />
             ) : (
@@ -457,7 +468,7 @@ export default async function HubPage({
                 familiesParam: familiesRaw,
                 showRequests: showRequestsItem,
                 requestsBadge: pendingRequests.length,
-                inviteHref: familyInviteHref,
+                invite: familyInvite,
               }}
             />
           )}

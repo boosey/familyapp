@@ -25,7 +25,7 @@ import { getRuntime } from "@/lib/runtime";
 import { hub } from "@/app/_copy";
 import { pendingRequestChipBadges, requestsInScope } from "@/lib/hub-tabs";
 import { FamilyChips } from "@/app/hub/FamilyChips";
-import { FamilySurfaceNav } from "@/app/hub/FamilySurfaceNav";
+import { FamilySurfaceNav, type FamilySurfaceInvite } from "@/app/hub/FamilySurfaceNav";
 import { InfoTooltip } from "@/app/hub/InfoTooltip";
 import familyStyles from "./FamilyTab.module.css";
 import { RequestsList, type RequestRow } from "./RequestsList";
@@ -71,7 +71,7 @@ export async function RequestsTab({
     familiesParam: string | null;
     showRequests: boolean;
     requestsBadge?: number;
-    inviteHref?: string;
+    invite?: FamilySurfaceInvite;
   };
 }) {
   const { db, auth } = await getRuntime();
@@ -150,7 +150,7 @@ export async function RequestsTab({
         familiesParam={surface.familiesParam}
         showRequests={surface.showRequests}
         requestsBadge={surface.requestsBadge}
-        inviteHref={surface.inviteHref}
+        invite={surface.invite}
         row2Left={familyChips}
       />
 

@@ -73,7 +73,10 @@ const SURFACE = {
   familiesParam: null as string | null,
   showRequests: true,
   requestsBadge: 1,
-  inviteHref: "/hub?tab=invite",
+  invite: {
+    families: [{ id: "fam-a", name: "Esposito" }],
+    seededFamily: "fam-a" as string | null,
+  },
 };
 
 describe("RequestsTab → FamilyChips props are serializable (RSC-boundary regression)", () => {
