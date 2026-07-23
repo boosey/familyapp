@@ -53,7 +53,7 @@ it("does not wrap the capture subtree in data-tone=\"solemn\"", () => {
   expect(container.querySelector('[data-tone="solemn"]')).toBeNull();
 });
 
-it("uses the compact capture mic size on take-0 entry", () => {
+it("uses the compact footer mic size on take-0 entry (same chrome as composing)", () => {
   render(
     <ComposingEditor
       ask={null}
@@ -64,11 +64,11 @@ it("uses the compact capture mic size on take-0 entry", () => {
     />,
   );
   const btn = screen.getByRole("button", { name: "Tap to speak" });
-  expect(btn.style.width).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
-  expect(btn.style.height).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
+  expect(btn.style.width).toBe(`${CAPTURE_VOICE_SIZE_FOOTER_PX}px`);
+  expect(btn.style.height).toBe(`${CAPTURE_VOICE_SIZE_FOOTER_PX}px`);
 });
 
-it("capture voice sizes stay single-sourced (footer smaller than entry)", () => {
+it("capture voice sizes stay single-sourced (footer smaller than legacy entry)", () => {
   expect(CAPTURE_VOICE_SIZE_FOOTER_PX).toBeLessThan(CAPTURE_VOICE_SIZE_ENTRY_PX);
   expect(CAPTURE_VOICE_SIZE_ENTRY_PX).toBe(120);
   expect(CAPTURE_VOICE_SIZE_FOOTER_PX).toBe(96);

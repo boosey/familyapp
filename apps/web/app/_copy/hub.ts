@@ -785,7 +785,6 @@ export const hub = {
     galleryAlt: (caption: string | null) => caption ?? "Story photo",
     // Editor (composer review phase).
     editorHeading: "Photos",
-    editorHelp: "Add photos from your album to illustrate this story.",
     attachedHeading: "On this story",
     pickerHeading: "Add from your album",
     noAlbumPhotos: "No album photos yet. Add some in the Album tab first.",

@@ -90,31 +90,6 @@ export function TagInput({
 
   return (
     <div ref={containerRef} style={wrap}>
-      {tokens.length > 0 && (
-        <ul style={chipRow}>
-          {tokens.map((t) => (
-            <li key={tokenKey(t)} style={t.kind === "family" ? familyChip : chip}>
-              <span title={t.kind === "family" ? hub.tagInput.familyChipTitle : undefined}>
-                {t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)}
-              </span>
-              {nonRemovableTokenKeys?.has(tokenKey(t)) ? null : (
-                <button
-                  type="button"
-                  aria-label={`${hub.tagInput.remove} ${
-                    t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)
-                  }`}
-                  onClick={() => onRemove(t)}
-                  disabled={disabled}
-                  style={chipRemove}
-                >
-                  ✕
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
       <input
         type="text"
         value={query}
@@ -136,6 +111,31 @@ export function TagInput({
         }}
         style={field}
       />
+
+      {/* Chips below the entry field. Always reserve one row so selecting a family (which mirrors
+          into a tag chip) does not shove Share/Finish down on the confirmation screen. */}
+      <ul style={chipRow}>
+        {tokens.map((t) => (
+          <li key={tokenKey(t)} style={t.kind === "family" ? familyChip : chip}>
+            <span title={t.kind === "family" ? hub.tagInput.familyChipTitle : undefined}>
+              {t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)}
+            </span>
+            {nonRemovableTokenKeys?.has(tokenKey(t)) ? null : (
+              <button
+                type="button"
+                aria-label={`${hub.tagInput.remove} ${
+                  t.kind === "text" ? t.value : t.kind === "person" ? t.displayName : familyTokenLabel(t)
+                }`}
+                onClick={() => onRemove(t)}
+                disabled={disabled}
+                style={chipRemove}
+              >
+                ✕
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
 
       {showDropdown && (
         <div role="group" aria-label={hub.tagInput.label} style={dropdown}>
@@ -198,7 +198,14 @@ export function TagInput({
 
 const wrap: React.CSSProperties = { position: "relative", display: "grid", gap: 10 };
 const chipRow: React.CSSProperties = {
-  listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: 8,
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  // One chip-row tall even when empty — avoids Share jumping when the first family tag appears.
+  minHeight: 34,
 };
 const chip: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6,

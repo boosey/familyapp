@@ -105,21 +105,22 @@ afterEach(() => {
 });
 
 describe("StoryComposer capture (tell mode)", () => {
-  it("in tell mode with no ask, shows no question header and offers a type toggle", () => {
+  it("in tell mode with no ask, shows the edit field and a type toggle from the start", () => {
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
     // No answer-mode question header ("<NAME> ASKED") in a self-initiated telling.
     expect(screen.queryByText(/asked/i)).toBeNull();
+    expect(screen.getByRole("textbox", { name: /your story, in your words/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: hub.compose.typeIt })).toBeTruthy();
   });
 
   it("type mode submits text via composeStoryAction", async () => {
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
 
-    // Switch to the typed path.
+    // Switch to the typed path (focuses the already-visible edit field).
     fireEvent.click(screen.getByRole("button", { name: hub.compose.typeIt }));
 
     // Type into the textarea and submit.
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const textarea = screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "The summer we drove to the coast." } });
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
@@ -136,7 +137,7 @@ describe("StoryComposer capture (tell mode)", () => {
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: hub.compose.typeIt }));
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const textarea = screen.getByRole("textbox", { name: /your story, in your words/i }) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "The summer we drove to the coast." } });
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
 
@@ -276,7 +277,7 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
     expect(form.get("audienceTier")).toBe("family");
   });
 
-  it("BLOCKS Share with an empty required selection — shows the guard, never calls the action", async () => {
+  it("BLOCKS Share with an empty required selection — button disabled, never calls the action", async () => {
     render(
       <StoryComposer
         mode="tell"
@@ -287,11 +288,9 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
         familyChoiceRequired
       />,
     );
-    // Nothing pre-checked (ambiguous "all"-with-several); Share must not proceed.
-    fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/choose at least one family for this story/i)).toBeTruthy(),
-    );
+    const share = screen.getByRole("button", { name: /share with family/i }) as HTMLButtonElement;
+    expect(share.disabled).toBe(true);
+    fireEvent.click(share);
     expect(shareAnswerAction).not.toHaveBeenCalled();
   });
 
@@ -308,7 +307,9 @@ describe("StoryComposer share-step multi-family picker (Task 4)", () => {
     );
     // Pick a family, then Share proceeds to the action (which carries the chosen id).
     fireEvent.click(pickerChips()[0]!);
-    fireEvent.click(screen.getByRole("button", { name: /share with family/i }));
+    const share = screen.getByRole("button", { name: /share with family/i }) as HTMLButtonElement;
+    expect(share.disabled).toBe(false);
+    fireEvent.click(share);
     await waitFor(() => expect(shareAnswerAction).toHaveBeenCalledOnce());
     const form = shareAnswerAction.mock.calls[0]![0] as FormData;
     expect(form.getAll("familyIds")).toEqual(["fam-a"]);

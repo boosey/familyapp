@@ -374,7 +374,6 @@ export function StoryPhotosEditor({
   return (
     <section style={{ marginBottom: 32 }}>
       <p style={label}>{hub.storyImages.editorHeading}</p>
-      <p style={help}>{hub.storyImages.editorHelp}</p>
 
       {error ? (
         <p aria-live="polite" style={errorText}>

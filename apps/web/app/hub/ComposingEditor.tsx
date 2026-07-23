@@ -53,7 +53,6 @@ import {
 import { useProseHistory } from "@/lib/use-prose-history";
 import { clog } from "@/lib/clog";
 import {
-  CAPTURE_VOICE_SIZE_ENTRY_PX,
   CAPTURE_VOICE_SIZE_FOOTER_PX,
 } from "@/lib/constants";
 import styles from "./ComposingEditor.module.css";
@@ -373,6 +372,9 @@ export function ComposingEditor({
   // take 0, where re-seeding from draft.prose is correct). The hook returns a MEMOIZED handle (slice 10
   // forward-risk (iii)), so putting it in callback deps below doesn't churn them each render.
   const history = useProseHistory(proseDraft, setProseDraft, draft?.storyId);
+  // Entry (take 0) types into textDraft before a draft exists — own history so Undo/Redo in the
+  // entry ProseBlock don't touch the (still-empty) composing prose.
+  const entryHistory = useProseHistory(textDraft, setTextDraft, "capture-entry");
   const proseTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   /** Speak→Type on the composing surface: focus the prose field (opens the mobile keyboard). */
@@ -882,6 +884,7 @@ export function ComposingEditor({
     // same render, so the review controls — including TagInput — are unmounted before any share I/O
     // happens; there is no window where they're both mounted and editable.)
     const isRemoving = op === "discard" || polishing;
+    const shareBlockedNoFamily = showFamilyPicker && pickedFamilies.size === 0;
     return (
       <div className={styles.composeSurface}>
         {topChrome(false)}
@@ -980,7 +983,7 @@ export function ComposingEditor({
             variant="primary"
             size="large"
             fullWidth
-            disabled={isRemoving}
+            disabled={isRemoving || shareBlockedNoFamily}
             onClick={handleShare}
           />
         </div>
@@ -1170,9 +1173,11 @@ export function ComposingEditor({
     );
   }
 
-  // ── CAPTURE ENTRY (no-draft: initial voice⇄text capture of take 0) ───────────
+  // ── CAPTURE ENTRY (no-draft: edit field + Speak/Type + record from the start) ─
+  const entryBusy = recordPhase === "listening" || recordPhase === "saving";
+  const entryHasText = textDraft.trim().length > 0;
   return (
-    <div className={styles.entryColumn}>
+    <div className={styles.composeSurface}>
       {topChrome()}
       {questionHeader}
       {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator sees
@@ -1192,52 +1197,76 @@ export function ComposingEditor({
         </p>
       )}
 
-      <ModeToggle inputMode={inputMode} setInputMode={setInputMode} />
+      <ProseBlock
+        proseDraft={textDraft}
+        setProseDraft={setTextDraft}
+        disabled={entryBusy}
+        history={entryHistory}
+        onPolish={async (text) => text}
+        showPolishButton={false}
+        showHistoryButtons={false}
+        textareaRef={proseTextareaRef}
+        label={null}
+        rows={6}
+      />
 
-      {inputMode === "voice" ? (
-        <>
+      <div className={styles.footer}>
+        <div className={styles.progressiveRow}>
+          <HubProgressiveControlRow
+            views={{
+              expanded: (
+                <ModeToggle
+                  inputMode={inputMode}
+                  setInputMode={selectInputMode}
+                  disabled={entryBusy}
+                  iconOnly={false}
+                />
+              ),
+              collapsed: (
+                <ModeToggle
+                  inputMode={inputMode}
+                  setInputMode={selectInputMode}
+                  disabled={entryBusy}
+                  iconOnly
+                />
+              ),
+            }}
+            action={{
+              labeled: (
+                <ChipButton
+                  icon={<Check size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                  label={hub.compose.continueLabel}
+                  disabled={entryBusy || !entryHasText}
+                  onClick={() => void submitText()}
+                />
+              ),
+              iconified: (
+                <ChipButton
+                  icon={<Check size={CHIP_GLYPH} strokeWidth={2} aria-hidden />}
+                  ariaLabel={hub.compose.continueLabel}
+                  disabled={entryBusy || !entryHasText}
+                  onClick={() => void submitText()}
+                />
+              ),
+            }}
+          />
+        </div>
+
+        {inputMode === "voice" ? (
           <KindredVoiceButton
             listening={recordPhase === "listening"}
             saving={recordPhase === "saving"}
-            size={CAPTURE_VOICE_SIZE_ENTRY_PX}
+            size={CAPTURE_VOICE_SIZE_FOOTER_PX}
             holdToRecord={holdToRecord}
             onHoldStart={holdToRecord ? onHoldStart : undefined}
             onHoldEnd={holdToRecord ? onHoldEnd : undefined}
             onClick={holdToRecord ? undefined : onTapToggle}
             waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
           />
-          {recordPhase === "idle" && (
-            <p
-              style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui-sm)", color: "var(--text-meta)", margin: 0, textAlign: "center", maxWidth: 300 }}
-            >
-              {hub.answer.takeYourTime}
-            </p>
-          )}
-        </>
-      ) : (
-        <div className={styles.textEntry}>
-          <label className="kin-form-label">
-            {hub.compose.textareaLabel}
-            <textarea
-              className="kin-field"
-              value={textDraft}
-              onChange={(e) => setTextDraft(e.target.value)}
-              rows={8}
-              placeholder={hub.compose.textPlaceholder}
-            />
-          </label>
-          <div className={styles.textEntryActionsWide}>
-            <KindredButton
-              label={hub.compose.continueLabel}
-              variant="primary"
-              size="large"
-              fullWidth
-              disabled={textDraft.trim().length === 0}
-              onClick={submitText}
-            />
-          </div>
-        </div>
-      )}
+        ) : null}
+      </div>
+
+      {pendingError && <ErrorLine message={pendingError} />}
     </div>
   );
   };
