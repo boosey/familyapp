@@ -87,9 +87,9 @@ function Harness({ draft: d, keyed }: { draft: DraftInfo | null; keyed: boolean 
 
 describe("StoryComposer record→review editor seeding", () => {
   it("seeds the review editor with draft.prose after the keyed remount (the fix)", () => {
-    // Record phase: draft is null, there is no prose editor yet.
+    // Record phase: draft is null; take-0 still shows an empty edit field (textDraft).
     const { rerender } = render(<Harness draft={null} keyed />);
-    expect(screen.queryByRole("textbox", { name: /your story, in your words/i })).toBeNull();
+    expect(proseEditor().value).toBe("");
 
     // router.refresh() populates the draft; the key change remounts the client component.
     rerender(<Harness draft={draft} keyed />);
