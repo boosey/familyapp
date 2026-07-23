@@ -159,7 +159,9 @@ describe("composeStoryAction — tell-a-photo subject (ADR-0009 Phase 3)", () =>
     authCtx = account(owner);
 
     const result = await composeStoryAction(
-      form({ text: "The porch swing my father built.", subjectPhotoId: photo }),
+      // Dated (stated year) so the always-on temporal probe is N/A and no follow-up evaluator is
+      // wired (mock: followUpEvaluator undefined) → the result stays `appended` for this imagery test.
+      form({ text: "In 1962, the porch swing my father built.", subjectPhotoId: photo }),
     );
     // ADR-0014 Inc 3: composeStoryAction's text path now returns `appended` (per-take model), not the
     // retired `ready` poll step. The imagery assertions below are unchanged.
@@ -222,7 +224,8 @@ describe("composeStoryAction — ask carry-forward (ADR-0009 Phase 3)", () => {
     // The target answers via the text path — carry-forward runs on the server (identity re-resolved).
     authCtx = account(target);
     const result = await composeStoryAction(
-      form({ askId: ask.id, text: "Those were taken the summer we moved." }),
+      // Dated so the always-on temporal probe is N/A (no follow-up evaluator wired) → stays `appended`.
+      form({ askId: ask.id, text: "Those were taken in 1971, the summer we moved." }),
     );
     // ADR-0014 Inc 3: composeStoryAction's text path now returns `appended` (per-take model), not the
     // retired `ready` poll step. The imagery assertions below are unchanged.
