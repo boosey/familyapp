@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Integration test: stopping a recording immediately shows the review-pending screen (audio +
- * "Polishing your words…" spinner, editor hidden) while the capture action is still in flight.
- * Mocks the browser media stack (getUserMedia, MediaRecorder, object URLs) and the server action.
+ * Integration test: stopping a recording immediately shows the review-pending screen
+ * ("Polishing your words…" spinner, editor hidden, no audio) while the capture action is still in
+ * flight. Mocks the browser media stack (getUserMedia, MediaRecorder) and the server action.
  *
  * ADR-0014 Inc 3 (Slice 5): the flag-off voice capture now resolves to the per-take `appended` step
  * (the take was transcribed/cleaned and concatenated onto the draft's working prose synchronously).
@@ -104,8 +104,6 @@ beforeEach(() => {
   (globalThis as any).MediaRecorder = FakeMediaRecorder;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).AudioContext = FakeAudioContext;
-  URL.createObjectURL = vi.fn(() => "blob:local-take");
-  URL.revokeObjectURL = vi.fn();
 });
 
 afterEach(() => {
@@ -132,15 +130,14 @@ describe("StoryComposer optimistic transition", () => {
     const mic = startVoice();
     await waitFor(() => expect(screen.getByText(/Listening/)).toBeTruthy());
 
-    // Stop: tap again → MediaRecorder.stop() → onstop → uploadRecording → localTake set.
+    // Stop: tap again → MediaRecorder.stop() → onstop → uploadRecording → take0Pending.
     stopVoice(mic);
 
-    // Review-pending appears while composeStoryAction is still pending.
+    // Review-pending appears while composeStoryAction is still pending — no audio flash.
     await waitFor(() => expect(screen.getByText(/Polishing your words/)).toBeTruthy());
     expect(composeStoryAction).toHaveBeenCalledOnce();
     expect(screen.queryByRole("textbox")).toBeNull(); // editor hidden
-    const audio = document.querySelector("audio");
-    expect(audio?.getAttribute("src")).toBe("blob:local-take");
+    expect(document.querySelector("audio")).toBeNull();
 
     // On success the action resolves to an `appended` step. The client seeds the prose and refreshes
     // once — it does NOT poll the status (an appended draft stays `draft`; there is nothing to await).
@@ -196,10 +193,9 @@ describe("StoryComposer optimistic transition", () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByText(/Polishing your words/)).toBeNull(); // spinner gone
 
-    // "Record again" clears the take (revoking its URL) and returns to the record screen.
+    // "Record again" clears the pending error and returns to the record screen.
     fireEvent.click(screen.getByRole("button", { name: /Record again/ }));
     expect(screen.getByRole("button", { name: /Tap to speak/ })).toBeTruthy();
     expect(screen.queryByText(/Could not save your recording/)).toBeNull();
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:local-take");
   });
 });
