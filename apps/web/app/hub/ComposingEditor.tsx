@@ -17,8 +17,9 @@
  *                            takes), an inline follow-up banner, and the Finish button.
  *                            `draft.state === "draft"` OR, before the first refresh, the client-optimistic
  *                            `activeStoryId` (a take-0 follow_up arrives here before any server prop).
- *   3. pending_approval    — shrunk review: confirm title + pick tier + Share/Discard (+ optional
- *                            ✨Polish). NO live append. `draft.state === "pending_approval"`.
+ *   3. pending_approval    — confirmation/share: title + prose + tags + Share/Discard (+ optional
+ *                            ✨Polish). Audience is always family. NO live append.
+ *                            `draft.state === "pending_approval"`.
  *
  * The editor stays mounted across appends and across the draft→pending_approval boundary (the page keys
  * on `draft.storyId`, stable within a compose session), so unsaved hand-edits are never remounted away.
@@ -38,7 +39,6 @@ import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { PREFERENCES } from "@/app/_kindred/preferences/registry";
 import { readPreference } from "@/app/_kindred/preferences/client";
 import { hub, common } from "@/app/_copy";
-import { relativeShortDate } from "@/lib/relative-time";
 import {
   composeStoryAction,
   recordFollowUpTakeAction,
@@ -74,11 +74,8 @@ import { ICON_SHEET_GLYPH_SIZE } from "./icon-sheet-constants";
 
 const CHIP_GLYPH = ICON_SHEET_GLYPH_SIZE;
 type RecordPhase = "idle" | "listening" | "saving" | "softfail";
-type Tier = "family" | "branch" | "public";
 type Op = "share" | "discard" | null;
 type InputMode = "voice" | "text";
-
-const TIER_ORDER: Tier[] = ["family", "branch", "public"];
 
 /** One recorded take in a (possibly multi-take) draft thread. Ordered by `position`; position 0 is
  * the initial answer, positions > 0 are follow-up takes. */
@@ -191,9 +188,8 @@ export function ComposingEditor({
   const [proseDraft, setProseDraft] = useState(draft?.prose ?? "");
   const [titleDraft, setTitleDraft] = useState(draft?.title ?? "");
   const [titleTouched, setTitleTouched] = useState(false);
-  const [tier, setTier] = useState<Tier>("family");
-  // Share-step multi-family target (Task 4). Seeded from the hub scope / ask families; only surfaced
-  // for a multi-family author on the family/branch tiers (see `showFamilyPicker`).
+  // Share always posts audienceTier=family (no "Who should hear this?" picker).
+  // Multi-family target (Task 4): surfaced when the narrator has more than one active family.
   const [pickedFamilies, setPickedFamilies] = useState<Set<string>>(() => new Set(seededFamilyIds));
   const toggleFamily = (id: string) =>
     setPickedFamilies((prev) => {
@@ -202,7 +198,7 @@ export function ComposingEditor({
       else next.add(id);
       return next;
     });
-  const showFamilyPicker = families.length > 1 && (tier === "family" || tier === "branch");
+  const showFamilyPicker = families.length > 1;
 
   const [op, setOp] = useState<Op>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -223,10 +219,8 @@ export function ComposingEditor({
   const [polishing, setPolishing] = useState(false);
 
   // ── Optimistic initial-capture (take 0) state ───────────────────────────────
-  // Set the instant the FIRST recording stops (or a typed telling is submitted): a local object URL
-  // of the take, shown with a "Polishing…" screen while composeStoryAction runs. Only used for take 0
-  // (there is no mounted editor yet); appends within the composing surface use an inline indicator.
-  const [localTake, setLocalTake] = useState<{ url: string } | null>(null);
+  // True while take-0 composeStoryAction runs ("Polishing…" screen). No audio playback on capture.
+  const [take0Pending, setTake0Pending] = useState(false);
   const [pendingError, setPendingError] = useState<string | null>(null);
 
   // ── Follow-up thread state ──────────────────────────────────────────────────
@@ -397,25 +391,21 @@ export function ComposingEditor({
     [focusProseEditor],
   );
 
-  // Revoke the object URL when localTake changes or the component unmounts.
   useEffect(() => {
-    if (!localTake) return;
-    return () => {
-      if (localTake.url) URL.revokeObjectURL(localTake.url);
-    };
-  }, [localTake]);
+    if (draft?.state === "draft" || draft?.state === "pending_approval") {
+      setTake0Pending(false);
+    }
+  }, [draft?.state]);
 
-  // Invalidate a live Finish-check offer on ANY prose edit (slice 8 data-loss fix). The polished text
-  // reflects the prose AT PROBE TIME; if the narrator keeps typing, accepting it would drop the new
-  // words. The functional setter makes it a no-op when no offer is up, so it never fires on the append
-  // path's `history.replace` seeding (finishOffer is null then).
+  // Invalidate a live Finish-check offer on ANY prose edit (slice 8 data-loss fix). Finish no longer
+  // probes by default, but a stale offer must still clear if somehow present.
   useEffect(() => {
     setFinishOffer((cur) => (cur ? null : cur));
   }, [proseDraft]);
 
   const recordAgain = useCallback(() => {
     setPendingError(null);
-    setLocalTake(null); // triggers the effect cleanup above → revokes the URL
+    setTake0Pending(false);
     setRecordPhase("idle");
   }, []);
 
@@ -450,7 +440,7 @@ export function ComposingEditor({
         });
         setActiveStoryId(step.storyId);
         history.replace(step.prose);
-        setLocalTake(null);
+        setTake0Pending(false);
         setFollowUp({ prompt: step.prompt });
         setRecordPhase("idle");
         setAppending(false);
@@ -491,7 +481,7 @@ export function ComposingEditor({
         });
         setActiveStoryId(step.storyId);
         setFollowUp(null);
-        setLocalTake(null);
+        setTake0Pending(false);
         setPendingError(null);
         setRecordPhase("idle");
         setAppending(false);
@@ -524,7 +514,7 @@ export function ComposingEditor({
         await handleStep(result);
       } else {
         // Initial capture (take 0): show the full-screen "Polishing…" screen while the action runs.
-        setLocalTake({ url: URL.createObjectURL(blob) });
+        setTake0Pending(true);
         if (ask) form.append("askId", ask.id);
         // ADR-0009 Phase 3 tell-a-photo hints (story mode); the server re-checks auth + visibility.
         if (subjectPhotoId) form.append("subjectPhotoId", subjectPhotoId);
@@ -630,7 +620,7 @@ export function ComposingEditor({
         setTextDraft("");
         await handleStep(step);
       } else {
-        setLocalTake({ url: "" }); // reuse the pending screen; no audio to play back for text
+        setTake0Pending(true);
         const form = new FormData();
         form.set("text", textDraft.trim());
         if (ask) form.set("askId", ask.id);
@@ -707,12 +697,8 @@ export function ComposingEditor({
     }
   };
 
-  const onFinishDraft = () => runFinish("probe");
-  const onUsePolished = () => runFinish("accept");
-  const onDismissFinishCheck = () => {
-    setFinishOffer(null);
-    void runFinish("decline");
-  };
+  // Seal as-is and go straight to confirmation — no Finish-check polish preview on capture.
+  const onFinishDraft = () => runFinish("decline");
 
   // ── Polish tap (shared by composing + review) ────────────────────────────────
   // Raises the parent `polishing` flag for the whole round-trip so it joins the mutation lock (finding
@@ -748,11 +734,11 @@ export function ComposingEditor({
       setOp(null);
       return;
     }
-    clog("review_share", { story: draft!.storyId, tier });
+    clog("review_share", { story: draft!.storyId, tier: "family" });
     try {
       const form = new FormData();
       form.append("storyId", draft!.storyId);
-      form.append("audienceTier", tier);
+      form.append("audienceTier", "family");
       if (showFamilyPicker) {
         for (const id of pickedFamilies) form.append("familyIds", id);
       }
@@ -825,33 +811,36 @@ export function ComposingEditor({
     </div>
   ) : null;
 
-  const topChrome = (
+  // Capture: Back + Undo/Redo. Confirmation: Back only (prose editor owns history there).
+  const topChrome = (showHistory = true) => (
     <div className={styles.topChrome}>
       <Link href={backHref} className={styles.backLink}>
         {backLabel}
       </Link>
-      <div className={styles.historyGroup} role="group" aria-label={`${common.proseEditor.undo} / ${common.proseEditor.redo}`}>
-        <button
-          type="button"
-          className={styles.historyButton}
-          title={common.proseEditor.undo}
-          aria-label={common.proseEditor.undo}
-          disabled={!history.canUndo}
-          onClick={history.undo}
-        >
-          <Undo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={styles.historyButton}
-          title={common.proseEditor.redo}
-          aria-label={common.proseEditor.redo}
-          disabled={!history.canRedo}
-          onClick={history.redo}
-        >
-          <Redo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
-        </button>
-      </div>
+      {showHistory ? (
+        <div className={styles.historyGroup} role="group" aria-label={`${common.proseEditor.undo} / ${common.proseEditor.redo}`}>
+          <button
+            type="button"
+            className={styles.historyButton}
+            title={common.proseEditor.undo}
+            aria-label={common.proseEditor.undo}
+            disabled={!history.canUndo}
+            onClick={history.undo}
+          >
+            <Undo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.historyButton}
+            title={common.proseEditor.redo}
+            aria-label={common.proseEditor.redo}
+            disabled={!history.canRedo}
+            onClick={history.redo}
+          >
+            <Redo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 
@@ -895,36 +884,22 @@ export function ComposingEditor({
     const isRemoving = op === "discard" || polishing;
     return (
       <div className={styles.composeSurface}>
-        {topChrome}
-        {questionHeader}
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--text-label)",
-            color: "var(--text-meta)",
-            letterSpacing: "var(--tracking-mono)",
-            textAlign: "center",
-            margin: "0 0 20px",
-          }}
-        >
-          {hub.answer.recordedAt(relativeShortDate(draft.recordedAt))}
-        </p>
+        {topChrome(false)}
 
-        {/* Editable title */}
+        {/* Editable title — no field label; section chrome is Share below. */}
         <div style={{ marginBottom: 24 }}>
-          <label className="kin-form-label">
-            {hub.compose.titleLabel}
-            <input
-              type="text"
-              className="kin-field"
-              value={titleTouched ? titleDraft : (draft.title ?? "")}
-              onChange={(e) => {
-                setTitleTouched(true);
-                setTitleDraft(e.target.value);
-              }}
-              disabled={isRemoving}
-            />
-          </label>
+          <input
+            type="text"
+            className="kin-field"
+            value={titleTouched ? titleDraft : (draft.title ?? "")}
+            onChange={(e) => {
+              setTitleTouched(true);
+              setTitleDraft(e.target.value);
+            }}
+            disabled={isRemoving}
+            aria-label={hub.compose.titleLabel}
+            placeholder={hub.compose.titleLabel}
+          />
         </div>
 
         <ProseBlock
@@ -967,9 +942,7 @@ export function ComposingEditor({
           />
         </div>
 
-        <TierPicker tier={tier} setTier={setTier} disabled={isRemoving} />
-
-        {/* Multi-family target (Task 4) — only for a multi-family author on family/branch tiers. */}
+        {/* Multi-family target (Task 4) — only when the narrator has more than one active family. */}
         {showFamilyPicker ? (
           <fieldset style={{ border: "none", padding: 0, margin: "0 0 32px" }}>
             <legend
@@ -986,18 +959,6 @@ export function ComposingEditor({
             >
               {hub.answer.whichFamilies}
             </legend>
-            {familyChoiceRequired ? (
-              <p
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-label)",
-                  color: "var(--text-muted)",
-                  margin: "0 0 12px",
-                }}
-              >
-                {hub.answer.whichFamiliesHelp}
-              </p>
-            ) : null}
             <FamilyChoiceChips
               families={families.map((f) => ({
                 id: f.familyId,
@@ -1046,8 +1007,7 @@ export function ComposingEditor({
     const busy = recordPhase === "listening" || savingTake || otherMutationInFlight;
     return (
       <div className={styles.composeSurface}>
-        {topChrome}
-        {questionHeader}
+        {topChrome()}
 
         <ProseBlock
           proseDraft={proseDraft}
@@ -1180,70 +1140,14 @@ export function ComposingEditor({
         </div>
 
         {pendingError && <ErrorLine message={pendingError} />}
-
-        {/* Finish-check offer card (slice 8) — inline, dismissible; taking or dismissing both finish. */}
-        {finishOffer && (
-          <div
-            style={{
-              border: "1.5px solid var(--border)",
-              borderRadius: "var(--radius-md)",
-              background: "var(--surface-card)",
-              padding: "18px 20px",
-              margin: "0 0 16px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-              <p
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-label)",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--support)",
-                  margin: 0,
-                }}
-              >
-                {hub.answer.finishCheckTitle}
-              </p>
-              <KindredButton
-                label={hub.answer.dismissFinishCheck}
-                variant="ghost"
-                size="small"
-                disabled={busy}
-                onClick={onDismissFinishCheck}
-              />
-            </div>
-            <p
-              style={{
-                fontFamily: "var(--font-story)",
-                fontSize: "var(--text-story)",
-                lineHeight: "var(--leading-relaxed)",
-                color: "var(--text-body)",
-                margin: "12px 0 16px",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {finishOffer.polished}
-            </p>
-            <KindredButton
-              label={hub.answer.usePolishedVersion}
-              variant="secondary"
-              size="small"
-              fullWidth
-              disabled={busy}
-              onClick={onUsePolished}
-            />
-          </div>
-        )}
       </div>
     );
   }
 
   // ── REVIEW-PENDING (initial take-0 capture in flight) ────────────────────────
-  if (localTake) {
+  if (take0Pending) {
     return (
       <AnswerReviewPending
-        audioUrl={localTake.url}
         error={pendingError}
         onRecordAgain={recordAgain}
         header={questionHeader}
@@ -1269,7 +1173,7 @@ export function ComposingEditor({
   // ── CAPTURE ENTRY (no-draft: initial voice⇄text capture of take 0) ───────────
   return (
     <div className={styles.entryColumn}>
-      {topChrome}
+      {topChrome()}
       {questionHeader}
       {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator sees
           exactly which photo they're telling the story of. Bytes come from the audited byte route (the
@@ -1346,94 +1250,6 @@ export function ComposingEditor({
 }
 
 /* ── Sub-components ─────────────────────────────────────────────────────────── */
-
-/** The audience-tier radio picker (mirrors ApprovalRecorder). */
-function TierPicker({ tier, setTier, disabled }: { tier: Tier; setTier: (t: Tier) => void; disabled: boolean }) {
-  return (
-    <fieldset style={{ border: "none", padding: 0, margin: "0 0 32px" }}>
-      <legend
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-label)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--support)",
-          marginBottom: 14,
-          display: "block",
-          width: "100%",
-        }}
-      >
-        {hub.answer.whoShouldHear}
-      </legend>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {TIER_ORDER.map((value) => {
-          const opt = common.audienceTiers[value];
-          const checked = tier === value;
-          return (
-            <label
-              key={value}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                width: "100%",
-                padding: "16px 20px",
-                borderRadius: "var(--radius-md)",
-                cursor: "pointer",
-                transition: "background var(--dur-fade)",
-                background: checked ? "var(--accent-soft)" : "var(--surface-card)",
-                border: `1.5px solid ${checked ? "var(--accent)" : "var(--border)"}`,
-                boxSizing: "border-box",
-              }}
-            >
-              <input
-                type="radio"
-                name="audienceTier"
-                value={value}
-                checked={checked}
-                onChange={() => setTier(value)}
-                disabled={disabled}
-                style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
-              />
-              <span
-                style={{
-                  flex: "0 0 auto",
-                  width: 26,
-                  height: 26,
-                  borderRadius: "50%",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: `2px solid ${checked ? "var(--accent)" : "var(--border-strong)"}`,
-                  background: checked ? "var(--accent)" : "transparent",
-                }}
-              >
-                <span
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: "50%",
-                    background: "var(--accent-on)",
-                    opacity: checked ? 1 : 0,
-                    transition: "opacity var(--dur-fade)",
-                  }}
-                />
-              </span>
-              <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-ui)", fontWeight: 600, color: "var(--text-body)" }}>
-                  {opt.label}
-                </span>
-                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-label)", color: "var(--text-muted)" }}>
-                  {opt.desc}
-                </span>
-              </span>
-            </label>
-          );
-        })}
-      </div>
-    </fieldset>
-  );
-}
 
 function ErrorLine({ message }: { message: string }) {
   return (

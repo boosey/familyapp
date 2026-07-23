@@ -1,14 +1,8 @@
 // @vitest-environment jsdom
 /**
- * StoryComposer — Finish + Finish-check client wiring (ADR-0014 Inc 3 slice 8).
- *  1. A Finish button on the review surface posts the current editor prose to finishDraftAction
- *     (intent="probe").
- *  2. A `finish_offer` response renders an inline dismissible card with the polished preview and two
- *     actions: [Use polished version] (accept) and a dismiss (decline).
- *  3. [Use polished version] re-invokes with intent="accept" carrying the polished text +
- *     modelId/promptText echoed from the offer; dismiss re-invokes with intent="decline".
- *  4. A `finished` response refreshes.
- * Mocks the server actions module (a "use server" file that pulls getRuntime()/db at import time).
+ * StoryComposer — Finish client wiring (capture → confirmation).
+ * Finish seals as-is (intent="decline") and settles to pending_approval — no polish-offer card
+ * on the capture surface. Editor/mic lock during the round-trip; Polish still locks Finish+mic.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -24,30 +18,9 @@ vi.mock("next/navigation", () => ({
 const STORY_ID = "57357613-bbb7-4eda-bb4f-5e645cbf2b3a";
 const POLISHED = "A tidier, polished version the narrator can read back.";
 
-type FinishStep =
-  | {
-      kind: "finish_offer";
-      storyId: string;
-      polished: string;
-      polishModelId: string;
-      polishPromptText: string;
-    }
-  | { kind: "finished"; storyId: string }
-  | { error: string };
+type FinishStep = { kind: "finished"; storyId: string } | { error: string };
 
-// Scripts finishDraftAction: the first (probe) call returns an offer; subsequent (accept/decline)
-// calls return `finished`. Records every call's FormData for assertions.
-const finishDraftAction = vi.fn(async (fd: FormData): Promise<FinishStep> => {
-  const intent = fd.get("intent");
-  if (intent === "probe") {
-    return {
-      kind: "finish_offer",
-      storyId: STORY_ID,
-      polished: POLISHED,
-      polishModelId: "mock-claude",
-      polishPromptText: "the polish system prompt",
-    };
-  }
+const finishDraftAction = vi.fn(async (_fd: FormData): Promise<FinishStep> => {
   return { kind: "finished", storyId: STORY_ID };
 });
 const polishAnswerProseAction = vi.fn(
@@ -71,8 +44,6 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// ADR-0014 Inc 3 slice 10: Finish now lives on the DRAFT composing surface (relocated off the shrunk
-// pending_approval review), so the draft under test is `draft`-state.
 const draft: DraftInfo = {
   storyId: STORY_ID,
   recordedAt: new Date(0).toISOString(),
@@ -83,55 +54,25 @@ const draft: DraftInfo = {
   takes: [],
 };
 
-describe("StoryComposer Finish-check", () => {
-  it("Finish posts the current editor prose with intent=probe and shows the offer card", async () => {
+describe("StoryComposer Finish", () => {
+  it("Finish posts the current editor prose with intent=decline (no polish offer on capture)", async () => {
     render(<StoryComposer mode="tell" ask={null} draft={draft} />);
 
     fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
 
     await waitFor(() => expect(finishDraftAction).toHaveBeenCalledTimes(1));
-    const probeForm = finishDraftAction.mock.calls[0]![0] as FormData;
-    expect(probeForm.get("intent")).toBe("probe");
-    expect(probeForm.get("storyId")).toBe(STORY_ID);
-    expect(probeForm.get("prose")).toBe("The body of the story.");
+    const form = finishDraftAction.mock.calls[0]![0] as FormData;
+    expect(form.get("intent")).toBe("decline");
+    expect(form.get("storyId")).toBe(STORY_ID);
+    expect(form.get("prose")).toBe("The body of the story.");
 
-    // The offer card renders the polished preview + both actions.
-    await waitFor(() => expect(screen.getByText(POLISHED)).toBeTruthy());
-    expect(screen.getByRole("button", { name: hub.answer.usePolishedVersion })).toBeTruthy();
-    expect(screen.getByRole("button", { name: hub.answer.dismissFinishCheck })).toBeTruthy();
-  });
-
-  it("[Use polished version] re-invokes with intent=accept echoing the polished text + provenance", async () => {
-    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
-    fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
-    await waitFor(() => expect(screen.getByText(POLISHED)).toBeTruthy());
-
-    fireEvent.click(screen.getByRole("button", { name: hub.answer.usePolishedVersion }));
-
-    await waitFor(() => expect(finishDraftAction).toHaveBeenCalledTimes(2));
-    const acceptForm = finishDraftAction.mock.calls[1]![0] as FormData;
-    expect(acceptForm.get("intent")).toBe("accept");
-    expect(acceptForm.get("storyId")).toBe(STORY_ID);
-    expect(acceptForm.get("polished")).toBe(POLISHED);
-    expect(acceptForm.get("polishModelId")).toBe("mock-claude");
-    expect(acceptForm.get("polishPromptText")).toBe("the polish system prompt");
-    // The finished step refreshes the surface.
+    expect(screen.queryByText(POLISHED)).toBeNull();
+    expect(screen.queryByRole("button", { name: hub.answer.usePolishedVersion })).toBeNull();
+    expect(screen.queryByRole("button", { name: hub.answer.dismissFinishCheck })).toBeNull();
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-
-    // REGRESSION (cold-review finding 1): the server persists the POLISHED text as finalText, so the
-    // client editor MUST sync to it. Otherwise proseDraft stays the pre-polish text and, since the
-    // draft→pending_approval transition does not remount, Share would send the stale pre-polish prose
-    // as `correctedProse` and silently overwrite the just-accepted polish.
-    const editor = screen.getByRole("textbox", {
-      name: /your story, in your words/i,
-    }) as HTMLTextAreaElement;
-    await waitFor(() => expect(editor.value).toBe(POLISHED));
   });
 
   it("locks the editor + mic while a Finish round-trip is in flight (cold-review finding 4)", async () => {
-    // Regression: during a Finish(probe/accept) round-trip the server holds the posted prose; if the
-    // editor/mic stayed live, a concurrent edit or append would be clobbered (UI: history.replace on
-    // accept; DB: a stale finishDraft write landing after an append). Everything but stop must lock.
     let resolveFinish: (v: FinishStep) => void = () => {};
     finishDraftAction.mockImplementationOnce(
       () => new Promise<FinishStep>((r) => (resolveFinish = r)),
@@ -144,19 +85,14 @@ describe("StoryComposer Finish-check", () => {
 
     fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
 
-    // While the finish is in flight: editor is read-only and the mic can't start a new recording.
     await waitFor(() => expect(editor().disabled).toBe(true));
     expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
 
-    // Resolve so the test doesn't leave a dangling promise.
     resolveFinish({ kind: "finished", storyId: STORY_ID });
     await waitFor(() => expect(editor().disabled).toBe(false));
   });
 
   it("locks the mic + Finish while a ✨Polish round-trip is in flight (cold-review finding 5)", async () => {
-    // Regression: the Polish tap lives inside KindredProseEditor but mutates proseDraft (history.replace)
-    // on resolve. If the surface stayed live, a concurrent append/Finish could race a slow Polish and lose
-    // the newly-appended text. The parent must lock while a Polish round-trips.
     let resolvePolish: (v: { prose: string }) => void = () => {};
     polishAnswerProseAction.mockImplementationOnce(
       () => new Promise<{ prose: string }>((r) => (resolvePolish = r)),
@@ -166,53 +102,12 @@ describe("StoryComposer Finish-check", () => {
     const finishBtn = () => screen.getByRole("button", { name: hub.answer.finish }) as HTMLButtonElement;
     expect(finishBtn().disabled).toBe(false);
 
-    // Kick off a Polish (the ✨ button inside the editor toolbar).
     fireEvent.click(screen.getByRole("button", { name: /polish/i }));
 
-    // While the Polish is in flight, Finish and the mic can't start a competing mutation.
     await waitFor(() => expect(finishBtn().disabled).toBe(true));
     expect((screen.getByRole("button", { name: /tap to speak/i }) as HTMLButtonElement).disabled).toBe(true);
 
     resolvePolish({ prose: POLISHED });
     await waitFor(() => expect(finishBtn().disabled).toBe(false));
-  });
-
-  it("editing the prose while an offer is up drops the stale offer (no way to accept it)", async () => {
-    // Data-loss guard: the polished preview reflects the prose AT PROBE TIME. If the narrator keeps
-    // typing, accepting the stale offer would silently drop the new words. Editing must invalidate the
-    // offer → revert to the plain Finish button, forcing a re-probe on the current text.
-    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
-    fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
-    await waitFor(() => expect(screen.getByText(POLISHED)).toBeTruthy());
-
-    // The narrator adds an important new detail after the offer appeared. Target the prose editor
-    // specifically (the review phase also has a title textbox) via its stable aria-label.
-    const editor = screen.getByRole("textbox", {
-      name: /your story, in your words/i,
-    }) as HTMLTextAreaElement;
-    fireEvent.change(editor, {
-      target: { value: "The body of the story. Plus an important new detail." },
-    });
-
-    // The offer card (and its accept button) are GONE — the stale polish can no longer be accepted.
-    await waitFor(() => expect(screen.queryByText(POLISHED)).toBeNull());
-    expect(screen.queryByRole("button", { name: hub.answer.usePolishedVersion })).toBeNull();
-    // The plain Finish button is back so the narrator can re-probe on the edited text.
-    expect(screen.getByRole("button", { name: hub.answer.finish })).toBeTruthy();
-  });
-
-  it("dismiss re-invokes with intent=decline and clears the offer card", async () => {
-    render(<StoryComposer mode="tell" ask={null} draft={draft} />);
-    fireEvent.click(screen.getByRole("button", { name: hub.answer.finish }));
-    await waitFor(() => expect(screen.getByText(POLISHED)).toBeTruthy());
-
-    fireEvent.click(screen.getByRole("button", { name: hub.answer.dismissFinishCheck }));
-
-    await waitFor(() => expect(finishDraftAction).toHaveBeenCalledTimes(2));
-    const declineForm = finishDraftAction.mock.calls[1]![0] as FormData;
-    expect(declineForm.get("intent")).toBe("decline");
-    expect(declineForm.get("storyId")).toBe(STORY_ID);
-    // The card is gone after dismiss.
-    await waitFor(() => expect(screen.queryByText(POLISHED)).toBeNull());
   });
 });

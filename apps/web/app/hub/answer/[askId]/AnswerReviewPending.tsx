@@ -1,27 +1,23 @@
 "use client";
 
 /**
- * Review-pending screen — shown the instant recording stops, while transcribe+render runs in
- * the foreground (awaited by AnswerFlow.uploadRecording). The narrator can replay their take
- * immediately; a spinner + "Polishing your words…" sits over the editor's slot until the prose
- * is ready. When render resolves, AnswerFlow's router.refresh() makes the draft prop arrive and
- * the key remount swaps this screen for the review-ready editor.
+ * Review-pending screen — shown the instant recording stops, while transcribe+cleanup runs in
+ * the foreground (awaited by ComposingEditor.uploadRecording). Spinner + "Polishing your words…"
+ * until the draft surface remounts. No audio playback here (capture keeps mic/edit only).
  *
- * Purely presentational: AnswerFlow owns the audio object URL, the error, and the retry.
+ * Purely presentational: the parent owns the error and the retry.
  */
 import type { ReactNode } from "react";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 
 export interface AnswerReviewPendingProps {
-  audioUrl: string;
   error: string | null;
   onRecordAgain: () => void;
   header: ReactNode;
 }
 
 export function AnswerReviewPending({
-  audioUrl,
   error,
   onRecordAgain,
   header,
@@ -29,23 +25,6 @@ export function AnswerReviewPending({
   return (
     <div>
       {header}
-
-      {/* Relisten the take they just gave (local object URL). A typed telling has no audio, so the
-          audio control is omitted (an empty src would trigger a spurious network fetch). */}
-      {audioUrl ? (
-        /* eslint-disable-next-line jsx-a11y/media-has-caption */
-        <audio
-          controls
-          src={audioUrl}
-          style={{
-            width: "100%",
-            maxWidth: 480,
-            display: "block",
-            margin: "0 auto 32px",
-            borderRadius: "var(--radius-md)",
-          }}
-        />
-      ) : null}
 
       {error ? (
         <div style={{ textAlign: "center" }}>

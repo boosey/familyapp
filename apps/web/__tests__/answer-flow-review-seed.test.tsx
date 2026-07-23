@@ -115,10 +115,9 @@ describe("StoryComposer record→review editor seeding", () => {
 });
 
 describe("AnswerReviewPending presentation", () => {
-  it("shows audio + the polishing spinner/message, and NO editor", () => {
+  it("shows the polishing spinner/message and NO editor or audio", () => {
     const { container } = render(
       <AnswerReviewPending
-        audioUrl="blob:fake-take"
         error={null}
         onRecordAgain={() => {}}
         header={<div>header</div>}
@@ -130,16 +129,14 @@ describe("AnswerReviewPending presentation", () => {
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.getByText(/Polishing your words/)).toBeTruthy();
     expect(container.querySelector(".kindred-spinner")).not.toBeNull();
-    // The recording is replayable (one <audio> with the local URL).
-    const audio = container.querySelector("audio");
-    expect(audio?.getAttribute("src")).toBe("blob:fake-take");
+    // No audio playback on the capture pending screen.
+    expect(container.querySelector("audio")).toBeNull();
   });
 
   it("shows an error + 'Record again' button (no spinner) when render failed", () => {
     const onRecordAgain = vi.fn();
     const { container } = render(
       <AnswerReviewPending
-        audioUrl="blob:fake-take"
         error="Could not save your recording. Please try again."
         onRecordAgain={onRecordAgain}
         header={<div>header</div>}
