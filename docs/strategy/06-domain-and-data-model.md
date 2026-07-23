@@ -119,7 +119,7 @@ Notifications, digests — designed, not productized.
 
 ### Link session
 
-Token → Person + Family for account-free capture. **Telephony seam** — not general anonymous access.
+Token → Person + Family for account-free **web** capture (`/s/[token]`). Not general anonymous access.
 
 ## Story state machine
 

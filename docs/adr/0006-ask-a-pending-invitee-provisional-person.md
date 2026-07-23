@@ -46,6 +46,10 @@ already has questions waiting for you").
   existing telephony exception. The glossary's "every Person has an Account" is loosened accordingly
   (see CONTEXT.md). A Person is still the permanent anchor of everything expressive; a provisional
   Person is simply one whose Account has not been linked yet.
+
+  > **Note (2026-07-23):** Disregard the "telephony exception" reference above. Telephony was never
+  > built and has been removed; the provisional invitee is now the *only* Account-less `persons`
+  > state.
 - **Ghost rows.** An invitee who never accepts leaves a provisional Person. These are never
   expressive and never surfaced; a housekeeping pass reaps them (companion to the orphan-blob GC).
 - **Acceptance is now a link, not a create.** ADR-0005's JIT provisioning must be adjusted to attach

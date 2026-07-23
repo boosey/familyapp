@@ -23,7 +23,7 @@ The product helps families **gather stories only their relatives can tell**, pre
 | A social network | Private by default; no public feed |
 | A one-time memoir gift (StoryWorth-style) | Ongoing archive, not a book that ships and ends |
 | An AI grief bot | No synthetic conversations with the dead; retrieval-only posture for future avatar work |
-| A phone-call service | Web/app first; telephony is a future adapter seam only |
+| A phone-call service | Web-first; narrators record in a login-free link opened on their phone — there is no phone-call channel |
 
 ## Positioning
 
@@ -49,7 +49,7 @@ Elders are a **critical launch audience**, not the product definition. Roles (na
 | **Magic link** (`/a/[token]/[askId]`) | Account holders who prefer passwordless entry | Auto-login → same hub answer flow |
 | **Link session** (`/s/[token]`) | Narrators without accounts | Minimal web page: record + approve; no sign-in |
 
-**Phone calls are not built.** The capture pipeline accepts audio from any source behind an adapter; telephony (Twilio, etc.) is explicitly deferred.
+**Capture is web-first.** Narrators without accounts record through a login-free link session (`/s/[token]`) opened in a phone browser. There is no phone-call / telephony capture channel.
 
 ## Brand
 

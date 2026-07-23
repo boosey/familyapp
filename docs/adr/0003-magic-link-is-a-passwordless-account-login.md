@@ -30,6 +30,10 @@ everything is the one authenticated in-hub flow.
   channel (telephony, or a narrator who never made an account). This decision only changes what
   happens when the resolved Person *has* an Account.
 
+> **Note (2026-07-23):** The "telephony" example above is historical. Telephony capture was never
+> built and has been removed as a planned channel; the account-less `link_session` path now serves
+> only web narrators who never made an account.
+
 ## Consequences
 
 - The texted token becomes a bearer credential for the whole account, not one scoped capture

@@ -97,10 +97,9 @@ Timeline / feed / search are projections over existing fields. A **map** is not:
 
 Caption + EXIF ranking ships; vision-model ranking (`PhotoUnderstanding` seam) deferred — likely premium. External open-license illustrations: `provenance` seam exists; no provider/UI until a legal/license pass. Photos-only or combined photo+story feed also deferred (v1 feed is Stories).
 
-### DSP / telephony persistence (engineering debt)
+### DSP persistence (engineering debt)
 
 - Working-copy DSP still a typed passthrough (`speedFactor: 1.0`); real VAD / time-stretch adapter later
-- `CaptureSource` (`web_link` | `telephony`) is type-shaped but not persisted on Media/Story — needed when telephony lands
 - Periodic GC for orphan `story-audio/**` blobs after storage-first partial failures
 - Confirm DPA before sending real narrator audio to transcription vendors (human/legal action)
 
@@ -116,7 +115,6 @@ Caption + EXIF ranking ships; vision-model ranking (`PhotoUnderstanding` seam) d
 
 | Initiative | Dependency / note |
 |------------|-------------------|
-| Telephony adapter | Twilio seam; same pipeline; persist `CaptureSource` |
 | GEDCOM / FamilySearch import | Background job + reconciliation UI |
 | External record enrichment | Census, newspapers — original Phase 3 moat |
 | Time-gated story release | Ledger + tier extension |
