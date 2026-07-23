@@ -29,11 +29,13 @@ import { CopyButton } from "../tabs/CopyButton";
 import {
   createPersonBoundMemberInviteAction,
   listPersonBoundInviteTargetsAction,
-  PERSON_INVITE_IDLE_STATE,
   type PersonInviteFormState,
   type PersonInviteTargets,
   type PersonInviteTargetsResult,
 } from "./person-invite-actions";
+
+/** Client-side idle seed for `useActionState` — must NOT live in the `"use server"` actions file. */
+const PERSON_INVITE_IDLE_STATE: PersonInviteFormState = { status: "idle" };
 
 export interface PersonInviteModalProps {
   personId: string;

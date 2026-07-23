@@ -133,19 +133,20 @@ export type PersonInviteFormState =
   | { status: "error"; message: string }
   | { status: "sent"; link: string; sendingTo: string | null };
 
-export const PERSON_INVITE_IDLE_STATE: PersonInviteFormState = { status: "idle" };
-
 /**
  * The write path, bound to `MemberInviteForm` via `useActionState` (see `PersonInviteModal`). Mirrors
  * `InviteTab.tsx`'s `createMemberInvite` field-by-field, EXCEPT it anchors on an existing Person
  * (`existingInviteePersonId`, #333) and returns a result instead of redirecting + a flash cookie — the
  * modal must stay mounted over Tree/List (#334 AC 1/4), so there is no page to redirect TO.
+ *
+ * Idle initial state for `useActionState` lives in the client modal (`PersonInviteModal`) — a
+ * `"use server"` file may only export async functions (Next.js rejects `export const` objects at
+ * action invoke time with a 500 that surfaces as "Couldn't load invite options").
  */
 export async function createPersonBoundMemberInviteAction(
   _prevState: PersonInviteFormState,
   formData: FormData,
 ): Promise<PersonInviteFormState> {
-  "use server";
   beginLogContext();
   const rt = await getRuntime();
   const { db, auth } = rt;
