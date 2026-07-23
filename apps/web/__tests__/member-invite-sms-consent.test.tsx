@@ -37,10 +37,8 @@ describe("MemberInviteForm — SMS consent (Twilio TFV)", () => {
     renderForm({ defaultPhone: "+15551230000" });
 
     const block = screen.getByTestId("invite-sms-consent");
-    expect(block.textContent).toContain("SMS text messages");
-    expect(block.textContent).toContain("Tell Me Again");
+    expect(block.textContent).toContain("text them this Tell Me Again invitation");
     expect(block.textContent).toContain("STOP");
-    expect(block.textContent).toContain("HELP");
 
     const checkbox = screen.getByTestId("invite-sms-consent-checkbox") as HTMLInputElement;
     expect(checkbox.checked).toBe(false);

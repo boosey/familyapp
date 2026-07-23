@@ -81,7 +81,7 @@ export const legal = {
             p: "Tell Me Again may send SMS text messages to mobile phone numbers that have been provided with consent to receive them. These messages are transactional and Service-related — for example, family invitation links and account or security notices. Message frequency varies. Message and data rates may apply. Carriers are not liable for delayed or undelivered messages.",
           },
           {
-            p: "We only send SMS after consent is collected through our Service (for example, when a phone number is submitted with an explicit agreement to receive text messages from Tell Me Again). Consent to receive SMS is not a condition of purchasing any goods or services.",
+            p: "The primary way to opt in is during account setup: when you add your mobile number and check the SMS consent box on the welcome screens. We may also send a one-time family invitation text when a family member confirms you have agreed to receive that invitation by SMS.",
           },
           {
             p: "You can opt out of Tell Me Again text messages at any time by replying STOP to any message from us. After you opt out, you will receive a confirmation and we will stop sending SMS to that number. You can reply HELP for help, or contact us at privacy@tellmeagain.app. You may also request removal of your number by emailing us.",

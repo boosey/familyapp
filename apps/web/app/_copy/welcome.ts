@@ -8,7 +8,7 @@ export const welcome = {
   greetingInvited: "Welcome to the family.",
   greetingDefault: "Welcome to Tell Me Again.",
   introBody:
-    "A couple of quick things and you'll be in — your name and your birthday. They help us tell your stories at your pace.",
+    "A couple of quick things and you'll be in — your name, your birthday, and optionally a phone if you'd like texts from us. They help us tell your stories at your pace.",
   begin: "Let's begin",
   // Name step (asked before DOB) — the one place a real, user-entered name is guaranteed.
   nameTitle: "What should we call you?",
@@ -19,6 +19,19 @@ export const welcome = {
   birthdayTitle: "Before we go in — when were you born?",
   birthdayBody:
     "This is the one thing we ask for. It shapes the questions and the pace we'll use with you later. Nothing else on this screen is required.",
+  // Optional phone + express SMS consent (Twilio TFV / TCPA) — recipient opts in for future texts.
+  phoneTitle: "Want texts from Tell Me Again?",
+  phoneBody:
+    "Optional. Add your mobile number if you'd like SMS for family invitations and account notices. You can skip this.",
+  phoneLabel: "Your mobile number",
+  phonePlaceholder: "+1 555 123 0000",
+  phoneInvalid: "That phone number doesn't look right — check the format and try again.",
+  smsConsentLabel:
+    "I agree to receive SMS text messages from Tell Me Again about family invitations and account notices. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.",
+  smsConsentPrivacyLink: "Privacy Policy",
+  smsConsentPrivacyAria: "Read our Privacy Policy (opens in the same tab)",
+  smsConsentRequired: "Check the box to agree to SMS before continuing with a phone number — or clear the number to skip.",
+  phoneSkip: "Not now",
   sayItOutLoud: "Say it out loud",
   voiceStop: "Tap when you're done",
   voiceOneMoment: "One moment…",

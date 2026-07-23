@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 /**
- * WelcomeFlow: the onboarding state machine is welcome → name → dob. The final Continue submits the
- * user-entered name AND the DOB in one server call, then routes STRAIGHT into the intake surface
- * (/hub/about-you) — the old "doors" fork is gone, so family creation can no longer be skipped from
- * here. Mocks the completeAccountOnboarding server action and next/navigation's router.
+ * WelcomeFlow: onboarding is welcome → name → dob → phone (optional SMS). The final Continue (or
+ * Skip on phone) submits name + DOB (+ optional SMS opt-in), then routes into /hub/about-you.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { WelcomeFlow } from "@/app/welcome/WelcomeFlow";
+import { welcome } from "@/app/_copy";
 
 vi.mock("@/app/welcome/actions", () => ({
   completeAccountOnboarding: vi.fn(async () => {}),
@@ -17,20 +16,21 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { completeAccountOnboarding } from "@/app/welcome/actions";
 
-/** Drive welcome → name → dob and fill in the three DOB selects. */
+/** Drive welcome → name → dob and fill in the three DOB selects. Leaves you on the DOB step. */
 function fillNameAndDob(name = "Alex Boudreaux") {
-  // welcome step → begin ("Let's begin")
   fireEvent.click(screen.getByRole("button", { name: /begin/i }));
-
-  // name step: type a name, then Continue
   fireEvent.change(screen.getByRole("textbox"), { target: { value: name } });
   fireEvent.click(screen.getByRole("button", { name: /continue/i }));
-
-  // dob step: the three selects are month / day / year in order.
   const [monthSel, daySel, yearSel] = screen.getAllByRole("combobox");
   fireEvent.change(monthSel!, { target: { value: "6" } });
   fireEvent.change(daySel!, { target: { value: "15" } });
   fireEvent.change(yearSel!, { target: { value: "1970" } });
+}
+
+/** After DOB is filled, advance to the phone step. */
+function goToPhoneStep() {
+  fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+  expect(screen.getByTestId("welcome-phone")).toBeTruthy();
 }
 
 describe("WelcomeFlow", () => {
@@ -55,11 +55,12 @@ describe("WelcomeFlow", () => {
     ).toBe(false);
   });
 
-  it("submits the entered name + DOB in one call, then routes into intake (no doors fork)", async () => {
+  it("skips phone: submits name + DOB only, then routes into intake", async () => {
     render(<WelcomeFlow initialName="" invited={false} />);
 
     fillNameAndDob("Alex Boudreaux");
-    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    goToPhoneStep();
+    fireEvent.click(screen.getByRole("button", { name: welcome.phoneSkip }));
 
     await waitFor(() =>
       expect(completeAccountOnboarding).toHaveBeenCalledWith({
@@ -72,11 +73,12 @@ describe("WelcomeFlow", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/hub/about-you"));
   });
 
-  it("trims the entered name before submitting", async () => {
+  it("trims the entered name before submitting (via phone skip)", async () => {
     render(<WelcomeFlow initialName="" invited={false} />);
 
     fillNameAndDob("  Alex Boudreaux  ");
-    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    goToPhoneStep();
+    fireEvent.click(screen.getByRole("button", { name: welcome.phoneSkip }));
 
     await waitFor(() =>
       expect(completeAccountOnboarding).toHaveBeenCalledWith({
@@ -88,22 +90,50 @@ describe("WelcomeFlow", () => {
     );
   });
 
-  it("save error: shows dobSaveError copy, does not navigate, re-enables Continue", async () => {
+  it("phone + unchecked consent: Continue stays disabled; after check, submits with smsConsent", async () => {
+    render(<WelcomeFlow initialName="" invited={false} />);
+    fillNameAndDob("Alex Boudreaux");
+    goToPhoneStep();
+
+    fireEvent.change(screen.getByTestId("welcome-phone"), { target: { value: "+15551230000" } });
+    const consent = screen.getByTestId("welcome-sms-consent");
+    expect(consent.textContent).toContain("SMS text messages");
+    expect(consent.textContent).toContain("STOP");
+    expect((screen.getByTestId("welcome-sms-consent-checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+    expect(
+      (screen.getByRole("button", { name: welcome.continue }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByTestId("welcome-sms-consent-checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: welcome.continue }));
+
+    await waitFor(() =>
+      expect(completeAccountOnboarding).toHaveBeenCalledWith({
+        displayName: "Alex Boudreaux",
+        year: 1970,
+        month: 6,
+        day: 15,
+        phone: "+15551230000",
+        smsConsent: true,
+      }),
+    );
+  });
+
+  it("save error: shows error copy, does not navigate, re-enables Continue", async () => {
     (completeAccountOnboarding as Mock).mockRejectedValueOnce(new Error("boom"));
 
     render(<WelcomeFlow initialName="" invited={false} />);
 
     fillNameAndDob("Alex Boudreaux");
-    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    goToPhoneStep();
+    fireEvent.click(screen.getByRole("button", { name: welcome.phoneSkip }));
 
-    // catch block surfaces welcome.dobSaveError.
-    await screen.findByText(/something went wrong saving that/i);
-    // The failure must not navigate away.
+    await screen.findByText("boom");
     expect(push).not.toHaveBeenCalled();
-    // busy reset to false → Continue re-enabled (asserting the disabled prop directly,
-    // matching the project convention in about-you-flow.test.tsx).
     expect(
-      (screen.getByRole("button", { name: /continue/i }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: welcome.phoneSkip }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 });

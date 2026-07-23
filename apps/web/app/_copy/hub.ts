@@ -262,14 +262,14 @@ export const hub = {
       "Add an email or a phone number — at least one — so we can recognize them when they join.",
     emailRequired: "Add their email to send it by email — or choose another way below.",
     phoneRequired: "Add their phone number to text it — or choose another way below.",
-    // Twilio TFV / TCPA — express SMS consent must be an unchecked checkbox with clear language
-    // (not implied by the "Send text" button alone). Shown when a phone number is present.
+    // Twilio TFV — slim inviter attestation for the invite SMS only. Recipient opt-in for ongoing
+    // SMS lives on /welcome (account setup). Shown when a phone number is present.
     smsConsentLabel:
-      "I confirm this person has agreed to receive SMS text messages from Tell Me Again with a family invitation link. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.",
+      "They've agreed I can text them this Tell Me Again invitation. Msg & data rates may apply. Reply STOP to opt out.",
     smsConsentPrivacyLink: "Privacy Policy",
     smsConsentPrivacyAria: "Read our Privacy Policy (opens in the same tab)",
     smsConsentRequired:
-      "Confirm they agreed to receive a text from Tell Me Again before sending — check the box next to the SMS consent language.",
+      "Confirm they've agreed to a text before sending — or choose email / get a link instead.",
     // #119 — the duplicate-member guard refusing an invite to someone already in the family.
     alreadyMember:
       "They're already a member of this family — no invitation needed.",

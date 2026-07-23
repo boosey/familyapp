@@ -1,21 +1,23 @@
 "use client";
 
 /**
- * Onboarding state machine (client): welcome → name → dob.
+ * Onboarding state machine (client): welcome → name → dob → phone (optional SMS opt-in).
  *
  * Design rules from the handoff that this preserves:
- *  - Name and date of birth are the required asks; the rest of onboarding is optional. The name step
+ *  - Name and date of birth are the required asks; phone/SMS consent is optional. The name step
  *    exists because manual Clerk sign-up never collects one, so without it a Person keeps the
  *    email-prefix placeholder forever.
  *  - Voice-first but never voice-only: each voice control captures a clip via `useMicRecorder`,
  *    transcribes it server-side, and PRE-FILLS the typed field (the name input, or the DOB
  *    dropdowns via an LLM date-parse). The typed path is always available; voice is a shortcut, and
  *    a mic/transcription failure quietly falls back to typing.
- *  - The final Continue submits name + DOB in one server call; on success it routes straight into
- *    the single intake surface at /hub/about-you. The old "doors" fork (which let a user skip family
- *    creation) is gone; family creation now happens earlier via the /families/start path.
+ *  - The final Continue (or Skip on the phone step) submits name + DOB (+ optional SMS opt-in) in
+ *    one server call; on success it routes straight into the single intake surface at
+ *    /hub/about-you. The old "doors" fork (which let a user skip family creation) is gone; family
+ *    creation now happens earlier via the /families/start path.
  */
 import { useState, useRef, useCallback, type CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
 import {
@@ -28,7 +30,7 @@ import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { common, welcome } from "@/app/_copy";
 import styles from "@/app/_onboarding/onboarding-card.module.css";
 
-type Step = "welcome" | "name" | "dob";
+type Step = "welcome" | "name" | "dob" | "phone";
 
 const NOW_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 120 }, (_, i) => NOW_YEAR - i);
@@ -65,6 +67,10 @@ export function WelcomeFlow({
   const [day, setDay] = useState("");
   const [year, setYear] = useState("");
 
+  // Optional phone + SMS consent (Twilio TFV — recipient opt-in at account setup)
+  const [phone, setPhone] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [micError, setMicError] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -72,6 +78,8 @@ export function WelcomeFlow({
 
   const nameComplete = name.trim().length > 0;
   const dobComplete = month !== "" && day !== "" && year !== "";
+  const hasPhone = phone.trim().length > 0;
+  const phoneStepReady = !hasPhone || smsConsent;
 
   // Fill the DOB dropdowns from a parsed spoken date — only the fields the speaker clearly stated,
   // and only a day that fits the (possibly just-spoken) month/year. Reads month/year from the parse
@@ -161,8 +169,9 @@ export function WelcomeFlow({
   const onVoiceClick =
     micPhase === "listening" ? finish : micPhase === "idle" && !transcribing ? startVoice : undefined;
 
-  async function submit() {
+  async function submit(opts: { includePhone: boolean }) {
     if (!nameComplete || !dobComplete) return;
+    if (opts.includePhone && hasPhone && !smsConsent) return;
     setBusy(true);
     setError(null);
     try {
@@ -171,10 +180,14 @@ export function WelcomeFlow({
         year: Number(year),
         month: Number(month),
         day: Number(day),
+        ...(opts.includePhone && hasPhone
+          ? { phone: phone.trim(), smsConsent: true }
+          : {}),
       });
       router.push("/hub/about-you");
-    } catch {
-      setError(welcome.dobSaveError);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : welcome.dobSaveError;
+      setError(message);
       setBusy(false);
     }
   }
@@ -351,11 +364,11 @@ export function WelcomeFlow({
 
           <div style={{ marginTop: 28 }}>
             <KindredButton
-              label={busy ? welcome.oneMoment : welcome.continue}
+              label={welcome.continue}
               size="large"
               fullWidth
               disabled={!dobComplete || busy || voiceActive}
-              onClick={submit}
+              onClick={() => goToStep("phone")}
             />
           </div>
         </div>
@@ -363,6 +376,81 @@ export function WelcomeFlow({
     );
   }
 
-  // `step` is exhaustively handled above (welcome | name | dob); unreachable.
+  /* ── Phone (optional SMS opt-in — Twilio TFV / TCPA recipient consent) ──── */
+  if (step === "phone") {
+    return (
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <h1 className={styles.headline} style={{ fontSize: "var(--text-display)" }}>{welcome.phoneTitle}</h1>
+          <p className={styles.sub}>{welcome.phoneBody}</p>
+
+          <label className="kin-form-label" style={{ marginTop: 24 }}>
+            {welcome.phoneLabel}
+            <input
+              type="tel"
+              className="kin-field"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={welcome.phonePlaceholder}
+              autoFocus
+              data-testid="welcome-phone"
+            />
+          </label>
+
+          {hasPhone ? (
+            <label
+              className="kin-form-label"
+              style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, cursor: "pointer" }}
+              data-testid="welcome-sms-consent"
+            >
+              <input
+                type="checkbox"
+                checked={smsConsent}
+                onChange={(e) => setSmsConsent(e.target.checked)}
+                style={{ width: 22, height: 22, marginTop: 2, flexShrink: 0, accentColor: "var(--accent)" }}
+                data-testid="welcome-sms-consent-checkbox"
+              />
+              <span style={{ fontSize: "var(--text-ui-sm)", lineHeight: 1.45, fontWeight: 400 }}>
+                {welcome.smsConsentLabel}{" "}
+                <Link
+                  href="/privacy"
+                  style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: 2 }}
+                  aria-label={welcome.smsConsentPrivacyAria}
+                >
+                  {welcome.smsConsentPrivacyLink}
+                </Link>
+              </span>
+            </label>
+          ) : null}
+
+          {error ? <p className={styles.errorBox}>{error}</p> : null}
+
+          <div style={{ marginTop: 28, display: "grid", gap: 10 }}>
+            <KindredButton
+              label={busy ? welcome.oneMoment : hasPhone ? welcome.continue : welcome.phoneSkip}
+              size="large"
+              fullWidth
+              disabled={!phoneStepReady || busy}
+              onClick={() => void submit({ includePhone: hasPhone })}
+              data-testid="welcome-phone-continue"
+            />
+            {hasPhone ? (
+              <KindredButton
+                label={welcome.phoneSkip}
+                size="large"
+                fullWidth
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void submit({ includePhone: false })}
+                data-testid="welcome-phone-skip"
+              />
+            ) : null}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // `step` is exhaustively handled above (welcome | name | dob | phone); unreachable.
   return null;
 }
