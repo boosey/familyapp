@@ -232,9 +232,6 @@ export const hub = {
   },
   invite: {
     personalLinkOnce: "Personal link — shown once",
-    narratorReadyTitle: "Their link is ready",
-    narratorReadyBlurb:
-      "Send this to them however you usually talk — a text or an email. Tapping it opens a gentle voice session where they can simply start telling their stories. No password, no sign-up, nothing to install.",
     fingerprintNote:
       "For safety we keep only a fingerprint — you won't see this link again. Save it now if you need to send it later; switching tabs or refreshing will clear it.",
     memberReadyTitle: "Invitation link is ready",
@@ -247,7 +244,7 @@ export const hub = {
     signedOut: "Sign in to invite someone.",
     memberHeading: "Invite a family member",
     memberBody:
-      "Send a relative a link to create their own login and join the family. They'll confirm who they are, then go through a short welcome.",
+      "Send a relative a link to create their own login and join the family.",
     nameLabel: "Their name",
     namePlaceholder: "e.g. Rosa Esposito",
     // #118: email and phone are individually optional but AT LEAST ONE is required — see
@@ -309,11 +306,6 @@ export const hub = {
     sendToEmail: "Send email",
     sendToPhone: "Send text",
     getLink: "Get a link to share",
-    narratorHeading: "Set up someone to record",
-    narratorBody:
-      "Choose a family member and we'll create their own private link. Opening it starts a gentle voice session — they just tap and talk, with no login, account, or app to set up. You hand them the link; they do the rest whenever they're ready.",
-    narratorLabel: "Who's telling the stories?",
-    createLink: "Create their link",
   },
   // Person-bound Invite modal (#334, ADR-0028) — the IN-PLACE modal opened from Tree's details sheet
   // + kebab and List's details, all three sharing this one surface. Reuses most of `hub.invite`'s
