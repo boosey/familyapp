@@ -108,14 +108,14 @@ describe("StoryComposer capture (tell mode)", () => {
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
     // No answer-mode question header ("<NAME> ASKED") in a self-initiated telling.
     expect(screen.queryByText(/asked/i)).toBeNull();
-    expect(screen.getByRole("button", { name: /type it/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Type$/i })).toBeTruthy();
   });
 
   it("type mode submits text via composeStoryAction", async () => {
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
 
     // Switch to the typed path.
-    fireEvent.click(screen.getByRole("button", { name: /type it/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Type$/i }));
 
     // Type into the textarea and submit.
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -134,7 +134,7 @@ describe("StoryComposer capture (tell mode)", () => {
     // so the first take navigates to `/hub/tell/[storyId]` (which server-drives the composing surface).
     render(<StoryComposer mode="tell" ask={null} draft={null} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /type it/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Type$/i }));
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "The summer we drove to the coast." } });
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));

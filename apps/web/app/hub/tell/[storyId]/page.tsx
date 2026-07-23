@@ -10,13 +10,11 @@
  * ownership + state explicitly (defense in depth) before treating the row as this narrator's draft.
  */
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getStoryForViewer, listStoryRecordings, listActiveFamiliesForPerson } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
 import { seedComposeFamilies, familyChoiceRequired } from "@/lib/compose-scope";
 import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
-import { hub } from "@/app/_copy";
 import { StoryComposer } from "../../StoryComposer";
 import type { DraftInfo } from "../../StoryComposer";
 
@@ -111,34 +109,7 @@ export default async function TellResumePage({
         flexDirection: "column",
       }}
     >
-      {/* Back nav */}
-      <div
-        style={{
-          padding: "20px clamp(16px, 4vw, 32px) 0",
-          maxWidth: 640,
-          width: "100%",
-          margin: "0 auto",
-          alignSelf: "flex-start",
-          boxSizing: "border-box",
-        }}
-      >
-        <Link
-          href="/hub?tab=stories"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-meta)",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {hub.compose.backToStories}
-        </Link>
-      </div>
-
-      {/* Content */}
+      {/* Content — back + undo/redo live inside ComposingEditor top chrome. */}
       <div
         style={{
           flex: 1,
@@ -147,7 +118,7 @@ export default async function TellResumePage({
           maxWidth: 640,
           width: "100%",
           margin: "0 auto",
-          padding: "32px clamp(16px, 4vw, 32px) 48px",
+          padding: "12px clamp(16px, 4vw, 32px) 24px",
           boxSizing: "border-box",
         }}
       >

@@ -9,7 +9,6 @@
  * content subpath directly. The `asks` and `persons` tables are open schema tables (fine to read).
  */
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import {
   getStoryForViewer,
   listOutstandingDrafts,
@@ -130,34 +129,7 @@ export default async function AnswerPage({
         flexDirection: "column",
       }}
     >
-      {/* Back nav */}
-      <div
-        style={{
-          padding: "20px clamp(16px, 4vw, 32px) 0",
-          maxWidth: 640,
-          width: "100%",
-          margin: "0 auto",
-          alignSelf: "flex-start",
-          boxSizing: "border-box",
-        }}
-      >
-        <Link
-          href="/hub?tab=questions"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-ui-sm)",
-            color: "var(--text-meta)",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {hub.answer.backToQuestions}
-        </Link>
-      </div>
-
-      {/* Content */}
+      {/* Content — back + undo/redo live inside ComposingEditor top chrome. */}
       <div
         style={{
           flex: 1,
@@ -166,7 +138,7 @@ export default async function AnswerPage({
           maxWidth: 640,
           width: "100%",
           margin: "0 auto",
-          padding: "32px clamp(16px, 4vw, 32px) 48px",
+          padding: "12px clamp(16px, 4vw, 32px) 24px",
           boxSizing: "border-box",
         }}
       >

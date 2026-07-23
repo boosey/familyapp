@@ -8,18 +8,128 @@
   display: contents;
 }
 
-/* Persistent capture footer — progressive action row + mic / type box.
- * Full width matches the prose field above; mic / type box stay centered below. */
+/* Full compose column: top chrome + content + sticky capture footer. */
+.composeSurface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Back + Undo/Redo on one row; tight gap down to the edit field. */
+.topChrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  min-height: 36px;
+  width: 100%;
+  align-self: stretch;
+}
+
+.backLink {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-meta);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.historyGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.historyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.historyButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.historyButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Persistent capture footer — sticky so Speak/Type · Polish · Finish stay on-screen when a
+ * follow-up strip appears. Mic stays centered below the action row. */
 .footer {
   border-top: none;
-  padding-top: 16px;
+  padding-top: 12px;
   margin-top: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--surface-page);
+}
+
+/* Compact enhancement follow-up (dates / gap / enrich) — lives in the sticky footer so it cannot
+ * push Speak/Type · Polish · Finish off the viewport. */
+.followUpStrip {
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.followUpIntro {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--text-meta);
+  letter-spacing: var(--tracking-mono);
+  margin: 0;
+}
+
+.followUpPrompt {
+  font-family: var(--font-story);
+  font-size: var(--text-ui);
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  margin: 0;
+}
+
+.followUpActions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Action row spans the edit-field width: Speak/Type · Polish flush left, Finish flush right.

@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useProseHistory, type ProseHistory } from "@/lib/use-prose-history";
 import { common } from "@/app/_copy";
 
@@ -44,6 +50,13 @@ export interface KindredProseEditorProps {
   onPolish?: (text: string) => Promise<string>;
   /** When false, hide the in-toolbar Polish button even if `onPolish` is set. Default true. */
   showPolishButton?: boolean;
+  /**
+   * When false, hide in-toolbar Undo/Redo (parent owns them — e.g. ComposingEditor top chrome next to
+   * Back). Default true. Polish can still show when `showPolishButton` is true.
+   */
+  showHistoryButtons?: boolean;
+  /** Optional ref to the textarea — parents use this to focus on Speak→Type. */
+  textareaRef?: Ref<HTMLTextAreaElement | null>;
   /** Change this to re-baseline undo/redo history (e.g. a different draft mounts into this editor). */
   historyKey?: string;
   /**
@@ -65,6 +78,8 @@ export function KindredProseEditor({
   disabled,
   onPolish,
   showPolishButton = true,
+  showHistoryButtons = true,
+  textareaRef,
   historyKey,
   history: injectedHistory,
   labels,
@@ -103,8 +118,9 @@ export function KindredProseEditor({
 
   const busy = disabled || polishing;
   const polishInToolbar = Boolean(onPolish) && showPolishButton;
+  const historyInToolbar = showHistoryButtons && (history.canUndo || history.canRedo);
   // The toolbar is worth showing if there is any history affordance OR an in-toolbar polish button.
-  const showToolbar = polishInToolbar || history.canUndo || history.canRedo;
+  const showToolbar = polishInToolbar || historyInToolbar;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -128,29 +144,36 @@ export function KindredProseEditor({
               {polishing ? l.polishing : l.polish}
             </ToolbarButton>
           )}
-          <div style={{ flex: 1 }} />
-          <ToolbarButton
-            onClick={history.undo}
-            disabled={busy || !history.canUndo}
-            title={l.undo}
-            aria-label={l.undo}
-            iconOnly
-          >
-            <UndoIcon />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={history.redo}
-            disabled={busy || !history.canRedo}
-            title={l.redo}
-            aria-label={l.redo}
-            iconOnly
-          >
-            <RedoIcon />
-          </ToolbarButton>
+          {historyInToolbar ? (
+            <>
+              <div style={{ flex: 1 }} />
+              <ToolbarButton
+                onClick={history.undo}
+                disabled={busy || !history.canUndo}
+                title={l.undo}
+                aria-label={l.undo}
+                iconOnly
+              >
+                <UndoIcon />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={history.redo}
+                disabled={busy || !history.canRedo}
+                title={l.redo}
+                aria-label={l.redo}
+                iconOnly
+              >
+                <RedoIcon />
+              </ToolbarButton>
+            </>
+          ) : polishInToolbar ? (
+            <div style={{ flex: 1 }} />
+          ) : null}
         </div>
       )}
 
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
