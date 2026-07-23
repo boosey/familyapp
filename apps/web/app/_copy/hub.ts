@@ -349,6 +349,9 @@ export const hub = {
     decline: "Decline",
     // Mono status shown in place once a request is decided (uppercased in the view).
     statusApproved: "Approved",
+    // #354: a request auto-approved because the requester already held an invitation from this
+    // family — distinguishes "you already vouched for them" from a fresh steward decision.
+    statusApprovedByInvitation: "Approved by invitation",
     statusDeclined: "Declined",
   },
   // "Story Browse (Hub)" surface — Feed / Timeline / Search modes + family-scope filter + the

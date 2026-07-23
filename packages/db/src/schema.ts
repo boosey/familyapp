@@ -1234,6 +1234,17 @@ export const joinRequests = pgTable(
     resultingMembershipId: uuid("resulting_membership_id").references(
       () => memberships.id,
     ),
+    /**
+     * When this request was AUTO-approved because the requester had a live invitation from this
+     * family matching one of their VERIFIED contacts (#354 — an invited person who took the
+     * discovery "request to join" route instead of tapping the invite link), the invitation it
+     * consumed. NULL for a normal steward-decided request. Drives the "Approved by invitation"
+     * label. `onDelete: set null` so the invite reaper / merge-on-collision can still delete the
+     * invitation without FK-failing this (already-decided) request.
+     */
+    viaInvitationId: uuid("via_invitation_id").references(() => invitations.id, {
+      onDelete: "set null",
+    }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

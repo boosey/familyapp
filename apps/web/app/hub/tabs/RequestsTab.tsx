@@ -112,6 +112,8 @@ export async function RequestsTab({
     requesterName: r.requesterName,
     message: r.message,
     status: r.status,
+    // #352: auto-approved-by-invitation rows render "Approved by invitation" instead of "Approved".
+    viaInvitation: r.viaInvitationId !== null,
   }));
 
   // #140 per-family pending-request counts from the FULL pending set (independent of the selected

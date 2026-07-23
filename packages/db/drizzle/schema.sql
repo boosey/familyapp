@@ -233,6 +233,7 @@ CREATE TABLE "join_requests" (
 	"status" "join_request_status" DEFAULT 'pending' NOT NULL,
 	"decided_by_person_id" uuid,
 	"resulting_membership_id" uuid,
+	"via_invitation_id" uuid,
 	"decided_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -536,6 +537,7 @@ ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_family_id_families_id_
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_requester_person_id_persons_id_fk" FOREIGN KEY ("requester_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_decided_by_person_id_persons_id_fk" FOREIGN KEY ("decided_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_resulting_membership_id_memberships_id_fk" FOREIGN KEY ("resulting_membership_id") REFERENCES "public"."memberships"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "join_requests" ADD CONSTRAINT "join_requests_via_invitation_id_invitations_id_fk" FOREIGN KEY ("via_invitation_id") REFERENCES "public"."invitations"("id") ON DELETE set null ON UPDATE no action;
 ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_person_a_id_persons_id_fk" FOREIGN KEY ("person_a_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "kinship_assertions" ADD CONSTRAINT "kinship_assertions_person_b_id_persons_id_fk" FOREIGN KEY ("person_b_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;

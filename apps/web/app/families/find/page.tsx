@@ -33,17 +33,22 @@ async function requestToJoin(formData: FormData): Promise<void> {
   const message = String(formData.get("message") ?? "").trim();
   if (!familyId) redirect("/families/find");
 
+  let autoApproved = false;
   try {
-    await createJoinRequest(db, {
+    ({ autoApproved } = await createJoinRequest(db, {
       familyId,
       requesterPersonId: ctx.personId,
       message: message || undefined,
-    });
+    }));
   } catch {
     // createJoinRequest's guards (family gone/undiscoverable, already a member, duplicate pending)
     // all mean "we can't send this" — surface a single friendly inline error.
     redirect("/families/find?error=request");
   }
+  // #354: the requester held a matching invitation, so they're already an active member — skip the
+  // "waiting for approval" screen and drop them straight into the family. (redirect() throws its own
+  // control-flow signal, so it must stay OUTSIDE the try above.)
+  if (autoApproved) redirect("/hub");
   redirect(`/families/find?sent=${encodeURIComponent(familyId)}`);
 }
 

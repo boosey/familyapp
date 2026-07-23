@@ -18,6 +18,8 @@ export interface RequestRow {
   requesterName: string;
   message: string | null;
   status: string;
+  /** #352: this (approved) row was auto-approved off a matching invitation — label it distinctly. */
+  viaInvitation?: boolean;
 }
 
 interface RequestsListProps {
@@ -177,7 +179,12 @@ export function RequestsList({ pending, decided, approve, decline }: RequestsLis
                 flex: "0 0 auto",
               }}
             >
-              {(approved ? hub.requests.statusApproved : hub.requests.statusDeclined).toUpperCase()}
+              {(approved
+                ? r.viaInvitation
+                  ? hub.requests.statusApprovedByInvitation
+                  : hub.requests.statusApproved
+                : hub.requests.statusDeclined
+              ).toUpperCase()}
             </span>
           </li>
         );

@@ -786,88 +786,128 @@ export async function acceptInvitation(
       throw new InvariantViolation("invitation has expired");
     }
 
-    const { membershipId } = await insertActiveMembership(tx, {
-      personId: input.acceptedPersonId,
-      familyId: invite.familyId,
-      role: invite.role,
+    const { membershipId } = await acceptResolvedInvitation(tx, invite, {
+      acceptedPersonId: input.acceptedPersonId,
+      relationshipLabel: input.relationshipLabel,
     });
-
-    // Merge the provisional invitee Person into the accepting Person, unless the invite already
-    // anchors to them (a no-op re-point, the person-bound Account-holder-accepts-their-own-invite
-    // case, #333). Guard: ONLY ever delete a Person that is a genuine ADR-0006 provisional —
-    // `origin === "invitee"` AND Account-less. A person-bound invite (#333, ADR-0028) may anchor to a
-    // real `mention`/`self` Person who happens to have no Account yet (e.g. a deceased-relative
-    // placeholder or a tree Person entered by a relative) — deleting THAT Person on a mismatched
-    // accept would destroy a real tree node the family already built, not clean up a throwaway
-    // placeholder. So a mismatched accept (accepter differs from the anchor) is refused unless the
-    // anchor is unambiguously a disposable provisional.
-    const provisionalId = invite.inviteePersonId;
-    if (provisionalId !== input.acceptedPersonId) {
-      const [anchor] = await tx
-        .select({ accountId: persons.accountId, origin: persons.origin })
-        .from(persons)
-        .where(eq(persons.id, provisionalId))
-        .limit(1);
-      if (!anchor) {
-        throw new InvariantViolation(
-          "invitation's provisional invitee Person is missing — cannot merge",
-        );
-      }
-      if (anchor.accountId !== null) {
-        throw new InvariantViolation(
-          "invitation's invitee anchor is an Account-bearing Person — refusing to merge/delete",
-        );
-      }
-      if (anchor.origin !== "invitee") {
-        throw new InvariantViolation(
-          "invitation's invitee anchor is not a disposable provisional (origin != 'invitee') — " +
-            "refusing to merge/delete a real tree Person; the accepting Person must match the anchor",
-        );
-      }
-      // Move any Asks queued against the provisional invitee onto the real Person.
-      await tx
-        .update(asks)
-        .set({ targetPersonId: input.acceptedPersonId })
-        .where(eq(asks.targetPersonId, provisionalId));
-    }
-
-    await tx
-      .update(invitations)
-      .set({
-        status: "accepted",
-        acceptedPersonId: input.acceptedPersonId,
-        // Re-point the anchor to the real Person before the provisional row is deleted (the FK
-        // would otherwise dangle). If it already pointed there this is a harmless self-set.
-        inviteePersonId: input.acceptedPersonId,
-        acceptedAt: new Date(),
-        ...(input.relationshipLabel !== undefined
-          ? { relationshipLabel: input.relationshipLabel.trim() || null }
-          : {}),
-      })
-      .where(eq(invitations.id, invite.id));
-
-    if (provisionalId !== input.acceptedPersonId) {
-      await tx.delete(persons).where(eq(persons.id, provisionalId));
-    }
-
-    // #164 (ADR-0023): auto-place the new member on the family tree from the invite's STRUCTURED
-    // relationship — the exact fact the inviter supplied, no longer discarded (the production
-    // incident this prevents). Only the six DIRECT primitives place an edge here; `other` and a
-    // nullish relationship write nothing (the member is left unplaced for #161, never guessed). The
-    // edge is a normal `asserted` edge, actor = the inviter, subject to the same hide/steward overlay.
-    // Runs on the REAL accepting Person (the provisional is already merged away) inside this tx.
-    if (
-      invite.inviteRelationship !== null &&
-      invite.inviteRelationship !== "other"
-    ) {
-      await placeInvitedMemberOnAccept(tx, {
-        familyId: invite.familyId,
-        inviterPersonId: invite.inviterPersonId,
-        inviteePersonId: input.acceptedPersonId,
-        relationship: invite.inviteRelationship,
-      });
-    }
-
     return { membershipId, familyId: invite.familyId };
   });
+}
+
+/** A tx handle wide enough for the accept core (which reads, inserts, updates, and deletes rows). */
+type AcceptTx = Pick<Database, "select" | "insert" | "update" | "delete">;
+
+/**
+ * The already-loaded, already-validated invitation the accept core acts on. The caller MUST have
+ * re-read this row (ideally `FOR UPDATE`) inside the same transaction and confirmed it is still
+ * `pending` and unexpired — the core does not re-check status.
+ */
+export interface ResolvedInvitation {
+  id: string;
+  familyId: string;
+  role: MembershipRole;
+  inviteePersonId: string;
+  inviterPersonId: string;
+  inviteRelationship: InviteRelationship | null;
+}
+
+/**
+ * Token-less core of acceptance, shared by {@link acceptInvitation} (the link path) and the
+ * join-request auto-approve path (#354 — an invited person who took the discovery "request to join"
+ * route instead of tapping the link). Given a validated invitation and the accepting Person, it:
+ *   1. creates the accepting Person's ACTIVE membership with the invite's role;
+ *   2. folds away a genuine ADR-0006 provisional invitee (re-points queued Asks, deletes the throwaway);
+ *   3. flips the invitation to `accepted` (so the link can never mint a SECOND membership afterward);
+ *   4. auto-places the new member from the invite's structured relationship (#164, ADR-0023).
+ * Runs entirely inside the caller's transaction. See {@link acceptInvitation} for the full ADR-0006 /
+ * #333 merge rationale reproduced in the inline comments below.
+ */
+export async function acceptResolvedInvitation(
+  tx: AcceptTx,
+  invite: ResolvedInvitation,
+  input: { acceptedPersonId: string; relationshipLabel?: string },
+): Promise<{ membershipId: string }> {
+  const { membershipId } = await insertActiveMembership(tx, {
+    personId: input.acceptedPersonId,
+    familyId: invite.familyId,
+    role: invite.role,
+  });
+
+  // Merge the provisional invitee Person into the accepting Person, unless the invite already
+  // anchors to them (a no-op re-point, the person-bound Account-holder-accepts-their-own-invite
+  // case, #333). Guard: ONLY ever delete a Person that is a genuine ADR-0006 provisional —
+  // `origin === "invitee"` AND Account-less. A person-bound invite (#333, ADR-0028) may anchor to a
+  // real `mention`/`self` Person who happens to have no Account yet (e.g. a deceased-relative
+  // placeholder or a tree Person entered by a relative) — deleting THAT Person on a mismatched
+  // accept would destroy a real tree node the family already built, not clean up a throwaway
+  // placeholder. So a mismatched accept (accepter differs from the anchor) is refused unless the
+  // anchor is unambiguously a disposable provisional.
+  const provisionalId = invite.inviteePersonId;
+  if (provisionalId !== input.acceptedPersonId) {
+    const [anchor] = await tx
+      .select({ accountId: persons.accountId, origin: persons.origin })
+      .from(persons)
+      .where(eq(persons.id, provisionalId))
+      .limit(1);
+    if (!anchor) {
+      throw new InvariantViolation(
+        "invitation's provisional invitee Person is missing — cannot merge",
+      );
+    }
+    if (anchor.accountId !== null) {
+      throw new InvariantViolation(
+        "invitation's invitee anchor is an Account-bearing Person — refusing to merge/delete",
+      );
+    }
+    if (anchor.origin !== "invitee") {
+      throw new InvariantViolation(
+        "invitation's invitee anchor is not a disposable provisional (origin != 'invitee') — " +
+          "refusing to merge/delete a real tree Person; the accepting Person must match the anchor",
+      );
+    }
+    // Move any Asks queued against the provisional invitee onto the real Person.
+    await tx
+      .update(asks)
+      .set({ targetPersonId: input.acceptedPersonId })
+      .where(eq(asks.targetPersonId, provisionalId));
+  }
+
+  await tx
+    .update(invitations)
+    .set({
+      status: "accepted",
+      acceptedPersonId: input.acceptedPersonId,
+      // Re-point the anchor to the real Person before the provisional row is deleted (the FK
+      // would otherwise dangle). If it already pointed there this is a harmless self-set.
+      inviteePersonId: input.acceptedPersonId,
+      acceptedAt: new Date(),
+      ...(input.relationshipLabel !== undefined
+        ? { relationshipLabel: input.relationshipLabel.trim() || null }
+        : {}),
+    })
+    .where(eq(invitations.id, invite.id));
+
+  if (provisionalId !== input.acceptedPersonId) {
+    await tx.delete(persons).where(eq(persons.id, provisionalId));
+  }
+
+  // #164 (ADR-0023): auto-place the new member on the family tree from the invite's STRUCTURED
+  // relationship — the exact fact the inviter supplied, no longer discarded (the production
+  // incident this prevents). Only the six DIRECT primitives place an edge here; `other` and a
+  // nullish relationship write nothing (the member is left unplaced for #161, never guessed). The
+  // edge is a normal `asserted` edge, actor = the inviter, subject to the same hide/steward overlay.
+  // Runs on the REAL accepting Person (the provisional is already merged away) inside this tx.
+  if (
+    invite.inviteRelationship !== null &&
+    invite.inviteRelationship !== "other"
+  ) {
+    await placeInvitedMemberOnAccept(tx, {
+      familyId: invite.familyId,
+      inviterPersonId: invite.inviterPersonId,
+      inviteePersonId: input.acceptedPersonId,
+      relationship: invite.inviteRelationship,
+    });
+  }
+
+  return { membershipId };
 }
