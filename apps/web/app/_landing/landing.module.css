@@ -361,6 +361,19 @@
 /* =====================================================================
  * Scrapbook skin flourishes — decorative, scoped so heirloom degrades cleanly.
  * ===================================================================== */
+/* Sticker eyebrow — mirrors the onboarding-card "full signature" sticker eyebrow so the landing
+   page's section kickers and hero tag carry the same coral-pill treatment as the rest of the app. */
+:global(:root[data-skin="scrapbook"]) .kicker,
+:global(:root[data-skin="scrapbook"]) .eyebrow {
+  background: var(--sticker-coral-bg);
+  color: var(--sticker-coral-ink);
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+  display: inline-block;
+  /* .eyebrow sits in the .hero flex column, which stretches children to full width by default;
+     shrink the pill back to its own content instead of the flex cross-axis. */
+  align-self: flex-start;
+}
 :global(:root[data-skin="scrapbook"]) .mark {
   background-image: linear-gradient(
     to bottom,
@@ -420,6 +433,22 @@
 :global(:root[data-reduce-motion="on"]) .tape,
 :global([data-tone="solemn"]) .tape {
   display: none;
+}
+/* Revert the sticker pill back to plain block text — or a suppressed kicker/eyebrow keeps the
+   pill's rust ink + inline-block sizing instead of the plain accent-strong label. */
+:global(:root[data-reduce-motion="on"]) .kicker,
+:global([data-tone="solemn"]) .kicker {
+  background: none;
+  padding: 0;
+  color: var(--accent-strong);
+  display: block;
+}
+:global(:root[data-reduce-motion="on"]) .eyebrow,
+:global([data-tone="solemn"]) .eyebrow {
+  background: none;
+  padding: 0;
+  color: var(--accent-strong);
+  display: block;
 }
 :global(:root[data-reduce-motion="on"]) .progressRail {
   display: none;
