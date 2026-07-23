@@ -46,7 +46,8 @@
   overflow: hidden;
 }
 .blob,
-.ring {
+.ring,
+.dot {
   position: absolute;
   border-radius: 50%;
   will-change: transform;
@@ -60,9 +61,17 @@
   border: var(--border-width) solid var(--border-strong);
   opacity: 0.5;
 }
+/* Small crisp accent — no blur, so it reads as a punctuation mark rather than a soft field shape. */
+.dot {
+  background: var(--accent);
+  opacity: 0.3;
+}
 /* Each shape rides a parallax channel; sign chooses drift direction for depth. */
 .driftSlowUp {
   transform: translate3d(0, calc(var(--py-slow, 0px) * -1), 0);
+}
+.driftSlowDown {
+  transform: translate3d(0, var(--py-slow, 0px), 0);
 }
 .driftMediumDown {
   transform: translate3d(0, var(--py-medium, 0px), 0);
@@ -70,12 +79,21 @@
 .driftFastUp {
   transform: translate3d(0, calc(var(--py-fast, 0px) * -1), 0);
 }
+.driftFastDown {
+  transform: translate3d(0, var(--py-fast, 0px), 0);
+}
 
 .blobA { top: -6vw; right: -4vw; width: 34vw; height: 34vw; }
 .blobB { top: 128vh; left: -8vw; width: 40vw; height: 40vw; background: var(--support-soft); }
 .blobC { top: 250vh; right: -10vw; width: 30vw; height: 30vw; }
+.blobD { top: 215vh; left: -6vw; width: 24vw; height: 24vw; background: var(--support-soft); }
+.blobE { top: 305vh; left: -7vw; width: 26vw; height: 26vw; }
 .ringA { top: 76vh; left: -7vw; width: 24vw; height: 24vw; }
 .ringB { top: 190vh; right: 10vw; width: 16vw; height: 16vw; }
+.ringC { top: 225vh; right: -4vw; width: 19vw; height: 19vw; }
+.dotA { top: 42vh; right: 20vw; width: 2.5vw; height: 2.5vw; }
+.dotB { top: 148vh; right: 32vw; width: 2vw; height: 2vw; }
+.dotC { top: 345vh; left: 22vw; width: 2.5vw; height: 2.5vw; }
 
 /* ---- shared section scaffolding ---- */
 .section {
@@ -457,11 +475,15 @@
  * or during initial hydration (the JS scroll handler already parks their custom
  * properties at 0px). */
 :global(:root[data-reduce-motion="on"]) .driftSlowUp,
+:global(:root[data-reduce-motion="on"]) .driftSlowDown,
 :global(:root[data-reduce-motion="on"]) .driftMediumDown,
 :global(:root[data-reduce-motion="on"]) .driftFastUp,
+:global(:root[data-reduce-motion="on"]) .driftFastDown,
 :global([data-tone="solemn"]) .driftSlowUp,
+:global([data-tone="solemn"]) .driftSlowDown,
 :global([data-tone="solemn"]) .driftMediumDown,
-:global([data-tone="solemn"]) .driftFastUp {
+:global([data-tone="solemn"]) .driftFastUp,
+:global([data-tone="solemn"]) .driftFastDown {
   transform: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -470,6 +492,8 @@
   .progressRail { display: none; }
   .scrollChevron { animation: none; }
   .driftSlowUp,
+  .driftSlowDown,
   .driftMediumDown,
-  .driftFastUp { transform: none !important; }
+  .driftFastUp,
+  .driftFastDown { transform: none !important; }
 }

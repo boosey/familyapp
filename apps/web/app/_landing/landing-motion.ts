@@ -15,9 +15,9 @@
  * (`--py-slow` / `--py-medium` / `--py-fast`) rather than inventing its own number.
  */
 export const SCROLL_SPEEDS = {
-  slow: 0.08,
-  medium: 0.18,
-  fast: 0.34,
+  slow: 0.16,
+  medium: 0.32,
+  fast: 0.56,
 } as const;
 
 export type ScrollSpeedChannel = keyof typeof SCROLL_SPEEDS;
