@@ -1,4 +1,5 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
+import styles from "./KindredPromptCard.module.css";
 
 export interface KindredPromptCardProps extends HTMLAttributes<HTMLDivElement> {
   eyebrow?: string;
@@ -12,59 +13,20 @@ export function KindredPromptCard({
   eyebrow,
   question,
   children,
+  className,
   style,
   ...rest
 }: KindredPromptCardProps) {
+  const mergedClass = className ? `${styles.card} ${className}` : styles.card;
   return (
-    <div
-      style={{
-        background: "var(--surface-card)",
-        border: "var(--border-width, 1.5px) solid var(--border)",
-        borderRadius: "var(--radius-lg)",
-        padding: "24px 28px",
-        boxShadow: "var(--shadow-sm)",
-        ...style,
-      }}
-      {...rest}
-    >
+    <div className={mergedClass} style={style as CSSProperties | undefined} {...rest}>
       {eyebrow ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: "var(--text-label)",
-            fontFamily: "var(--font-mono)",
-            fontWeight: 500,
-            letterSpacing: "0.06em",
-            color: "var(--accent)",
-            marginBottom: 14,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "var(--accent)",
-              flexShrink: 0,
-            }}
-          />
+        <div className={styles.eyebrow}>
+          <span className={styles.dot} aria-hidden="true" />
           {eyebrow}
         </div>
       ) : null}
-      {question != null ? (
-        <div
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "var(--text-prompt)",
-            lineHeight: "var(--leading-snug)",
-            color: "var(--text-body)",
-          }}
-        >
-          {question}
-        </div>
-      ) : null}
+      {question != null ? <div className={styles.question}>{question}</div> : null}
       {children}
     </div>
   );

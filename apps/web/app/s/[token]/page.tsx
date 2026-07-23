@@ -8,6 +8,7 @@
  */
 import { resolveLinkSession } from "@chronicle/capture";
 import { getNarratorProfile, listPendingAsksForNarrator } from "@chronicle/core";
+import type { CSSProperties } from "react";
 import { getRuntime } from "@/lib/runtime";
 import { NarratorRecorder } from "./NarratorRecorder";
 import { KindredPromptCard } from "@/app/_kindred";
@@ -29,7 +30,7 @@ export default async function NarratorPage({
 
   if (!resolved) {
     return (
-      <main className={`kin-fullbleed ${styles.restingMain}`} data-tone="solemn">
+      <main className={`kin-fullbleed ${styles.restingMain}`}>
         <h1 className={styles.restingTitle}>{capture.resting.welcome}</h1>
         <p className={styles.restingBody}>{capture.resting.body}</p>
       </main>
@@ -53,7 +54,7 @@ export default async function NarratorPage({
   });
 
   return (
-    <main className="kin-fullbleed" data-tone="solemn">
+    <main className={`kin-fullbleed ${styles.main}`}>
       <header className={styles.header}>
         <span className={styles.avatar}>{initial}</span>
         <div>
@@ -66,6 +67,8 @@ export default async function NarratorPage({
         <h1 className={styles.hello}>{capture.narrator.hello(spokenName)}</h1>
         <p className={styles.invite}>{capture.narrator.invite}</p>
         <KindredPromptCard
+          className={styles.promptCard}
+          style={{ "--tilt": "-0.6deg" } as CSSProperties}
           eyebrow={nextAsk ? capture.narrator.eyebrowAsked(nextAsk.askerSpokenName) : capture.narrator.eyebrowDefault}
           question={
             nextAsk

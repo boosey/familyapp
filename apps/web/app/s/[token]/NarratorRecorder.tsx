@@ -16,6 +16,7 @@ import { readPreference } from "@/app/_kindred/preferences/client";
 import { capture } from "@/app/_copy";
 import { pollUntilReady } from "@/lib/poll-status";
 import { useMicRecorder } from "@/lib/use-mic-recorder";
+import { CAPTURE_VOICE_SIZE_ENTRY_PX } from "@/lib/constants";
 
 // `processing` = capture saved, pipeline rendering out-of-band; `slow` = soft cap reached.
 type Phase = "processing" | "slow" | "done" | "softfail";
@@ -101,11 +102,9 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     onError: () => setPhase("softfail"),
   });
 
-  // Hold-to-remember: a breathing waveform reflects the live mic. The waveform intentionally keeps
-  // breathing on this (always-solemn) capture surface — it's the point of the surface. Reduce motion
-  // only when the app preference is on OR the OS query is set: then the waveform collapses to a
-  // static level bar and the audio-level rAF loop is disabled so nothing animates. (An OS-only user
-  // otherwise keeps the rAF/AudioContext running every frame even though CSS freezes the visual.)
+  // Hold-to-remember: a breathing waveform reflects the live mic. Reduce motion only when the app
+  // preference is on OR the OS query is set: then the waveform collapses to a static level bar and
+  // the audio-level rAF loop is disabled so nothing animates.
   // SSR-safe: the waveform only renders while listening (client-only, post-interaction).
   const reduceMotion =
     readPreference(PREFERENCES.reduceMotion) === "on" ||
@@ -222,7 +221,7 @@ export function NarratorRecorder({ token, askId = null }: { token: string; askId
     <KindredVoiceButton
       listening={micPhase === "listening"}
       saving={micPhase === "saving"}
-      size={220}
+      size={CAPTURE_VOICE_SIZE_ENTRY_PX}
       // Omit `label` so KindredVoiceButton's hold/tap defaults match hub compose + onboarding.
       holdToRecord={holdToRecord}
       onHoldStart={holdToRecord ? onHoldStart : undefined}

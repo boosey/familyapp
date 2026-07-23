@@ -9,6 +9,9 @@
  *
  * `label` overrides the heading; it defaults to the story surface's "Read it over…" copy so
  * ComposingEditor keeps its wording unchanged while intake passes its own.
+ *
+ * `showPolishButton` (default true) lets ComposingEditor hide the in-toolbar Polish when it owns a
+ * Polish control on the Speak/Type row instead.
  */
 import { KindredProseEditor } from "@/app/_kindred";
 import { hub, common } from "@/app/_copy";
@@ -20,6 +23,7 @@ export function ProseBlock({
   disabled,
   history,
   onPolish,
+  showPolishButton = true,
   label = hub.answer.reviewYourWords,
 }: {
   proseDraft: string;
@@ -27,6 +31,7 @@ export function ProseBlock({
   disabled: boolean;
   history: ProseHistory;
   onPolish: (text: string) => Promise<string>;
+  showPolishButton?: boolean;
   label?: string;
 }) {
   return (
@@ -50,6 +55,7 @@ export function ProseBlock({
         history={history}
         labels={common.proseEditor}
         onPolish={onPolish}
+        showPolishButton={showPolishButton}
       />
     </div>
   );

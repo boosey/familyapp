@@ -36,10 +36,14 @@ export interface KindredProseEditorProps {
   onChange: (next: string) => void;
   disabled?: boolean;
   /**
-   * When provided, renders a "Polish with AI" button. Takes the current text, returns the rewritten
-   * text (or throws to signal failure — the editor then shows an inline, non-destructive error).
+   * When provided, the editor can run "Polish with AI" (parent supplies the text→text call). By
+   * default a Polish button renders in the toolbar above the textarea. Set `showPolishButton={false}`
+   * when the parent owns a Polish control elsewhere (e.g. ComposingEditor Speak/Type row) so the
+   * toolbar stays undo/redo-only.
    */
   onPolish?: (text: string) => Promise<string>;
+  /** When false, hide the in-toolbar Polish button even if `onPolish` is set. Default true. */
+  showPolishButton?: boolean;
   /** Change this to re-baseline undo/redo history (e.g. a different draft mounts into this editor). */
   historyKey?: string;
   /**
@@ -58,6 +62,7 @@ export function KindredProseEditor({
   onChange,
   disabled,
   onPolish,
+  showPolishButton = true,
   historyKey,
   history: injectedHistory,
   labels,
@@ -94,8 +99,9 @@ export function KindredProseEditor({
     : {};
 
   const busy = disabled || polishing;
-  // The toolbar is worth showing if there is any history affordance OR a polish button.
-  const showToolbar = Boolean(onPolish) || history.canUndo || history.canRedo;
+  const polishInToolbar = Boolean(onPolish) && showPolishButton;
+  // The toolbar is worth showing if there is any history affordance OR an in-toolbar polish button.
+  const showToolbar = polishInToolbar || history.canUndo || history.canRedo;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -108,7 +114,7 @@ export function KindredProseEditor({
             flexWrap: "wrap",
           }}
         >
-          {onPolish && (
+          {polishInToolbar && (
             <ToolbarButton
               onClick={runPolish}
               disabled={busy || value.trim().length === 0}

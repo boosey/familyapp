@@ -52,3 +52,11 @@ export const RECONCILE_TOAST_DISMISS_MS = 5000;
  *   lg (64rem / 1024px) — tablet → desktop
  */
 export const RESPONSIVE_BREAKPOINTS_REM = { sm: 40, lg: 64 } as const;
+
+/**
+ * Capture voice-button diameters (px). Mobile-first — the old 220 hero disc crowded phone viewports.
+ * Entry = take-0 / link-session primary CTA; footer = follow-up append on the composing surface
+ * (matches `--touch-voice`). Single source for NarratorRecorder / ComposingEditor / ApprovalRecorder.
+ */
+export const CAPTURE_VOICE_SIZE_ENTRY_PX = 120;
+export const CAPTURE_VOICE_SIZE_FOOTER_PX = 96;

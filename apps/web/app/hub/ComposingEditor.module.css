@@ -1,11 +1,9 @@
 /*
- * ComposingEditor — the live story-composing / capture surface. The whole subtree is tone="solemn"
- * (set on `.capture` in ComposingEditor.tsx): this is the emotional core, so it stays calm — NO
- * Scrapbook tilt/tape/highlighter. Token-driven; a straight port of the capture-chrome inline styles
- * (the persistent capture footer + the voice/type mode toggles). See _skins/CSS-MODULES.md.
+ * ComposingEditor — the live story-composing / capture surface. Token-driven; Scrapbook signatures
+ * apply via the active skin (capture is no longer solemn-muted). See _skins/CSS-MODULES.md.
  */
 
-/* Outer solemn container — a plain contents-transparent wrapper carrying data-tone="solemn". */
+/* Outer container — a plain contents-transparent wrapper. */
 .capture {
   display: contents;
 }
@@ -22,6 +20,17 @@
   gap: 20px;
 }
 
+/* Speak/Type + Polish with AI on one row under the prose field. */
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  flex-wrap: wrap;
+}
+
 /* The voice⇄text input-mode segmented toggle group (both the footer and the capture-entry copies). */
 .modeGroup {
   display: inline-flex;
@@ -30,6 +39,34 @@
   border-radius: var(--radius-pill);
   background: var(--surface-card);
   border: var(--border-width) solid var(--border);
+}
+
+.polishButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fade), opacity var(--dur-fade);
+}
+
+.polishButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.polishButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* One option inside the mode toggle group. */
@@ -79,4 +116,42 @@
 /* Capture-entry (take-0) continue button sits a touch lower than the footer's. */
 .textEntryActionsWide {
   margin-top: 16px;
+}
+
+/* Compact denser entry column on phone. */
+.entryColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.subjectPhoto {
+  width: 100%;
+  max-width: 360px;
+  max-height: 28dvh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  display: block;
+  background: var(--surface-sunken);
+}
+
+.entryPrompt {
+  font-family: var(--font-story);
+  font-size: clamp(1.35rem, 3.5vw, var(--text-story-lg));
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  margin: 0;
+  max-width: 24ch;
+  text-align: center;
+}
+
+@media (min-width: 40rem) {
+  .entryColumn {
+    gap: 32px;
+  }
+
+  .subjectPhoto {
+    max-height: 40dvh;
+  }
 }

@@ -1,7 +1,10 @@
 /*
- * /s/[token] narrator entry surface — the link-session capture page. Token-driven, calm: this is the
- * emotional core, so the <main> carries data-tone="solemn" (set in page.tsx) and gets NO Scrapbook
- * structural signatures. Straight port of the former inline styles. See _skins/CSS-MODULES.md.
+ * /s/[token] narrator entry surface — link-session capture. Token-driven base; Scrapbook structural
+ * signatures on the prompt card (via KindredPromptCard) and a light header shelf. See
+ * _skins/CSS-MODULES.md.
+ *
+ * Mobile-first: phone chrome is demoted (no hello/invite/date) so prompt + mic dominate; desktop
+ * restores the fuller greeting at ≥ sm (40rem).
  */
 
 /* Resting/error state: centered fullbleed layout. */
@@ -11,7 +14,6 @@
   padding: 32px;
 }
 
-/* Resting/error state heading + body (unresolved token). */
 .restingTitle {
   font-family: var(--font-story);
   font-size: clamp(1.75rem, 7vw, var(--text-display));
@@ -31,26 +33,31 @@
   font-size: var(--text-ui);
 }
 
-/* Header: inviter avatar + name + conversation date. */
+.main {
+  background: var(--surface-page);
+}
+
+/* Header — compact on phone. */
 .header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 20px 28px;
+  gap: 10px;
+  padding: 12px 16px;
   border-bottom: var(--border-width) solid var(--border);
 }
 
 .avatar {
-  width: 52px;
-  height: 52px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--support);
   color: var(--accent-on);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-ui);
+  font-size: var(--text-label);
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .name {
@@ -61,23 +68,24 @@
 }
 
 .date {
+  display: none;
   font-size: var(--text-label);
   color: var(--text-muted);
 }
 
-/* The main prompt section. */
 .section {
   flex: 1;
-  padding: 32px clamp(20px, 5vw, 56px);
+  padding: 16px 16px 8px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 12px;
   max-width: 720px;
   width: 100%;
   align-self: center;
 }
 
 .hello {
+  display: none;
   font-family: var(--font-story);
   font-size: clamp(2rem, 8vw, var(--text-display-md));
   font-weight: 400;
@@ -90,6 +98,7 @@
 }
 
 .invite {
+  display: none;
   font-family: var(--font-ui);
   font-size: var(--text-ui);
   margin: 0;
@@ -98,10 +107,56 @@
   max-width: 26ch;
 }
 
-/* The record CTA footer. */
+.promptCard {
+  /* Optional layout hook; Scrapbook signatures live on KindredPromptCard. */
+  margin: 0;
+}
+
 .footer {
-  padding: 28px clamp(20px, 5vw, 56px) clamp(24px, 5vw, 48px);
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px));
   border-top: var(--border-width) solid var(--border);
   display: flex;
   justify-content: center;
+}
+
+/* Desktop / tablet: restore fuller greeting chrome. */
+@media (min-width: 40rem) {
+  .header {
+    gap: 14px;
+    padding: 20px 28px;
+  }
+
+  .avatar {
+    width: 52px;
+    height: 52px;
+    font-size: var(--text-ui);
+  }
+
+  .date {
+    display: block;
+  }
+
+  .section {
+    padding: 32px clamp(20px, 5vw, 56px);
+    gap: 28px;
+  }
+
+  .hello,
+  .invite {
+    display: block;
+  }
+
+  .footer {
+    padding: 28px clamp(20px, 5vw, 56px) clamp(24px, 5vw, 48px);
+    padding-bottom: max(clamp(24px, 5vw, 48px), env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ---- Scrapbook: soft shelf on the header strip ---- */
+:global(:root[data-skin="scrapbook"]) .header {
+  box-shadow: var(--shadow-sm);
+}
+
+:global(:root[data-skin="scrapbook"]) .avatar {
+  box-shadow: 0 3px 0 var(--border);
 }

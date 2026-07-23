@@ -52,6 +52,10 @@ import {
 } from "./answer/[askId]/actions";
 import { useProseHistory } from "@/lib/use-prose-history";
 import { clog } from "@/lib/clog";
+import {
+  CAPTURE_VOICE_SIZE_ENTRY_PX,
+  CAPTURE_VOICE_SIZE_FOOTER_PX,
+} from "@/lib/constants";
 import styles from "./ComposingEditor.module.css";
 import { AnswerReviewPending } from "./answer/[askId]/AnswerReviewPending";
 import { ProseBlock } from "./_composing/ProseBlock";
@@ -830,10 +834,8 @@ export function ComposingEditor({
 
   const composing = draft?.state === "draft" || (draft == null && activeStoryId != null);
 
-  // The whole composing/recording subtree is emotionally heavy → tone="solemn" (spec §4.5): the
-  // Task-1 guard mutes the decorative palette and the modules kill tilt/tape/breathing under it, so
-  // capture stays calm even under the Scrapbook skin. Every render phase below is produced by this inner
-  // function and wrapped in one solemn container (`display: contents`, so it adds no layout box).
+  // Capture uses the active skin fully (Scrapbook signatures included). Every render phase below is
+  // produced by this inner function and wrapped in `.capture` (`display: contents`, no layout box).
   const renderPhase = () => {
   // ── PENDING-APPROVAL REVIEW (shrunk: title + relisten + edit + tier + Share/Discard) ──
   if (draft && draft.state === "pending_approval") {
@@ -883,8 +885,6 @@ export function ComposingEditor({
         >
           {hub.answer.recordedAt(relativeShortDate(draft.recordedAt))}
         </p>
-
-        <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} />
 
         {/* Editable title */}
         <div style={{ marginBottom: 24 }}>
@@ -987,6 +987,11 @@ export function ComposingEditor({
 
         {actionError && <ErrorLine message={actionError} />}
 
+        {/* Recording replay at the bottom — thumb reach, above Share/Discard. */}
+        <div style={{ margin: "8px 0 20px" }}>
+          <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} />
+        </div>
+
         <div style={{ marginBottom: 14 }}>
           <KindredButton
             label={hub.answer.shareWithFamily}
@@ -1022,16 +1027,13 @@ export function ComposingEditor({
       <div>
         {questionHeader}
 
-        {/* Compact per-take relisten strip (audio only; drop on follow-up takes). Absent in the
-            optimistic window before the first refresh (no server takes yet). */}
-        {draft && <RelistenStrip takes={draft.takes} mediaUrl={draft.mediaUrl} onDrop={handleDropTake} dropDisabled={op === "drop" || busy} />}
-
         <ProseBlock
           proseDraft={proseDraft}
           setProseDraft={setProseDraft}
           disabled={busy}
           history={history}
           onPolish={polishHandler}
+          showPolishButton={false}
         />
 
         {dropNotice && <NoticeLine message={dropNotice} />}
@@ -1080,11 +1082,31 @@ export function ComposingEditor({
           </div>
         )}
 
-        {/* Persistent capture footer — mic + type box, both live (append more takes). */}
+        {/* Persistent capture footer — Speak/Type + Polish on one row, then mic/type + relisten. */}
         <div className={styles.footer}>
-          <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
-            <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={busy} onClick={() => setInputMode("voice")} />
-            <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={busy} onClick={() => setInputMode("text")} />
+          <div className={styles.actionRow}>
+            <div role="group" aria-label={hub.compose.inputModeAria} className={styles.modeGroup}>
+              <ToggleOption label={hub.compose.speak} active={inputMode === "voice"} disabled={busy} onClick={() => setInputMode("voice")} />
+              <ToggleOption label={hub.compose.typeIt} active={inputMode === "text"} disabled={busy} onClick={() => setInputMode("text")} />
+            </div>
+            <button
+              type="button"
+              className={styles.polishButton}
+              title={common.proseEditor.polishHint}
+              disabled={busy || polishing || proseDraft.trim().length === 0}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const next = await polishHandler(proseDraft);
+                    history.replace(next);
+                  } catch {
+                    setPendingError(common.proseEditor.polishError);
+                  }
+                })();
+              }}
+            >
+              {polishing ? common.proseEditor.polishing : common.proseEditor.polish}
+            </button>
           </div>
 
           {inputMode === "voice" ? (
@@ -1092,7 +1114,7 @@ export function ComposingEditor({
               listening={recordPhase === "listening"}
               saving={savingTake}
               disabled={otherMutationInFlight}
-              size={160}
+              size={CAPTURE_VOICE_SIZE_FOOTER_PX}
               holdToRecord={holdToRecord}
               onHoldStart={holdToRecord ? onHoldStart : undefined}
               onHoldEnd={holdToRecord ? onHoldEnd : undefined}
@@ -1123,6 +1145,16 @@ export function ComposingEditor({
                 />
               </div>
             </div>
+          )}
+
+          {/* Compact per-take relisten strip at the bottom (thumb reach). */}
+          {draft && (
+            <RelistenStrip
+              takes={draft.takes}
+              mediaUrl={draft.mediaUrl}
+              onDrop={handleDropTake}
+              dropDisabled={op === "drop" || busy}
+            />
           )}
         </div>
 
@@ -1225,7 +1257,7 @@ export function ComposingEditor({
 
   // ── CAPTURE ENTRY (no-draft: initial voice⇄text capture of take 0) ───────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
+    <div className={styles.entryColumn}>
       {questionHeader}
       {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator sees
           exactly which photo they're telling the story of. Bytes come from the audited byte route (the
@@ -1235,29 +1267,11 @@ export function ComposingEditor({
         <img
           src={`/api/album-photo/${subjectPhotoId}`}
           alt={promptQuestion ?? hub.compose.tellPrompt}
-          style={{
-            width: "100%",
-            maxWidth: 360,
-            maxHeight: "40dvh",
-            objectFit: "contain",
-            borderRadius: "var(--radius-md)",
-            display: "block",
-            background: "var(--surface-sunken)",
-          }}
+          className={styles.subjectPhoto}
         />
       )}
       {!ask && (
-        <p
-          style={{
-            fontFamily: "var(--font-story)",
-            fontSize: "clamp(1.35rem, 3.5vw, var(--text-story-lg))",
-            lineHeight: "var(--leading-snug)",
-            color: "var(--text-body)",
-            margin: 0,
-            maxWidth: "24ch",
-            textAlign: "center",
-          }}
-        >
+        <p className={styles.entryPrompt}>
           {promptQuestion ?? hub.compose.tellPrompt}
         </p>
       )}
@@ -1272,7 +1286,7 @@ export function ComposingEditor({
           <KindredVoiceButton
             listening={recordPhase === "listening"}
             saving={recordPhase === "saving"}
-            size={220}
+            size={CAPTURE_VOICE_SIZE_ENTRY_PX}
             holdToRecord={holdToRecord}
             onHoldStart={holdToRecord ? onHoldStart : undefined}
             onHoldEnd={holdToRecord ? onHoldEnd : undefined}
@@ -1316,7 +1330,7 @@ export function ComposingEditor({
   };
 
   return (
-    <div data-tone="solemn" className={styles.capture}>
+    <div className={styles.capture}>
       {renderPhase()}
     </div>
   );

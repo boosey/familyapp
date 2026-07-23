@@ -1,0 +1,168 @@
+/*
+ * Link-session approve surface. Token-driven base; Scrapbook signatures on the story shelf.
+ * Listen bar sits at the bottom (thumb reach). Mobile-first. See _skins/CSS-MODULES.md.
+ */
+
+.restingMain {
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.restingTitle {
+  font-family: var(--font-story);
+  font-weight: 400;
+  font-size: var(--text-display);
+  margin: 0;
+  color: var(--text-body);
+}
+
+.restingBody {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  max-width: 32ch;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.main {
+  background: var(--surface-page);
+}
+
+.section {
+  flex: 1;
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 760px;
+  width: 100%;
+  align-self: center;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-story);
+  font-size: var(--text-ui-lg);
+  color: var(--text-meta);
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--support);
+}
+
+.headline {
+  font-family: var(--font-story);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  line-height: 1.1;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.subtext {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 14px 0 0;
+  max-width: 28ch;
+}
+
+.recorder {
+  margin-top: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.listenBottom {
+  margin-top: auto;
+  padding-top: 24px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+}
+
+.storyShelf {
+  position: relative;
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 40rem) {
+  .section {
+    padding: clamp(28px, 5vw, 52px) clamp(20px, 5vw, 48px);
+  }
+
+  .headerRow {
+    margin-bottom: 30px;
+  }
+
+  .headline {
+    font-size: clamp(2rem, 6vw, 46px);
+  }
+
+  .recorder {
+    margin-top: 30px;
+  }
+
+  .storyShelf {
+    margin-top: 24px;
+    padding: 20px 22px;
+  }
+}
+
+:global(:root[data-skin="scrapbook"]) .storyShelf {
+  transform: rotate(-0.4deg);
+  box-shadow: var(--shadow-card);
+}
+
+:global(:root[data-skin="scrapbook"]) .storyShelf::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 72px;
+  height: 20px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+:global(:root[data-skin="scrapbook"]) .headline {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 78%;
+  background-size: 100% 42%;
+  display: inline-block;
+}
+
+:global(:root[data-reduce-motion="on"]) .storyShelf {
+  transform: none;
+}
+
+:global(:root[data-reduce-motion="on"]) .storyShelf::before {
+  display: none;
+}
+
+:global(:root[data-reduce-motion="on"]) .headline {
+  background-image: none;
+}

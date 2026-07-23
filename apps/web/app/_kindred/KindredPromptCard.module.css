@@ -1,0 +1,83 @@
+/*
+ * KindredPromptCard — prompt seed card used on link-session capture (and anywhere a family question
+ * is the visual focus). Base chrome is token-driven & skin-neutral; Scrapbook signatures (tilt, tape,
+ * highlighter) are skin-scoped and suppressed under reduce-motion. See _skins/CSS-MODULES.md.
+ */
+
+.card {
+  position: relative;
+  background: var(--surface-card);
+  border: var(--border-width, 1.5px) solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-label);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.question {
+  font-family: var(--font-story);
+  font-size: var(--text-prompt);
+  line-height: var(--leading-snug);
+  color: var(--text-body);
+  display: inline-block;
+}
+
+/* ---- Scrapbook structural signatures ---------------------------------------------------------- */
+
+:global(:root[data-skin="scrapbook"]) .card {
+  transform: rotate(var(--tilt, 0deg));
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-settle) var(--ease-quiet),
+    box-shadow var(--dur-settle) var(--ease-quiet);
+}
+
+:global(:root[data-skin="scrapbook"]) .card::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: var(--tape-bg);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--tilt-shadow);
+}
+
+:global(:root[data-skin="scrapbook"]) .question {
+  background-image: linear-gradient(var(--highlighter), var(--highlighter));
+  background-repeat: no-repeat;
+  background-position: 0 78%;
+  background-size: 100% 42%;
+}
+
+:global(:root[data-reduce-motion="on"]) .card {
+  transform: none;
+}
+
+:global(:root[data-reduce-motion="on"]) .card::before {
+  display: none;
+}
+
+:global(:root[data-reduce-motion="on"]) .question {
+  background-image: none;
+}

@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 /**
- * Capture is solemn (Phase 2 Task 6). The whole ComposingEditor subtree is the emotional core, so it
- * carries data-tone="solemn" on its outer container — that attribute is what dials the Scrapbook skin's
- * decorative palette / structural signatures down (the Task-1 globals guard + the module suppressions
- * key off `[data-tone="solemn"]`). This asserts the container ships the attribute in its calmest
- * phase (the take-0 capture entry, draft=null), which is the state every capture surface first renders.
+ * Capture is no longer solemn-muted — full Scrapbook signatures apply on the composing surface.
+ * This asserts the outer container does NOT ship data-tone="solemn".
  */
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ComposingEditor } from "./ComposingEditor";
+import { CAPTURE_VOICE_SIZE_ENTRY_PX, CAPTURE_VOICE_SIZE_FOOTER_PX } from "@/lib/constants";
 
-// The composing editor pulls in a spread of server actions and next/navigation; none run in this
-// render (idle capture-entry phase, no mutation fired), so stub them out to keep the shell renderable.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -37,12 +36,31 @@ vi.mock("./tag-suggestions-actions", () => ({
 
 afterEach(cleanup);
 
-it("wraps the capture subtree in a data-tone=\"solemn\" container", () => {
+it("does not wrap the capture subtree in data-tone=\"solemn\"", () => {
   const { container } = render(<ComposingEditor ask={null} draft={null} backTab="/hub?tab=stories" />);
 
-  // Assert the attribute sits on the OUTERMOST rendered element, so the whole capture subtree
-  // (every phase) is scoped — not merely present on some inner leaf while siblings escape solemn.
-  const solemn = container.firstElementChild;
-  expect(solemn).not.toBeNull();
-  expect(solemn!.getAttribute("data-tone")).toBe("solemn");
+  const root = container.firstElementChild;
+  expect(root).not.toBeNull();
+  expect(root!.getAttribute("data-tone")).not.toBe("solemn");
+  expect(container.querySelector('[data-tone="solemn"]')).toBeNull();
+});
+
+it("uses the compact capture mic size on take-0 entry", () => {
+  render(<ComposingEditor ask={null} draft={null} backTab="/hub?tab=stories" />);
+  const btn = screen.getByRole("button", { name: "Tap to speak" });
+  expect(btn.style.width).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
+  expect(btn.style.height).toBe(`${CAPTURE_VOICE_SIZE_ENTRY_PX}px`);
+});
+
+it("capture voice sizes stay single-sourced (footer smaller than entry)", () => {
+  expect(CAPTURE_VOICE_SIZE_FOOTER_PX).toBeLessThan(CAPTURE_VOICE_SIZE_ENTRY_PX);
+  expect(CAPTURE_VOICE_SIZE_ENTRY_PX).toBe(120);
+  expect(CAPTURE_VOICE_SIZE_FOOTER_PX).toBe(96);
+});
+
+it("ComposingEditor module exposes Speak/Type + Polish action row", () => {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(join(dir, "ComposingEditor.module.css"), "utf8");
+  expect(css).toContain(".actionRow");
+  expect(css).toContain(".polishButton");
 });

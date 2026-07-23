@@ -14,6 +14,7 @@ import { useCallback, useRef, useState } from "react";
 import { KindredVoiceButton, KindredButton, KindredProseEditor } from "@/app/_kindred";
 import { useRecordingGesture } from "@/app/_kindred/useRecordingGesture";
 import { capture, common } from "@/app/_copy";
+import { CAPTURE_VOICE_SIZE_ENTRY_PX } from "@/lib/constants";
 
 type Phase = "idle" | "listening" | "saving" | "done" | "softfail";
 type Tier = "family" | "branch" | "public";
@@ -360,7 +361,7 @@ export function ApprovalRecorder({
         ) : null}
         <KindredVoiceButton
           listening={phase === "listening"}
-          size={150}
+          size={CAPTURE_VOICE_SIZE_ENTRY_PX}
           label={voiceLabel}
           holdToRecord={holdToRecord}
           onHoldStart={holdToRecord ? onHoldStart : undefined}
