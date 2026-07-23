@@ -4,8 +4,8 @@
  * Delivery (email/SMS) is dispatched off the request path, so after submit the inviter otherwise
  * sees only the copy-link with no sign anything was sent. These tests pin:
  *
- *  1. The member form still renders the phone input + SMS-consent checkbox (prior task; regression
- *     pin so this task doesn't regress it).
+ *  1. The member form still renders the phone input + three send intents (SMS consent is
+ *     client-gated on a non-empty phone — see member-invite-sms-consent.test.tsx).
  *  2. When BOTH the member token flash cookie and the new targets flash cookie are present, the
  *     result view renders a "Sending your invitation to <targets>" line AND still renders the
  *     copy-link fallback.

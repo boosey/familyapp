@@ -60,6 +60,8 @@ describe("deliverInvite", () => {
     expect(email?.text).toContain(link);
     expect(sms).toBeDefined();
     expect(sms?.text).toContain(link);
+    expect(sms?.text).toContain("STOP");
+    expect(sms?.text).toContain("HELP");
 
     const [row] = await db
       .select({

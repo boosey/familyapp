@@ -31,7 +31,12 @@ import { revalidatePath } from "next/cache";
 import { getRuntime } from "@/lib/runtime";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { resolveInviteOrigin } from "@/lib/invite-origin";
-import { parseInviteIntent, planInviteChannels } from "@/lib/invite-delivery-channels";
+import {
+  inviteChannelPlanErrorMessage,
+  parseInviteIntent,
+  parseSmsConsent,
+  planInviteChannels,
+} from "@/lib/invite-delivery-channels";
 import { parseInviteRelationship } from "@/lib/invite-relationship";
 import { resolvePersonInviteFamilies, type PersonInviteFamilyOption } from "@/lib/person-invite-targets";
 import { hub } from "@/app/_copy";
@@ -176,11 +181,15 @@ export async function createPersonBoundMemberInviteAction(
   if (!inviteeEmail && !normalizedPhone) {
     return { status: "error", message: hub.invite.identifierRequired };
   }
-  const plan = planInviteChannels(intent, { email: inviteeEmail || null, normalizedPhone });
+  const plan = planInviteChannels(intent, {
+    email: inviteeEmail || null,
+    normalizedPhone,
+    smsConsent: parseSmsConsent(formData.get("smsConsent")),
+  });
   if (!plan.ok) {
     return {
       status: "error",
-      message: plan.reason === "email_required" ? hub.invite.emailRequired : hub.invite.phoneRequired,
+      message: inviteChannelPlanErrorMessage(plan.reason, hub.invite),
     };
   }
   const channels = plan.channels;

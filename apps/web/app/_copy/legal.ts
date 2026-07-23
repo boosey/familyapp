@@ -21,8 +21,8 @@ export const legal = {
     appName: "Tell Me Again",
     homeUrl: "https://tellmeagain.app",
     contactEmail: "privacy@tellmeagain.app",
-    effectiveDate: "July 16, 2026",
-    lastUpdated: "July 16, 2026",
+    effectiveDate: "July 23, 2026",
+    lastUpdated: "July 23, 2026",
 
     intro: [
       "Tell Me Again is a private place for families to record, keep, and share their stories. This Privacy Policy explains what information we collect, how we use it, and the choices you have. It applies to the Tell Me Again website and app at tellmeagain.app (the “Service”).",
@@ -38,6 +38,7 @@ export const legal = {
           {
             list: [
               "Account information — your name, email address, and date of birth, collected when you create an account or are invited to a family. Sign-in and authentication are handled by our authentication provider (Clerk).",
+              "Mobile phone numbers — when you or a family member provide a number so we can send SMS text messages (for example, a family invitation link or account notice). See “Text Messaging (SMS)” below.",
               "Content you create — the stories, recordings, transcripts, photos, and captions you add, together with the people, families, and relationships you choose to record.",
               "Google Photos you select — when you choose to import from Google Photos, we receive only the specific photos you pick (see “Google User Data” below).",
               "Technical and usage data — basic, privacy-preserving analytics (such as page views and aggregate usage) and standard server logs used to keep the Service secure and reliable.",
@@ -73,6 +74,24 @@ export const legal = {
         ],
       },
       {
+        id: "text-messaging-sms",
+        heading: "Text Messaging (SMS)",
+        blocks: [
+          {
+            p: "Tell Me Again may send SMS text messages to mobile phone numbers that have been provided with consent to receive them. These messages are transactional and Service-related — for example, family invitation links and account or security notices. Message frequency varies. Message and data rates may apply. Carriers are not liable for delayed or undelivered messages.",
+          },
+          {
+            p: "We only send SMS after consent is collected through our Service (for example, when a phone number is submitted with an explicit agreement to receive text messages from Tell Me Again). Consent to receive SMS is not a condition of purchasing any goods or services.",
+          },
+          {
+            p: "You can opt out of Tell Me Again text messages at any time by replying STOP to any message from us. After you opt out, you will receive a confirmation and we will stop sending SMS to that number. You can reply HELP for help, or contact us at privacy@tellmeagain.app. You may also request removal of your number by emailing us.",
+          },
+          {
+            p: "Mobile information and text messaging originator opt-in data and consent will not be shared with any third parties or affiliates for their marketing or promotional purposes. We do not sell, rent, or transfer SMS opt-in data or consent. Phone numbers may be processed by our SMS delivery provider solely to transmit messages you have consented to receive.",
+          },
+        ],
+      },
+      {
         id: "how-we-use-information",
         heading: "How We Use Your Information",
         blocks: [
@@ -82,7 +101,7 @@ export const legal = {
               "Provide the Service — save your stories and media, and show them to the family members you have chosen to share them with.",
               "Enable voice capture and story features — transcribe recordings and render them into readable stories using vendor services acting on our behalf.",
               "Keep the Service secure — authenticate you, prevent abuse, and diagnose problems.",
-              "Communicate with you — send account, security, and Service-related messages.",
+              "Communicate with you — send account, security, and Service-related messages by email and, where you have consented, by SMS text message (including family invitation links).",
             ],
           },
         ],
@@ -95,10 +114,10 @@ export const legal = {
             p: "Sharing within your family is controlled by you. A story is visible to others only after you approve it for sharing and choose an audience (for example, your whole family or a chosen branch). Until then, only you can see it.",
           },
           {
-            p: "We share information with service providers who process it on our behalf under confidentiality obligations — including hosting, database, storage, authentication, transcription, and language-model providers. They may use your information only to provide services to us.",
+            p: "We share information with service providers who process it on our behalf under confidentiality obligations — including hosting, database, storage, authentication, email, SMS delivery, transcription, and language-model providers. They may use your information only to provide services to us.",
           },
           {
-            p: "We do not sell your personal information. We may disclose information if required by law, to protect the safety of people, or as part of a business transfer, and we will act to protect your information in any such event.",
+            p: "We do not sell your personal information. We may disclose information if required by law, to protect the safety of people, or as part of a business transfer, and we will act to protect your information in any such event. The above excludes text messaging originator opt-in data and consent; this information will not be shared with any third parties.",
           },
         ],
       },
@@ -113,6 +132,8 @@ export const legal = {
               "Neon / Supabase — database hosting.",
               "Cloudflare R2 — storage of media files (recordings and photos).",
               "Clerk — account authentication.",
+              "Twilio — SMS text message delivery, when a consented phone number is provided.",
+              "Resend / Zoho — email delivery and business email.",
               "Google — the Google Photos Picker, when you choose to import photos.",
               "Groq, Anthropic, and ElevenLabs — transcription, story rendering, and voice features.",
             ],
@@ -127,7 +148,7 @@ export const legal = {
             p: "We keep your information for as long as your account is active or as needed to provide the Service. You can delete individual stories, photos, and recordings at any time.",
           },
           {
-            p: "You may request deletion of your account and associated personal content by contacting us. When content is erased, the underlying media is removed from storage. Some records may be retained where required for legal, security, or audit reasons.",
+            p: "You may request deletion of your account and associated personal content by contacting us. When content is erased, the underlying media is removed from storage. Some records may be retained where required for legal, security, or audit reasons. If you opt out of SMS, we retain enough information to honor that opt-out and avoid messaging you again.",
           },
         ],
       },
@@ -139,6 +160,7 @@ export const legal = {
             list: [
               "Access and correct — view and update your account details in the app.",
               "Delete — remove stories, photos, and recordings, or request account deletion.",
+              "SMS opt-out — reply STOP to any Tell Me Again text message, or contact privacy@tellmeagain.app.",
               "Revoke Google access — disconnect Google Photos in the app or at myaccount.google.com/permissions.",
               "Control sharing — decide what is shared, with whom, and withdraw consent by removing or unsharing content.",
             ],
@@ -180,7 +202,7 @@ export const legal = {
         heading: "Contact Us",
         blocks: [
           {
-            p: "If you have questions about this Privacy Policy or how we handle your information, contact us at privacy@tellmeagain.app.",
+            p: "If you have questions about this Privacy Policy, SMS text messaging, or how we handle your information, contact us at privacy@tellmeagain.app.",
           },
         ],
       },
