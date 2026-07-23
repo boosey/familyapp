@@ -1,7 +1,9 @@
-/* ActionButton (#7) — the ONE canonical primary action button (Scrapbook skin), lifted from the Stories
- * tab's "Tell a story" button. Used app-wide for a surface's primary CTA: Tell a story, Add Photos,
- * Invite. Solid fill + card shadow; renders as a link or a button. Tokens for design values, raw px for
- * layout, per _skins/CSS-MODULES.md. */
+/* ActionButton (#7) — the ONE canonical action button (Scrapbook skin). Used app-wide for a surface's
+ * primary CTA (Tell a story, Add Photos, Invite) AND, via the secondary/ghost variants, for the
+ * lower-emphasis actions that used to render as the old flat <KindredButton> (retired). One compact
+ * size everywhere; the primary variant carries the bright coral→amber fill + card shelf so every CTA
+ * stays on one style and can't drift apart. Tokens for design values, raw px for layout, per
+ * _skins/CSS-MODULES.md. Server-safe: hover is pure CSS, no JS state. */
 
 .button {
   display: inline-flex;
@@ -11,15 +13,52 @@
   padding: 12px 22px;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--tell-card-bg);
-  color: var(--accent-on);
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
   font-weight: 600;
+  line-height: 1.2;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
+  transition: background var(--dur-fade) var(--ease-quiet),
+    border-color var(--dur-fade) var(--ease-quiet),
+    color var(--dur-fade) var(--ease-quiet),
+    box-shadow var(--dur-fade) var(--ease-quiet);
+}
+
+/* fullWidth — spans its container (was <KindredButton fullWidth>, the full-screen form CTAs). */
+.fullWidth {
+  width: 100%;
+}
+
+/* primary — the bright CTA: coral→amber fill (Scrapbook) / solid accent (heirloom) + card shelf. */
+.primary {
+  background: var(--tell-card-bg);
+  color: var(--accent-on);
   box-shadow: var(--shadow-card);
+}
+.primary:hover {
+  box-shadow: var(--shadow-lift);
+}
+
+/* secondary — outlined, quiet: reads on the page ground, fills soft-accent on hover. */
+.secondary {
+  background: transparent;
+  color: var(--text-body);
+  border: var(--border-width) solid var(--border-strong);
+}
+.secondary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* ghost — text-only accent action, no chrome until hover. */
+.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+.ghost:hover {
+  background: var(--accent-soft);
 }
 
 .button:focus-visible {
@@ -30,4 +69,5 @@
 .button:disabled {
   opacity: 0.6;
   cursor: default;
+  box-shadow: none;
 }

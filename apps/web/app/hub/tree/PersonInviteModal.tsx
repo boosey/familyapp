@@ -23,7 +23,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { hub } from "@/app/_copy";
 import { ModalShell } from "@/app/_kindred/ModalShell";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { MemberInviteForm } from "../tabs/MemberInviteForm";
 import { CopyButton } from "../tabs/CopyButton";
 import {
@@ -150,15 +150,14 @@ export function PersonInviteModal({
               <CopyButton value={state.link} />
             </div>
             <div>
-              <KindredButton
+              <ActionButton
                 variant="secondary"
-                size="small"
                 type="button"
                 data-testid="person-invite-done"
                 onClick={onClose}
               >
                 {hub.personInvite.done}
-              </KindredButton>
+              </ActionButton>
             </div>
           </div>
         ) : loadError ? (

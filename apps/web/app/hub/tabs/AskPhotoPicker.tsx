@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { hub } from "@/app/_copy";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { albumPhotoSrc } from "@/app/hub/album/photo-src";
 import { loadAskPhotoOptionsAction, type AskAlbumPhoto } from "./ask-photo-actions";
 import s from "./AskPhotoPicker.module.css";
@@ -89,9 +89,8 @@ export function AskPhotoPicker({
         <input key={id} type="hidden" name="subjectPhotoIds" value={id} />
       ))}
 
-      <KindredButton
+      <ActionButton
         variant="secondary"
-        size="small"
         label={hub.ask.photosAdd}
         onClick={() => {
           triggerRef.current = document.activeElement as HTMLElement | null;
@@ -269,7 +268,7 @@ function AskPhotoModal({
         )}
 
         <div className={s.actions}>
-          <KindredButton variant="primary" size="small" onClick={onClose} label={hub.ask.photosDone} />
+          <ActionButton variant="primary" onClick={onClose} label={hub.ask.photosDone} />
         </div>
       </div>
     </div>

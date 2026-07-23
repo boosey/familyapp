@@ -18,7 +18,7 @@
  * GovernableEdgeList `.edge` card — not on these controls (#265). List does not mount these (#283).
  */
 import { useState, useTransition } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton as SkinActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 import type { GovernableKinEdge } from "@chronicle/core";
 import type { KinshipNature } from "@chronicle/db";
@@ -88,9 +88,8 @@ function ActionButton({
   return (
     <form action={onSubmit} className={styles.inlineForm}>
       <EdgeFields familyId={familyId} edge={edge} />
-      <KindredButton
+      <SkinActionButton
         type="submit"
-        size="small"
         label={pending ? pendingLabel : label}
         disabled={pending}
       />
@@ -151,9 +150,8 @@ function CorrectNatureForm({
           ))}
         </select>
       </label>
-      <KindredButton
+      <SkinActionButton
         type="submit"
-        size="small"
         label={pending ? hub.kin.correcting : hub.kin.correct}
         disabled={pending}
       />

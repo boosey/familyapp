@@ -19,7 +19,7 @@
 import { useState, useTransition } from "react";
 import type { AddRelativeRelation, UnplacedMember } from "@chronicle/core";
 import type { KinshipNature, PersonSex } from "@chronicle/db";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 import { linkExistingMemberAction } from "./actions";
 import {
@@ -509,14 +509,14 @@ export function AddRelativeForm({
               {c.name}
             </label>
           ))}
-          <KindredButton
+          <ActionButton
             type="button"
             label={pending ? hub.kin.submitting : hub.kin.stepParentOfferConfirm}
             disabled={pending}
             onClick={() => confirmStepOffer(true)}
             data-testid="add-relative-step-confirm"
           />
-          <KindredButton
+          <ActionButton
             type="button"
             variant="secondary"
             label={hub.kin.stepParentOfferSkip}
@@ -561,14 +561,14 @@ export function AddRelativeForm({
               </select>
             </label>
           ) : null}
-          <KindredButton
+          <ActionButton
             type="button"
             label={pending ? hub.kin.existingMatchConnecting : hub.kin.existingMatchUse}
             disabled={pending}
             onClick={connectExisting}
             data-testid="add-relative-use-existing"
           />
-          <KindredButton
+          <ActionButton
             type="button"
             variant="secondary"
             label={hub.kin.existingMatchCreateNew}
@@ -594,7 +594,7 @@ export function AddRelativeForm({
           />
         </div>
       ) : (
-        <KindredButton
+        <ActionButton
           type="submit"
           label={pending ? hub.kin.submitting : hub.kin.submit}
           disabled={pending}

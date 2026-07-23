@@ -19,7 +19,7 @@
  */
 import { useState } from "react";
 import Link from "next/link";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
 import { InfoTooltip } from "../InfoTooltip";
@@ -217,31 +217,28 @@ export function MemberInviteForm({
         onSelectedChange={setFamilyId}
       />
       <div className={styles.actions}>
-        <KindredButton
+        <ActionButton
           type="submit"
           name="intent"
           value="send_email"
           label={hub.invite.sendToEmail}
           disabled={!hasEmail || !hasFamily}
-          size="small"
         />
-        <KindredButton
+        <ActionButton
           type="submit"
           name="intent"
           value="send_phone"
           label={hub.invite.sendToPhone}
           disabled={!hasPhone || !smsConsent || !hasFamily}
           variant="secondary"
-          size="small"
         />
-        <KindredButton
+        <ActionButton
           type="submit"
           name="intent"
           value="get_link"
           label={hub.invite.getLink}
           disabled={!hasIdentifier || !hasFamily}
           variant="ghost"
-          size="small"
         />
       </div>
     </form>

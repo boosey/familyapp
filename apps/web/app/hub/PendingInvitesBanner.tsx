@@ -7,7 +7,7 @@
  */
 import type { PendingInvitationMatch } from "@chronicle/core";
 import { hub } from "@/app/_copy";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { dismissPendingInvite, joinPendingInvite } from "./pending-invites-actions";
 
 export function PendingInvitesBanner({
@@ -60,7 +60,7 @@ export function PendingInvitesBanner({
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <form action={joinPendingInvite}>
               <input type="hidden" name="invitationId" value={m.invitationId} />
-              <KindredButton type="submit" label={hub.pendingInvites.join} />
+              <ActionButton type="submit" label={hub.pendingInvites.join} />
             </form>
             <form action={dismissPendingInvite}>
               <input type="hidden" name="invitationId" value={m.invitationId} />

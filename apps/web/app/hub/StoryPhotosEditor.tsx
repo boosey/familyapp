@@ -23,7 +23,7 @@
  * SERVER-side; the storyId here only names WHICH story. Errors surface inline (no native dialogs).
  */
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "./FamilyChoiceChips";
@@ -457,17 +457,15 @@ export function StoryPhotosEditor({
           />
           <p style={nudgeText}>{hub.compose.photoNudge(nudge.caption)}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <KindredButton
+            <ActionButton
               label={hub.compose.photoNudgeAdd}
               variant="primary"
-              size="small"
               disabled={busy}
               onClick={() => attach(nudge.photoId)}
             />
-            <KindredButton
+            <ActionButton
               label={hub.compose.photoNudgeDismiss}
               variant="ghost"
-              size="small"
               aria-label={hub.compose.photoNudgeDismissAria}
               onClick={() => setDismissedNudge(true)}
             />
@@ -478,20 +476,18 @@ export function StoryPhotosEditor({
       {/* Add-photo entry points (items 2 + 3). Only meaningful once the owner belongs to a family. */}
       {loaded && families.length > 0 ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <KindredButton
+          <ActionButton
             type="button"
             label={hub.storyImages.addFromAlbumButton}
             variant="secondary"
-            size="small"
             disabled={busy}
             onClick={() => setModalOpen(true)}
           />
           {googleConfigured && googleConnected ? (
-            <KindredButton
+            <ActionButton
               type="button"
               label={busy ? hub.storyImages.importing : hub.storyImages.addFromGoogleButton}
               variant="secondary"
-              size="small"
               disabled={busy || !canPlace}
               onClick={() => void runGoogleImport()}
             />
@@ -531,11 +527,10 @@ export function StoryPhotosEditor({
           <div style={modalCard}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <h3 style={modalTitle}>{hub.storyImages.pickModalTitle}</h3>
-              <KindredButton
+              <ActionButton
                 type="button"
                 label={hub.storyImages.pickModalClose}
                 variant="ghost"
-                size="small"
                 disabled={busy}
                 onClick={() => setModalOpen(false)}
               />
@@ -553,11 +548,10 @@ export function StoryPhotosEditor({
               </fieldset>
             ) : null}
 
-            <KindredButton
+            <ActionButton
               type="button"
               label={addBusy ? hub.storyImages.uploading : hub.storyImages.uploadFromDevice}
               variant="primary"
-              size="small"
               disabled={busy || !canPlace}
               onClick={openDevicePicker}
             />

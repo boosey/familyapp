@@ -23,7 +23,7 @@
  */
 import { useEffect, useRef } from "react";
 import { FamilyChoiceChips } from "../FamilyChoiceChips";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import type { AlbumFamilyOption } from "./AlbumUploader";
@@ -191,12 +191,11 @@ export function AlbumDestinationModal({
               {hub.album.destinationPreparing}
             </div>
           ) : null}
-          <KindredButton variant="ghost" size="small" onClick={onCancel}>
+          <ActionButton variant="ghost" onClick={onCancel}>
             {hub.album.destinationCancel}
-          </KindredButton>
-          <KindredButton
+          </ActionButton>
+          <ActionButton
             variant="primary"
-            size="small"
             disabled={addDisabled}
             onClick={() => {
               if (addDisabled) return;
@@ -204,7 +203,7 @@ export function AlbumDestinationModal({
             }}
           >
             {hub.album.destinationAdd}
-          </KindredButton>
+          </ActionButton>
         </div>
       </div>
     </ModalShell>

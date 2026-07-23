@@ -6,7 +6,7 @@
  * the DB. Description + "let relatives find this family" (ADR-0001) are preserved.
  */
 import { useState } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { families } from "@/app/_copy";
 import { suggestShortName } from "@/lib/suggest-short-name";
 
@@ -106,11 +106,10 @@ export function CreateFamilyForm({
           </span>
         </span>
       </label>
-      <KindredButton
+      <ActionButton
         type="submit"
         label={families.new.submit}
         fullWidth
-        size="large"
         disabled={empty}
       />
     </form>

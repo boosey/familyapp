@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { pollUntilReady } from "@/lib/poll-status";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { capture } from "@/app/_copy";
 
 type Phase = "polling" | "slow" | "failed" | "retrying";
@@ -124,7 +124,7 @@ export function ApprovePending({ token, storyId }: { token: string; storyId: str
       </p>
       {isFailed && (
         <div style={{ marginTop: 24 }}>
-          <KindredButton
+          <ActionButton
             label={phase === "retrying" ? capture.approve.retrying : capture.approve.tryAgain}
             variant="primary"
             onClick={onRetry}

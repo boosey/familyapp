@@ -6,7 +6,7 @@
  * confirms first. This component names WHICH story; the server actions re-resolve auth + ownership.
  */
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub } from "@/app/_copy";
 import { TagInput } from "@/app/hub/TagInput";
 import { StoryPhotosEditor } from "@/app/hub/StoryPhotosEditor";
@@ -253,14 +253,14 @@ export function StoryEditor(props: StoryEditorProps) {
       {error && <p role="alert" className={styles.errText}>{error}</p>}
 
       <div className={styles.actions}>
-        <KindredButton
+        <ActionButton
           type="button"
           label={hub.storyDetail.cancel}
           variant="ghost"
           disabled={pending}
           onClick={() => onClose({ title, tags, prose, targetFamilies: families })}
         />
-        <KindredButton
+        <ActionButton
           type="button"
           label={pending ? hub.storyDetail.saving : hub.storyDetail.save}
           disabled={pending}

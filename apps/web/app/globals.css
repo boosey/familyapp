@@ -170,7 +170,7 @@ select.kin-field {
  * to nothing and the control paints with Clerk defaults (an invisible transparent
  * primary button was the visible symptom). We fix it here by (1) re-asserting the
  * tokens with `inherit` so `var()` resolves again from the wrapper, and (2) styling
- * the controls to match the Kindred forms (.kin-field / KindredButton).
+ * the controls to match the Kindred forms (.kin-field / the ActionButton CTAs).
  *
  * Selectors are prefixed with `.cl-rootBox` and marked `!important` so they win the
  * cascade over Clerk's own single-class rules regardless of the order Clerk injects
@@ -242,7 +242,7 @@ select.kin-field {
   --radius-md: inherit; --radius-pill: inherit; --font-ui: inherit; --text-label: inherit;
 }
 
-/* Primary CTA → KindredButton (primary, pill). */
+/* Primary CTA → styled to echo the primary ActionButton (accent fill, pill). */
 .cl-rootBox .cl-formButtonPrimary {
   background: var(--accent) !important;
   color: var(--accent-on) !important;
@@ -312,7 +312,7 @@ select.kin-field {
   font: 600 var(--text-label) var(--font-ui) !important;
 }
 
-/* Social / alternate-method buttons → KindredButton (secondary, pill outline). */
+/* Social / alternate-method buttons → styled to echo the secondary ActionButton (pill outline). */
 .cl-rootBox .cl-socialButtonsBlockButton,
 .cl-rootBox .cl-socialButtonsIconButton {
   background: transparent !important;

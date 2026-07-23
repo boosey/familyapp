@@ -7,13 +7,12 @@
  * or — if already signed in — accept directly. Both paths edit only the free-text relationship label
  * (re-picking a different person is out of scope), then continue to /welcome (DOB onward).
  */
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRuntime, isClerkConfigured } from "@/lib/runtime";
 import { acceptInvitation, getInvitationByToken } from "@chronicle/core";
 import { mockSignUp } from "@/lib/auth-mock";
 import { beginClerkJoinAction } from "@/lib/join-actions";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { join } from "@/app/_copy";
 import styles from "@/app/_onboarding/onboarding-card.module.css";
 
@@ -115,9 +114,7 @@ export default async function JoinPage({
         <p className={styles.sub} style={{ margin: "0 0 24px" }}>
           {join.invalidBody}
         </p>
-        <Link href="/sign-in" style={{ textDecoration: "none" }}>
-          <KindredButton label={join.signIn} fullWidth />
-        </Link>
+        <ActionButton href="/sign-in" label={join.signIn} fullWidth />
       </Shell>
     );
   }
@@ -226,7 +223,7 @@ export default async function JoinPage({
         <form action={acceptAsSignedIn} style={{ display: "grid", gap: 18, marginTop: 14 }}>
           <input type="hidden" name="token" value={token} />
           {relationshipField}
-          <KindredButton type="submit" label={join.comeIn} fullWidth size="large" />
+          <ActionButton type="submit" label={join.comeIn} fullWidth />
         </form>
       </Shell>
     );
@@ -243,7 +240,7 @@ export default async function JoinPage({
         <form action={beginClerkJoin} style={{ display: "grid", gap: 18, marginTop: 14 }}>
           <input type="hidden" name="token" value={token} />
           {relationshipField}
-          <KindredButton type="submit" label={join.clerkContinue} fullWidth size="large" />
+          <ActionButton type="submit" label={join.clerkContinue} fullWidth />
         </form>
       </Shell>
     );
@@ -291,7 +288,7 @@ export default async function JoinPage({
             placeholder={join.passwordPlaceholder}
           />
         </label>
-        <KindredButton type="submit" label={join.submit} fullWidth size="large" />
+        <ActionButton type="submit" label={join.submit} fullWidth />
       </form>
     </Shell>
   );

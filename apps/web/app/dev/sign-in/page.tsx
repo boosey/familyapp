@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { accounts, persons } from "@chronicle/db/schema";
 import { getRuntime } from "@/lib/runtime";
 import { DEV_MOCK_SESSION_COOKIE } from "@/lib/auth-mock";
-import { KindredButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { auth } from "@/app/_copy";
 
 export const runtime = "nodejs";
@@ -71,14 +71,14 @@ export default async function DevSignIn() {
           {people.map((p) => (
             <form key={p.id} action={signInAs}>
               <input type="hidden" name="authProviderUserId" value={p.authProviderUserId} />
-              <KindredButton type="submit" label={auth.devSignIn.become(p.displayName ?? "")} fullWidth />
+              <ActionButton type="submit" label={auth.devSignIn.become(p.displayName ?? "")} fullWidth />
             </form>
           ))}
 
           <div style={{ marginTop: 8 }}>
             <form action={signInAs}>
               <input type="hidden" name="authProviderUserId" value="" />
-              <KindredButton type="submit" label={auth.devSignIn.signOut} variant="secondary" fullWidth />
+              <ActionButton type="submit" label={auth.devSignIn.signOut} variant="secondary" fullWidth />
             </form>
           </div>
         </div>

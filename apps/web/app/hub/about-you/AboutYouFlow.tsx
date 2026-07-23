@@ -21,7 +21,8 @@
 import { useState, useRef, useCallback, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { KindredButton, KindredVoiceButton } from "@/app/_kindred";
+import { KindredVoiceButton } from "@/app/_kindred";
+import { ActionButton } from "@/app/_kindred/ActionButton";
 import { hub, common } from "@/app/_copy";
 import {
   submitIntakeRecording,
@@ -219,10 +220,9 @@ export function AboutYouFlow({
           }}
         >
           <div className={styles.eyebrow}>{hub.aboutYou.eyebrow}</div>
-          <KindredButton
+          <ActionButton
             label={hub.aboutYou.takeMeToHub}
             variant="ghost"
-            size="small"
             onClick={exitToHub}
           />
         </div>
@@ -254,9 +254,8 @@ export function AboutYouFlow({
         {error ? <p className={styles.errorBox}>{error}</p> : null}
 
         <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
-          <KindredButton
+          <ActionButton
             label={busy ? hub.aboutYou.saving : hub.aboutYou.next}
-            size="large"
             disabled={busy || transcribing || micPhase !== "idle"}
             onClick={next}
           />
