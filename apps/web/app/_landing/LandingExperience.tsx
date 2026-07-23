@@ -135,6 +135,12 @@ export function LandingExperience() {
         <span className={`${styles.blob} ${styles.blobB} ${styles.driftFastUp}`} />
         <span className={`${styles.ring} ${styles.ringB} ${styles.driftSlowUp}`} />
         <span className={`${styles.blob} ${styles.blobC} ${styles.driftMediumDown}`} />
+        <span className={`${styles.dot} ${styles.dotA} ${styles.driftFastUp}`} />
+        <span className={`${styles.blob} ${styles.blobD} ${styles.driftFastDown}`} />
+        <span className={`${styles.dot} ${styles.dotB} ${styles.driftSlowDown}`} />
+        <span className={`${styles.ring} ${styles.ringC} ${styles.driftFastUp}`} />
+        <span className={`${styles.blob} ${styles.blobE} ${styles.driftSlowDown}`} />
+        <span className={`${styles.dot} ${styles.dotC} ${styles.driftMediumDown}`} />
       </div>
 
       <main>
