@@ -101,10 +101,10 @@ describe("InviteTab — all-scope ambiguity guard (Finding 2)", () => {
 
     // No chip is pre-selected — the browser can't silently target an arbitrary family.
     expect(html).not.toMatch(/aria-pressed="true"/);
-    // Both forms (member + narrator invite) carry the hidden required familyId input, and both are
-    // empty so an empty submit is blocked.
+    // The member-invite form carries the hidden required familyId input, empty so an empty submit
+    // is blocked.
     const familyInputs = html.split('name="familyId"').length - 1;
-    expect(familyInputs).toBe(2);
+    expect(familyInputs).toBe(1);
     // The hidden family input is required and empty (an empty submit is blocked).
     expect(html).toMatch(/required[^>]*name="familyId"[^>]*value=""/);
   });

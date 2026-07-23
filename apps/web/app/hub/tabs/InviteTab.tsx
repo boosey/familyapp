@@ -1,22 +1,16 @@
 /**
- * Invite tab — two modes that share the show-once flash-cookie pattern:
- *   1. "Invite a narrator to record" — a personal /s/[token] link that opens the narrator recording page
- *      (the link IS the identity; no login).
- *   2. "Invite a family member" — a /join/[token] link that creates an Account-backed membership via
- *      core.createInvitation. The raw token is shown ONCE via a separate flash cookie and never put
- *      in a URL query/redirect that could land in logs.
+ * Invite tab — invite a family member via a /join/[token] link that creates an Account-backed
+ * membership through core.createInvitation. The raw token is shown ONCE via a flash cookie and
+ * never put in a URL query/redirect that could land in logs.
  *
  * Server component. When a flash cookie is present it renders that link once then a client effect
- * clears it; otherwise it renders the two forms.
+ * clears it; otherwise it renders the member-invite form.
  */
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { and, eq, inArray, ne } from "drizzle-orm";
 import { createInvitation, listActiveFamiliesForPerson, AlreadyFamilyMemberError, ThrottleError } from "@chronicle/core";
-import { memberships, persons } from "@chronicle/db/schema";
 import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
-import { designateAndCreateNarratorLink } from "@/lib/narrator-onboarding";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
 import { parseInviteIntent, planInviteChannels } from "@/lib/invite-delivery-channels";
@@ -24,50 +18,15 @@ import { parseInviteRelationship } from "@/lib/invite-relationship";
 import { resolveInviteOrigin } from "@/lib/invite-origin";
 import type { FamilyFilter } from "@/lib/family-filter";
 import {
-  INVITE_FLASH_COOKIE,
-  INVITE_FLASH_PATH,
   MEMBER_INVITE_FLASH_COOKIE,
   MEMBER_INVITE_FLASH_PATH,
   MEMBER_INVITE_TARGETS_FLASH_COOKIE,
   MEMBER_INVITE_TARGETS_FLASH_PATH,
 } from "@/lib/invite-flash";
-import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
-import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
 import { MemberInviteForm } from "./MemberInviteForm";
 import { CopyButton } from "./CopyButton";
 import { ClearInviteFlash } from "./ClearInviteFlash";
-
-async function createInvite(formData: FormData): Promise<void> {
-  "use server";
-  const { db, auth } = await getRuntime();
-  const ctx = await auth.getCurrentAuthContext();
-  if (ctx.kind !== "account") redirect("/sign-in");
-  const narratorId = String(formData.get("narratorId") ?? "");
-  if (!narratorId) throw new Error("narrator required");
-  // Server-side family-target guard (Finding 2): a crafted POST can omit familyId, which the browser
-  // would otherwise have auto-filled with an arbitrary first family. Resolve it against the inviter's
-  // OWN active families — refusing the ambiguous empty-with-several case — before touching the domain.
-  const activeFamilyIds = (await listActiveFamiliesForPerson(db, ctx.personId)).map((f) => f.familyId);
-  const familyId = resolveInviteFamilyId(String(formData.get("familyId") ?? ""), activeFamilyIds);
-
-  // Designate the chosen member as this family's narrator AND mint the login-free capture link, in one
-  // atomic step (issue #79). The membership gate (inviter AND narrator must be active members of this
-  // family) is enforced transactionally inside the helper — the domain owns it. We don't re-check here.
-  const { token } = await designateAndCreateNarratorLink(db, {
-    inviterPersonId: ctx.personId,
-    narratorPersonId: narratorId,
-    familyId,
-  });
-  const jar = await cookies();
-  jar.set(INVITE_FLASH_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: INVITE_FLASH_PATH,
-    maxAge: 60,
-  });
-  redirect("/hub?tab=invite");
-}
 
 async function createMemberInvite(formData: FormData): Promise<void> {
   "use server";
@@ -310,21 +269,7 @@ export async function InviteTab({
   inviteeName?: string;
 }) {
   const jar = await cookies();
-  const narratorToken = jar.get(INVITE_FLASH_COOKIE)?.value;
   const memberToken = jar.get(MEMBER_INVITE_FLASH_COOKIE)?.value;
-
-  /* ── Narrator result (show-once) ────────────────────────────────────────────── */
-  if (narratorToken) {
-    const link = `${await resolveInviteOrigin()}/s/${narratorToken}`;
-    return (
-      <LinkResult
-        title={hub.invite.narratorReadyTitle}
-        blurb={hub.invite.narratorReadyBlurb}
-        link={link}
-        note={hub.invite.fingerprintNote}
-      />
-    );
-  }
 
   /* ── Member result (show-once) ───────────────────────────────────────────── */
   if (memberToken) {
@@ -342,7 +287,7 @@ export async function InviteTab({
   }
 
   /* ── Form view ────────────────────────────────────────────────────────────── */
-  const { db, auth } = await getRuntime();
+  const { auth } = await getRuntime();
   const ctx = await auth.getCurrentAuthContext();
 
   if (ctx.kind !== "account") {
@@ -360,8 +305,7 @@ export async function InviteTab({
   }
 
   // The DESIGNATOR's option set is the passed `families` prop (the viewer's active families, the
-  // authoritative list); the candidate-PEOPLE query below still reads the DB, but the family set is
-  // driven by the prop so the designator and the pending-empty guard never drift from page.tsx.
+  // authoritative list) so the designator and the pending-empty guard never drift from page.tsx.
   const familyIds = designatorFamilies.map((f) => f.id);
   const seededFamily = seedDesignatorFamily(filter, familyIds);
 
@@ -395,24 +339,6 @@ export async function InviteTab({
     );
   }
 
-  const candidateRows = familyIds.length
-    ? await db
-        .select({ id: persons.id, displayName: persons.displayName })
-        .from(memberships)
-        .innerJoin(persons, eq(persons.id, memberships.personId))
-        .where(
-          and(
-            inArray(memberships.familyId, familyIds),
-            eq(memberships.status, "active"),
-            ne(persons.id, ctx.personId),
-          ),
-        )
-    : [];
-  const seen = new Set<string>();
-  const allPeople = candidateRows.filter((p) =>
-    seen.has(p.id) ? false : (seen.add(p.id), true),
-  );
-
   const sectionTitle: React.CSSProperties = {
     fontFamily: "var(--font-story)",
     fontSize: "var(--text-story-lg)",
@@ -429,8 +355,7 @@ export async function InviteTab({
   };
 
   return (
-    <div style={{ maxWidth: 600, display: "grid", gap: 44 }}>
-      {/* Member invite */}
+    <div style={{ maxWidth: 600 }}>
       <section>
         <h2 style={sectionTitle}>{hub.invite.memberHeading}</h2>
         <p style={sectionBlurb}>
@@ -442,36 +367,6 @@ export async function InviteTab({
           seededFamily={seededFamily}
           defaultName={inviteeName?.trim() || undefined}
         />
-      </section>
-
-      <hr className="kin-divider" />
-
-      {/* Narrator invite */}
-      <section>
-        <h2 style={sectionTitle}>{hub.invite.narratorHeading}</h2>
-        <p style={sectionBlurb}>
-          {hub.invite.narratorBody}
-        </p>
-        <form action={createInvite} style={{ display: "grid", gap: 20 }}>
-          <label className="kin-form-label">
-            {hub.invite.narratorLabel}
-            <select name="narratorId" className="kin-field" required>
-              {allPeople.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <FamilyDesignatorChips
-            families={designatorFamilies}
-            seeded={seededFamily}
-            name="familyId"
-            label={hub.invite.familyLabel}
-            requiredMessage={hub.invite.familyRequired}
-          />
-          <KindredButton type="submit" label={hub.invite.createLink} />
-        </form>
       </section>
     </div>
   );
