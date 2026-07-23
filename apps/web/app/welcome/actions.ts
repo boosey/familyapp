@@ -6,15 +6,23 @@
  * which owns the date-of-birth validation and the `onboarded_at` state transition. The web layer's
  * only job here is to turn the request into an authenticated personId and call the domain.
  */
-import { completeOnboarding } from "@chronicle/core";
+import { completeOnboarding, recordAccountSmsOptIn } from "@chronicle/core";
 import { transcribeIntakeAudio, parseSpokenDate, type SpokenDate } from "@chronicle/pipeline";
+import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
+import { welcome } from "@/app/_copy";
 
 export interface CompleteAccountOnboardingInput {
   displayName: string;
   year: number;
   month: number; // 1-12
   day: number; // 1-31
+  /**
+   * Optional mobile for SMS. When set with `smsConsent: true`, persisted as the account holder's
+   * express SMS opt-in (not an account_contacts match key).
+   */
+  phone?: string;
+  smsConsent?: boolean;
 }
 
 export async function completeAccountOnboarding(
@@ -24,6 +32,18 @@ export async function completeAccountOnboarding(
   const ctx = await auth.getCurrentAuthContext();
   if (ctx.kind !== "account") throw new Error("must be signed in");
   await completeOnboarding(db, ctx.personId, input);
+
+  const phoneRaw = input.phone?.trim() ?? "";
+  if (!phoneRaw) return;
+
+  if (!input.smsConsent) {
+    throw new Error(welcome.smsConsentRequired);
+  }
+  const normalized = normalizePhone(phoneRaw);
+  if (!normalized) {
+    throw new Error(welcome.phoneInvalid);
+  }
+  await recordAccountSmsOptIn(db, ctx.personId, { phone: normalized });
 }
 
 /**

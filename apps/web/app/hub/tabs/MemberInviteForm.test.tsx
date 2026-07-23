@@ -39,8 +39,13 @@ describe("MemberInviteForm — family required for send actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Esposito" }));
 
     expect(emailBtn.disabled).toBe(false);
-    expect(phoneBtn.disabled).toBe(false);
+    // Send text also requires the SMS consent checkbox (Twilio TFV / TCPA express consent).
+    expect(phoneBtn.disabled).toBe(true);
     expect(linkBtn.disabled).toBe(false);
+
+    fireEvent.click(screen.getByTestId("invite-sms-consent-checkbox"));
+
+    expect(phoneBtn.disabled).toBe(false);
   });
 
   it("enables send actions when a family is already seeded", () => {
@@ -58,5 +63,24 @@ describe("MemberInviteForm — family required for send actions", () => {
     expect(
       (screen.getByRole("button", { name: hub.invite.sendToEmail }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  it("keeps Send text disabled without SMS consent even with a phone and family", () => {
+    render(
+      <MemberInviteForm
+        action={vi.fn()}
+        families={FAMILIES}
+        seededFamily="fam-b"
+        defaultName="Rosa"
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("invite-phone"), { target: { value: "+15551230000" } });
+
+    const phoneBtn = screen.getByRole("button", { name: hub.invite.sendToPhone }) as HTMLButtonElement;
+    expect(phoneBtn.disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("invite-sms-consent-checkbox"));
+    expect(phoneBtn.disabled).toBe(false);
   });
 });

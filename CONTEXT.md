@@ -7,12 +7,11 @@ conversation uses a word that conflicts with a definition here, the conflict is 
 
 ## Identity & membership
 - **Person** — the permanent, singular human; owner of everything expressive. There is one kind of
-  user. A Person normally has an Account, but two states precede one: a **provisional Person** (a
-  pending invitee, created so questions can be queued for them before they accept) and the
-  telephony exception.
+  user. A Person normally has an Account, but one state precedes it: a **provisional Person** (a
+  pending invitee, created so questions can be queued for them before they accept).
 - **Account** — the login attached to a Person. Holds only the auth provider's user id + basic
   profile; never a password. Provisioned just-in-time when a Person accepts an invitation
-  (ADR-0005); a provisional invitee and a telephony Person have none.
+  (ADR-0005); a provisional invitee has none.
 - **Provisional Person** — a `persons` row created at invitation time for someone who has not yet
   accepted (Option A / ADR-0006). Lets Asks and other references attach to a real anchor before
   acceptance; acceptance links an Account to the *same* Person. An invitee who never joins leaves a
@@ -186,10 +185,11 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   reusable within its window. The link is the password (a bearer credential), accepted deliberately
   so a Person never has to type a password. This is the primary low-friction entry for all users,
   including elderly narrators who should never see a login screen.
-- **Link session** — a token-based session for the genuinely account-free case: telephony (inbound
-  phone calls). The long unguessable token maps to a Person and a Family context; it is a narrow
-  seam for channels where Account-based login is impossible, not a general-purpose anonymous-access
-  mechanism. Web narrators use a Magic link (auto-login to their Account), not a link session.
+- **Link session** — a token-based session for the genuinely account-free case: a narrator who has
+  no Account, capturing through the login-free web surface at `/s/[token]`. The long unguessable
+  token maps to a Person and a Family context; it is a narrow seam for the account-free capture
+  case, not a general-purpose anonymous-access mechanism. Account holders use a Magic link
+  (auto-login to their Account) instead.
 - **Discoverable family** — a Family whose steward has opted into being found by search. Default is
   private (not discoverable).
 - **Family search** — finding a *discoverable* family by name, description, steward name, or member

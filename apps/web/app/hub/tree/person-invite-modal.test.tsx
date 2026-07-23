@@ -74,6 +74,11 @@ it("renders the family chips from the server-prepared (already-filtered) set, se
   expect(screen.getByTestId("invite-name-locked").textContent).toBe("Elena Ricci");
   expect(screen.getByTestId("invite-email-locked").textContent).toBe("elena@example.com");
   expect(screen.getByTestId("invite-phone-locked").textContent).toBe("+15551234567");
+  // Phone present → Twilio SMS consent disclosure (unchecked) is visible for screenshots / TFV.
+  expect(screen.getByTestId("invite-sms-consent").textContent).toContain(
+    "text them this Tell Me Again invitation",
+  );
+  expect((screen.getByTestId("invite-sms-consent-checkbox") as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByRole("textbox")).toBeNull();
 });
 

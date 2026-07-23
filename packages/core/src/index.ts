@@ -197,11 +197,13 @@ export {
   resolveAccountIdByVerifiedEmail,
   resolveAccountIdByVerifiedPhone,
   attachIdentity,
+  recordAccountSmsOptIn,
   type SignUpAccountInput,
   type AccountWithPerson,
   type ReconcileAccountProfileInput,
   type ReconcileAccountResult,
   type DeactivateAccountResult,
+  type RecordAccountSmsOptInInput,
 } from "./accounts";
 export {
   completeOnboarding,

@@ -12,8 +12,13 @@
  *
  * Buttons enable/disable from live field state (contacts + a chosen family); the server action
  * re-validates. Submit rides the native form POST (`intent` distinguishes the three buttons).
+ *
+ * SMS: when a phone is present, an unchecked-by-default consent checkbox + disclosure must be
+ * checked before "Send text" (Twilio TFV error 30513 / TCPA express consent). Email and get-link
+ * do not require it.
  */
 import { useState } from "react";
+import Link from "next/link";
 import { KindredButton } from "@/app/_kindred";
 import { hub } from "@/app/_copy";
 import { FamilyDesignatorChips } from "../FamilyDesignatorChips";
@@ -89,6 +94,7 @@ export function MemberInviteForm({
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [phone, setPhone] = useState(defaultPhone ?? "");
   const [familyId, setFamilyId] = useState(() => initialFamilyId(seededFamily, families));
+  const [smsConsent, setSmsConsent] = useState(false);
 
   const lockName = personBound;
   // Person-bound: if either contact arrived prefilled, lock BOTH (display-only, not inputs).
@@ -163,6 +169,28 @@ export function MemberInviteForm({
         </div>
       )}
 
+      {hasPhone && (
+        <label className={styles.smsConsent} data-testid="invite-sms-consent">
+          <input
+            name="smsConsent"
+            type="checkbox"
+            checked={smsConsent}
+            onChange={(e) => setSmsConsent(e.target.checked)}
+            data-testid="invite-sms-consent-checkbox"
+          />
+          <span>
+            {hub.invite.smsConsentLabel}{" "}
+            <Link
+              href="/privacy"
+              className={styles.smsConsentLink}
+              aria-label={hub.invite.smsConsentPrivacyAria}
+            >
+              {hub.invite.smsConsentPrivacyLink}
+            </Link>
+          </span>
+        </label>
+      )}
+
       <div className={styles.fieldWithInfo}>
         <select
           name="relationship"
@@ -202,7 +230,7 @@ export function MemberInviteForm({
           name="intent"
           value="send_phone"
           label={hub.invite.sendToPhone}
-          disabled={!hasPhone || !hasFamily}
+          disabled={!hasPhone || !smsConsent || !hasFamily}
           variant="secondary"
           size="small"
         />

@@ -11,8 +11,8 @@
  * → shared @ chosen tier → append the FIRST `approved_for_sharing` ConsentRecord — happens in
  * one transaction inside `@chronicle/core`'s audited `approveAndShareStory`, never here.
  *
- * Source-agnostic (same as recording capture): the approval audio is a `CapturedAudio`, so a
- * later telephony adapter can deliver it identically — no rebuild.
+ * Source-agnostic (same as recording capture): the approval audio is a `CapturedAudio`, delivered
+ * by the login-free web-link surface (the only capture channel).
  */
 import { createHash, randomUUID } from "node:crypto";
 import { approveAndShareStory, getStoryForViewer, saveProseCorrection } from "@chronicle/core";

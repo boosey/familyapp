@@ -159,7 +159,6 @@ Single shell at `/hub` with tab query params. Desktop: top nav + account menu. M
 
 | Feature | Notes |
 |---------|-------|
-| Phone / telephony capture | Seam only (`CaptureSource`) |
 | Notifications / digests | Designed in CONTEXT; no outbound product yet |
 | Ask the archive (RAG Q&A) | Chronicle search shipped; Q&A deferred |
 | External sharing (`public` tier surface) | Tier stored; no anonymous reader |

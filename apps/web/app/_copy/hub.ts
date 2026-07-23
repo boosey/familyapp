@@ -262,6 +262,14 @@ export const hub = {
       "Add an email or a phone number — at least one — so we can recognize them when they join.",
     emailRequired: "Add their email to send it by email — or choose another way below.",
     phoneRequired: "Add their phone number to text it — or choose another way below.",
+    // Twilio TFV — slim inviter attestation for the invite SMS only. Recipient opt-in for ongoing
+    // SMS lives on /welcome (account setup). Shown when a phone number is present.
+    smsConsentLabel:
+      "They've agreed I can text them this Tell Me Again invitation. Msg & data rates may apply. Reply STOP to opt out.",
+    smsConsentPrivacyLink: "Privacy Policy",
+    smsConsentPrivacyAria: "Read our Privacy Policy (opens in the same tab)",
+    smsConsentRequired:
+      "Confirm they've agreed to a text before sending — or choose email / get a link instead.",
     // #119 — the duplicate-member guard refusing an invite to someone already in the family.
     alreadyMember:
       "They're already a member of this family — no invitation needed.",
@@ -301,8 +309,7 @@ export const hub = {
     // Custom validity message when the family designator (ADR-0021, #49) blocks an empty submit — the
     // ambiguous >1-family case with no deliberate pick.
     familyRequired: "Choose a family for this invitation.",
-    // #118 — the three send actions. The phone button doubles as the SMS consent: pressing it IS
-    // the explicit ask to text them.
+    // #118 — three send actions. "Send text" also requires the SMS consent checkbox above.
     sendToEmail: "Send email",
     sendToPhone: "Send text",
     getLink: "Get a link to share",

@@ -13,7 +13,12 @@ import { normalizePhone } from "@chronicle/notifications";
 import { getRuntime } from "@/lib/runtime";
 import { resolveInviteFamilyId } from "@/lib/invite-scope";
 import { seedDesignatorFamily } from "@/lib/family-designator";
-import { parseInviteIntent, planInviteChannels } from "@/lib/invite-delivery-channels";
+import {
+  inviteChannelPlanErrorMessage,
+  parseInviteIntent,
+  parseSmsConsent,
+  planInviteChannels,
+} from "@/lib/invite-delivery-channels";
 import { parseInviteRelationship } from "@/lib/invite-relationship";
 import { resolveInviteOrigin } from "@/lib/invite-origin";
 import type { FamilyFilter } from "@/lib/family-filter";
@@ -59,16 +64,14 @@ async function createMemberInvite(formData: FormData): Promise<void> {
     throw new Error(hub.invite.identifierRequired);
   }
   // The clicked action must match the contacts entered (Send-to-email needs an email, etc.).
+  // Send-to-phone also requires the explicit SMS consent checkbox (Twilio TFV / TCPA).
   const plan = planInviteChannels(intent, {
     email: inviteeEmail || null,
     normalizedPhone,
+    smsConsent: parseSmsConsent(formData.get("smsConsent")),
   });
   if (!plan.ok) {
-    throw new Error(
-      plan.reason === "email_required"
-        ? hub.invite.emailRequired
-        : hub.invite.phoneRequired,
-    );
+    throw new Error(inviteChannelPlanErrorMessage(plan.reason, hub.invite));
   }
   const channels = plan.channels;
   // Server-side family-target guard (Finding 2): resolve the single-family target against the inviter's

@@ -6,9 +6,9 @@
  * storage, THEN records the immutable Media row and the draft Story (via the audited core write
  * path). Nothing downstream ever overwrites the recording.
  *
- * Source-agnostic seam: intake accepts `CapturedAudio` from ANY source. The web-link channel is
- * the only producer in Phase 1; a later telephony adapter just produces the same `CapturedAudio`
- * and calls this exact function — no rebuild of capture.
+ * Source-agnostic seam: intake accepts `CapturedAudio` from ANY source. The login-free web-link
+ * channel (`/s/[token]`) is the sole capture channel — narrators record in a phone browser; there
+ * is no telephony channel.
  */
 import { randomUUID } from "node:crypto";
 import { createTextDraft, persistRecordingAndCreateDraft, persistTakeRecording } from "@chronicle/core";
@@ -17,8 +17,8 @@ import type { MediaStorage } from "@chronicle/storage";
 import { resolveCaptureActor } from "./identity";
 import { sha256Hex, extensionFor } from "./audio-util";
 
-/** The audio entry channel. The pipeline behind this is identical for every value. */
-export type CaptureSource = "web_link" | "telephony";
+/** The audio entry channel. Currently the login-free web-link surface is the only channel. */
+export type CaptureSource = "web_link";
 
 /**
  * WHO is capturing — the identity-agnostic credential for the capture orchestrator (ADR-0003).
@@ -48,7 +48,7 @@ export interface IngestRecordingInput {
   /** WHO is capturing — a link-session token or a signed-in account (ADR-0003). */
   actor: CaptureActor;
   audio: CapturedAudio;
-  /** Defaults to "web_link". Present so a telephony adapter is a config, not a rebuild. */
+  /** The capture channel. Defaults to "web_link" (the only channel today). */
   source?: CaptureSource;
   promptQuestion?: string;
   askId?: string;

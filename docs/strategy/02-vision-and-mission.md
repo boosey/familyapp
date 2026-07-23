@@ -13,10 +13,10 @@ Build a **perpetual family chronicle**: a living, private institution that holds
 Early documents (`docs/99-pruned/strategy-2026-early/Family-Chronicle-Vision.md`) over-rotated on:
 
 1. **Elders as the product** — narrators are important, but the hub serves the whole family
-2. **Phone calls as primary entry** — the product is a **web app**; link sessions are the account-free exception
+2. **Phone calls as an entry channel** — there is no telephony; account holders use the hub and account-free narrators use a login-free web link
 3. **"Mode 1 only" framing** — capture is the wedge, but album, tree, questions, and browse are first-class today
 
-The mission did not change. The **center of gravity** moved from "elder rescue via telephony" to **family storykeeping with elder-accessible design**.
+The mission did not change. The **center of gravity** is **family storykeeping with elder-accessible design** — a living archive for the whole family, not a one-time elder-rescue project.
 
 ## Core beliefs
 

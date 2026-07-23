@@ -48,13 +48,14 @@ export const auth = {
     eyebrow: "tellmeagain.app",
     refrain: "Tell me again.",
     lede:
-      "Tell Me Again helps your family record and keep the stories of the people you love — in their own voice — before they're gone.",
+      "Tell Me Again is a private home for your family's stories — told in the voices of the people who lived them, and kept for everyone who comes after.",
     primaryCta: "Start your family",
+    findCta: "Find your family",
     signUp: "Sign up",
     signIn: "Sign in",
     scrollCue: "How it works",
     narratorNote:
-      "Invited to share a memory? You'll open your own personal link — there's nothing to sign into here.",
+      "Invited to share a memory? Follow your personal invite link to join the family in a couple of minutes.",
     what: {
       eyebrow: "What it is",
       title: "A home for your family's voices.",
@@ -73,15 +74,15 @@ export const auth = {
         },
         {
           n: "02",
-          title: "They talk",
+          title: "They tell it",
           body:
-            "They answer out loud, in their own voice, from any phone. No account, no app, no setup.",
+            "They respond right from their phone's browser — no app to install, just a few minutes.",
         },
         {
           n: "03",
           title: "It's kept",
           body:
-            "We gently transcribe it and tuck it into your family's private archive, to hear again anytime.",
+            "We transcribe it gently and keep it in your family's private archive — searchable, safe, and there for years to come.",
         },
       ],
     },
@@ -89,13 +90,13 @@ export const auth = {
       eyebrow: "Photos, too",
       title: "Bring in the photos your stories live in.",
       body:
-        "Upload photos straight from your device — or connect Google Photos to bring in the ones already there — and attach them to a memory. The wedding, the old kitchen, the road trip: a photograph pulls the story out of the person who was in it — who's there, where it was, what happened next. We use your photos only to help your family tell and keep these stories. They are never sold, never shared, and never used for advertising.",
+        "Upload photos straight from your device — or connect Google Photos to bring in the ones already there — and attach them to a memory. The wedding, the old kitchen, the road trip: a photograph pulls the story out of the person who was in it — who's there, where it was, what happened next. Your photos are used only to help your family tell and keep these stories — never sold, shared, or used for advertising.",
     },
     why: {
-      eyebrow: "Why now",
-      title: "The stories go quiet sooner than we think.",
+      eyebrow: "Why start now",
+      title: "A family's record only grows once someone starts it.",
       body:
-        "We all mean to write it down someday. Tell Me Again turns “someday” into a two-minute phone call — so a grandchild can still hear the laugh, the pause, the exact way it was told.",
+        "Most of what a family knows lives in one or two people — and in a shoebox nobody labeled. Tell Me Again gives those stories a home: easy to add to, safe to keep, and there for a grandchild who goes looking years from now. The sooner you begin, the more you'll have gathered while the storytellers are here to tell it.",
     },
     trust: {
       eyebrow: "Yours, and only yours",

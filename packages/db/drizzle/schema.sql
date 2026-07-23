@@ -53,6 +53,8 @@ CREATE TABLE "accounts" (
 	"email" text,
 	"display_name" text,
 	"active" boolean DEFAULT true NOT NULL,
+	"sms_phone" text,
+	"sms_opted_in_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

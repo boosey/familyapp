@@ -363,3 +363,43 @@ export async function attachIdentity(
       target: [accountIdentities.provider, accountIdentities.providerUserId],
     });
 }
+
+export interface RecordAccountSmsOptInInput {
+  /** E.164 already normalized by the caller. */
+  phone: string;
+  /** Injectable clock for tests. */
+  now?: Date;
+}
+
+/**
+ * Persist the account holder's express SMS opt-in (welcome / signup phone step). Writes
+ * `accounts.sms_phone` + `accounts.sms_opted_in_at` only — never `account_contacts`, so an
+ * unverified self-reported number cannot become a match key (#121).
+ */
+export async function recordAccountSmsOptIn(
+  db: Database,
+  personId: string,
+  input: RecordAccountSmsOptInInput,
+): Promise<void> {
+  const phone = input.phone.trim();
+  if (!phone) throw new InvariantViolation("phone is required for SMS opt-in");
+
+  const [row] = await db
+    .select({ accountId: persons.accountId })
+    .from(persons)
+    .where(eq(persons.id, personId))
+    .limit(1);
+  if (!row?.accountId) {
+    throw new InvariantViolation(`person ${personId} has no account`);
+  }
+
+  const now = input.now ?? new Date();
+  await db
+    .update(accounts)
+    .set({
+      smsPhone: phone,
+      smsOptedInAt: now,
+      updatedAt: now,
+    })
+    .where(eq(accounts.id, row.accountId));
+}

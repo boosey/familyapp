@@ -35,6 +35,9 @@ function LandingCta() {
       <Link href="/sign-up" className={styles.ctaLink}>
         <KindredButton label={landing.primaryCta} size="large" />
       </Link>
+      <Link href="/sign-up" className={styles.ctaLink}>
+        <KindredButton label={landing.findCta} variant="secondary" size="large" />
+      </Link>
       <Link href="/sign-in" className={styles.ctaLink}>
         <KindredButton label={landing.signIn} variant="secondary" size="large" />
       </Link>

@@ -87,11 +87,11 @@ Happy to talk; hates passwords and menus. Uses the **personal link** (`/s/[token
 
 *Design implication:* link-session and magic-link paths must stay excellent. Every required login on the narrator path is a bug.
 
-### James — the organizer racing time
+### James — the organizer who gets it started
 
 **48, working parent, comfortable with technology.**
 
-Notices stories disappearing with each funeral. Sets up the family, invites Mom, sends specific questions, shares answers to siblings. Needs visible progress without nagging.
+Notices how much of the family's story lives in just one or two people, and that nobody's writing it down. Sets up the family, invites Mom, sends specific questions, shares answers to siblings. Needs visible progress without nagging.
 
 *Design implication:* ask relay, draft reminders, one-tap sharing, "your asks" status.
 
@@ -130,5 +130,4 @@ A Person may belong to **multiple Families** (e.g., birth family and in-laws). C
 ## Who is not a user (yet)
 
 - **Anonymous public** — `public` audience tier exists in schema; no external read surface
-- **Telephony-only callers** — seam designed, not shipped
 - **GEDCOM importers** — background job designed; not shipped

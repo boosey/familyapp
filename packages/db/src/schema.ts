@@ -341,6 +341,14 @@ export const accounts = pgTable(
     email: text("email"),
     displayName: text("display_name"),
     active: boolean("active").notNull().default(true),
+    /**
+     * Optional E.164 mobile number the account holder opted in to receive SMS on (Twilio / TCPA).
+     * Deliberately NOT an `account_contacts` match key — unverified self-reported phones must never
+     * squat the UNIQUE(kind, value) contact table (#121). Messaging delivery only.
+     */
+    smsPhone: text("sms_phone"),
+    /** When the account holder expressly consented to SMS; null means not opted in. */
+    smsOptedInAt: timestamp("sms_opted_in_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
