@@ -27,4 +27,18 @@ describe("KindredProseEditor showPolishButton", () => {
     );
     expect(screen.queryByRole("button", { name: /polish with ai/i })).toBeNull();
   });
+
+  it("hides Undo/Redo when showHistoryButtons is false", () => {
+    render(
+      <KindredProseEditor
+        value="hello story"
+        onChange={vi.fn()}
+        onPolish={vi.fn(async (t) => t)}
+        showPolishButton={false}
+        showHistoryButtons={false}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Undo$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redo$/i })).toBeNull();
+  });
 });

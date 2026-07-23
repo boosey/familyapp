@@ -29,7 +29,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Keyboard, Mic, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Check, Keyboard, Mic, Redo2, Sparkles, Undo2 } from "lucide-react";
 import { KindredVoiceButton, KindredButton } from "@/app/_kindred";
 import { BreathingWaveform } from "@/app/_kindred/BreathingWaveform";
 import { useAudioLevel } from "@/app/_kindred/use-audio-level";
@@ -108,6 +109,9 @@ export interface ComposingEditorProps {
   draft: DraftInfo | null;
   /** Where a discard navigates (Stories vs Questions tab) — the caller owns the answer/tell chrome. */
   backTab: string;
+  /** Top-chrome back link (same destination as discard's tab). Shown with Undo/Redo on one row. */
+  backHref: string;
+  backLabel: string;
   /**
    * How to build the resume URL for a freshly-created story (ADR-0014 Inc 3 slice 10). Some entry
    * surfaces cannot server-drive the draft after take 0 by a plain `router.refresh()`: `/hub/tell`
@@ -159,6 +163,8 @@ export function ComposingEditor({
   ask = null,
   draft,
   backTab,
+  backHref,
+  backLabel,
   resumeHref,
   subjectPhotoId = null,
   extraSubjectPhotoIds = [],
@@ -373,6 +379,23 @@ export function ComposingEditor({
   // take 0, where re-seeding from draft.prose is correct). The hook returns a MEMOIZED handle (slice 10
   // forward-risk (iii)), so putting it in callback deps below doesn't churn them each render.
   const history = useProseHistory(proseDraft, setProseDraft, draft?.storyId);
+  const proseTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /** Speak→Type on the composing surface: focus the prose field (opens the mobile keyboard). */
+  const focusProseEditor = useCallback(() => {
+    // Defer one frame so the mode swap paints before focus (iOS keyboard needs a user-gesture focus).
+    requestAnimationFrame(() => {
+      proseTextareaRef.current?.focus({ preventScroll: false });
+    });
+  }, []);
+
+  const selectInputMode = useCallback(
+    (mode: InputMode) => {
+      setInputMode(mode);
+      if (mode === "text") focusProseEditor();
+    },
+    [focusProseEditor],
+  );
 
   // Revoke the object URL when localTake changes or the component unmounts.
   useEffect(() => {
@@ -769,9 +792,11 @@ export function ComposingEditor({
     }
   };
 
-  // ── Shared question header (answer mode only) ────────────────────────────────
-  const questionHeader = ask ? (
-    <div style={{ marginBottom: 32, textAlign: "center" }}>
+  // ── Shared question header (answer mode only). Hidden while an enhancement follow-up is
+  // showing so the sticky footer prompt is the only active question (saves vertical space).
+  const questionHeader =
+    ask && !followUp ? (
+    <div style={{ marginBottom: 16, textAlign: "center" }}>
       <p
         style={{
           fontFamily: "var(--font-mono)",
@@ -799,6 +824,36 @@ export function ComposingEditor({
       </p>
     </div>
   ) : null;
+
+  const topChrome = (
+    <div className={styles.topChrome}>
+      <Link href={backHref} className={styles.backLink}>
+        {backLabel}
+      </Link>
+      <div className={styles.historyGroup} role="group" aria-label={`${common.proseEditor.undo} / ${common.proseEditor.redo}`}>
+        <button
+          type="button"
+          className={styles.historyButton}
+          title={common.proseEditor.undo}
+          aria-label={common.proseEditor.undo}
+          disabled={!history.canUndo}
+          onClick={history.undo}
+        >
+          <Undo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className={styles.historyButton}
+          title={common.proseEditor.redo}
+          aria-label={common.proseEditor.redo}
+          disabled={!history.canRedo}
+          onClick={history.redo}
+        >
+          <Redo2 size={CHIP_GLYPH} strokeWidth={2} aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
 
   const composing = draft?.state === "draft" || (draft == null && activeStoryId != null);
 
@@ -839,7 +894,8 @@ export function ComposingEditor({
     // happens; there is no window where they're both mounted and editable.)
     const isRemoving = op === "discard" || polishing;
     return (
-      <div>
+      <div className={styles.composeSurface}>
+        {topChrome}
         {questionHeader}
         <p
           style={{
@@ -989,7 +1045,8 @@ export function ComposingEditor({
     // live only to STOP an in-flight recording — starting a new one is gated by `otherMutationInFlight`.
     const busy = recordPhase === "listening" || savingTake || otherMutationInFlight;
     return (
-      <div>
+      <div className={styles.composeSurface}>
+        {topChrome}
         {questionHeader}
 
         <ProseBlock
@@ -999,56 +1056,31 @@ export function ComposingEditor({
           history={history}
           onPolish={polishHandler}
           showPolishButton={false}
+          showHistoryButtons={false}
+          textareaRef={proseTextareaRef}
           label={null}
           rows={6}
         />
 
-        {/* Inline follow-up banner (replaces the old full-screen FollowUpPrompt). Declining is a peer
-            path — a full-size ghost button, never a dead end. */}
-        {followUp && (
-          <div
-            style={{
-              border: "1.5px solid var(--border)",
-              borderRadius: "var(--radius-md)",
-              background: "var(--surface-card)",
-              padding: "16px 18px",
-              margin: "0 0 20px",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-label)",
-                color: "var(--text-meta)",
-                letterSpacing: "var(--tracking-mono)",
-                margin: "0 0 8px",
-              }}
-            >
-              {hub.answer.followUpIntro}
-            </p>
-            <p
-              style={{
-                fontFamily: "var(--font-story)",
-                fontSize: "var(--text-story)",
-                lineHeight: "var(--leading-snug)",
-                color: "var(--text-body)",
-                margin: "0 0 12px",
-              }}
-            >
-              {followUp.prompt}
-            </p>
-            <KindredButton
-              label={hub.answer.thatsAllForNow}
-              variant="ghost"
-              size="small"
-              disabled={busy}
-              onClick={onDeclineFollowUp}
-            />
-          </div>
-        )}
-
-        {/* Persistent capture footer — progressive Speak/Type · Polish · Finish, then mic/type. */}
+        {/* Sticky footer: enhancement follow-up strip + Speak/Type · Polish · Finish + mic.
+            Follow-up lives here so it cannot push the capture controls off-screen. */}
         <div className={styles.footer}>
+          {followUp ? (
+            <div className={styles.followUpStrip}>
+              <p className={styles.followUpIntro}>{hub.answer.followUpIntro}</p>
+              <p className={styles.followUpPrompt}>{followUp.prompt}</p>
+              <div className={styles.followUpActions}>
+                <KindredButton
+                  label={hub.answer.thatsAllForNow}
+                  variant="ghost"
+                  size="small"
+                  disabled={busy}
+                  onClick={onDeclineFollowUp}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className={styles.progressiveRow}>
             <HubProgressiveControlRow
               // Collapse precedence (first to lose labels): views → family → action iconify.
@@ -1058,7 +1090,7 @@ export function ComposingEditor({
                 expanded: (
                   <ModeToggle
                     inputMode={inputMode}
-                    setInputMode={setInputMode}
+                    setInputMode={selectInputMode}
                     disabled={busy}
                     iconOnly={false}
                   />
@@ -1066,7 +1098,7 @@ export function ComposingEditor({
                 collapsed: (
                   <ModeToggle
                     inputMode={inputMode}
-                    setInputMode={setInputMode}
+                    setInputMode={selectInputMode}
                     disabled={busy}
                     iconOnly
                   />
@@ -1131,6 +1163,7 @@ export function ComposingEditor({
             />
           </div>
 
+          {/* Type mode focuses the prose field above — no second entry box on the composing surface. */}
           {inputMode === "voice" ? (
             <KindredVoiceButton
               listening={recordPhase === "listening"}
@@ -1143,31 +1176,7 @@ export function ComposingEditor({
               onClick={holdToRecord ? undefined : onTapToggle}
               waveform={<BreathingWaveform level={level} reduceMotion={reduceMotion} />}
             />
-          ) : (
-            <div className={styles.textEntry}>
-              <label className="kin-form-label">
-                {hub.compose.textareaLabel}
-                <textarea
-                  className="kin-field"
-                  value={textDraft}
-                  onChange={(e) => setTextDraft(e.target.value)}
-                  rows={5}
-                  placeholder={hub.compose.textPlaceholder}
-                  disabled={busy}
-                />
-              </label>
-              <div className={styles.textEntryActions}>
-                <KindredButton
-                  label={hub.compose.continueLabel}
-                  variant="secondary"
-                  size="default"
-                  fullWidth
-                  disabled={busy || textDraft.trim().length === 0}
-                  onClick={submitText}
-                />
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {pendingError && <ErrorLine message={pendingError} />}
@@ -1260,6 +1269,7 @@ export function ComposingEditor({
   // ── CAPTURE ENTRY (no-draft: initial voice⇄text capture of take 0) ───────────
   return (
     <div className={styles.entryColumn}>
+      {topChrome}
       {questionHeader}
       {/* Tell-a-photo (ADR-0009 Phase 3): show the subject photo above the prompt so the narrator sees
           exactly which photo they're telling the story of. Bytes come from the audited byte route (the
