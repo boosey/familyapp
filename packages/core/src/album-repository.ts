@@ -448,6 +448,65 @@ export async function listAlbumPhotosDetailed(
   }));
 }
 
+/**
+ * The album's photo IDS ONLY, across MANY family albums — the lightweight sibling of
+ * `listAlbumPhotosDetailed` used to WARM thumbnail caches on hub load (#371). Same authorization and
+ * ordering, but it returns nothing but ids so it can run cheaply on EVERY hub render (not just when
+ * the album tab is active):
+ *
+ *   - The viewer must hold an ACTIVE membership in a family to see its photos; any `familyIds` the
+ *     viewer is NOT an active member of are silently dropped (never leaked). Anonymous ⇒ [].
+ *   - Each non-deleted photo placed in ANY authorized family appears ONCE (deduped by id), most-recent
+ *     first (`createdAt` desc, id desc) — the SAME ordering `listAlbumPhotosDetailed` uses, so a warmed
+ *     prefix is exactly the prefix of tiles the album will render.
+ *   - Defensively capped at `opts.limit` (default `ALBUM_PHOTO_QUERY_CAP`) — callers warming a single
+ *     screenful pass a small limit.
+ *
+ * Efficiency: ONE query (the placement rows joined to non-deleted photos), deduped in memory. No
+ * enrichment (no contributor/family/tag joins) — warming needs only the ids to build the byte-route URLs.
+ */
+export async function listAlbumPhotoIds(
+  db: Database,
+  ctx: AuthContext,
+  familyIds: string[],
+  opts: ListAlbumPhotosDetailedOptions = {},
+): Promise<string[]> {
+  const viewer = viewerPersonId(ctx);
+  if (viewer === null) return [];
+  const viewerFamilies = await activeFamilyIds(db, viewer);
+  const authorizedFamilies = [
+    ...new Set(familyIds.filter((id) => viewerFamilies.has(id))),
+  ];
+  if (authorizedFamilies.length === 0) return [];
+
+  // Placement rows for the authorized families, joined to non-deleted photos, most-recent first.
+  const placementRows = await db
+    .select({
+      photoId: familyPhotoFamilies.photoId,
+    })
+    .from(familyPhotoFamilies)
+    .innerJoin(familyPhotos, eq(familyPhotos.id, familyPhotoFamilies.photoId))
+    .where(
+      and(
+        inArray(familyPhotoFamilies.familyId, authorizedFamilies),
+        isNull(familyPhotos.deletedAt),
+      ),
+    )
+    .orderBy(desc(familyPhotos.createdAt), desc(familyPhotos.id));
+
+  // Distinct photo ids in most-recent-first order, then defensively capped (#217). A photo placed in
+  // several authorized families yields several rows; count the DISTINCT photo, not the placement rows.
+  const limit = opts.limit ?? ALBUM_PHOTO_QUERY_CAP;
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const r of placementRows) {
+    if (seen.has(r.photoId)) continue;
+    seen.add(r.photoId);
+    ordered.push(r.photoId);
+  }
+  return ordered.slice(0, limit);
+}
+
 /** A photo as shown on the person page's "Photos contributed" grid — thumbnail/metadata refs only. */
 export interface AlbumPhotoCard {
   id: string;
