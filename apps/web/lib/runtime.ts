@@ -40,9 +40,9 @@ import {
 } from "@chronicle/interviewer";
 import {
   getInvitationTokenForDelivery,
-  noopNarratorMemorySink,
   type NarratorMemorySink,
 } from "@chronicle/core";
+import { createNarratorMemorySink } from "./narrator-memory-sink";
 import { createGroqTranscriber } from "@chronicle/transcribe-groq";
 import { createGroqLanguageModel } from "@chronicle/llm-groq";
 import { createAnthropicLanguageModel } from "@chronicle/llm-anthropic";
@@ -297,10 +297,10 @@ type Runtime = {
    */
   inngest?: { client: Inngest; functions: InngestFunction.Any[] };
   /**
-   * The consent-gated narrator-memory WRITE seam (ADR-0014 §8/§9). The memory MODEL ("picture of the
-   * person") is DEFERRED — this is currently the no-op sink. The two consent points (post-approval Story,
-   * intake Save) invoke `record` so extraction lands here when the model arrives. Retention already keeps
-   * the raw material; a discarded/unshared draft never reaches this seam (that IS the §9 gating).
+   * The consent-gated narrator-memory WRITE seam (ADR-0014 §8/§9). #362 wired the REAL sink: the two
+   * consent points (post-approval Story, intake Save) invoke `record`, which runs LLM extraction and
+   * writes `narrator_memory` rows. A discarded/unshared draft never reaches this seam (that IS the §9
+   * gating). Best-effort at the call-sites (a memory-feed failure never fails the share/save).
    */
   narratorMemory: NarratorMemorySink;
 };
@@ -635,7 +635,9 @@ async function build(): Promise<Runtime> {
     dispatchAskActionableNotify,
     inngestConfigured,
     ...(inngest ? { inngest } : {}),
-    narratorMemory: noopNarratorMemorySink,
+    // #362: the real sink — LLM extraction (`extractNarratorMemory`) → `narrator_memory` rows. Runs
+    // on the SAME `languageModel` as post-approval augmentation. Best-effort at the call-sites.
+    narratorMemory: createNarratorMemorySink(db, languageModel),
   };
 }
 

@@ -952,11 +952,11 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
       });
     }
 
-    // Consent-gated narrator-memory feed (ADR-0014 §9): a Story feeds the (deferred) memory model
-    // ONLY here, post-approval — a discarded/unshared draft never reaches this seam. Currently a
-    // no-op sink; the SEAM is placed so extraction lands here when the model arrives. Best-effort in
-    // its OWN try/catch: a memory-feed failure must never fail the share/redirect. Only when the
-    // approved story has prose (the consented text mined for memory).
+    // Consent-gated narrator-memory feed (ADR-0014 §9): a Story feeds the memory model ONLY here,
+    // post-approval — a discarded/unshared draft never reaches this seam. #362 wired the real sink
+    // (LLM extraction → narrator_memory rows). Best-effort in its OWN try/catch: a memory-feed
+    // failure must never fail the share/redirect. Only when the approved story has prose (the
+    // consented text mined for memory); `sourceStoryId` records the provenance on extracted rows.
     try {
       const approved = await getStoryForViewer(db, ctx, storyId);
       if (approved?.prose) {
@@ -964,6 +964,7 @@ export async function shareAnswerAction(formData: FormData): Promise<ActionResul
           personId: ctx.personId,
           source: "story",
           text: approved.prose,
+          sourceStoryId: storyId,
         });
       }
     } catch (e) {

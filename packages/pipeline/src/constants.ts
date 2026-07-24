@@ -32,6 +32,12 @@ export const BIOGRAPHY_EXTRACT_LLM_TEMPERATURE = 0;
 /** Hard cap on output tokens for biographical extraction (the JSON record is tiny). */
 export const BIOGRAPHY_EXTRACT_MAX_OUTPUT_TOKENS = 300;
 
+/** LLM temperature for narrator-memory extraction (0 = deterministic fact-pull). */
+export const NARRATOR_MEMORY_EXTRACT_LLM_TEMPERATURE = 0;
+
+/** Hard cap on output tokens for narrator-memory extraction (a short JSON array of facts). */
+export const NARRATOR_MEMORY_EXTRACT_MAX_OUTPUT_TOKENS = 600;
+
 /**
  * LLM temperature for the OPT-IN prose polish (slightly above story-render's 0.2 so it can smooth
  * rambling and resolve self-corrections, but still low enough that it never drifts into invention).

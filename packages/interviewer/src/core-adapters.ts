@@ -1,11 +1,11 @@
 /**
  * Adapters that bridge `@chronicle/core`'s audited read API to the interviewer's seams.
  *
- * Cross-session memory is a content read: title/summary/tags from the narrator's prior stories.
- * It goes through `listNarratorMemoryForInterviewer` — an audited read on the already-allowlisted
- * `story-repository.ts`. The projection is in SQL (no transcript, no prose, no storage key
- * are ever selected), so the safe-metadata-only contract is structural rather than a
- * convention in this adapter file.
+ * Cross-session memory is title/summary/tags about the narrator. Post-#362 it goes through
+ * `listNarratorMemoryForInterviewer` reading the OPEN-schema `narrator_memory` store (no longer
+ * story content) — the projection is in SQL (no transcript, no prose, no storage key are ever
+ * selected), so the safe-metadata-only contract is structural rather than a convention in this
+ * adapter file.
  *
  * Biographical anchors are non-content (the persons table is on the open schema), so a thin
  * pass-through to `getNarratorBiographicalContext` is the whole adapter.

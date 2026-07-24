@@ -46,6 +46,7 @@ import {
   joinRequests,
   linkSessions,
   memberships,
+  narratorMemory,
   persons,
   storyFamilies,
   voiceCaptions,
@@ -195,6 +196,10 @@ async function eraseStoryCascade(tx: TxLike, storyId: string): Promise<string[]>
   await tx.delete(consentRecords).where(eq(consentRecords.storyId, storyId));
   await tx.delete(proseRevisions).where(eq(proseRevisions.storyId, storyId));
   await tx.delete(storyRecordings).where(eq(storyRecordings.storyId, storyId));
+  // narrator_memory.source_story_id FKs stories (plain FK, no cascade), so facts MINED from this
+  // story must go before DELETE stories or it FK-fails. User-authored facts (source_story_id NULL)
+  // are untouched — they did not come from this story. This helper is reused by eraseAccount.
+  await tx.delete(narratorMemory).where(eq(narratorMemory.sourceStoryId, storyId));
   await tx.delete(stories).where(eq(stories.id, storyId));
   // Media LAST — the story (and every other referencer) is gone.
   if (mediaIds.length > 0) {
@@ -660,6 +665,11 @@ export async function eraseAccount(
     //     they were INVITED to, join requests / link sessions that are theirs, and their Google
     //     Photos connection. Kept minimal + FK-guided.
     await tx.delete(intakeAnswers).where(eq(intakeAnswers.personId, personId));
+    // narrator_memory.person_id FKs persons (plain FK, no cascade) — remove ALL of the person's
+    // facts (extracted AND user-authored). Extracted facts from their OWN stories were already
+    // caught by the owned-story cascade in (a); this additionally catches user-authored
+    // (source_story_id NULL) rows. Deletes are idempotent so the overlap is harmless.
+    await tx.delete(narratorMemory).where(eq(narratorMemory.personId, personId));
     await tx
       .delete(notificationStreamPrefs)
       .where(eq(notificationStreamPrefs.personId, personId));
