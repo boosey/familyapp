@@ -27,6 +27,8 @@
  */
 import { hub } from "@/app/_copy";
 import type { KinRelation, TreeNode } from "@chronicle/core";
+import { personCardBadgeFor } from "./person-badge";
+import { PersonStatusBadge } from "./person-status-badge";
 import {
   AVATAR_SIZE_PX,
   FOCUS_BADGE_GLYPH_PX,
@@ -169,11 +171,18 @@ export interface PersonNodeProps {
   focus?: boolean;
   /** True for the VIEWER's own card (Slice A #9) — its relation chip reads "You". */
   isViewer?: boolean;
+  /**
+   * #372 — open the person-bound Invite modal for this node. When provided AND this card's status badge
+   * is `eligible`, the bottom-left badge becomes a tappable invite button; otherwise the badge is
+   * informational only. The canvas suppresses this during placement (badge still shows informationally).
+   */
+  onInvite?: (node: TreeNode) => void;
 }
 
-export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }: PersonNodeProps) {
+export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer, onInvite }: PersonNodeProps) {
   const anon = isAnonymousBridge(node);
   const name = displayNameFor(node);
+  const badge = personCardBadgeFor(node);
   const dates = datesLineFor(node);
   const initial = monogramFor(node);
   const photo = photoUrlFor(node);
@@ -205,6 +214,17 @@ export function PersonNode({ node, onTap, kebab, squareCorner, focus, isViewer }
         >
           {kebab}
         </span>
+      )}
+      {/* #372 status badge — bottom-left, mirrors the kebab. A HOISTED SIBLING of the card <button>
+          (which is overflow:hidden), so it is never clipped. Tappable only when eligible + onInvite. */}
+      {badge && (
+        <PersonStatusBadge
+          variant="corner"
+          badge={badge}
+          name={name}
+          onInvite={onInvite ? () => onInvite(node) : undefined}
+          testidSuffix={node.personId}
+        />
       )}
       <button
         type="button"

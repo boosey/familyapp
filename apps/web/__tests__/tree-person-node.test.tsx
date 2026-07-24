@@ -24,6 +24,8 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     hasHiddenChildren: over.hasHiddenChildren ?? false,
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
+    membership: over.membership ?? "tree-only",
+    isSteward: over.isSteward ?? false,
   };
 }
 

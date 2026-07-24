@@ -708,6 +708,10 @@ export interface TreeNode {
    *                        separate status (#335 retired Account-centric `accepted`).
    */
   inviteStatus: "invitable" | "pending" | "not-applicable";
+  /** #372 — active membership in THIS (the tree's) family. Family-scoped, read-only projection. */
+  membership: "member" | "tree-only";
+  /** #372 — is this person the VIEWED family's steward (`families.stewardPersonId`). */
+  isSteward: boolean;
 }
 
 export interface KinshipTreeData {
@@ -1038,6 +1042,33 @@ export async function resolveKinshipTree(
     })),
   );
 
+  // #372 — family-scoped standing for the status badge, batched (never per-person):
+  //   - `membership`: an active `memberships` row in THIS family among the in-window ids → "member",
+  //     else "tree-only" (a plain edge endpoint with no active membership here).
+  //   - `isSteward`: the family's `families.stewardPersonId`.
+  // Both are family-scoped and read-only projections — memberships/families are open (non-content)
+  // tables, so no content front-door concern.
+  const activeMemberIds = new Set<string>();
+  if (ids.length > 0) {
+    const memberRows = await db
+      .select({ personId: memberships.personId })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.familyId, familyId),
+          eq(memberships.status, "active"),
+          inArray(memberships.personId, ids),
+        ),
+      );
+    for (const m of memberRows) activeMemberIds.add(m.personId);
+  }
+  const [famSteward] = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(families)
+    .where(eq(families.id, familyId))
+    .limit(1);
+  const stewardId = famSteward?.stewardPersonId ?? null;
+
   const nodes: TreeNode[] = rows.map((r) => ({
     personId: r.id,
     displayName: r.displayName,
@@ -1050,6 +1081,8 @@ export async function resolveKinshipTree(
     hasHiddenParents: hasHiddenParents.get(r.id) ?? false,
     hasHiddenChildren: hasHiddenChildren.get(r.id) ?? false,
     inviteStatus: inviteStatusById.get(r.id) ?? "not-applicable",
+    membership: activeMemberIds.has(r.id) ? "member" : "tree-only",
+    isSteward: r.id === stewardId,
   }));
 
   // Materialized-but-nonexistent ids (only the invalid root, realistically) don't become nodes; drop

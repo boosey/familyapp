@@ -1219,6 +1219,17 @@ export const hub = {
     inviteButton: "Invite to another family",
     kebabInvite: "Invite…",
     invitePendingNote: "Invitation pending",
+    // #372 person-card status badge. Glyph alone on the tree card; glyph+line on the details sheet;
+    // glyph beside the Member/tree-only word on the List. a11y labels for informational glyphs.
+    statusBadge: {
+      inviteAria: (name: string) => `Invite ${name}`,
+      eligibleLabel: "Eligible to invite",
+      invitedLabel: "Invitation pending",
+      stewardLabel: "Family steward",
+      eligibleLine: "Not yet a member of this family — can be invited.",
+      invitedLine: "Invitation pending.",
+      stewardLine: "Steward of this family.",
+    },
     // Per-direction caret aria labels (collapse/expand an already-drawn branch; add via "+").
     collapseParents: "Collapse ancestors",
     expandParents: "Expand ancestors",

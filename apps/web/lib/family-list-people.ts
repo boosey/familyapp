@@ -35,6 +35,12 @@ export interface FamilyListPerson {
   lifeStatus: KinListEntry["lifeStatus"];
   /** Member = active Membership; tree-only = kinship/tree presence without active membership. */
   membership: FamilyListMembershipBadge;
+  /**
+   * #372 — is this person the VIEWED family's steward. Projector defaults false (no family source);
+   * the loader (`loadFamilyTabData`) hydrates it from `families.stewardPersonId`. Feeds the shared
+   * `personCardBadgeFor` rule so List shows the SAME status badge as Tree.
+   */
+  isSteward: boolean;
   /** Derived relation to the viewer when known; null for self, unplaced, or unrelated members. */
   relation: KinRelation | null;
   /**
@@ -121,6 +127,7 @@ export function projectFamilyListPeople(input: ProjectFamilyListPeopleInput): Fa
       lifeStatus: kin?.lifeStatus ?? "living",
       membership: isMember ? "member" : "tree-only",
       relation: kin?.relation ?? null,
+      isSteward: false,
       // No identity/invite/reconcile source in this pure projector — the loader hydrates these via
       // `hydrateFamilyListPeopleIdentity` (below) so List's Edit/Save never wipes real data (#330),
       // List's Invite affordance reflects the person's REAL status (#334), and #337 reconcile gating
@@ -158,6 +165,8 @@ export interface FamilyListPersonIdentity {
   origin: PersonOrigin;
   /** #337 — `persons.accountId` for member-with-account eligibility. */
   accountId: string | null;
+  /** #372 — whether this person is the viewed family's steward (`families.stewardPersonId`). */
+  isSteward: boolean;
 }
 
 /**
@@ -189,6 +198,7 @@ export function hydrateFamilyListPeopleIdentity(
       deathYear: identity.deathYear,
       sex: identity.sex,
       inviteStatus: identity.inviteStatus,
+      isSteward: identity.isSteward,
       reconcileSide,
     };
   });
@@ -238,5 +248,7 @@ export function resolveListPersonNode(
     hasHiddenParents: false,
     hasHiddenChildren: false,
     inviteStatus: person.inviteStatus,
+    membership: person.membership,
+    isSteward: person.isSteward,
   };
 }

@@ -24,6 +24,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
     reconcileSide: "reconcileSide" in over ? (over.reconcileSide ?? null) : null,
+    isSteward: over.isSteward ?? false,
   };
 }
 
