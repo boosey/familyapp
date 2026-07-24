@@ -25,8 +25,15 @@ import { AtSign, BookOpen, Images, SquarePen } from "lucide-react";
 import { hub } from "@/app/_copy";
 import type { KinRelation, PersonSex, TreeNode } from "@chronicle/core";
 import { ICON_SHEET_GLYPH_SIZE } from "../icon-sheet-constants";
+import { AVATAR_SIZE_PX } from "./tree-constants";
 import styles from "./PersonDetails.module.css";
-import { datesLineFor, displayNameFor, isAnonymousBridge } from "./person-node";
+import {
+  datesLineFor,
+  displayNameFor,
+  isAnonymousBridge,
+  monogramColor,
+  monogramFor,
+} from "./person-node";
 import {
   personEditabilityAction,
   savePersonEditAction,
@@ -182,11 +189,30 @@ export function PersonDetails({
         />
       ) : (
         <>
-          <h2 className={anon ? styles.titleAnon : styles.title}>{name}</h2>
-
-          {(relation || dates) && (
-            <p className={styles.meta}>{[relation, dates].filter(Boolean).join(" · ")}</p>
-          )}
+          <div className={styles.header}>
+            {/* Monogram avatar — reuses the tree card's helpers so the initial and deterministic color
+                match this person's card exactly. Decorative: the name beside it carries the identity. */}
+            <span
+              className={styles.avatar}
+              data-testid="tree-details-avatar"
+              style={{
+                // Match the tree card exactly: a neutral fill for an anonymous bridge, else the
+                // deterministic per-person monogram color (person-node.tsx).
+                background: anon ? "var(--border-strong)" : monogramColor(node.personId),
+                width: AVATAR_SIZE_PX,
+                height: AVATAR_SIZE_PX,
+              }}
+              aria-hidden
+            >
+              {monogramFor(node)}
+            </span>
+            <div className={styles.identity}>
+              <h2 className={anon ? styles.titleAnon : styles.title}>{name}</h2>
+              {(relation || dates) && (
+                <p className={styles.meta}>{[relation, dates].filter(Boolean).join(" · ")}</p>
+              )}
+            </div>
+          </div>
 
           {!hasName && !anon && <p className={styles.unknownNote}>{hub.tree.unknownRelative}</p>}
 
@@ -197,6 +223,7 @@ export function PersonDetails({
                 data-testid="tree-details-edit"
                 className={styles.iconAction}
                 aria-label={hub.tree.editButton}
+                title={hub.tree.editButton}
                 onClick={() => setEditing(true)}
               >
                 <SquarePen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
@@ -207,6 +234,7 @@ export function PersonDetails({
               className={styles.iconAction}
               data-testid="tree-details-stories"
               aria-label={hub.tree.detailsStories}
+              title={hub.tree.detailsStories}
             >
               <BookOpen size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
             </Link>
@@ -215,6 +243,7 @@ export function PersonDetails({
               className={styles.iconAction}
               data-testid="tree-details-photos"
               aria-label={hub.tree.detailsPhotos}
+              title={hub.tree.detailsPhotos}
             >
               <Images size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
             </Link>
@@ -223,6 +252,7 @@ export function PersonDetails({
               className={styles.iconAction}
               data-testid="tree-details-mentions"
               aria-label={hub.tree.detailsMentions}
+              title={hub.tree.detailsMentions}
             >
               <AtSign size={ICON_SHEET_GLYPH_SIZE} strokeWidth={2} aria-hidden />
             </Link>
