@@ -11,7 +11,6 @@
  *
  * Owns its own data load, keyed on the shared-contract `personId`/`db`. Section copy is in `./copy.ts`.
  */
-import type { CSSProperties } from "react";
 import { eq } from "drizzle-orm";
 import type { BiographicalProfile } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
@@ -35,56 +34,7 @@ export default async function MemoriesSection({ personId, db }: AccountSectionPr
 
   return (
     <section aria-labelledby="account-memories-title">
-      <header style={headerStyle}>
-        <h2 id="account-memories-title" style={titleStyle}>
-          {copy.title}
-        </h2>
-        <p style={subtitleStyle}>{copy.subtitle}</p>
-      </header>
-
-      <p style={provenanceNoteStyle}>{copy.provenanceNote}</p>
-
-      <MemoriesList items={items} />
-
-      <p style={comingSoonStyle}>{copy.comingSoonNote}</p>
+      <MemoriesList items={items} title={copy.title} />
     </section>
   );
 }
-
-const headerStyle: CSSProperties = {
-  marginBottom: 20,
-};
-
-const titleStyle: CSSProperties = {
-  fontFamily: "var(--font-story)",
-  fontSize: "clamp(1.5rem, 3.5vw, var(--text-display))",
-  fontWeight: 400,
-  color: "var(--text-body)",
-  margin: "0 0 8px",
-};
-
-const subtitleStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: 0,
-  lineHeight: "var(--leading-snug)",
-};
-
-const provenanceNoteStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-label)",
-  color: "var(--text-muted)",
-  margin: "0 0 20px",
-  lineHeight: "var(--leading-snug)",
-};
-
-const comingSoonStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-label)",
-  color: "var(--text-muted)",
-  margin: "24px 0 0",
-  paddingTop: 16,
-  borderTop: "1px solid var(--border-subtle)",
-  lineHeight: "var(--leading-snug)",
-};

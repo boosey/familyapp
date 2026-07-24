@@ -7,7 +7,6 @@
  */
 import type { CSSProperties } from "react";
 import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
-import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
 import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
 import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
 import { KindredRecordingGesturePicker } from "@/app/_kindred/KindredRecordingGesturePicker";
@@ -20,7 +19,6 @@ export function AppearanceControls() {
         <h2 id="appearance-skin" style={sectionTitle}>
           {appearanceCopy.skinHeading}
         </h2>
-        <p style={sectionIntro}>{appearanceCopy.skinIntro}</p>
         <KindredSkinPicker />
       </section>
 
@@ -28,7 +26,6 @@ export function AppearanceControls() {
         <h2 id="appearance-motion" style={sectionTitle}>
           {appearanceCopy.motionHeading}
         </h2>
-        <p style={sectionIntro}>{appearanceCopy.motionIntro}</p>
         <KindredMotionToggle />
       </section>
 
@@ -36,7 +33,6 @@ export function AppearanceControls() {
         <h2 id="appearance-recording-gesture" style={sectionTitle}>
           {appearanceCopy.recordingGestureHeading}
         </h2>
-        <p style={sectionIntro}>{appearanceCopy.recordingGestureIntro}</p>
         <KindredRecordingGesturePicker />
       </section>
 
@@ -44,16 +40,7 @@ export function AppearanceControls() {
         <h2 id="appearance-text-size" style={sectionTitle}>
           {appearanceCopy.textSizeHeading}
         </h2>
-        <p style={sectionIntro}>{appearanceCopy.textSizeIntro}</p>
         <KindredFontScale />
-      </section>
-
-      <section aria-labelledby="appearance-palette">
-        <h2 id="appearance-palette" style={sectionTitle}>
-          {appearanceCopy.paletteHeading}
-        </h2>
-        <p style={sectionIntro}>{appearanceCopy.paletteIntro}</p>
-        <KindredThemePicker />
       </section>
     </div>
   );
@@ -67,10 +54,3 @@ const sectionTitle: CSSProperties = {
   margin: "0 0 8px",
 };
 
-const sectionIntro: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: "0 0 16px",
-  lineHeight: "var(--leading-snug)",
-};

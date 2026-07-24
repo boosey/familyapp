@@ -14,7 +14,6 @@ import {
   DEFAULT_FONT_SIZE_INDEX,
 } from "@/lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
-import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
 import {
   SKIN_IDS,
   DEFAULT_SKIN_ID,
@@ -109,8 +108,8 @@ export function computeApplication(def: PreferenceDef, value: string | number): 
 }
 
 /**
- * The registry: the small, opt-in set of app preferences. Reading size and color palette are folded in
- * from their previously hand-rolled constants (ADR-0020). Adding a preference is adding an entry here.
+ * The registry: the small, opt-in set of app preferences. Reading size is folded in
+ * from its previously hand-rolled constants (ADR-0020). Adding a preference is adding an entry here.
  */
 export const PREFERENCES = {
   readingSize: {
@@ -119,13 +118,6 @@ export const PREFERENCES = {
     default: DEFAULT_FONT_SIZE_INDEX,
     validate: { kind: "int-index", length: FONT_SIZE_STEPS_PT.length },
     apply: { strategy: "root-font-size", steps: FONT_SIZE_STEPS_PT, unit: "pt" },
-  },
-  theme: {
-    key: "theme",
-    storageKey: THEME_STORAGE_KEY,
-    default: DEFAULT_THEME_ID,
-    validate: { kind: "enum", values: THEME_IDS },
-    apply: { strategy: "data-attr", attr: "data-theme" },
   },
   skin: {
     key: "skin",

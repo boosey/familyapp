@@ -20,6 +20,10 @@ export const privacySectionCopy = {
   hidePhoneHelp:
     "Other members won't see your phone and it won't prefill invitations. You'll still receive text notifications you've asked for.",
 
+  // Item labels for the Hidden/Visible SegmentedControl (checked === hidden).
+  hidden: "Hidden",
+  visible: "Visible",
+
   saving: "Saving…",
   saved: "Saved",
   saveError: "Couldn't save — try again.",

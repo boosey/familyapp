@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 /**
- * Integration: the folded-in bespoke controls (reading size, theme) still persist to localStorage and
- * apply to <html> — but now entirely through the preference registry/client, not hand-rolled logic.
+ * Integration: the folded-in bespoke controls (reading size, skin, motion, recording gesture) still
+ * persist to localStorage and apply to <html> — but now entirely through the preference
+ * registry/client, not hand-rolled logic.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { KindredFontScale } from "@/app/_kindred/KindredFontScale";
-import { KindredThemePicker } from "@/app/_kindred/KindredThemePicker";
 import { KindredSkinPicker } from "@/app/_kindred/KindredSkinPicker";
 import { KindredMotionToggle } from "@/app/_kindred/KindredMotionToggle";
 import { KindredRecordingGesturePicker } from "@/app/_kindred/KindredRecordingGesturePicker";
@@ -18,7 +18,6 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   document.documentElement.removeAttribute("style");
-  document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-skin");
   document.documentElement.removeAttribute("data-reduce-motion");
 });
@@ -35,21 +34,6 @@ describe("KindredFontScale", () => {
     localStorage.setItem(PREFERENCES.readingSize.storageKey, "3"); // steps[3] = 14
     render(<KindredFontScale />);
     expect(document.documentElement.style.fontSize).toBe("14pt");
-  });
-});
-
-describe("KindredThemePicker", () => {
-  it("choosing a palette writes localStorage and sets data-theme", () => {
-    render(<KindredThemePicker />);
-    fireEvent.click(screen.getByLabelText(hub.settings.paletteLabels.archive));
-    expect(localStorage.getItem(PREFERENCES.theme.storageKey)).toBe("archive");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("archive");
-  });
-
-  it("re-applies the stored palette on mount", () => {
-    localStorage.setItem(PREFERENCES.theme.storageKey, "hearth");
-    render(<KindredThemePicker />);
-    expect(document.documentElement.getAttribute("data-theme")).toBe("hearth");
   });
 });
 
@@ -99,10 +83,10 @@ describe("KindredMotionToggle", () => {
 describe("KindredRecordingGesturePicker", () => {
   it("choosing phone hold writes the phone storage key (not desktop)", () => {
     render(<KindredRecordingGesturePicker />);
-    const phoneHold = screen.getByLabelText(
-      `${hub.settings.recordingGestureHoldLabel} — ${hub.settings.recordingGesturePhoneAria}`,
-    );
-    fireEvent.click(phoneHold);
+    const phoneGroup = screen.getByRole("group", {
+      name: hub.settings.recordingGesturePhoneAria,
+    });
+    fireEvent.click(within(phoneGroup).getByRole("button", { name: hub.settings.recordingGestureHoldLabel }));
     expect(localStorage.getItem(PREFERENCES.recordingGesturePhone.storageKey)).toBe("hold");
     expect(localStorage.getItem(PREFERENCES.recordingGestureDesktop.storageKey)).toBeNull();
   });
@@ -110,21 +94,20 @@ describe("KindredRecordingGesturePicker", () => {
   it("choosing desktop tap writes the desktop storage key (not phone)", () => {
     localStorage.setItem(PREFERENCES.recordingGestureDesktop.storageKey, "hold");
     render(<KindredRecordingGesturePicker />);
-    const desktopTap = screen.getByLabelText(
-      `${hub.settings.recordingGestureTapLabel} — ${hub.settings.recordingGestureDesktopAria}`,
-    );
-    fireEvent.click(desktopTap);
+    const desktopGroup = screen.getByRole("group", {
+      name: hub.settings.recordingGestureDesktopAria,
+    });
+    fireEvent.click(within(desktopGroup).getByRole("button", { name: hub.settings.recordingGestureTapLabel }));
     expect(localStorage.getItem(PREFERENCES.recordingGestureDesktop.storageKey)).toBe("tap");
     expect(localStorage.getItem(PREFERENCES.recordingGesturePhone.storageKey)).toBeNull();
   });
 
   it("js-read apply does not mutate the document when choosing", () => {
     render(<KindredRecordingGesturePicker />);
-    fireEvent.click(
-      screen.getByLabelText(
-        `${hub.settings.recordingGestureHoldLabel} — ${hub.settings.recordingGesturePhoneAria}`,
-      ),
-    );
+    const phoneGroup = screen.getByRole("group", {
+      name: hub.settings.recordingGesturePhoneAria,
+    });
+    fireEvent.click(within(phoneGroup).getByRole("button", { name: hub.settings.recordingGestureHoldLabel }));
     expect(document.documentElement.getAttribute("data-recording-gesture")).toBeNull();
   });
 });

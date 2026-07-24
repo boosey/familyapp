@@ -85,9 +85,6 @@ export const hub = {
     backToHub: "← Back to hub",
     // Narrow-only toggle that opens the section list (the drill-down); also the rail's accessible name.
     sections: "Sections",
-    // Trailing scope tag on each rail item: device-local app preference vs account-level (cross-device).
-    deviceScope: "Device",
-    accountScope: "Account",
   },
   // ADR-0025 collapsed browse panels — per-concern IconSheet triggers (View/Family/Filter/Search).
   // Compact (< 40rem) opens a BottomSheet; wide opens an AnchoredPopover (#300). Panel body is shared.
@@ -852,15 +849,12 @@ export const hub = {
     title: "Your profile",
     subtitle: "Changes save automatically when you leave each field.",
     identityHeading: "Who you are",
-    identityIntro: "The name your family sees, what we say when we talk with you, and your birthday.",
     spokenNameLabel: "What we call you aloud",
     spokenNameHelp: "The interviewer uses this name — it can differ from your full name.",
     emailLabel: "Email",
     emailHelp: "Managed by your sign-in provider; not editable here.",
     birthdayLabel: "Birthday",
     introHeading: "Your introduction",
-    introIntro:
-      "These details help your family ask better questions. First-time answers are collected in the guided introduction; edit them here anytime.",
     anchorLabels: {
       hometown: "Where you grew up",
       siblingContext: "Brothers and sisters",
@@ -900,19 +894,6 @@ export const hub = {
     streamFrequencyAria: (streamLabel: string) => `${streamLabel} frequency`,
     textSizeHeading: "Text size",
     textSizeIntro: "Makes everything on the screen a little larger or smaller.",
-    paletteHeading: "Color palette",
-    paletteIntro: "Choose the mood of Tell Me Again on this device.",
-    paletteAria: "Color palette",
-    paletteShort: {
-      heirloom: "Heirloom",
-      archive: "Archive",
-      hearth: "Hearth",
-    },
-    paletteLabels: {
-      heirloom: "Heirloom palette — warm terracotta and sage",
-      archive: "Archive palette — cool gray and teal",
-      hearth: "Hearth palette — warm rose and coral",
-    },
     skinHeading: "Look and feel",
     skinIntro: "Choose how the app looks and feels on this device.",
     skinAria: "Look and feel",

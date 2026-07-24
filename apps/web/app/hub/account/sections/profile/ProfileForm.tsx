@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 import type { BiographicalProfile, PersonSex } from "@chronicle/db";
 import { common, hub, welcome } from "@/app/_copy";
+import { InfoTooltip } from "@/app/hub/InfoTooltip";
 import {
   saveDisplayNameAction,
   saveSpokenNameAction,
@@ -130,7 +131,6 @@ export function ProfileForm({
         <h2 id="profile-identity-heading" style={sectionTitle}>
           {hub.profile.identityHeading}
         </h2>
-        <p style={sectionIntro}>{hub.profile.identityIntro}</p>
         <div style={fieldStack}>
           <label className="kin-form-label">
             {welcome.nameLabel}
@@ -147,7 +147,10 @@ export function ProfileForm({
           </label>
 
           <label className="kin-form-label">
-            {hub.profile.spokenNameLabel}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {hub.profile.spokenNameLabel}
+              <InfoTooltip label={hub.profile.spokenNameLabel} text={hub.profile.spokenNameHelp} />
+            </span>
             <input
               type="text"
               className="kin-field"
@@ -157,15 +160,16 @@ export function ProfileForm({
                 void runSave("spokenName", () => saveSpokenNameAction(spokenName));
               }}
             />
-            <span style={helpText}>{hub.profile.spokenNameHelp}</span>
             {hintEl("spokenName")}
           </label>
 
           {email ? (
             <label className="kin-form-label">
-              {hub.profile.emailLabel}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {hub.profile.emailLabel}
+                <InfoTooltip label={hub.profile.emailLabel} text={hub.profile.emailHelp} />
+              </span>
               <input type="email" className="kin-field" value={email} readOnly disabled />
-              <span style={helpText}>{hub.profile.emailHelp}</span>
             </label>
           ) : null}
 
@@ -261,7 +265,6 @@ export function ProfileForm({
         <h2 id="profile-intro-heading" style={sectionTitle}>
           {hub.profile.introHeading}
         </h2>
-        <p style={sectionIntro}>{hub.profile.introIntro}</p>
         <div style={fieldStack}>
           <AnchorTextField
             label={hub.profile.anchorLabels.hometown}
@@ -429,25 +432,9 @@ const sectionTitle: CSSProperties = {
   margin: "0 0 8px",
 };
 
-const sectionIntro: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: "0 0 20px",
-  lineHeight: "var(--leading-snug)",
-};
-
 const fieldStack: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 20,
 };
 
-const helpText: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-label)",
-  color: "var(--text-muted)",
-  marginTop: 6,
-  display: "block",
-  lineHeight: "var(--leading-snug)",
-};

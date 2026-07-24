@@ -103,16 +103,19 @@ export default async function RootLayout({
   // className goes on <html> so the CSS variables are exposed at :root, which is where
   // _kindred/tokens.css references them via var(--font-newsreader) / var(--font-public-sans).
   //
-  // `data-skin` carries a STATIC SSR default (unlike `data-theme`, which is pre-paint-script-only):
-  // a skin swaps fonts + shape, so a pre-script flash of the wrong skin is far more jarring than a
-  // palette flash. It is sourced from DEFAULT_SKIN_ID (not a hardcoded literal) so it can never drift
-  // out of lockstep with the registry default and silently reintroduce a first-paint flash.
+  // `data-theme="heirloom"` is a STATIC default that names the base palette block in tokens.css
+  // (`:root, [data-theme="heirloom"]`). It is no longer a live preference — nothing swaps it at
+  // runtime — but it keeps the base palette selector explicit on the document root.
+  //
+  // `data-skin` likewise carries a STATIC SSR default: a skin swaps fonts + shape, so a first-paint
+  // flash of the wrong skin is jarring. It is sourced from DEFAULT_SKIN_ID (not a hardcoded literal)
+  // so it can never drift out of lockstep with the registry default and silently reintroduce a flash.
   return (
     <html lang="en" data-theme="heirloom" data-skin={DEFAULT_SKIN_ID} className={`${newsreader.variable} ${publicSans.variable} ${dmMono.variable} ${baloo.variable} ${nunito.variable} ${sourceSans.variable}`} suppressHydrationWarning>
       <head>
-        {/* Apply persisted app preferences (reading size, theme) BEFORE first paint to avoid a
+        {/* Apply persisted app preferences (reading size) BEFORE first paint to avoid a
             flash/reflow. Generated from the preference registry — the single source of truth shared
-            with KindredFontScale / KindredThemePicker (ADR-0020). Adding a preference needs no edit here. */}
+            with KindredFontScale (ADR-0020). Adding a preference needs no edit here. */}
         <script dangerouslySetInnerHTML={{ __html: buildPrePaintScript(ALL_PREFERENCES) }} />
       </head>
       {inner}

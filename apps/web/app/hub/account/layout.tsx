@@ -16,7 +16,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const sections = ACCOUNT_SECTIONS.map((s) => ({
     slug: s.slug,
     label: s.label,
-    scope: s.scope,
   }));
 
   return (
@@ -28,8 +27,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             copy={{
               sectionsLabel: hub.accountShell.sections,
               backToHub: hub.accountShell.backToHub,
-              deviceScope: hub.accountShell.deviceScope,
-              accountScope: hub.accountShell.accountScope,
             }}
           />
           <div className={styles.panel}>{children}</div>

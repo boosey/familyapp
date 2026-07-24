@@ -99,3 +99,15 @@ export async function forgetMemoryAction(key: string): Promise<SaveResult> {
 
 // Re-export the anchor type so the section can key its view model off the same source of truth.
 export type { BiographicalProfile };
+
+/**
+ * STUB — createCustomMemoryAction. This is an intentional seam for the Account › Memories "Add a
+ * memory" UI, awaiting the narrator_memory ledger (issue #362), which is being built in a separate
+ * workstream and will be wired in here later. Do not remove this stub without wiring real persistence.
+ */
+export async function createCustomMemoryAction(
+  _title: string,
+  _summary: string,
+): Promise<{ ok: true } | { error: string }> {
+  return { error: "not_yet_available" };
+}

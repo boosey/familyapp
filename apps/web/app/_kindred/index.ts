@@ -12,7 +12,6 @@ export type { KindredListenBarProps } from "./KindredListenBar";
 export { KindredAccountMenu } from "./KindredAccountMenu";
 export type { KindredAccountMenuProps, AccountMenuItem } from "./KindredAccountMenu";
 export { KindredFontScale } from "./KindredFontScale";
-export { KindredThemePicker } from "./KindredThemePicker";
 export { KindredSkinPicker } from "./KindredSkinPicker";
 export { KindredMotionToggle } from "./KindredMotionToggle";
 export { KindredRecordingGesturePicker } from "./KindredRecordingGesturePicker";

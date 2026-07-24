@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { coerce, computeApplication, PREFERENCES, type PreferenceDef } from "./registry";
 import { FONT_SIZE_STEPS_PT, DEFAULT_FONT_SIZE_INDEX } from "@/lib/constants";
 import { FONT_SIZE_STORAGE_KEY } from "@/app/_kindred/font-scale-constants";
-import { THEME_IDS, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@/app/_kindred/theme-constants";
 import { SKIN_IDS, DEFAULT_SKIN_ID, SKIN_STORAGE_KEY } from "@/app/_kindred/skin-constants";
 import { REDUCE_MOTION_VALUES, DEFAULT_REDUCE_MOTION, MOTION_STORAGE_KEY } from "@/app/_kindred/motion-constants";
 import {
@@ -18,14 +17,6 @@ const fontDef: PreferenceDef = {
   default: 1,
   validate: { kind: "int-index", length: 5 },
   apply: { strategy: "root-font-size", steps: [8, 10, 12, 14, 18], unit: "pt" },
-};
-
-const themeDef: PreferenceDef = {
-  key: "theme",
-  storageKey: "kin-theme",
-  default: "heirloom",
-  validate: { kind: "enum", values: ["heirloom", "archive", "hearth"] },
-  apply: { strategy: "data-attr", attr: "data-theme" },
 };
 
 describe("coerce — int-index (reading size)", () => {
@@ -55,25 +46,15 @@ describe("coerce — int-index (reading size)", () => {
   });
 });
 
-describe("coerce — enum (theme)", () => {
-  it("keeps a known theme id", () => {
-    expect(coerce(themeDef, "archive")).toBe("archive");
-  });
-  it("falls back to default for unknown / absent", () => {
-    expect(coerce(themeDef, "midnight")).toBe("heirloom");
-    expect(coerce(themeDef, null)).toBe("heirloom");
-  });
-});
-
 describe("computeApplication", () => {
   it("root-font-size maps the stored index to a sized fontSize string", () => {
     expect(computeApplication(fontDef, 2)).toEqual({ target: "root-font-size", value: "12pt" });
   });
   it("data-attr yields the attribute name and the value verbatim", () => {
-    expect(computeApplication(themeDef, "archive")).toEqual({
+    expect(computeApplication(PREFERENCES.skin, "heirloom")).toEqual({
       target: "data-attr",
-      attr: "data-theme",
-      value: "archive",
+      attr: "data-skin",
+      value: "heirloom",
     });
   });
 
@@ -113,11 +94,6 @@ describe("PREFERENCES registry parity with the folded-in constants", () => {
     expect(PREFERENCES.readingSize.default).toBe(DEFAULT_FONT_SIZE_INDEX);
     expect(PREFERENCES.readingSize.storageKey).toBe(FONT_SIZE_STORAGE_KEY);
     expect(PREFERENCES.readingSize.apply).toMatchObject({ steps: FONT_SIZE_STEPS_PT, unit: "pt" });
-  });
-  it("theme preserves the existing default, ids, and storage key", () => {
-    expect(PREFERENCES.theme.default).toBe(DEFAULT_THEME_ID);
-    expect(PREFERENCES.theme.storageKey).toBe(THEME_STORAGE_KEY);
-    expect(PREFERENCES.theme.validate).toMatchObject({ kind: "enum", values: THEME_IDS });
   });
 });
 

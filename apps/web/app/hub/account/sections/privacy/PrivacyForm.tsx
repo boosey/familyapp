@@ -9,6 +9,8 @@
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 import { privacySectionCopy as copy } from "./copy";
 import { saveHideEmailAction, saveHidePhoneAction } from "./actions";
+import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
+import { InfoTooltip } from "@/app/hub/InfoTooltip";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -88,20 +90,22 @@ function PrivacyToggle({
 
   return (
     <div>
-      <label style={toggleRow}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => {
-            void onToggle(e.target.checked);
-          }}
-          style={{ marginTop: 3, flexShrink: 0 }}
-        />
-        <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={toggleRow}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={toggleLabel}>{label}</span>
-          <span style={helpText}>{help}</span>
+          <InfoTooltip label={label} text={help} />
         </span>
-      </label>
+        <SegmentedControl
+          variant="toggle"
+          items={[
+            { key: "hidden", label: copy.hidden },
+            { key: "visible", label: copy.visible },
+          ]}
+          active={checked ? "hidden" : "visible"}
+          onSelect={(k) => void onToggle(k === "hidden")}
+          ariaLabel={label}
+        />
+      </div>
       {hint ? (
         <span
           style={{
@@ -127,21 +131,15 @@ const fieldStack: CSSProperties = {
 
 const toggleRow: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
-  gap: 12,
-  cursor: "pointer",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 16,
 };
 
 const toggleLabel: CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-ui)",
   color: "var(--text-body)",
-  lineHeight: "var(--leading-snug)",
-};
-
-const helpText: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-label)",
-  color: "var(--text-muted)",
   lineHeight: "var(--leading-snug)",
 };
