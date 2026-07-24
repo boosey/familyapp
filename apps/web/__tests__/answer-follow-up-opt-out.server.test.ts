@@ -18,7 +18,6 @@ vi.mock("@/lib/runtime", () => ({
 
 import { createTestDatabase, type Database, type FollowUpCandidate } from "@chronicle/db";
 import { persons } from "@chronicle/db/schema";
-import { eq } from "drizzle-orm";
 import {
   persistRecordingAndCreateDraft,
   listFollowUpDecisionsForStory,
