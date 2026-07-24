@@ -28,6 +28,7 @@ import { ModalShell } from "@/app/_kindred/ModalShell";
 import { hub } from "@/app/_copy";
 import { FamilyChoiceChips } from "./FamilyChoiceChips";
 import { albumPhotoSrc } from "./album/photo-src";
+import { tileContainment } from "./album/tile-containment";
 import { prepareAlbumPhoto } from "./album/prepare-photo";
 import {
   PHOTO_BATCH_MAX_FILES as MAX_BATCH_FILES,
@@ -565,7 +566,10 @@ export function StoryPhotosEditor({
               ) : (
                 <ul style={grid}>
                   {album.map((p) => (
-                    <li key={p.photoId} style={{ margin: 0 }}>
+                    // #219 — uniform picker grid (minmax(120px)); tiles opt into content-visibility so
+                    // off-screen ones skip layout + paint (nodes stay in the DOM — tap-to-attach stays
+                    // correct). The 120px intrinsic-size hint matches the grid min.
+                    <li key={p.photoId} style={{ margin: 0, ...tileContainment(120) }}>
                       <button
                         type="button"
                         onClick={() => attach(p.photoId)}
@@ -577,6 +581,8 @@ export function StoryPhotosEditor({
                         <img
                           src={albumPhotoSrc(p.photoId, { thumb: true })}
                           alt={hub.storyImages.imageAlt(p.caption)}
+                          // #219 — defer off-screen tile fetch/decode.
+                          loading="lazy"
                           style={tileImg}
                         />
                       </button>

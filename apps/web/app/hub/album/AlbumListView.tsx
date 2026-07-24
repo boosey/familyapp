@@ -220,6 +220,9 @@ function ListRow({
           <img
             src={albumPhotoSrc(photo.id, { thumb: true })}
             alt={hub.album.photoAlt(photo.caption)}
+            // #219 — defer off-screen row thumbnails' fetch/decode. The table layout gets lazy only
+            // (content-visibility is unreliable on table rows).
+            loading="lazy"
             style={{
               width: cellThumb,
               height: cellThumb,
