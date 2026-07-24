@@ -18,8 +18,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addMembership,
   addRelative,
+  linkExistingMember,
   reconcileMentionIntoAccount,
   resolveKinshipProjection,
+  unreconcileMention,
   type AuthContext,
 } from "../src/index";
 import { makeFamily, makePerson } from "./helpers";
@@ -417,5 +419,372 @@ describe("reconcileMentionIntoAccount — carry sex", () => {
     expect(res.allowed).toBe(true);
     expect(res.sexCarried).toBe(false);
     expect(await personSex(accountId)).toBe("male");
+  });
+});
+
+/**
+ * A canonical, order-stable fingerprint of a family's VISIBLE kinship projection: one string per
+ * edge (`parent_of` keeps direction; `partnered_with` endpoints are sorted so A|B == B|A), sorted.
+ * Two projections are equal iff their fingerprints are equal — the round-trip oracle for un-reconcile.
+ */
+async function projectionFingerprint(fam: string, viewer: string): Promise<string[]> {
+  const { edges } = await resolveKinshipProjection(db, account(viewer), fam);
+  return edges
+    .map((e) => {
+      const [a, b] =
+        e.edgeType === "partnered_with"
+          ? [e.personAId, e.personBId].sort()
+          : [e.personAId, e.personBId];
+      return `${e.edgeType}|${a}|${b}`;
+    })
+    .sort();
+}
+
+describe("unreconcileMention — auth & preconditions", () => {
+  it("rejects a non-steward member, no writes", async () => {
+    const { fam, stewardId, mentionChildId, accountId } = await seedFamilyWithMentionChild();
+    await reconcileMentionIntoAccount(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    const before = (await db.select().from(kinshipAssertions)).length;
+    // accountId is a member but NOT the steward.
+    const res = await unreconcileMention(db, account(accountId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/steward/i);
+    expect((await db.select().from(kinshipAssertions)).length).toBe(before);
+  });
+
+  it("refuses when there is no reconciliation to reverse for this mention, no writes", async () => {
+    // A mention that was never reconciled.
+    const { fam, stewardId, mentionChildId, accountId } = await seedFamilyWithMentionChild();
+    const before = (await db.select().from(kinshipAssertions)).length;
+    const res = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/no reconciliation/i);
+    expect((await db.select().from(kinshipAssertions)).length).toBe(before);
+  });
+});
+
+describe("unreconcileMention — round trip restores the exact pre-reconcile projection", () => {
+  it("parent_of: reconcile then un-reconcile is a no-op on the visible projection", async () => {
+    const { fam, stewardId, mentionChildId, accountId } = await seedFamilyWithMentionChild();
+    const before = await projectionFingerprint(fam.id, stewardId);
+
+    const fwd = await reconcileMentionIntoAccount(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(fwd.allowed).toBe(true);
+    // Sanity: the projection actually changed (mention edges moved onto the account).
+    expect(await projectionFingerprint(fam.id, stewardId)).not.toEqual(before);
+
+    const rev = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(rev.allowed).toBe(true);
+    expect(rev.restoredEdgeIds).toHaveLength(2); // both mention parent edges back
+    expect(rev.deniedEdgeIds).toHaveLength(2); // both redirected account edges removed
+
+    // The mention is child of both parents again; the account has no parents again.
+    expect(await projectionFingerprint(fam.id, stewardId)).toEqual(before);
+  });
+
+  it("partnered_with: reconcile then un-reconcile restores the mention's partners", async () => {
+    const steward = await makeSelfPerson("Steward");
+    const fam = await makeFamily(db, "Esposito", steward.id);
+    await addMembership(db, { personId: steward.id, familyId: fam.id, role: "member" });
+    const pat = await addRelative(db, account(steward.id), {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "Pat",
+    });
+    const mentionId = pat.createdPersonId!;
+    await addRelative(db, account(steward.id), {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "X",
+      anchorPersonId: mentionId,
+    });
+    const acct = await makeSelfPerson("Pat Real");
+    await addMembership(db, { personId: acct.id, familyId: fam.id, role: "member" });
+    const before = await projectionFingerprint(fam.id, steward.id);
+
+    await reconcileMentionIntoAccount(db, account(steward.id), {
+      familyId: fam.id,
+      mentionPersonId: mentionId,
+      accountPersonId: acct.id,
+    });
+    const rev = await unreconcileMention(db, account(steward.id), {
+      familyId: fam.id,
+      mentionPersonId: mentionId,
+      accountPersonId: acct.id,
+    });
+    expect(rev.allowed).toBe(true);
+    expect(await projectionFingerprint(fam.id, steward.id)).toEqual(before);
+  });
+
+  it("is idempotent: a second un-reconcile is a no-op with no new visible edges", async () => {
+    const { fam, stewardId, mentionChildId, accountId } = await seedFamilyWithMentionChild();
+    await reconcileMentionIntoAccount(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    const fp = await projectionFingerprint(fam.id, stewardId);
+
+    const again = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(again.allowed).toBe(true);
+    expect(again.restoredEdgeIds).toEqual([]);
+    expect(again.deniedEdgeIds).toEqual([]);
+    expect(await projectionFingerprint(fam.id, stewardId)).toEqual(fp);
+  });
+});
+
+describe("unreconcileMention — preserves a pre-existing duplicate account edge", () => {
+  it("does NOT deny an account edge that pre-existed the reconcile (only forward-created ones)", async () => {
+    // Mia (mention) is child of steward + dad. BEFORE reconcile, the ACCOUNT is ALSO a child of the
+    // steward — a genuine pre-existing duplicate. The forward reconcile's idempotency SKIPS re-adding
+    // the steward→account edge (it already exists) and only appends steward-nothing / dad→account.
+    // Un-reconcile must restore the mention's two edges but deny ONLY the forward-created dad→account
+    // edge — never the pre-existing steward→account one.
+    const { fam, stewardId, mentionChildId, dadId, accountId } = await seedFamilyWithMentionChild();
+    // Pre-existing: account is already a child of the steward (link the existing member into the tree).
+    await linkExistingMember(db, account(stewardId), {
+      familyId: fam.id,
+      relation: "child",
+      anchorPersonId: stewardId,
+      existingPersonId: accountId,
+    });
+    const before = await projectionFingerprint(fam.id, stewardId);
+    expect(await parentsOf(fam.id, stewardId, accountId)).toEqual([stewardId]);
+
+    await reconcileMentionIntoAccount(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    // After reconcile the account has BOTH parents (steward pre-existing + dad redirected).
+    expect(await parentsOf(fam.id, stewardId, accountId)).toEqual([stewardId, dadId].sort());
+
+    const rev = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(rev.allowed).toBe(true);
+    // Only the forward-created dad→account edge is denied; the pre-existing steward→account survives.
+    expect(await parentsOf(fam.id, stewardId, accountId)).toEqual([stewardId]);
+    // The mention is fully restored.
+    expect(await parentsOf(fam.id, stewardId, mentionChildId)).toEqual([stewardId, dadId].sort());
+    expect(await projectionFingerprint(fam.id, stewardId)).toEqual(before);
+  });
+});
+
+/**
+ * Two distinct mentions M1 and M2 BOTH partnered with the same third party X, BOTH reconciled into the
+ * same account A. The forward idempotency-skip means the shared `partnered_with(A, X)` edge is created
+ * once (by whichever reconcile ran first) and carries a single redirect marker. Regression for the
+ * corruption where un-reconciling ONE mention severed the OTHER's still-active shared edge.
+ */
+async function seedTwoMentionsSharingPartnerIntoOneAccount() {
+  const steward = await makeSelfPerson("Steward");
+  const fam = await makeFamily(db, "Esposito", steward.id);
+  await addMembership(db, { personId: steward.id, familyId: fam.id, role: "member" });
+
+  const x = await addRelative(db, account(steward.id), {
+    familyId: fam.id,
+    relation: "partner",
+    displayName: "X",
+  });
+  const xId = x.createdPersonId!;
+  const m1 = await addRelative(db, account(steward.id), {
+    familyId: fam.id,
+    relation: "partner",
+    displayName: "M1",
+    anchorPersonId: xId,
+  });
+  const m1Id = m1.createdPersonId!;
+  const m2 = await addRelative(db, account(steward.id), {
+    familyId: fam.id,
+    relation: "partner",
+    displayName: "M2",
+    anchorPersonId: xId,
+  });
+  const m2Id = m2.createdPersonId!;
+  const acct = await makeSelfPerson("A Real");
+  await addMembership(db, { personId: acct.id, familyId: fam.id, role: "member" });
+
+  const s = steward.id;
+  // Merge BOTH mentions into the one account. Order: M1 first (creates A↔X), then M2 (idempotency-skip).
+  await reconcileMentionIntoAccount(db, account(s), {
+    familyId: fam.id,
+    mentionPersonId: m1Id,
+    accountPersonId: acct.id,
+  });
+  await reconcileMentionIntoAccount(db, account(s), {
+    familyId: fam.id,
+    mentionPersonId: m2Id,
+    accountPersonId: acct.id,
+  });
+  // After both: the account is partnered with X (via the shared redirected edge).
+  expect(await partnersOf(fam.id, s, acct.id)).toEqual([xId]);
+  return { fam, stewardId: s, m1Id, m2Id, xId, accountId: acct.id };
+}
+
+describe("unreconcileMention — two mentions merged into one account share a redirect target", () => {
+  it("un-reconciling the FIRST mention preserves the shared account edge the SECOND still relies on", async () => {
+    const { fam, stewardId, m1Id, m2Id, xId, accountId } =
+      await seedTwoMentionsSharingPartnerIntoOneAccount();
+
+    const rev1 = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: m1Id,
+      accountPersonId: accountId,
+    });
+    expect(rev1.allowed).toBe(true);
+    // M1's own partnership is back; M2 is still merged, so the account KEEPS its partnership with X.
+    expect(await partnersOf(fam.id, stewardId, m1Id)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, accountId)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, m2Id)).toEqual([]); // still tombstoned
+
+    // Now release the second: with no mention left relying on it, the account edge is removed.
+    const rev2 = await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: m2Id,
+      accountPersonId: accountId,
+    });
+    expect(rev2.allowed).toBe(true);
+    expect(await partnersOf(fam.id, stewardId, m2Id)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, accountId)).toEqual([]);
+  });
+
+  it("is order-independent: un-reconciling the SECOND mention first also preserves the shared edge", async () => {
+    const { fam, stewardId, m1Id, m2Id, xId, accountId } =
+      await seedTwoMentionsSharingPartnerIntoOneAccount();
+
+    // Reverse the OTHER order (M2 first). M1 is still merged → account keeps X.
+    await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: m2Id,
+      accountPersonId: accountId,
+    });
+    expect(await partnersOf(fam.id, stewardId, m2Id)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, accountId)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, m1Id)).toEqual([]);
+
+    await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: m1Id,
+      accountPersonId: accountId,
+    });
+    expect(await partnersOf(fam.id, stewardId, m1Id)).toEqual([xId]);
+    expect(await partnersOf(fam.id, stewardId, accountId)).toEqual([]);
+  });
+});
+
+describe("unreconcileMention — parent_of direction: opposite-role mentions sharing a third party", () => {
+  it("removes a redirected parent_of edge even when an opposite-role mention into the same account shares the third party", async () => {
+    // M1 is a PARENT of X → parent_of(M1, X). M2 is a CHILD of X → parent_of(X, M2). Both merged into
+    // account A. Un-reconciling M1 must remove parent_of(A, X) — M2's edge redirects to the REVERSED
+    // parent_of(X, A), a different logical edge, so it does NOT keep parent_of(A, X) alive.
+    const steward = await makeSelfPerson("Steward");
+    const fam = await makeFamily(db, "Esposito", steward.id);
+    await addMembership(db, { personId: steward.id, familyId: fam.id, role: "member" });
+    const s = steward.id;
+
+    // X is a partner of the steward (no parent_of edge to X, so X's only parents come from the mentions).
+    const x = await addRelative(db, account(s), {
+      familyId: fam.id,
+      relation: "partner",
+      displayName: "X",
+    });
+    const xId = x.createdPersonId!;
+    // M1 is a parent of X.
+    const m1 = await addRelative(db, account(s), {
+      familyId: fam.id,
+      relation: "parent",
+      displayName: "M1",
+      anchorPersonId: xId,
+    });
+    const m1Id = m1.createdPersonId!;
+    // M2 is a child of X.
+    const m2 = await addRelative(db, account(s), {
+      familyId: fam.id,
+      relation: "child",
+      displayName: "M2",
+      anchorPersonId: xId,
+    });
+    const m2Id = m2.createdPersonId!;
+    const acct = await makeSelfPerson("A Real");
+    await addMembership(db, { personId: acct.id, familyId: fam.id, role: "member" });
+
+    await reconcileMentionIntoAccount(db, account(s), {
+      familyId: fam.id,
+      mentionPersonId: m1Id,
+      accountPersonId: acct.id,
+    });
+    await reconcileMentionIntoAccount(db, account(s), {
+      familyId: fam.id,
+      mentionPersonId: m2Id,
+      accountPersonId: acct.id,
+    });
+    // After both: A is a parent of X (from M1) AND a child of X (from M2).
+    expect(await parentsOf(fam.id, s, xId)).toEqual([acct.id]); // A is X's parent
+    expect(await parentsOf(fam.id, s, acct.id)).toEqual([xId]); // X is A's parent
+
+    // Un-reconcile M1 only. parent_of(A,X) is M1's alone → it MUST be removed (not held by M2's
+    // reversed-role edge). parent_of(X,A) stays (M2 still merged).
+    const rev = await unreconcileMention(db, account(s), {
+      familyId: fam.id,
+      mentionPersonId: m1Id,
+      accountPersonId: acct.id,
+    });
+    expect(rev.allowed).toBe(true);
+    // M1's own edge is restored AND A is no longer X's parent → X's only parent is M1 again.
+    expect(await parentsOf(fam.id, s, xId)).toEqual([m1Id]);
+    expect(await parentsOf(fam.id, s, acct.id)).toEqual([xId]); // X is STILL A's parent (M2 relies)
+  });
+});
+
+describe("unreconcileMention — sex carry is one-way (not reversed in v1)", () => {
+  it("leaves the carried sex on the account after un-reconcile", async () => {
+    const { fam, stewardId, mentionChildId, accountId } = await seedFamilyWithMentionChild();
+    expect(await personSex(accountId)).toBe("unknown");
+    await reconcileMentionIntoAccount(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    expect(await personSex(accountId)).toBe("female"); // carried by forward
+
+    await unreconcileMention(db, account(stewardId), {
+      familyId: fam.id,
+      mentionPersonId: mentionChildId,
+      accountPersonId: accountId,
+    });
+    // Edges-only reversal: the carried sex is a one-way enrichment, deliberately NOT un-set.
+    expect(await personSex(accountId)).toBe("female");
   });
 });

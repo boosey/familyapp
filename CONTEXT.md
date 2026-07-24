@@ -149,12 +149,22 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   (`gedcom | familysearch | ancestry`), `sourceId` (the source's own person id, e.g. GEDCOM `@I42@`
   or a FamilySearch PID), and `importBatchId`. Re-import / API **sync matches on `(source,
   sourceId)`** to update-in-place — foreign ids, never names, drive **idempotency**.
-- **Reconciliation** — the **separate, explicit, human-confirmed** step of merging a `mention`
-  Person (a tree depiction with no Account) onto a **known Person** who already participates as a
-  member with an Account in that Family. Always mention → member; never silent; Steward-gated.
-  Product language: **This is the same person as…** (not “merge”). **Import reconciliation**
-  (GEDCOM/API) is the same operation offered in bulk after additive import — never part of import
-  itself, same **offer-never-silent** discipline as **Dedup-on-invite**.
+- **Reconciliation** — the **separate, explicit, human-confirmed** step of merging one Person row
+  onto another when both depict the same human. A **family of flavors**, all Steward-gated, all
+  **never silent**, all **append-only** (redirect the loser's edges onto the winner and supersede the
+  loser's own with `denied` rows; the loser row remains an inert tombstone): **mention → member**
+  (the shipped default — a tree `mention` with no Account onto a **known Person** who is a member with
+  an Account in that Family; product language **This is the same person as…**, not “merge”);
+  **placeholder ↔ placeholder** (two unidentified `mention` bridges for the same unnamed ancestor —
+  no Account winner, discovered by edge topology not name); and **Import reconciliation** (GEDCOM/API,
+  offered in bulk after additive import — never part of import itself). Same **offer-never-silent**
+  discipline as **Dedup-on-invite**.
+- **Un-reconcile** — the **reversal** of a Reconciliation, done the same append-only way: re-assert
+  the loser's original edges and `deny` the ones the reconcile **created** on the winner (a
+  pre-existing duplicate edge, which the merge idempotency-skipped, is preserved). The tombstoned
+  loser renders again. Possible precisely because reconcile edits nothing — the history to reverse is
+  never lost. **Edges only:** the merge's one-way `sex` enrichment of the winner is *not* reversed
+  (it leaves no audit trail and may be legitimately true), so un-reconcile never touches it.
 
 ## Joining a family (the new flows)
 - **Invitation** — a system-delivered link a member sends to someone (possibly unknown to the
