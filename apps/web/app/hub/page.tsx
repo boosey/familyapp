@@ -16,6 +16,7 @@ import {
   listOutstandingDrafts,
   listActiveFamiliesForPerson,
   listPendingInvitationsForPerson,
+  listAlbumPhotoIds,
 } from "@chronicle/core";
 import { getRuntime } from "@/lib/runtime";
 import { resolvePostAuthRoute } from "@/lib/post-auth-route";
@@ -34,12 +35,14 @@ import { CollapsingHeader } from "./CollapsingHeader";
 import { loadAccountMenu } from "@/app/_kindred/load-account-menu";
 import { QuestionsSubNav } from "./QuestionsSubNav";
 import { FamilySurfaceNav } from "./FamilySurfaceNav";
-import { parseFamilyFilter, deriveSingleScope } from "@/lib/family-filter";
+import { parseFamilyFilter, deriveSingleScope, selectedIdList } from "@/lib/family-filter";
 import { seedDesignatorFamily } from "@/lib/family-designator";
 import { inviteTabVisible, requestsTabVisible, familyTabBadge } from "@/lib/hub-tabs";
 import { isBiographicalProfileComplete } from "@/lib/intake-profile";
 import { PendingInvitesBanner } from "./PendingInvitesBanner";
 import { AlbumSurface } from "./album/AlbumSurface";
+import { ThumbPrefetchLinks } from "./album/ThumbPrefetchLinks";
+import { ALBUM_WARM_FIRST_SCREEN } from "./album/prefetch-constants";
 import { StoriesTab } from "./tabs/StoriesTab";
 import { QuestionsTab } from "./tabs/QuestionsTab";
 import { AskTab } from "./tabs/AskTab";
@@ -167,7 +170,14 @@ export default async function HubPage({
       }
     : undefined;
 
-  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches, accountMenu] = await Promise.all([
+  // #371: warm the first screenful of album thumbnails on EVERY hub load (not just the album tab), so
+  // switching to Album paints from cache. The families to warm are the SAME ones the album would show
+  // under the current `?families=` filter (parsed above) — so the warmed prefix matches the tile prefix.
+  // An ids-only read (one cheap query); the `<ThumbPrefetchLinks>` below turns them into idle prefetch
+  // hints. See docs/superpowers/specs/2026-07-23-preload-album-thumbnails-design.md.
+  const albumWarmFamilyIds = selectedIdList(filter, activeIds);
+
+  const [feed, pendingAsks, pendingRequests, decidedRequests, viewerRow, allDrafts, pendingInviteMatches, accountMenu, albumWarmIds] = await Promise.all([
     loadHubFeed(db, ctx),
     listPendingAsksForNarrator(db, ctx.personId, { limit: 20 }),
     listPendingJoinRequestsForSteward(db, ctx.personId),
@@ -190,6 +200,8 @@ export default async function HubPage({
     // the tabs row) and the bottom bar's 5th "Account" item on a phone. This is the ONLY
     // loadAccountMenu call — the duplicate global root-layout mount was removed in #234.
     loadAccountMenu(db, ctx.personId),
+    // #371: ids-only, capped at one screenful — cheap enough to run on every hub render.
+    listAlbumPhotoIds(db, ctx, albumWarmFamilyIds, { limit: ALBUM_WARM_FIRST_SCREEN }),
   ]);
 
   // Which stories in the feed this viewer has already opened — drives the per-card "New" badge.
@@ -292,6 +304,9 @@ export default async function HubPage({
   /* ── Shell ──────────────────────────────────────────────────────────────── */
   return (
     <main className={styles.main}>
+      {/* #371: idle, low-priority cache-warm for the first screenful of album thumbnails, on every tab
+          — so switching to Album paints from cache. Additive; never changes what any tile renders. */}
+      <ThumbPrefetchLinks ids={albumWarmIds} />
       <div className={styles.container}>
         {/* Header (ADR-0025 Inc 2): CollapsingHeader OWNS the <header> so it can make the whole header
             sticky + collapse-on-scroll on a phone (desktop renders it byte-for-byte as before). It wraps

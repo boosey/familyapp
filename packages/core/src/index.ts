@@ -373,6 +373,7 @@ export {
   createAlbumPhoto,
   listAlbumPhotos,
   listAlbumPhotosDetailed,
+  listAlbumPhotoIds,
   listPhotosContributedByPerson,
   authorizeAlbumPhotoRead,
   getAlbumPhotoForViewer,
