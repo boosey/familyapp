@@ -1,17 +1,20 @@
 /**
  * Account › Families (ADR-0029) — the PERSONAL membership slice, consolidated from the old avatar menu
  * (the stewarded-families query removed from `load-account-menu.ts` re-lands here). Shows:
- *   - the families the viewer holds an ACTIVE membership in, with their role in each,
- *   - a "Family settings" link OUT to `/families/{id}/edit` for every family they steward, and
+ *   - ONE list of every family the viewer holds an ACTIVE membership in, with their role in each; a
+ *     family the viewer stewards additionally shows an inline icon-link out to `/families/{id}/edit`
+ *     (folded in from a separate second "Families you steward" list — every stewarded family is also
+ *     a family the viewer belongs to, so the split list was redundant), and
  *   - "Create a family" (`/families/new`) / "Find a family" (`/families/find`).
  *
  * Scope is deliberately narrow. Family GOVERNANCE (member management, tree, album) is NOT absorbed —
- * it stays on the per-family surface, reached via the steward links-out. Per-viewer short-name override
+ * it stays on the per-family surface, reached via the steward link-out. Per-viewer short-name override
  * and self leave/pause are OMITTED: CONTEXT.md § Short name marks the override a future account-level
  * preference (no backend), and there is no self-leave write path — surface only what has a real backend.
  */
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { Settings2 } from "lucide-react";
 import {
   listActiveFamiliesForPerson,
   listActiveMembershipsForPerson,
@@ -41,6 +44,7 @@ export default async function FamiliesSection({ personId, db }: AccountSectionPr
   const roleByFamily = new Map<string, MembershipRole>(
     memberships.map((m) => [m.familyId, m.role]),
   );
+  const stewardedIds = new Set<string>(stewarded.map((f) => f.familyId));
 
   const rows: MembershipRow[] = families.map((f) => ({
     familyId: f.familyId,
@@ -53,7 +57,6 @@ export default async function FamiliesSection({ personId, db }: AccountSectionPr
       <h2 id="account-section-title" style={titleStyle}>
         {copy.title}
       </h2>
-      <p style={subtitleStyle}>{copy.subtitle}</p>
 
       {rows.length === 0 ? (
         <p style={emptyStyle}>{copy.empty}</p>
@@ -62,27 +65,22 @@ export default async function FamiliesSection({ personId, db }: AccountSectionPr
           {rows.map((row) => (
             <li key={row.familyId} style={memberRowStyle}>
               <span style={familyNameStyle}>{row.name}</span>
-              <span style={roleBadgeStyle}>{copy.roleLabel[row.role]}</span>
+              <span style={rowMetaStyle}>
+                <span style={roleBadgeStyle}>{copy.roleLabel[row.role]}</span>
+                {stewardedIds.has(row.familyId) ? (
+                  <Link
+                    href={`/families/${row.familyId}/edit`}
+                    style={iconLinkStyle}
+                    aria-label={copy.familySettingsLink}
+                    title={copy.familySettingsLink}
+                  >
+                    <Settings2 size={18} strokeWidth={2} aria-hidden />
+                  </Link>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>
-      )}
-
-      {stewarded.length > 0 && (
-        <div style={blockStyle}>
-          <h3 style={headingStyle}>{copy.stewardHeading}</h3>
-          <p style={noteStyle}>{copy.stewardNote}</p>
-          <ul style={listStyle}>
-            {stewarded.map((f) => (
-              <li key={f.familyId} style={memberRowStyle}>
-                <span style={familyNameStyle}>{f.shortName ?? f.name}</span>
-                <Link href={`/families/${f.familyId}/edit`} style={linkStyle}>
-                  {copy.familySettingsLink}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
 
       <div style={blockStyle}>
@@ -106,13 +104,6 @@ const titleStyle: CSSProperties = {
   fontWeight: 400,
   color: "var(--text-body)",
   margin: "0 0 8px",
-};
-
-const subtitleStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: "0 0 24px",
 };
 
 const emptyStyle: CSSProperties = {
@@ -154,6 +145,21 @@ const roleBadgeStyle: CSSProperties = {
   color: "var(--text-muted)",
 };
 
+const rowMetaStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const iconLinkStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "var(--text-muted)",
+  padding: "4px",
+  borderRadius: "var(--radius-sm)",
+};
+
 const blockStyle: CSSProperties = {
   marginTop: "32px",
 };
@@ -164,21 +170,6 @@ const headingStyle: CSSProperties = {
   fontWeight: 600,
   color: "var(--text-body)",
   margin: "0 0 4px",
-};
-
-const noteStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: "0 0 12px",
-};
-
-const linkStyle: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--accent)",
-  textDecoration: "none",
-  whiteSpace: "nowrap",
 };
 
 const actionRowStyle: CSSProperties = {

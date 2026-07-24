@@ -1,55 +1,81 @@
 /*
- * Account › Memories (ADR-0029 §#357) — card + control styling for the memory list. Token-driven to
- * match the Kindred forms and the FollowUp/account surfaces (var(--accent), --border, --radius-*).
- * Buttons follow the same ghost/primary shape used by FollowUpButton so the section reads native.
+ * Account › Memories (ADR-0029 §#357, densified in change 8/9/10) — dense single-line row styling for
+ * the memory list, plus the header/add-form controls. Token-driven to match the Kindred forms and the
+ * FollowUp/account surfaces (var(--accent), --border, --radius-*). Icon buttons follow the tree
+ * person-details icon-action convention (small, tappable, title= tooltip); this file is page-local
+ * layout so its icon size lives inline on the glyphs (see MemoriesList.tsx `ICON_SIZE`), not a repeated
+ * design token, per CLAUDE.md's numeric-constants rule.
  */
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 20px;
-  background: var(--surface-card);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-
-.cardUnset {
-  background: transparent;
-  box-shadow: none;
-}
-
-.cardHeader {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerTitle {
+  font-family: var(--font-story);
+  font-size: clamp(1.5rem, 3.5vw, var(--text-display));
+  font-weight: 400;
+  color: var(--text-body);
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  padding: 10px 4px;
+  border-bottom: var(--border-width) solid var(--border-subtle, var(--border));
+}
+
+.rowUnset {
+  opacity: 0.6;
 }
 
 .title {
+  flex: 0 0 auto;
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
   font-weight: 600;
   color: var(--text-body);
+  white-space: nowrap;
 }
 
 .provenanceChip {
+  flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: var(--text-label);
   color: var(--text-muted);
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-pill);
-  padding: 2px 10px;
+  padding: 1px 8px;
   white-space: nowrap;
 }
 
 .summary {
-  font-family: var(--font-story);
-  font-size: var(--text-story);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
   color: var(--text-body);
   margin: 0;
-  line-height: var(--leading-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summaryEmpty {
@@ -59,8 +85,41 @@
 
 .editStack {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+
+.iconButtonRow {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.iconButton:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .buttonRow {
@@ -78,6 +137,17 @@
 }
 .hintError {
   color: var(--text-danger);
+}
+
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
 .btnGhost {

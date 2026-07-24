@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // Parity + drift guard for the registry-driven pre-paint script. Executing the generated script must
-// reproduce the OLD hand-coded behavior (font size + theme applied to <html> from localStorage), and
+// reproduce the OLD hand-coded behavior (font size applied to <html> from localStorage), and
 // its output must match the TS `computeApplication` so the two hand-parallel appliers can't drift.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -21,26 +21,21 @@ function runPrePaint(): void {
 beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("style");
-  document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-skin");
   document.documentElement.removeAttribute("data-reduce-motion");
 });
 
 describe("pre-paint script", () => {
-  it("applies stored reading size and theme to <html>", () => {
+  it("applies stored reading size to <html>", () => {
     localStorage.setItem(PREFERENCES.readingSize.storageKey, "3"); // steps[3] = 14
-    localStorage.setItem(PREFERENCES.theme.storageKey, "archive");
     runPrePaint();
     expect(document.documentElement.style.fontSize).toBe("14pt");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("archive");
   });
 
   it("falls back to declared defaults for missing/garbage values", () => {
     localStorage.setItem(PREFERENCES.readingSize.storageKey, "99"); // out of range
-    // theme key left unset
     runPrePaint();
     expect(document.documentElement.style.fontSize).toBe("10pt"); // default idx 1 → steps[1] = 10
-    expect(document.documentElement.getAttribute("data-theme")).toBe("heirloom");
   });
 
   it("applies stored skin and reduce-motion to <html>", () => {
@@ -75,7 +70,7 @@ describe("pre-paint script", () => {
     const dataAttrs = [...document.documentElement.attributes]
       .map((a) => a.name)
       .filter((n) => n.startsWith("data-"));
-    expect(dataAttrs).toEqual(expect.arrayContaining(["data-skin", "data-reduce-motion", "data-theme"]));
+    expect(dataAttrs).toEqual(expect.arrayContaining(["data-skin", "data-reduce-motion"]));
     expect(dataAttrs).not.toContain("data-recording-gesture");
   });
 

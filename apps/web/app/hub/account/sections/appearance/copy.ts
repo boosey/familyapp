@@ -1,7 +1,7 @@
 /**
  * Account › Appearance — section-specific copy (ADR-0029). These are the section-panel headings and
  * intros for the DEVICE-LOCAL app preferences (ADR-0020) relocated from /hub/settings. The Kindred
- * picker controls (KindredSkinPicker, KindredThemePicker, …) read their own option labels from the
+ * picker controls (KindredSkinPicker, …) read their own option labels from the
  * shared `hub.settings` copy; this file only owns the per-control heading/intro copy the panel renders.
  */
 export const appearanceCopy = {
@@ -14,6 +14,4 @@ export const appearanceCopy = {
     "Choose how the microphone button starts and stops recording — separately for phone and desktop on this device.",
   textSizeHeading: "Text size",
   textSizeIntro: "Makes everything on the screen a little larger or smaller.",
-  paletteHeading: "Color palette",
-  paletteIntro: "Choose the mood of Tell Me Again on this device.",
 } as const;

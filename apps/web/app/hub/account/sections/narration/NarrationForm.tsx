@@ -9,6 +9,8 @@
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 import { narrationSectionCopy as copy } from "./copy";
 import { saveFollowUpsEnabledAction, saveAskSuggestionEnabledAction } from "./actions";
+import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
+import { InfoTooltip } from "@/app/hub/InfoTooltip";
 
 type SaveState = "idle" | "saving" | "error";
 
@@ -30,6 +32,8 @@ export function NarrationForm({
         heading={copy.followUps.heading}
         label={copy.followUps.label}
         help={copy.followUps.help}
+        onLabel={copy.followUps.on}
+        offLabel={copy.followUps.off}
         initial={initialFollowUps}
         save={saveFollowUpsEnabledAction}
       />
@@ -38,6 +42,8 @@ export function NarrationForm({
         heading={copy.askSuggestion.heading}
         label={copy.askSuggestion.label}
         help={copy.askSuggestion.help}
+        onLabel={copy.askSuggestion.on}
+        offLabel={copy.askSuggestion.off}
         initial={initialAskSuggestion}
         save={saveAskSuggestionEnabledAction}
       />
@@ -50,6 +56,8 @@ function ToggleSection({
   heading,
   label,
   help,
+  onLabel,
+  offLabel,
   initial,
   save,
 }: {
@@ -57,6 +65,8 @@ function ToggleSection({
   heading: string;
   label: string;
   help: string;
+  onLabel: string;
+  offLabel: string;
   initial: boolean;
   save: (enabled: boolean) => Promise<{ ok: true } | { error: string }>;
 }) {
@@ -87,31 +97,23 @@ function ToggleSection({
     <section aria-labelledby={headingId}>
       <h2 id={headingId} style={sectionTitle}>
         {heading}
+        <InfoTooltip label={heading} text={help} />
       </h2>
       <div style={rowStyle}>
         <span id={`${headingId}-label`} style={labelStyle}>
           {label}
         </span>
-        <div role="group" aria-labelledby={`${headingId}-label`} style={{ display: "flex", gap: 10 }}>
-          <button
-            type="button"
-            onClick={() => void choose(true)}
-            aria-pressed={enabled}
-            style={cell(enabled)}
-          >
-            {copy.followUps.on}
-          </button>
-          <button
-            type="button"
-            onClick={() => void choose(false)}
-            aria-pressed={!enabled}
-            style={cell(!enabled)}
-          >
-            {copy.followUps.off}
-          </button>
-        </div>
+        <SegmentedControl
+          variant="toggle"
+          items={[
+            { key: "on", label: onLabel },
+            { key: "off", label: offLabel },
+          ]}
+          active={enabled ? "on" : "off"}
+          onSelect={(k) => void choose(k === "on")}
+          ariaLabel={label}
+        />
       </div>
-      <p style={helpText}>{help}</p>
       {state !== "idle" ? (
         <span
           style={{
@@ -129,22 +131,10 @@ function ToggleSection({
   );
 }
 
-function cell(on: boolean): CSSProperties {
-  return {
-    padding: "12px 24px",
-    minHeight: "var(--touch-min)",
-    cursor: "pointer",
-    borderRadius: "var(--radius-md)",
-    border: on ? "2px solid var(--accent)" : "var(--border-width) solid var(--border-strong)",
-    background: on ? "var(--accent-soft)" : "var(--surface-card)",
-    fontFamily: "var(--font-ui)",
-    fontSize: "var(--text-ui-sm)",
-    fontWeight: 600,
-    color: "var(--text-body)",
-  };
-}
-
 const sectionTitle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
   fontFamily: "var(--font-story)",
   fontSize: "var(--text-story-lg)",
   fontWeight: 400,
@@ -165,13 +155,4 @@ const labelStyle: CSSProperties = {
   fontSize: "var(--text-ui)",
   fontWeight: 600,
   color: "var(--text-body)",
-};
-
-const helpText: CSSProperties = {
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-ui-sm)",
-  color: "var(--text-muted)",
-  margin: "10px 0 0",
-  lineHeight: "var(--leading-snug)",
-  maxWidth: "60ch",
 };

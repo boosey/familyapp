@@ -8,8 +8,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (p: string) => readFileSync(join(here, p), "utf8");
 
 // heirloom is the base/default skin (see the "skin model" comment in tokens.css): its palette lives
-// in the `:root, [data-theme…]` blocks and its language tokens in the `:root, :root[data-skin="heirloom"]`
-// block — all in tokens.css, so the whole heirloom contract is satisfied by this one file.
+// in the base `:root, [data-theme="heirloom"]` block and its language tokens in the
+// `:root, :root[data-skin="heirloom"]` block — all in tokens.css, so the whole heirloom contract is
+// satisfied by this one file.
 const heirloom = read("../_kindred/tokens.css");
 const scrapbook = read("./scrapbook.css");
 

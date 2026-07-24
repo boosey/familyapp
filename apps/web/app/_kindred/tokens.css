@@ -77,48 +77,13 @@
   --sticker-gold-bg:  #EDE0C4;  --sticker-gold-ink:  #6E5A2A;
 }
 
-[data-theme="archive"] {
-  --paper-100: #F7F8F9; --paper-200: #ECEEF0; --paper-300: #DFE3E6;
-  --ink-900: #232A2E; --ink-700: #3C474C; --ink-500: #5C6B72;
-  --line-200: #D4DADD; --line-300: #C2CACE;
-  --surface-page: var(--paper-200); --surface-card: var(--paper-100); --surface-sunken: var(--paper-300);
-  --text-body: var(--ink-900); --text-muted: var(--ink-500); --text-meta: var(--ink-700);
-  --accent: #45707C; --accent-strong: #355864; --accent-soft: #D2E0E4; --accent-soft-0: rgba(210, 224, 228, 0); --accent-on: #FFFFFF;
-  --support: #8A8270; --support-soft: #E0DED2; --border: var(--line-200); --border-strong: var(--line-300);
-  --focus-ring: #45707C;
-  /* Cool-leaning crimson danger ink — the base warm brick red would clash with this blue-grey
-   * palette. AA-guarded on this theme's surfaces by _skins/contrast.test.ts. */
-  --text-danger: #9B2C3D;
-  --shadow-sm: 0 1px 2px rgba(30, 45, 55, 0.08);
-  --shadow-card: 0 2px 10px rgba(30, 45, 55, 0.10);
-  --shadow-lift: 0 8px 28px rgba(30, 45, 55, 0.16);
-}
-
-[data-theme="hearth"] {
-  --paper-100: #FBEFEA; --paper-200: #F3E4DD; --paper-300: #E9D3C9;
-  --ink-900: #34241F; --ink-700: #543A32; --ink-500: #7A5F56;
-  --line-200: #E8D2C8; --line-300: #DCC0B3;
-  --surface-page: var(--paper-200); --surface-card: var(--paper-100); --surface-sunken: var(--paper-300);
-  --text-body: var(--ink-900); --text-muted: var(--ink-500); --text-meta: var(--ink-700);
-  --accent: #B5524C; --accent-strong: #97403B; --accent-soft: #F1D2CC; --accent-soft-0: rgba(241, 210, 204, 0); --accent-on: #FFFFFF;
-  --support: #A8745C; --support-soft: #EFD8C9; --border: var(--line-200); --border-strong: var(--line-300);
-  --focus-ring: #B5524C;
-  /* Rose-leaning danger ink — deeper and more magenta than --accent-strong so error text never
-   * blurs into the rose accent. AA-guarded on this theme's surfaces by _skins/contrast.test.ts. */
-  --text-danger: #93314A;
-  --shadow-sm: 0 1px 2px rgba(80, 40, 30, 0.09);
-  --shadow-card: 0 2px 10px rgba(80, 40, 30, 0.12);
-  --shadow-lift: 0 8px 28px rgba(80, 40, 30, 0.18);
-}
-
 /* ── The skin model (data-skin) ──────────────────────────────────────────────
  * A SKIN is a full design language (fonts + shape + motion + palette). Two ship:
  *   • "heirloom" — the ORIGINAL language, and the base default. It deliberately rides this base
- *     `:root` rather than a separate `_skins/heirloom.css`: its PALETTE is the `:root, [data-theme…]`
- *     blocks above (so the archive/hearth palettes remain selectable as `data-theme` sub-variants —
- *     a dedicated `[data-skin="heirloom"]` palette block would out-specify and break them), and its
- *     LANGUAGE tokens are the block below. The `:root[data-skin="heirloom"]` selector is listed
- *     explicitly on that block so `data-skin="heirloom"` is a REAL, greppable selector, not inert.
+ *     `:root` rather than a separate `_skins/heirloom.css`: its PALETTE is the `:root,
+ *     [data-theme="heirloom"]` block above, and its LANGUAGE tokens are the block below. The
+ *     `:root[data-skin="heirloom"]` selector is listed explicitly on that block so
+ *     `data-skin="heirloom"` is a REAL, greppable selector, not inert.
  *   • "scrapbook" — a full skin in `_skins/scrapbook.css` that bakes in its own palette + language.
  * The per-skin token contract both must satisfy is `_skins/skin-contract.ts` (guard test). */
 :root, :root[data-skin="heirloom"] {

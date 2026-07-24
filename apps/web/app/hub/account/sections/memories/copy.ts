@@ -8,17 +8,14 @@
  */
 export const memoriesSectionCopy = {
   title: "What we remember",
-  subtitle:
-    "These are the facts the system holds about you. Review them, correct anything that's off, or clear what you'd rather it forget.",
 
-  /** Honest provenance for the anchor-backed era: these come from your profile/intake, not a story. */
+  /** Honest provenance for the anchor-backed era: these come from your profile/intake, not a story.
+   *  Folded into the title's InfoTooltip (change 3) — carries both the "what/why" (review/correct/
+   *  forget) and the forward-looking note that story-derived memories are coming (#362), so nothing
+   *  from the old subtitle/comingSoonNote paragraphs is lost, just consolidated into one tooltip. */
   provenanceLabel: "From your profile",
   provenanceNote:
-    "You told us this when you set up your profile or during your first conversation — it isn't drawn from a story.",
-
-  /** The forward-looking note that richer, story-derived memories are coming (they land with #362). */
-  comingSoonNote:
-    "Soon this list will also include things the interviewer picks up from the stories you tell — each shown with the story it came from. For now it holds the facts from your profile.",
+    "These are facts you told us when you set up your profile or during your first conversation — not drawn from a story. Review them, correct anything that's off, or forget what you'd rather not keep. Soon this list will also include things the interviewer picks up from the stories you tell, each shown with the story it came from.",
 
   /** Empty state — no anchors set yet. */
   emptyTitle: "Nothing remembered yet",
@@ -39,6 +36,16 @@ export const memoriesSectionCopy = {
   saved: "Saved",
   saveError: "Couldn't save — try again",
   cleared: "Forgotten",
+
+  /** Add-a-memory affordance (#357 change 9) — a stub UI ahead of the narrator_memory ledger (#362). */
+  addMemoryLabel: "Add a memory",
+  addTitleLabel: "Title",
+  addTitlePlaceholder: "e.g. My favorite recipe",
+  addSummaryLabel: "Details",
+  addSummaryPlaceholder: "Write what you'd like remembered…",
+  addSave: "Save",
+  addCancel: "Cancel",
+  createNotAvailable: "Adding memories isn't available yet — check back soon.",
 } as const;
 
 /**

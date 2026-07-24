@@ -16,10 +16,10 @@ import type { AccountSection } from "./account-sections";
 import styles from "./account-shell.module.css";
 
 export interface AccountRailProps {
-  /** Slug + label + scope for each section, in registry order. */
-  sections: readonly Pick<AccountSection, "slug" | "label" | "scope">[];
+  /** Slug + label for each section, in registry order. */
+  sections: readonly Pick<AccountSection, "slug" | "label">[];
   /** Copy for the narrow-only sections toggle and the back-to-hub link. */
-  copy: { sectionsLabel: string; backToHub: string; deviceScope: string; accountScope: string };
+  copy: { sectionsLabel: string; backToHub: string };
 }
 
 export function AccountRail({ sections, copy }: AccountRailProps) {
@@ -57,9 +57,6 @@ export function AccountRail({ sections, copy }: AccountRailProps) {
               onClick={() => setOpen(false)}
             >
               <span>{s.label}</span>
-              <span className={styles.scope}>
-                {s.scope === "device" ? copy.deviceScope : copy.accountScope}
-              </span>
             </Link>
           ))}
         </div>
