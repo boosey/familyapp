@@ -50,12 +50,39 @@
   outline-offset: 2px;
 }
 
+/* Read-only header: monogram avatar on the left, name + meta stacked to its right (#328). */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Clear the absolutely-positioned × close in the top-right corner. */
+  padding-right: 24px;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: var(--accent-on);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 1.4rem;
+  line-height: 1;
+  /* width/height/background are set inline (avatar size constant + deterministic monogram color). */
+}
+
+.identity {
+  min-width: 0;
+}
+
 .title {
   font-family: var(--font-story);
   font-size: var(--text-story);
   font-weight: var(--weight-medium);
   color: var(--text-body);
-  margin: 0 24px 4px 0;
+  margin: 0 0 4px;
   font-style: normal;
 }
 
