@@ -68,8 +68,11 @@ export async function proposeAndDisposeFollowUp(
 ): Promise<ProposeAndDisposeFollowUpResult> {
   const { decide, evaluationInput } = input;
 
-  // Distress / off-ramp: short-circuit before probes and LLM stages (matches interview session).
-  if (decide.distressed || decide.offRampRequested) {
+  // Narrator opt-out (#351) / distress / off-ramp: short-circuit before probes and LLM stages
+  // (matches interview session). No evaluation LLM runs and no probe is consulted — the empty
+  // evaluation feeds `decideFollowUp`, whose thread-level short-circuit records the audited
+  // disposition (`suppressed_narrator_opt_out` for opt-out; `distress_shortcircuit` otherwise).
+  if (decide.narratorOptedOut || decide.distressed || decide.offRampRequested) {
     const evaluation = EMPTY_EVAL;
     const decision = decideFollowUp({ ...decide, evaluation });
     return { decision, evaluation, stage: "none", origin: null };

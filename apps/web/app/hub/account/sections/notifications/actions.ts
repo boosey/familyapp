@@ -1,5 +1,9 @@
 "use server";
 
+/**
+ * Account › Notifications — the save action for the 3 Person-global notification streams (relocated
+ * from /hub/settings). Persists via `@/lib/notification-prefs`.
+ */
 import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
 import { getRuntime } from "@/lib/runtime";
 import { NOTIFICATION_STREAMS, setNotificationStreamFrequency } from "@/lib/notification-prefs";

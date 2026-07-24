@@ -45,6 +45,9 @@ export const hub = {
     familySubNavAria: "Family sections",
     menuProfile: "Your profile",
     menuSettings: "Settings",
+    // ADR-0029 — the single avatar-menu launcher that replaces Profile / Settings / (steward family
+    // settings) / Create / Find. Opens the unified per-person Account surface (/hub/account).
+    menuAccount: "Account",
     menuSwitchUser: "Switch user",
     menuLogOut: "Log out",
     // Account-menu family actions (ADR-0021): moved off the retired scope pill. Universal — they work
@@ -73,6 +76,18 @@ export const hub = {
     // Pending-only empty state (Task 4.6): a viewer who has reached the hub with no active family
     // yet (one pending join request). Shown by the read tabs in place of their generic empties.
     pendingEmpty: "Nothing here yet — you'll see stories once you're part of a family.",
+  },
+  // ADR-0029 — the unified Account surface's SHELL chrome (rail + narrow drill-down + scope tags).
+  // Section CONTENT copy lives per-section in app/hub/account/sections/<slug>/copy.ts (never here) so
+  // the 7 parallel section agents edit disjoint files; only this shell block is shared.
+  accountShell: {
+    // Back-to-hub link at the top of the surface.
+    backToHub: "← Back to hub",
+    // Narrow-only toggle that opens the section list (the drill-down); also the rail's accessible name.
+    sections: "Sections",
+    // Trailing scope tag on each rail item: device-local app preference vs account-level (cross-device).
+    deviceScope: "Device",
+    accountScope: "Account",
   },
   // ADR-0025 collapsed browse panels — per-concern IconSheet triggers (View/Family/Filter/Search).
   // Compact (< 40rem) opens a BottomSheet; wide opens an AnchoredPopover (#300). Panel body is shared.

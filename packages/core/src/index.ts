@@ -144,6 +144,13 @@ export {
   getNarratorBiographicalContext,
 } from "./narrator-profile";
 export {
+  type NarrationPreferences,
+  getNarrationPreferences,
+  getFollowUpsOptOut,
+  setFollowUpsOptOut,
+  setAskSuggestionOptOut,
+} from "./narration-preferences";
+export {
   type NarratorMemoryInput,
   type NarratorMemorySink,
   noopNarratorMemorySink,

@@ -77,6 +77,9 @@ export async function listPersonBoundInviteTargetsAction(
       identified: persons.identified,
       lifeStatus: persons.lifeStatus,
       accountId: persons.accountId,
+      // #331 (ADR-0029) contact visibility: a channel the invitee has hidden must NEVER prefill.
+      hideEmail: persons.hideEmail,
+      hidePhone: persons.hidePhone,
     })
     .from(persons)
     .where(eq(persons.id, personId))
@@ -116,8 +119,11 @@ export async function listPersonBoundInviteTargetsAction(
         and(eq(accountContacts.accountId, person.accountId), isNotNull(accountContacts.verifiedAt)),
       );
     for (const c of contacts) {
-      if (c.kind === "email" && !email) email = c.value;
-      if (c.kind === "phone" && !phone) phone = c.value;
+      // #331 (ADR-0029): suppress a channel the invitee has hidden from co-member-facing reads. This
+      // is visibility-to-humans only — the async delivery path (`dispatchInviteDelivery` →
+      // `resolvePersonEmails`) reads the REAL contact and is intentionally NOT gated here.
+      if (c.kind === "email" && !email && !person.hideEmail) email = c.value;
+      if (c.kind === "phone" && !phone && !person.hidePhone) phone = c.value;
     }
   }
 

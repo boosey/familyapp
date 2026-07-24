@@ -1,7 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { persons } from "@chronicle/db/schema";
-import { listFamiliesStewardedBy } from "@chronicle/core";
+import type { listFamiliesStewardedBy } from "@chronicle/core";
 import { isClerkConfigured } from "@/lib/clerk-config";
 import { hub } from "@/app/_copy";
 import type { AccountMenuItem } from "./KindredAccountMenu";
@@ -24,7 +24,7 @@ export interface AccountMenu {
   initials: string;
   /** The viewer's display name (menu header); null when unknown. */
   viewerName: string | null;
-  /** Profile / Settings / (steward family settings) / Create / Find / Log out. */
+  /** ADR-0029: Account (single launcher) / Switch-user (dev) / Log out. */
   items: AccountMenuItem[];
   /** Whether the log-out row must use the Clerk sign-out path (only when ClerkProvider is mounted). */
   clerkSignOut: boolean;
@@ -52,32 +52,15 @@ export async function loadAccountMenu(
         .toUpperCase()
     : "Y";
 
-  // Steward-only Edit-a-Family entries (#54): one per stewarded family, above "Create a family". One
-  // stewarded family → a generic "Family settings" label; two or more are disambiguated by name.
-  const stewarded = await listFamiliesStewardedBy(db, personId);
-  const familyEditItems: AccountMenuItem[] =
-    stewarded.length === 1
-      ? [
-          {
-            key: "family-settings",
-            label: hub.shell.menuFamilySettings,
-            href: `/families/${stewarded[0]!.familyId}/edit`,
-          },
-        ]
-      : stewarded.map((f) => ({
-          key: `family-settings-${f.familyId}`,
-          // `||` (not `??`): a blank short name falls back to the formal name, not a " settings" label.
-          label: hub.shell.menuFamilySettingsNamed(f.shortName || f.name),
-          href: `/families/${f.familyId}/edit`,
-        }));
-
+  // ADR-0029 — the avatar menu collapses to ONE launcher. The former Profile / Settings rows, the
+  // per-stewarded-family "Family settings" entries, and Create / Find all move INTO the unified
+  // Account surface (Profile, Appearance, Notifications, and the Families section respectively). The
+  // stewarded-families query that lived here (`listFamiliesStewardedBy(db, personId)`, #54) was
+  // removed with them — the Families SECTION loader re-adds that logic later. Only the dev
+  // Switch-user shortcut and Log out remain beside the single Account entry.
   const items: AccountMenuItem[] = [
-    { key: "profile", label: hub.shell.menuProfile, href: "/hub/profile" },
-    { key: "settings", label: hub.shell.menuSettings, href: "/hub/settings" },
+    { key: "account", label: hub.shell.menuAccount, href: "/hub/account" },
     { key: "switch-user", label: hub.shell.menuSwitchUser, href: "/dev/sign-in" },
-    ...familyEditItems,
-    { key: "create-family", label: hub.shell.menuCreateFamily, href: "/families/new" },
-    { key: "find-family", label: hub.shell.menuFindFamily, href: "/families/find" },
     { key: "log-out", label: hub.shell.menuLogOut, onSelect: logOut },
   ];
 

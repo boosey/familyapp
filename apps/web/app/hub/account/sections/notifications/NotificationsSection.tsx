@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Notifications section (#280) — the settings surface for the three Person-global notification
- * streams. Unlike every other section on this page these choices SYNC to the account (persisted
- * via notificationStreamPrefs), not device-local.
+ * Account › Notifications (#280) — the settings surface for the three Person-global notification
+ * streams. Unlike the device-local Appearance controls, these choices SYNC to the account (persisted
+ * via notificationStreamPrefs), not device-local. Relocated from /hub/settings.
  *
  * Prefs get/set live in `@/lib/notification-prefs` (`server-only`); this client module must not
  * import `@chronicle/core`.
@@ -13,8 +13,8 @@
  */
 import { useCallback, useRef, useState, type CSSProperties } from "react";
 import type { NotificationFrequency, NotificationStream } from "@chronicle/db";
-import { hub } from "@/app/_copy";
 import { SegmentedControl } from "@/app/_kindred/SegmentedControl";
+import { notificationsCopy } from "./copy";
 import { saveNotificationStreamFrequencyAction } from "./actions";
 
 const NOTIFICATION_STREAMS = [
@@ -81,30 +81,30 @@ export function NotificationsSection({ initialFrequencies }: NotificationsSectio
 
   function hint(stream: NotificationStream) {
     const state = saveState[stream];
-    if (state === "saving") return hub.settings.notificationsSaving;
-    if (state === "saved") return hub.settings.notificationsSaved;
-    if (state === "error") return hub.settings.notificationsSaveError;
+    if (state === "saving") return notificationsCopy.notificationsSaving;
+    if (state === "saved") return notificationsCopy.notificationsSaved;
+    if (state === "error") return notificationsCopy.notificationsSaveError;
     return null;
   }
 
   return (
-    <section aria-labelledby="settings-notifications">
-      <h2 id="settings-notifications" style={sectionTitle}>
-        {hub.settings.notificationsHeading}
+    <section aria-labelledby="account-notifications">
+      <h2 id="account-notifications" style={sectionTitle}>
+        {notificationsCopy.notificationsHeading}
       </h2>
-      <p style={sectionIntro}>{hub.settings.notificationsIntro}</p>
+      <p style={sectionIntro}>{notificationsCopy.notificationsIntro}</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {NOTIFICATION_STREAMS.map((stream) => {
-          const streamLabel = hub.settings.streamLabels[stream];
+          const streamLabel = notificationsCopy.streamLabels[stream];
           const hintText = hint(stream);
           return (
             <div key={stream}>
               <span style={streamLabelStyle}>{streamLabel}</span>
               <SegmentedControl
-                ariaLabel={hub.settings.streamFrequencyAria(streamLabel)}
+                ariaLabel={notificationsCopy.streamFrequencyAria(streamLabel)}
                 items={[
-                  { key: "every_item", label: hub.settings.frequencyEveryItem },
-                  { key: "off", label: hub.settings.frequencyOff },
+                  { key: "every_item", label: notificationsCopy.frequencyEveryItem },
+                  { key: "off", label: notificationsCopy.frequencyOff },
                 ]}
                 active={frequencies[stream]}
                 onSelect={(key) => void handleSelect(stream, key as UiFrequency)}

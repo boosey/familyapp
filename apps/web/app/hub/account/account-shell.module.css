@@ -1,0 +1,167 @@
+/* Account surface shell (ADR-0029) — left rail on wide viewports, section drill-down on narrow.
+ *
+ * MOBILE-FIRST (base = phone): the rail is NOT rendered inline; the panel fills the width and a back
+ * affordance opens the section list as a pushed overlay (the drill-down). This honours the ADR-0024/
+ * 0025 native-nav / no-vertical-bloat discipline (the HubTabs lesson) — the rail never stacks ABOVE
+ * the panel on a phone, which would bloat every section with a 7-item list before its content.
+ *
+ * Design values (color/radius/shadow/motion) are tokens; layout dims (gaps, paddings) are raw px per
+ * _skins/CSS-MODULES.md, matching page.module.css / HubTabs.module.css house style. */
+
+.shell {
+  min-height: 100dvh;
+  background: var(--surface-page);
+}
+
+.inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px clamp(16px, 4vw, 32px) 48px;
+  box-sizing: border-box;
+}
+
+/* The back-to-hub link + (on narrow) the sections toggle sit in a top bar above the columns. */
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  grid-column: 1 / -1;
+}
+
+.backLink {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-meta);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backLink:hover {
+  color: var(--text-body);
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Narrow-only "Sections" toggle that opens the drill-down list. Hidden on wide (the rail is inline). */
+.sectionsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 6px 12px;
+  border: 1px solid var(--border-muted, var(--border, currentColor));
+  border-radius: var(--radius-md);
+  background: var(--surface-card, transparent);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sectionsToggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.columns {
+  display: block;
+}
+
+/* The rail is a full-width pushed overlay on a phone (the drill-down list), shown only when open. */
+.rail {
+  display: none;
+}
+
+.railOpen {
+  display: block;
+  margin-bottom: 24px;
+}
+
+.railNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--touch-min);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-meta);
+  text-decoration: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+  transition: background var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+
+.railLink:hover {
+  background: var(--surface-sunken);
+  color: var(--text-body);
+}
+
+.railLink[aria-current="page"] {
+  background: var(--tell-card-bg);
+  color: var(--accent-on);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.railLink:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Small scope tag (device / account) trailing each rail label. */
+.scope {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-meta);
+  opacity: 0.75;
+}
+
+.railLink[aria-current="page"] .scope {
+  color: var(--accent-on);
+  opacity: 0.85;
+}
+
+.panel {
+  min-width: 0;
+}
+
+/* WIDE (≥ sm): two columns — a persistent left rail beside the panel. The narrow-only toggle hides;
+ * the rail is always shown (never the overlay state). No vertical stacking, so no bloat. */
+@media (min-width: 40rem) {
+  .sectionsToggle {
+    display: none;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .rail,
+  .railOpen {
+    display: block;
+    margin-bottom: 0;
+    position: sticky;
+    top: 20px;
+  }
+}

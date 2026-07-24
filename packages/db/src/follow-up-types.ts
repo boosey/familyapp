@@ -27,6 +27,11 @@ export type FollowUpDispositionReason =
   | "selected"
   | "thin_answer"
   | "distress_shortcircuit"
+  // Narrator turned follow-ups off entirely (#351, per-account opt-out). A thread-level
+  // short-circuit at the TOP of the cascade — no evaluation LLM runs and no question is asked;
+  // the suppression is recorded as an audited disposition (ADR-0029). Memory extraction (a
+  // separate post-approval pipeline) is unaffected.
+  | "suppressed_narrator_opt_out"
   | "over_cap_thread"
   | "over_cap_session"
   | "below_confidence"
