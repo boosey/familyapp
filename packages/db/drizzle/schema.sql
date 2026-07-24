@@ -348,6 +348,10 @@ CREATE TABLE "persons" (
 	"identified" boolean DEFAULT true NOT NULL,
 	"account_id" uuid,
 	"created_by_person_id" uuid,
+	"hide_email" boolean DEFAULT false NOT NULL,
+	"hide_phone" boolean DEFAULT false NOT NULL,
+	"follow_ups_opt_out" boolean DEFAULT false NOT NULL,
+	"ask_suggestion_opt_out" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

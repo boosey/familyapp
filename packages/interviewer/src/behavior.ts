@@ -443,6 +443,14 @@ export interface FollowUpDecisionInput {
   distressed: boolean;
   offRampRequested: boolean;
   rapportEstablished: boolean;
+  /**
+   * The narrator turned follow-ups off entirely (#351, per-account opt-out on `persons`). When
+   * true the whole cascade short-circuits at the TOP — before any evaluation LLM — and the
+   * suppression is recorded as an audited `suppressed_narrator_opt_out` disposition (ADR-0029).
+   * Defaults to false (follow-ups ON) when omitted. Gates ONLY the narrator-facing ask; memory
+   * extraction (a separate post-approval pipeline) is unaffected.
+   */
+  narratorOptedOut?: boolean;
   /** Seeds already asked this sitting — the cheap lexical anti-repeat backstop. */
   alreadyAskedSeeds: ReadonlyArray<string>;
 }
@@ -450,7 +458,11 @@ export interface FollowUpDecisionInput {
 /** A thread-level veto that applies before any per-candidate ranking. */
 export type FollowUpShortCircuit = Extract<
   FollowUpDispositionReason,
-  "thin_answer" | "distress_shortcircuit" | "over_cap_thread" | "over_cap_session"
+  | "thin_answer"
+  | "distress_shortcircuit"
+  | "suppressed_narrator_opt_out"
+  | "over_cap_thread"
+  | "over_cap_session"
 >;
 
 export interface FollowUpDecision {
@@ -512,6 +524,9 @@ export function decideFollowUp(input: FollowUpDecisionInput): FollowUpDecision {
 }
 
 function threadShortCircuit(input: FollowUpDecisionInput): FollowUpShortCircuit | null {
+  // #351: a narrator who opted out of follow-ups is never asked one — checked FIRST (a personal
+  // preference veto), before distress and the caps. Recorded as an audited disposition.
+  if (input.narratorOptedOut) return "suppressed_narrator_opt_out";
   if (input.distressed || input.offRampRequested) return "distress_shortcircuit";
   if (input.answerWordCount < input.policy.thinAnswerWordFloor) return "thin_answer";
   if (input.followUpsAskedInThread >= input.policy.maxFollowUpsPerThread) return "over_cap_thread";

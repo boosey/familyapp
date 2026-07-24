@@ -316,6 +316,30 @@ export const persons = pgTable(
     createdByPersonId: uuid("created_by_person_id").references(
       (): AnyPgColumn => persons.id,
     ),
+    /**
+     * #331 (ADR-0029) contact visibility — when true, this Person's email is suppressed from every
+     * co-member-facing contact read (including the Steward) AND from Invite-modal prefill. A personal
+     * veto, coarse across all families. Never disables system NOTIFICATION delivery. Default false
+     * = email visible.
+     */
+    hideEmail: boolean("hide_email").notNull().default(false),
+    /**
+     * #331 (ADR-0029) contact visibility — the phone mirror of `hideEmail`. When true, this Person's
+     * phone is suppressed from co-member contact reads and Invite-modal prefill; delivery is
+     * unaffected. Default false = phone visible.
+     */
+    hidePhone: boolean("hide_phone").notNull().default(false),
+    /**
+     * #351 (ADR-0029) narration — when true, the follow-up cascade short-circuits at the top (no
+     * evaluation LLM, no ask; audited "suppressed: narrator opt-out"). Memory extraction is
+     * unaffected. Default false = follow-ups ON.
+     */
+    followUpsOptOut: boolean("follow_ups_opt_out").notNull().default(false),
+    /**
+     * #351 sibling (ADR-0029) narration — when true, Ask-suggestion prompts are suppressed for this
+     * Person. Default false = suggestions ON.
+     */
+    askSuggestionOptOut: boolean("ask_suggestion_opt_out").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

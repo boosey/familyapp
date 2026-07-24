@@ -26,7 +26,7 @@ import {
   getNotificationStreamFrequency,
   listNotificationStreamFrequencies,
 } from "@chronicle/core";
-import { saveNotificationStreamFrequencyAction } from "@/app/hub/settings/actions";
+import { saveNotificationStreamFrequencyAction } from "@/app/hub/account/sections/notifications/actions";
 
 async function makePerson(db: Database, name = "Sofia"): Promise<string> {
   const [p] = await db.insert(persons).values({ displayName: name, spokenName: name }).returning();

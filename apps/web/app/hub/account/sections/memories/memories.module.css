@@ -1,0 +1,160 @@
+/*
+ * Account › Memories (ADR-0029 §#357) — card + control styling for the memory list. Token-driven to
+ * match the Kindred forms and the FollowUp/account surfaces (var(--accent), --border, --radius-*).
+ * Buttons follow the same ghost/primary shape used by FollowUpButton so the section reads native.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardUnset {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.provenanceChip {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+.summary {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-body);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+
+.summaryEmpty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.editStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.hintError {
+  color: var(--text-danger);
+}
+
+.btnGhost {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  transition: background var(--dur-fade) var(--ease-quiet),
+    border-color var(--dur-fade) var(--ease-quiet), color var(--dur-fade) var(--ease-quiet);
+}
+.btnGhost:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.btnPrimary {
+  padding: 6px 18px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur-fade) var(--ease-quiet);
+}
+:global(:root[data-skin="scrapbook"]) .btnPrimary {
+  background: var(--accent-gradient);
+}
+.btnPrimary:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+}
+
+.btnGhost:focus-visible,
+.btnPrimary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:global(:root[data-reduce-motion="on"]) .btnPrimary,
+:global([data-tone="solemn"]) .btnPrimary {
+  box-shadow: none;
+}
+
+.unsetHeading {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 12px 0 0;
+}
+
+.empty {
+  border: var(--border-width) dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  text-align: center;
+}
+.emptyTitle {
+  font-family: var(--font-story);
+  font-size: var(--text-story);
+  color: var(--text-body);
+  margin: 0 0 8px;
+}
+.emptyBody {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui-sm);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: var(--leading-snug);
+}

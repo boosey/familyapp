@@ -69,6 +69,10 @@ async function familyMembers(db: Database, familyId: string): Promise<Person[]> 
       identified: persons.identified,
       accountId: persons.accountId,
       createdByPersonId: persons.createdByPersonId,
+      hideEmail: persons.hideEmail,
+      hidePhone: persons.hidePhone,
+      followUpsOptOut: persons.followUpsOptOut,
+      askSuggestionOptOut: persons.askSuggestionOptOut,
       createdAt: persons.createdAt,
       updatedAt: persons.updatedAt,
     })

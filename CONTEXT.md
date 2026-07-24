@@ -177,9 +177,16 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   pending status stays scoped to the Family being invited into (the chosen target), not some other
   Family (ADR-0028).
 - **Co-member contacts** — active co-members *may* see each other's contact channels for product
-  flows that need them. The List/Tree Invite modal may **prefill** name and email/phone from those
-  contacts; Person details does not permanently surface contacts in this slice. An option for a
-  Person to hide contacts from family members is deferred (#331); not implemented here.
+  flows that need them, **unless the Person has hidden that channel** (see **Contact visibility**). The
+  List/Tree Invite modal may **prefill** name and email/phone from those contacts, but **never a hidden
+  channel**; Person details does not permanently surface contacts in this slice.
+- **Contact visibility** — a Person's per-channel privacy choice (#331): two **independent,
+  account-level** booleans (**hide email**, **hide phone**) that suppress that channel from **all**
+  co-members (**including the Steward** — a personal veto, like **Subject hide**) and from Invite-modal
+  prefill. **Coarse**: one choice applies across every family, never per-family. Visibility governs what
+  other *humans* see — it **never** disables the channel for **system delivery** (a **Notification**
+  still reaches a hidden email/phone). Default **visible**; hiding is opt-in. Managed in the Account
+  **Privacy** section.
 - **Magic link** — a texted or emailed deep link whose token is a **passwordless login to the
   Person's existing Account**, routing straight to a specific question's answer page. Time-boxed and
   reusable within its window. The link is the password (a bearer credential), accepted deliberately
@@ -200,22 +207,36 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   join): confirm **display name** and **date of birth** in `/welcome`, then the **Intake**
   introduction. Gated by `Person.onboardedAt`. **Spoken name** defaults from display name here and
   may be refined later on **Profile**.
-- **Profile** — the signed-in screen where a Person **later** views and edits their identity
-  (display name, spoken name, date of birth, read-only email) and **Biographical anchors** inline
-  (text-only, direct structured fields). Distinct from the first-time **Intake** walk at
-  `/hub/about-you`, which stays unchanged in onboarding; Profile is reached from the account menu
-  for post-onboarding edits.
-- **Settings** — the signed-in screen for **app preferences**: text size, color palette
-  (Heirloom / Archive / Hearth), and **Look and feel** (Scrapbook / Heirloom). Light / dark /
-  system appearance is deferred until dark tokens exist. Device-local preferences, not identity
-  (Profile) and not account actions (sign out stays in the account menu).
-- **App preference** — a **device-local** choice a Person makes for how the app looks or reads,
-  surfaced on **Settings** (today: reading size, color palette, Look and feel, reduce motion,
-  recording gesture). A deliberately small, opt-in set —
-  a UI value becomes an app preference only when it is promoted to one; the vast majority of UI values
-  are fixed at build time and are not preferences. Distinct from **Profile** (identity) and from account
-  actions. Because it is device-local, a preference does not follow a Person across devices unless it is
-  later re-defined as identity-linked (a conscious change, not the current model — see ADR-0020).
+- **Account (surface)** — the single signed-in surface where a Person manages **everything about
+  themselves and their use of the app**: identity (**Profile**), look-and-feel (**Appearance**),
+  narration behaviour (**Follow-up opt-out**), **Contact visibility**, notification streams, their
+  **Narrator memories**, and their **memberships/families**. Reached from the avatar menu, which
+  collapses to one **Account** launcher (plus Log out, plus dev Switch-user). Rendered as sectioned
+  panels — a **left rail** on wide viewports, a **section drill-down** on narrow — at
+  `/hub/account/[section]`. **Storage-agnostic**: each setting declares its own **scope** —
+  *this-device* (browser-applied app preferences, ADR-0020) or *my-account* (server-persisted,
+  cross-device) — so one surface holds both without conflating them (ADR-0029). Distinct from the
+  **Account** *login* record (below) and from a **Family** surface: the Account surface is about the
+  Person; Family **governance** (steward actions, members, tree, album, `/families/{id}/edit`) stays on
+  its own per-family surface. The Account's **Families** section holds only the *personal* slice (your
+  memberships, per-viewer short-name override, leave/pause) and **links out** to family governance.
+- **Profile** — the **Account** section for a Person's **identity**: display name, spoken name, date of
+  birth, read-only email, and **Biographical anchors** inline (text-only, direct structured fields).
+  Account-scoped (cross-device). Distinct from the first-time **Intake** walk at `/hub/about-you`, which
+  stays unchanged in onboarding.
+- **Appearance** — the **Account** section for **app preferences** (the former standalone *Settings*
+  screen): text size, color palette, **Look and feel** (Scrapbook / Heirloom), reduce motion, recording
+  gesture. Light / dark / system appearance is deferred until dark tokens exist. **Device-local** by
+  default (ADR-0020) — deliberately so a Person may set a different text size on phone and on desktop.
+  (The surface name **Settings** is retired: the avatar menu's old *Settings* link is now
+  *Account → Appearance*. Historical ADR/plan references to "Settings" mean this section.)
+- **App preference** — a choice a Person makes for how the app looks or reads, surfaced in
+  **Appearance** (today: reading size, color palette, Look and feel, reduce motion, recording gesture).
+  A deliberately small, opt-in set — a UI value becomes an app preference only when it is promoted to
+  one; the vast majority of UI values are fixed at build time and are not preferences. **Scope is
+  per-preference, not per-surface** (ADR-0029): app preferences stay device-local (browser-applied,
+  ADR-0020), while other Account settings (Contact visibility, Follow-up opt-out, notification streams)
+  are account-level and cross-device. Distinct from account actions (Log out, Erase account).
 - **Spoken name** — the name the interviewer speaks aloud when addressing this Person. Defaults to
   the first word of display name; editable on Profile independently of display name.
 - **Family filter** — on a **browse** surface (the album, story browse, the tree), the viewer's
@@ -465,6 +486,20 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   post-approval** (a discarded or never-shared draft never feeds memory, even though its audio is
   still retained). **Intake** is the one exception — it extracts at **Save**, because answering a
   direct biographical question *is* the consent to build the profile. Best-effort throughout.
+- **Narrator memory** — the **broader "picture of the person"** the system accrues beyond the fixed
+  **Biographical anchors**: salient facts mined by **Memory extraction** (`origin = extracted`, each
+  carrying `sourceStoryId` provenance and a confidence) plus facts a Person states about themselves
+  (`origin = user`). Persisted as an **append-only ledger** (same discipline as the **Consent ledger**
+  and **prose revisions**): a correction writes a new `active` row and marks the prior `superseded`; a
+  removal writes `dismissed`; the interviewer reads only `active` rows (via the audited
+  `listNarratorMemoryForInterviewer` seam, which returns `title`/`summary`/`tags` only). **User-authored
+  or user-corrected facts are never overwritten by later extraction** — the same precedence rule anchors
+  use. The store + extraction write-path are a **fast-follow** build (#357's UI is designed against this
+  contract first; see ADR-0029 / the account-panel plan).
+- **Narrator memory management** — the **Account → Memories** section (#357): a Person's own CRUD over
+  *their* **Narrator memory** — review, correct, dismiss, or add facts, each extracted item showing its
+  **source story** so a stale or wrong memory is correctable *with context*. Per-narrator and
+  self-only (you never see or edit anyone else's). All edits are append-only supersessions.
 - **Intake** — a structured 6-question first pass that populates **Biographical anchors**. Run once
   during onboarding at `/hub/about-you` (after `/welcome`): one question at a time, voice-first with
   typed fallback, LLM extraction into the anchor fields. Resumable until complete; the hub reminder
@@ -484,6 +519,15 @@ text — same discipline as the **Consent ledger**). No stage ever mutates the c
   *generated from what the narrator just said*. Its answer is another **Take** on the *same* Story,
   not a new Story. The narrator can always decline a follow-up and move on — declining is a
   first-class path, never a dead end.
+- **Follow-up opt-out** — a **per-account (per-narrator)** preference (#351) to turn follow-ups off
+  entirely, managed in the Account **Narration** section. Default **ON** (opt-out, not opt-in). When on,
+  it **short-circuits the follow-up cascade at the top** — like the distress/off-ramp short-circuit — so
+  **no evaluation LLM runs and no question is asked**; the suppression is itself recorded as an audited
+  disposition in the **Follow-up decision record** ("suppressed: narrator opt-out"). It gates **only the
+  narrator-facing ask**: **Memory extraction** (a separate post-approval pipeline) is **unaffected** —
+  the narrator opted out of being *interrupted*, not out of being *understood*. Scoped to the narrator,
+  not per-family (follow-ups are a property of how the interviewer treats *you*). Independent of the
+  **Ask suggestion** on/off control.
 - **Emotional-door rule** — the interviewer follows an emotional thread *only when the narrator
   themselves opened it*; it never manufactures an emotional probe. A follow-up on grief, loss, or
   joy is eligible only when the narrator's own words surfaced that feeling first. This is "never

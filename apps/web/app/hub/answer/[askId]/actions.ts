@@ -30,6 +30,7 @@ import {
   latestUnresolvedDecision,
   listFollowUpDecisionsForStory,
   listActiveFamiliesForPerson,
+  getFollowUpsOptOut,
 } from "@chronicle/core";
 import { ingestRecording, ingestFollowUpTake, ingestTextStory } from "@chronicle/capture";
 import {
@@ -645,6 +646,12 @@ export async function runFollowUpStep(
   const distressed = detectDistress(args.answerTranscript);
   const offRampRequested = detectOffRamp(args.answerTranscript);
 
+  // #351 per-narrator follow-up opt-out (ADR-0029). Read the flag once at the call site and thread it
+  // into `decide`; the cascade short-circuits at the TOP when set — no evaluation LLM runs and no
+  // probe is consulted — recording an audited `suppressed_narrator_opt_out` disposition. Gates ONLY
+  // the narrator-facing ask; memory extraction (a separate post-approval pipeline) is unaffected.
+  const narratorOptedOut = await getFollowUpsOptOut(db, args.ownerPersonId);
+
   // Temporal latch from ledger: any prior ask of the dating seed counts.
   const temporalAlreadyAsked =
     args.dating?.alreadyAsked === true || askedSeeds.includes(STORY_DATE_FOLLOW_UP_SEED);
@@ -696,6 +703,7 @@ export async function runFollowUpStep(
           followUpsAskedInSession: followUpsAskedInThread,
           distressed,
           offRampRequested,
+          narratorOptedOut,
           rapportEstablished: RAPPORT_ESTABLISHED_ON_ANSWER_SURFACE,
           alreadyAskedSeeds: askedSeeds,
         },
