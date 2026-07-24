@@ -37,6 +37,7 @@ import {
 import { AlbumBulkBar } from "./AlbumBulkBar";
 import { deleteAlbumPhotoAction, bulkSoftDeleteAlbumPhotosAction } from "./actions";
 import { albumPhotoSrc } from "./photo-src";
+import { tileContainment } from "./tile-containment";
 import type { PendingTile } from "./import-progress";
 
 export interface AlbumGridPhoto {
@@ -367,6 +368,7 @@ export function AlbumGrid({
             <AlbumTile
               key={photo.id}
               photo={photo}
+              thumbPx={thumbPx}
               selecting={selecting}
               selected={selected.has(photo.id)}
               onToggleSelected={() => toggleSelected(photo.id)}
@@ -562,6 +564,7 @@ function MasonryPendingTile({
 function AlbumTile({
   photo,
   masonry = false,
+  thumbPx,
   selecting = false,
   selected = false,
   onToggleSelected,
@@ -572,6 +575,9 @@ function AlbumTile({
   photo: AlbumGridPhoto;
   /** Masonry layout: natural aspect ratio + break-inside guard (Grid forces a 1:1 box). */
   masonry?: boolean;
+  /** Grid layout only: the slider thumb size, used as the `content-visibility` intrinsic-size hint
+   *  so an off-screen tile reserves ~its own square footprint (#219). Ignored in masonry. */
+  thumbPx?: number;
   /** Phase C selection mode: show a checkbox, suppress the hover toolbar. */
   selecting?: boolean;
   selected?: boolean;
@@ -622,7 +628,10 @@ function AlbumTile({
         flexDirection: "column",
         gap: 6,
         position: "relative",
-        ...(masonry ? { breakInside: "avoid" as const } : {}),
+        // #219 — Grid tiles are uniform, so they opt into content-visibility (the browser skips layout +
+        // paint off-screen). Masonry (CSS multi-column) instead keeps break-inside:avoid and relies on
+        // loading="lazy" alone — content-visibility is unreliable inside multi-column.
+        ...(masonry ? { breakInside: "avoid" as const } : tileContainment(thumbPx)),
       }}
     >
       {/* Selection checkbox (Phase C) — overlaid top-left while in selection mode. A real, keyboard-
@@ -701,6 +710,9 @@ function AlbumTile({
         <img
           src={albumPhotoSrc(photo.id, { thumb: true })}
           alt={hub.album.photoAlt(photo.caption)}
+          // #219 — defer the fetch + decode until the tile nears the viewport (the dominant per-tile
+          // cost at the 500 cap). Universal across layouts; the only windowing masonry/list get.
+          loading="lazy"
           style={{
             width: "100%",
             // Masonry keeps the photo's natural aspect (catalog look); Grid forces a uniform 1:1 box.

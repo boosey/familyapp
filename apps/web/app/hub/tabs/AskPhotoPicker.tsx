@@ -258,6 +258,9 @@ function AskPhotoModal({
                     <img
                       src={albumPhotoSrc(p.photoId, { thumb: true })}
                       alt={hub.album.photoAlt(p.caption)}
+                      // #219 — defer off-screen tile fetch/decode (paired with the grid's
+                      // content-visibility in AskPhotoPicker.module.css).
+                      loading="lazy"
                       className={s.tileImg}
                     />
                   </button>

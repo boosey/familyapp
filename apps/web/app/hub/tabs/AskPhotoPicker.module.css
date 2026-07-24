@@ -102,6 +102,11 @@
 
 .grid li {
   margin: 0;
+  /* #219 — uniform grid tiles opt into content-visibility so the browser skips layout + paint for
+     off-screen tiles; the intrinsic-size hint (~the 110px grid min, square) keeps the scrollbar
+     stable as tiles paint in. Nodes stay in the DOM, so the toggle selection stays correct. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 110px;
 }
 
 .tile {
