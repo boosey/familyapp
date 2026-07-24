@@ -12,7 +12,7 @@
  * endpoint confirmation. Every insert normalizes its endpoints via `normalizeEdgeEndpoints` (shared
  * with the read side) so partnered_with (A,B)/(B,A) collapse to one logical edge.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like, or } from "drizzle-orm";
 import { kinshipAssertions, kinshipSubjectHides } from "@chronicle/db/kinship";
 import { families, persons } from "@chronicle/db/schema";
 import type {
@@ -181,6 +181,7 @@ async function insertParentOf(
   parentId: string,
   childId: string,
   nature: KinshipNature,
+  note: string | null = null,
 ): Promise<string> {
   const { personAId, personBId } = normalizeEdgeEndpoints("parent_of", parentId, childId);
   const [row] = await db
@@ -193,6 +194,7 @@ async function insertParentOf(
       nature,
       state: "asserted",
       actorPersonId,
+      note,
     })
     .returning({ id: kinshipAssertions.id });
   return row!.id;
@@ -205,6 +207,7 @@ async function insertPartneredWith(
   actorPersonId: string,
   p1: string,
   p2: string,
+  note: string | null = null,
 ): Promise<string> {
   const { personAId, personBId } = normalizeEdgeEndpoints("partnered_with", p1, p2);
   const [row] = await db
@@ -217,6 +220,7 @@ async function insertPartneredWith(
       nature: null,
       state: "asserted",
       actorPersonId,
+      note,
     })
     .returning({ id: kinshipAssertions.id });
   return row!.id;
@@ -1399,6 +1403,40 @@ export async function unhideEdge(
 // onto the account when the account's is unset — a person-row UPDATE (persons is not append-only).
 // ===========================================================================
 
+// Ledger-note provenance markers stamped on the rows reconcile / un-reconcile append. They are the
+// SINGLE SOURCE identifying which rows belong to which reconcile so the reverse is exact. Each marker
+// embeds BOTH the mention (loser) and account (winner) ids as `<mentionId>><accountId>` behind a
+// reserved `@reconcile/` prefix — a plain per-edge string would be ambiguous when the SAME account
+// absorbs two different mentions that share a redirect target (undoing one would sever the other's
+// still-active edge). The reserved prefix + embedded UUIDs also make an accidental collision with a
+// human-supplied governance `note` effectively impossible. Internal audit strings, not user copy.
+const RECONCILE_MERGED_PREFIX = "@reconcile/merged:";
+const RECONCILE_REDIRECTED_PREFIX = "@reconcile/redirected:";
+const UNRECONCILE_RESTORED_NOTE = "@reconcile/un-restored";
+const UNRECONCILE_REMOVED_NOTE = "@reconcile/un-removed";
+
+/** Note stamped on the `denied` row superseding a mention's own edge when it is merged into `accountId`. */
+function reconcileMergedNote(mentionId: string, accountId: string): string {
+  return `${RECONCILE_MERGED_PREFIX}${mentionId}>${accountId}`;
+}
+/** Note stamped on the `asserted` account edge reconcile CREATES when redirecting a mention's edge. */
+function reconcileRedirectedNote(mentionId: string, accountId: string): string {
+  return `${RECONCILE_REDIRECTED_PREFIX}${mentionId}>${accountId}`;
+}
+/** Parse either reconcile marker back into its ids, or null if `note` is not a reconcile marker. */
+function parseReconcileNote(note: string | null): { mentionId: string; accountId: string } | null {
+  if (note === null) return null;
+  const body = note.startsWith(RECONCILE_MERGED_PREFIX)
+    ? note.slice(RECONCILE_MERGED_PREFIX.length)
+    : note.startsWith(RECONCILE_REDIRECTED_PREFIX)
+      ? note.slice(RECONCILE_REDIRECTED_PREFIX.length)
+      : null;
+  if (body === null) return null;
+  const sep = body.indexOf(">");
+  if (sep <= 0 || sep === body.length - 1) return null;
+  return { mentionId: body.slice(0, sep), accountId: body.slice(sep + 1) };
+}
+
 export interface ReconcileMentionInput {
   familyId: string;
   /** The loser: an `origin='mention'` Person that carries the tree edges. */
@@ -1542,10 +1580,27 @@ export async function reconcileMentionIntoAccount(
         if (!visibleKeys.has(equivKey)) {
           if (e.edgeType === "parent_of") {
             assertedEdgeIds.push(
-              await insertParentOf(tx, familyId, me, newA, newB, e.nature ?? "unknown"),
+              await insertParentOf(
+                tx,
+                familyId,
+                me,
+                newA,
+                newB,
+                e.nature ?? "unknown",
+                reconcileRedirectedNote(mentionId, accountId),
+              ),
             );
           } else {
-            assertedEdgeIds.push(await insertPartneredWith(tx, familyId, me, newA, newB));
+            assertedEdgeIds.push(
+              await insertPartneredWith(
+                tx,
+                familyId,
+                me,
+                newA,
+                newB,
+                reconcileRedirectedNote(mentionId, accountId),
+              ),
+            );
           }
           visibleKeys.add(equivKey);
         }
@@ -1562,7 +1617,7 @@ export async function reconcileMentionIntoAccount(
           me,
           "denied",
           natureToCarryForward(e.edgeType, e.nature),
-          "reconciled: mention merged into account",
+          reconcileMergedNote(mentionId, accountId),
         ),
       );
     }
@@ -1582,4 +1637,276 @@ export async function reconcileMentionIntoAccount(
 
     return { allowed: true, assertedEdgeIds, deniedEdgeIds, sexCarried };
   });
+}
+
+// ===========================================================================
+// Un-reconcile (#363) — reverse a prior mention→member reconciliation.
+//
+// Reconciliation edits NOTHING (append-only), so its full effect is recoverable: the mention's edges
+// were superseded with `denied` rows (note = RECONCILE_MENTION_DENIED_NOTE) and equivalent edges were
+// appended onto the account (note = RECONCILE_REDIRECTED_NOTE). Un-reconcile reverses BOTH, again by
+// APPENDING only:
+//   • for every mention edge reconcile denied, APPEND an `affirmed` row so it returns to the projection
+//     (the mention stops being an inert tombstone);
+//   • for the equivalent redirected account edge, APPEND a `denied` row — but ONLY when that edge
+//     carries a RECONCILE_REDIRECTED_NOTE asserted row, i.e. reconcile CREATED it. An account edge that
+//     PRE-EXISTED the reconcile (a true duplicate the forward idempotency-skipped) has no such note and
+//     is left untouched, so un-reconcile never destroys a legitimately independent edge.
+// Steward-gated. Idempotent: a second run finds the mention edges already visible and the redirected
+// edges already denied, and appends nothing. The forward `sex` carry is a one-way enrichment (persons
+// is not append-only and the carry leaves no audit row) and is deliberately NOT reversed in v1.
+// ===========================================================================
+
+export interface UnreconcileMentionInput {
+  familyId: string;
+  /** The mention Person that was merged away (the reconcile loser). */
+  mentionPersonId: string;
+  /** The account Person the mention was merged into (the reconcile winner). */
+  accountPersonId: string;
+}
+
+export interface UnreconcileResult {
+  allowed: boolean;
+  reason?: string;
+  /** Mention edges brought back into the projection (an `affirmed` row appended for each). */
+  restoredEdgeIds?: string[];
+  /** Redirected account edges removed (a `denied` row appended for each forward-created one). */
+  deniedEdgeIds?: string[];
+}
+
+/**
+ * Reverse a prior `reconcileMentionIntoAccount` (ADR-0016 / #363). Steward-gated, ledger-native
+ * (append-only): re-affirms every mention edge the reconcile denied and denies every account edge the
+ * reconcile created (identified by the RECONCILE_REDIRECTED_NOTE marker so a pre-existing duplicate is
+ * preserved). Idempotent. Refuses if no reconciliation is recorded for the given mention. Does NOT
+ * reverse the one-way `sex` carry (see block comment).
+ */
+export async function unreconcileMention(
+  db: Database,
+  ctx: AuthContext,
+  input: UnreconcileMentionInput,
+): Promise<UnreconcileResult> {
+  // 1. Auth: real account AND this family's steward.
+  if (ctx.kind !== "account") {
+    return { allowed: false, reason: "not signed in" };
+  }
+  const me = ctx.personId;
+  const steward = await stewardPersonIdOf(db, input.familyId);
+  if (steward === null) {
+    return { allowed: false, reason: "family not found" };
+  }
+  if (steward !== me) {
+    return { allowed: false, reason: "only the family steward may un-reconcile a mention" };
+  }
+
+  // 2. Validate the two persons (mirror the forward guards). The mention is a tombstone with no
+  //    visible edges after reconcile, so — unlike the forward path — we do NOT require it to be
+  //    "attachable in this family" (it never is post-reconcile); scoping is enforced by (3) below,
+  //    which only ever touches rows this family's reconcile stamped.
+  if (input.mentionPersonId === input.accountPersonId) {
+    return { allowed: false, reason: "mention and account are the same person" };
+  }
+  const mention = await personReconcileRow(db, input.mentionPersonId);
+  if (mention === null) {
+    return { allowed: false, reason: "mention person does not exist" };
+  }
+  const accountPerson = await personReconcileRow(db, input.accountPersonId);
+  if (accountPerson === null) {
+    return { allowed: false, reason: "account person does not exist" };
+  }
+  if (mention.origin !== "mention") {
+    return { allowed: false, reason: "loser is not a mention — nothing was reconciled away" };
+  }
+
+  const familyId = input.familyId;
+  const mentionId = input.mentionPersonId;
+  const accountId = input.accountPersonId;
+
+  // 3. THIS reconcile's denied mention edges — rows stamped with the (mention→account) merged marker.
+  //    Scoping the note to BOTH ids means we reverse only the M→A reconcile, never some other merge.
+  const deniedMentionRows = await db
+    .select({
+      edgeType: kinshipAssertions.edgeType,
+      personAId: kinshipAssertions.personAId,
+      personBId: kinshipAssertions.personBId,
+    })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, familyId),
+        eq(kinshipAssertions.note, reconcileMergedNote(mentionId, accountId)),
+      ),
+    );
+  if (deniedMentionRows.length === 0) {
+    return { allowed: false, reason: "no reconciliation to reverse for this mention" };
+  }
+
+  return db.transaction(async (tx) => {
+    const restoredEdgeIds: string[] = [];
+    const deniedEdgeIds: string[] = [];
+    const seen = new Set<string>();
+
+    for (const r of deniedMentionRows) {
+      const dedupeKey = `${r.edgeType}|${r.personAId}|${r.personBId}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      const mentionRef: EdgeRef = {
+        familyId,
+        edgeType: r.edgeType,
+        personAId: r.personAId,
+        personBId: r.personBId,
+      };
+
+      // 4a. Restore the mention's own edge if its LATEST state is still denied (idempotency: skip if a
+      //     prior un-reconcile already re-affirmed it). MUST precede the self-loop continue below so a
+      //     mention-partnered-with-the-account edge is still restored even though it has no account edge.
+      const latestMention = await latestEdgeRow(tx, mentionRef);
+      if (latestMention !== null && latestMention.state === "denied") {
+        restoredEdgeIds.push(
+          await appendGovernanceRow(
+            tx,
+            mentionRef,
+            r.personAId,
+            r.personBId,
+            me,
+            "affirmed",
+            natureToCarryForward(r.edgeType, latestMention.nature),
+            UNRECONCILE_RESTORED_NOTE,
+          ),
+        );
+      }
+
+      // 4b. Deny the equivalent redirected account edge — but ONLY the one reconcile CREATED, and ONLY
+      //     when no OTHER still-active reconcile into this account still relies on it.
+      const otherEndpoint = r.personAId === mentionId ? r.personBId : r.personAId;
+      if (otherEndpoint === accountId) continue; // self-loop: reconcile appended no account edge.
+      const newA = r.personAId === mentionId ? accountId : r.personAId;
+      const newB = r.personBId === mentionId ? accountId : r.personBId;
+      const norm = normalizeEdgeEndpoints(r.edgeType, newA, newB);
+      const accountRef: EdgeRef = {
+        familyId,
+        edgeType: r.edgeType,
+        personAId: norm.personAId,
+        personBId: norm.personBId,
+      };
+      // Reconcile-created iff a redirect marker for THIS account sits on the edge. A pre-existing
+      // duplicate has none → leave it (never destroy an independent edge on undo).
+      if (!(await reconcileCreatedAccountEdge(tx, familyId, accountId, accountRef))) continue;
+
+      // Shared-target guard (fixes the two-mentions-into-one-account corruption): if a DIFFERENT mention
+      // is STILL merged into this account and its own denied edge redirects onto the SAME account edge,
+      // that reconcile still needs this edge — leave it. The last un-reconcile to release it removes it.
+      if (
+        await accountEdgeStillReliedByAnotherMention(tx, familyId, accountId, mentionId, accountRef)
+      ) {
+        continue;
+      }
+
+      // Deny only if the account edge is currently visible (idempotency: skip if already denied).
+      const latestAccount = await latestEdgeRow(tx, accountRef);
+      if (latestAccount !== null && latestAccount.state !== "denied") {
+        deniedEdgeIds.push(
+          await appendGovernanceRow(
+            tx,
+            accountRef,
+            norm.personAId,
+            norm.personBId,
+            me,
+            "denied",
+            natureToCarryForward(r.edgeType, latestAccount.nature),
+            UNRECONCILE_REMOVED_NOTE,
+          ),
+        );
+      }
+    }
+
+    return { allowed: true, restoredEdgeIds, deniedEdgeIds };
+  });
+}
+
+/** True iff `accountRef` carries a redirect marker created by a reconcile INTO `accountId` (i.e. the
+ *  reconcile CREATED this account edge, so it is safe to remove on undo — never a pre-existing edge). */
+async function reconcileCreatedAccountEdge(
+  db: DbOrTx,
+  familyId: string,
+  accountId: string,
+  accountRef: EdgeRef,
+): Promise<boolean> {
+  const rows = await db
+    .select({ note: kinshipAssertions.note })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, familyId),
+        eq(kinshipAssertions.edgeType, accountRef.edgeType),
+        eq(kinshipAssertions.personAId, accountRef.personAId),
+        eq(kinshipAssertions.personBId, accountRef.personBId),
+        like(kinshipAssertions.note, `${RECONCILE_REDIRECTED_PREFIX}%`),
+      ),
+    );
+  return rows.some((row) => parseReconcileNote(row.note)?.accountId === accountId);
+}
+
+/** True iff a mention OTHER than `excludeMentionId` is STILL merged into `accountId` via an edge that
+ *  redirects onto EXACTLY `accountRef` (same edgeType AND same normalized/directed endpoints — a
+ *  `parent_of(A,X)` is NOT the same as `parent_of(X,A)`), its own edge's latest state still `denied`.
+ *  Such a mention's active reconcile relies on the shared redirected account edge, so undo must leave it
+ *  in place; only when the last relying mention is un-reconciled does the account edge get removed. This
+ *  mention-side reliance check makes multi-mention-into-one-account un-reconcile order-independent (the
+ *  redirected account edge itself carries only ONE marker due to the forward idempotency-skip). */
+async function accountEdgeStillReliedByAnotherMention(
+  db: DbOrTx,
+  familyId: string,
+  accountId: string,
+  excludeMentionId: string,
+  accountRef: EdgeRef,
+): Promise<boolean> {
+  // The account edge connects the account to this third party (the non-account endpoint). Any mention
+  // edge that redirects onto `accountRef` must itself touch this same third party — so prefilter on it.
+  const thirdPartyId =
+    accountRef.personAId === accountId ? accountRef.personBId : accountRef.personAId;
+  const rows = await db
+    .select({
+      note: kinshipAssertions.note,
+      personAId: kinshipAssertions.personAId,
+      personBId: kinshipAssertions.personBId,
+    })
+    .from(kinshipAssertions)
+    .where(
+      and(
+        eq(kinshipAssertions.familyId, familyId),
+        eq(kinshipAssertions.edgeType, accountRef.edgeType),
+        like(kinshipAssertions.note, `${RECONCILE_MERGED_PREFIX}%`),
+        or(
+          eq(kinshipAssertions.personAId, thirdPartyId),
+          eq(kinshipAssertions.personBId, thirdPartyId),
+        ),
+      ),
+    );
+  for (const row of rows) {
+    const parsed = parseReconcileNote(row.note);
+    if (parsed === null) continue;
+    if (parsed.accountId !== accountId) continue; // merged into a DIFFERENT account — unrelated.
+    if (parsed.mentionId === excludeMentionId) continue; // the mention we are currently reversing.
+    // Redirect THIS candidate's own edge (its mention endpoint → the account) and require it to be the
+    // SAME directed logical edge as accountRef — not merely "touches the same third party".
+    const mk = parsed.mentionId;
+    if (row.personAId !== mk && row.personBId !== mk) continue; // marker/endpoint mismatch (defensive).
+    const redirA = row.personAId === mk ? accountId : row.personAId;
+    const redirB = row.personBId === mk ? accountId : row.personBId;
+    const redir = normalizeEdgeEndpoints(accountRef.edgeType, redirA, redirB);
+    if (redir.personAId !== accountRef.personAId || redir.personBId !== accountRef.personBId) {
+      continue; // redirects onto a DIFFERENT edge (e.g. reversed parent_of role) — not reliance.
+    }
+    // Its own edge must still be denied (that reconcile still active) to count as reliance.
+    const latest = await latestEdgeRow(db, {
+      familyId,
+      edgeType: accountRef.edgeType,
+      personAId: row.personAId,
+      personBId: row.personBId,
+    });
+    if (latest !== null && latest.state === "denied") return true;
+  }
+  return false;
 }

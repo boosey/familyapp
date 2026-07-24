@@ -160,9 +160,11 @@ conversation uses a word that conflicts with a definition here, the conflict is 
   offered in bulk after additive import — never part of import itself). Same **offer-never-silent**
   discipline as **Dedup-on-invite**.
 - **Un-reconcile** — the **reversal** of a Reconciliation, done the same append-only way: re-assert
-  the loser's original edges and `deny` the ones that were redirected onto the winner (and un-carry
-  any field, e.g. `sex`, that the forward step carried). The tombstoned loser renders again. Possible
-  precisely because reconcile edits nothing — the history to reverse is never lost.
+  the loser's original edges and `deny` the ones the reconcile **created** on the winner (a
+  pre-existing duplicate edge, which the merge idempotency-skipped, is preserved). The tombstoned
+  loser renders again. Possible precisely because reconcile edits nothing — the history to reverse is
+  never lost. **Edges only:** the merge's one-way `sex` enrichment of the winner is *not* reversed
+  (it leaves no audit trail and may be legitimately true), so un-reconcile never touches it.
 
 ## Joining a family (the new flows)
 - **Invitation** — a system-delivered link a member sends to someone (possibly unknown to the
