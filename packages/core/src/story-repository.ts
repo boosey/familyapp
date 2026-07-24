@@ -440,58 +440,10 @@ export interface PipelineStoryView {
   } | null;
 }
 
-/**
- * Cross-session memory for the interviewer — the narrow audited read that returns ONLY safe
- * metadata for the narrator's own prior stories. The projection at the SQL layer (not in the
- * consumer) is the point: this function structurally cannot leak transcript/prose/audio key,
- * because it never selects them. The interviewer is restricted to titles/summaries/tags by
- * the TYPE of what it can ask core for, not by a convention in a downstream adapter.
- *
- * AuthZ: this is a system-actor read, BUT the implementation enforces that the requesting
- * caller is reading the narrator's OWN stories (the narrator is the owner — `ownerPersonId ===
- * personId`). That is exactly the owner-branch of the authorization function. We avoid the
- * full `listStoriesForViewer` round-trip because (a) the projection is the contract and (b)
- * fetching only metadata is cheaper. The architecture allowlist already includes this file.
- */
-export interface InterviewerStoryMemory {
-  storyId: string;
-  title: string | null;
-  summary: string | null;
-  tags: string[];
-  promptQuestion: string | null;
-  createdAt: Date;
-}
-
-export async function listNarratorMemoryForInterviewer(
-  db: Database,
-  narratorPersonId: string,
-  limit: number,
-): Promise<InterviewerStoryMemory[]> {
-  const rows = await db
-    .select({
-      storyId: stories.id,
-      title: stories.title,
-      summary: stories.summary,
-      tags: stories.tags,
-      promptQuestion: stories.promptQuestion,
-      createdAt: stories.createdAt,
-    })
-    .from(stories)
-    .where(eq(stories.ownerPersonId, narratorPersonId));
-  // Most recent first; cap at `limit`. Sorting in app code (not SQL) keeps the test DB happy
-  // and the projection identical regardless of index choice.
-  return rows
-    .map((r) => ({
-      storyId: r.storyId,
-      title: r.title,
-      summary: r.summary,
-      tags: r.tags ?? [],
-      promptQuestion: r.promptQuestion,
-      createdAt: r.createdAt,
-    }))
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, limit);
-}
+// #362: `InterviewerStoryMemory` + `listNarratorMemoryForInterviewer` MOVED to
+// `narrator-memory-repository.ts` (they no longer read the `stories` content table — the interviewer
+// read is now a strict repoint onto the `narrator_memory` store). `@chronicle/core`'s index
+// re-exports both from there under the same names, so no call-site changed.
 
 /**
  * The voice-only approval gate (spec Part III). Atomic, audited write that closes the consent

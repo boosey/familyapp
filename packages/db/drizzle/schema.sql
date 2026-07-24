@@ -20,6 +20,8 @@ CREATE TYPE "public"."life_status" AS ENUM('living', 'deceased');
 CREATE TYPE "public"."media_kind" AS ENUM('story_audio', 'approval_audio', 'intake_audio', 'caption_audio', 'photo', 'document');
 CREATE TYPE "public"."membership_role" AS ENUM('narrator', 'member', 'steward');
 CREATE TYPE "public"."membership_status" AS ENUM('active', 'paused', 'ended');
+CREATE TYPE "public"."narrator_memory_origin" AS ENUM('extracted', 'user');
+CREATE TYPE "public"."narrator_memory_status" AS ENUM('active', 'superseded', 'dismissed');
 CREATE TYPE "public"."notification_frequency" AS ENUM('every_item', 'daily_digest', 'weekly_digest', 'off');
 CREATE TYPE "public"."notification_stream" AS ENUM('questions_for_me', 'answers_to_my_asks', 'family_activity');
 CREATE TYPE "public"."occurred_kind" AS ENUM('date', 'circa', 'period');
@@ -323,6 +325,21 @@ CREATE TABLE "mock_auth_users" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE "narrator_memory" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"seq" bigserial NOT NULL,
+	"person_id" uuid NOT NULL,
+	"title" text NOT NULL,
+	"summary" text NOT NULL,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
+	"origin" "narrator_memory_origin" NOT NULL,
+	"source_story_id" uuid,
+	"confidence" real,
+	"status" "narrator_memory_status" DEFAULT 'active' NOT NULL,
+	"superseded_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE "notification_stream_prefs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"person_id" uuid NOT NULL,
@@ -558,6 +575,9 @@ ALTER TABLE "link_sessions" ADD CONSTRAINT "link_sessions_invited_by_person_id_p
 ALTER TABLE "media" ADD CONSTRAINT "media_owner_person_id_persons_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "narrator_memory" ADD CONSTRAINT "narrator_memory_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "narrator_memory" ADD CONSTRAINT "narrator_memory_source_story_id_stories_id_fk" FOREIGN KEY ("source_story_id") REFERENCES "public"."stories"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "narrator_memory" ADD CONSTRAINT "narrator_memory_superseded_by_narrator_memory_id_fk" FOREIGN KEY ("superseded_by") REFERENCES "public"."narrator_memory"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "notification_stream_prefs" ADD CONSTRAINT "notification_stream_prefs_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "persons" ADD CONSTRAINT "persons_created_by_person_id_persons_id_fk" FOREIGN KEY ("created_by_person_id") REFERENCES "public"."persons"("id") ON DELETE no action ON UPDATE no action;
@@ -637,6 +657,9 @@ CREATE INDEX "memberships_person_idx" ON "memberships" USING btree ("person_id")
 CREATE INDEX "memberships_family_idx" ON "memberships" USING btree ("family_id");
 CREATE UNIQUE INDEX "mock_auth_users_email_uq" ON "mock_auth_users" USING btree ("email");
 CREATE UNIQUE INDEX "mock_auth_users_provider_id_uq" ON "mock_auth_users" USING btree ("auth_provider_user_id");
+CREATE INDEX "narrator_memory_person_idx" ON "narrator_memory" USING btree ("person_id");
+CREATE INDEX "narrator_memory_person_status_idx" ON "narrator_memory" USING btree ("person_id","status");
+CREATE INDEX "narrator_memory_source_story_idx" ON "narrator_memory" USING btree ("source_story_id");
 CREATE INDEX "notification_stream_prefs_person_idx" ON "notification_stream_prefs" USING btree ("person_id");
 CREATE UNIQUE INDEX "notification_stream_prefs_person_stream_uq" ON "notification_stream_prefs" USING btree ("person_id","stream");
 CREATE UNIQUE INDEX "persons_account_id_uq" ON "persons" USING btree ("account_id");

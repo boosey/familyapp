@@ -26,7 +26,6 @@ export {
   type TextDraftInput,
   type CreatedTextDraft,
   type DerivedFields,
-  type InterviewerStoryMemory,
   type ApproveAndShareInput,
   type ApproveAndShareResult,
   type OutstandingAnswerDraft,
@@ -41,7 +40,6 @@ export {
   transitionStoryState,
   markStoryProcessingFailed,
   beginStoryRetry,
-  listNarratorMemoryForInterviewer,
   approveAndShareStory,
   applyTranscriptCorrection,
   listOutstandingAnswerDrafts,
@@ -84,6 +82,21 @@ export {
   type TagStorySubjectInput,
   type TagStorySubjectResult,
 } from "./story-repository";
+// #362: the persistent narrator-memory store (ADR-0014 §8/§9). Open-schema, non-content. The
+// interviewer read `listNarratorMemoryForInterviewer` + its `InterviewerStoryMemory` shape MOVED
+// here from story-repository.ts (strict repoint onto the store), re-exported under the same names.
+export {
+  recordExtractedMemories,
+  authorNarratorMemory,
+  supersedeNarratorMemory,
+  dismissNarratorMemory,
+  listNarratorMemoryForInterviewer,
+  type ExtractedMemoryFact,
+  type RecordExtractedMemoriesInput,
+  type AuthorNarratorMemoryInput,
+  type SupersedeNarratorMemoryInput,
+  type InterviewerStoryMemory,
+} from "./narrator-memory-repository";
 // ADR-0026 (tiered hybrid): Tier A stated-calendar parse (deterministic, no LLM), the Tier B pure
 // calculator over a validated structured ref, and the defensive parser. The live path uses Tier A;
 // the finish-time backstop recognizes soft language via an LLM ref → the same calculator.

@@ -93,6 +93,11 @@ export {
 } from "./extract-biography";
 
 export {
+  extractNarratorMemory,
+  type ExtractedMemory,
+} from "./extract-narrator-memory";
+
+export {
   withTranscriberLogging,
   withLanguageModelLogging,
 } from "./observability";

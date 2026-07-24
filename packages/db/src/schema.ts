@@ -26,6 +26,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -800,6 +801,76 @@ export const lifeEvents = pgTable(
       .defaultNow(),
   },
   (t) => [index("life_events_person_idx").on(t.personId)],
+);
+
+// ---------------------------------------------------------------------------
+// NarratorMemory (#362, ADR-0014 §8/§9) — the persistent "picture of the person": a fact-store of
+// title/summary/tags mined from the narrator's consented tellings (post-approval Story prose, saved
+// intake answers) plus user-authored facts. It is an interviewer INPUT like `life_events`, NOT Story
+// content — the lowest-sensitivity, already-derived metadata — so it lives on the OPEN schema, needs
+// NO architecture-allowlist entry, and its FK to `stories.id` is a plain reference (an FK grants no
+// content read). See docs/superpowers/specs/2026-07-23-narrator-memory-store-design.md.
+//
+// Append-only CONTENT, mutable LIFECYCLE: a correction is a NEW `active` row (the prior row flips to
+// `superseded`, `superseded_by` pointing at the replacement); a removal flips a row to `dismissed`.
+// The `chronicle_narrator_memory_guard` trigger (invariants.sql) forbids any content-column UPDATE
+// and permits only `status`/`superseded_by` changes; DELETE is UNguarded (erasure must remove rows).
+// ---------------------------------------------------------------------------
+
+/** #362: how a narrator-memory fact was produced. `extracted` = LLM-mined from consented text;
+ * `user` = authored directly (the #357 "add a memory" write path). */
+export const narratorMemoryOriginEnum = pgEnum("narrator_memory_origin", [
+  "extracted",
+  "user",
+]);
+
+/** #362: the lifecycle of a narrator-memory row. Only `active` rows are read by the interviewer. A
+ * correction supersedes (`active` → `superseded`); a removal `dismissed`s. This is the ONE mutable
+ * column (plus `superseded_by`); every content column is immutable (trigger-enforced). */
+export const narratorMemoryStatusEnum = pgEnum("narrator_memory_status", [
+  "active",
+  "superseded",
+  "dismissed",
+]);
+
+export const narratorMemory = pgTable(
+  "narrator_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic total order over facts (like the consent/prose ledgers) — deterministic
+     * "most-recent-first" even when two rows share a created_at timestamp. */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    /** The narrator this fact is about / belongs to. */
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => persons.id),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    /** Free-text tags. Real pg text[] (not JSONB) — this is metadata, queried as a set. */
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    origin: narratorMemoryOriginEnum("origin").notNull(),
+    /** Provenance for an extracted fact (the approved story it was mined from); NULL for a
+     * user-authored fact and for intake-mined facts (no source story). Plain FK — no cascade; the
+     * audited erasure paths remove rows explicitly (the guard permits DELETE). */
+    sourceStoryId: uuid("source_story_id").references(() => stories.id),
+    /** The extractor's confidence (0..1); NULL for a user-authored fact. */
+    confidence: real("confidence"),
+    status: narratorMemoryStatusEnum("status").notNull().default("active"),
+    /** Self-ref: the `active` row that superseded THIS one (set when this row flips to
+     * `superseded`). NULL while active/dismissed. */
+    supersededBy: uuid("superseded_by").references((): AnyPgColumn => narratorMemory.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("narrator_memory_person_idx").on(t.personId),
+    index("narrator_memory_person_status_idx").on(t.personId, t.status),
+    index("narrator_memory_source_story_idx").on(t.sourceStoryId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -1991,6 +2062,12 @@ export type FollowUpDecisionRow = typeof followUpDecisions.$inferSelect;
 export type NewFollowUpDecisionRow = typeof followUpDecisions.$inferInsert;
 export type LifeEvent = typeof lifeEvents.$inferSelect;
 export type NewLifeEvent = typeof lifeEvents.$inferInsert;
+export type NarratorMemory = typeof narratorMemory.$inferSelect;
+export type NewNarratorMemory = typeof narratorMemory.$inferInsert;
+export type NarratorMemoryOrigin =
+  (typeof narratorMemoryOriginEnum.enumValues)[number];
+export type NarratorMemoryStatus =
+  (typeof narratorMemoryStatusEnum.enumValues)[number];
 
 export type LifeStatus = (typeof lifeStatusEnum.enumValues)[number];
 export type PersonOrigin = (typeof personOriginEnum.enumValues)[number];

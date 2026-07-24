@@ -346,3 +346,38 @@ CREATE TRIGGER kinship_assertions_append_only
 CREATE TRIGGER kinship_subject_hides_append_only
   BEFORE UPDATE OR DELETE ON kinship_subject_hides
   FOR EACH ROW EXECUTE FUNCTION chronicle_forbid_mutation();
+
+-- ---------------------------------------------------------------------------
+-- (6) Narrator-memory (#362): append-only CONTENT, mutable LIFECYCLE. Unlike the consent/kinship
+--     ledgers (forbid ALL mutation), this fact-store MUST permit status transitions — a correction
+--     supersedes (active → superseded) and a removal dismisses — so a blanket forbid-UPDATE trigger
+--     is wrong. Instead the guard fires BEFORE UPDATE ONLY and RAISEs if any CONTENT column changed
+--     (person_id, title, summary, tags, origin, source_story_id, confidence, seq, created_at),
+--     permitting ONLY `status` and `superseded_by` to move. DELETE is intentionally NOT guarded:
+--     account/story erasure removes rows explicitly (the FKs to persons/stories have no cascade).
+--     Hand-carried — drizzle-kit does not model triggers.
+CREATE OR REPLACE FUNCTION chronicle_narrator_memory_guard()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.person_id IS DISTINCT FROM OLD.person_id
+     OR NEW.title IS DISTINCT FROM OLD.title
+     OR NEW.summary IS DISTINCT FROM OLD.summary
+     OR NEW.tags IS DISTINCT FROM OLD.tags
+     OR NEW.origin IS DISTINCT FROM OLD.origin
+     OR NEW.source_story_id IS DISTINCT FROM OLD.source_story_id
+     OR NEW.confidence IS DISTINCT FROM OLD.confidence
+     OR NEW.seq IS DISTINCT FROM OLD.seq
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+  THEN
+    RAISE EXCEPTION
+      'Table % content is immutable: only status/superseded_by may change (a correction is a new row).',
+      TG_TABLE_NAME
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER narrator_memory_content_immutable
+  BEFORE UPDATE ON narrator_memory
+  FOR EACH ROW EXECUTE FUNCTION chronicle_narrator_memory_guard();

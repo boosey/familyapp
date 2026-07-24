@@ -19,6 +19,9 @@ let runtimeTranscriber: Transcriber;
 let runtimeEvaluator: FollowUpEvaluator;
 let authCtx: { kind: string; personId?: string };
 const recordSpy = vi.fn(async (..._args: unknown[]) => {});
+// Swappable: the §9 gating tests keep the spy (assert the record SHAPE); the wired-sink tests set
+// this to the REAL createNarratorMemorySink so we assert actual narrator_memory rows are written.
+let runtimeNarratorMemory: NarratorMemorySink;
 
 vi.mock("@/lib/runtime", () => ({
   getRuntime: async () => ({
@@ -29,7 +32,7 @@ vi.mock("@/lib/runtime", () => ({
     followUpEvaluator: runtimeEvaluator,
     transcriber: runtimeTranscriber,
     dispatchPipeline: async () => {},
-    narratorMemory: { record: recordSpy },
+    narratorMemory: runtimeNarratorMemory,
   }),
 }));
 
@@ -41,13 +44,16 @@ vi.mock("@chronicle/pipeline", async (importOriginal) => {
   return { ...actual, augmentProfileFromStory: (...args: unknown[]) => augmentSpy(...args) };
 });
 
+import { eq } from "drizzle-orm";
 import { createTestDatabase, type Database } from "@chronicle/db";
-import { persons } from "@chronicle/db/schema";
+import { narratorMemory, persons } from "@chronicle/db/schema";
 import {
   createTextDraft,
   updateDerivedFields,
   transitionStoryState,
+  type NarratorMemorySink,
 } from "@chronicle/core";
+import { createNarratorMemorySink } from "@/lib/narrator-memory-sink";
 import { ScriptedFollowUpEvaluator, type FollowUpEvaluator } from "@chronicle/interviewer";
 import {
   ScriptedLanguageModel,
@@ -112,6 +118,7 @@ describe("narrator-memory seam — §9 consent gating", () => {
     authCtx = { kind: "none" };
     recordSpy.mockClear();
     augmentSpy.mockClear();
+    runtimeNarratorMemory = { record: recordSpy };
   });
 
   it("sharing/approving a story feeds memory exactly once, with the approved prose, after approval", async () => {
@@ -126,6 +133,7 @@ describe("narrator-memory seam — §9 consent gating", () => {
       personId,
       source: "story",
       text: APPROVED_PROSE,
+      sourceStoryId: storyId,
     });
     // The memory feed re-reads the APPROVED story; it can only carry that prose if approval ran first.
     // Augmentation (which runs on the same post-approval read) fired too, confirming the ordering.
@@ -179,5 +187,55 @@ describe("narrator-memory seam — §9 consent gating", () => {
     await saveIntakeAnswer([], "hometown", "   ");
 
     expect(recordSpy).not.toHaveBeenCalled();
+  });
+});
+
+// #362: the REAL wired sink (createNarratorMemorySink) end-to-end — extraction actually writes
+// `active` narrator_memory rows on approval, and NOTHING on discard (the §9 gating, verified against
+// real rows, not just the record-call spy). The scripted LLM returns deterministic JSON facts.
+describe("narrator-memory wired sink — writes rows post-approval, none on discard", () => {
+  function scriptedFactsLlm(facts: unknown): LanguageModel {
+    return new ScriptedLanguageModel({ respond: () => JSON.stringify(facts) });
+  }
+
+  it("writes an active extracted row carrying the story provenance after approval", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+    const storyId = await seedPending(personId);
+    runtimeNarratorMemory = createNarratorMemorySink(
+      runtimeDb,
+      scriptedFactsLlm([{ title: "Baker", summary: "Ran a bakery.", tags: ["work"], confidence: 0.8 }]),
+    );
+
+    await share(form({ storyId, audienceTier: "family" }));
+
+    const rows = await runtimeDb
+      .select()
+      .from(narratorMemory)
+      .where(eq(narratorMemory.personId, personId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("active");
+    expect(rows[0]!.origin).toBe("extracted");
+    expect(rows[0]!.sourceStoryId).toBe(storyId);
+    expect(rows[0]!.title).toBe("Baker");
+  });
+
+  it("writes NO rows when the draft is discarded (never consented)", async () => {
+    const personId = await makePerson(runtimeDb);
+    authCtx = { kind: "account", personId };
+    const storyId = await seedDraft(personId);
+    runtimeNarratorMemory = createNarratorMemorySink(
+      runtimeDb,
+      scriptedFactsLlm([{ title: "X", summary: "Y", tags: [], confidence: 1 }]),
+    );
+
+    const result = await discardAnswerAction(form({ storyId }));
+    expect(result).toBeUndefined();
+
+    const rows = await runtimeDb
+      .select()
+      .from(narratorMemory)
+      .where(eq(narratorMemory.personId, personId));
+    expect(rows).toHaveLength(0);
   });
 });
