@@ -39,6 +39,8 @@ function selfNode(personId: string, displayName = personId): TreeNode {
     hasHiddenChildren: false,
     sex: "unknown",
     inviteStatus: "not-applicable",
+    membership: "tree-only",
+    isSteward: false,
   };
 }
 

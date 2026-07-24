@@ -37,6 +37,8 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     hasHiddenChildren: false,
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
+    membership: over.membership ?? "tree-only",
+    isSteward: over.isSteward ?? false,
   };
 }
 
@@ -75,8 +77,9 @@ it("PersonDetails shows the muted pending note (and no button) for a pending per
       checkEditable={notEditable}
     />,
   );
-  expect(screen.getByTestId("tree-details-invite-pending").textContent).toBe(
-    hub.tree.invitePendingNote,
+  // #372 — the standalone pending note was folded into the shared status row (glyph + line).
+  expect(screen.getByTestId("tree-details-status").textContent).toContain(
+    hub.tree.statusBadge.invitedLine,
   );
   expect(screen.queryByTestId("tree-details-invite")).toBeNull();
 });
@@ -93,7 +96,11 @@ it("PersonDetails shows no invite affordance for not-applicable", () => {
     />,
   );
   expect(screen.queryByTestId("tree-details-invite")).toBeNull();
-  expect(screen.queryByTestId("tree-details-invite-pending")).toBeNull();
+  // #372 — no cross-family Invite button for not-applicable; the standalone pending note is gone.
+  // (This tree-only living person still shows an "eligible" status row — a different, in-family axis.)
+  expect(screen.queryByTestId("tree-details-status")?.textContent ?? "").not.toContain(
+    hub.tree.statusBadge.invitedLine,
+  );
 });
 
 /* ── 2. KebabMenu ──────────────────────────────────────────────────────────── */

@@ -97,6 +97,7 @@ const MARCO: FamilyListPerson = {
   sex: "unknown",
   inviteStatus: "not-applicable",
   reconcileSide: null,
+  isSteward: false,
 };
 
 function renderListTab(
@@ -199,6 +200,8 @@ it("#334 — Invite from List details opens the SAME in-place PersonInviteModal 
         hasHiddenChildren: false,
         sex: "unknown",
         inviteStatus: "invitable",
+        membership: "tree-only",
+        isSteward: false,
       } satisfies TreeNode,
     ],
     edges: [],
@@ -311,6 +314,7 @@ it("#330 fix — Edit→Save from List sends the person's REAL birthYear/sex, no
     sex: "female",
     inviteStatus: "not-applicable",
     reconcileSide: null,
+    isSteward: false,
   };
   const node = resolveListPersonNode(eleanor, [] /* not in the tree window */);
   expect(node.birthYear).toBe(1940);
@@ -365,6 +369,7 @@ it("#330 fix — unplaced deceased member: hydrate → synthesize → Edit→Sav
       sex: "unknown" as const,
       inviteStatus: "not-applicable" as const,
       reconcileSide: null,
+      isSteward: false,
     },
   ];
   const [rosa] = hydrateFamilyListPeopleIdentity(
@@ -380,6 +385,7 @@ it("#330 fix — unplaced deceased member: hydrate → synthesize → Edit→Sav
           inviteStatus: "not-applicable" as const,
           origin: "self" as const,
           accountId: "acct-rosa",
+          isSteward: false,
         },
       ],
     ]),

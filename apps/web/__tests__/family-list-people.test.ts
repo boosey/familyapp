@@ -152,6 +152,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "not-applicable" as const,
             origin: "self" as const,
             accountId: "acct-e",
+            isSteward: false,
           },
         ],
         [
@@ -164,6 +165,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "invitable" as const,
             origin: "self" as const,
             accountId: "acct-m",
+            isSteward: false,
           },
         ],
       ]),
@@ -213,6 +215,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "not-applicable" as const,
             origin: "mention" as const,
             accountId: null,
+            isSteward: false,
           },
         ],
         [
@@ -225,6 +228,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "not-applicable" as const,
             origin: "self" as const,
             accountId: "acct-1",
+            isSteward: false,
           },
         ],
         [
@@ -237,6 +241,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "not-applicable" as const,
             origin: "mention" as const,
             accountId: null,
+            isSteward: false,
           },
         ],
       ]),
@@ -269,6 +274,7 @@ describe("hydrateFamilyListPeopleIdentity (#330/#334/#337)", () => {
             inviteStatus: "not-applicable",
             origin: "self",
             accountId: "acct-r",
+            isSteward: false,
           },
         ],
       ]),
@@ -303,6 +309,7 @@ function person(over: Partial<FamilyListPerson> & { personId: string }): FamilyL
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
     reconcileSide: "reconcileSide" in over ? (over.reconcileSide ?? null) : null,
+    isSteward: over.isSteward ?? false,
   };
 }
 
@@ -319,6 +326,8 @@ function node(over: Partial<TreeNode> & { personId: string }): TreeNode {
     hasHiddenChildren: over.hasHiddenChildren ?? false,
     sex: over.sex ?? "unknown",
     inviteStatus: over.inviteStatus ?? "not-applicable",
+    membership: over.membership ?? "tree-only",
+    isSteward: over.isSteward ?? false,
   };
 }
 
@@ -354,6 +363,8 @@ describe("resolveListPersonNode (#330)", () => {
       hasHiddenParents: false,
       hasHiddenChildren: false,
       inviteStatus: "not-applicable",
+      membership: "member",
+      isSteward: false,
     });
   });
 

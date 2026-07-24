@@ -906,6 +906,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(function
                   node={p.node}
                   focus={isFocus}
                   isViewer={isViewer}
+                  onInvite={placingOnCanvas ? undefined : onInvite}
                   squareCorner={squareCornerByPerson.get(p.personId)}
                   kebab={
                     inert || placingOnCanvas ? undefined : (

@@ -105,7 +105,11 @@
   margin: 0 0 14px;
 }
 
-.invitePending {
+/* #372 status row — the status glyph + its explanatory line on the details sheet. */
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-ui);
   font-size: var(--text-ui-sm);
   color: var(--text-muted);

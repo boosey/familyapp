@@ -269,6 +269,54 @@ describe("resolveKinshipTree — sex projection (ADR-0016 tree card color)", () 
   });
 });
 
+describe("resolveKinshipTree — #372 membership + steward projection", () => {
+  it("projects membership (tree-only vs member) and isSteward, family-scoped", async () => {
+    // `familyWithMember` makes `member` the family creator ⇒ also its stewardPersonId.
+    const { member, fam } = await familyWithMember("Steward");
+    const root = member;
+
+    // A plain edge endpoint with NO active membership in this family → "tree-only", not steward.
+    const treeOnlyParent = await makePerson(db, "TreeOnly Parent");
+    // Another ACTIVE member of the family (non-steward) → "member", isSteward false.
+    const otherMember = await makePerson(db, "Other Member");
+    await addMembership(db, { personId: otherMember.id, familyId: fam.id, role: "member" });
+
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: treeOnlyParent.id, b: root.id, actor: member.id });
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: otherMember.id, b: root.id, actor: member.id });
+
+    const tree = await resolveKinshipTree(db, account(member.id), fam.id, root.id);
+
+    // Steward (the root/creator): member + steward.
+    expect(node(tree, root.id)!.membership).toBe("member");
+    expect(node(tree, root.id)!.isSteward).toBe(true);
+
+    // Plain edge endpoint, no membership → tree-only, not steward.
+    expect(node(tree, treeOnlyParent.id)!.membership).toBe("tree-only");
+    expect(node(tree, treeOnlyParent.id)!.isSteward).toBe(false);
+
+    // Active member who is not the steward → member, isSteward false.
+    expect(node(tree, otherMember.id)!.membership).toBe("member");
+    expect(node(tree, otherMember.id)!.isSteward).toBe(false);
+  });
+
+  it("is family-scoped: standing in ANOTHER family never leaks into this family's tree", async () => {
+    // `crossPerson` is a MEMBER + STEWARD of their own separate family, and a bare edge endpoint
+    // (no membership) in `fam`. Both projected facts must be family-scoped: within `fam` they must
+    // read tree-only + isSteward:false, regardless of their standing elsewhere.
+    const { member, fam } = await familyWithMember("Reader");
+    const crossPerson = await makePerson(db, "Cross Family");
+    const otherFam = await makeFamily(db, "Other", crossPerson.id); // crossPerson is its steward
+    await addMembership(db, { personId: crossPerson.id, familyId: otherFam.id, role: "member" });
+
+    // In THIS family, crossPerson is only a plain edge endpoint (no membership here).
+    await assert(db, { familyId: fam.id, edgeType: "parent_of", a: crossPerson.id, b: member.id, actor: member.id });
+
+    const tree = await resolveKinshipTree(db, account(member.id), fam.id, member.id);
+    expect(node(tree, crossPerson.id)!.membership).toBe("tree-only");
+    expect(node(tree, crossPerson.id)!.isSteward).toBe(false);
+  });
+});
+
 describe("resolveKinshipTree — windowing + boundary flags", () => {
   it("does not materialize a person beyond the window but flags the in-window boundary node", async () => {
     const { member, fam } = await familyWithMember();

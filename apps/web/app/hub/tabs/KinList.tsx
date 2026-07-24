@@ -27,6 +27,8 @@ import {
   type FamilyListPerson,
 } from "@/lib/family-list-people";
 import { canOfferReconcile } from "@/lib/reconcile-eligibility";
+import { personCardBadgeFor } from "../tree/person-badge";
+import { PersonStatusBadge } from "../tree/person-status-badge";
 import styles from "./KinList.module.css";
 
 function relationLabel(relation: KinRelation): string {
@@ -105,6 +107,16 @@ export function KinList({
         <ul className={styles.list}>
           {results.map((entry) => {
             const known = Boolean(entry.identified && entry.displayName);
+            // #372 — the SAME status vocabulary as Tree: keyed off the shared `personCardBadgeFor`
+            // rule so List's glyph never drifts from the tree card / details sheet.
+            const statusBadge = personCardBadgeFor({
+              identified: entry.identified,
+              lifeStatus: entry.lifeStatus,
+              membership: entry.membership,
+              isSteward: entry.isSteward,
+              inviteStatus: entry.inviteStatus,
+              relationToRoot: entry.relation,
+            });
             const start = asReconcilePerson(entry);
             const showReconcile =
               onReconcile != null && canOfferReconcile(viewerIsSteward, start, pool);
@@ -125,6 +137,14 @@ export function KinList({
                 >
                   {membershipLabel(entry.membership)}
                 </span>
+                {statusBadge ? (
+                  <PersonStatusBadge
+                    variant="inline"
+                    badge={statusBadge}
+                    name={displayNameFor(entry)}
+                    testidSuffix={entry.personId}
+                  />
+                ) : null}
               </span>
             );
 

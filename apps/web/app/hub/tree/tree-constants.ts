@@ -104,6 +104,12 @@ export const FOCUS_BADGE_GLYPH_PX = 12;
 export const SEX_BAR_HEIGHT_PX = 6;
 /** Inset (px) of the per-card ⋮ kebab from the top-right corner. */
 export const KEBAB_INSET_PX = 4;
+/**
+ * #372 status badge (bottom-left, mirrors the kebab top-right). `_GLYPH_PX` is the lucide glyph size;
+ * `_INSET_PX` is the badge's inset from the card corner (same style-knob role as KEBAB_INSET_PX).
+ */
+export const STATUS_BADGE_GLYPH_PX = 27;
+export const STATUS_BADGE_INSET_PX = 4;
 /** Max lines the card name may wrap to before truncating. */
 export const NAME_LINE_CLAMP = 2;
 

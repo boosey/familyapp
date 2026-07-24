@@ -34,6 +34,8 @@ import {
   monogramColor,
   monogramFor,
 } from "./person-node";
+import { personCardBadgeFor, type PersonCardBadge } from "./person-badge";
+import { PersonStatusBadge } from "./person-status-badge";
 import {
   personEditabilityAction,
   savePersonEditAction,
@@ -42,6 +44,13 @@ import {
 } from "./actions";
 
 const RELATION_LABEL: Record<KinRelation, string> = hub.kin.relationLabel;
+
+/** #372 — the explanatory line beside the details-sheet status glyph. */
+function statusLineFor(badge: PersonCardBadge): string {
+  if (badge === "steward") return hub.tree.statusBadge.stewardLine;
+  if (badge === "invited") return hub.tree.statusBadge.invitedLine;
+  return hub.tree.statusBadge.eligibleLine;
+}
 
 /** Injected seams so the sheet is testable without the server (default to the real server actions). */
 export type CheckEditableFn = (familyId: string, personId: string) => Promise<PersonEditabilityResult>;
@@ -108,6 +117,7 @@ export function PersonDetails({
     relationToViewer === null || relationToViewer === "self" ? "" : RELATION_LABEL[relationToViewer];
   const dates = datesLineFor(node);
   const anon = isAnonymousBridge(node);
+  const badge = personCardBadgeFor(node);
   const hasName = node.displayName != null && node.displayName.trim().length > 0;
   const rootRef = useRef<HTMLElement | null>(null);
 
@@ -216,6 +226,15 @@ export function PersonDetails({
 
           {!hasName && !anon && <p className={styles.unknownNote}>{hub.tree.unknownRelative}</p>}
 
+          {/* #372 status row — glyph + explanatory line. Same vocabulary as the tree card badge and
+              the List, keyed off the SAME `personCardBadgeFor` rule. Informational only here. */}
+          {badge && (
+            <p className={styles.statusRow} data-testid="tree-details-status">
+              <PersonStatusBadge variant="inline" badge={badge} name={name} />
+              <span>{statusLineFor(badge)}</span>
+            </p>
+          )}
+
           <div className={styles.actions} data-testid="tree-details-actions">
             {editable && (
               <button
@@ -272,11 +291,6 @@ export function PersonDetails({
                 {hub.tree.inviteButton}
               </button>
             </div>
-          )}
-          {node.inviteStatus === "pending" && (
-            <p data-testid="tree-details-invite-pending" className={styles.invitePending}>
-              {hub.tree.invitePendingNote}
-            </p>
           )}
         </>
       )}

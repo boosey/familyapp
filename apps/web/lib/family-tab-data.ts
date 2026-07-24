@@ -26,8 +26,8 @@ import {
   type TreeNode,
   type UnplacedMember,
 } from "@chronicle/core";
-import { inArray } from "drizzle-orm";
-import { persons } from "@chronicle/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { families, persons } from "@chronicle/db/schema";
 import type { Database } from "@chronicle/db";
 import {
   hydrateFamilyListPeopleIdentity,
@@ -153,6 +153,13 @@ export async function loadFamilyTabData(
           })),
         )
       : new Map<string, TreeNode["inviteStatus"]>();
+  // #372 — the family's steward, fetched once, so List rows carry the SAME `isSteward` Tree does.
+  const [famSteward] = await db
+    .select({ stewardPersonId: families.stewardPersonId })
+    .from(families)
+    .where(eq(families.id, familyId))
+    .limit(1);
+  const stewardPersonId = famSteward?.stewardPersonId ?? null;
   const identityById = new Map<string, FamilyListPersonIdentity>(
     identityRows.map((r) => [
       r.id,
@@ -164,6 +171,7 @@ export async function loadFamilyTabData(
         inviteStatus: inviteStatusById.get(r.id) ?? "not-applicable",
         origin: r.origin,
         accountId: r.accountId,
+        isSteward: r.id === stewardPersonId,
       },
     ]),
   );

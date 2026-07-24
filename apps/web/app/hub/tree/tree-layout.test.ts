@@ -33,6 +33,8 @@ function node(id: string, over: Partial<TreeNode> = {}): TreeNode {
     hasHiddenParents: false,
     hasHiddenChildren: false,
     inviteStatus: "not-applicable",
+    membership: "tree-only",
+    isSteward: false,
     ...over,
   };
 }

@@ -137,6 +137,12 @@
   --sex-male: #8FBEE8;
   --sex-female: #F0AEC6;
 
+  /* #372 tree person-card status-badge hues. Bare glyphs, no disc; single-sourced here.
+     eligible = accent terracotta, invited = warm gold, steward = archival teal. */
+  --badge-eligible: var(--terracotta-600);
+  --badge-invited: #C99A3B;
+  --badge-steward: #45707C;
+
   /* Modal backdrop scrim (skin-neutral warm dark, shared by every modal dialog). */
   --scrim: rgba(46, 38, 32, 0.55);
 
