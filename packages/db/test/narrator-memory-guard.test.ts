@@ -3,7 +3,7 @@
  * append-only in its CONTENT but its lifecycle is mutable: a content-column UPDATE must RAISE, while
  * a `status` / `superseded_by` UPDATE must succeed. DELETE is intentionally unguarded (erasure).
  */
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { narratorMemory, persons } from "../src/schema";
 import { createTestDatabase, type Database } from "../src/index";
